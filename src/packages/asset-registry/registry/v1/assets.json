@@ -1,0 +1,1391 @@
+{
+  "schema_version": "v1",
+  "created_at": "2026-08-10T00:00:00Z",
+  "source_refs": [
+    {
+      "ref_id": "registry:mock-v1",
+      "source_type": "registry",
+      "label": "Deterministic development registry"
+    }
+  ],
+  "content_hash": "ecf1bc03c7ad54500eb9f728fcc3d9d8b88a18c2a987e419e11ba7891a424a28",
+  "registry_version": "v1.0.0",
+  "as_of": "2026-08-10T00:00:00Z",
+  "assets": [
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "5c93131d9f7be18aa23cc4287614050849a7067e44c6daa239047d5f3afde807",
+      "asset_id": "IDX:000300.SH",
+      "economic_exposure_id": "IDX:000300.SH",
+      "display_name": "CSI 300 economic exposure",
+      "asset_class": "index",
+      "subtype": "broad_equity_index",
+      "exchange": "XSHG",
+      "currency": "CNY",
+      "timezone": "Asia/Shanghai",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:510300.SS"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "000300.SH"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "3af7bf404b8d116d956ea81b8511eb26db90312d3aa4f10c9a6678b8c9f64b69",
+      "asset_id": "IDX:SPX",
+      "economic_exposure_id": "IDX:SPX",
+      "display_name": "S&P 500 economic exposure",
+      "asset_class": "index",
+      "subtype": "broad_equity_index",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:SPY"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "SPX"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "561a72d35bdd59083535d6627af46f3e1494616261e69181c916cb64ef3fd4d3",
+      "asset_id": "IDX:HSI",
+      "economic_exposure_id": "IDX:HSI",
+      "display_name": "Hang Seng Index economic exposure",
+      "asset_class": "index",
+      "subtype": "broad_equity_index",
+      "exchange": "XHKG",
+      "currency": "HKD",
+      "timezone": "Asia/Hong_Kong",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:2800.HK"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "HSI"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "e6b0435e579adf7ca6b2fa6e48adf7925f38cc44cae55c90f39cab7e7e4b003f",
+      "asset_id": "IDX:N225",
+      "economic_exposure_id": "IDX:N225",
+      "display_name": "Nikkei 225 economic exposure",
+      "asset_class": "index",
+      "subtype": "broad_equity_index",
+      "exchange": "XTKS",
+      "currency": "JPY",
+      "timezone": "Asia/Tokyo",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:1321.T"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "N225"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "59468b4e84f42cb326d8cf6b1ca64c2cbad3d769ffbe30ed4c54973b29e5a3fe",
+      "asset_id": "IDX:SX5E",
+      "economic_exposure_id": "IDX:SX5E",
+      "display_name": "EURO STOXX 50 economic exposure",
+      "asset_class": "index",
+      "subtype": "broad_equity_index",
+      "exchange": "XEUR",
+      "currency": "EUR",
+      "timezone": "Europe/Berlin",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:FEZ"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "SX5E"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "ea55cdce62539db4cf881e9d3c785bc0313536ec4804b0e624c29c63770cb535",
+      "asset_id": "IDX:000688.SH",
+      "economic_exposure_id": "IDX:000688.SH",
+      "display_name": "SSE STAR 50 economic exposure",
+      "asset_class": "index",
+      "subtype": "technology_equity_index",
+      "exchange": "XSHG",
+      "currency": "CNY",
+      "timezone": "Asia/Shanghai",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:588000.SS"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "medium",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "000688.SH"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "e1e46498a22753c5f7db1aab1563cf1b00b71bae69364b230d54fc3881f409d2",
+      "asset_id": "IDX:SOX",
+      "economic_exposure_id": "IDX:SOX",
+      "display_name": "PHLX Semiconductor economic exposure",
+      "asset_class": "index",
+      "subtype": "semiconductor_index",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:SOXX"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "SOX"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "aee752c24543425b8263be7ee001b88d777dba132491b3be67ea02bbba79528d",
+      "asset_id": "IDX:NDX",
+      "economic_exposure_id": "IDX:NDX",
+      "display_name": "Nasdaq-100 economic exposure",
+      "asset_class": "index",
+      "subtype": "technology_equity_index",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "close",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:QQQ"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Economic index exposure requires a tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "NDX"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "ef92bc7800ae9e1ad13af7c885ffe597a2a3a58c1c3d800b7c0b071eac2f4d57",
+      "asset_id": "COM:XAU",
+      "economic_exposure_id": "COM:XAU",
+      "display_name": "Gold spot economic exposure",
+      "asset_class": "commodity_spot",
+      "subtype": "precious_metal",
+      "exchange": "OTC",
+      "currency": "USD",
+      "timezone": "UTC",
+      "price_type": "spot",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:GLD"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Spot benchmark is mapped to a licensed tradable proxy.",
+      "provider_symbol_map": {
+        "benchmark": "XAU"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "f267e8bd36bdba7b31ca014d012486bcb99f65f1fadbe802ec449e11db0381b3",
+      "asset_id": "COM:COPPER",
+      "economic_exposure_id": "COM:COPPER",
+      "display_name": "LME copper economic exposure",
+      "asset_class": "commodity_spot",
+      "subtype": "industrial_metal",
+      "exchange": "XLME",
+      "currency": "USD",
+      "timezone": "Europe/London",
+      "price_type": "spot",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:CPER"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "medium",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Commodity benchmark is mapped to a tradable product.",
+      "provider_symbol_map": {
+        "benchmark": "COPPER"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "2a0e5c1c2fd0ee5038eb478c682d43d6da40cde4b794b09e19b9228fe43789f4",
+      "asset_id": "COM:WTI",
+      "economic_exposure_id": "COM:WTI",
+      "display_name": "WTI crude economic exposure",
+      "asset_class": "commodity_spot",
+      "subtype": "energy",
+      "exchange": "XNYM",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "spot",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:USO"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Commodity benchmark is mapped to a tradable product.",
+      "provider_symbol_map": {
+        "benchmark": "WTI"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "8f3d1624d5369247165974902151d3b9ee16f2ba089cddbde76e5da8bbc75b7b",
+      "asset_id": "CRYPTO:BTC",
+      "economic_exposure_id": "CRYPTO:BTC",
+      "display_name": "Bitcoin",
+      "asset_class": "crypto",
+      "subtype": "layer_1",
+      "exchange": "MULTI",
+      "currency": "USD",
+      "timezone": "UTC",
+      "price_type": "spot",
+      "tradable": true,
+      "proxy_instruments": [
+        "ETF:IBIT"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1e-8,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "benchmark": "BTC"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "2b554dcd2311f73bbb3908d43091bbf4e64b456774bb75e8e725d340b3e42384",
+      "asset_id": "CRYPTO:ETH",
+      "economic_exposure_id": "CRYPTO:ETH",
+      "display_name": "Ether",
+      "asset_class": "crypto",
+      "subtype": "layer_1",
+      "exchange": "MULTI",
+      "currency": "USD",
+      "timezone": "UTC",
+      "price_type": "spot",
+      "tradable": true,
+      "proxy_instruments": [
+        "ETF:ETHA"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1e-8,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "benchmark": "ETH"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "24778a289d2a2edf911894f5df32aa5fd04ffd4fc5c9c4facf855471f618c63d",
+      "asset_id": "YIELD:US10Y",
+      "economic_exposure_id": "YIELD:US10Y",
+      "display_name": "US 10-year Treasury yield exposure",
+      "asset_class": "yield_curve",
+      "subtype": "sovereign_10y_yield",
+      "exchange": "OTC",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "yield",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:IEF"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Yield series is not directly tradable.",
+      "provider_symbol_map": {
+        "benchmark": "US10Y"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "792a9c6af71679e6769aad2772f1af259f2ba4828d57665da5b99fa00b110381",
+      "asset_id": "YIELD:CN10Y",
+      "economic_exposure_id": "YIELD:CN10Y",
+      "display_name": "China 10-year government yield exposure",
+      "asset_class": "yield_curve",
+      "subtype": "sovereign_10y_yield",
+      "exchange": "OTC",
+      "currency": "CNY",
+      "timezone": "Asia/Shanghai",
+      "price_type": "yield",
+      "tradable": false,
+      "proxy_instruments": [
+        "ETF:511010.SS"
+      ],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "medium",
+      "default_allocation_eligible": false,
+      "ineligibility_reason": "Yield series is not directly tradable.",
+      "provider_symbol_map": {
+        "benchmark": "CN10Y"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "42eb027e7ff4c700dbbc6146bf3fa78c38008fdeb1ac3e76fffea6573b891492",
+      "asset_id": "ETF:510300.SS",
+      "economic_exposure_id": "IDX:000300.SH",
+      "display_name": "CSI 300 ETF proxy",
+      "asset_class": "etf",
+      "subtype": "equity_index_etf",
+      "exchange": "XSHG",
+      "currency": "CNY",
+      "timezone": "Asia/Shanghai",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 100,
+      "fractional_supported": false,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "510300.SS"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "3ed4bd4e323e633918931371b25e8594a8112bb51b6ae3ea8d020e1fae43e151",
+      "asset_id": "ETF:SPY",
+      "economic_exposure_id": "IDX:SPX",
+      "display_name": "SPDR S&P 500 ETF Trust",
+      "asset_class": "etf",
+      "subtype": "equity_index_etf",
+      "exchange": "ARCX",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "SPY"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "380e24698e188dadae37af4e513f32a9e3e6562d25a9ccd8c3582e94e26c1cbe",
+      "asset_id": "ETF:2800.HK",
+      "economic_exposure_id": "IDX:HSI",
+      "display_name": "Tracker Fund of Hong Kong",
+      "asset_class": "etf",
+      "subtype": "equity_index_etf",
+      "exchange": "XHKG",
+      "currency": "HKD",
+      "timezone": "Asia/Hong_Kong",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 500,
+      "fractional_supported": false,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "2800.HK"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "3594f41219e957e08a624a1d8d755a38b13345ed33a4da18c4ce7827abd94501",
+      "asset_id": "ETF:1321.T",
+      "economic_exposure_id": "IDX:N225",
+      "display_name": "Nikkei 225 ETF proxy",
+      "asset_class": "etf",
+      "subtype": "equity_index_etf",
+      "exchange": "XTKS",
+      "currency": "JPY",
+      "timezone": "Asia/Tokyo",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": false,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "1321.T"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "1b5e772c6e95eb51dc7585c859cbb0d23387b0e4a37ca699645c1cc9b8e95237",
+      "asset_id": "ETF:FEZ",
+      "economic_exposure_id": "IDX:SX5E",
+      "display_name": "SPDR EURO STOXX 50 ETF",
+      "asset_class": "etf",
+      "subtype": "equity_index_etf",
+      "exchange": "ARCX",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "FEZ"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "82788ab2ef7e11f4c4a967bb27f4e507ef81e780db753a96d24f730f7e2f71d2",
+      "asset_id": "ETF:588000.SS",
+      "economic_exposure_id": "IDX:000688.SH",
+      "display_name": "STAR 50 ETF proxy",
+      "asset_class": "etf",
+      "subtype": "technology_equity_etf",
+      "exchange": "XSHG",
+      "currency": "CNY",
+      "timezone": "Asia/Shanghai",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 100,
+      "fractional_supported": false,
+      "liquidity_tier": "medium",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "588000.SS"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "e9da4cfa44cd15035248d21cc2d472d4c60d82c874c69f850cb3dfaac86f262d",
+      "asset_id": "ETF:SOXX",
+      "economic_exposure_id": "IDX:SOX",
+      "display_name": "iShares Semiconductor ETF",
+      "asset_class": "etf",
+      "subtype": "semiconductor_etf",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "SOXX"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "f2389da4d552a6a429970998002ff2b807ffc510c771d9133e36aba37eefa395",
+      "asset_id": "ETF:QQQ",
+      "economic_exposure_id": "IDX:NDX",
+      "display_name": "Invesco QQQ Trust",
+      "asset_class": "etf",
+      "subtype": "technology_equity_etf",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "QQQ"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "bb42af3cffecf308cc80a8d27c4f711a8f505288262ddae287565d60d1b609d1",
+      "asset_id": "ETF:GLD",
+      "economic_exposure_id": "COM:XAU",
+      "display_name": "SPDR Gold Shares",
+      "asset_class": "commodity_etf",
+      "subtype": "precious_metal_etf",
+      "exchange": "ARCX",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "GLD"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "a4d75e1dbfc602ac2e358afaaa9f4f50ab466df8bcd0be93e665cb2fccf4f96a",
+      "asset_id": "ETF:CPER",
+      "economic_exposure_id": "COM:COPPER",
+      "display_name": "United States Copper Index Fund",
+      "asset_class": "commodity_etf",
+      "subtype": "industrial_metal_etf",
+      "exchange": "ARCX",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "medium",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "CPER"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "903feb36821673fda1c1e079663a3fcef49bf60984623c4eef6d465e3b711c80",
+      "asset_id": "ETF:USO",
+      "economic_exposure_id": "COM:WTI",
+      "display_name": "United States Oil Fund",
+      "asset_class": "commodity_etf",
+      "subtype": "energy_etf",
+      "exchange": "ARCX",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "USO"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "25213dcc336927ff737128ed894b58636b4fe97342d356f1b5070a5f1950979b",
+      "asset_id": "ETF:IBIT",
+      "economic_exposure_id": "CRYPTO:BTC",
+      "display_name": "Spot Bitcoin ETF proxy",
+      "asset_class": "etf",
+      "subtype": "crypto_etf",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "IBIT"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "bfaa9812411ff4ca10960d575004d85294c9cb1329323619e310f0ab22cc1074",
+      "asset_id": "ETF:ETHA",
+      "economic_exposure_id": "CRYPTO:ETH",
+      "display_name": "Spot Ether ETF proxy",
+      "asset_class": "etf",
+      "subtype": "crypto_etf",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "medium",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "ETHA"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "a640915d5586d001a1a684434e4f5a21d81d44dd2133a40d58fb9711644f49f5",
+      "asset_id": "ETF:IEF",
+      "economic_exposure_id": "YIELD:US10Y",
+      "display_name": "iShares 7-10 Year Treasury Bond ETF",
+      "asset_class": "etf",
+      "subtype": "sovereign_bond_etf",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "IEF"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "b2ab416191fa312909b32515ebc61e95a240e46d8655c0c30a486c7ba15c232e",
+      "asset_id": "ETF:511010.SS",
+      "economic_exposure_id": "YIELD:CN10Y",
+      "display_name": "China government bond ETF proxy",
+      "asset_class": "etf",
+      "subtype": "sovereign_bond_etf",
+      "exchange": "XSHG",
+      "currency": "CNY",
+      "timezone": "Asia/Shanghai",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 100,
+      "fractional_supported": false,
+      "liquidity_tier": "medium",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "511010.SS"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "051d7fbc7de72d8993441b200f48644c822277d7ee9415de10818d0e1283c063",
+      "asset_id": "ETF:ACWI",
+      "economic_exposure_id": "EQ:GLOBAL",
+      "display_name": "iShares MSCI ACWI ETF",
+      "asset_class": "etf",
+      "subtype": "global_equity_etf",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "ACWI"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "52c5c5b88fafcdb66522d0501a95ef265af061030ee203febacaf18bddef724d",
+      "asset_id": "ETF:BND",
+      "economic_exposure_id": "BOND:US_AGG",
+      "display_name": "Vanguard Total Bond Market ETF",
+      "asset_class": "etf",
+      "subtype": "aggregate_bond_etf",
+      "exchange": "XNAS",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "BND"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "1f93757d7f1b9e84b762acb0f3b68ffbfcba7f320187ee8f781b4d8cbf43d3d4",
+      "asset_id": "ETF:VWO",
+      "economic_exposure_id": "EQ:EMERGING",
+      "display_name": "Vanguard FTSE Emerging Markets ETF",
+      "asset_class": "etf",
+      "subtype": "emerging_equity_etf",
+      "exchange": "ARCX",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "VWO"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "9ce2cbbd5a17c5743cb158832cd04348d873ed043f8329f59de23f10ccd4ce54",
+      "asset_id": "REIT:VNQ",
+      "economic_exposure_id": "REAL_ESTATE:US",
+      "display_name": "Vanguard Real Estate ETF",
+      "asset_class": "reit",
+      "subtype": "listed_reit_etf",
+      "exchange": "ARCX",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "price_type": "adjusted_close",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 1,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "VNQ"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "b567baf62b7a89158e50a1dca7184c2c99a4b83945306ed8d872a7fbe5f920af",
+      "asset_id": "CASH:USD",
+      "economic_exposure_id": "CASH:USD",
+      "display_name": "US dollar cash equivalent",
+      "asset_class": "cash",
+      "subtype": "cash_equivalent",
+      "exchange": "OTC",
+      "currency": "USD",
+      "timezone": "UTC",
+      "price_type": "nav",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 0.01,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "USD-CASH"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    },
+    {
+      "schema_version": "v1",
+      "created_at": "2026-08-10T00:00:00Z",
+      "source_refs": [
+        {
+          "ref_id": "registry:mock-v1",
+          "source_type": "registry",
+          "label": "Deterministic development registry"
+        }
+      ],
+      "content_hash": "0496460e8bf8c4c483c7fb70083304f6b40ce69cb6da483e50c4505dfb795e50",
+      "asset_id": "CASH:CNY",
+      "economic_exposure_id": "CASH:CNY",
+      "display_name": "Renminbi cash equivalent",
+      "asset_class": "cash",
+      "subtype": "cash_equivalent",
+      "exchange": "OTC",
+      "currency": "CNY",
+      "timezone": "Asia/Shanghai",
+      "price_type": "nav",
+      "tradable": true,
+      "proxy_instruments": [],
+      "contract_multiplier": 1,
+      "lot_size": 0.01,
+      "fractional_supported": true,
+      "liquidity_tier": "high",
+      "default_allocation_eligible": true,
+      "provider_symbol_map": {
+        "mock": "CNY-CASH"
+      },
+      "data_license": {
+        "license_id": "mock-development-v1",
+        "redistribution": "allowed",
+        "usage": "development_mock",
+        "attribution": "Synthetic metadata; no live market data."
+      }
+    }
+  ]
+}

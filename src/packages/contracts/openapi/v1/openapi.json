@@ -1,0 +1,4739 @@
+{
+  "components": {
+    "schemas": {
+      "AcceptanceFixture": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "expected": {
+                "$ref": "#/components/schemas/AcceptanceFixtureExpected"
+              },
+              "fixture_version": {
+                "const": "v1"
+              },
+              "input": {
+                "$ref": "#/components/schemas/AcceptanceFixtureInput"
+              },
+              "scenario": {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G"
+                ]
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "fixture_version",
+              "scenario",
+              "title",
+              "input",
+              "expected"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "AcceptanceFixtureExpected": {
+        "additionalProperties": false,
+        "properties": {
+          "markers": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "portfolio_ready",
+              "confirmed_with_reservations",
+              "evidence_accepted",
+              "equal_weight_fallback",
+              "cash_or_proxy_rounding",
+              "historical_only",
+              "retry_cancel_resume"
+            ]
+          }
+        },
+        "required": [
+          "outcome",
+          "markers"
+        ],
+        "type": "object"
+      },
+      "AcceptanceFixtureInput": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "base_currency": {
+                "$ref": "#/components/schemas/Currency"
+              },
+              "capital": {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "kind": {
+                "const": "complete_thesis"
+              },
+              "thesis": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "thesis",
+              "capital",
+              "base_currency"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "claim": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "private_evidence"
+              },
+              "public_evidence_available": {
+                "const": false
+              }
+            },
+            "required": [
+              "kind",
+              "claim",
+              "public_evidence_available"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "excerpt": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "client_evidence_fallback"
+              },
+              "search_available": {
+                "const": false
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "url",
+              "excerpt",
+              "search_available"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "no_valid_factors"
+              },
+              "valid_factor_count": {
+                "const": 0
+              }
+            },
+            "required": [
+              "kind",
+              "valid_factor_count"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "capital": {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "kind": {
+                "const": "small_capital"
+              },
+              "minimum_lot_cost": {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "kind",
+              "capital",
+              "minimum_lot_cost"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "as_of": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "freshness_threshold_hours": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "kind": {
+                "const": "stale_data"
+              }
+            },
+            "required": [
+              "kind",
+              "as_of",
+              "freshness_threshold_hours"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "failure": {
+                "enum": [
+                  "429",
+                  "502",
+                  "timeout"
+                ]
+              },
+              "idempotency_key": {
+                "minLength": 8,
+                "type": "string"
+              },
+              "kind": {
+                "const": "provider_failure"
+              }
+            },
+            "required": [
+              "kind",
+              "failure",
+              "idempotency_key"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "AssetImpact": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "already_priced_score": {
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4
+                ]
+              },
+              "decay": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "direction": {
+                "enum": [
+                  "positive",
+                  "negative",
+                  "mixed"
+                ]
+              },
+              "economic_exposure_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "evidence_refs": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "type": "array"
+              },
+              "first_order_reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "impact_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "instrument_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "peak_window": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "second_order_reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              "start_window": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "impact_id",
+              "economic_exposure_id",
+              "direction",
+              "severity",
+              "start_window",
+              "peak_window",
+              "decay",
+              "first_order_reason",
+              "already_priced_score",
+              "evidence_refs"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "AssetRegistryEntry": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "asset_class": {
+                "enum": [
+                  "equity",
+                  "etf",
+                  "fund",
+                  "index",
+                  "sovereign_bond",
+                  "credit_bond",
+                  "yield_curve",
+                  "fx",
+                  "commodity_spot",
+                  "commodity_etf",
+                  "future",
+                  "crypto",
+                  "real_estate",
+                  "reit",
+                  "option",
+                  "derivative",
+                  "cash"
+                ]
+              },
+              "asset_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "contract_multiplier": {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "currency": {
+                "$ref": "#/components/schemas/Currency"
+              },
+              "data_license": {
+                "$ref": "#/components/schemas/DataLicense"
+              },
+              "default_allocation_eligible": {
+                "type": "boolean"
+              },
+              "derivative": {
+                "$ref": "#/components/schemas/DerivativeSpec"
+              },
+              "display_name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "economic_exposure_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "exchange": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "fractional_supported": {
+                "type": "boolean"
+              },
+              "ineligibility_reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "liquidity_tier": {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low",
+                  "restricted"
+                ]
+              },
+              "lot_size": {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "price_type": {
+                "enum": [
+                  "adjusted_close",
+                  "close",
+                  "spot",
+                  "yield",
+                  "nav",
+                  "mark"
+                ]
+              },
+              "provider_symbol_map": {
+                "additionalProperties": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "proxy_instruments": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "type": "array"
+              },
+              "subtype": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "timezone": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "tradable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "asset_id",
+              "economic_exposure_id",
+              "display_name",
+              "asset_class",
+              "subtype",
+              "exchange",
+              "currency",
+              "timezone",
+              "price_type",
+              "tradable",
+              "proxy_instruments",
+              "contract_multiplier",
+              "lot_size",
+              "fractional_supported",
+              "liquidity_tier",
+              "data_license",
+              "provider_symbol_map",
+              "default_allocation_eligible"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "AssetRegistrySnapshot": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "as_of": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "assets": {
+                "items": {
+                  "$ref": "#/components/schemas/AssetRegistryEntry"
+                },
+                "minItems": 20,
+                "type": "array"
+              },
+              "registry_version": {
+                "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "registry_version",
+              "as_of",
+              "assets"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "AssetSearchResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AssetRegistryEntry"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          },
+          "total": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "CancelOperationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cancel_token": {
+            "maxLength": 200,
+            "minLength": 16,
+            "type": "string"
+          }
+        },
+        "required": [
+          "cancel_token"
+        ],
+        "type": "object"
+      },
+      "ChallengeMessageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "ChallengeOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "challenge": {
+            "$ref": "#/components/schemas/ChallengeRecord"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          }
+        },
+        "required": [
+          "operation",
+          "challenge"
+        ],
+        "type": "object"
+      },
+      "ChallengeRecord": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "challenge_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "claims": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "missing_evidence": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "objections": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "private_evidence_declared": {
+                "type": "boolean"
+              },
+              "questions": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "type": "array"
+              },
+              "reservation_note": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "rubric_scores": {
+                "items": {
+                  "$ref": "#/components/schemas/RubricScore"
+                },
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
+              },
+              "status": {
+                "enum": [
+                  "CHALLENGING",
+                  "EVIDENCE_REQUIRED",
+                  "CONFIRMED"
+                ]
+              },
+              "thesis_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "turn_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "unresolved_issues": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "user_confirmation": {
+                "enum": [
+                  "pending",
+                  "confirmed",
+                  "confirmed_with_reservations"
+                ]
+              }
+            },
+            "required": [
+              "turn_id",
+              "challenge_id",
+              "thesis_id",
+              "claims",
+              "objections",
+              "missing_evidence",
+              "questions",
+              "rubric_scores",
+              "unresolved_issues",
+              "user_confirmation",
+              "private_evidence_declared",
+              "status"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "ClientAttestationOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attestation": {
+            "$ref": "#/components/schemas/ClientComputationAttestation"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          }
+        },
+        "required": [
+          "operation",
+          "attestation"
+        ],
+        "type": "object"
+      },
+      "ClientComputationAttestRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "engine_version": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "factor_manifest_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "input_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "market_manifest_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "operation_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "output_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "worldline_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          }
+        },
+        "required": [
+          "operation_id",
+          "engine_version",
+          "worldline_hash",
+          "market_manifest_hash",
+          "factor_manifest_hash",
+          "input_hash",
+          "output_hash",
+          "completed_at"
+        ],
+        "type": "object"
+      },
+      "ClientComputationAttestation": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "accepted": {
+                "type": "boolean"
+              },
+              "completed_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "computation_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "engine_version": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "factor_manifest_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              },
+              "input_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              },
+              "market_manifest_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              },
+              "operation_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "output_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              },
+              "rejection_reasons": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "worldline_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              }
+            },
+            "required": [
+              "computation_id",
+              "operation_id",
+              "engine_version",
+              "worldline_hash",
+              "market_manifest_hash",
+              "factor_manifest_hash",
+              "input_hash",
+              "output_hash",
+              "completed_at",
+              "accepted",
+              "rejection_reasons"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "ConfirmChallengeRequest": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "command": {
+                  "const": "CONFIRM_WITH_RESERVATIONS"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            },
+            "then": {
+              "properties": {
+                "unresolved_issues_acknowledged": {
+                  "const": true
+                }
+              },
+              "required": [
+                "reservation_note"
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "command": {
+            "enum": [
+              "CONFIRM",
+              "CONFIRM_WITH_RESERVATIONS"
+            ]
+          },
+          "reservation_note": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "unresolved_issues_acknowledged": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "unresolved_issues_acknowledged"
+        ],
+        "type": "object"
+      },
+      "ContractMetadata": {
+        "properties": {
+          "content_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "schema_version": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRef"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "created_at",
+          "source_refs",
+          "content_hash"
+        ],
+        "type": "object"
+      },
+      "CreateChallengeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "base_currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "capital": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "session_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "thesis": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "user_private_evidence_claims": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "thesis",
+          "capital",
+          "base_currency",
+          "user_private_evidence_claims"
+        ],
+        "type": "object"
+      },
+      "CreateSessionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "client_locale": {
+            "maxLength": 35,
+            "minLength": 2,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Currency": {
+        "pattern": "^[A-Z]{3}$",
+        "type": "string"
+      },
+      "DataLicense": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "license_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "redistribution": {
+            "enum": [
+              "allowed",
+              "forbidden",
+              "internal_test_only"
+            ]
+          },
+          "usage": {
+            "enum": [
+              "public_display",
+              "derived_only",
+              "development_mock"
+            ]
+          }
+        },
+        "required": [
+          "license_id",
+          "redistribution",
+          "usage"
+        ],
+        "type": "object"
+      },
+      "DerivativeSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "contract_multiplier": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "delta": {
+            "maximum": 1,
+            "minimum": -1,
+            "type": "number"
+          },
+          "expiry": {
+            "format": "date",
+            "type": "string"
+          },
+          "implied_volatility": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "margin": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "option_type": {
+            "enum": [
+              "call",
+              "put"
+            ]
+          },
+          "risk_model_version": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "strike": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "expiry",
+          "contract_multiplier",
+          "margin",
+          "risk_model_version"
+        ],
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "location": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "message": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "type": "array"
+          },
+          "error_code": {
+            "enum": [
+              "bad_request",
+              "validation_error",
+              "not_found",
+              "invalid_state_transition",
+              "idempotency_conflict",
+              "invalid_operation_token",
+              "invalid_last_event_id",
+              "contract_violation",
+              "internal_error"
+            ]
+          },
+          "message": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "request_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          }
+        },
+        "required": [
+          "schema_version",
+          "error_code",
+          "message",
+          "request_id",
+          "retryable",
+          "details"
+        ],
+        "type": "object"
+      },
+      "EvidenceItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "challenge_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "evidence_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "excerpt": {
+                "maxLength": 10000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "grade": {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E"
+                ]
+              },
+              "independently_reviewable": {
+                "type": "boolean"
+              },
+              "published_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "publisher": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "retrieved_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "source_type": {
+                "enum": [
+                  "primary",
+                  "reliable_secondary",
+                  "commentary",
+                  "user_private",
+                  "model_inference"
+                ]
+              },
+              "supports_or_challenges": {
+                "enum": [
+                  "supports",
+                  "challenges",
+                  "context"
+                ]
+              },
+              "title": {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              "url": {
+                "format": "uri",
+                "type": "string"
+              },
+              "user_note": {
+                "maxLength": 2000,
+                "type": "string"
+              }
+            },
+            "required": [
+              "evidence_id",
+              "challenge_id",
+              "source_type",
+              "title",
+              "retrieved_at",
+              "excerpt",
+              "grade",
+              "supports_or_challenges",
+              "independently_reviewable"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "EvidenceSubmissionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "excerpt": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "publisher": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "url": {
+            "format": "uri",
+            "type": "string"
+          },
+          "user_note": {
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "retrieved_at",
+          "excerpt",
+          "user_note",
+          "content_hash"
+        ],
+        "type": "object"
+      },
+      "FactorAdmission": {
+        "additionalProperties": false,
+        "properties": {
+          "active_top_k": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "correlation_threshold": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "ic_threshold": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "icir_threshold": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "ic_threshold",
+          "icir_threshold",
+          "correlation_threshold",
+          "active_top_k"
+        ],
+        "type": "object"
+      },
+      "FactorDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "expression_tokens": {
+            "items": {
+              "$ref": "#/components/schemas/FactorToken"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "factor_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "forecast_horizon": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ic_mean": {
+            "type": "number"
+          },
+          "icir": {
+            "type": "number"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "factor_id",
+          "name",
+          "expression_tokens",
+          "ic_mean",
+          "icir",
+          "forecast_horizon",
+          "valid"
+        ],
+        "type": "object"
+      },
+      "FactorLibraryManifest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "admission": {
+                "$ref": "#/components/schemas/FactorAdmission"
+              },
+              "as_of": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "dsl_version": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "factor_ids": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "integrity": {
+                "$ref": "#/components/schemas/Integrity"
+              },
+              "library_version": {
+                "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "metric_version": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "shards": {
+                "items": {
+                  "$ref": "#/components/schemas/ShardDescriptor"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "library_version",
+              "metric_version",
+              "dsl_version",
+              "as_of",
+              "admission",
+              "factor_ids",
+              "shards",
+              "integrity"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "FactorLibraryShard": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "factors": {
+                "items": {
+                  "$ref": "#/components/schemas/FactorDefinition"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "integrity": {
+                "$ref": "#/components/schemas/Integrity"
+              },
+              "library_version": {
+                "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "shard_id": {
+                "$ref": "#/components/schemas/Identifier"
+              }
+            },
+            "required": [
+              "library_version",
+              "shard_id",
+              "factors",
+              "integrity"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "FactorToken": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "enum": [
+                  "open",
+                  "high",
+                  "low",
+                  "close",
+                  "volume",
+                  "amount"
+                ]
+              },
+              "kind": {
+                "const": "field"
+              }
+            },
+            "required": [
+              "kind",
+              "field"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "constant"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "arity": {
+                "enum": [
+                  1,
+                  2
+                ]
+              },
+              "kind": {
+                "const": "operator"
+              },
+              "operator": {
+                "enum": [
+                  "add",
+                  "subtract",
+                  "multiply",
+                  "divide",
+                  "log",
+                  "difference",
+                  "rank",
+                  "rolling_mean"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "operator",
+              "arity"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clock": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provider": {
+            "const": "deterministic_mock"
+          },
+          "schema_version": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          },
+          "status": {
+            "const": "ok"
+          }
+        },
+        "required": [
+          "status",
+          "provider",
+          "schema_version",
+          "clock"
+        ],
+        "type": "object"
+      },
+      "HeartbeatEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SseEventBase"
+          },
+          {
+            "properties": {
+              "event": {
+                "const": "heartbeat"
+              }
+            },
+            "required": [
+              "event"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "Identifier": {
+        "maxLength": 160,
+        "minLength": 1,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        "type": "string"
+      },
+      "Integrity": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "const": "sha256"
+          },
+          "digest": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "key_id": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        },
+        "required": [
+          "algorithm",
+          "digest",
+          "key_id"
+        ],
+        "type": "object"
+      },
+      "MarketDataManifest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "as_of": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "asset_ids": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "data_license": {
+                "$ref": "#/components/schemas/DataLicense"
+              },
+              "field_set": {
+                "items": {
+                  "enum": [
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                    "amount",
+                    "currency",
+                    "adjusted",
+                    "provider",
+                    "as_of"
+                  ]
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "freshness": {
+                "enum": [
+                  "current",
+                  "stale",
+                  "historical_only"
+                ]
+              },
+              "integrity": {
+                "$ref": "#/components/schemas/Integrity"
+              },
+              "manifest_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "market_data_version": {
+                "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "provider": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "registry_version": {
+                "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+                "type": "string"
+              },
+              "shards": {
+                "items": {
+                  "$ref": "#/components/schemas/ShardDescriptor"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "manifest_id",
+              "market_data_version",
+              "registry_version",
+              "provider",
+              "as_of",
+              "freshness",
+              "field_set",
+              "asset_ids",
+              "data_license",
+              "shards",
+              "integrity"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "MarketDataManifestOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/MarketDataManifest"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          }
+        },
+        "required": [
+          "operation",
+          "manifest"
+        ],
+        "type": "object"
+      },
+      "MarketDataManifestRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_ids": {
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "field_set": {
+            "items": {
+              "enum": [
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "amount",
+                "currency",
+                "adjusted",
+                "provider",
+                "as_of"
+              ]
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset_ids",
+          "from",
+          "to",
+          "field_set"
+        ],
+        "type": "object"
+      },
+      "MarketDataRow": {
+        "additionalProperties": false,
+        "properties": {
+          "adjusted": {
+            "type": "boolean"
+          },
+          "amount": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "as_of": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "asset_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "close": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "contract_multiplier": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "datetime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "delta": {
+            "maximum": 1,
+            "minimum": -1,
+            "type": "number"
+          },
+          "expiry": {
+            "format": "date",
+            "type": "string"
+          },
+          "high": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "implied_volatility": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "low": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "margin": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "open": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "option_type": {
+            "enum": [
+              "call",
+              "put"
+            ]
+          },
+          "provider": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "strike": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "volume": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "datetime",
+          "asset_id",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume",
+          "amount",
+          "currency",
+          "adjusted",
+          "provider",
+          "as_of"
+        ],
+        "type": "object"
+      },
+      "MarketDataShard": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "integrity": {
+                "$ref": "#/components/schemas/Integrity"
+              },
+              "manifest_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "rows": {
+                "items": {
+                  "$ref": "#/components/schemas/MarketDataRow"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "shard_id": {
+                "$ref": "#/components/schemas/Identifier"
+              }
+            },
+            "required": [
+              "manifest_id",
+              "shard_id",
+              "rows",
+              "integrity"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "MarketDataShardOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          },
+          "shard": {
+            "$ref": "#/components/schemas/MarketDataShard"
+          }
+        },
+        "required": [
+          "operation",
+          "shard"
+        ],
+        "type": "object"
+      },
+      "MarketDataShardRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "manifest_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "shard_id": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        },
+        "required": [
+          "manifest_id",
+          "shard_id"
+        ],
+        "type": "object"
+      },
+      "MethodologyResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "client_computation": {
+            "const": true
+          },
+          "disclosure": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "methodology_version": {
+            "const": "v1"
+          },
+          "probability_display": {
+            "const": "interval_first"
+          },
+          "schema_version": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          }
+        },
+        "required": [
+          "schema_version",
+          "methodology_version",
+          "disclosure",
+          "probability_display",
+          "client_computation"
+        ],
+        "type": "object"
+      },
+      "Operation": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "cancel_token": {
+                "maxLength": 200,
+                "minLength": 16,
+                "type": "string"
+              },
+              "endpoint": {
+                "pattern": "^/v1/",
+                "type": "string"
+              },
+              "idempotency_key_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              },
+              "last_event_id": {
+                "pattern": "^[A-Za-z0-9._:-]+:[0-9]+$",
+                "type": "string"
+              },
+              "operation_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "resume_token": {
+                "maxLength": 200,
+                "minLength": 16,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "running",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation_id",
+              "endpoint",
+              "status",
+              "updated_at",
+              "idempotency_key_hash",
+              "cancel_token",
+              "resume_token",
+              "last_event_id"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "OperationCompleteEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SseEventBase"
+          },
+          {
+            "properties": {
+              "event": {
+                "const": "operation.complete"
+              },
+              "result_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              },
+              "result_ref": {
+                "$ref": "#/components/schemas/Identifier"
+              }
+            },
+            "required": [
+              "event",
+              "result_ref",
+              "result_hash"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "OperationErrorEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SseEventBase"
+          },
+          {
+            "properties": {
+              "error": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              "event": {
+                "const": "operation.error"
+              },
+              "retryable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "event",
+              "error",
+              "retryable"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "OperationProgressEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SseEventBase"
+          },
+          {
+            "properties": {
+              "event": {
+                "const": "operation.progress"
+              },
+              "message": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "progress": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "event",
+              "progress",
+              "message"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "OperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "type": "object"
+      },
+      "OperationStartedEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SseEventBase"
+          },
+          {
+            "properties": {
+              "event": {
+                "const": "operation.started"
+              },
+              "message": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "event",
+              "message"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "ProbabilityAssessment": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "adjustment_reasons": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "assessment_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "base_rate_refs": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "type": "array"
+              },
+              "calibration_status": {
+                "enum": [
+                  "model_estimate_unvalidated",
+                  "historically_calibrated"
+                ]
+              },
+              "conditional_probability": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "conditional_probability_range": {
+                "$ref": "#/components/schemas/ProbabilityRange"
+              },
+              "confidence": {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              "joint_probability": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "joint_probability_range": {
+                "$ref": "#/components/schemas/ProbabilityRange"
+              },
+              "premise_probability": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "premise_probability_range": {
+                "$ref": "#/components/schemas/ProbabilityRange"
+              },
+              "worldline_id": {
+                "$ref": "#/components/schemas/Identifier"
+              }
+            },
+            "required": [
+              "assessment_id",
+              "worldline_id",
+              "premise_probability",
+              "premise_probability_range",
+              "conditional_probability",
+              "conditional_probability_range",
+              "joint_probability",
+              "joint_probability_range",
+              "confidence",
+              "base_rate_refs",
+              "adjustment_reasons",
+              "calibration_status"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "ProbabilityOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          },
+          "probability": {
+            "$ref": "#/components/schemas/ProbabilityAssessment"
+          }
+        },
+        "required": [
+          "operation",
+          "probability"
+        ],
+        "type": "object"
+      },
+      "ProbabilityRange": {
+        "additionalProperties": false,
+        "properties": {
+          "maximum": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "minimum": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "minimum",
+          "maximum"
+        ],
+        "type": "object"
+      },
+      "ProbabilityRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "conditional_path": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "premise": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "worldline_id": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        },
+        "required": [
+          "worldline_id",
+          "premise",
+          "conditional_path"
+        ],
+        "type": "object"
+      },
+      "ResearchSession": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "expires_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "session_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ResearchStatus"
+              }
+            },
+            "required": [
+              "session_id",
+              "status",
+              "expires_at"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "ResearchStatus": {
+        "enum": [
+          "DRAFT",
+          "CHALLENGING",
+          "EVIDENCE_REQUIRED",
+          "CONFIRMED",
+          "WORLDLINE_GENERATING",
+          "WORLDLINE_READY",
+          "DATA_PREPARING",
+          "CLIENT_COMPUTING",
+          "PORTFOLIO_READY",
+          "EXPORTED"
+        ]
+      },
+      "ResumeOperationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "resume_token": {
+            "maxLength": 200,
+            "minLength": 16,
+            "type": "string"
+          }
+        },
+        "required": [
+          "resume_token"
+        ],
+        "type": "object"
+      },
+      "RevealEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "event_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "event_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "reveal_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "rule": {
+            "enum": [
+              "scheduled",
+              "leak",
+              "observed"
+            ]
+          }
+        },
+        "required": [
+          "event_id",
+          "event_date",
+          "reveal_date",
+          "rule"
+        ],
+        "type": "object"
+      },
+      "RubricScore": {
+        "additionalProperties": false,
+        "properties": {
+          "criterion": {
+            "enum": [
+              "premise_clarity",
+              "time_boundary",
+              "trigger_observability",
+              "causal_chain",
+              "counterfactuals",
+              "evidence_quality",
+              "asset_transmission",
+              "already_priced",
+              "falsifiability",
+              "user_confirmation"
+            ]
+          },
+          "rationale": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "score": {
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          }
+        },
+        "required": [
+          "criterion",
+          "score",
+          "rationale"
+        ],
+        "type": "object"
+      },
+      "SchemaVersion": {
+        "const": "v1"
+      },
+      "SessionOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          },
+          "session": {
+            "$ref": "#/components/schemas/ResearchSession"
+          }
+        },
+        "required": [
+          "operation",
+          "session"
+        ],
+        "type": "object"
+      },
+      "Sha256": {
+        "pattern": "^[a-f0-9]{64}$",
+        "type": "string"
+      },
+      "ShardDescriptor": {
+        "additionalProperties": false,
+        "properties": {
+          "content_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "row_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "shard_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shard_id",
+          "content_hash",
+          "row_count",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "SourceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "ref_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "source_type": {
+            "enum": [
+              "public",
+              "user_submitted",
+              "model_inference",
+              "market_data",
+              "registry",
+              "factor_library"
+            ]
+          },
+          "url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref_id",
+          "source_type",
+          "label"
+        ],
+        "type": "object"
+      },
+      "SseEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/OperationStartedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/OperationProgressEvent"
+          },
+          {
+            "$ref": "#/components/schemas/HeartbeatEvent"
+          },
+          {
+            "$ref": "#/components/schemas/OperationErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/OperationCompleteEvent"
+          }
+        ]
+      },
+      "SseEventBase": {
+        "properties": {
+          "emitted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "operation_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "schema_version": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          },
+          "sequence": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "sequence",
+          "emitted_at"
+        ],
+        "type": "object"
+      },
+      "ThesisDocument": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "base_currency": {
+                "$ref": "#/components/schemas/Currency"
+              },
+              "capital": {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "claimed_asset_impacts": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              "horizon": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "normalized_premise": {
+                "maxLength": 10000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "raw_text": {
+                "maxLength": 10000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "session_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ResearchStatus"
+              },
+              "thesis_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "trigger_events": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              "user_private_evidence_claims": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "thesis_id",
+              "session_id",
+              "raw_text",
+              "normalized_premise",
+              "horizon",
+              "trigger_events",
+              "claimed_asset_impacts",
+              "capital",
+              "base_currency",
+              "user_private_evidence_claims",
+              "status"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "Worldline": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "asset_anchors": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "type": "array"
+              },
+              "baseline_date": {
+                "format": "date",
+                "type": "string"
+              },
+              "branch_kind": {
+                "enum": [
+                  "weak",
+                  "main",
+                  "strong"
+                ]
+              },
+              "bundle_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "edges": {
+                "items": {
+                  "$ref": "#/components/schemas/WorldlineEdge"
+                },
+                "type": "array"
+              },
+              "event_reveal_schedule": {
+                "items": {
+                  "$ref": "#/components/schemas/RevealEvent"
+                },
+                "type": "array"
+              },
+              "horizon_end": {
+                "format": "date",
+                "type": "string"
+              },
+              "invalidation_conditions": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "nodes": {
+                "items": {
+                  "$ref": "#/components/schemas/WorldlineNode"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "premise": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "provenance": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "const": "WORLDLINE_READY"
+              },
+              "title": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "worldline_id": {
+                "$ref": "#/components/schemas/Identifier"
+              }
+            },
+            "required": [
+              "worldline_id",
+              "bundle_id",
+              "branch_kind",
+              "title",
+              "premise",
+              "baseline_date",
+              "horizon_end",
+              "nodes",
+              "edges",
+              "asset_anchors",
+              "event_reveal_schedule",
+              "invalidation_conditions",
+              "provenance",
+              "status"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "WorldlineBundle": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContractMetadata"
+          },
+          {
+            "properties": {
+              "bundle_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "challenge_id": {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              "worldlines": {
+                "items": {
+                  "$ref": "#/components/schemas/Worldline"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              }
+            },
+            "required": [
+              "bundle_id",
+              "challenge_id",
+              "worldlines"
+            ],
+            "type": "object"
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "WorldlineBundleOperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/WorldlineBundle"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          }
+        },
+        "required": [
+          "operation",
+          "bundle"
+        ],
+        "type": "object"
+      },
+      "WorldlineEdge": {
+        "additionalProperties": false,
+        "properties": {
+          "from_node_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "to_node_id": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        },
+        "required": [
+          "from_node_id",
+          "to_node_id"
+        ],
+        "type": "object"
+      },
+      "WorldlineNode": {
+        "additionalProperties": false,
+        "properties": {
+          "causal_parents": {
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            },
+            "type": "array"
+          },
+          "confidence": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "event": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "node_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "observable_indicators": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state_changes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "time_window": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id",
+          "time_window",
+          "event",
+          "observable_indicators",
+          "causal_parents",
+          "state_changes",
+          "confidence"
+        ],
+        "type": "object"
+      },
+      "WorldlineRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "challenge_id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "horizon_end": {
+            "format": "date",
+            "type": "string"
+          },
+          "premise": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "premise",
+          "horizon_end"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
+    "title": "ForesightNine API",
+    "version": "1.0.0",
+    "x-contract-sha256": "bddc7eb1f3b8d9eb4250a8e48beb06f8376a6d01a3b3dc7fa3e4f3c23134d651"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/v1/assets/search": {
+      "get": {
+        "operationId": "searchAssets",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Query",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Search Assets"
+      }
+    },
+    "/v1/assets/{asset_id}": {
+      "get": {
+        "operationId": "getAsset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetRegistryEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Get Asset"
+      }
+    },
+    "/v1/challenges": {
+      "post": {
+        "operationId": "createChallenge",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChallengeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Create Challenge"
+      }
+    },
+    "/v1/challenges/{challenge_id}/confirm": {
+      "post": {
+        "operationId": "confirmChallenge",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmChallengeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Confirm Challenge"
+      }
+    },
+    "/v1/challenges/{challenge_id}/evidence": {
+      "post": {
+        "operationId": "addChallengeEvidence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceSubmissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Add Challenge Evidence"
+      }
+    },
+    "/v1/challenges/{challenge_id}/messages": {
+      "post": {
+        "operationId": "addChallengeMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChallengeMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Add Challenge Message"
+      }
+    },
+    "/v1/client-computations/{computation_id}/attest": {
+      "post": {
+        "operationId": "attestClientComputation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "computation_id",
+            "required": true,
+            "schema": {
+              "title": "Computation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientComputationAttestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientAttestationOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Attest Client Computation"
+      }
+    },
+    "/v1/factor-libraries/{version}/manifest": {
+      "get": {
+        "operationId": "getFactorLibraryManifest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorLibraryManifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Get Factor Manifest"
+      }
+    },
+    "/v1/factor-libraries/{version}/shards": {
+      "get": {
+        "operationId": "getFactorLibraryShard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "shard_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Shard Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorLibraryShard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Get Factor Shard"
+      }
+    },
+    "/v1/market-data/manifests": {
+      "post": {
+        "operationId": "createMarketDataManifest",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketDataManifestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataManifestOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Create Market Manifest"
+      }
+    },
+    "/v1/market-data/shards": {
+      "post": {
+        "operationId": "getMarketDataShard",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketDataShardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataShardOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Get Market Shard"
+      }
+    },
+    "/v1/methodology": {
+      "get": {
+        "operationId": "getMethodology",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MethodologyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Methodology"
+      }
+    },
+    "/v1/operations/{operation_id}/cancel": {
+      "post": {
+        "operationId": "cancelOperation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Cancel Operation"
+      }
+    },
+    "/v1/operations/{operation_id}/events": {
+      "get": {
+        "operationId": "streamOperationEvents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/SseEvent"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Replayable Server-Sent Events. IDs are operation_id:sequence."
+          },
+          "400": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Stream Operation Events"
+      }
+    },
+    "/v1/operations/{operation_id}/resume": {
+      "post": {
+        "operationId": "resumeOperation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Resume Operation"
+      }
+    },
+    "/v1/probabilities/assess": {
+      "post": {
+        "operationId": "assessProbability",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbabilityOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Assess Probability"
+      }
+    },
+    "/v1/sessions": {
+      "post": {
+        "operationId": "createSession",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Create Session"
+      }
+    },
+    "/v1/worldlines": {
+      "post": {
+        "operationId": "createWorldlines",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldlineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldlineBundleOperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Create Worldlines"
+      }
+    },
+    "/v1/worldlines/{worldline_id}": {
+      "get": {
+        "operationId": "getWorldline",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "worldline_id",
+            "required": true,
+            "schema": {
+              "title": "Worldline Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worldline"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Get Worldline"
+      }
+    }
+  }
+}

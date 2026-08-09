@@ -1,0 +1,50 @@
+{
+  "captured_at": "2026-08-10T00:00:00+08:00",
+  "algorithm": "sha256",
+  "read_only_roots": [
+    "D:\\FM acceleration",
+    "D:\\FM acceleration-deepseek",
+    "D:\\WL-data-final",
+    "D:\\ACFM_WL_paperwriting",
+    "/home/lxx/trade-agent-crisis",
+    "/home/lxx/trade-agent-benchmark"
+  ],
+  "files": [
+    {
+      "path": "D:\\FM acceleration-deepseek\\bundle\\agent-framework\\scheduler\\fm_walk_forward.py",
+      "purpose": "walk-forward decision cadence, signal combination, raw target weights and transaction-cost dead-band",
+      "size": 21497,
+      "sha256": "00b84bbd3cccb8c01598edc541ac132c99c31705d24c6fc6cf84dbd3639b6163"
+    },
+    {
+      "path": "D:\\FM acceleration-deepseek\\bundle\\agent-framework\\FactorMiner\\factorminer\\evaluation\\combination.py",
+      "purpose": "reference factor-combination variants and documented semantic differences",
+      "size": 6666,
+      "sha256": "3865b32237715d22d47e2c2b18582de8900efb7b831802f5371b440bc7da5414"
+    },
+    {
+      "path": "D:\\FM acceleration-deepseek\\bundle\\agent-framework\\FactorMiner\\factorminer\\evaluation\\portfolio.py",
+      "purpose": "portfolio construction reference and zero-based rank variant",
+      "size": 9131,
+      "sha256": "a6286aa0ffbd87e7dbc5807dc9b2b444e8345511d711c2b550029642d75092bb"
+    },
+    {
+      "path": "D:\\FM acceleration-deepseek\\bundle\\agent-framework\\FactorMiner\\factorminer\\evaluation\\metrics.py",
+      "purpose": "IC/ICIR reference for M-by-T input layout",
+      "size": 11588,
+      "sha256": "4e5c145ebb8e47911baddcc4bb169716a78408b3b780c00d603d9ff108c4e4d4"
+    },
+    {
+      "path": "D:\\FM acceleration-deepseek\\bundle\\agent-framework\\FactorMiner\\factorminer\\evaluation\\backtest.py",
+      "purpose": "backtest IC statistics reference for T-by-N layout",
+      "size": 10784,
+      "sha256": "4b2bd0420ed1f0af0d819131033217146d767ccabc755bbfc9c3d92b7ff556a9"
+    },
+    {
+      "path": "D:\\FM acceleration-deepseek\\bundle\\agent-framework\\ASSETS.yaml",
+      "purpose": "benchmark asset registry, initial capital and factor-admission metadata",
+      "size": 5637,
+      "sha256": "fd2af322c5656c4360d0fc54292d3af510c6b14169f006c587f8ab3149097920"
+    }
+  ]
+}

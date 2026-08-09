@@ -1,0 +1,804 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://foresightnine.local/contracts/v1/contracts.schema.json",
+  "title": "ForesightNine canonical contracts v1",
+  "description": "The sole authority for v1 entities, API payloads, operation control, SSE events, manifests, shards and acceptance fixtures.",
+  "$defs": {
+    "SchemaVersion": { "const": "v1" },
+    "Identifier": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "Sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "Currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "ResearchStatus": { "enum": ["DRAFT", "CHALLENGING", "EVIDENCE_REQUIRED", "CONFIRMED", "WORLDLINE_GENERATING", "WORLDLINE_READY", "DATA_PREPARING", "CLIENT_COMPUTING", "PORTFOLIO_READY", "EXPORTED"] },
+    "SourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref_id", "source_type", "label"],
+      "properties": {
+        "ref_id": { "$ref": "#/$defs/Identifier" },
+        "source_type": { "enum": ["public", "user_submitted", "model_inference", "market_data", "registry", "factor_library"] },
+        "label": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "ContractMetadata": {
+      "type": "object",
+      "required": ["schema_version", "created_at", "source_refs", "content_hash"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/SchemaVersion" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "source_refs": { "type": "array", "items": { "$ref": "#/$defs/SourceRef" } },
+        "content_hash": { "$ref": "#/$defs/Sha256" }
+      }
+    },
+    "ProbabilityRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum", "maximum"],
+      "properties": {
+        "minimum": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maximum": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "ResearchSession": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["session_id", "status", "expires_at"],
+          "properties": {
+            "session_id": { "$ref": "#/$defs/Identifier" },
+            "status": { "$ref": "#/$defs/ResearchStatus" },
+            "expires_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "ThesisDocument": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["thesis_id", "session_id", "raw_text", "normalized_premise", "horizon", "trigger_events", "claimed_asset_impacts", "capital", "base_currency", "user_private_evidence_claims", "status"],
+          "properties": {
+            "thesis_id": { "$ref": "#/$defs/Identifier" },
+            "session_id": { "$ref": "#/$defs/Identifier" },
+            "raw_text": { "type": "string", "minLength": 1, "maxLength": 10000 },
+            "normalized_premise": { "type": "string", "minLength": 1, "maxLength": 10000 },
+            "horizon": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "trigger_events": { "type": "array", "items": { "type": "string", "minLength": 1 }, "maxItems": 50 },
+            "claimed_asset_impacts": { "type": "array", "items": { "type": "string", "minLength": 1 }, "maxItems": 100 },
+            "capital": { "type": "number", "exclusiveMinimum": 0 },
+            "base_currency": { "$ref": "#/$defs/Currency" },
+            "user_private_evidence_claims": { "type": "boolean" },
+            "status": { "$ref": "#/$defs/ResearchStatus" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "EvidenceItem": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["evidence_id", "challenge_id", "source_type", "title", "retrieved_at", "excerpt", "grade", "supports_or_challenges", "independently_reviewable"],
+          "properties": {
+            "evidence_id": { "$ref": "#/$defs/Identifier" },
+            "challenge_id": { "$ref": "#/$defs/Identifier" },
+            "source_type": { "enum": ["primary", "reliable_secondary", "commentary", "user_private", "model_inference"] },
+            "url": { "type": "string", "format": "uri" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "publisher": { "type": "string", "minLength": 1, "maxLength": 300 },
+            "published_at": { "type": "string", "format": "date-time" },
+            "retrieved_at": { "type": "string", "format": "date-time" },
+            "excerpt": { "type": "string", "minLength": 1, "maxLength": 10000 },
+            "user_note": { "type": "string", "maxLength": 2000 },
+            "grade": { "enum": ["A", "B", "C", "D", "E"] },
+            "supports_or_challenges": { "enum": ["supports", "challenges", "context"] },
+            "independently_reviewable": { "type": "boolean" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "RubricScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion", "score", "rationale"],
+      "properties": {
+        "criterion": { "enum": ["premise_clarity", "time_boundary", "trigger_observability", "causal_chain", "counterfactuals", "evidence_quality", "asset_transmission", "already_priced", "falsifiability", "user_confirmation"] },
+        "score": { "enum": [0, 1, 2, 3, 4] },
+        "rationale": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "ChallengeRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["turn_id", "challenge_id", "thesis_id", "claims", "objections", "missing_evidence", "questions", "rubric_scores", "unresolved_issues", "user_confirmation", "private_evidence_declared", "status"],
+          "properties": {
+            "turn_id": { "$ref": "#/$defs/Identifier" },
+            "challenge_id": { "$ref": "#/$defs/Identifier" },
+            "thesis_id": { "$ref": "#/$defs/Identifier" },
+            "claims": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+            "objections": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+            "missing_evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "questions": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "string", "minLength": 1 } },
+            "rubric_scores": { "type": "array", "minItems": 10, "maxItems": 10, "items": { "$ref": "#/$defs/RubricScore" } },
+            "unresolved_issues": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "user_confirmation": { "enum": ["pending", "confirmed", "confirmed_with_reservations"] },
+            "reservation_note": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "private_evidence_declared": { "type": "boolean" },
+            "status": { "enum": ["CHALLENGING", "EVIDENCE_REQUIRED", "CONFIRMED"] }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "WorldlineNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "time_window", "event", "observable_indicators", "causal_parents", "state_changes", "confidence"],
+      "properties": {
+        "node_id": { "$ref": "#/$defs/Identifier" },
+        "time_window": { "type": "string", "minLength": 1 },
+        "event": { "type": "string", "minLength": 1 },
+        "observable_indicators": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "causal_parents": { "type": "array", "items": { "$ref": "#/$defs/Identifier" } },
+        "state_changes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "confidence": { "enum": ["low", "medium", "high"] }
+      }
+    },
+    "WorldlineEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_node_id", "to_node_id"],
+      "properties": {
+        "from_node_id": { "$ref": "#/$defs/Identifier" },
+        "to_node_id": { "$ref": "#/$defs/Identifier" }
+      }
+    },
+    "RevealEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_date", "reveal_date", "rule"],
+      "properties": {
+        "event_id": { "$ref": "#/$defs/Identifier" },
+        "event_date": { "type": "string", "format": "date" },
+        "reveal_date": { "type": "string", "format": "date" },
+        "rule": { "enum": ["scheduled", "leak", "observed"] }
+      }
+    },
+    "Worldline": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["worldline_id", "bundle_id", "branch_kind", "title", "premise", "baseline_date", "horizon_end", "nodes", "edges", "asset_anchors", "event_reveal_schedule", "invalidation_conditions", "provenance", "status"],
+          "properties": {
+            "worldline_id": { "$ref": "#/$defs/Identifier" },
+            "bundle_id": { "$ref": "#/$defs/Identifier" },
+            "branch_kind": { "enum": ["weak", "main", "strong"] },
+            "title": { "type": "string", "minLength": 1 },
+            "premise": { "type": "string", "minLength": 1 },
+            "baseline_date": { "type": "string", "format": "date" },
+            "horizon_end": { "type": "string", "format": "date" },
+            "nodes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/WorldlineNode" } },
+            "edges": { "type": "array", "items": { "$ref": "#/$defs/WorldlineEdge" } },
+            "asset_anchors": { "type": "array", "items": { "$ref": "#/$defs/Identifier" } },
+            "event_reveal_schedule": { "type": "array", "items": { "$ref": "#/$defs/RevealEvent" } },
+            "invalidation_conditions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+            "provenance": { "type": "string", "minLength": 1 },
+            "status": { "const": "WORLDLINE_READY" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "WorldlineBundle": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["bundle_id", "challenge_id", "worldlines"],
+          "properties": {
+            "bundle_id": { "$ref": "#/$defs/Identifier" },
+            "challenge_id": { "$ref": "#/$defs/Identifier" },
+            "worldlines": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/Worldline" } }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "ProbabilityAssessment": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["assessment_id", "worldline_id", "premise_probability", "premise_probability_range", "conditional_probability", "conditional_probability_range", "joint_probability", "joint_probability_range", "confidence", "base_rate_refs", "adjustment_reasons", "calibration_status"],
+          "properties": {
+            "assessment_id": { "$ref": "#/$defs/Identifier" },
+            "worldline_id": { "$ref": "#/$defs/Identifier" },
+            "premise_probability": { "type": "number", "minimum": 0, "maximum": 1 },
+            "premise_probability_range": { "$ref": "#/$defs/ProbabilityRange" },
+            "conditional_probability": { "type": "number", "minimum": 0, "maximum": 1 },
+            "conditional_probability_range": { "$ref": "#/$defs/ProbabilityRange" },
+            "joint_probability": { "type": "number", "minimum": 0, "maximum": 1 },
+            "joint_probability_range": { "$ref": "#/$defs/ProbabilityRange" },
+            "confidence": { "enum": ["low", "medium", "high"] },
+            "base_rate_refs": { "type": "array", "items": { "$ref": "#/$defs/Identifier" } },
+            "adjustment_reasons": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+            "calibration_status": { "enum": ["model_estimate_unvalidated", "historically_calibrated"] }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "AssetImpact": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["impact_id", "economic_exposure_id", "direction", "severity", "start_window", "peak_window", "decay", "first_order_reason", "already_priced_score", "evidence_refs"],
+          "properties": {
+            "impact_id": { "$ref": "#/$defs/Identifier" },
+            "economic_exposure_id": { "$ref": "#/$defs/Identifier" },
+            "instrument_id": { "$ref": "#/$defs/Identifier" },
+            "direction": { "enum": ["positive", "negative", "mixed"] },
+            "severity": { "enum": ["low", "medium", "high"] },
+            "start_window": { "type": "string", "minLength": 1 },
+            "peak_window": { "type": "string", "minLength": 1 },
+            "decay": { "type": "string", "minLength": 1 },
+            "first_order_reason": { "type": "string", "minLength": 1 },
+            "second_order_reason": { "type": "string", "minLength": 1 },
+            "already_priced_score": { "enum": [0, 1, 2, 3, 4] },
+            "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/Identifier" } }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "DataLicense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["license_id", "redistribution", "usage"],
+      "properties": {
+        "license_id": { "$ref": "#/$defs/Identifier" },
+        "redistribution": { "enum": ["allowed", "forbidden", "internal_test_only"] },
+        "usage": { "enum": ["public_display", "derived_only", "development_mock"] },
+        "attribution": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "DerivativeSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expiry", "contract_multiplier", "margin", "risk_model_version"],
+      "properties": {
+        "expiry": { "type": "string", "format": "date" },
+        "strike": { "type": "number", "minimum": 0 },
+        "option_type": { "enum": ["call", "put"] },
+        "delta": { "type": "number", "minimum": -1, "maximum": 1 },
+        "implied_volatility": { "type": "number", "minimum": 0 },
+        "margin": { "type": "number", "minimum": 0 },
+        "contract_multiplier": { "type": "number", "exclusiveMinimum": 0 },
+        "risk_model_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "AssetRegistryEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["asset_id", "economic_exposure_id", "display_name", "asset_class", "subtype", "exchange", "currency", "timezone", "price_type", "tradable", "proxy_instruments", "contract_multiplier", "lot_size", "fractional_supported", "liquidity_tier", "data_license", "provider_symbol_map", "default_allocation_eligible"],
+          "properties": {
+            "asset_id": { "$ref": "#/$defs/Identifier" },
+            "economic_exposure_id": { "$ref": "#/$defs/Identifier" },
+            "display_name": { "type": "string", "minLength": 1 },
+            "asset_class": { "enum": ["equity", "etf", "fund", "index", "sovereign_bond", "credit_bond", "yield_curve", "fx", "commodity_spot", "commodity_etf", "future", "crypto", "real_estate", "reit", "option", "derivative", "cash"] },
+            "subtype": { "type": "string", "minLength": 1 },
+            "exchange": { "type": "string", "minLength": 1 },
+            "currency": { "$ref": "#/$defs/Currency" },
+            "timezone": { "type": "string", "minLength": 1 },
+            "price_type": { "enum": ["adjusted_close", "close", "spot", "yield", "nav", "mark"] },
+            "tradable": { "type": "boolean" },
+            "proxy_instruments": { "type": "array", "items": { "$ref": "#/$defs/Identifier" } },
+            "contract_multiplier": { "type": "number", "exclusiveMinimum": 0 },
+            "lot_size": { "type": "number", "exclusiveMinimum": 0 },
+            "fractional_supported": { "type": "boolean" },
+            "liquidity_tier": { "enum": ["high", "medium", "low", "restricted"] },
+            "data_license": { "$ref": "#/$defs/DataLicense" },
+            "provider_symbol_map": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+            "default_allocation_eligible": { "type": "boolean" },
+            "ineligibility_reason": { "type": "string", "minLength": 1 },
+            "derivative": { "$ref": "#/$defs/DerivativeSpec" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "AssetRegistrySnapshot": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["registry_version", "as_of", "assets"],
+          "properties": {
+            "registry_version": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "as_of": { "type": "string", "format": "date-time" },
+            "assets": { "type": "array", "minItems": 20, "items": { "$ref": "#/$defs/AssetRegistryEntry" } }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest", "key_id"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "$ref": "#/$defs/Sha256" },
+        "key_id": { "$ref": "#/$defs/Identifier" }
+      }
+    },
+    "ShardDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shard_id", "content_hash", "row_count", "from", "to"],
+      "properties": {
+        "shard_id": { "$ref": "#/$defs/Identifier" },
+        "content_hash": { "$ref": "#/$defs/Sha256" },
+        "row_count": { "type": "integer", "minimum": 0 },
+        "from": { "type": "string", "format": "date-time" },
+        "to": { "type": "string", "format": "date-time" }
+      }
+    },
+    "MarketDataManifest": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["manifest_id", "market_data_version", "registry_version", "provider", "as_of", "freshness", "field_set", "asset_ids", "data_license", "shards", "integrity"],
+          "properties": {
+            "manifest_id": { "$ref": "#/$defs/Identifier" },
+            "market_data_version": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "registry_version": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "provider": { "type": "string", "minLength": 1 },
+            "as_of": { "type": "string", "format": "date-time" },
+            "freshness": { "enum": ["current", "stale", "historical_only"] },
+            "field_set": { "type": "array", "minItems": 1, "items": { "enum": ["open", "high", "low", "close", "volume", "amount", "currency", "adjusted", "provider", "as_of"] } },
+            "asset_ids": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Identifier" } },
+            "data_license": { "$ref": "#/$defs/DataLicense" },
+            "shards": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ShardDescriptor" } },
+            "integrity": { "$ref": "#/$defs/Integrity" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "MarketDataRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["datetime", "asset_id", "open", "high", "low", "close", "volume", "amount", "currency", "adjusted", "provider", "as_of"],
+      "properties": {
+        "datetime": { "type": "string", "format": "date-time" },
+        "asset_id": { "$ref": "#/$defs/Identifier" },
+        "open": { "type": "number", "minimum": 0 },
+        "high": { "type": "number", "minimum": 0 },
+        "low": { "type": "number", "minimum": 0 },
+        "close": { "type": "number", "minimum": 0 },
+        "volume": { "type": "number", "minimum": 0 },
+        "amount": { "type": "number", "minimum": 0 },
+        "currency": { "$ref": "#/$defs/Currency" },
+        "adjusted": { "type": "boolean" },
+        "provider": { "type": "string", "minLength": 1 },
+        "as_of": { "type": "string", "format": "date-time" },
+        "expiry": { "type": "string", "format": "date" },
+        "strike": { "type": "number", "minimum": 0 },
+        "option_type": { "enum": ["call", "put"] },
+        "delta": { "type": "number", "minimum": -1, "maximum": 1 },
+        "implied_volatility": { "type": "number", "minimum": 0 },
+        "margin": { "type": "number", "minimum": 0 },
+        "contract_multiplier": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "MarketDataShard": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["manifest_id", "shard_id", "rows", "integrity"],
+          "properties": {
+            "manifest_id": { "$ref": "#/$defs/Identifier" },
+            "shard_id": { "$ref": "#/$defs/Identifier" },
+            "rows": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/MarketDataRow" } },
+            "integrity": { "$ref": "#/$defs/Integrity" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "FactorAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ic_threshold", "icir_threshold", "correlation_threshold", "active_top_k"],
+      "properties": {
+        "ic_threshold": { "type": "number", "minimum": 0 },
+        "icir_threshold": { "type": "number", "minimum": 0 },
+        "correlation_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "active_top_k": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "FactorToken": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "field"],
+          "properties": { "kind": { "const": "field" }, "field": { "enum": ["open", "high", "low", "close", "volume", "amount"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": { "kind": { "const": "constant" }, "value": { "type": "number" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "operator", "arity"],
+          "properties": { "kind": { "const": "operator" }, "operator": { "enum": ["add", "subtract", "multiply", "divide", "log", "difference", "rank", "rolling_mean"] }, "arity": { "enum": [1, 2] } }
+        }
+      ]
+    },
+    "FactorDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factor_id", "name", "expression_tokens", "ic_mean", "icir", "forecast_horizon", "valid"],
+      "properties": {
+        "factor_id": { "$ref": "#/$defs/Identifier" },
+        "name": { "type": "string", "minLength": 1 },
+        "expression_tokens": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/FactorToken" } },
+        "ic_mean": { "type": "number" },
+        "icir": { "type": "number" },
+        "forecast_horizon": { "type": "integer", "minimum": 1 },
+        "valid": { "type": "boolean" }
+      }
+    },
+    "FactorLibraryManifest": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["library_version", "metric_version", "dsl_version", "as_of", "admission", "factor_ids", "shards", "integrity"],
+          "properties": {
+            "library_version": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "metric_version": { "type": "string", "minLength": 1 },
+            "dsl_version": { "type": "string", "minLength": 1 },
+            "as_of": { "type": "string", "format": "date-time" },
+            "admission": { "$ref": "#/$defs/FactorAdmission" },
+            "factor_ids": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Identifier" } },
+            "shards": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ShardDescriptor" } },
+            "integrity": { "$ref": "#/$defs/Integrity" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "FactorLibraryShard": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["library_version", "shard_id", "factors", "integrity"],
+          "properties": {
+            "library_version": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "shard_id": { "$ref": "#/$defs/Identifier" },
+            "factors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/FactorDefinition" } },
+            "integrity": { "$ref": "#/$defs/Integrity" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "ClientComputationAttestation": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["computation_id", "operation_id", "engine_version", "worldline_hash", "market_manifest_hash", "factor_manifest_hash", "input_hash", "output_hash", "completed_at", "accepted", "rejection_reasons"],
+          "properties": {
+            "computation_id": { "$ref": "#/$defs/Identifier" },
+            "operation_id": { "$ref": "#/$defs/Identifier" },
+            "engine_version": { "type": "string", "minLength": 1 },
+            "worldline_hash": { "$ref": "#/$defs/Sha256" },
+            "market_manifest_hash": { "$ref": "#/$defs/Sha256" },
+            "factor_manifest_hash": { "$ref": "#/$defs/Sha256" },
+            "input_hash": { "$ref": "#/$defs/Sha256" },
+            "output_hash": { "$ref": "#/$defs/Sha256" },
+            "completed_at": { "type": "string", "format": "date-time" },
+            "accepted": { "type": "boolean" },
+            "rejection_reasons": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Operation": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["operation_id", "endpoint", "status", "updated_at", "idempotency_key_hash", "cancel_token", "resume_token", "last_event_id"],
+          "properties": {
+            "operation_id": { "$ref": "#/$defs/Identifier" },
+            "endpoint": { "type": "string", "pattern": "^/v1/" },
+            "status": { "enum": ["pending", "running", "completed", "failed", "cancelled"] },
+            "updated_at": { "type": "string", "format": "date-time" },
+            "idempotency_key_hash": { "$ref": "#/$defs/Sha256" },
+            "cancel_token": { "type": "string", "minLength": 16, "maxLength": 200 },
+            "resume_token": { "type": "string", "minLength": 16, "maxLength": 200 },
+            "last_event_id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]+:[0-9]+$" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "ErrorDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location", "message"],
+      "properties": {
+        "location": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "error_code", "message", "request_id", "retryable", "details"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/SchemaVersion" },
+        "error_code": { "enum": ["bad_request", "validation_error", "not_found", "invalid_state_transition", "idempotency_conflict", "invalid_operation_token", "invalid_last_event_id", "contract_violation", "internal_error"] },
+        "message": { "type": "string", "minLength": 1 },
+        "request_id": { "$ref": "#/$defs/Identifier" },
+        "retryable": { "type": "boolean" },
+        "details": { "type": "array", "items": { "$ref": "#/$defs/ErrorDetail" } }
+      }
+    },
+    "SseEventBase": {
+      "type": "object",
+      "required": ["schema_version", "operation_id", "sequence", "emitted_at"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/SchemaVersion" },
+        "operation_id": { "$ref": "#/$defs/Identifier" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "emitted_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "OperationStartedEvent": {
+      "allOf": [{ "$ref": "#/$defs/SseEventBase" }, { "type": "object", "required": ["event", "message"], "properties": { "event": { "const": "operation.started" }, "message": { "type": "string", "minLength": 1 } } }],
+      "unevaluatedProperties": false
+    },
+    "OperationProgressEvent": {
+      "allOf": [{ "$ref": "#/$defs/SseEventBase" }, { "type": "object", "required": ["event", "progress", "message"], "properties": { "event": { "const": "operation.progress" }, "progress": { "type": "number", "minimum": 0, "maximum": 1 }, "message": { "type": "string", "minLength": 1 } } }],
+      "unevaluatedProperties": false
+    },
+    "HeartbeatEvent": {
+      "allOf": [{ "$ref": "#/$defs/SseEventBase" }, { "type": "object", "required": ["event"], "properties": { "event": { "const": "heartbeat" } } }],
+      "unevaluatedProperties": false
+    },
+    "OperationErrorEvent": {
+      "allOf": [{ "$ref": "#/$defs/SseEventBase" }, { "type": "object", "required": ["event", "error", "retryable"], "properties": { "event": { "const": "operation.error" }, "error": { "$ref": "#/$defs/ErrorResponse" }, "retryable": { "type": "boolean" } } }],
+      "unevaluatedProperties": false
+    },
+    "OperationCompleteEvent": {
+      "allOf": [{ "$ref": "#/$defs/SseEventBase" }, { "type": "object", "required": ["event", "result_ref", "result_hash"], "properties": { "event": { "const": "operation.complete" }, "result_ref": { "$ref": "#/$defs/Identifier" }, "result_hash": { "$ref": "#/$defs/Sha256" } } }],
+      "unevaluatedProperties": false
+    },
+    "SseEvent": { "oneOf": [{ "$ref": "#/$defs/OperationStartedEvent" }, { "$ref": "#/$defs/OperationProgressEvent" }, { "$ref": "#/$defs/HeartbeatEvent" }, { "$ref": "#/$defs/OperationErrorEvent" }, { "$ref": "#/$defs/OperationCompleteEvent" }] },
+    "CreateSessionRequest": {
+      "type": "object", "additionalProperties": false, "properties": { "client_locale": { "type": "string", "minLength": 2, "maxLength": 35 } }
+    },
+    "CreateChallengeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["session_id", "thesis", "capital", "base_currency", "user_private_evidence_claims"],
+      "properties": {
+        "session_id": { "$ref": "#/$defs/Identifier" },
+        "thesis": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "capital": { "type": "number", "exclusiveMinimum": 0 },
+        "base_currency": { "$ref": "#/$defs/Currency" },
+        "user_private_evidence_claims": { "type": "boolean" }
+      }
+    },
+    "ChallengeMessageRequest": {
+      "type": "object", "additionalProperties": false, "required": ["message"],
+      "properties": { "message": { "type": "string", "minLength": 1, "maxLength": 10000 } }
+    },
+    "EvidenceSubmissionRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["title", "retrieved_at", "excerpt", "user_note", "content_hash"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "publisher": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "published_at": { "type": "string", "format": "date-time" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "excerpt": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "user_note": { "type": "string", "maxLength": 2000 },
+        "content_hash": { "$ref": "#/$defs/Sha256" }
+      }
+    },
+    "ConfirmChallengeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "unresolved_issues_acknowledged"],
+      "properties": {
+        "command": { "enum": ["CONFIRM", "CONFIRM_WITH_RESERVATIONS"] },
+        "unresolved_issues_acknowledged": { "type": "boolean" },
+        "reservation_note": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "command": { "const": "CONFIRM_WITH_RESERVATIONS" } }, "required": ["command"] },
+          "then": { "required": ["reservation_note"], "properties": { "unresolved_issues_acknowledged": { "const": true } } }
+        }
+      ]
+    },
+    "WorldlineRequest": {
+      "type": "object", "additionalProperties": false, "required": ["challenge_id", "premise", "horizon_end"],
+      "properties": {
+        "challenge_id": { "$ref": "#/$defs/Identifier" },
+        "premise": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "horizon_end": { "type": "string", "format": "date" }
+      }
+    },
+    "ProbabilityRequest": {
+      "type": "object", "additionalProperties": false, "required": ["worldline_id", "premise", "conditional_path"],
+      "properties": {
+        "worldline_id": { "$ref": "#/$defs/Identifier" },
+        "premise": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "conditional_path": { "type": "string", "minLength": 1, "maxLength": 10000 }
+      }
+    },
+    "MarketDataManifestRequest": {
+      "type": "object", "additionalProperties": false, "required": ["asset_ids", "from", "to", "field_set"],
+      "properties": {
+        "asset_ids": { "type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/Identifier" } },
+        "from": { "type": "string", "format": "date-time" },
+        "to": { "type": "string", "format": "date-time" },
+        "field_set": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["open", "high", "low", "close", "volume", "amount", "currency", "adjusted", "provider", "as_of"] } }
+      }
+    },
+    "MarketDataShardRequest": {
+      "type": "object", "additionalProperties": false, "required": ["manifest_id", "shard_id"],
+      "properties": { "manifest_id": { "$ref": "#/$defs/Identifier" }, "shard_id": { "$ref": "#/$defs/Identifier" } }
+    },
+    "ClientComputationAttestRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation_id", "engine_version", "worldline_hash", "market_manifest_hash", "factor_manifest_hash", "input_hash", "output_hash", "completed_at"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/Identifier" },
+        "engine_version": { "type": "string", "minLength": 1 },
+        "worldline_hash": { "$ref": "#/$defs/Sha256" },
+        "market_manifest_hash": { "$ref": "#/$defs/Sha256" },
+        "factor_manifest_hash": { "$ref": "#/$defs/Sha256" },
+        "input_hash": { "$ref": "#/$defs/Sha256" },
+        "output_hash": { "$ref": "#/$defs/Sha256" },
+        "completed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "CancelOperationRequest": {
+      "type": "object", "additionalProperties": false, "required": ["cancel_token"],
+      "properties": { "cancel_token": { "type": "string", "minLength": 16, "maxLength": 200 } }
+    },
+    "ResumeOperationRequest": {
+      "type": "object", "additionalProperties": false, "required": ["resume_token"],
+      "properties": { "resume_token": { "type": "string", "minLength": 16, "maxLength": 200 } }
+    },
+    "HealthResponse": {
+      "type": "object", "additionalProperties": false, "required": ["status", "provider", "schema_version", "clock"],
+      "properties": { "status": { "const": "ok" }, "provider": { "const": "deterministic_mock" }, "schema_version": { "$ref": "#/$defs/SchemaVersion" }, "clock": { "type": "string", "format": "date-time" } }
+    },
+    "SessionOperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "session"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" }, "session": { "$ref": "#/$defs/ResearchSession" } }
+    },
+    "ChallengeOperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "challenge"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" }, "challenge": { "$ref": "#/$defs/ChallengeRecord" } }
+    },
+    "WorldlineBundleOperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "bundle"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" }, "bundle": { "$ref": "#/$defs/WorldlineBundle" } }
+    },
+    "ProbabilityOperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "probability"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" }, "probability": { "$ref": "#/$defs/ProbabilityAssessment" } }
+    },
+    "MarketDataManifestOperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "manifest"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" }, "manifest": { "$ref": "#/$defs/MarketDataManifest" } }
+    },
+    "MarketDataShardOperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "shard"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" }, "shard": { "$ref": "#/$defs/MarketDataShard" } }
+    },
+    "ClientAttestationOperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "attestation"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" }, "attestation": { "$ref": "#/$defs/ClientComputationAttestation" } }
+    },
+    "OperationResponse": {
+      "type": "object", "additionalProperties": false, "required": ["operation"],
+      "properties": { "operation": { "$ref": "#/$defs/Operation" } }
+    },
+    "AssetSearchResponse": {
+      "type": "object", "additionalProperties": false, "required": ["schema_version", "items", "total"],
+      "properties": { "schema_version": { "$ref": "#/$defs/SchemaVersion" }, "items": { "type": "array", "items": { "$ref": "#/$defs/AssetRegistryEntry" } }, "total": { "type": "integer", "minimum": 0 } }
+    },
+    "MethodologyResponse": {
+      "type": "object", "additionalProperties": false, "required": ["schema_version", "methodology_version", "disclosure", "probability_display", "client_computation"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/SchemaVersion" },
+        "methodology_version": { "const": "v1" },
+        "disclosure": { "type": "string", "minLength": 1 },
+        "probability_display": { "const": "interval_first" },
+        "client_computation": { "const": true }
+      }
+    },
+    "AcceptanceFixtureInput": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "thesis", "capital", "base_currency"], "properties": { "kind": { "const": "complete_thesis" }, "thesis": { "type": "string", "minLength": 1 }, "capital": { "type": "number", "exclusiveMinimum": 0 }, "base_currency": { "$ref": "#/$defs/Currency" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "claim", "public_evidence_available"], "properties": { "kind": { "const": "private_evidence" }, "claim": { "type": "string", "minLength": 1 }, "public_evidence_available": { "const": false } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "url", "excerpt", "search_available"], "properties": { "kind": { "const": "client_evidence_fallback" }, "url": { "type": "string", "format": "uri" }, "excerpt": { "type": "string", "minLength": 1 }, "search_available": { "const": false } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "valid_factor_count"], "properties": { "kind": { "const": "no_valid_factors" }, "valid_factor_count": { "const": 0 } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "capital", "minimum_lot_cost"], "properties": { "kind": { "const": "small_capital" }, "capital": { "type": "number", "exclusiveMinimum": 0 }, "minimum_lot_cost": { "type": "number", "exclusiveMinimum": 0 } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "as_of", "freshness_threshold_hours"], "properties": { "kind": { "const": "stale_data" }, "as_of": { "type": "string", "format": "date-time" }, "freshness_threshold_hours": { "type": "integer", "minimum": 1 } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "failure", "idempotency_key"], "properties": { "kind": { "const": "provider_failure" }, "failure": { "enum": ["429", "502", "timeout"] }, "idempotency_key": { "type": "string", "minLength": 8 } } }
+      ]
+    },
+    "AcceptanceFixtureExpected": {
+      "type": "object", "additionalProperties": false, "required": ["outcome", "markers"],
+      "properties": {
+        "outcome": { "enum": ["portfolio_ready", "confirmed_with_reservations", "evidence_accepted", "equal_weight_fallback", "cash_or_proxy_rounding", "historical_only", "retry_cancel_resume"] },
+        "markers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "AcceptanceFixture": {
+      "allOf": [
+        { "$ref": "#/$defs/ContractMetadata" },
+        {
+          "type": "object",
+          "required": ["fixture_version", "scenario", "title", "input", "expected"],
+          "properties": {
+            "fixture_version": { "const": "v1" },
+            "scenario": { "enum": ["A", "B", "C", "D", "E", "F", "G"] },
+            "title": { "type": "string", "minLength": 1 },
+            "input": { "$ref": "#/$defs/AcceptanceFixtureInput" },
+            "expected": { "$ref": "#/$defs/AcceptanceFixtureExpected" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/ResearchSession" },
+    { "$ref": "#/$defs/ThesisDocument" },
+    { "$ref": "#/$defs/EvidenceItem" },
+    { "$ref": "#/$defs/ChallengeRecord" },
+    { "$ref": "#/$defs/Worldline" },
+    { "$ref": "#/$defs/WorldlineBundle" },
+    { "$ref": "#/$defs/ProbabilityAssessment" },
+    { "$ref": "#/$defs/AssetImpact" },
+    { "$ref": "#/$defs/AssetRegistryEntry" },
+    { "$ref": "#/$defs/AssetRegistrySnapshot" },
+    { "$ref": "#/$defs/MarketDataManifest" },
+    { "$ref": "#/$defs/MarketDataShard" },
+    { "$ref": "#/$defs/FactorLibraryManifest" },
+    { "$ref": "#/$defs/FactorLibraryShard" },
+    { "$ref": "#/$defs/ClientComputationAttestation" },
+    { "$ref": "#/$defs/Operation" }
+  ]
+}

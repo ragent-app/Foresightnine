@@ -1,0 +1,28 @@
+{
+  "schema_version": "v1",
+  "created_at": "2026-08-10T00:00:00Z",
+  "source_refs": [
+    {
+      "ref_id": "fixture:G",
+      "source_type": "model_inference",
+      "label": "Acceptance scenario G"
+    }
+  ],
+  "content_hash": "4fe62639bf76fb71cd56fd40f7edfb99cf925e840fbe130e081080e2d822b52a",
+  "fixture_version": "v1",
+  "scenario": "G",
+  "title": "Provider failure preserves retry, cancel and resume identity",
+  "input": {
+    "kind": "provider_failure",
+    "failure": "429",
+    "idempotency_key": "fixture-g-idempotency"
+  },
+  "expected": {
+    "outcome": "retry_cancel_resume",
+    "markers": [
+      "same operation id",
+      "no duplicate charge",
+      "replay from Last-Event-ID"
+    ]
+  }
+}

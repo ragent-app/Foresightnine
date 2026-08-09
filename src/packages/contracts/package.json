@@ -1,0 +1,25 @@
+{
+  "name": "@foresightnine/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schemas/v1/contracts.schema.json": "./schemas/v1/contracts.schema.json",
+    "./schemas/v1/research.schema.json": "./schemas/v1/research.schema.json",
+    "./openapi/v1/openapi.json": "./openapi/v1/openapi.json",
+    "./openapi/v1/openapi.yaml": "./openapi/v1/openapi.yaml"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "verify:generated": "node scripts/generate.mjs --check",
+    "typecheck": "tsc -b --pretty false",
+    "test": "node scripts/generate.mjs --check && tsc -b --pretty false"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

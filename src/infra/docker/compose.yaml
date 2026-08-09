@@ -1,0 +1,10 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      # Phase 0/1 intentionally has no provider credentials; MockResearchProvider is selected.
+      FORESIGHTNINE_PROVIDER: mock

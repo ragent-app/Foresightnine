@@ -1,0 +1,25 @@
+{
+  "name": "@foresightnine/asset-registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./registry/v1/assets.json": "./registry/v1/assets.json"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-registry.mjs",
+    "verify:generated": "node scripts/generate-registry.mjs --check",
+    "typecheck": "tsc -b --pretty false",
+    "test": "node scripts/generate-registry.mjs --check && tsc -b --pretty false && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@foresightnine/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

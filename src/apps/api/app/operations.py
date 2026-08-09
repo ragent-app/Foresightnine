@@ -1,0 +1,269 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from hashlib import sha256
+from typing import Any, Callable
+
+from pydantic import BaseModel
+
+from .models import (
+    ErrorResponse,
+    HeartbeatEvent,
+    Operation,
+    OperationCompleteEvent,
+    OperationErrorEvent,
+    OperationProgressEvent,
+    OperationResponse,
+    OperationStartedEvent,
+    SourceRef,
+)
+from .providers import FixedClock
+from .services import canonical_json, content_hash, deterministic_id, validate_payload
+
+
+class ApiProblem(RuntimeError):
+    def __init__(self, status_code: int, error_code: str, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.message = message
+        self.retryable = retryable
+
+
+@dataclass(frozen=True)
+class IdempotencyEntry:
+    request_hash: str
+    response: BaseModel
+
+
+class OperationManager:
+    def __init__(self, clock: FixedClock | None = None) -> None:
+        self.clock = clock or FixedClock()
+        self._idempotency: dict[tuple[str, str], IdempotencyEntry] = {}
+        self.operations: dict[str, Operation] = {}
+        self.events: dict[str, list[BaseModel]] = {}
+
+    def reset(self) -> None:
+        self._idempotency.clear()
+        self.operations.clear()
+        self.events.clear()
+
+    def _operation(
+        self,
+        *,
+        operation_id: str,
+        endpoint: str,
+        idempotency_key: str,
+        status: str,
+        last_sequence: int,
+    ) -> Operation:
+        refs = (SourceRef(ref_id="mock:operation", source_type="model_inference", label="Deterministic operation controller"),)
+        payload = {
+            "operation_id": operation_id,
+            "endpoint": endpoint,
+            "status": status,
+            "updated_at": self.clock.now(),
+            "idempotency_key_hash": sha256(idempotency_key.encode("utf-8")).hexdigest(),
+            "cancel_token": sha256(f"cancel\0{operation_id}".encode("utf-8")).hexdigest(),
+            "resume_token": sha256(f"resume\0{operation_id}".encode("utf-8")).hexdigest(),
+            "last_event_id": f"{operation_id}:{last_sequence}",
+        }
+        metadata_input = {
+            "schema_version": "v1",
+            "source_refs": [ref.model_dump(mode="json", exclude_none=True) for ref in refs],
+            **payload,
+        }
+        operation = Operation(
+            schema_version="v1",
+            created_at=self.clock.now(),
+            source_refs=refs,
+            content_hash=content_hash(metadata_input),
+            **payload,
+        )
+        validate_payload(operation, "Operation")
+        return operation
+
+    def _base_event(self, operation_id: str, sequence: int) -> dict[str, Any]:
+        return {"schema_version": "v1", "operation_id": operation_id, "sequence": sequence, "emitted_at": self.clock.now()}
+
+    def execute(
+        self,
+        *,
+        endpoint: str,
+        idempotency_key: str,
+        request_payload: dict[str, Any],
+        response_model: type[BaseModel],
+        result_field: str,
+        build_result: Callable[[str], tuple[BaseModel, str]],
+    ) -> tuple[BaseModel, bool]:
+        request_hash = content_hash(request_payload)
+        key = (endpoint, idempotency_key)
+        existing = self._idempotency.get(key)
+        if existing:
+            if existing.request_hash != request_hash:
+                raise ApiProblem(409, "idempotency_conflict", "Idempotency-Key was already used with a different request body.")
+            return existing.response, True
+
+        operation_id = deterministic_id("operation", f"{endpoint}\0{idempotency_key}")
+        result, result_ref = build_result(operation_id)
+        result_hash = getattr(result, "content_hash", content_hash(result))
+        event_log: list[BaseModel] = [
+            OperationStartedEvent(**self._base_event(operation_id, 1), event="operation.started", message="Operation accepted."),
+            OperationProgressEvent(**self._base_event(operation_id, 2), event="operation.progress", progress=1.0, message="Deterministic mock result validated."),
+            HeartbeatEvent(**self._base_event(operation_id, 3), event="heartbeat"),
+            OperationCompleteEvent(**self._base_event(operation_id, 4), event="operation.complete", result_ref=result_ref, result_hash=result_hash),
+        ]
+        for event, name in zip(event_log, ("OperationStartedEvent", "OperationProgressEvent", "HeartbeatEvent", "OperationCompleteEvent"), strict=True):
+            validate_payload(event, name)
+        operation = self._operation(
+            operation_id=operation_id,
+            endpoint=endpoint,
+            idempotency_key=idempotency_key,
+            status="completed",
+            last_sequence=4,
+        )
+        response = response_model(operation=operation, **{result_field: result})
+        self.operations[operation_id] = operation
+        self.events[operation_id] = event_log
+        self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=response)
+        return response, False
+
+    def start(self, *, endpoint: str, idempotency_key: str) -> Operation:
+        """Register a durable running operation for asynchronous adapters and cancellation tests."""
+        operation_id = deterministic_id("operation", f"{endpoint}\0{idempotency_key}")
+        event_log: list[BaseModel] = [
+            OperationStartedEvent(**self._base_event(operation_id, 1), event="operation.started", message="Operation accepted."),
+            OperationProgressEvent(**self._base_event(operation_id, 2), event="operation.progress", progress=0.0, message="Operation is awaiting provider output."),
+            HeartbeatEvent(**self._base_event(operation_id, 3), event="heartbeat"),
+        ]
+        operation = self._operation(
+            operation_id=operation_id,
+            endpoint=endpoint,
+            idempotency_key=idempotency_key,
+            status="running",
+            last_sequence=3,
+        )
+        self.operations[operation_id] = operation
+        self.events[operation_id] = event_log
+        return operation
+
+    def _control_replay(self, endpoint: str, idempotency_key: str, payload: dict[str, Any]) -> BaseModel | None:
+        request_hash = content_hash(payload)
+        existing = self._idempotency.get((endpoint, idempotency_key))
+        if not existing:
+            return None
+        if existing.request_hash != request_hash:
+            raise ApiProblem(409, "idempotency_conflict", "Idempotency-Key was already used with a different control request.")
+        return existing.response
+
+    def _store_control(self, endpoint: str, idempotency_key: str, payload: dict[str, Any], response: BaseModel) -> None:
+        self._idempotency[(endpoint, idempotency_key)] = IdempotencyEntry(content_hash(payload), response)
+
+    def cancel(self, operation_id: str, cancel_token: str, idempotency_key: str) -> tuple[OperationResponse, bool]:
+        endpoint = f"/v1/operations/{operation_id}/cancel"
+        payload = {"cancel_token": cancel_token}
+        replay = self._control_replay(endpoint, idempotency_key, payload)
+        if replay:
+            return replay, True
+        operation = self.operations.get(operation_id)
+        if not operation:
+            raise ApiProblem(404, "not_found", "Operation not found.")
+        if operation.cancel_token != cancel_token:
+            raise ApiProblem(403, "invalid_operation_token", "Invalid cancel token.")
+        if operation.status in ("pending", "running"):
+            sequence = len(self.events[operation_id]) + 1
+            error = ErrorResponse(
+                schema_version="v1",
+                error_code="bad_request",
+                message="Operation cancelled by client command.",
+                request_id=deterministic_id("request", operation_id),
+                retryable=True,
+                details=[],
+            )
+            event = OperationErrorEvent(
+                **self._base_event(operation_id, sequence),
+                event="operation.error",
+                error=error,
+                retryable=True,
+            )
+            validate_payload(event, "OperationErrorEvent")
+            self.events[operation_id].append(event)
+            operation = self._operation(
+                operation_id=operation_id,
+                endpoint=operation.endpoint,
+                idempotency_key=idempotency_key,
+                status="cancelled",
+                last_sequence=sequence,
+            )
+            self.operations[operation_id] = operation
+        response = OperationResponse(operation=operation)
+        self._store_control(endpoint, idempotency_key, payload, response)
+        return response, False
+
+    def resume(self, operation_id: str, resume_token: str, idempotency_key: str) -> tuple[OperationResponse, bool]:
+        endpoint = f"/v1/operations/{operation_id}/resume"
+        payload = {"resume_token": resume_token}
+        replay = self._control_replay(endpoint, idempotency_key, payload)
+        if replay:
+            return replay, True
+        operation = self.operations.get(operation_id)
+        if not operation:
+            raise ApiProblem(404, "not_found", "Operation not found.")
+        if operation.resume_token != resume_token:
+            raise ApiProblem(403, "invalid_operation_token", "Invalid resume token.")
+        if operation.status == "failed":
+            raise ApiProblem(409, "invalid_state_transition", "Failed operation must be retried with its original Idempotency-Key.", retryable=True)
+        if operation.status == "cancelled":
+            sequence = len(self.events[operation_id]) + 1
+            resumed_events: list[BaseModel] = [
+                OperationProgressEvent(**self._base_event(operation_id, sequence), event="operation.progress", progress=0.0, message="Operation resumed from its retained checkpoint."),
+                HeartbeatEvent(**self._base_event(operation_id, sequence + 1), event="heartbeat"),
+                OperationCompleteEvent(
+                    **self._base_event(operation_id, sequence + 2),
+                    event="operation.complete",
+                    result_ref=operation_id,
+                    result_hash=operation.content_hash,
+                ),
+            ]
+            self.events[operation_id].extend(resumed_events)
+            operation = self._operation(
+                operation_id=operation_id,
+                endpoint=operation.endpoint,
+                idempotency_key=idempotency_key,
+                status="completed",
+                last_sequence=sequence + 2,
+            )
+            self.operations[operation_id] = operation
+        response = OperationResponse(operation=operation)
+        self._store_control(endpoint, idempotency_key, payload, response)
+        return response, False
+
+    def events_after(self, operation_id: str, last_event_id: str | None) -> list[BaseModel]:
+        events = self.events.get(operation_id)
+        if events is None:
+            raise ApiProblem(404, "not_found", "Operation not found.")
+        if last_event_id is None:
+            return events
+        prefix = f"{operation_id}:"
+        if not last_event_id.startswith(prefix):
+            raise ApiProblem(400, "invalid_last_event_id", "Last-Event-ID belongs to another operation.")
+        raw_sequence = last_event_id.removeprefix(prefix)
+        if not raw_sequence.isdigit():
+            raise ApiProblem(400, "invalid_last_event_id", "Last-Event-ID sequence is invalid.")
+        sequence = int(raw_sequence)
+        if sequence < 0 or sequence > len(events):
+            raise ApiProblem(400, "invalid_last_event_id", "Last-Event-ID is outside the retained replay window.")
+        return [event for event in events if event.sequence > sequence]
+
+
+def format_sse(events: list[BaseModel]) -> str:
+    chunks: list[str] = []
+    for event in events:
+        payload = event.model_dump(mode="json", exclude_none=True)
+        chunks.extend((
+            f"id: {event.operation_id}:{event.sequence}",
+            f"event: {event.event}",
+            f"data: {canonical_json(payload)}",
+            "",
+        ))
+    return "\n".join(chunks) + ("\n" if chunks else "")

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://foresightnine.local/contracts/v1/entities.schema.json",
+  "title": "Compatibility alias; contracts.schema.json is authoritative",
+  "$ref": "contracts.schema.json"
+}

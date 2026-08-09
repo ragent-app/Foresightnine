@@ -1,0 +1,41 @@
+{
+  "schema_version": "design-phase2-v1",
+  "status": "approved_for_implementation",
+  "approval": {
+    "date": "2026-08-10",
+    "source": "active goal instruction",
+    "user_statement": "我认可所有你给出的方案，直接继续执行直到完成",
+    "scope_interpretation": "blanket approval to continue implementing the complete concept suite and reviewer-directed corrections without another visual pause"
+  },
+  "required_web": [
+    "01-thesis-input.png",
+    "02-challenge-evidence.png",
+    "03-worldline-probability.png",
+    "04-fm-progress.png",
+    "05-portfolio-stress.png",
+    "06-worldline-nav.png",
+    "07-methodology-risk.png"
+  ],
+  "required_android": [
+    "01-thesis-input.png",
+    "02-challenge-conversation.png",
+    "03-evidence-workspace.png",
+    "04-worldline-timeline.png",
+    "05-portfolio-nav.png",
+    "06-share-export.png"
+  ],
+  "variants": [
+    "web/02b-sse-recovery.png",
+    "web/05b-public-default-delta.png",
+    "android/02b-sse-recovery.png",
+    "android/05b-public-default-delta.png"
+  ],
+  "specifications": [
+    "README.md",
+    "imagegen-prompts.md",
+    "component-state-matrix.md",
+    "component-specification.md",
+    "copy-deck.md",
+    "fidelity-qa.md"
+  ]
+}

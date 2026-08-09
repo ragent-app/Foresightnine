@@ -1,0 +1,22 @@
+{
+  "name": "foresightnine",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "verify:reference-hashes": "node scripts/verify/reference-hashes.mjs",
+    "verify:boundaries": "node scripts/verify/boundaries.mjs",
+    "verify:phase0": "corepack pnpm verify:reference-hashes && corepack pnpm verify:boundaries && corepack pnpm scan:secrets",
+    "verify:generated-contracts": "node scripts/verify/generated-contracts.mjs",
+    "verify:phase1": "corepack pnpm verify:generated-contracts && corepack pnpm --filter @foresightnine/contracts test && corepack pnpm --filter @foresightnine/domain test && corepack pnpm --filter @foresightnine/asset-registry test && uv run --project apps/api pytest apps/api/tests",
+    "verify:phase2": "node scripts/verify/design-assets.mjs && corepack pnpm --filter @foresightnine/design-system typecheck",
+    "scan:secrets": "node scripts/verify/secret-scan.mjs",
+    "typecheck": "corepack pnpm -r typecheck",
+    "test:api": "uv run --project apps/api pytest apps/api/tests",
+    "test": "corepack pnpm -r test && uv run --project apps/api pytest apps/api/tests"
+  }
+}

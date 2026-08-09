@@ -1,0 +1,28 @@
+{
+  "schema_version": "v1",
+  "created_at": "2026-08-10T00:00:00Z",
+  "source_refs": [
+    {
+      "ref_id": "fixture:F",
+      "source_type": "model_inference",
+      "label": "Acceptance scenario F"
+    }
+  ],
+  "content_hash": "36fcdfdcfdce0fbfc750feb8ae74ab0d630ff7947a0e1a24adbce4ad24401be8",
+  "fixture_version": "v1",
+  "scenario": "F",
+  "title": "Stale market data is historical-only",
+  "input": {
+    "kind": "stale_data",
+    "as_of": "2026-07-01T00:00:00Z",
+    "freshness_threshold_hours": 24
+  },
+  "expected": {
+    "outcome": "historical_only",
+    "markers": [
+      "freshness visible",
+      "current allocation disabled",
+      "as-of retained"
+    ]
+  }
+}

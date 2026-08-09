@@ -1,0 +1,29 @@
+{
+  "schema_version": "v1",
+  "created_at": "2026-08-10T00:00:00Z",
+  "source_refs": [
+    {
+      "ref_id": "fixture:C",
+      "source_type": "model_inference",
+      "label": "Acceptance scenario C"
+    }
+  ],
+  "content_hash": "f8b4c1a44bc002414958e2f48e44b97925e3382768032b1efb0e9dfad6790e3a",
+  "fixture_version": "v1",
+  "scenario": "C",
+  "title": "Client evidence fallback is accepted when search is unavailable",
+  "input": {
+    "kind": "client_evidence_fallback",
+    "url": "https://example.com/public-source",
+    "excerpt": "Dated public excerpt supplied by the client.",
+    "search_available": false
+  },
+  "expected": {
+    "outcome": "evidence_accepted",
+    "markers": [
+      "URL retained",
+      "retrieval timestamp retained",
+      "content hash retained"
+    ]
+  }
+}

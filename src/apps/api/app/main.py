@@ -1,0 +1,625 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from datetime import timedelta
+from hashlib import sha256
+from typing import Annotated, Any
+
+from fastapi import FastAPI, Header, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel
+
+from .contract_models import CONTRACT_SCHEMA
+from .models import (
+    AssetSearchResponse,
+    CancelOperationRequest,
+    ChallengeMessageRequest,
+    ChallengeOperationResponse,
+    ChallengeRecord,
+    ClientAttestationOperationResponse,
+    ClientComputationAttestRequest,
+    ConfirmChallengeRequest,
+    CreateChallengeRequest,
+    CreateSessionRequest,
+    ErrorDetail,
+    ErrorResponse,
+    EvidenceItem,
+    EvidenceSubmissionRequest,
+    FactorLibraryManifest,
+    FactorLibraryShard,
+    HealthResponse,
+    MarketDataManifest,
+    MarketDataManifestOperationResponse,
+    MarketDataManifestRequest,
+    MarketDataShardOperationResponse,
+    MarketDataShardRequest,
+    MethodologyResponse,
+    OperationResponse,
+    ProbabilityOperationResponse,
+    ProbabilityRequest,
+    ResearchSession,
+    ResumeOperationRequest,
+    SessionOperationResponse,
+    SourceRef,
+    ThesisDocument,
+    Worldline,
+    WorldlineBundleOperationResponse,
+    WorldlineRequest,
+)
+from .operations import ApiProblem, OperationManager, format_sse
+from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, build_attestation
+from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
+from .services import ContractViolation, content_hash, deterministic_id, validate_payload
+
+IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
+
+ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Malformed request or replay cursor"},
+    403: {"model": ErrorResponse, "description": "Invalid operation control token"},
+    404: {"model": ErrorResponse, "description": "Entity not found"},
+    409: {"model": ErrorResponse, "description": "Idempotency or lifecycle conflict"},
+    422: {"model": ErrorResponse, "description": "Strict contract validation failure"},
+    500: {"model": ErrorResponse, "description": "Validated internal failure"},
+}
+
+app = FastAPI(
+    title="ForesightNine API",
+    version="1.0.0",
+    description="Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
+)
+clock = FixedClock()
+research_provider = MockResearchProvider(clock)
+data_provider = MockDataProvider(clock)
+factor_provider = MockFactorProvider(clock)
+operations = OperationManager(clock)
+
+SESSIONS: dict[str, ResearchSession] = {}
+THESES: dict[str, ThesisDocument] = {}
+CHALLENGES: dict[str, ChallengeRecord] = {}
+CHALLENGE_TURNS: dict[str, int] = {}
+EVIDENCE: dict[str, EvidenceItem] = {}
+WORLDLINES: dict[str, Worldline] = {}
+MARKET_MANIFESTS: dict[str, MarketDataManifest] = {}
+
+
+def reset_state() -> None:
+    operations.reset()
+    SESSIONS.clear()
+    THESES.clear()
+    CHALLENGES.clear()
+    CHALLENGE_TURNS.clear()
+    EVIDENCE.clear()
+    WORLDLINES.clear()
+    MARKET_MANIFESTS.clear()
+
+
+def _metadata(payload: dict[str, Any], ref_id: str, label: str, source_type: str = "model_inference") -> dict[str, Any]:
+    ref = SourceRef(ref_id=ref_id, source_type=source_type, label=label)
+    refs = (ref,)
+    hash_input = {"schema_version": "v1", "source_refs": [ref.model_dump(mode="json", exclude_none=True)], **payload}
+    return {
+        "schema_version": "v1",
+        "created_at": clock.now(),
+        "source_refs": refs,
+        "content_hash": content_hash(hash_input),
+    }
+
+
+def _request_payload(model: BaseModel) -> dict[str, Any]:
+    return model.model_dump(mode="json", exclude_none=True)
+
+
+def _validate_request(model: BaseModel, contract: str) -> None:
+    try:
+        validate_payload(model, contract)
+    except ContractViolation as error:
+        raise ApiProblem(422, "validation_error", str(error)) from error
+
+
+def _mark_replay(response: Response, replayed: bool) -> None:
+    response.headers["Idempotency-Replayed"] = "true" if replayed else "false"
+    response.headers["Cache-Control"] = "no-store"
+
+
+def _error(status_code: int, error_code: str, message: str, request: Request, *, retryable: bool = False, details: list[ErrorDetail] | None = None) -> JSONResponse:
+    request_id = deterministic_id("request", f"{request.method}:{request.url.path}:{error_code}")
+    payload = ErrorResponse(
+        schema_version="v1",
+        error_code=error_code,
+        message=message,
+        request_id=request_id,
+        retryable=retryable,
+        details=details or [],
+    )
+    validate_payload(payload, "ErrorResponse")
+    return JSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
+
+
+@app.exception_handler(ApiProblem)
+async def api_problem_handler(request: Request, error: ApiProblem) -> JSONResponse:
+    return _error(error.status_code, error.error_code, error.message, request, retryable=error.retryable)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request: Request, error: RequestValidationError) -> JSONResponse:
+    details = [
+        ErrorDetail(location="/".join(str(part) for part in item["loc"]), message=item["msg"])
+        for item in error.errors()
+    ]
+    return _error(422, "validation_error", "Request failed strict contract validation.", request, details=details)
+
+
+@app.exception_handler(ContractViolation)
+async def contract_violation_handler(request: Request, error: ContractViolation) -> JSONResponse:
+    details = [ErrorDetail(location=error.contract, message=item) for item in error.errors]
+    return _error(500, "contract_violation", "Generated response violated the canonical contract.", request, details=details)
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, error: Exception) -> JSONResponse:
+    return _error(500, "internal_error", "Internal operation failed without exposing sensitive detail.", request, retryable=True)
+
+
+@app.get("/health", response_model=HealthResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="health")
+def health() -> HealthResponse:
+    return HealthResponse(status="ok", provider="deterministic_mock", schema_version="v1", clock=clock.now())
+
+
+@app.post("/v1/sessions", response_model=SessionOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createSession")
+def create_session(request: CreateSessionRequest, response: Response, idempotency_key: IdempotencyKey) -> SessionOperationResponse:
+    _validate_request(request, "CreateSessionRequest")
+
+    def build(operation_id: str) -> tuple[ResearchSession, str]:
+        session_id = deterministic_id("session", operation_id)
+        payload = {"session_id": session_id, "status": "DRAFT", "expires_at": clock.now() + timedelta(hours=24)}
+        session = ResearchSession(**_metadata(payload, "mock:session", "Deterministic anonymous session"), **payload)
+        validate_payload(session, "ResearchSession")
+        SESSIONS[session_id] = session
+        return session, session_id
+
+    result, replayed = operations.execute(
+        endpoint="/v1/sessions",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=SessionOperationResponse,
+        result_field="session",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/challenges", response_model=ChallengeOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createChallenge")
+def create_challenge(request: CreateChallengeRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+    _validate_request(request, "CreateChallengeRequest")
+    if request.session_id not in SESSIONS:
+        raise ApiProblem(404, "not_found", "Session not found.")
+
+    def build(operation_id: str) -> tuple[ChallengeRecord, str]:
+        thesis = research_provider.thesis(
+            operation_id=operation_id,
+            session_id=request.session_id,
+            raw_text=request.thesis,
+            capital=request.capital,
+            base_currency=request.base_currency,
+            private_evidence=request.user_private_evidence_claims,
+        )
+        challenge_id = deterministic_id("challenge", operation_id)
+        challenge = research_provider.challenge(
+            operation_id=operation_id,
+            thesis_id=thesis.thesis_id,
+            challenge_id=challenge_id,
+            claim=request.thesis,
+            turn=1,
+            status="CHALLENGING",
+            private_evidence_declared=request.user_private_evidence_claims,
+        )
+        THESES[thesis.thesis_id] = thesis
+        CHALLENGES[challenge_id] = challenge
+        CHALLENGE_TURNS[challenge_id] = 1
+        return challenge, challenge_id
+
+    result, replayed = operations.execute(
+        endpoint="/v1/challenges",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=ChallengeOperationResponse,
+        result_field="challenge",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/challenges/{challenge_id}/messages", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeMessage")
+def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+    _validate_request(request, "ChallengeMessageRequest")
+
+    def build(operation_id: str) -> tuple[ChallengeRecord, str]:
+        current = CHALLENGES.get(challenge_id)
+        if not current:
+            raise ApiProblem(404, "not_found", "Challenge not found.")
+        if current.status != "CHALLENGING":
+            raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
+        turn = CHALLENGE_TURNS[challenge_id] + 1
+        updated = research_provider.challenge(
+            operation_id=operation_id,
+            thesis_id=current.thesis_id,
+            challenge_id=challenge_id,
+            claim=request.message,
+            turn=turn,
+            status="EVIDENCE_REQUIRED",
+            private_evidence_declared=current.private_evidence_declared,
+        )
+        CHALLENGES[challenge_id] = updated
+        CHALLENGE_TURNS[challenge_id] = turn
+        return updated, challenge_id
+
+    result, replayed = operations.execute(
+        endpoint=f"/v1/challenges/{challenge_id}/messages",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=ChallengeOperationResponse,
+        result_field="challenge",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/challenges/{challenge_id}/evidence", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeEvidence")
+def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+    _validate_request(request, "EvidenceSubmissionRequest")
+
+    def build(operation_id: str) -> tuple[ChallengeRecord, str]:
+        current = CHALLENGES.get(challenge_id)
+        if not current:
+            raise ApiProblem(404, "not_found", "Challenge not found.")
+        if current.status != "EVIDENCE_REQUIRED":
+            raise ApiProblem(409, "invalid_state_transition", f"Evidence command cannot transition from {current.status}.")
+        evidence_id = deterministic_id("evidence", operation_id)
+        independently_reviewable = request.url is not None
+        evidence_payload: dict[str, Any] = {
+            "evidence_id": evidence_id,
+            "challenge_id": challenge_id,
+            "source_type": "reliable_secondary" if independently_reviewable else "user_private",
+            "title": request.title,
+            "retrieved_at": request.retrieved_at,
+            "excerpt": request.excerpt,
+            "user_note": request.user_note,
+            "grade": "B" if independently_reviewable else "D",
+            "supports_or_challenges": "context",
+            "independently_reviewable": independently_reviewable,
+        }
+        if request.url is not None:
+            evidence_payload["url"] = str(request.url)
+        if request.publisher is not None:
+            evidence_payload["publisher"] = request.publisher
+        if request.published_at is not None:
+            evidence_payload["published_at"] = request.published_at
+        evidence = EvidenceItem(**_metadata(evidence_payload, "client:evidence", "Client submitted evidence", "user_submitted"), **evidence_payload)
+        validate_payload(evidence, "EvidenceItem")
+        turn = CHALLENGE_TURNS[challenge_id] + 1
+        updated = research_provider.challenge(
+            operation_id=operation_id,
+            thesis_id=current.thesis_id,
+            challenge_id=challenge_id,
+            claim=f"Evidence supplied: {request.title}",
+            turn=turn,
+            status="CHALLENGING",
+            private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
+        )
+        EVIDENCE[evidence_id] = evidence
+        CHALLENGES[challenge_id] = updated
+        CHALLENGE_TURNS[challenge_id] = turn
+        return updated, challenge_id
+
+    result, replayed = operations.execute(
+        endpoint=f"/v1/challenges/{challenge_id}/evidence",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=ChallengeOperationResponse,
+        result_field="challenge",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/challenges/{challenge_id}/confirm", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="confirmChallenge")
+def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+    _validate_request(request, "ConfirmChallengeRequest")
+    reservation = request.command == "CONFIRM_WITH_RESERVATIONS"
+
+    def build(operation_id: str) -> tuple[ChallengeRecord, str]:
+        current = CHALLENGES.get(challenge_id)
+        if not current:
+            raise ApiProblem(404, "not_found", "Challenge not found.")
+        if reservation and current.status != "EVIDENCE_REQUIRED":
+            raise ApiProblem(409, "invalid_state_transition", "Reservation command is only legal from EVIDENCE_REQUIRED.")
+        if not reservation and current.status != "CHALLENGING":
+            raise ApiProblem(409, "invalid_state_transition", "Normal confirmation is only legal from CHALLENGING.")
+        turn = CHALLENGE_TURNS[challenge_id] + 1
+        updated = research_provider.challenge(
+            operation_id=operation_id,
+            thesis_id=current.thesis_id,
+            challenge_id=challenge_id,
+            claim=current.claims[-1],
+            turn=turn,
+            status="CONFIRMED",
+            confirmation="confirmed_with_reservations" if reservation else "confirmed",
+            reservation_note=request.reservation_note if reservation else None,
+            private_evidence_declared=current.private_evidence_declared,
+        )
+        CHALLENGES[challenge_id] = updated
+        CHALLENGE_TURNS[challenge_id] = turn
+        return updated, challenge_id
+
+    result, replayed = operations.execute(
+        endpoint=f"/v1/challenges/{challenge_id}/confirm",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=ChallengeOperationResponse,
+        result_field="challenge",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/worldlines", response_model=WorldlineBundleOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createWorldlines")
+def create_worldlines(request: WorldlineRequest, response: Response, idempotency_key: IdempotencyKey) -> WorldlineBundleOperationResponse:
+    _validate_request(request, "WorldlineRequest")
+    challenge = CHALLENGES.get(request.challenge_id)
+    if not challenge:
+        raise ApiProblem(404, "not_found", "Challenge not found.")
+    if challenge.status != "CONFIRMED":
+        raise ApiProblem(409, "invalid_state_transition", "Worldlines require a confirmed challenge.")
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        bundle = research_provider.generate_worldlines(
+            operation_id=operation_id,
+            challenge_id=request.challenge_id,
+            premise=request.premise,
+            horizon_end=request.horizon_end,
+        )
+        for worldline in bundle.worldlines:
+            WORLDLINES[worldline.worldline_id] = worldline
+        return bundle, bundle.bundle_id
+
+    result, replayed = operations.execute(
+        endpoint="/v1/worldlines",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=WorldlineBundleOperationResponse,
+        result_field="bundle",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.get("/v1/worldlines/{worldline_id}", response_model=Worldline, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getWorldline")
+def get_worldline(worldline_id: str) -> Worldline:
+    worldline = WORLDLINES.get(worldline_id)
+    if not worldline:
+        raise ApiProblem(404, "not_found", "Worldline not found.")
+    return worldline
+
+
+@app.post("/v1/probabilities/assess", response_model=ProbabilityOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="assessProbability")
+def assess_probability(request: ProbabilityRequest, response: Response, idempotency_key: IdempotencyKey) -> ProbabilityOperationResponse:
+    _validate_request(request, "ProbabilityRequest")
+    if request.worldline_id not in WORLDLINES:
+        raise ApiProblem(404, "not_found", "Worldline not found.")
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        result = research_provider.assess_probability(
+            operation_id=operation_id,
+            worldline_id=request.worldline_id,
+            premise=request.premise,
+            conditional_path=request.conditional_path,
+        )
+        return result, result.assessment_id
+
+    result, replayed = operations.execute(
+        endpoint="/v1/probabilities/assess",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=ProbabilityOperationResponse,
+        result_field="probability",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.get("/v1/assets/search", response_model=AssetSearchResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="searchAssets")
+def search_assets(query: Annotated[str, Query(max_length=200)] = "") -> AssetSearchResponse:
+    items = registry_search_assets(query)
+    return AssetSearchResponse(schema_version="v1", items=items, total=len(items))
+
+
+@app.get("/v1/assets/{asset_id}", response_model=ASSET_INDEX["ETF:SPY"].__class__, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getAsset")
+def get_asset(asset_id: str) -> BaseModel:
+    asset = registry_get_asset(asset_id)
+    if not asset:
+        raise ApiProblem(404, "not_found", "Asset not found.")
+    return asset
+
+
+@app.post("/v1/market-data/manifests", response_model=MarketDataManifestOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createMarketDataManifest")
+def create_market_manifest(request: MarketDataManifestRequest, response: Response, idempotency_key: IdempotencyKey) -> MarketDataManifestOperationResponse:
+    _validate_request(request, "MarketDataManifestRequest")
+    unknown = [asset_id for asset_id in request.asset_ids if asset_id not in ASSET_INDEX]
+    if unknown:
+        raise ApiProblem(422, "validation_error", f"Unknown registry asset IDs: {', '.join(unknown)}")
+    from_at = getattr(request, "from")
+    if from_at > request.to:
+        raise ApiProblem(422, "validation_error", "Market-data 'from' must not be after 'to'.")
+
+    def build(operation_id: str) -> tuple[MarketDataManifest, str]:
+        manifest = data_provider.manifest(
+            operation_id=operation_id,
+            asset_ids=tuple(request.asset_ids),
+            field_set=tuple(request.field_set),
+            from_at=from_at,
+            to_at=request.to,
+            assets=ASSET_INDEX,
+        )
+        MARKET_MANIFESTS[manifest.manifest_id] = manifest
+        return manifest, manifest.manifest_id
+
+    result, replayed = operations.execute(
+        endpoint="/v1/market-data/manifests",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=MarketDataManifestOperationResponse,
+        result_field="manifest",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/market-data/shards", response_model=MarketDataShardOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getMarketDataShard")
+def get_market_shard(request: MarketDataShardRequest, response: Response, idempotency_key: IdempotencyKey) -> MarketDataShardOperationResponse:
+    _validate_request(request, "MarketDataShardRequest")
+    manifest = MARKET_MANIFESTS.get(request.manifest_id)
+    if not manifest:
+        raise ApiProblem(404, "not_found", "Market-data manifest not found.")
+    if request.shard_id not in {item.shard_id for item in manifest.shards}:
+        raise ApiProblem(404, "not_found", "Market-data shard not found.")
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        shard = data_provider.shard(manifest, ASSET_INDEX)
+        return shard, shard.shard_id
+
+    result, replayed = operations.execute(
+        endpoint="/v1/market-data/shards",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=MarketDataShardOperationResponse,
+        result_field="shard",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.get("/v1/factor-libraries/{version}/manifest", response_model=FactorLibraryManifest, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getFactorLibraryManifest")
+def get_factor_manifest(version: str) -> FactorLibraryManifest:
+    try:
+        return factor_provider.manifest(version)
+    except KeyError as error:
+        raise ApiProblem(404, "not_found", "Factor library version not found.") from error
+
+
+@app.get("/v1/factor-libraries/{version}/shards", response_model=FactorLibraryShard, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getFactorLibraryShard")
+def get_factor_shard(version: str, shard_id: Annotated[str, Query(min_length=1)]) -> FactorLibraryShard:
+    try:
+        return factor_provider.shard(version, shard_id)
+    except KeyError as error:
+        raise ApiProblem(404, "not_found", "Factor library shard not found.") from error
+
+
+@app.post("/v1/client-computations/{computation_id}/attest", response_model=ClientAttestationOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="attestClientComputation")
+def attest_client_computation(computation_id: str, request: ClientComputationAttestRequest, response: Response, idempotency_key: IdempotencyKey) -> ClientAttestationOperationResponse:
+    _validate_request(request, "ClientComputationAttestRequest")
+    if request.operation_id not in operations.operations:
+        raise ApiProblem(404, "not_found", "Referenced operation not found.")
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        result = build_attestation(operation_id=operation_id, computation_id=computation_id, request=request, clock=clock)
+        return result, computation_id
+
+    result, replayed = operations.execute(
+        endpoint=f"/v1/client-computations/{computation_id}/attest",
+        idempotency_key=idempotency_key,
+        request_payload=_request_payload(request),
+        response_model=ClientAttestationOperationResponse,
+        result_field="attestation",
+        build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/operations/{operation_id}/cancel", response_model=OperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="cancelOperation")
+def cancel_operation(operation_id: str, request: CancelOperationRequest, response: Response, idempotency_key: IdempotencyKey) -> OperationResponse:
+    _validate_request(request, "CancelOperationRequest")
+    result, replayed = operations.cancel(operation_id, request.cancel_token, idempotency_key)
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/operations/{operation_id}/resume", response_model=OperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="resumeOperation")
+def resume_operation(operation_id: str, request: ResumeOperationRequest, response: Response, idempotency_key: IdempotencyKey) -> OperationResponse:
+    _validate_request(request, "ResumeOperationRequest")
+    result, replayed = operations.resume(operation_id, request.resume_token, idempotency_key)
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.get(
+    "/v1/operations/{operation_id}/events",
+    response_class=PlainTextResponse,
+    responses={
+        **ERROR_RESPONSES,
+        200: {
+            "description": "Replayable Server-Sent Events. IDs are operation_id:sequence.",
+            "content": {"text/event-stream": {"schema": {"$ref": "#/components/schemas/SseEvent"}}},
+        },
+    },
+    operation_id="streamOperationEvents",
+)
+def stream_operation_events(operation_id: str, last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None) -> PlainTextResponse:
+    events = operations.events_after(operation_id, last_event_id)
+    return PlainTextResponse(
+        format_sse(events),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/v1/methodology", response_model=MethodologyResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getMethodology")
+def methodology() -> MethodologyResponse:
+    return MethodologyResponse(
+        schema_version="v1",
+        methodology_version="v1",
+        disclosure="Research scenario and portfolio simulation only; not investment advice and no broker execution.",
+        probability_display="interval_first",
+        client_computation=True,
+    )
+
+
+def canonical_openapi() -> dict[str, Any]:
+    if app.openapi_schema:
+        return app.openapi_schema
+    document = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
+    document["openapi"] = "3.1.0"
+    document["info"]["x-contract-sha256"] = sha256(
+        __import__("json").dumps(CONTRACT_SCHEMA, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    component_schemas = deepcopy(CONTRACT_SCHEMA["$defs"])
+
+    def rewrite_refs(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "$ref" and isinstance(child, str) and child.startswith("#/$defs/"):
+                    value[key] = child.replace("#/$defs/", "#/components/schemas/", 1)
+                else:
+                    rewrite_refs(child)
+        elif isinstance(value, list):
+            for child in value:
+                rewrite_refs(child)
+
+    rewrite_refs(component_schemas)
+    document.setdefault("components", {})["schemas"] = component_schemas
+    app.openapi_schema = document
+    return document
+
+
+app.openapi = canonical_openapi
