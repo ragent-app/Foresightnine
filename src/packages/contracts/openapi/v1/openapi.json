@@ -821,6 +821,7 @@
           "reservation_note": {
             "maxLength": 2000,
             "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           },
           "unresolved_issues_acknowledged": {
@@ -1018,6 +1019,7 @@
               "validation_error",
               "not_found",
               "invalid_state_transition",
+              "confirmation_requirements_not_met",
               "idempotency_conflict",
               "invalid_operation_token",
               "invalid_last_event_id",
@@ -2742,7 +2744,7 @@
     "description": "Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
     "title": "ForesightNine API",
     "version": "1.0.0",
-    "x-contract-sha256": "bddc7eb1f3b8d9eb4250a8e48beb06f8376a6d01a3b3dc7fa3e4f3c23134d651"
+    "x-contract-sha256": "d8db9a5ffbed2e488677847f14d7671d97b3671daa2c581aafb49df533bd6e56"
   },
   "openapi": "3.1.0",
   "paths": {

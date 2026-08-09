@@ -7,6 +7,7 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from .models import (
+    ErrorDetail,
     ErrorResponse,
     HeartbeatEvent,
     Operation,
@@ -22,12 +23,21 @@ from .services import canonical_json, content_hash, deterministic_id, validate_p
 
 
 class ApiProblem(RuntimeError):
-    def __init__(self, status_code: int, error_code: str, message: str, *, retryable: bool = False) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        error_code: str,
+        message: str,
+        *,
+        retryable: bool = False,
+        details: list[ErrorDetail] | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.error_code = error_code
         self.message = message
         self.retryable = retryable
+        self.details = details or []
 
 
 @dataclass(frozen=True)

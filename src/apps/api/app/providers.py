@@ -122,9 +122,10 @@ class MockResearchProvider(ResearchProvider):
         confirmation: str = "pending",
         reservation_note: str | None = None,
         private_evidence_declared: bool = False,
+        rubric_passed: bool = False,
     ) -> ChallengeRecord:
         refs = (_model_ref("mock:challenge", "Deterministic adversarial review"),)
-        score = 3 if status == "CONFIRMED" else 2
+        score = 3 if rubric_passed else 2
         scores = tuple(
             RubricScore(criterion=criterion, score=score, rationale="Mock rubric remains evidence-conservative and deterministic.")
             for criterion in RUBRIC_CRITERIA
@@ -135,10 +136,10 @@ class MockResearchProvider(ResearchProvider):
             "thesis_id": thesis_id,
             "claims": [claim],
             "objections": ["The proposed causal link may have a competing explanation or already be priced."],
-            "missing_evidence": [] if status == "CONFIRMED" else ["Add a dated, independently verifiable base-rate source."],
+            "missing_evidence": [] if rubric_passed else ["Add a dated, independently verifiable base-rate source."],
             "questions": ["What observable result would falsify this premise?"],
             "rubric_scores": [item.model_dump(mode="json", exclude_none=True) for item in scores],
-            "unresolved_issues": ["No public base-rate evidence has been independently verified in mock mode."],
+            "unresolved_issues": [] if rubric_passed else ["No public base-rate evidence has been independently verified in mock mode."],
             "user_confirmation": confirmation,
             "private_evidence_declared": private_evidence_declared,
             "status": status,

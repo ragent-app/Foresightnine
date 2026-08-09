@@ -3,7 +3,7 @@
  * Source: schemas/v1/contracts.schema.json
  */
 export const CONTRACT_VERSION = "v1" as const;
-export const CONTRACT_SCHEMA_SHA256 = "8763a1c15fde062aba0978226c41c3dfd899980eae0bd90b8f51750f8eab4b49" as const;
+export const CONTRACT_SCHEMA_SHA256 = "deb077db03cd740cf9d7e2d618ad5fc9c5610bdd4ac9e6fe0f1f8c26fa48d01d" as const;
 
 export type SchemaVersion = "v1";
 
@@ -404,7 +404,7 @@ export interface ErrorDetail {
 
 export interface ErrorResponse {
   readonly "schema_version": SchemaVersion;
-  readonly "error_code": "bad_request" | "validation_error" | "not_found" | "invalid_state_transition" | "idempotency_conflict" | "invalid_operation_token" | "invalid_last_event_id" | "contract_violation" | "internal_error";
+  readonly "error_code": "bad_request" | "validation_error" | "not_found" | "invalid_state_transition" | "confirmation_requirements_not_met" | "idempotency_conflict" | "invalid_operation_token" | "invalid_last_event_id" | "contract_violation" | "internal_error";
   readonly "message": string;
   readonly "request_id": Identifier;
   readonly "retryable": boolean;
@@ -621,4 +621,3 @@ export interface AcceptanceFixture {
   readonly "input": AcceptanceFixtureInput;
   readonly "expected": AcceptanceFixtureExpected;
 }
-

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from app.main import CHALLENGES, CHALLENGE_TURNS
+
 from .helpers import CLIENT, assert_contract, confirm_standard_flow, create_challenge, create_session, create_worldlines, idem
 
 
@@ -72,26 +74,75 @@ def test_normal_state_path_worldlines_probability_and_get() -> None:
     assert assessment["calibration_status"] == "model_estimate_unvalidated"
 
 
-def test_explicit_reservation_command_and_illegal_state_paths() -> None:
-    created = create_challenge(private=True, key="private-challenge-key")
+def test_direct_ordinary_confirmation_rejects_low_rubric_without_mutation() -> None:
+    created = create_challenge(private=True, key="direct-ordinary-challenge-key")
     challenge_id = created["challenge"]["challenge_id"]
-    illegal_evidence = CLIENT.post(
-        f"/v1/challenges/{challenge_id}/evidence",
-        json={"title": "Private note", "retrieved_at": "2026-08-10T00:00:00Z", "excerpt": "Unverifiable", "user_note": "", "content_hash": "b" * 64},
-        headers=idem("illegal-evidence-key"),
+    before = CHALLENGES[challenge_id].model_dump(mode="json", exclude_none=True)
+    before_turn = CHALLENGE_TURNS[challenge_id]
+
+    rejected = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/confirm",
+        json={"command": "CONFIRM", "unresolved_issues_acknowledged": False},
+        headers=idem("direct-ordinary-confirm-key"),
     )
-    assert illegal_evidence.status_code == 409
-    CLIENT.post(
-        f"/v1/challenges/{challenge_id}/messages",
-        json={"message": "Private claim without public corroboration."},
-        headers=idem("private-message-key"),
+    assert rejected.status_code == 409
+    assert rejected.json()["error_code"] == "confirmation_requirements_not_met"
+    assert_contract(rejected.json(), "ErrorResponse")
+    locations = {item["location"] for item in rejected.json()["details"]}
+    assert {
+        "challenge/rubric_scores/total",
+        "challenge/rubric_scores/premise_clarity",
+        "challenge/rubric_scores/time_boundary",
+        "challenge/rubric_scores/causal_chain",
+        "challenge/rubric_scores/asset_transmission",
+        "challenge/rubric_scores/falsifiability",
+        "challenge/missing_evidence",
+        "challenge/unresolved_issues",
+    } <= locations
+    assert CHALLENGES[challenge_id].model_dump(mode="json", exclude_none=True) == before
+    assert CHALLENGE_TURNS[challenge_id] == before_turn
+
+
+def test_reservation_confirmation_requires_true_acknowledgment_and_note() -> None:
+    created = create_challenge(private=True, key="false-ack-challenge-key")
+    challenge_id = created["challenge"]["challenge_id"]
+    before = CHALLENGES[challenge_id].model_dump(mode="json", exclude_none=True)
+
+    false_ack = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/confirm",
+        json={
+            "command": "CONFIRM_WITH_RESERVATIONS",
+            "unresolved_issues_acknowledged": False,
+            "reservation_note": "The private claim remains unresolved.",
+        },
+        headers=idem("false-ack-confirm-key"),
     )
+    assert false_ack.status_code == 422
+    assert false_ack.json()["error_code"] == "validation_error"
+
     missing_note = CLIENT.post(
         f"/v1/challenges/{challenge_id}/confirm",
         json={"command": "CONFIRM_WITH_RESERVATIONS", "unresolved_issues_acknowledged": True},
         headers=idem("missing-reservation-key"),
     )
     assert missing_note.status_code == 422
+    whitespace_note = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/confirm",
+        json={
+            "command": "CONFIRM_WITH_RESERVATIONS",
+            "unresolved_issues_acknowledged": True,
+            "reservation_note": "   ",
+        },
+        headers=idem("whitespace-reservation-key"),
+    )
+    assert whitespace_note.status_code == 422
+    assert CHALLENGES[challenge_id].model_dump(mode="json", exclude_none=True) == before
+
+
+def test_direct_reservation_confirmation_preserves_review_and_private_evidence() -> None:
+    created = create_challenge(private=True, key="direct-reservation-challenge-key")
+    challenge_id = created["challenge"]["challenge_id"]
+    before = created["challenge"]
     confirmed = CLIENT.post(
         f"/v1/challenges/{challenge_id}/confirm",
         json={
@@ -99,11 +150,18 @@ def test_explicit_reservation_command_and_illegal_state_paths() -> None:
             "unresolved_issues_acknowledged": True,
             "reservation_note": "The industry claim is not independently reviewable.",
         },
-        headers=idem("reservation-key-0001"),
+        headers=idem("direct-reservation-confirm-key"),
     )
     assert confirmed.status_code == 200, confirmed.text
-    assert confirmed.json()["challenge"]["user_confirmation"] == "confirmed_with_reservations"
-    assert confirmed.json()["challenge"]["reservation_note"]
+    after = confirmed.json()["challenge"]
+    assert after["status"] == "CONFIRMED"
+    assert after["user_confirmation"] == "confirmed_with_reservations"
+    assert after["reservation_note"] == "The industry claim is not independently reviewable."
+    for field in (
+        "claims", "objections", "missing_evidence", "questions", "rubric_scores",
+        "unresolved_issues", "private_evidence_declared",
+    ):
+        assert after[field] == before[field]
 
 
 def test_market_factor_registry_and_client_attestation_contracts() -> None:

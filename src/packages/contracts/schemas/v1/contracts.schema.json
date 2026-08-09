@@ -561,7 +561,7 @@
       "required": ["schema_version", "error_code", "message", "request_id", "retryable", "details"],
       "properties": {
         "schema_version": { "$ref": "#/$defs/SchemaVersion" },
-        "error_code": { "enum": ["bad_request", "validation_error", "not_found", "invalid_state_transition", "idempotency_conflict", "invalid_operation_token", "invalid_last_event_id", "contract_violation", "internal_error"] },
+        "error_code": { "enum": ["bad_request", "validation_error", "not_found", "invalid_state_transition", "confirmation_requirements_not_met", "idempotency_conflict", "invalid_operation_token", "invalid_last_event_id", "contract_violation", "internal_error"] },
         "message": { "type": "string", "minLength": 1 },
         "request_id": { "$ref": "#/$defs/Identifier" },
         "retryable": { "type": "boolean" },
@@ -637,7 +637,7 @@
       "properties": {
         "command": { "enum": ["CONFIRM", "CONFIRM_WITH_RESERVATIONS"] },
         "unresolved_issues_acknowledged": { "type": "boolean" },
-        "reservation_note": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        "reservation_note": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S" }
       },
       "allOf": [
         {

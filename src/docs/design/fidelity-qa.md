@@ -30,6 +30,7 @@ User approval: explicit. The user stated that all proposed solutions were accept
 - Baseline/reveal dates now use 2026-08-10 and coherent +6/+12/+18/+24-month anchors.
 - Public Default selected-state variants show Raw→Public deltas and reasons without hiding or overwriting Raw.
 - Android input/export chrome and dependent settings were corrected; recovery-state variants were added for Web and Android.
+- Final reviewer corrections align the FM concept with the executable rank/IC/quality/valid-support/z-score/clip/normalise sequence, restore grade C to secondary commentary/expert interviews, and align both Android portfolio states to the 2026-08-10 boundary plus a 24-month 2028-08-10 endpoint.
 
 ### Implementation corrections required
 

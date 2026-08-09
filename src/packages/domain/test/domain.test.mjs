@@ -19,12 +19,17 @@ test("state machine exposes only the approved durable graph", () => {
 });
 
 test("reservation confirmation requires the explicit audited command", () => {
+  assert.equal(confirmWithReservations("CHALLENGING", {
+    command: "CONFIRM_WITH_RESERVATIONS",
+    unresolved_issues_acknowledged: true,
+    reservation_note: "Direct confirmation retains the initial review gaps."
+  }), "CONFIRMED");
   assert.equal(confirmWithReservations("EVIDENCE_REQUIRED", {
     command: "CONFIRM_WITH_RESERVATIONS",
     unresolved_issues_acknowledged: true,
     reservation_note: "Base-rate evidence remains unresolved."
   }), "CONFIRMED");
-  assert.throws(() => confirmWithReservations("CHALLENGING", {
+  assert.throws(() => confirmWithReservations("DRAFT", {
     command: "CONFIRM_WITH_RESERVATIONS",
     unresolved_issues_acknowledged: true,
     reservation_note: "Still unresolved."

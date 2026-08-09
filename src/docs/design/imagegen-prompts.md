@@ -42,3 +42,9 @@ The complete suite received a correction pass after Sol's pre-review:
 - **Recovery variants:** additional Web/Android challenge states preserve transcript, evidence and draft while recovering from `Last-Event-ID 17`; retry explicitly avoids duplicate submission or billing.
 
 The bitmap files remain in `docs/design/concepts`; no generated image is loaded by runtime UI code.
+
+### Final specification correction pass
+
+- **FM executable formula:** the active Web FM concept now follows the actual client engine exactly: `r=rank_pct(signal)-0.5`, `c=sign(IC)r`, global `q=|IC||ICIR|`, per-asset valid-support weighted combination, cross-sectional z-score with `ddof=0`, clipping, positive-part transformation and final sum-to-one normalisation.
+- **Evidence grade C:** the active methodology concept describes C as secondary commentary or expert interviews, preserving the A–E rubric contract.
+- **Android NAV horizon:** both active Raw and Public Default portfolio concepts use history through the 2026-08-10 simulation boundary and a 24-month endpoint of 2028-08-10. Superseded bitmaps remain in the adjacent archive folders.

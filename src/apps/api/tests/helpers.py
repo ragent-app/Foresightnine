@@ -74,13 +74,25 @@ def confirm_standard_flow() -> tuple[dict[str, Any], dict[str, Any]]:
         headers=idem("evidence-key-0001"),
     )
     assert evidence.status_code == 200, evidence.text
-    assert evidence.json()["challenge"]["status"] == "CHALLENGING"
+    passing_challenge = evidence.json()["challenge"]
+    assert passing_challenge["status"] == "CHALLENGING"
+    assert sum(item["score"] for item in passing_challenge["rubric_scores"]) >= 30
+    critical = {"premise_clarity", "time_boundary", "causal_chain", "asset_transmission", "falsifiability"}
+    assert all(item["score"] >= 3 for item in passing_challenge["rubric_scores"] if item["criterion"] in critical)
+    assert passing_challenge["missing_evidence"] == []
+    assert passing_challenge["unresolved_issues"] == []
     confirmed = CLIENT.post(
         f"/v1/challenges/{challenge_id}/confirm",
-        json={"command": "CONFIRM", "unresolved_issues_acknowledged": True},
+        json={"command": "CONFIRM", "unresolved_issues_acknowledged": False},
         headers=idem("confirm-key-0001"),
     )
     assert confirmed.status_code == 200, confirmed.text
+    confirmed_challenge = confirmed.json()["challenge"]
+    for field in (
+        "claims", "objections", "missing_evidence", "questions", "rubric_scores",
+        "unresolved_issues", "private_evidence_declared",
+    ):
+        assert confirmed_challenge[field] == passing_challenge[field]
     return created, confirmed.json()
 
 

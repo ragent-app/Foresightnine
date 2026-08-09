@@ -111,6 +111,7 @@ for (const [name, definition] of Object.entries(definitions)) {
   }
 }
 
+while (lines.at(-1) === "") lines.pop();
 const output = `${lines.join("\n")}\n`;
 if (process.argv.includes("--check")) {
   const current = await readFile(outputPath, "utf8").catch(() => "");

@@ -1,5 +1,52 @@
 # Progress
 
+## Phase 2 reviewer corrections complete — 2026-08-10
+
+### Delivered
+
+- Corrected the Web FM concept to the executable pipeline: one-based percentile rank minus 0.5, IC-sign direction, global factor quality `|IC|×|ICIR|`, per-asset valid-support combination, population-standard-deviation z-score, clipping and final long-only re-normalisation.
+- Corrected evidence grade C to secondary commentary/expert interviews; it is no longer described as a company filing.
+- Corrected Android Raw and Public Default NAV horizons to a coherent `2024-08 → 2026-08-10 today → 2028-08-10 (+24m)` boundary.
+- Retained every replaced concept in an `archive` directory. The active suite contains 13 required full-state concepts and four state variants: Web/Android SSE recovery and Web/Android Public Default delta.
+- Strengthened Phase 2 verification to inspect every PNG recursively, including variants and archives, and to enforce the required Web and Android artboard dimensions for both primary and variant states.
+- The standing user instruction to accept all proposed solutions and continue through completion covers this reviewer-directed correction pass; its scope and source are recorded in `phase2-manifest.json`.
+
+### Verification status
+
+- `corepack pnpm install --frozen-lockfile` and `uv sync --project apps/api --frozen`: passed with the checked-in lockfiles.
+- `corepack pnpm typecheck`: passed all five typed workspace projects.
+- `corepack pnpm verify:phase0`: passed six immutable FM references, all governance boundaries, 103 unique Git-history blobs and the current-tree secret scan.
+- `corepack pnpm verify:phase1`: passed generated contract/registry/OpenAPI drift checks, 4 domain tests, 2 registry tests and 20 API tests.
+- `corepack pnpm verify:phase2`: passed 35 recursively inspected PNGs, 13 required concepts, 4 state variants, all specifications, contrast checks and design-system typecheck.
+- `corepack pnpm test`: passed contracts, design-system, 4 FM parity tests, 4 domain tests, 2 registry tests and 20 API tests.
+- Original-resolution visual inspection passed the corrected FM equation, evidence-grade C definition and both Android NAV horizons. Formal Sol re-review remains the phase-gate authority.
+
+## Phase 1 Sol confirmation blocker remediated — 2026-08-10
+
+### Delivered
+
+- Reproduced the blocker at commit `1af8069`: an initial `CHALLENGING` record with a 20/40 rubric accepted ordinary `CONFIRM` with `unresolved_issues_acknowledged=false`, then confirmation-derived provider logic rewrote the rubric to 30/40.
+- Ordinary `CONFIRM` now requires a rubric total of at least 30/40; `premise_clarity`, `time_boundary`, `causal_chain`, `asset_transmission` and `falsifiability` must each be at least 3/4; `missing_evidence` and `unresolved_issues` must both be empty. Failure returns structured 409 code `confirmation_requirements_not_met` with per-gate details and leaves the challenge and turn counter unchanged.
+- `CONFIRM_WITH_RESERVATIONS` is an explicit pre-confirmation command from `CHALLENGING` or `EVIDENCE_REQUIRED`. Canonical validation requires `unresolved_issues_acknowledged=true` and a non-whitespace reservation note.
+- Confirmation no longer invokes the research provider. It copies the current claims, scoring, missing evidence, unresolved issues, AI objections, questions and private-evidence declaration unchanged; only the new turn, confirmed status, user confirmation, optional reservation note, provenance and content hash are written.
+- The deterministic mock review becomes rubric-passing only after independently reviewable evidence is accepted. Provider scoring no longer depends on `CONFIRMED` status.
+- Added direct early-confirmation rejection, false acknowledgment/missing/whitespace note, reservation preservation, no-rewrite and passing ordinary-confirmation regression coverage. Updated the shared domain reservation command for both pre-confirmation review states.
+- Added the canonical error code and non-whitespace note constraint, then regenerated TypeScript contracts and both 20-path OpenAPI snapshots. Canonical schema SHA-256 is `deb077db03cd740cf9d7e2d618ad5fc9c5610bdd4ac9e6fe0f1f8c26fa48d01d`.
+
+### Verification evidence
+
+- `corepack pnpm install --frozen-lockfile`: passed; all 6 workspace projects already up to date.
+- `uv sync --project apps/api --frozen`: passed; 32 packages checked.
+- `corepack pnpm typecheck`: passed all 5 typed workspace projects.
+- `corepack pnpm verify:phase1`: passed generated-contract/OpenAPI drift gates, 4 domain tests, 2 registry tests and 20 API tests.
+- `corepack pnpm test`: passed contracts, design-system, 4 FM parity tests, 4 domain tests, 2 registry tests and 20 API tests.
+- The existing third-party Starlette `httpx2` migration warning remains non-failing and unchanged.
+
+### Scope preservation
+
+- This remediation did not edit design concepts, FM implementation/fixtures, governance files, root plans or any declared read-only source.
+- No Git commit was created; integration remains with the main thread.
+
 ## Phase 1 gate complete — 2026-08-10
 
 ### Delivered
@@ -24,7 +71,7 @@
 - `uv run --project apps/api pytest apps/api/tests`: **18 passed**; one third-party Starlette warning recommends migrating its TestClient from `httpx` to `httpx2`.
 - `corepack pnpm verify:phase0`: passed 6 immutable reference hashes, all 3 governance hashes/boundaries and secret scan.
 - `corepack pnpm verify:phase1`: passed generated TS/registry/OpenAPI drift checks, 4 domain tests, 2 registry tests and 18 Python tests.
-- `corepack pnpm verify:phase2`: passed 13 approved concepts, 2 variants, specification files, contrast checks and design-system typecheck.
+- `corepack pnpm verify:phase2`: passed 13 approved concepts, 4 variants, specification files, contrast checks and design-system typecheck.
 - `corepack pnpm test`: passed contracts generation/type tests, 4 existing fm-engine parity tests, 4 domain tests, 2 registry tests, design-system typecheck and 18 Python tests.
 
 ### Preserved concurrent work

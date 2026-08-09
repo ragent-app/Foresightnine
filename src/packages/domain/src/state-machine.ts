@@ -31,13 +31,13 @@ export interface ConfirmWithReservationsCommand {
   readonly reservation_note: string;
 }
 
-/** Early confirmation is a distinct audited command, never a hidden graph shortcut. */
+/** Early confirmation is a distinct audited command from either pre-confirmation review state. */
 export function confirmWithReservations(
   from: ResearchStatus,
   command: ConfirmWithReservationsCommand
 ): ResearchStatus {
   if (
-    from !== "EVIDENCE_REQUIRED" ||
+    (from !== "CHALLENGING" && from !== "EVIDENCE_REQUIRED") ||
     command.command !== "CONFIRM_WITH_RESERVATIONS" ||
     command.unresolved_issues_acknowledged !== true ||
     command.reservation_note.trim().length === 0

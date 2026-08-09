@@ -1,5 +1,5 @@
-import { access, readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { access, readFile, readdir } from "node:fs/promises";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -22,29 +22,59 @@ const required = [
   "android/06-share-export.png",
 ];
 
-for (const relative of required) {
-  const path = resolve(root, relative);
+const inspectPng = async (relativePath) => {
+  const path = resolve(root, relativePath);
   const bytes = await readFile(path);
   const signature = bytes.subarray(0, 8).toString("hex");
-  if (signature !== "89504e470d0a1a0a") throw new Error(`${relative} is not a decodable PNG`);
+  if (signature !== "89504e470d0a1a0a" || bytes.length < 33) throw new Error(`${relativePath} is not a valid PNG`);
+  if (bytes.subarray(12, 16).toString("ascii") !== "IHDR") throw new Error(`${relativePath} has no PNG IHDR`);
   const width = bytes.readUInt32BE(16);
   const height = bytes.readUInt32BE(20);
-  if (relative.startsWith("web/") && (width !== 1536 || height !== 1024)) {
-    throw new Error(`${relative} must be 1536x1024, observed ${width}x${height}`);
+  if (width <= 0 || height <= 0 || !bytes.includes(Buffer.from("IEND"))) {
+    throw new Error(`${relativePath} has invalid PNG dimensions or no IEND chunk`);
   }
-  if (relative.startsWith("android/")) {
+  return { width, height };
+};
+
+const assertArtboard = (relativePath, width, height) => {
+  if (relativePath.startsWith("web/") && (width !== 1536 || height !== 1024)) {
+    throw new Error(`${relativePath} must be 1536x1024, observed ${width}x${height}`);
+  }
+  if (relativePath.startsWith("android/")) {
     const ratio = width / height;
     if (width < 850 || height < 1600 || Math.abs(ratio - 9 / 16) > 0.01) {
-      throw new Error(`${relative} must be a high-resolution 9:16 Android artboard, observed ${width}x${height}`);
+      throw new Error(`${relativePath} must be a high-resolution 9:16 Android artboard, observed ${width}x${height}`);
     }
   }
-  console.log(`PASS design ${relative} ${width}x${height}`);
+};
+
+const pngPaths = [];
+async function collectPngs(directory) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) await collectPngs(path);
+    if (entry.isFile() && entry.name.toLowerCase().endsWith(".png")) {
+      pngPaths.push(relative(root, path).replaceAll("\\", "/"));
+    }
+  }
+}
+await collectPngs(root);
+
+for (const relativePath of pngPaths.sort()) {
+  const { width, height } = await inspectPng(relativePath);
+  console.log(`PASS PNG ${relativePath} ${width}x${height}`);
 }
 
-for (const relative of manifest.variants) {
-  const path = resolve(root, relative);
-  await access(path);
-  console.log(`PASS variant ${relative}`);
+for (const relativePath of required) {
+  const { width, height } = await inspectPng(relativePath);
+  assertArtboard(relativePath, width, height);
+  console.log(`PASS required design ${relativePath} ${width}x${height}`);
+}
+
+for (const relativePath of manifest.variants) {
+  const { width, height } = await inspectPng(relativePath);
+  assertArtboard(relativePath, width, height);
+  console.log(`PASS variant ${relativePath} ${width}x${height}`);
 }
 
 for (const relative of manifest.specifications) {
@@ -102,4 +132,4 @@ for (const requiredToken of ["semanticPair", "component", "dash", "marker", "tou
   if (!tokenSource.includes(requiredToken)) throw new Error(`Missing implementation token: ${requiredToken}`);
 }
 
-console.log(`Verified ${required.length} approved full-state concepts, ${manifest.variants.length} state variants, prompts, specifications and contrast tokens.`);
+console.log(`Verified ${pngPaths.length} PNG assets, ${required.length} approved full-state concepts, ${manifest.variants.length} state variants, prompts, specifications and contrast tokens.`);

@@ -83,6 +83,16 @@ EVIDENCE: dict[str, EvidenceItem] = {}
 WORLDLINES: dict[str, Worldline] = {}
 MARKET_MANIFESTS: dict[str, MarketDataManifest] = {}
 
+NORMAL_CONFIRM_MINIMUM_TOTAL = 30
+NORMAL_CONFIRM_MINIMUM_CRITICAL_SCORE = 3
+NORMAL_CONFIRM_CRITICAL_CRITERIA = (
+    "premise_clarity",
+    "time_boundary",
+    "causal_chain",
+    "asset_transmission",
+    "falsifiability",
+)
+
 
 def reset_state() -> None:
     operations.reset()
@@ -139,7 +149,14 @@ def _error(status_code: int, error_code: str, message: str, request: Request, *,
 
 @app.exception_handler(ApiProblem)
 async def api_problem_handler(request: Request, error: ApiProblem) -> JSONResponse:
-    return _error(error.status_code, error.error_code, error.message, request, retryable=error.retryable)
+    return _error(
+        error.status_code,
+        error.error_code,
+        error.message,
+        request,
+        retryable=error.retryable,
+        details=error.details,
+    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -310,6 +327,7 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
             turn=turn,
             status="CHALLENGING",
             private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
+            rubric_passed=independently_reviewable,
         )
         EVIDENCE[evidence_id] = evidence
         CHALLENGES[challenge_id] = updated
@@ -328,6 +346,86 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
     return result
 
 
+def _normal_confirmation_failures(challenge: ChallengeRecord) -> list[ErrorDetail]:
+    failures: list[ErrorDetail] = []
+    total = sum(score.score for score in challenge.rubric_scores)
+    if total < NORMAL_CONFIRM_MINIMUM_TOTAL:
+        failures.append(ErrorDetail(
+            location="challenge/rubric_scores/total",
+            message=f"Rubric total {total}/40 is below the required {NORMAL_CONFIRM_MINIMUM_TOTAL}/40.",
+        ))
+
+    for criterion in NORMAL_CONFIRM_CRITICAL_CRITERIA:
+        criterion_scores = [score.score for score in challenge.rubric_scores if score.criterion == criterion]
+        if len(criterion_scores) != 1:
+            failures.append(ErrorDetail(
+                location=f"challenge/rubric_scores/{criterion}",
+                message="Exactly one score is required for this critical rubric criterion.",
+            ))
+        elif criterion_scores[0] < NORMAL_CONFIRM_MINIMUM_CRITICAL_SCORE:
+            failures.append(ErrorDetail(
+                location=f"challenge/rubric_scores/{criterion}",
+                message=(
+                    f"Critical rubric score {criterion_scores[0]}/4 is below the required "
+                    f"{NORMAL_CONFIRM_MINIMUM_CRITICAL_SCORE}/4."
+                ),
+            ))
+
+    if challenge.missing_evidence:
+        failures.append(ErrorDetail(
+            location="challenge/missing_evidence",
+            message=f"{len(challenge.missing_evidence)} major evidence gap(s) remain.",
+        ))
+    if challenge.unresolved_issues:
+        failures.append(ErrorDetail(
+            location="challenge/unresolved_issues",
+            message=f"{len(challenge.unresolved_issues)} major unresolved issue(s) remain.",
+        ))
+    return failures
+
+
+def _confirmed_challenge(
+    current: ChallengeRecord,
+    *,
+    operation_id: str,
+    turn: int,
+    confirmation: str,
+    reservation_note: str | None,
+) -> ChallengeRecord:
+    metadata_fields = {"schema_version", "created_at", "source_refs", "content_hash"}
+    payload = current.model_dump(mode="json", exclude=metadata_fields, exclude_none=True)
+    payload.update({
+        "turn_id": deterministic_id("turn", f"{current.challenge_id}:{turn}"),
+        "user_confirmation": confirmation,
+        "status": "CONFIRMED",
+    })
+    if reservation_note is None:
+        payload.pop("reservation_note", None)
+    else:
+        payload["reservation_note"] = reservation_note
+
+    confirmation_ref = SourceRef(
+        ref_id=deterministic_id("confirmation", operation_id),
+        source_type="user_submitted",
+        label="Explicit user challenge confirmation",
+    )
+    refs = (*current.source_refs, confirmation_ref)
+    hash_input = {
+        "schema_version": "v1",
+        "source_refs": [ref.model_dump(mode="json", exclude_none=True) for ref in refs],
+        **payload,
+    }
+    updated = ChallengeRecord(
+        schema_version="v1",
+        created_at=clock.now(),
+        source_refs=refs,
+        content_hash=content_hash(hash_input),
+        **payload,
+    )
+    validate_payload(updated, "ChallengeRecord")
+    return updated
+
+
 @app.post("/v1/challenges/{challenge_id}/confirm", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="confirmChallenge")
 def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
     _validate_request(request, "ConfirmChallengeRequest")
@@ -337,21 +435,26 @@ def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, respo
         current = CHALLENGES.get(challenge_id)
         if not current:
             raise ApiProblem(404, "not_found", "Challenge not found.")
-        if reservation and current.status != "EVIDENCE_REQUIRED":
-            raise ApiProblem(409, "invalid_state_transition", "Reservation command is only legal from EVIDENCE_REQUIRED.")
+        if reservation and current.status not in {"CHALLENGING", "EVIDENCE_REQUIRED"}:
+            raise ApiProblem(409, "invalid_state_transition", "Reservation command is only legal before confirmation.")
         if not reservation and current.status != "CHALLENGING":
             raise ApiProblem(409, "invalid_state_transition", "Normal confirmation is only legal from CHALLENGING.")
+        if not reservation:
+            failures = _normal_confirmation_failures(current)
+            if failures:
+                raise ApiProblem(
+                    409,
+                    "confirmation_requirements_not_met",
+                    "Normal confirmation requires a passing rubric and no major gaps; use CONFIRM_WITH_RESERVATIONS to confirm early.",
+                    details=failures,
+                )
         turn = CHALLENGE_TURNS[challenge_id] + 1
-        updated = research_provider.challenge(
+        updated = _confirmed_challenge(
+            current,
             operation_id=operation_id,
-            thesis_id=current.thesis_id,
-            challenge_id=challenge_id,
-            claim=current.claims[-1],
             turn=turn,
-            status="CONFIRMED",
             confirmation="confirmed_with_reservations" if reservation else "confirmed",
             reservation_note=request.reservation_note if reservation else None,
-            private_evidence_declared=current.private_evidence_declared,
         )
         CHALLENGES[challenge_id] = updated
         CHALLENGE_TURNS[challenge_id] = turn
