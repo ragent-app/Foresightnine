@@ -18,5 +18,9 @@
     "typecheck": "corepack pnpm -r typecheck",
     "test:api": "uv run --project apps/api pytest apps/api/tests",
     "test": "corepack pnpm -r test && uv run --project apps/api pytest apps/api/tests"
+  },
+  "devDependencies": {
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0"
   }
 }

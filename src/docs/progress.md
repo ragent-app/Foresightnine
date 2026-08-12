@@ -1,5 +1,28 @@
 # Progress
 
+## Phase 2 verifier hardening — 2026-08-13
+
+### Blocker
+
+Sol's independent Phase 2 re-review of commit 2d5cf57 returned FAIL: the PNG verifier checked only the signature, IHDR, dimensions and the presence of an IEND marker anywhere in the byte stream, without decompressing IDAT. A corrupted pixel stream still produced PASS. Two archive PNGs with non-standard Android dimensions (916x1717, 864x1821) were also accepted without being registered as historical exceptions.
+
+### Fix
+
+- Added an authoritative assets registry to phase2-manifest.json: all 35 PNGs (13 required, 4 variant, 18 archive) each with exact expected width, height and role. The verifier now refuses any on-disk PNG that is not registered and any registered PNG that is missing from disk.
+- Rewrote design-assets.mjs to decode every pixel via pngjs PNG.sync.read. A corrupt or truncated IDAT stream, bad CRC or incomplete RGBA buffer now throws and fails the gate. Verified by a synthetic corruption test: PNG.sync.read throws on bad compressed data, where the old verifier returned PASS.
+- Strict dimension comparison: every decoded PNG width and height must exactly match its manifest entry. The two non-standard archives are registered at their true historical dimensions and reported as archive historical exception; they are not subject to the 9:16 artboard rule but are still pixel-decoded and dimension-checked.
+- Added pngjs and @types/pngjs as workspace dev dependencies.
+
+### Verification evidence
+
+- corepack pnpm install --frozen-lockfile and uv sync --project apps/api --frozen: passed.
+- corepack pnpm typecheck: passed all five typed workspace projects.
+- corepack pnpm verify:phase0: passed six immutable FM references, all governance boundaries, 119 unique Git-history blobs and the current-tree secret scan.
+- corepack pnpm verify:phase1: passed generated contract/registry/OpenAPI drift checks, 4 domain tests, 2 registry tests and 20 API tests.
+- corepack pnpm verify:phase2: passed 35 pixel-decoded PNG assets (exact dimension match), 13 required concepts, 4 state variants, 2 registered historical-exception archives, all specifications, contrast checks and design-system typecheck.
+- corepack pnpm test: passed contracts, design-system, 4 FM parity tests, 4 domain tests, 2 registry tests and 20 API tests.
+# Progress
+
 ## Phase 2 reviewer corrections complete — 2026-08-10
 
 ### Delivered
@@ -15,7 +38,7 @@
 
 - `corepack pnpm install --frozen-lockfile` and `uv sync --project apps/api --frozen`: passed with the checked-in lockfiles.
 - `corepack pnpm typecheck`: passed all five typed workspace projects.
-- `corepack pnpm verify:phase0`: passed six immutable FM references, all governance boundaries, 103 unique Git-history blobs and the current-tree secret scan.
+- `corepack pnpm verify:phase0`: passed six immutable FM references, all governance boundaries, 119 unique Git-history blobs and the current-tree secret scan.
 - `corepack pnpm verify:phase1`: passed generated contract/registry/OpenAPI drift checks, 4 domain tests, 2 registry tests and 20 API tests.
 - `corepack pnpm verify:phase2`: passed 35 recursively inspected PNGs, 13 required concepts, 4 state variants, all specifications, contrast checks and design-system typecheck.
 - `corepack pnpm test`: passed contracts, design-system, 4 FM parity tests, 4 domain tests, 2 registry tests and 20 API tests.
@@ -115,3 +138,4 @@ The older baseline below is retained as historical evidence and is superseded wh
 
 - No persistence, streaming, rate limit, search adapter, real market data, FM engine, Web, or Android implementation yet.
 - OpenAPI is the public endpoint description; generated client artifacts will be added with the consuming clients.
+

@@ -37,5 +37,217 @@
     "component-specification.md",
     "copy-deck.md",
     "fidelity-qa.md"
+  ],
+  "assets": [
+    {
+      "path": "web/01-thesis-input.png",
+      "height": 1024,
+      "role": "required",
+      "width": 1536
+    },
+    {
+      "path": "web/02-challenge-evidence.png",
+      "height": 1024,
+      "role": "required",
+      "width": 1536
+    },
+    {
+      "path": "web/03-worldline-probability.png",
+      "height": 1024,
+      "role": "required",
+      "width": 1536
+    },
+    {
+      "path": "web/04-fm-progress.png",
+      "height": 1024,
+      "role": "required",
+      "width": 1536
+    },
+    {
+      "path": "web/05-portfolio-stress.png",
+      "height": 1024,
+      "role": "required",
+      "width": 1536
+    },
+    {
+      "path": "web/06-worldline-nav.png",
+      "height": 1024,
+      "role": "required",
+      "width": 1536
+    },
+    {
+      "path": "web/07-methodology-risk.png",
+      "height": 1024,
+      "role": "required",
+      "width": 1536
+    },
+    {
+      "path": "web/02b-sse-recovery.png",
+      "height": 1024,
+      "role": "variant",
+      "width": 1536
+    },
+    {
+      "path": "web/05b-public-default-delta.png",
+      "height": 1024,
+      "role": "variant",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/02-challenge-evidence-v1.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/03-worldline-probability-v1.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/04-fm-progress-v1.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/04-fm-progress-v2.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/05-portfolio-stress-v1.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/06-worldline-nav-v1.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/07-methodology-risk-v1.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "web/archive/07-methodology-risk-v2.png",
+      "height": 1024,
+      "role": "archive",
+      "width": 1536
+    },
+    {
+      "path": "android/01-thesis-input.png",
+      "height": 1672,
+      "role": "required",
+      "width": 941
+    },
+    {
+      "path": "android/02-challenge-conversation.png",
+      "height": 1672,
+      "role": "required",
+      "width": 941
+    },
+    {
+      "path": "android/03-evidence-workspace.png",
+      "height": 1672,
+      "role": "required",
+      "width": 941
+    },
+    {
+      "path": "android/04-worldline-timeline.png",
+      "height": 1672,
+      "role": "required",
+      "width": 941
+    },
+    {
+      "path": "android/05-portfolio-nav.png",
+      "height": 1672,
+      "role": "required",
+      "width": 941
+    },
+    {
+      "path": "android/06-share-export.png",
+      "height": 1672,
+      "role": "required",
+      "width": 941
+    },
+    {
+      "path": "android/02b-sse-recovery.png",
+      "height": 1672,
+      "role": "variant",
+      "width": 941
+    },
+    {
+      "path": "android/05b-public-default-delta.png",
+      "height": 1672,
+      "role": "variant",
+      "width": 941
+    },
+    {
+      "path": "android/archive/01-thesis-input-v1.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    },
+    {
+      "path": "android/archive/02-challenge-conversation-v1.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    },
+    {
+      "path": "android/archive/03-evidence-workspace-v1.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    },
+    {
+      "path": "android/archive/04-worldline-timeline-v1.png",
+      "height": 1717,
+      "role": "archive",
+      "width": 916
+    },
+    {
+      "path": "android/archive/05-portfolio-nav-v1.png",
+      "height": 1821,
+      "role": "archive",
+      "width": 864
+    },
+    {
+      "path": "android/archive/05-portfolio-nav-v2.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    },
+    {
+      "path": "android/archive/05-portfolio-nav-v3.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    },
+    {
+      "path": "android/archive/05-portfolio-nav-v4.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    },
+    {
+      "path": "android/archive/05b-public-default-delta-v1.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    },
+    {
+      "path": "android/archive/06-share-export-v1.png",
+      "height": 1672,
+      "role": "archive",
+      "width": 941
+    }
   ]
 }

@@ -1,11 +1,18 @@
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir, stat } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PNG } from "pngjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../docs/design/concepts");
 const designRoot = resolve(here, "../../docs/design");
 const manifest = JSON.parse(await readFile(resolve(designRoot, "phase2-manifest.json"), "utf8"));
+
+if (!Array.isArray(manifest.assets) || manifest.assets.length === 0) {
+  throw new Error("manifest.assets dimension registry is missing or empty");
+}
+
+const registry = new Map(manifest.assets.map((entry) => [entry.path, entry]));
 const required = [
   "web/01-thesis-input.png",
   "web/02-challenge-evidence.png",
@@ -22,18 +29,14 @@ const required = [
   "android/06-share-export.png",
 ];
 
-const inspectPng = async (relativePath) => {
-  const path = resolve(root, relativePath);
-  const bytes = await readFile(path);
-  const signature = bytes.subarray(0, 8).toString("hex");
-  if (signature !== "89504e470d0a1a0a" || bytes.length < 33) throw new Error(`${relativePath} is not a valid PNG`);
-  if (bytes.subarray(12, 16).toString("ascii") !== "IHDR") throw new Error(`${relativePath} has no PNG IHDR`);
-  const width = bytes.readUInt32BE(16);
-  const height = bytes.readUInt32BE(20);
-  if (width <= 0 || height <= 0 || !bytes.includes(Buffer.from("IEND"))) {
-    throw new Error(`${relativePath} has invalid PNG dimensions or no IEND chunk`);
+/** Decode every pixel of the PNG. A corrupt IDAT, bad CRC or truncated stream throws. */
+const decodePng = async (relativePath) => {
+  const bytes = await readFile(resolve(root, relativePath));
+  const png = PNG.sync.read(bytes);
+  if (!png.data || png.data.length !== png.width * png.height * 4) {
+    throw new Error(`${relativePath} decoded but its RGBA buffer is incomplete`);
   }
-  return { width, height };
+  return { width: png.width, height: png.height };
 };
 
 const assertArtboard = (relativePath, width, height) => {
@@ -48,33 +51,53 @@ const assertArtboard = (relativePath, width, height) => {
   }
 };
 
-const pngPaths = [];
+const onDiskPaths = [];
 async function collectPngs(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) await collectPngs(path);
     if (entry.isFile() && entry.name.toLowerCase().endsWith(".png")) {
-      pngPaths.push(relative(root, path).replaceAll("\\", "/"));
+      onDiskPaths.push(relative(root, path).replaceAll("\\", "/"));
     }
   }
 }
 await collectPngs(root);
 
-for (const relativePath of pngPaths.sort()) {
-  const { width, height } = await inspectPng(relativePath);
-  console.log(`PASS PNG ${relativePath} ${width}x${height}`);
+const registryPaths = new Set(registry.keys());
+const diskSet = new Set(onDiskPaths);
+const unregistered = onDiskPaths.filter((path) => !registryPaths.has(path)).sort();
+const missing = [...registryPaths].filter((path) => !diskSet.has(path)).sort();
+if (unregistered.length > 0) throw new Error(`Unregistered PNG assets not in manifest: ${unregistered.join(", ")}`);
+if (missing.length > 0) throw new Error(`Registered PNG assets missing from disk: ${missing.join(", ")}`);
+
+for (const entry of manifest.assets.sort((a, b) => a.path.localeCompare(b.path))) {
+  const { width, height } = await decodePng(entry.path);
+  if (width !== entry.width || height !== entry.height) {
+    throw new Error(`${entry.path} dimension mismatch: registered ${entry.width}x${entry.height}, observed ${width}x${height}`);
+  }
+  console.log(`PASS decoded ${entry.role} ${entry.path} ${width}x${height}`);
 }
 
 for (const relativePath of required) {
-  const { width, height } = await inspectPng(relativePath);
+  const entry = registry.get(relativePath);
+  const { width, height } = await decodePng(relativePath);
   assertArtboard(relativePath, width, height);
+  if (entry.role !== "required") throw new Error(`${relativePath} is registered as ${entry.role}, not required`);
   console.log(`PASS required design ${relativePath} ${width}x${height}`);
 }
 
 for (const relativePath of manifest.variants) {
-  const { width, height } = await inspectPng(relativePath);
+  const entry = registry.get(relativePath);
+  const { width, height } = await decodePng(relativePath);
   assertArtboard(relativePath, width, height);
+  if (entry.role !== "variant") throw new Error(`${relativePath} is registered as ${entry.role}, not variant`);
   console.log(`PASS variant ${relativePath} ${width}x${height}`);
+}
+
+for (const entry of manifest.assets) {
+  if (entry.role === "archive" && entry.width !== 1536 && entry.width !== 941) {
+    console.log(`PASS archive historical exception ${entry.path} ${entry.width}x${entry.height}`);
+  }
 }
 
 for (const relative of manifest.specifications) {
@@ -107,7 +130,7 @@ if (manifest.status !== "approved_for_implementation" || !manifest.approval?.use
 
 const tokenSource = await readFile(resolve(here, "../../packages/design-system/src/index.ts"), "utf8");
 const tokenHex = (name) => {
-  const match = tokenSource.match(new RegExp(`${name}:\\s*\"(#[0-9a-fA-F]{6})\"`));
+  const match = tokenSource.match(new RegExp(`${name}:\\s*"(#[0-9a-fA-F]{6})"`));
   if (!match) throw new Error(`Missing colour token ${name}`);
   return match[1];
 };
@@ -132,4 +155,4 @@ for (const requiredToken of ["semanticPair", "component", "dash", "marker", "tou
   if (!tokenSource.includes(requiredToken)) throw new Error(`Missing implementation token: ${requiredToken}`);
 }
 
-console.log(`Verified ${pngPaths.length} PNG assets, ${required.length} approved full-state concepts, ${manifest.variants.length} state variants, prompts, specifications and contrast tokens.`);
+console.log(`Verified ${manifest.assets.length} pixel-decoded PNG assets, ${required.length} approved full-state concepts, ${manifest.variants.length} state variants, prompts, specifications and contrast tokens.`);
