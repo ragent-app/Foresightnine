@@ -159,8 +159,8 @@ test("all-invalid and single-factor inputs use explicit equal-weight fallback", 
 
 test("allocateCapital rejects non-finite and non-positive numeric asset inputs", () => {
   const asset = { id: "A", weight: 1, price: 10, fxToBase: 1, lotSize: 1, fractionalSupported: true };
-  for (const capital of [Number.NaN, Number.POSITIVE_INFINITY, -1]) assert.throws(() => allocateCapital(capital, [asset]), /capital must be non-negative/);
-  for (const [field, value] of [["weight", Number.NaN], ["weight", Number.POSITIVE_INFINITY], ["weight", -1], ["price", Number.NaN], ["price", Number.POSITIVE_INFINITY], ["price", 0], ["price", -1], ["fxToBase", Number.NaN], ["fxToBase", Number.POSITIVE_INFINITY], ["fxToBase", 0], ["fxToBase", -1], ["lotSize", Number.NaN], ["lotSize", Number.POSITIVE_INFINITY], ["lotSize", 0], ["lotSize", -1]]) {
+  for (const capital of [Number.NaN, Number.POSITIVE_INFINITY, 0, -0, -1]) assert.throws(() => allocateCapital(capital, [asset]), /capital must be positive/);
+  for (const [field, value] of [["weight", Number.NaN], ["weight", Number.POSITIVE_INFINITY], ["weight", 0], ["weight", -0], ["weight", -1], ["price", Number.NaN], ["price", Number.POSITIVE_INFINITY], ["price", 0], ["price", -0], ["price", -1], ["fxToBase", Number.NaN], ["fxToBase", Number.POSITIVE_INFINITY], ["fxToBase", 0], ["fxToBase", -0], ["fxToBase", -1], ["lotSize", Number.NaN], ["lotSize", Number.POSITIVE_INFINITY], ["lotSize", 0], ["lotSize", -0], ["lotSize", -1]]) {
     const invalid = { ...asset, [field]: value };
     assert.throws(() => allocateCapital(100, [invalid]), /invalid asset A/);
   }
