@@ -8,6 +8,7 @@ from threading import Event, Thread
 
 import pytest
 
+import app.main as app_main
 from app.main import EVIDENCE
 from app.operations import ApiProblem, OperationManager
 from app.providers import FixedClock
@@ -76,6 +77,14 @@ def test_opencode_runtime_search_detection_handles_search_and_no_search_envelope
     fallback = no_search.generate_challenge(request())
     assert no_search.supports_native_search is False
     assert fallback.native_search_used is False
+    for adversarial in (
+        {"search": "unavailable"},
+        {"capabilities": {"search": "no"}},
+        {"tools": [{"name": "search", "status": "unavailable"}]},
+        {"data": {"search": {"status": "failed", "results": ["not a result"]}}},
+    ):
+        assert OpenCodeDeepSeekFlashProvider._native_search_detected(adversarial) is False
+    assert OpenCodeDeepSeekFlashProvider._native_search_detected({"events": [{"type": "tool_call", "tool": "search", "status": "completed"}]}) is True
 
 
 @pytest.mark.parametrize("signal", ["429 too many requests", "502 bad gateway"])
@@ -310,3 +319,38 @@ def test_evidence_api_requires_canonical_hash_and_published_at_for_url_then_mark
     assert accepted.status_code == 200, accepted.text
     evidence = next(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
     assert evidence.grade == "C" and evidence.independently_reviewable is True
+
+
+def test_message_rebuilds_attached_evidence_for_provider_citations(monkeypatch: pytest.MonkeyPatch) -> None:
+    created = create_challenge(key="phase3-message-evidence")
+    challenge_id = created["challenge"]["challenge_id"]
+    assert CLIENT.post(f"/v1/challenges/{challenge_id}/messages", json={"message": "Need source."}, headers=idem("phase3-message-evidence-first")).status_code == 200
+    evidence_body = {
+        "url": "https://example.com/evidence", "title": "Attached client source", "published_at": "2026-08-01T00:00:00Z",
+        "retrieved_at": "2026-08-10T00:00:00Z", "excerpt": "Evidence that must remain attached on the next turn.", "user_note": "Fallback.",
+    }
+    attached = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/evidence",
+        json={**evidence_body, "content_hash": evidence_hash(url=evidence_body["url"], title=evidence_body["title"], published_at=evidence_body["published_at"], retrieved_at=evidence_body["retrieved_at"], excerpt=evidence_body["excerpt"], user_note=evidence_body["user_note"])},
+        headers=idem("phase3-message-evidence-attach"),
+    )
+    assert attached.status_code == 200
+    captured = []
+    delegate = DeterministicMockLlmProvider()
+
+    class CaptureProvider:
+        name = "capture"
+
+        def generate_challenge(self, request: ChallengeInput):
+            captured.append(request)
+            return delegate.generate_challenge(request)
+
+    monkeypatch.setattr(app_main, "challenge_provider", CaptureProvider())
+    response = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/messages", json={"message": "How does the attached source change the counterargument?"},
+        headers=idem("phase3-message-evidence-second"),
+    )
+    assert response.status_code == 200, response.text
+    evidence = next(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
+    assert captured[-1].evidence_ids == (evidence.evidence_id,)
+    assert captured[-1].evidence_grades == ((evidence.evidence_id, "C"),)

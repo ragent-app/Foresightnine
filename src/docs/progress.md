@@ -11,6 +11,14 @@
 - Registered running operations and cancellation events before provider execution; cancel reaches the live callback, prevents commit/re-submit, and explicit resume uses that callback rather than synthetic completion.
 - `uv run --project apps/api pytest apps/api/tests`: **35 passed** (one unchanged third-party warning). Live smoke remains **blocked by missing new server-side secret** and is not represented as DeepSeek-live verification.
 
+## Phase 3 independent review remediation — 2026-08-15
+
+- Removed unsafe provider re-execution from resume. Cancelled/failed operations now retain their terminal audit checkpoint, replay without a second submission/charge, and do not emit synthetic completion events; a genuinely new user command is required for another provider attempt because OpenCode CLI exposes no auditable charge receipt.
+- Rebuilt `evidence_ids` and `evidence_grades` from all attached challenge evidence on every later message turn.
+- Tightened native search detection to explicit `capabilities.search === true`, usable search tools, successful tool events, or successful result bundles; arbitrary `search: "unavailable"` style fields are rejected as false positives.
+- Caught `ApiProblem` from `build_result`, records typed `operation.error`, transitions to `failed`, and idempotently replays that error rather than leaving a running operation.
+- Regression suite: `38 passed`, including provider submission-count assertions across failure/cancel/resume, message evidence propagation, native-search false positives and `ApiProblem` lifecycle closure.
+
 ## Phase 3 Challenge and Evidence — 2026-08-15
 
 ### Delivered

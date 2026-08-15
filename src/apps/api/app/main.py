@@ -317,11 +317,14 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
         if current.status != "CHALLENGING":
             raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
         turn = CHALLENGE_TURNS[challenge_id] + 1
+        attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
         draft = challenge_provider.generate_challenge(
             ChallengeInput(
                 operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
                 claim=request.message, turn=turn, status="EVIDENCE_REQUIRED",
                 private_evidence_declared=current.private_evidence_declared,
+                evidence_ids=tuple(item.evidence_id for item in attached if item.independently_reviewable),
+                evidence_grades=tuple((item.evidence_id, item.grade) for item in attached),
                 cancel_event=operations.cancel_event(operation_id),
             )
         )

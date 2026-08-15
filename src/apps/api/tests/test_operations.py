@@ -10,7 +10,7 @@ from app.phase3 import ProviderFailure
 from app.providers import FixedClock
 
 
-def test_running_operation_cancel_resume_and_replay_sequence() -> None:
+def test_running_operation_cancel_resume_preserves_terminal_checkpoint_without_synthetic_complete() -> None:
     manager = OperationManager(FixedClock())
     running = manager.start(endpoint="/v1/worldlines", idempotency_key="async-running-key")
     assert running.status == "running"
@@ -20,13 +20,12 @@ def test_running_operation_cancel_resume_and_replay_sequence() -> None:
     assert manager.events[running.operation_id][-1].event == "operation.error"
     resumed, replayed = manager.resume(running.operation_id, running.resume_token, "resume-running-key")
     assert replayed is False
-    assert resumed.operation.status == "completed"
-    assert manager.events[running.operation_id][-2].event == "heartbeat"
-    assert manager.events[running.operation_id][-1].event == "operation.complete"
-    assert [event.sequence for event in manager.events_after(running.operation_id, f"{running.operation_id}:4")] == [5, 6, 7]
+    assert resumed.operation.status == "cancelled"
+    assert manager.events[running.operation_id][-1].event == "operation.error"
+    assert manager.events_after(running.operation_id, f"{running.operation_id}:4") == []
 
 
-def test_provider_failure_is_replayed_without_resubmission_then_explicit_resume_reuses_operation() -> None:
+def test_provider_failure_and_resume_never_resubmit_without_provider_charge_receipt() -> None:
     manager = OperationManager(FixedClock())
     payload_type = create_model("ProviderPayload", content_hash=(str, ...))
     response_type = create_model("ProviderResponse", operation=(object, ...), value=(object, ...))
@@ -59,17 +58,11 @@ def test_provider_failure_is_replayed_without_resubmission_then_explicit_resume_
     assert attempts == 1
 
     resumed, replayed = manager.resume(operation.operation_id, operation.resume_token, "provider-resume-key")
-    assert replayed is False and resumed.operation.status == "completed" and attempts == 2
-    assert [event.sequence for event in manager.events_after(operation.operation_id, f"{operation.operation_id}:4")] == [5, 6, 7]
-    response, replayed = manager.execute(
-        endpoint="/v1/challenges", idempotency_key="provider-recovery-key",
-        request_payload={"message": "same command"}, response_model=response_type,
-        result_field="value", build_result=build,
-    )
-    assert replayed is True and response.value.content_hash == "a" * 64 and attempts == 2
+    assert replayed is False and resumed.operation.status == "failed" and attempts == 1
+    assert [event.sequence for event in manager.events_after(operation.operation_id, f"{operation.operation_id}:4")] == []
 
 
-def test_execute_registers_live_cancel_event_before_provider_and_resume_retries_once() -> None:
+def test_execute_registers_live_cancel_event_and_resume_never_retries_submission() -> None:
     manager = OperationManager(FixedClock())
     payload_type = create_model("CancelledPayload", content_hash=(str, ...))
     response_type = create_model("CancelledResponse", operation=(object, ...), value=(object, ...))
@@ -117,4 +110,29 @@ def test_execute_registers_live_cancel_event_before_provider_and_resume_retries_
         )
     assert attempts == 1
     resumed, _ = manager.resume(operation.operation_id, operation.resume_token, "live-cancel-resume-key")
-    assert resumed.operation.status == "completed" and attempts == 2
+    assert resumed.operation.status == "cancelled" and attempts == 1
+
+
+def test_build_api_problem_transitions_running_operation_to_failed_and_replays_error() -> None:
+    manager = OperationManager(FixedClock())
+    response_type = create_model("ApiProblemResponse", operation=(object, ...), value=(object, ...))
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        raise ApiProblem(404, "not_found", "Challenge disappeared.")
+
+    with pytest.raises(ApiProblem) as raised:
+        manager.execute(
+            endpoint="/v1/challenges", idempotency_key="api-problem-key",
+            request_payload={"message": "missing"}, response_model=response_type,
+            result_field="value", build_result=build,
+        )
+    operation = next(iter(manager.operations.values()))
+    assert raised.value.status_code == 404 and operation.status == "failed"
+    assert manager.events[operation.operation_id][-1].event == "operation.error"
+    with pytest.raises(ApiProblem) as replayed:
+        manager.execute(
+            endpoint="/v1/challenges", idempotency_key="api-problem-key",
+            request_payload={"message": "missing"}, response_model=response_type,
+            result_field="value", build_result=build,
+        )
+    assert replayed.value.status_code == 404

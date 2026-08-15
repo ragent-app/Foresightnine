@@ -362,23 +362,37 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
 
     @staticmethod
     def _native_search_detected(envelope: dict[str, Any]) -> bool:
-        """Detect an actual OpenCode capability/tool/result, never a static model claim."""
-        def visit(value: Any, key: str | None = None) -> bool:
-            if isinstance(value, dict):
-                for item_key, item_value in value.items():
-                    lowered = item_key.lower()
-                    if lowered == "search" and item_value not in (None, False, [], {}, ""):
-                        return True
-                    if lowered in {"capabilities", "tools"} and visit(item_value, lowered):
-                        return True
-                    if visit(item_value, lowered):
-                        return True
+        """Accept only explicit capability booleans or successful search tool events."""
+        search_names = {"search", "web_search", "web-search"}
+        unavailable = {"unavailable", "unsupported", "disabled", "failed", "error"}
+
+        def tool_event(value: Any) -> bool:
+            if not isinstance(value, dict):
                 return False
-            if isinstance(value, list):
-                return any(visit(item, key) for item in value)
-            if isinstance(value, str) and key in {"capabilities", "tools", "name", "tool", "type"}:
-                return value.lower() in {"search", "web_search", "web-search"}
-            return False
+            name = value.get("name", value.get("tool"))
+            if not isinstance(name, str) or name.lower() not in search_names:
+                return False
+            status = value.get("status")
+            return not isinstance(status, str) or status.lower() not in unavailable
+
+        def visit(value: Any) -> bool:
+            if not isinstance(value, dict):
+                return False
+            capabilities = value.get("capabilities")
+            if isinstance(capabilities, dict) and capabilities.get("search") is True:
+                return True
+            tools = value.get("tools")
+            if isinstance(tools, list) and any(tool_event(item) for item in tools):
+                return True
+            if value.get("type") in {"tool_call", "tool_use", "tool_result"} and tool_event(value):
+                return True
+            search = value.get("search")
+            if isinstance(search, dict) and search.get("status") in {"completed", "success"} and isinstance(search.get("results"), list) and bool(search["results"]):
+                return True
+            return any(visit(value[key]) for key in ("events", "event", "data", "result", "results") if isinstance(value.get(key), dict)) or any(
+                any(visit(item) for item in value[key]) for key in ("events", "results") if isinstance(value.get(key), list)
+            )
+
         return visit(envelope)
 
     def _reserve_attempt(self, prompt: str) -> float:
