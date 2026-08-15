@@ -145,3 +145,29 @@ def test_phase4_typed_invalid_probability_assessment_fails_terminal(monkeypatch:
     operation = [item for item in main.operations.operations.values() if item.endpoint == "/v1/probabilities/assess"][-1]
     assert operation.status == "failed"
     assert main.operations.events[operation.operation_id][-1].event == "operation.error"
+
+
+def test_phase4_typed_wrong_worldline_probability_assessment_fails_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = main.WorldlineBundle(**create_worldlines()["bundle"])
+    requested_worldline, other_worldline = payload.worldlines[:2]
+
+    class TypedWrongWorldlineAssessor:
+        def assess(self, request: main.ProbabilityAssessmentInput) -> main.ProbabilityAssessment:
+            valid = main.DeterministicMockProbabilityAssessor(main.clock).assess(request)
+            return valid.model_copy(update={"worldline_id": other_worldline.worldline_id})
+
+    monkeypatch.setattr(main, "probability_assessor", TypedWrongWorldlineAssessor())
+    stored_worldlines = dict(main.WORLDLINES)
+    response = CLIENT.post(
+        "/v1/probabilities/assess",
+        json={"worldline_id": requested_worldline.worldline_id},
+        headers=idem("phase4-typed-wrong-worldline-probability"),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "internal_error"
+    assert "outside the accepted boundary" not in response.text
+    assert main.WORLDLINES == stored_worldlines
+    operation = [item for item in main.operations.operations.values() if item.endpoint == "/v1/probabilities/assess"][-1]
+    assert operation.status == "failed"
+    assert main.operations.events[operation.operation_id][-1].event == "operation.error"

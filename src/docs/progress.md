@@ -3,8 +3,8 @@
 ## Phase 4 provider-boundary gate reinforcement — 2026-08-15
 
 - Revalidated every typed `WorldlineBundle` at `POST /v1/worldlines` before persistence: canonical schema, request challenge identity, bundle/worldline identity, worldline time/graph/reveal constraints, and weak/main/strong conditional partition plus joint-probability semantics.
-- Revalidated typed `ProbabilityAssessment` results at `POST /v1/probabilities/assess` with the canonical schema and joint-probability semantics. Boundary failures now use the existing safe failed-operation terminal path without returning provider diagnostics.
-- Added fake typed-output regressions for challenge/bundle identity, nested asset-impact schema, reveal-horizon, conditional partition, and invalid probability joint calculations; rejected bundles persist no worldlines.
+- Revalidated typed `ProbabilityAssessment` results at `POST /v1/probabilities/assess` with the canonical schema, requested-worldline identity, and joint-probability semantics. Boundary failures now use the existing safe failed-operation terminal path without returning provider diagnostics.
+- Added fake typed-output regressions for challenge/bundle identity, nested asset-impact schema, reveal-horizon, conditional partition, wrong-worldline and invalid-joint probability assessments; rejected bundles persist no worldlines.
 
 ## Phase 4 Worldlines and Probability — 2026-08-15
 

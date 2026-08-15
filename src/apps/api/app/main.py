@@ -172,10 +172,16 @@ def _validate_provider_worldline_bundle(bundle: WorldlineBundle, *, challenge_id
         ) from error
 
 
-def _validate_provider_probability_assessment(assessment: ProbabilityAssessment) -> None:
+def _validate_provider_probability_assessment(
+    assessment: ProbabilityAssessment,
+    *,
+    expected_worldline_id: str,
+) -> None:
     """Re-validate typed probability output at the route boundary."""
     try:
         validate_payload(assessment, "ProbabilityAssessment")
+        if assessment.worldline_id != expected_worldline_id:
+            raise ContractViolation("ProbabilityAssessment", ["assessment worldline_id must match the requested worldline"])
         validate_probability_semantics(assessment)
     except Exception as error:
         raise ProviderFailure(
@@ -722,7 +728,7 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
         ))
         if not isinstance(result, ProbabilityAssessment):
             raise ProviderFailure("invalid_provider_output", "Probability provider returned an unknown structured result.", retryable=False)
-        _validate_provider_probability_assessment(result)
+        _validate_provider_probability_assessment(result, expected_worldline_id=request.worldline_id)
         return result, result.assessment_id
 
     result, replayed = operations.execute(
