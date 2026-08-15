@@ -30,6 +30,26 @@
     "android/02b-sse-recovery.png",
     "android/05b-public-default-delta.png"
   ],
+  "archive_paths": [
+    "web/archive/02-challenge-evidence-v1.png",
+    "web/archive/03-worldline-probability-v1.png",
+    "web/archive/04-fm-progress-v1.png",
+    "web/archive/04-fm-progress-v2.png",
+    "web/archive/05-portfolio-stress-v1.png",
+    "web/archive/06-worldline-nav-v1.png",
+    "web/archive/07-methodology-risk-v1.png",
+    "web/archive/07-methodology-risk-v2.png",
+    "android/archive/01-thesis-input-v1.png",
+    "android/archive/02-challenge-conversation-v1.png",
+    "android/archive/03-evidence-workspace-v1.png",
+    "android/archive/04-worldline-timeline-v1.png",
+    "android/archive/05-portfolio-nav-v1.png",
+    "android/archive/05-portfolio-nav-v2.png",
+    "android/archive/05-portfolio-nav-v3.png",
+    "android/archive/05-portfolio-nav-v4.png",
+    "android/archive/05b-public-default-delta-v1.png",
+    "android/archive/06-share-export-v1.png"
+  ],
   "specifications": [
     "README.md",
     "imagegen-prompts.md",

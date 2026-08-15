@@ -13,6 +13,10 @@ if (!Array.isArray(manifest.assets) || manifest.assets.length === 0) {
   throw new Error("manifest.assets dimension registry is missing or empty");
 }
 
+if (!Array.isArray(manifest.required_web) || !Array.isArray(manifest.required_android) || !Array.isArray(manifest.archive_paths)) {
+  throw new Error("Manifest required Web/Android/archive asset lists are missing");
+}
+
 const required = [
   ...manifest.required_web.map((path) => `web/${path}`),
   ...manifest.required_android.map((path) => `android/${path}`),
@@ -20,26 +24,25 @@ const required = [
 
 const requiredSet = new Set(required);
 const variantSet = new Set(manifest.variants);
+const archiveSet = new Set(manifest.archive_paths);
 const validRoles = new Set(["required", "variant", "archive"]);
 if (requiredSet.size !== required.length) throw new Error("Duplicate required design path in phase2 manifest");
 if (variantSet.size !== manifest.variants.length) throw new Error("Duplicate variant path in phase2 manifest");
-if (!Array.isArray(manifest.required_web) || !Array.isArray(manifest.required_android)) {
-  throw new Error("Manifest required Web/Android asset lists are missing");
-}
+if (archiveSet.size !== manifest.archive_paths.length) throw new Error("Duplicate archive path in phase2 manifest");
 
 const duplicateAssetPaths = manifest.assets.map((entry) => entry.path).filter((path, index, paths) => paths.indexOf(path) !== index);
 if (duplicateAssetPaths.length > 0) throw new Error(`Duplicate asset registry path(s): ${[...new Set(duplicateAssetPaths)].join(", ")}`);
 if (manifest.assets.some((entry) => !validRoles.has(entry.role))) throw new Error("Asset registry contains an unknown role");
 const registry = new Map(manifest.assets.map((entry) => [entry.path, entry]));
-const archiveSet = new Set(manifest.assets.filter((entry) => entry.role === "archive").map((entry) => entry.path));
 const rolePaths = {
   required: new Set(manifest.assets.filter((entry) => entry.role === "required").map((entry) => entry.path)),
   variant: new Set(manifest.assets.filter((entry) => entry.role === "variant").map((entry) => entry.path)),
-  archive: archiveSet,
+  archive: new Set(manifest.assets.filter((entry) => entry.role === "archive").map((entry) => entry.path)),
 };
 const sameSet = (left, right) => left.size === right.size && [...left].every((path) => right.has(path));
 if (!sameSet(rolePaths.required, requiredSet)) throw new Error("Manifest required lists and asset roles disagree");
 if (!sameSet(rolePaths.variant, variantSet)) throw new Error("Manifest variants and asset roles disagree");
+if (!sameSet(rolePaths.archive, archiveSet)) throw new Error("Manifest archive list and asset roles disagree");
 if ([...archiveSet].some((path) => requiredSet.has(path) || variantSet.has(path))) {
   throw new Error("Archive asset overlaps a required or variant path");
 }
