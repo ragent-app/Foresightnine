@@ -103,6 +103,21 @@ def test_direct_ordinary_confirmation_rejects_low_rubric_without_mutation() -> N
     assert CHALLENGE_TURNS[challenge_id] == before_turn
 
 
+def test_ordinary_confirmation_requires_independently_reviewable_evidence_even_with_passing_rubric() -> None:
+    created = create_challenge(key="passing-rubric-without-evidence")
+    challenge_id = created["challenge"]["challenge_id"]
+    current = CHALLENGES[challenge_id]
+    passing_scores = tuple(score.model_copy(update={"score": 3}) for score in current.rubric_scores)
+    CHALLENGES[challenge_id] = current.model_copy(update={"rubric_scores": passing_scores, "missing_evidence": (), "unresolved_issues": ()})
+    rejected = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/confirm",
+        json={"command": "CONFIRM", "unresolved_issues_acknowledged": False},
+        headers=idem("passing-rubric-no-evidence-confirm"),
+    )
+    assert rejected.status_code == 409
+    assert {item["location"] for item in rejected.json()["details"]} == {"challenge/evidence"}
+
+
 def test_reservation_confirmation_requires_true_acknowledgment_and_note() -> None:
     created = create_challenge(private=True, key="false-ack-challenge-key")
     challenge_id = created["challenge"]["challenge_id"]

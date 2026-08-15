@@ -1,5 +1,16 @@
 # Progress
 
+## Phase 3 Sol FAIL remediation — 2026-08-15
+
+### Corrections and regression evidence
+
+- Replaced static OpenCode search capability with runtime JSON-envelope detection; missing search forces client fallback.
+- Added canonical-hashed full client evidence bundles, C/not-yet-verified URL evidence, D/no-URL evidence, publication-time enforcement and legacy IPv4/IPv6 SSRF rejection.
+- Made draft fields, rubric objects and citation subset relations strict; D/E cannot support public facts. Normal confirmation additionally requires independently reviewable evidence, while reservation confirmation is unchanged.
+- Added pre-call budget reservation, finite non-negative usage validation, retry only for 429/5xx/timeout, and immediate non-transient CLI failure.
+- Registered running operations and cancellation events before provider execution; cancel reaches the live callback, prevents commit/re-submit, and explicit resume uses that callback rather than synthetic completion.
+- `uv run --project apps/api pytest apps/api/tests`: **35 passed** (one unchanged third-party warning). Live smoke remains **blocked by missing new server-side secret** and is not represented as DeepSeek-live verification.
+
 ## Phase 3 Challenge and Evidence — 2026-08-15
 
 ### Delivered

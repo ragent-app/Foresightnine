@@ -49,7 +49,7 @@ from .models import (
     WorldlineRequest,
 )
 from .operations import ApiProblem, OperationManager, format_sse
-from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider, ProviderFailure, build_llm_provider
+from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, build_attestation
 from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
 from .services import ContractViolation, content_hash, deterministic_id, validate_payload
@@ -168,6 +168,11 @@ def _challenge_from_draft(
     return result
 
 
+def _raise_if_operation_cancelled(operation_id: str) -> None:
+    if operations.cancel_event(operation_id).is_set():
+        raise ProviderFailure("provider_cancelled", "Provider request was cancelled before state was committed.", retryable=True)
+
+
 def _error(status_code: int, error_code: str, message: str, request: Request, *, retryable: bool = False, details: list[ErrorDetail] | None = None) -> JSONResponse:
     request_id = deterministic_id("request", f"{request.method}:{request.url.path}:{error_code}")
     payload = ErrorResponse(
@@ -276,8 +281,10 @@ def create_challenge(request: CreateChallengeRequest, response: Response, idempo
                 operation_id=operation_id, challenge_id=challenge_id, thesis_id=thesis.thesis_id,
                 claim=request.thesis, turn=1, status="CHALLENGING",
                 private_evidence_declared=request.user_private_evidence_claims,
+                cancel_event=operations.cancel_event(operation_id),
             )
         )
+        _raise_if_operation_cancelled(operation_id)
         challenge = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=thesis.thesis_id, challenge_id=challenge_id,
             turn=1, status="CHALLENGING", private_evidence_declared=request.user_private_evidence_claims,
@@ -315,8 +322,10 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
                 operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
                 claim=request.message, turn=turn, status="EVIDENCE_REQUIRED",
                 private_evidence_declared=current.private_evidence_declared,
+                cancel_event=operations.cancel_event(operation_id),
             )
         )
+        _raise_if_operation_cancelled(operation_id)
         updated = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
             turn=turn, status="EVIDENCE_REQUIRED", private_evidence_declared=current.private_evidence_declared,
@@ -340,6 +349,15 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
 @app.post("/v1/challenges/{challenge_id}/evidence", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeEvidence")
 def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
     _validate_request(request, "EvidenceSubmissionRequest")
+    independently_reviewable = evidence_provider.validate_client_bundle(SearchEvidenceBundle(
+        url=str(request.url) if request.url is not None else None,
+        title=request.title,
+        published_at=request.published_at,
+        retrieved_at=request.retrieved_at,
+        excerpt=request.excerpt,
+        user_note=request.user_note,
+        supplied_content_hash=request.content_hash,
+    ))
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
         current = CHALLENGES.get(challenge_id)
@@ -348,16 +366,17 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
         if current.status != "EVIDENCE_REQUIRED":
             raise ApiProblem(409, "invalid_state_transition", f"Evidence command cannot transition from {current.status}.")
         evidence_id = deterministic_id("evidence", operation_id)
-        independently_reviewable = evidence_provider.validate_client_bundle(str(request.url) if request.url is not None else None)
         evidence_payload: dict[str, Any] = {
             "evidence_id": evidence_id,
             "challenge_id": challenge_id,
-            "source_type": "reliable_secondary" if independently_reviewable else "user_private",
+            "source_type": "commentary" if independently_reviewable else "user_private",
             "title": request.title,
             "retrieved_at": request.retrieved_at,
             "excerpt": request.excerpt,
             "user_note": request.user_note,
-            "grade": "B" if independently_reviewable else "D",
+            # A client URL is independently reviewable, not independently
+            # verified by this API. Keep third-party fallback evidence at C.
+            "grade": "C" if independently_reviewable else "D",
             "supports_or_challenges": "context",
             "independently_reviewable": independently_reviewable,
         }
@@ -379,8 +398,10 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
                 private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
                 evidence_ids=tuple(item.evidence_id for item in attached if item.independently_reviewable),
                 evidence_grades=tuple((item.evidence_id, item.grade) for item in attached),
+                cancel_event=operations.cancel_event(operation_id),
             )
         )
+        _raise_if_operation_cancelled(operation_id)
         updated = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
             turn=turn, status="CHALLENGING" if not draft.missing_evidence else "EVIDENCE_REQUIRED",
@@ -437,6 +458,11 @@ def _normal_confirmation_failures(challenge: ChallengeRecord) -> list[ErrorDetai
         failures.append(ErrorDetail(
             location="challenge/unresolved_issues",
             message=f"{len(challenge.unresolved_issues)} major unresolved issue(s) remain.",
+        ))
+    if not any(item.challenge_id == challenge.challenge_id and item.independently_reviewable for item in EVIDENCE.values()):
+        failures.append(ErrorDetail(
+            location="challenge/evidence",
+            message="Normal confirmation requires at least one independently reviewable evidence item.",
         ))
     return failures
 

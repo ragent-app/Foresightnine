@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 
 from app.main import app
+from app.phase3 import SearchEvidenceBundle
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 SCHEMA = json.loads((WORKSPACE_ROOT / "packages" / "contracts" / "schemas" / "v1" / "contracts.schema.json").read_text(encoding="utf-8"))
@@ -16,6 +18,15 @@ CLIENT = TestClient(app, raise_server_exceptions=False)
 
 def idem(value: str) -> dict[str, str]:
     return {"Idempotency-Key": value}
+
+
+def evidence_hash(*, url: str | None, title: str, published_at: str | None, retrieved_at: str, excerpt: str, user_note: str) -> str:
+    return SearchEvidenceBundle(
+        url=url, title=title,
+        published_at=datetime.fromisoformat(published_at.replace("Z", "+00:00")) if published_at else None,
+        retrieved_at=datetime.fromisoformat(retrieved_at.replace("Z", "+00:00")),
+        excerpt=excerpt, user_note=user_note, supplied_content_hash="",
+    ).expected_content_hash()
 
 
 def assert_contract(payload: dict[str, Any], name: str) -> None:
@@ -69,7 +80,11 @@ def confirm_standard_flow() -> tuple[dict[str, Any], dict[str, Any]]:
             "retrieved_at": "2026-08-10T00:00:00Z",
             "excerpt": "A reproducible public excerpt used only by the deterministic fixture.",
             "user_note": "Client supplied fallback.",
-            "content_hash": "a" * 64,
+            "content_hash": evidence_hash(
+                url="https://example.com/public-evidence", title="Dated public evidence",
+                published_at="2026-08-01T00:00:00Z", retrieved_at="2026-08-10T00:00:00Z",
+                excerpt="A reproducible public excerpt used only by the deterministic fixture.", user_note="Client supplied fallback.",
+            ),
         },
         headers=idem("evidence-key-0001"),
     )
