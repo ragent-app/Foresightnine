@@ -1,5 +1,20 @@
 # Progress
 
+## Phase 3 Challenge and Evidence — 2026-08-15
+
+### Delivered
+
+- Added a provider-neutral `LlmProvider` and `SearchEvidenceProvider`, with deterministic mock as the default and an opt-in OpenCode DeepSeek Flash adapter using the required CLI model form. The adapter never reads, prints, stores or forwards credentials; it applies a concurrency-one gate, rounds/token/cost budgets, timeout/cancel termination and bounded exponential backoff for 429/5xx.
+- Added fail-closed structured-output handling: malformed JSON, prompt-control text, incomplete/invalid 10-dimension rubric output, unattached citations and D/E evidence promoted as public facts all produce no challenge record. Accepted output is rebuilt as and validated against the existing canonical `ChallengeRecord`.
+- Added client evidence fallback URL safety: HTTP(S), size, user-info, port and literal private/reserved-IP guards, plus a redirect-target DNS validation hook for any future fetcher. The API never server-fetches client evidence. Missing URL stays grade D/unreviewable and leaves challenge evidence requirements open.
+- Preserved the Phase 1 normal-confirmation gate and extended typed SSE/Last-Event-ID/cancel/resume/idempotency behavior for provider failures: a failed original request replays its failure without re-submitting; explicit resume retains the operation ID and makes the original request replay the validated result. No canonical schema expansion or generated-contract change was necessary.
+- Added reviewed JSON fixture and tests for mock end-to-end fallback, OpenCode success/no-search capability, 429, 502, timeout, cancel, invalid JSON, prompt injection, citation mismatch, D/E public-fact rejection and SSRF/redirect checks.
+
+### Verification and limitation
+
+- `uv run --project apps/api pytest apps/api/tests`: 28 passed; one unchanged third-party Starlette TestClient deprecation warning.
+- Live smoke is **blocked by missing server secret** in this environment. The OpenCode path is implemented but is not represented as DeepSeek-live verified; deterministic mock acceptance is the verified path.
+
 ## Phase 2 strict-decoder and manifest-closure fix — 2026-08-15
 
 Sol's second review found two false-negative paths in `af9b473`: `pngjs` alone accepted a valid-CRC PNG whose zlib header was invalid, and the registry did not reject duplicate paths or all required/variant/archive role drift.

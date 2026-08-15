@@ -1,0 +1,22 @@
+{
+  "claims": ["The thesis remains an unverified research scenario."],
+  "objections": ["A competing explanation or an already-priced expectation could break the transmission path."],
+  "missing_evidence": [],
+  "questions": ["Which dated observation would falsify the causal chain?"],
+  "rubric_scores": [
+    {"criterion": "premise_clarity", "score": 3, "rationale": "Defined premise."},
+    {"criterion": "time_boundary", "score": 3, "rationale": "Dated horizon required."},
+    {"criterion": "trigger_observability", "score": 3, "rationale": "Observable trigger."},
+    {"criterion": "causal_chain", "score": 3, "rationale": "Transmission is stated."},
+    {"criterion": "counterfactuals", "score": 3, "rationale": "Alternative explanation considered."},
+    {"criterion": "evidence_quality", "score": 3, "rationale": "Attached public source."},
+    {"criterion": "asset_transmission", "score": 3, "rationale": "Asset channel is explicit."},
+    {"criterion": "already_priced", "score": 3, "rationale": "Pricing risk retained."},
+    {"criterion": "falsifiability", "score": 3, "rationale": "Falsifier requested."},
+    {"criterion": "user_confirmation", "score": 3, "rationale": "User must decide."}
+  ],
+  "unresolved_issues": [],
+  "citation_ids": ["evidence:public"],
+  "public_fact_citation_ids": ["evidence:public"],
+  "native_search_used": true
+}

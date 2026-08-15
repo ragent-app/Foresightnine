@@ -4,6 +4,6 @@ The v1 boundary is contract-first and provider-neutral. One Draft 2020-12 JSON S
 
 The domain package owns pure lifecycle, probability and worldline invariants. The legal durable graph follows the approved plan. `CONFIRM_WITH_RESERVATIONS` is a separate acknowledged command from `EVIDENCE_REQUIRED`, not an undocumented state edge.
 
-The FastAPI adapter wires only fixed-clock, deterministic-ID mock providers. Structured provider output is validated again against canonical JSON Schema before return. The API supplies manifests and shards but never computes a user's final portfolio, connects to a broker, or claims current market data.
+The FastAPI adapter defaults to a fixed-clock, deterministic mock LLM provider. Phase 3 also defines provider-neutral LLM/search-evidence boundaries and an opt-in, server-only OpenCode DeepSeek Flash adapter. Structured provider output is parsed as untrusted data and validated again against canonical JSON Schema before return. The API supplies manifests and shards but never computes a user's final portfolio, connects to a broker, or claims current market data.
 
 Recoverability is part of the transport contract: POST idempotency survives state advancement, operation IDs are stable, cancel/resume tokens are explicit, and SSE event IDs support suffix replay via `Last-Event-ID`. Phase 1 uses process memory; later persistence must preserve these externally tested semantics.

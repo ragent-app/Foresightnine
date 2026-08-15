@@ -18,6 +18,7 @@ from .models import (
     OperationStartedEvent,
     SourceRef,
 )
+from .phase3 import ProviderFailure
 from .providers import FixedClock
 from .services import canonical_json, content_hash, deterministic_id, validate_payload
 
@@ -43,18 +44,30 @@ class ApiProblem(RuntimeError):
 @dataclass(frozen=True)
 class IdempotencyEntry:
     request_hash: str
-    response: BaseModel
+    response: BaseModel | ApiProblem
+
+
+@dataclass(frozen=True)
+class PendingProviderExecution:
+    endpoint: str
+    idempotency_key: str
+    request_hash: str
+    response_model: type[BaseModel]
+    result_field: str
+    build_result: Callable[[str], tuple[BaseModel, str]]
 
 
 class OperationManager:
     def __init__(self, clock: FixedClock | None = None) -> None:
         self.clock = clock or FixedClock()
         self._idempotency: dict[tuple[str, str], IdempotencyEntry] = {}
+        self._pending_provider_executions: dict[str, PendingProviderExecution] = {}
         self.operations: dict[str, Operation] = {}
         self.events: dict[str, list[BaseModel]] = {}
 
     def reset(self) -> None:
         self._idempotency.clear()
+        self._pending_provider_executions.clear()
         self.operations.clear()
         self.events.clear()
 
@@ -112,10 +125,35 @@ class OperationManager:
         if existing:
             if existing.request_hash != request_hash:
                 raise ApiProblem(409, "idempotency_conflict", "Idempotency-Key was already used with a different request body.")
+            if isinstance(existing.response, ApiProblem):
+                raise existing.response
             return existing.response, True
 
         operation_id = deterministic_id("operation", f"{endpoint}\0{idempotency_key}")
-        result, result_ref = build_result(operation_id)
+        try:
+            result, result_ref = build_result(operation_id)
+        except ProviderFailure as error:
+            failure = ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=error.retryable)
+            event_log: list[BaseModel] = [
+                OperationStartedEvent(**self._base_event(operation_id, 1), event="operation.started", message="Operation accepted."),
+                OperationProgressEvent(**self._base_event(operation_id, 2), event="operation.progress", progress=0.0, message="Provider result is pending validation."),
+                HeartbeatEvent(**self._base_event(operation_id, 3), event="heartbeat"),
+                OperationErrorEvent(
+                    **self._base_event(operation_id, 4), event="operation.error",
+                    error=ErrorResponse(schema_version="v1", error_code="internal_error", message="Provider result was not accepted.", request_id=deterministic_id("request", operation_id), retryable=error.retryable, details=[]),
+                    retryable=error.retryable,
+                ),
+            ]
+            self.events[operation_id] = event_log
+            self.operations[operation_id] = self._operation(
+                operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=4,
+            )
+            self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure)
+            self._pending_provider_executions[operation_id] = PendingProviderExecution(
+                endpoint=endpoint, idempotency_key=idempotency_key, request_hash=request_hash,
+                response_model=response_model, result_field=result_field, build_result=build_result,
+            )
+            raise failure from error
         result_hash = getattr(result, "content_hash", content_hash(result))
         event_log: list[BaseModel] = [
             OperationStartedEvent(**self._base_event(operation_id, 1), event="operation.started", message="Operation accepted."),
@@ -222,7 +260,40 @@ class OperationManager:
         if operation.resume_token != resume_token:
             raise ApiProblem(403, "invalid_operation_token", "Invalid resume token.")
         if operation.status == "failed":
-            raise ApiProblem(409, "invalid_state_transition", "Failed operation must be retried with its original Idempotency-Key.", retryable=True)
+            pending = self._pending_provider_executions.get(operation_id)
+            if pending is None:
+                raise ApiProblem(409, "invalid_state_transition", "Failed operation has no resumable provider checkpoint.", retryable=True)
+            try:
+                result, result_ref = pending.build_result(operation_id)
+            except ProviderFailure as error:
+                sequence = len(self.events[operation_id]) + 1
+                self.events[operation_id].append(OperationErrorEvent(
+                    **self._base_event(operation_id, sequence), event="operation.error",
+                    error=ErrorResponse(schema_version="v1", error_code="internal_error", message="Provider result was not accepted.", request_id=deterministic_id("request", operation_id), retryable=error.retryable, details=[]),
+                    retryable=error.retryable,
+                ))
+                self.operations[operation_id] = self._operation(
+                    operation_id=operation_id, endpoint=operation.endpoint, idempotency_key=pending.idempotency_key,
+                    status="failed", last_sequence=sequence,
+                )
+                raise ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=error.retryable) from error
+            sequence = len(self.events[operation_id]) + 1
+            result_hash = getattr(result, "content_hash", content_hash(result))
+            self.events[operation_id].extend([
+                OperationProgressEvent(**self._base_event(operation_id, sequence), event="operation.progress", progress=1.0, message="Resumed provider result validated."),
+                HeartbeatEvent(**self._base_event(operation_id, sequence + 1), event="heartbeat"),
+                OperationCompleteEvent(**self._base_event(operation_id, sequence + 2), event="operation.complete", result_ref=result_ref, result_hash=result_hash),
+            ])
+            operation = self._operation(
+                operation_id=operation_id, endpoint=operation.endpoint, idempotency_key=pending.idempotency_key,
+                status="completed", last_sequence=sequence + 2,
+            )
+            self.operations[operation_id] = operation
+            self._idempotency[(pending.endpoint, pending.idempotency_key)] = IdempotencyEntry(
+                request_hash=pending.request_hash,
+                response=pending.response_model(operation=operation, **{pending.result_field: result}),
+            )
+            del self._pending_provider_executions[operation_id]
         if operation.status == "cancelled":
             sequence = len(self.events[operation_id]) + 1
             resumed_events: list[BaseModel] = [

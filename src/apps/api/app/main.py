@@ -49,6 +49,7 @@ from .models import (
     WorldlineRequest,
 )
 from .operations import ApiProblem, OperationManager, format_sse
+from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider, ProviderFailure, build_llm_provider
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, build_attestation
 from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
 from .services import ContractViolation, content_hash, deterministic_id, validate_payload
@@ -71,6 +72,8 @@ app = FastAPI(
 )
 clock = FixedClock()
 research_provider = MockResearchProvider(clock)
+challenge_provider = build_llm_provider()
+evidence_provider = ClientSearchEvidenceProvider()
 data_provider = MockDataProvider(clock)
 factor_provider = MockFactorProvider(clock)
 operations = OperationManager(clock)
@@ -133,6 +136,38 @@ def _mark_replay(response: Response, replayed: bool) -> None:
     response.headers["Cache-Control"] = "no-store"
 
 
+def _challenge_from_draft(
+    draft: ChallengeDraft,
+    *,
+    operation_id: str,
+    challenge_id: str,
+    thesis_id: str,
+    turn: int,
+    status: str,
+    private_evidence_declared: bool,
+) -> ChallengeRecord:
+    payload = {
+        "turn_id": deterministic_id("turn", f"{challenge_id}:{turn}"),
+        "challenge_id": challenge_id,
+        "thesis_id": thesis_id,
+        "claims": list(draft.claims),
+        "objections": list(draft.objections),
+        "missing_evidence": list(draft.missing_evidence),
+        "questions": list(draft.questions),
+        "rubric_scores": [score.model_dump(mode="json", exclude_none=True) for score in draft.rubric_scores],
+        "unresolved_issues": list(draft.unresolved_issues),
+        "user_confirmation": "pending",
+        "private_evidence_declared": private_evidence_declared,
+        "status": status,
+    }
+    result = ChallengeRecord(
+        **_metadata(payload, f"provider:{challenge_provider.name}", "Validated adversarial challenge draft"),
+        **payload,
+    )
+    validate_payload(result, "ChallengeRecord")
+    return result
+
+
 def _error(status_code: int, error_code: str, message: str, request: Request, *, retryable: bool = False, details: list[ErrorDetail] | None = None) -> JSONResponse:
     request_id = deterministic_id("request", f"{request.method}:{request.url.path}:{error_code}")
     payload = ErrorResponse(
@@ -172,6 +207,18 @@ async def request_validation_handler(request: Request, error: RequestValidationE
 async def contract_violation_handler(request: Request, error: ContractViolation) -> JSONResponse:
     details = [ErrorDetail(location=error.contract, message=item) for item in error.errors]
     return _error(500, "contract_violation", "Generated response violated the canonical contract.", request, details=details)
+
+
+@app.exception_handler(ProviderFailure)
+async def provider_failure_handler(request: Request, error: ProviderFailure) -> JSONResponse:
+    # Raw CLI/model diagnostics are intentionally not exposed or stored.
+    return _error(
+        500 if error.retryable else 400,
+        "internal_error" if error.retryable else "bad_request",
+        "Provider request could not produce an accepted result.",
+        request,
+        retryable=error.retryable,
+    )
 
 
 @app.exception_handler(Exception)
@@ -224,14 +271,16 @@ def create_challenge(request: CreateChallengeRequest, response: Response, idempo
             private_evidence=request.user_private_evidence_claims,
         )
         challenge_id = deterministic_id("challenge", operation_id)
-        challenge = research_provider.challenge(
-            operation_id=operation_id,
-            thesis_id=thesis.thesis_id,
-            challenge_id=challenge_id,
-            claim=request.thesis,
-            turn=1,
-            status="CHALLENGING",
-            private_evidence_declared=request.user_private_evidence_claims,
+        draft = challenge_provider.generate_challenge(
+            ChallengeInput(
+                operation_id=operation_id, challenge_id=challenge_id, thesis_id=thesis.thesis_id,
+                claim=request.thesis, turn=1, status="CHALLENGING",
+                private_evidence_declared=request.user_private_evidence_claims,
+            )
+        )
+        challenge = _challenge_from_draft(
+            draft, operation_id=operation_id, thesis_id=thesis.thesis_id, challenge_id=challenge_id,
+            turn=1, status="CHALLENGING", private_evidence_declared=request.user_private_evidence_claims,
         )
         THESES[thesis.thesis_id] = thesis
         CHALLENGES[challenge_id] = challenge
@@ -261,14 +310,16 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
         if current.status != "CHALLENGING":
             raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
         turn = CHALLENGE_TURNS[challenge_id] + 1
-        updated = research_provider.challenge(
-            operation_id=operation_id,
-            thesis_id=current.thesis_id,
-            challenge_id=challenge_id,
-            claim=request.message,
-            turn=turn,
-            status="EVIDENCE_REQUIRED",
-            private_evidence_declared=current.private_evidence_declared,
+        draft = challenge_provider.generate_challenge(
+            ChallengeInput(
+                operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
+                claim=request.message, turn=turn, status="EVIDENCE_REQUIRED",
+                private_evidence_declared=current.private_evidence_declared,
+            )
+        )
+        updated = _challenge_from_draft(
+            draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
+            turn=turn, status="EVIDENCE_REQUIRED", private_evidence_declared=current.private_evidence_declared,
         )
         CHALLENGES[challenge_id] = updated
         CHALLENGE_TURNS[challenge_id] = turn
@@ -297,7 +348,7 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
         if current.status != "EVIDENCE_REQUIRED":
             raise ApiProblem(409, "invalid_state_transition", f"Evidence command cannot transition from {current.status}.")
         evidence_id = deterministic_id("evidence", operation_id)
-        independently_reviewable = request.url is not None
+        independently_reviewable = evidence_provider.validate_client_bundle(str(request.url) if request.url is not None else None)
         evidence_payload: dict[str, Any] = {
             "evidence_id": evidence_id,
             "challenge_id": challenge_id,
@@ -319,15 +370,21 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
         evidence = EvidenceItem(**_metadata(evidence_payload, "client:evidence", "Client submitted evidence", "user_submitted"), **evidence_payload)
         validate_payload(evidence, "EvidenceItem")
         turn = CHALLENGE_TURNS[challenge_id] + 1
-        updated = research_provider.challenge(
-            operation_id=operation_id,
-            thesis_id=current.thesis_id,
-            challenge_id=challenge_id,
-            claim=f"Evidence supplied: {request.title}",
-            turn=turn,
-            status="CHALLENGING",
+        attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
+        attached = (*attached, evidence)
+        draft = challenge_provider.generate_challenge(
+            ChallengeInput(
+                operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
+                claim=current.claims[0], turn=turn, status="CHALLENGING",
+                private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
+                evidence_ids=tuple(item.evidence_id for item in attached if item.independently_reviewable),
+                evidence_grades=tuple((item.evidence_id, item.grade) for item in attached),
+            )
+        )
+        updated = _challenge_from_draft(
+            draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
+            turn=turn, status="CHALLENGING" if not draft.missing_evidence else "EVIDENCE_REQUIRED",
             private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
-            rubric_passed=independently_reviewable,
         )
         EVIDENCE[evidence_id] = evidence
         CHALLENGES[challenge_id] = updated
