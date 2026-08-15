@@ -19,6 +19,7 @@ export function validatePngStream(bytes, relativePath) {
   const idat = [];
   let sawIdat = false;
   let sawNonIdatAfterIdat = false;
+  let sawPlte = false;
   let sawIend = false;
   while (offset < bytes.length) {
     if (offset + 12 > bytes.length) throw new Error(`${relativePath} has a truncated PNG chunk`);
@@ -40,8 +41,14 @@ export function validatePngStream(bytes, relativePath) {
       ihdr = data;
     } else if (typeName === "IDAT") {
       if (!ihdr || sawIend || sawNonIdatAfterIdat) throw new Error(`${relativePath} has an out-of-order IDAT`);
+      if (ihdr[9] === 3 && !sawPlte) throw new Error(`${relativePath} indexed colour PNG is missing PLTE before IDAT`);
       sawIdat = true;
       idat.push(data);
+    } else if (typeName === "PLTE") {
+      if (!ihdr || sawIdat || sawIend || sawPlte) throw new Error(`${relativePath} has PLTE after IDAT or a duplicate PLTE`);
+      if (data.length < 3 || data.length > 768 || data.length % 3 !== 0) throw new Error(`${relativePath} has an invalid PLTE length`);
+      if (ihdr[9] === 0 || ihdr[9] === 4) throw new Error(`${relativePath} has PLTE with a grayscale colour type`);
+      sawPlte = true;
     } else if (typeName === "IEND") {
       if (!sawIdat || data.length !== 0 || sawIend) throw new Error(`${relativePath} has an invalid IEND`);
       sawIend = true;

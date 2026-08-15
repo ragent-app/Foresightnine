@@ -56,4 +56,15 @@ assert.throws(
   /trailing or unconsumed compressed IDAT bytes/,
 );
 
-console.log("PASS design asset regression: invalid zlib stream and trailing IDAT bytes are rejected");
+const end = chunks.at(-1);
+const latePalette = encodeChunks([
+  ...chunks.slice(0, -1),
+  { type: Buffer.from("PLTE"), data: Buffer.from([0x00, 0x00, 0x00]) },
+  end,
+]);
+assert.throws(
+  () => validatePngStream(latePalette, "late-plte.png"),
+  /PLTE after IDAT/,
+);
+
+console.log("PASS design asset regression: invalid zlib, trailing IDAT and late PLTE streams are rejected");
