@@ -449,7 +449,7 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
             part = value.get("part")
             if not isinstance(part, dict):
                 return False
-            name = part.get("tool", part.get("name"))
+            name = part.get("tool")
             state = part.get("state")
             status = state.get("status") if isinstance(state, dict) else None
             return (
@@ -463,15 +463,6 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
             if not isinstance(value, dict):
                 return False
             if successful_tool_use_part(value):
-                return True
-            search = value.get("search")
-            if (
-                isinstance(search, dict)
-                and isinstance(search.get("status"), str)
-                and search["status"].lower() in successful_statuses
-                and isinstance(search.get("results"), list)
-                and bool(search["results"])
-            ):
                 return True
             return any(visit(child) for child in value.values() if isinstance(child, (dict, list)))
 

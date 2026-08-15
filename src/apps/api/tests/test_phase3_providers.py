@@ -89,6 +89,26 @@ def test_opencode_runtime_search_detection_handles_search_and_no_search_envelope
         assert OpenCodeDeepSeekFlashProvider._native_search_detected({"events": [{"type": "tool_use.part", "part": {"tool": "search", "state": {"status": status}}}]}) is False
     assert OpenCodeDeepSeekFlashProvider._native_search_detected({"capabilities": {"search": True}}) is False
     assert OpenCodeDeepSeekFlashProvider._native_search_detected({"events": [{"type": "tool_call", "tool": "search", "status": "completed"}]}) is False
+    assert OpenCodeDeepSeekFlashProvider._native_search_detected({"events": [{"type": "tool_use.part", "part": {"name": "search", "state": {"status": "completed"}}}]}) is False
+
+
+def test_opencode_native_search_ignores_sol_adversarial_generic_search_result() -> None:
+    adversarial = {
+        "capabilities": {"search": True},
+        "tools": [{"name": "search", "status": "completed"}],
+        "data": {
+            "results": [
+                {
+                    "search": {
+                        "status": "success",
+                        "results": [{"title": "not OpenCode tool telemetry"}],
+                    }
+                }
+            ]
+        },
+    }
+
+    assert OpenCodeDeepSeekFlashProvider._native_search_detected(adversarial) is False
 
 
 @pytest.mark.parametrize("signal", ["429 too many requests", "502 bad gateway"])
