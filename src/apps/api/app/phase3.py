@@ -32,8 +32,11 @@ RUBRIC_CRITERIA = (
 )
 _INJECTION = re.compile(
     r"(?i)((ignore|disregard)\s+(all\s+)?(previous|prior|earlier)\s+(instructions?|directions?)|"
+    r"forget\s+(all\s+)?(previous|prior|earlier)\s+(instructions?|directions?)|"
     r"system\s+prompt|reveal\s+(your\s+)?instructions|"
     r"developer\s+message|jailbreak|do\s+not\s+follow)"
+    r"|((approve|confirm|comply)\s+(this|the|it|my|our)\s+(claim|request|output|answer)?\s*(regardless|without|now))"
+    r"|(compliance\s+(mode|override|instruction|check)|approval\s+override)"
 )
 
 
@@ -73,6 +76,7 @@ class ChallengeInput:
     private_evidence_declared: bool
     evidence_ids: tuple[str, ...] = ()
     evidence_grades: tuple[tuple[str, str], ...] = ()
+    untrusted_text: tuple[str, ...] = ()
     cancel_event: Event | None = None
 
 
@@ -87,6 +91,7 @@ class ChallengeDraft:
     citation_ids: tuple[str, ...]
     public_fact_citation_ids: tuple[str, ...]
     native_search_used: bool
+    provenance: str
 
 
 @dataclass(frozen=True)
@@ -265,11 +270,12 @@ def _draft_from_payload(payload: Any, request: ChallengeInput, *, native_search_
         raise ProviderFailure("citation_mismatch", "A review with independently reviewable evidence must cite that evidence.", retryable=False)
     if any(evidence[item] in {"D", "E"} for item in public_citations):
         raise ProviderFailure("citation_mismatch", "Private or model-derived evidence cannot be represented as a public fact.", retryable=False)
-    _reject_injection(*all_text)
+    _reject_injection(request.claim, *request.untrusted_text, *all_text)
     return ChallengeDraft(
         claims=claims, objections=objections, missing_evidence=missing_evidence, questions=questions,
         rubric_scores=scores, unresolved_issues=unresolved, citation_ids=citations,
         public_fact_citation_ids=public_citations, native_search_used=native_search_used,
+        provenance="provider_output_validated; native_search_verified" if native_search_used else "provider_output_validated; native_search_not_verified",
     )
 
 
@@ -281,7 +287,7 @@ class DeterministicMockLlmProvider(LlmProvider):
         return False
 
     def generate_challenge(self, request: ChallengeInput) -> ChallengeDraft:
-        _reject_injection(request.claim)
+        _reject_injection(request.claim, *request.untrusted_text)
         evidence_is_public = bool(request.evidence_ids)
         score = 3 if evidence_is_public else 2
         payload = {
@@ -349,30 +355,102 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
 
     @staticmethod
     def _payload(stdout: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Decode a mock envelope or OpenCode 1.3.0's raw JSONL event stream.
+
+        OpenCode emits one JSON object per event even with ``--format json``.  The
+        final structured answer is normally carried in a text part, while usage
+        and tool events are separate records.  Keep only the final strict payload
+        and usage value; raw events never leave this boundary.
+        """
         try:
-            envelope = json.loads(stdout)
-            candidate = envelope.get("output", envelope) if isinstance(envelope, dict) else envelope
+            decoded = json.loads(stdout)
+            if not isinstance(decoded, dict):
+                raise ValueError("envelope is not object")
+            # A one-line JSONL stream is still an event, not the legacy mock
+            # envelope. Route it through the event accumulator below.
+            if decoded.get("type") and "output" not in decoded:
+                raise ValueError("single JSONL event")
+            candidate = decoded.get("output", decoded)
             if isinstance(candidate, str):
                 candidate = json.loads(candidate)
             if not isinstance(candidate, dict):
                 raise ValueError("not object")
-            return candidate, envelope if isinstance(envelope, dict) else {}
+            return candidate, decoded
         except (ValueError, TypeError, json.JSONDecodeError) as error:
-            raise ProviderFailure("invalid_provider_output", "Provider did not return valid structured JSON.", retryable=False) from error
+            # A whole-document JSON decode failure is expected for JSONL. Parse
+            # every non-empty line so malformed event records fail closed.
+            try:
+                events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+                if not events or any(not isinstance(event, dict) for event in events):
+                    raise ValueError("empty or non-object JSONL event")
+
+                def values(node: Any, key: str) -> list[Any]:
+                    found: list[Any] = []
+                    if isinstance(node, dict):
+                        if key in node:
+                            found.append(node[key])
+                        for value in node.values():
+                            found.extend(values(value, key))
+                    elif isinstance(node, list):
+                        for value in node:
+                            found.extend(values(value, key))
+                    return found
+
+                # Structured candidates can be emitted directly as an output or
+                # as final text. Prefer the newest parseable candidate.
+                candidates: list[Any] = []
+                text_fragments: list[str] = []
+                for event in events:
+                    candidates.extend(values(event, "output"))
+                    candidates.extend(values(event, "result"))
+                    for text in values(event, "text"):
+                        if isinstance(text, str):
+                            text_fragments.append(text)
+                candidates.extend(reversed(text_fragments))
+                if text_fragments:
+                    candidates.append("".join(text_fragments))
+                payload: dict[str, Any] | None = None
+                for candidate in reversed(candidates):
+                    try:
+                        if isinstance(candidate, dict):
+                            payload = candidate
+                        elif isinstance(candidate, str):
+                            parsed = json.loads(candidate)
+                            if isinstance(parsed, dict):
+                                payload = parsed
+                    except json.JSONDecodeError:
+                        continue
+                    if payload is not None:
+                        break
+                if payload is None:
+                    raise ValueError("JSONL stream has no final structured payload")
+                usages = [usage for event in events for usage in values(event, "usage")]
+                envelope: dict[str, Any] = {"events": events}
+                if usages:
+                    envelope["usage"] = usages[-1]
+                return payload, envelope
+            except (ValueError, TypeError, json.JSONDecodeError) as jsonl_error:
+                raise ProviderFailure("invalid_provider_output", "Provider did not return valid structured JSON.", retryable=False) from jsonl_error
 
     @staticmethod
     def _native_search_detected(envelope: dict[str, Any]) -> bool:
         """Accept only explicit capability booleans or successful search tool events."""
-        search_names = {"search", "web_search", "web-search"}
-        unavailable = {"unavailable", "unsupported", "disabled", "failed", "error"}
+        search_names = {"search", "websearch", "web_search", "web-search"}
+        unavailable = {"no", "unavailable", "unsupported", "disabled", "failed", "error"}
 
         def tool_event(value: Any) -> bool:
             if not isinstance(value, dict):
                 return False
-            name = value.get("name", value.get("tool"))
+            part = value.get("part")
+            if isinstance(part, dict):
+                name = part.get("tool", part.get("name"))
+                state = part.get("state")
+                status = part.get("status", state.get("status") if isinstance(state, dict) else value.get("status"))
+            else:
+                name = value.get("name", value.get("tool"))
+                status = value.get("status")
             if not isinstance(name, str) or name.lower() not in search_names:
                 return False
-            status = value.get("status")
             return not isinstance(status, str) or status.lower() not in unavailable
 
         def visit(value: Any) -> bool:
@@ -389,9 +467,12 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
             search = value.get("search")
             if isinstance(search, dict) and search.get("status") in {"completed", "success"} and isinstance(search.get("results"), list) and bool(search["results"]):
                 return True
-            return any(visit(value[key]) for key in ("events", "event", "data", "result", "results") if isinstance(value.get(key), dict)) or any(
-                any(visit(item) for item in value[key]) for key in ("events", "results") if isinstance(value.get(key), list)
-            )
+            if value.get("type") == "tool_use" and tool_event(value):
+                return True
+            return any(visit(child) for child in value.values() if isinstance(child, (dict, list)))
+
+        if isinstance(envelope.get("events"), list):
+            return any(visit(event) for event in envelope["events"])
 
         return visit(envelope)
 
@@ -413,12 +494,12 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
         if not isinstance(usage, dict) or set(usage) != {"total_tokens", "cost_usd"}:
             raise ProviderFailure("invalid_provider_output", "Provider usage must contain only total_tokens and cost_usd.", retryable=False)
         tokens, cost = usage["total_tokens"], usage["cost_usd"]
-        if type(tokens) not in {int, float} or type(cost) not in {int, float} or isinstance(tokens, bool) or isinstance(cost, bool) or not math.isfinite(float(tokens)) or not math.isfinite(float(cost)) or tokens < 0 or cost < 0 or int(tokens) != tokens:
-            raise ProviderFailure("invalid_provider_output", "Provider usage must be finite non-negative numbers.", retryable=False)
+        if type(tokens) is not int or type(cost) is not int or tokens < 0 or cost < 0:
+            raise ProviderFailure("invalid_provider_output", "Provider usage must be non-negative integers.", retryable=False)
         return int(tokens), float(cost)
 
     def generate_challenge(self, request: ChallengeInput) -> ChallengeDraft:
-        _reject_injection(request.claim)
+        _reject_injection(request.claim, *request.untrusted_text)
         if request.turn > self.policy.max_rounds:
             raise ProviderFailure("provider_budget_exhausted", "Challenge round limit reached.", retryable=False)
         prompt = self._prompt(request)
@@ -466,7 +547,9 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
                 return _draft_from_payload(
                     payload,
                     request,
-                    native_search_used=detected and type(payload.get("native_search_used")) is bool and payload["native_search_used"],
+                    # Tool telemetry is authoritative; the model's field is
+                    # still schema-checked but cannot downgrade an observed use.
+                    native_search_used=detected,
                 )
         raise AssertionError("unreachable")
 

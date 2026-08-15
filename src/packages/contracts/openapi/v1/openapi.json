@@ -567,6 +567,12 @@
               "challenge_id": {
                 "$ref": "#/components/schemas/Identifier"
               },
+              "citation_ids": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "type": "array"
+              },
               "claims": {
                 "items": {
                   "minLength": 1,
@@ -582,6 +588,9 @@
                 },
                 "type": "array"
               },
+              "native_search_used": {
+                "type": "boolean"
+              },
               "objections": {
                 "items": {
                   "minLength": 1,
@@ -592,6 +601,17 @@
               },
               "private_evidence_declared": {
                 "type": "boolean"
+              },
+              "provenance": {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              "public_fact_citation_ids": {
+                "items": {
+                  "$ref": "#/components/schemas/Identifier"
+                },
+                "type": "array"
               },
               "questions": {
                 "items": {
@@ -653,6 +673,10 @@
               "questions",
               "rubric_scores",
               "unresolved_issues",
+              "citation_ids",
+              "public_fact_citation_ids",
+              "native_search_used",
+              "provenance",
               "user_confirmation",
               "private_evidence_declared",
               "status"
@@ -2744,7 +2768,7 @@
     "description": "Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
     "title": "ForesightNine API",
     "version": "1.0.0",
-    "x-contract-sha256": "d8db9a5ffbed2e488677847f14d7671d97b3671daa2c581aafb49df533bd6e56"
+    "x-contract-sha256": "de82daec2d864d70b3170285b0d1f578fd2c3016fa2836059757e7215d8b759a"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3435,6 +3459,117 @@
           }
         },
         "summary": "Add Challenge Message"
+      }
+    },
+    "/v1/challenges/{challenge_id}/messages/async": {
+      "post": {
+        "description": "Start a Phase 3 message without waiting for its provider runner.",
+        "operationId": "startChallengeMessageStream",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "title": "Challenge Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChallengeMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Start Challenge Message Stream"
       }
     },
     "/v1/client-computations/{computation_id}/attest": {
@@ -4162,18 +4297,13 @@
                 "schema": {
                   "$ref": "#/components/schemas/SseEvent"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
             "description": "Replayable Server-Sent Events. IDs are operation_id:sequence."
           },
           "400": {
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -4183,7 +4313,7 @@
           },
           "403": {
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -4193,7 +4323,7 @@
           },
           "404": {
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -4203,7 +4333,7 @@
           },
           "409": {
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -4213,7 +4343,7 @@
           },
           "422": {
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -4223,7 +4353,7 @@
           },
           "500": {
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }

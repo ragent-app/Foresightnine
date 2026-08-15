@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from threading import Event, Thread
+from threading import Barrier, Event, Thread
 import pytest
 from pydantic import BaseModel, create_model
 
@@ -136,3 +136,69 @@ def test_build_api_problem_transitions_running_operation_to_failed_and_replays_e
             result_field="value", build_result=build,
         )
     assert replayed.value.status_code == 404
+
+
+def test_execute_is_atomic_single_flight_under_same_idempotency_key() -> None:
+    manager = OperationManager(FixedClock())
+    payload_type = create_model("SingleFlightPayload", content_hash=(str, ...))
+    response_type = create_model("SingleFlightResponse", operation=(object, ...), value=(object, ...))
+    callers = Barrier(3)
+    provider_started = Event()
+    release_provider = Event()
+    submissions = 0
+    results: list[object] = []
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        nonlocal submissions
+        submissions += 1
+        provider_started.set()
+        assert release_provider.wait(1)
+        return payload_type(content_hash="d" * 64), "result:single-flight"
+
+    def invoke() -> None:
+        callers.wait()
+        results.append(manager.execute(
+            endpoint="/v1/challenges", idempotency_key="single-flight-key",
+            request_payload={"message": "same"}, response_model=response_type,
+            result_field="value", build_result=build,
+        ))
+
+    workers = [Thread(target=invoke) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    callers.wait()
+    assert provider_started.wait(1)
+    release_provider.set()
+    for worker in workers:
+        worker.join(1)
+        assert not worker.is_alive()
+    assert submissions == 1
+    assert len(results) == 2
+    assert len({result[0].operation.operation_id for result in results}) == 1
+    assert sorted(result[1] for result in results) == [False, True]
+
+
+def test_async_sse_emits_before_provider_completion_and_cancel_reaches_runner() -> None:
+    manager = OperationManager(FixedClock())
+    runner_started = Event()
+    runner_cancelled = Event()
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        runner_started.set()
+        assert manager.cancel_event(operation_id).wait(1)
+        runner_cancelled.set()
+        raise ProviderFailure("provider_cancelled", "cancelled", retryable=True)
+
+    receipt, replayed = manager.submit_async(
+        endpoint="/v1/challenges/challenge:stream/messages/async", idempotency_key="streaming-provider-key",
+        request_payload={"message": "block"}, result_field="challenge", build_result=build,
+    )
+    assert replayed is False and runner_started.wait(1)
+    stream = manager.sse_events(receipt.operation.operation_id, None, heartbeat_seconds=0.001)
+    assert "event: operation.started" in next(stream)
+    assert "event: operation.progress" in next(stream)
+    assert "event: heartbeat" in next(stream)
+    assert runner_cancelled.is_set() is False
+    cancelled, _ = manager.cancel(receipt.operation.operation_id, receipt.operation.cancel_token, "cancel-streaming-provider-key")
+    assert cancelled.operation.status == "cancelled" and runner_cancelled.wait(1)
+    assert "event: operation.error" in next(stream)

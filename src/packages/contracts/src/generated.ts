@@ -3,7 +3,7 @@
  * Source: schemas/v1/contracts.schema.json
  */
 export const CONTRACT_VERSION = "v1" as const;
-export const CONTRACT_SCHEMA_SHA256 = "deb077db03cd740cf9d7e2d618ad5fc9c5610bdd4ac9e6fe0f1f8c26fa48d01d" as const;
+export const CONTRACT_SCHEMA_SHA256 = "49262f157e73daac2961749ad5a1a591c676f058e2a138bc04381c4c0081c0db" as const;
 
 export type SchemaVersion = "v1";
 
@@ -102,6 +102,10 @@ export interface ChallengeRecord {
   readonly "questions": readonly (string)[];
   readonly "rubric_scores": readonly (RubricScore)[];
   readonly "unresolved_issues": readonly (string)[];
+  readonly "citation_ids": readonly (Identifier)[];
+  readonly "public_fact_citation_ids": readonly (Identifier)[];
+  readonly "native_search_used": boolean;
+  readonly "provenance": string;
   readonly "user_confirmation": "pending" | "confirmed" | "confirmed_with_reservations";
   readonly "reservation_note"?: string;
   readonly "private_evidence_declared": boolean;

@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .contract_models import CONTRACT_SCHEMA
@@ -156,6 +156,10 @@ def _challenge_from_draft(
         "questions": list(draft.questions),
         "rubric_scores": [score.model_dump(mode="json", exclude_none=True) for score in draft.rubric_scores],
         "unresolved_issues": list(draft.unresolved_issues),
+        "citation_ids": list(draft.citation_ids),
+        "public_fact_citation_ids": list(draft.public_fact_citation_ids),
+        "native_search_used": draft.native_search_used,
+        "provenance": draft.provenance,
         "user_confirmation": "pending",
         "private_evidence_declared": private_evidence_declared,
         "status": status,
@@ -171,6 +175,15 @@ def _challenge_from_draft(
 def _raise_if_operation_cancelled(operation_id: str) -> None:
     if operations.cancel_event(operation_id).is_set():
         raise ProviderFailure("provider_cancelled", "Provider request was cancelled before state was committed.", retryable=True)
+
+
+def _untrusted_evidence_text(items: tuple[EvidenceItem, ...]) -> tuple[str, ...]:
+    """Every user/model-controlled evidence string is prompt-control checked."""
+    return tuple(text for item in items for text in (item.title, item.excerpt, item.user_note, item.publisher or ""))
+
+
+def _challenge_status(draft: ChallengeDraft) -> str:
+    return "EVIDENCE_REQUIRED" if draft.missing_evidence or draft.unresolved_issues else "CHALLENGING"
 
 
 def _error(status_code: int, error_code: str, message: str, request: Request, *, retryable: bool = False, details: list[ErrorDetail] | None = None) -> JSONResponse:
@@ -314,7 +327,7 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
         current = CHALLENGES.get(challenge_id)
         if not current:
             raise ApiProblem(404, "not_found", "Challenge not found.")
-        if current.status != "CHALLENGING":
+        if current.status not in {"CHALLENGING", "EVIDENCE_REQUIRED"}:
             raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
         turn = CHALLENGE_TURNS[challenge_id] + 1
         attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
@@ -325,13 +338,14 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
                 private_evidence_declared=current.private_evidence_declared,
                 evidence_ids=tuple(item.evidence_id for item in attached if item.independently_reviewable),
                 evidence_grades=tuple((item.evidence_id, item.grade) for item in attached),
+                untrusted_text=_untrusted_evidence_text(attached),
                 cancel_event=operations.cancel_event(operation_id),
             )
         )
         _raise_if_operation_cancelled(operation_id)
         updated = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
-            turn=turn, status="EVIDENCE_REQUIRED", private_evidence_declared=current.private_evidence_declared,
+            turn=turn, status=_challenge_status(draft), private_evidence_declared=current.private_evidence_declared,
         )
         CHALLENGES[challenge_id] = updated
         CHALLENGE_TURNS[challenge_id] = turn
@@ -344,6 +358,44 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.post("/v1/challenges/{challenge_id}/messages/async", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, responses=ERROR_RESPONSES, operation_id="startChallengeMessageStream")
+def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey) -> OperationResponse:
+    """Start a Phase 3 message without waiting for its provider runner."""
+    _validate_request(request, "ChallengeMessageRequest")
+
+    def build(operation_id: str) -> tuple[ChallengeRecord, str]:
+        current = CHALLENGES.get(challenge_id)
+        if not current:
+            raise ApiProblem(404, "not_found", "Challenge not found.")
+        if current.status not in {"CHALLENGING", "EVIDENCE_REQUIRED"}:
+            raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
+        turn = CHALLENGE_TURNS[challenge_id] + 1
+        attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
+        draft = challenge_provider.generate_challenge(ChallengeInput(
+            operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
+            claim=request.message, turn=turn, status=current.status,
+            private_evidence_declared=current.private_evidence_declared,
+            evidence_ids=tuple(item.evidence_id for item in attached if item.independently_reviewable),
+            evidence_grades=tuple((item.evidence_id, item.grade) for item in attached),
+            untrusted_text=_untrusted_evidence_text(attached), cancel_event=operations.cancel_event(operation_id),
+        ))
+        _raise_if_operation_cancelled(operation_id)
+        updated = _challenge_from_draft(
+            draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
+            turn=turn, status=_challenge_status(draft), private_evidence_declared=current.private_evidence_declared,
+        )
+        CHALLENGES[challenge_id] = updated
+        CHALLENGE_TURNS[challenge_id] = turn
+        return updated, challenge_id
+
+    result, replayed = operations.submit_async(
+        endpoint=f"/v1/challenges/{challenge_id}/messages/async", idempotency_key=idempotency_key,
+        request_payload=_request_payload(request), result_field="challenge", build_result=build,
     )
     _mark_replay(response, replayed)
     return result
@@ -401,13 +453,14 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
                 private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
                 evidence_ids=tuple(item.evidence_id for item in attached if item.independently_reviewable),
                 evidence_grades=tuple((item.evidence_id, item.grade) for item in attached),
+                untrusted_text=_untrusted_evidence_text(attached),
                 cancel_event=operations.cancel_event(operation_id),
             )
         )
         _raise_if_operation_cancelled(operation_id)
         updated = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
-            turn=turn, status="CHALLENGING" if not draft.missing_evidence else "EVIDENCE_REQUIRED",
+            turn=turn, status=_challenge_status(draft),
             private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
         )
         EVIDENCE[evidence_id] = evidence
@@ -754,7 +807,7 @@ def resume_operation(operation_id: str, request: ResumeOperationRequest, respons
 
 @app.get(
     "/v1/operations/{operation_id}/events",
-    response_class=PlainTextResponse,
+    response_class=StreamingResponse,
     responses={
         **ERROR_RESPONSES,
         200: {
@@ -764,10 +817,12 @@ def resume_operation(operation_id: str, request: ResumeOperationRequest, respons
     },
     operation_id="streamOperationEvents",
 )
-def stream_operation_events(operation_id: str, last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None) -> PlainTextResponse:
-    events = operations.events_after(operation_id, last_event_id)
-    return PlainTextResponse(
-        format_sse(events),
+def stream_operation_events(operation_id: str, last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None) -> StreamingResponse:
+    # Validate the replay cursor before response headers are committed; exceptions
+    # raised only from a streaming iterator would otherwise surface as HTTP 200.
+    operations.events_after(operation_id, last_event_id)
+    return StreamingResponse(
+        operations.sse_events(operation_id, last_event_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

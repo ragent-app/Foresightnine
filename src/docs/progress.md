@@ -1,5 +1,21 @@
 # Progress
 
+## Phase 3 formal FAIL remediation — 2026-08-15
+
+### Delivered
+
+- Reworked the OpenCode 1.3.0 adapter for raw JSONL events while retaining only a compatibility path for single-envelope mocks. It now extracts final structured text/payload and usage, recognizes actual `tool_use.part.tool` `search`/`websearch`, and treats `no`/`unavailable`/`error` as unavailable.
+- Added an opt-in asynchronous Phase 3 message endpoint. It returns the existing typed operation receipt before provider completion; `StreamingResponse` supplies replay, typed terminal events and keepalive heartbeats. Cancel signals the actual provider runner event before state commit. Existing synchronous endpoints remain synchronous and unchanged.
+- Made `OperationManager.execute` endpoint-plus-idempotency-key single-flight under concurrency. Same-body callers wait and replay the one submission; mismatch remains a conflict. A Barrier regression test proves one provider call.
+- Made evidence-backed follow-up messages return `CHALLENGING` only when both draft evidence gaps and unresolved issues are clear. Normal confirmation now has an audit regression proving preserved citations/provenance after a valid public-evidence turn.
+- Promoted `citation_ids`, `public_fact_citation_ids`, `native_search_used` and server-derived `provenance` into required canonical `ChallengeRecord` fields, regenerated TypeScript and OpenAPI, and retained attached-evidence grade validation.
+- Tightened usage to exact non-negative Python integers; rejected bool, float, NaN, infinity and negative values. Expanded prompt-control detection to forget-prior, approval and compliance forms across claims and untrusted evidence strings.
+
+### Verification and limit
+
+- `uv run --project apps/api pytest apps/api/tests`: **48 passed** (one unchanged third-party TestClient deprecation warning), including JSONL, single-flight Barrier and provider-blocked SSE/cancel tests.
+- Live smoke remains **blocked**: no new authorized server-side provider key is present. No historical key was used and no DeepSeek-live claim is made.
+
 ## Phase 3 Sol FAIL remediation — 2026-08-15
 
 ### Corrections and regression evidence
