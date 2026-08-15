@@ -48,7 +48,7 @@ def test_normal_state_path_worldlines_probability_and_get() -> None:
     challenge_id = confirmed["challenge"]["challenge_id"]
     worldline_response = CLIENT.post(
         "/v1/worldlines",
-        json={"challenge_id": challenge_id, "premise": "Observable grid investment accelerates.", "horizon_end": "2027-08-10"},
+        json={"challenge_id": challenge_id, "horizon_end": "2027-08-10"},
         headers=idem("worldline-path-key"),
     )
     assert worldline_response.status_code == 201, worldline_response.text
@@ -63,7 +63,7 @@ def test_normal_state_path_worldlines_probability_and_get() -> None:
 
     probability = CLIENT.post(
         "/v1/probabilities/assess",
-        json={"worldline_id": worldline["worldline_id"], "premise": worldline["premise"], "conditional_path": "main path given premise"},
+        json={"worldline_id": worldline["worldline_id"]},
         headers=idem("probability-key-0001"),
     )
     assert probability.status_code == 200, probability.text

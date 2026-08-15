@@ -37,6 +37,7 @@ from .models import (
     MarketDataShardRequest,
     MethodologyResponse,
     OperationResponse,
+    ProbabilityAssessment,
     ProbabilityOperationResponse,
     ProbabilityRequest,
     ResearchSession,
@@ -45,11 +46,13 @@ from .models import (
     SourceRef,
     ThesisDocument,
     Worldline,
+    WorldlineBundle,
     WorldlineBundleOperationResponse,
     WorldlineRequest,
 )
 from .operations import ApiProblem, OperationManager, format_sse
 from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider
+from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, build_attestation
 from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
 from .services import ContractViolation, content_hash, deterministic_id, validate_payload
@@ -72,6 +75,8 @@ app = FastAPI(
 )
 clock = FixedClock()
 research_provider = MockResearchProvider(clock)
+probability_assessor = DeterministicMockProbabilityAssessor(clock)
+worldline_generator = DeterministicMockWorldlineGenerator(probability_assessor, clock)
 challenge_provider = build_llm_provider()
 evidence_provider = ClientSearchEvidenceProvider()
 data_provider = MockDataProvider(clock)
@@ -619,14 +624,18 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         raise ApiProblem(404, "not_found", "Challenge not found.")
     if challenge.status != "CONFIRMED":
         raise ApiProblem(409, "invalid_state_transition", "Worldlines require a confirmed challenge.")
+    if request.horizon_end < clock.today():
+        raise ApiProblem(422, "validation_error", "Worldline horizon must not precede the baseline date.")
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
-        bundle = research_provider.generate_worldlines(
-            operation_id=operation_id,
-            challenge_id=request.challenge_id,
-            premise=request.premise,
-            horizon_end=request.horizon_end,
-        )
+        thesis = THESES.get(challenge.thesis_id)
+        if not thesis:
+            raise ApiProblem(409, "lifecycle_conflict", "Confirmed challenge has no retained thesis input.")
+        bundle = worldline_generator.generate(WorldlineGenerationInput(
+            operation_id=operation_id, challenge=challenge, thesis=thesis, horizon_end=request.horizon_end,
+        ))
+        if not isinstance(bundle, WorldlineBundle):
+            raise ProviderFailure("invalid_provider_output", "Worldline provider returned an unknown structured result.", retryable=False)
         for worldline in bundle.worldlines:
             WORLDLINES[worldline.worldline_id] = worldline
         return bundle, bundle.bundle_id
@@ -658,12 +667,11 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
         raise ApiProblem(404, "not_found", "Worldline not found.")
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
-        result = research_provider.assess_probability(
-            operation_id=operation_id,
-            worldline_id=request.worldline_id,
-            premise=request.premise,
-            conditional_path=request.conditional_path,
-        )
+        result = probability_assessor.assess(ProbabilityAssessmentInput(
+            operation_id=operation_id, worldline=WORLDLINES[request.worldline_id],
+        ))
+        if not isinstance(result, ProbabilityAssessment):
+            raise ProviderFailure("invalid_provider_output", "Probability provider returned an unknown structured result.", retryable=False)
         return result, result.assessment_id
 
     result, replayed = operations.execute(

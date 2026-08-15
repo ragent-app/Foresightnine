@@ -2171,24 +2171,12 @@
       "ProbabilityRequest": {
         "additionalProperties": false,
         "properties": {
-          "conditional_path": {
-            "maxLength": 10000,
-            "minLength": 1,
-            "type": "string"
-          },
-          "premise": {
-            "maxLength": 10000,
-            "minLength": 1,
-            "type": "string"
-          },
           "worldline_id": {
             "$ref": "#/components/schemas/Identifier"
           }
         },
         "required": [
-          "worldline_id",
-          "premise",
-          "conditional_path"
+          "worldline_id"
         ],
         "type": "object"
       },
@@ -2537,6 +2525,13 @@
                 },
                 "type": "array"
               },
+              "asset_impacts": {
+                "items": {
+                  "$ref": "#/components/schemas/AssetImpact"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
               "baseline_date": {
                 "format": "date",
                 "type": "string"
@@ -2612,6 +2607,7 @@
               "nodes",
               "edges",
               "asset_anchors",
+              "asset_impacts",
               "event_reveal_schedule",
               "invalidation_conditions",
               "provenance",
@@ -2635,6 +2631,14 @@
               "challenge_id": {
                 "$ref": "#/components/schemas/Identifier"
               },
+              "probability_assessments": {
+                "items": {
+                  "$ref": "#/components/schemas/ProbabilityAssessment"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
               "worldlines": {
                 "items": {
                   "$ref": "#/components/schemas/Worldline"
@@ -2647,7 +2651,8 @@
             "required": [
               "bundle_id",
               "challenge_id",
-              "worldlines"
+              "worldlines",
+              "probability_assessments"
             ],
             "type": "object"
           }
@@ -2702,8 +2707,16 @@
               "high"
             ]
           },
+          "data_as_of": {
+            "format": "date",
+            "type": "string"
+          },
           "event": {
             "minLength": 1,
+            "type": "string"
+          },
+          "event_date": {
+            "format": "date",
             "type": "string"
           },
           "node_id": {
@@ -2731,6 +2744,8 @@
         "required": [
           "node_id",
           "time_window",
+          "event_date",
+          "data_as_of",
           "event",
           "observable_indicators",
           "causal_parents",
@@ -2748,16 +2763,10 @@
           "horizon_end": {
             "format": "date",
             "type": "string"
-          },
-          "premise": {
-            "maxLength": 10000,
-            "minLength": 1,
-            "type": "string"
           }
         },
         "required": [
           "challenge_id",
-          "premise",
           "horizon_end"
         ],
         "type": "object"
@@ -2768,7 +2777,7 @@
     "description": "Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
     "title": "ForesightNine API",
     "version": "1.0.0",
-    "x-contract-sha256": "de82daec2d864d70b3170285b0d1f578fd2c3016fa2836059757e7215d8b759a"
+    "x-contract-sha256": "69398b44234ce05fa5d9f7be4733dfd6f27e76b9e006c4e1ef49a5b791005f98"
   },
   "openapi": "3.1.0",
   "paths": {

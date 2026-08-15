@@ -144,10 +144,12 @@
     "WorldlineNode": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["node_id", "time_window", "event", "observable_indicators", "causal_parents", "state_changes", "confidence"],
+      "required": ["node_id", "time_window", "event_date", "data_as_of", "event", "observable_indicators", "causal_parents", "state_changes", "confidence"],
       "properties": {
         "node_id": { "$ref": "#/$defs/Identifier" },
         "time_window": { "type": "string", "minLength": 1 },
+        "event_date": { "type": "string", "format": "date" },
+        "data_as_of": { "type": "string", "format": "date" },
         "event": { "type": "string", "minLength": 1 },
         "observable_indicators": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "causal_parents": { "type": "array", "items": { "$ref": "#/$defs/Identifier" } },
@@ -180,7 +182,7 @@
         { "$ref": "#/$defs/ContractMetadata" },
         {
           "type": "object",
-          "required": ["worldline_id", "bundle_id", "branch_kind", "title", "premise", "baseline_date", "horizon_end", "nodes", "edges", "asset_anchors", "event_reveal_schedule", "invalidation_conditions", "provenance", "status"],
+          "required": ["worldline_id", "bundle_id", "branch_kind", "title", "premise", "baseline_date", "horizon_end", "nodes", "edges", "asset_anchors", "asset_impacts", "event_reveal_schedule", "invalidation_conditions", "provenance", "status"],
           "properties": {
             "worldline_id": { "$ref": "#/$defs/Identifier" },
             "bundle_id": { "$ref": "#/$defs/Identifier" },
@@ -192,6 +194,7 @@
             "nodes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/WorldlineNode" } },
             "edges": { "type": "array", "items": { "$ref": "#/$defs/WorldlineEdge" } },
             "asset_anchors": { "type": "array", "items": { "$ref": "#/$defs/Identifier" } },
+            "asset_impacts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/AssetImpact" } },
             "event_reveal_schedule": { "type": "array", "items": { "$ref": "#/$defs/RevealEvent" } },
             "invalidation_conditions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
             "provenance": { "type": "string", "minLength": 1 },
@@ -206,11 +209,12 @@
         { "$ref": "#/$defs/ContractMetadata" },
         {
           "type": "object",
-          "required": ["bundle_id", "challenge_id", "worldlines"],
+          "required": ["bundle_id", "challenge_id", "worldlines", "probability_assessments"],
           "properties": {
             "bundle_id": { "$ref": "#/$defs/Identifier" },
             "challenge_id": { "$ref": "#/$defs/Identifier" },
-            "worldlines": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/Worldline" } }
+            "worldlines": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/Worldline" } },
+            "probability_assessments": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/ProbabilityAssessment" } }
           }
         }
       ],
@@ -651,19 +655,16 @@
       ]
     },
     "WorldlineRequest": {
-      "type": "object", "additionalProperties": false, "required": ["challenge_id", "premise", "horizon_end"],
+      "type": "object", "additionalProperties": false, "required": ["challenge_id", "horizon_end"],
       "properties": {
         "challenge_id": { "$ref": "#/$defs/Identifier" },
-        "premise": { "type": "string", "minLength": 1, "maxLength": 10000 },
         "horizon_end": { "type": "string", "format": "date" }
       }
     },
     "ProbabilityRequest": {
-      "type": "object", "additionalProperties": false, "required": ["worldline_id", "premise", "conditional_path"],
+      "type": "object", "additionalProperties": false, "required": ["worldline_id"],
       "properties": {
-        "worldline_id": { "$ref": "#/$defs/Identifier" },
-        "premise": { "type": "string", "minLength": 1, "maxLength": 10000 },
-        "conditional_path": { "type": "string", "minLength": 1, "maxLength": 10000 }
+        "worldline_id": { "$ref": "#/$defs/Identifier" }
       }
     },
     "MarketDataManifestRequest": {

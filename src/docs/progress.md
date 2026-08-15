@@ -1,5 +1,19 @@
 # Progress
 
+## Phase 4 Worldlines and Probability — 2026-08-15
+
+### Delivered
+
+- Added provider-neutral `WorldlineGenerator` and `ProbabilityAssessor` interfaces, with deterministic no-key mock defaults. Worldline generation now derives its premise from the stored thesis belonging to a `CONFIRMED` challenge; the API rejects caller-supplied premise/path fields.
+- Canonical worldline contracts now include node event/data-as-of dates, embedded asset impacts, and three attached probability assessments for weak/main/strong paths. Contracts, generated TypeScript, and OpenAPI are regenerated together.
+- Enforced schema-plus-semantic gates for acyclic graph shape, edge-time monotonicity, baseline/horizon containment, no future data references, event/reveal rules, exact interval/scalar joint recomputation, shared premise probabilities, and conditional branch partition consistency.
+- Added one 9WL regression fixture containing nine reference-derived scenario records, each with weak/main/strong expected structure, probability decomposition and event/reveal schedule expectations; added API/domain coverage including unknown-provider fail-closed behavior.
+
+### Material judgment and limit
+
+- The fixture copies only minimal scenario titles and trigger timing from the read-only 9WL source. Its probability values are deliberately deterministic test inputs, not historical estimates or forecasts.
+- Live OpenCode smoke remains **blocked**: no newly authorized server-side provider secret is available. No live-provider claim is made; deterministic mock completion is the verified path.
+
 ## Phase 3 formal FAIL remediation — 2026-08-15
 
 ### Delivered

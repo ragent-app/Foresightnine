@@ -3,7 +3,7 @@
  * Source: schemas/v1/contracts.schema.json
  */
 export const CONTRACT_VERSION = "v1" as const;
-export const CONTRACT_SCHEMA_SHA256 = "49262f157e73daac2961749ad5a1a591c676f058e2a138bc04381c4c0081c0db" as const;
+export const CONTRACT_SCHEMA_SHA256 = "fe86c2e837c7e673a876a79ccfa0848085202e2137dd4a814f22e8e87342cf96" as const;
 
 export type SchemaVersion = "v1";
 
@@ -115,6 +115,8 @@ export interface ChallengeRecord {
 export interface WorldlineNode {
   readonly "node_id": Identifier;
   readonly "time_window": string;
+  readonly "event_date": string;
+  readonly "data_as_of": string;
   readonly "event": string;
   readonly "observable_indicators": readonly (string)[];
   readonly "causal_parents": readonly (Identifier)[];
@@ -149,6 +151,7 @@ export interface Worldline {
   readonly "nodes": readonly (WorldlineNode)[];
   readonly "edges": readonly (WorldlineEdge)[];
   readonly "asset_anchors": readonly (Identifier)[];
+  readonly "asset_impacts": readonly (AssetImpact)[];
   readonly "event_reveal_schedule": readonly (RevealEvent)[];
   readonly "invalidation_conditions": readonly (string)[];
   readonly "provenance": string;
@@ -163,6 +166,7 @@ export interface WorldlineBundle {
   readonly "bundle_id": Identifier;
   readonly "challenge_id": Identifier;
   readonly "worldlines": readonly (Worldline)[];
+  readonly "probability_assessments": readonly (ProbabilityAssessment)[];
 }
 
 export interface ProbabilityAssessment {
@@ -506,14 +510,11 @@ export interface ConfirmChallengeRequest {
 
 export interface WorldlineRequest {
   readonly "challenge_id": Identifier;
-  readonly "premise": string;
   readonly "horizon_end": string;
 }
 
 export interface ProbabilityRequest {
   readonly "worldline_id": Identifier;
-  readonly "premise": string;
-  readonly "conditional_path": string;
 }
 
 export interface MarketDataManifestRequest {

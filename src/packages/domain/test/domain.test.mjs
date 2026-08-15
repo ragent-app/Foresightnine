@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   TRANSITIONS,
@@ -58,14 +59,36 @@ test("probability scalars and intervals are jointly recomputable", () => {
 test("worldlines reject cycles and reveal-before-event leakage", () => {
   assert.throws(() => assertAcyclicWorldline({
     nodes: [
-      { node_id: "a", time_window: "a", event: "a", observable_indicators: [], causal_parents: [], state_changes: [], confidence: "low" },
-      { node_id: "b", time_window: "b", event: "b", observable_indicators: [], causal_parents: ["a"], state_changes: [], confidence: "low" }
+      { node_id: "a", time_window: "a", event_date: "2026-08-10", data_as_of: "2026-08-10", event: "a", observable_indicators: [], causal_parents: [], state_changes: [], confidence: "low" },
+      { node_id: "b", time_window: "b", event_date: "2026-09-01", data_as_of: "2026-08-10", event: "b", observable_indicators: [], causal_parents: ["a"], state_changes: [], confidence: "low" }
     ],
     edges: [{ from_node_id: "a", to_node_id: "b" }, { from_node_id: "b", to_node_id: "a" }]
   }), /acyclic/);
-  assert.throws(() => assertWorldlineDates({
+  assert.doesNotThrow(() => assertWorldlineDates({
     baseline_date: "2026-08-10",
     horizon_end: "2027-08-10",
+    nodes: [
+      { node_id: "a", time_window: "a", event_date: "2026-08-10", data_as_of: "2026-08-10", event: "a", observable_indicators: [], causal_parents: [], state_changes: [], confidence: "low" },
+      { node_id: "b", time_window: "b", event_date: "2027-01-02", data_as_of: "2026-08-10", event: "b", observable_indicators: [], causal_parents: ["a"], state_changes: [], confidence: "low" }
+    ],
+    edges: [{ from_node_id: "a", to_node_id: "b" }],
     event_reveal_schedule: [{ event_id: "e", event_date: "2027-01-02", reveal_date: "2027-01-01", rule: "leak" }]
-  }), /cannot precede/);
+  }));
+  assert.throws(() => assertWorldlineDates({
+    baseline_date: "2026-08-10", horizon_end: "2027-08-10",
+    nodes: [{ node_id: "a", time_window: "a", event_date: "2026-08-10", data_as_of: "2026-08-11", event: "a", observable_indicators: [], causal_parents: [], state_changes: [], confidence: "low" }],
+    edges: [], event_reveal_schedule: []
+  }), /future data/);
+});
+
+test("9WL regression fixture has nine complete three-branch probability decompositions", async () => {
+  const fixture = JSON.parse(await readFile(new URL("../../test-fixtures/worldlines/v1/9wl-regression.json", import.meta.url), "utf8"));
+  assert.equal(fixture.worldlines.length, 9);
+  assert.deepEqual(fixture.expected_branch_structure, ["weak", "main", "strong"]);
+  assert.equal(Object.values(fixture.expected_probabilities).reduce((sum, branch) => sum + branch.conditional, 0), 1);
+  for (const branch of Object.values(fixture.expected_probabilities)) {
+    assert.ok(Math.abs(branch.joint - fixture.premise_probability.scalar * branch.conditional) < 1e-12);
+    assert.deepEqual(branch.joint_range.map((value, index) => Number(value.toFixed(12))), [fixture.premise_probability.range[0] * branch.conditional_range[0], fixture.premise_probability.range[1] * branch.conditional_range[1]].map((value) => Number(value.toFixed(12))));
+  }
+  for (const scenario of fixture.worldlines) assert.ok(scenario.event_date <= scenario.reveal_date && scenario.reveal_date <= scenario.horizon_end);
 });

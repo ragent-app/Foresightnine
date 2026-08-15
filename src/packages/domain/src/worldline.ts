@@ -23,14 +23,27 @@ export function assertAcyclicWorldline(worldline: Pick<Worldline, "nodes" | "edg
 }
 
 export function assertWorldlineDates(
-  worldline: Pick<Worldline, "baseline_date" | "horizon_end" | "event_reveal_schedule">
+  worldline: Pick<Worldline, "baseline_date" | "horizon_end" | "nodes" | "edges" | "event_reveal_schedule">
 ): void {
   if (worldline.baseline_date > worldline.horizon_end) {
     throw new Error("Worldline baseline must not be after its horizon");
   }
   for (const reveal of worldline.event_reveal_schedule) {
-    if (reveal.reveal_date < reveal.event_date) {
-      throw new Error(`Reveal ${reveal.event_id} cannot precede its event date`);
+    if (reveal.rule !== "leak" && reveal.reveal_date < reveal.event_date) {
+      throw new Error(`Reveal ${reveal.event_id} cannot precede its event date unless it is a leak`);
+    }
+    if (reveal.event_date < worldline.baseline_date || reveal.event_date > worldline.horizon_end || reveal.reveal_date < worldline.baseline_date || reveal.reveal_date > worldline.horizon_end) throw new Error(`Reveal ${reveal.event_id} is outside the worldline horizon`);
+  }
+  const nodes = new Map(worldline.nodes.map((node) => [node.node_id, node]));
+  for (const node of worldline.nodes) {
+    if (node.event_date < worldline.baseline_date || node.event_date > worldline.horizon_end) throw new Error(`Node ${node.node_id} is outside the worldline horizon`);
+    if (node.data_as_of > worldline.baseline_date || node.data_as_of > node.event_date) throw new Error(`Node ${node.node_id} references future data`);
+  }
+  for (const edge of worldline.edges) {
+    const parent = nodes.get(edge.from_node_id);
+    const child = nodes.get(edge.to_node_id);
+    if (parent && child && parent.event_date > child.event_date) {
+      throw new Error(`Node time must be monotonic across ${edge.from_node_id} -> ${edge.to_node_id}`);
     }
   }
 }

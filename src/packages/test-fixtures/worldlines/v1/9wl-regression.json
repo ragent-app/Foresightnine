@@ -1,0 +1,23 @@
+{
+  "fixture_version": "v1",
+  "source": "Minimal scenario titles and trigger timing copied from the read-only WL-data-final wordline-md set; probabilities are deterministic test inputs, not forecasts.",
+  "baseline_date": "2026-07-17",
+  "premise_probability": { "scalar": 0.2, "range": [0.15, 0.25] },
+  "expected_branch_structure": ["weak", "main", "strong"],
+  "expected_probabilities": {
+    "weak": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] },
+    "main": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] },
+    "strong": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] }
+  },
+  "worldlines": [
+    { "id": "WL1", "title": "Taiwan Strait limited-unification shock", "trigger": "Pescadores collision then rapid escalation", "event_date": "2028-04-01", "reveal_date": "2028-04-01", "rule": "observed", "horizon_end": "2035-12-31" },
+    { "id": "WL2", "title": "US-China technology-system split", "trigger": "Internet and financial-technology separation", "event_date": "2028-06-01", "reveal_date": "2028-06-01", "rule": "observed", "horizon_end": "2035-12-31" },
+    { "id": "WL3", "title": "Korean Peninsula succession crisis", "trigger": "Seventh nuclear test and conventional conflict", "event_date": "2028-06-01", "reveal_date": "2028-06-01", "rule": "observed", "horizon_end": "2035-12-31" },
+    { "id": "WL4", "title": "US Treasury Minsky moment", "trigger": "Seven-year Treasury auction failure", "event_date": "2029-04-01", "reveal_date": "2029-04-01", "rule": "scheduled", "horizon_end": "2035-12-31" },
+    { "id": "WL5", "title": "Japanese-yen depreciation spiral", "trigger": "Bank of Japan control failure", "event_date": "2028-07-01", "reveal_date": "2028-07-01", "rule": "observed", "horizon_end": "2035-12-31" },
+    { "id": "WL6", "title": "Central-bank credibility collapse", "trigger": "Inflation expectations de-anchor", "event_date": "2028-01-01", "reveal_date": "2028-01-01", "rule": "observed", "horizon_end": "2035-12-31" },
+    { "id": "WL7", "title": "AI algorithmic deleveraging", "trigger": "Strategy crowding and forced selling", "event_date": "2029-01-01", "reveal_date": "2029-01-01", "rule": "observed", "horizon_end": "2035-12-31" },
+    { "id": "WL8", "title": "Global energy-system disruption", "trigger": "Hormuz shipping blockade", "event_date": "2028-01-01", "reveal_date": "2028-01-01", "rule": "observed", "horizon_end": "2035-12-31" },
+    { "id": "WL9", "title": "Novel-pandemic supply-chain reset", "trigger": "XPV-27 discovery", "event_date": "2028-01-01", "reveal_date": "2028-01-01", "rule": "observed", "horizon_end": "2035-12-31" }
+  ]
+}

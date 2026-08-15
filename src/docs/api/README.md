@@ -49,6 +49,8 @@ Event IDs use `operation_id:sequence`. On reconnect, a client sends the last ful
 
 ## Probability, manifests and attestation
 
-`ProbabilityAssessment` always carries premise, conditional and joint scalar values plus all three intervals. The API verifies scalar multiplication, interval multiplication, interval ordering and scalar containment. Mock output is `model_estimate_unvalidated` and uses coarse values.
+`POST /v1/worldlines` accepts only a confirmed `challenge_id` and horizon; its premise is derived from the retained challenge thesis. It returns exactly weak, main and strong branches, their event/reveal schedule, asset impacts, and three attached assessments. `POST /v1/probabilities/assess` accepts only a generated `worldline_id`.
+
+`ProbabilityAssessment` always carries premise, conditional and joint scalar values plus all three intervals. The API verifies scalar multiplication, interval multiplication, interval ordering and scalar containment. Branches share a premise estimate, conditional scalar mass sums to one, and conditional intervals must jointly admit one. Mock output is `model_estimate_unvalidated` and uses coarse values.
 
 Market and factor payloads are manifest/shard pairs with version, content hash, mock integrity key ID, field/admission metadata and explicit data-license status. Market mock data is always `historical_only`. Final portfolio computation remains client-side; the server only records hash-based `ClientComputationAttestation` data.

@@ -116,7 +116,7 @@ def create_worldlines() -> dict[str, Any]:
     challenge_id = confirmed["challenge"]["challenge_id"]
     response = CLIENT.post(
         "/v1/worldlines",
-        json={"challenge_id": challenge_id, "premise": "Observable grid investment accelerates.", "horizon_end": "2027-08-10"},
+        json={"challenge_id": challenge_id, "horizon_end": "2027-08-10"},
         headers=idem("worldline-key-0001"),
     )
     assert response.status_code == 201, response.text
