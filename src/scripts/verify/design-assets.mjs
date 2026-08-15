@@ -1,7 +1,8 @@
-import { access, readFile, readdir, stat } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
+import { validatePngStream } from "./design-png-guards.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../docs/design/concepts");
@@ -12,31 +13,49 @@ if (!Array.isArray(manifest.assets) || manifest.assets.length === 0) {
   throw new Error("manifest.assets dimension registry is missing or empty");
 }
 
-const registry = new Map(manifest.assets.map((entry) => [entry.path, entry]));
 const required = [
-  "web/01-thesis-input.png",
-  "web/02-challenge-evidence.png",
-  "web/03-worldline-probability.png",
-  "web/04-fm-progress.png",
-  "web/05-portfolio-stress.png",
-  "web/06-worldline-nav.png",
-  "web/07-methodology-risk.png",
-  "android/01-thesis-input.png",
-  "android/02-challenge-conversation.png",
-  "android/03-evidence-workspace.png",
-  "android/04-worldline-timeline.png",
-  "android/05-portfolio-nav.png",
-  "android/06-share-export.png",
+  ...manifest.required_web.map((path) => `web/${path}`),
+  ...manifest.required_android.map((path) => `android/${path}`),
 ];
 
-/** Decode every pixel of the PNG. A corrupt IDAT, bad CRC or truncated stream throws. */
+const requiredSet = new Set(required);
+const variantSet = new Set(manifest.variants);
+const validRoles = new Set(["required", "variant", "archive"]);
+if (requiredSet.size !== required.length) throw new Error("Duplicate required design path in phase2 manifest");
+if (variantSet.size !== manifest.variants.length) throw new Error("Duplicate variant path in phase2 manifest");
+if (!Array.isArray(manifest.required_web) || !Array.isArray(manifest.required_android)) {
+  throw new Error("Manifest required Web/Android asset lists are missing");
+}
+
+const duplicateAssetPaths = manifest.assets.map((entry) => entry.path).filter((path, index, paths) => paths.indexOf(path) !== index);
+if (duplicateAssetPaths.length > 0) throw new Error(`Duplicate asset registry path(s): ${[...new Set(duplicateAssetPaths)].join(", ")}`);
+if (manifest.assets.some((entry) => !validRoles.has(entry.role))) throw new Error("Asset registry contains an unknown role");
+const registry = new Map(manifest.assets.map((entry) => [entry.path, entry]));
+const archiveSet = new Set(manifest.assets.filter((entry) => entry.role === "archive").map((entry) => entry.path));
+const rolePaths = {
+  required: new Set(manifest.assets.filter((entry) => entry.role === "required").map((entry) => entry.path)),
+  variant: new Set(manifest.assets.filter((entry) => entry.role === "variant").map((entry) => entry.path)),
+  archive: archiveSet,
+};
+const sameSet = (left, right) => left.size === right.size && [...left].every((path) => right.has(path));
+if (!sameSet(rolePaths.required, requiredSet)) throw new Error("Manifest required lists and asset roles disagree");
+if (!sameSet(rolePaths.variant, variantSet)) throw new Error("Manifest variants and asset roles disagree");
+if ([...archiveSet].some((path) => requiredSet.has(path) || variantSet.has(path))) {
+  throw new Error("Archive asset overlaps a required or variant path");
+}
+
+/** Validate the complete PNG stream, then use a real RGBA decoder for pixel output. */
 const decodePng = async (relativePath) => {
   const bytes = await readFile(resolve(root, relativePath));
+  const stream = validatePngStream(bytes, relativePath);
   const png = PNG.sync.read(bytes);
   if (!png.data || png.data.length !== png.width * png.height * 4) {
     throw new Error(`${relativePath} decoded but its RGBA buffer is incomplete`);
   }
-  return { width: png.width, height: png.height };
+  if (png.width !== stream.width || png.height !== stream.height) {
+    throw new Error(`${relativePath} decoder dimensions disagree with IHDR`);
+  }
+  return stream;
 };
 
 const assertArtboard = (relativePath, width, height) => {
@@ -65,6 +84,7 @@ await collectPngs(root);
 
 const registryPaths = new Set(registry.keys());
 const diskSet = new Set(onDiskPaths);
+if (registryPaths.size !== manifest.assets.length) throw new Error("Asset registry contains duplicate paths");
 const unregistered = onDiskPaths.filter((path) => !registryPaths.has(path)).sort();
 const missing = [...registryPaths].filter((path) => !diskSet.has(path)).sort();
 if (unregistered.length > 0) throw new Error(`Unregistered PNG assets not in manifest: ${unregistered.join(", ")}`);

@@ -1,5 +1,20 @@
 # Progress
 
+## Phase 2 strict-decoder and manifest-closure fix — 2026-08-15
+
+Sol's second review found two false-negative paths in `af9b473`: `pngjs` alone accepted a valid-CRC PNG whose zlib header was invalid, and the registry did not reject duplicate paths or all required/variant/archive role drift.
+
+### Fix
+
+- Added `scripts/verify/design-png-guards.mjs`: verifies every chunk CRC and order, restricts the approved 8-bit non-interlaced encoding, inflates the concatenated IDAT stream with `inflateSync(..., { info: true })`, requires all compressed bytes to be consumed, and checks the exact filtered scanline length before `pngjs` decodes RGBA pixels.
+- Added `scripts/verify/design-assets-regression.mjs` to construct in memory, with valid PNG CRCs, an invalid zlib header and trailing compressed bytes; both are required to fail the guard.
+- The manifest gate now consumes `required_web`/`required_android`, rejects duplicate registry paths and duplicate variants, validates roles against the exact required/variant/archive path sets, and rejects role overlap, missing files and unregistered files.
+
+### Verification
+
+- `corepack pnpm verify:phase2`: passed all 35 pixel decodes, exact dimensions, required/variant/archive closure, and both corruption regressions.
+- Manual proof: a legal-CRC invalid zlib header is rejected with `incorrect header check`; no file is written by the regression test.
+
 ## Phase 2 verifier hardening — 2026-08-13
 
 ### Blocker
