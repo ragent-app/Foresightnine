@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from threading import Barrier, Event, Thread
+from time import sleep
 import pytest
 from pydantic import BaseModel, create_model
 
@@ -202,3 +203,32 @@ def test_async_sse_emits_before_provider_completion_and_cancel_reaches_runner() 
     cancelled, _ = manager.cancel(receipt.operation.operation_id, receipt.operation.cancel_token, "cancel-streaming-provider-key")
     assert cancelled.operation.status == "cancelled" and runner_cancelled.wait(1)
     assert "event: operation.error" in next(stream)
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_async_submit_replay_updates_from_running_to_terminal_operation(failure: bool) -> None:
+    manager = OperationManager(FixedClock())
+    payload_type = create_model("AsyncReplayPayload", content_hash=(str, ...))
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        if failure:
+            raise ProviderFailure("provider_timeout", "timed out", retryable=True)
+        return payload_type(content_hash="e" * 64), "result:async-replay"
+
+    receipt, replayed = manager.submit_async(
+        endpoint="/v1/challenges/challenge:async/messages/async", idempotency_key=f"async-replay-{failure}",
+        request_payload={"message": "same"}, result_field="challenge", build_result=build,
+    )
+    assert replayed is False and receipt.operation.status == "running"
+    for _ in range(100):
+        if manager.operations[receipt.operation.operation_id].status != "running":
+            break
+        sleep(0.01)
+    expected_status = "failed" if failure else "completed"
+    assert manager.operations[receipt.operation.operation_id].status == expected_status
+    replay, replayed = manager.submit_async(
+        endpoint="/v1/challenges/challenge:async/messages/async", idempotency_key=f"async-replay-{failure}",
+        request_payload={"message": "same"}, result_field="challenge",
+        build_result=lambda operation_id: (_ for _ in ()).throw(AssertionError("replay must not submit provider work")),
+    )
+    assert replayed is True and replay.operation.status == expected_status

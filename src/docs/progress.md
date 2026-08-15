@@ -9,11 +9,11 @@
 - Made `OperationManager.execute` endpoint-plus-idempotency-key single-flight under concurrency. Same-body callers wait and replay the one submission; mismatch remains a conflict. A Barrier regression test proves one provider call.
 - Made evidence-backed follow-up messages return `CHALLENGING` only when both draft evidence gaps and unresolved issues are clear. Normal confirmation now has an audit regression proving preserved citations/provenance after a valid public-evidence turn.
 - Promoted `citation_ids`, `public_fact_citation_ids`, `native_search_used` and server-derived `provenance` into required canonical `ChallengeRecord` fields, regenerated TypeScript and OpenAPI, and retained attached-evidence grade validation.
-- Tightened usage to exact non-negative Python integers; rejected bool, float, NaN, infinity and negative values. Expanded prompt-control detection to forget-prior, approval and compliance forms across claims and untrusted evidence strings.
+- Tightened usage so `total_tokens` is an exact non-negative Python integer and `cost_usd` is a finite, non-negative non-bool integer/float; rejected bool, NaN, infinity and negative values. Expanded prompt-control detection to forget-prior, approval and compliance forms across claims and untrusted evidence strings.
 
 ### Verification and limit
 
-- `uv run --project apps/api pytest apps/api/tests`: **48 passed** (one unchanged third-party TestClient deprecation warning), including JSONL, single-flight Barrier and provider-blocked SSE/cancel tests.
+- `uv run --project apps/api pytest apps/api/tests`: **51 passed** (one unchanged third-party TestClient deprecation warning), including JSONL, single-flight Barrier, provider-blocked SSE/cancel and terminal async-replay tests.
 - Live smoke remains **blocked**: no new authorized server-side provider key is present. No historical key was used and no DeepSeek-live claim is made.
 
 ## Phase 3 Sol FAIL remediation — 2026-08-15

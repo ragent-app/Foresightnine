@@ -335,6 +335,7 @@ class OperationManager:
                     self.operations[operation_id] = self._operation(
                         operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="completed", last_sequence=sequence,
                     )
+                    self._idempotency[key] = IdempotencyEntry(request_hash, OperationResponse(operation=self.operations[operation_id]))
             except (ProviderFailure, ApiProblem):
                 with self._lock:
                     if self.operations[operation_id].status != "cancelled":
@@ -347,6 +348,7 @@ class OperationManager:
                         self.operations[operation_id] = self._operation(
                             operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=sequence,
                         )
+                        self._idempotency[key] = IdempotencyEntry(request_hash, OperationResponse(operation=self.operations[operation_id]))
             finally:
                 with self._lock:
                     self._pending_provider_executions.pop(operation_id, None)
@@ -396,6 +398,10 @@ class OperationManager:
                     idempotency_key=pending.idempotency_key if pending else idempotency_key, status="cancelled", last_sequence=sequence,
                 )
                 self.operations[operation_id] = operation
+                if pending:
+                    self._idempotency[(pending.endpoint, pending.idempotency_key)] = IdempotencyEntry(
+                        pending.request_hash, OperationResponse(operation=operation),
+                    )
         response = OperationResponse(operation=operation)
         self._store_control(endpoint, idempotency_key, payload, response)
         return response, False

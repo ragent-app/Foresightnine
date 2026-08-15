@@ -61,7 +61,7 @@ def test_opencode_runtime_search_detection_handles_search_and_no_search_envelope
 
     def runner(command: list[str], prompt: str, timeout: float, cancel: Event | None) -> subprocess.CompletedProcess[str]:
         calls.append((command, prompt))
-        return completed({"output": payload(), "capabilities": {"search": True}, "usage": {"total_tokens": 120, "cost_usd": 0}})
+        return completed({"output": payload(), "capabilities": {"search": True}, "usage": {"total_tokens": 120, "cost_usd": 0.001}})
 
     provider = OpenCodeDeepSeekFlashProvider(ProviderPolicy(max_cost_usd=0.01, retry_base_seconds=0), runner)
     draft = provider.generate_challenge(request())
@@ -72,7 +72,7 @@ def test_opencode_runtime_search_detection_handles_search_and_no_search_envelope
 
     no_search = OpenCodeDeepSeekFlashProvider(
         ProviderPolicy(max_cost_usd=0.01, retry_base_seconds=0),
-        lambda *args: completed({"output": payload(), "usage": {"total_tokens": 120, "cost_usd": 0}}),
+        lambda *args: completed({"output": payload(), "usage": {"total_tokens": 120, "cost_usd": 0.001}}),
     )
     fallback = no_search.generate_challenge(request())
     assert no_search.supports_native_search is False
@@ -128,7 +128,7 @@ def test_controllable_opencode_runner_observes_inflight_cancel_without_second_su
         attempts += 1
         runner_started.set()
         assert received_cancel is not None and received_cancel.wait(1)
-        return completed({"output": payload(), "usage": {"total_tokens": 100, "cost_usd": 0}})
+        return completed({"output": payload(), "usage": {"total_tokens": 100, "cost_usd": 0.001}})
 
     provider = OpenCodeDeepSeekFlashProvider(ProviderPolicy(max_attempts=1), runner)
 
@@ -241,15 +241,15 @@ def test_opencode_rejects_nontransient_exit_and_negative_usage_without_retry() -
         ProviderPolicy(max_attempts=1),
         lambda *args: completed({"output": payload(), "usage": {"total_tokens": -1, "cost_usd": -0.01}}),
     )
-    with pytest.raises(ProviderFailure, match="non-negative integers"):
+    with pytest.raises(ProviderFailure, match="total_tokens"):
         negative.generate_challenge(request())
 
 
 def test_opencode_jsonl_accumulates_final_text_usage_and_real_tool_use() -> None:
     events = [
         {"type": "message.part.updated", "properties": {"part": {"type": "text", "text": json.dumps(payload())}}},
-        {"type": "tool_use", "part": {"tool": "websearch", "status": "completed"}},
-        {"type": "message.updated", "properties": {"usage": {"total_tokens": 123, "cost_usd": 0}}},
+        {"type": "tool_use.part", "part": {"tool": "websearch", "state": {"status": "completed"}}},
+        {"type": "message.updated", "properties": {"usage": {"total_tokens": 123, "cost_usd": 0.001}}},
     ]
     provider = OpenCodeDeepSeekFlashProvider(
         ProviderPolicy(max_attempts=1), lambda *args: completed("\n".join(json.dumps(event) for event in events)),
@@ -258,6 +258,7 @@ def test_opencode_jsonl_accumulates_final_text_usage_and_real_tool_use() -> None
     assert draft.native_search_used is True
     assert provider.supports_native_search is True
     assert draft.provenance.endswith("native_search_verified")
+    assert OpenCodeDeepSeekFlashProvider._native_search_detected({"events": [events[1]]}) is True
 
     one_line = OpenCodeDeepSeekFlashProvider(
         ProviderPolicy(max_attempts=1), lambda *args: completed(json.dumps(events[0])),
@@ -265,23 +266,25 @@ def test_opencode_jsonl_accumulates_final_text_usage_and_real_tool_use() -> None
     assert one_line.generate_challenge(request()).native_search_used is False
 
     for status in ("no", "unavailable", "error"):
-        blocked = [{"type": "tool_use", "part": {"tool": "search", "state": {"status": status}}}, events[0], events[2]]
+        blocked = [{"type": "tool_use.part", "part": {"tool": "search", "state": {"status": status}}}, events[0], events[2]]
         provider = OpenCodeDeepSeekFlashProvider(
             ProviderPolicy(max_attempts=1), lambda *args, blocked=blocked: completed("\n".join(json.dumps(event) for event in blocked)),
         )
+        assert OpenCodeDeepSeekFlashProvider._native_search_detected({"events": [blocked[0]]}) is False
         assert provider.generate_challenge(request()).native_search_used is False
 
 
 @pytest.mark.parametrize("usage", [
     {"total_tokens": True, "cost_usd": 0}, {"total_tokens": 1.0, "cost_usd": 0},
-    {"total_tokens": 1, "cost_usd": 0.0}, {"total_tokens": 1, "cost_usd": float("nan")},
+    {"total_tokens": 1, "cost_usd": True}, {"total_tokens": 1, "cost_usd": float("nan")},
     {"total_tokens": 1, "cost_usd": float("inf")}, {"total_tokens": -1, "cost_usd": 0},
+    {"total_tokens": 1, "cost_usd": -0.001},
 ])
-def test_opencode_usage_is_exact_non_negative_integer(usage: dict[str, object]) -> None:
+def test_opencode_usage_rejects_non_integer_tokens_and_invalid_costs(usage: dict[str, object]) -> None:
     provider = OpenCodeDeepSeekFlashProvider(
         ProviderPolicy(max_attempts=1), lambda *args: completed({"output": payload(), "usage": usage}),
     )
-    with pytest.raises(ProviderFailure, match="non-negative integers"):
+    with pytest.raises(ProviderFailure, match="total_tokens|cost_usd"):
         provider.generate_challenge(request())
 
 

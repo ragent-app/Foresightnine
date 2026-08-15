@@ -462,12 +462,13 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
             tools = value.get("tools")
             if isinstance(tools, list) and any(tool_event(item) for item in tools):
                 return True
-            if value.get("type") in {"tool_call", "tool_use", "tool_result"} and tool_event(value):
+            if (
+                value.get("type") in {"tool_call", "tool_use", "tool_use.part", "tool_result"}
+                or isinstance(value.get("part"), dict) and "tool" in value["part"]
+            ) and tool_event(value):
                 return True
             search = value.get("search")
             if isinstance(search, dict) and search.get("status") in {"completed", "success"} and isinstance(search.get("results"), list) and bool(search["results"]):
-                return True
-            if value.get("type") == "tool_use" and tool_event(value):
                 return True
             return any(visit(child) for child in value.values() if isinstance(child, (dict, list)))
 
@@ -494,8 +495,10 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
         if not isinstance(usage, dict) or set(usage) != {"total_tokens", "cost_usd"}:
             raise ProviderFailure("invalid_provider_output", "Provider usage must contain only total_tokens and cost_usd.", retryable=False)
         tokens, cost = usage["total_tokens"], usage["cost_usd"]
-        if type(tokens) is not int or type(cost) is not int or tokens < 0 or cost < 0:
-            raise ProviderFailure("invalid_provider_output", "Provider usage must be non-negative integers.", retryable=False)
+        if type(tokens) is not int or tokens < 0:
+            raise ProviderFailure("invalid_provider_output", "Provider total_tokens must be a non-negative integer.", retryable=False)
+        if type(cost) not in {int, float} or not math.isfinite(float(cost)) or cost < 0:
+            raise ProviderFailure("invalid_provider_output", "Provider cost_usd must be a finite non-negative number.", retryable=False)
         return int(tokens), float(cost)
 
     def generate_challenge(self, request: ChallengeInput) -> ChallengeDraft:
