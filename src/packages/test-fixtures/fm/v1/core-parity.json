@@ -1,26 +1,264 @@
 {
   "fixture_version": "fm-v1",
+  "oracle": {
+    "mode": "copied_formula_reference",
+    "import_status": "not_persisted"
+  },
   "reference_sha256": {
     "fm_walk_forward.py": "00b84bbd3cccb8c01598edc541ac132c99c31705d24c6fc6cf84dbd3639b6163",
+    "combination.py": "3865b32237715d22d47e2c2b18582de8900efb7b831802f5371b440bc7da5414",
+    "portfolio.py": "a6286aa0ffbd87e7dbc5807dc9b2b444e8345511d711c2b550029642d75092bb",
     "metrics.py": "4e5c145ebb8e47911baddcc4bb169716a78408b3b780c00d603d9ff108c4e4d4",
-    "portfolio.py": "a6286aa0ffbd87e7dbc5807dc9b2b444e8345511d711c2b550029642d75092bb"
+    "backtest.py": "4b2bd0420ed1f0af0d819131033217146d767ccabc755bbfc9c3d92b7ff556a9",
+    "ASSETS.yaml": "fd2af322c5656c4360d0fc54292d3af510c6b14169f006c587f8ab3149097920"
   },
-  "inputs": {
-    "factors": [
-      {
-        "id": 10,
-        "ic_mean": 0.2,
-        "icir": 1.5,
-        "admitted": true,
-        "signal": [
-          3.0,
-          1.0,
-          1.0,
-          null,
-          5.0,
-          2.0
+  "orientation": {
+    "signals_returns": "M-by-T (assets x time) for metrics.py; rows are T observations of N assets for the client engine.",
+    "backtest": "T-by-N (time x assets) for backtest.py.",
+    "portfolio": "T-by-N forward returns/signals; ASSETS.yaml defines the 15 tradable asset universe."
+  },
+  "reference_cases": {
+    "combination.py": {
+      "input_shape_t_by_n": [
+        2,
+        5
+      ],
+      "equal_weight": {
+        "output": [
+          [
+            0.23050365736714928,
+            -1.0920554581175999,
+            -0.2016397831543608,
+            -0.1885753861942513,
+            1.2517669700990628
+          ],
+          [
+            -0.12304973322612445,
+            -0.7385020675243261,
+            0.5054669980321866,
+            -0.542128776787525,
+            0.898213579505789
+          ]
         ]
       },
+      "ic_weighted_positive": {
+        "ic": {
+          "first": 0.2,
+          "second": 0.1
+        },
+        "output": [
+          [
+            -0.16406631096816598,
+            -0.9846694233657682,
+            -0.2688530442058144,
+            -0.015731587863485934,
+            1.4333203664032346
+          ],
+          [
+            -0.3997685713636818,
+            -0.7489671629702525,
+            0.2025514765852173,
+            -0.2514338482590018,
+            1.1976181060077187
+          ]
+        ]
+      },
+      "ic_weighted_non_positive_fallback": {
+        "ic": {
+          "first": -0.2,
+          "second": 0.0
+        },
+        "output": [
+          [
+            0.23050365736714928,
+            -1.0920554581175999,
+            -0.2016397831543608,
+            -0.1885753861942513,
+            1.2517669700990628
+          ],
+          [
+            -0.12304973322612445,
+            -0.7385020675243261,
+            0.5054669980321866,
+            -0.542128776787525,
+            0.898213579505789
+          ]
+        ],
+        "fallback": "equal_weight"
+      },
+      "orthogonal": {
+        "output": [
+          [
+            0.21197061673121154,
+            -1.1070244524773956,
+            -0.2094806849618729,
+            -0.18216010289719592,
+            1.286694623605253
+          ],
+          [
+            -0.14158277386206214,
+            -0.753471061884122,
+            0.4976260962246746,
+            -0.5357134934904697,
+            0.9331412330119793
+          ]
+        ],
+        "output_shape_t_by_n": [
+          2,
+          5
+        ],
+        "empty_input": "reject"
+      }
+    },
+    "portfolio.py": {
+      "input_shape_t_by_n": [
+        2,
+        5
+      ],
+      "transaction_cost_bps": 3,
+      "quintile_period_returns": [
+        [
+          0.01,
+          0.02,
+          0.03,
+          0.04,
+          0.05
+        ],
+        [
+          0.05,
+          0.04,
+          0.03,
+          0.02,
+          0.01
+        ]
+      ],
+      "quintile_means": [
+        0.01,
+        0.02,
+        0.03,
+        0.04,
+        0.05
+      ],
+      "turnover_series": [
+        0.0,
+        1.0
+      ],
+      "avg_turnover": 0.5,
+      "ls_gross_series": [
+        0.04,
+        0.04
+      ],
+      "ls_net_series": [
+        0.04,
+        0.0394
+      ],
+      "ls_return": 0.0397,
+      "metrics": {
+        "ic_series": [
+          1.0,
+          -1.0
+        ],
+        "ic_mean": 0.0,
+        "icir": 0.0,
+        "ic_win_rate": 0.5,
+        "monotonicity": 1.0
+      },
+      "formula": "ls_net = ls_gross - 2 * (cost_bps / 10000) * turnover"
+    },
+    "backtest.py": {
+      "train_test_split": {
+        "T": 10,
+        "train_ratio": 0.7,
+        "split": {
+          "train_start": 0,
+          "train_end": 7,
+          "test_start": 7,
+          "test_end": 10
+        }
+      },
+      "rolling_splits": {
+        "T": 8,
+        "train_window": 3,
+        "test_window": 2,
+        "step": 2,
+        "splits": [
+          {
+            "train_start": 0,
+            "train_end": 3,
+            "test_start": 3,
+            "test_end": 5
+          },
+          {
+            "train_start": 2,
+            "train_end": 5,
+            "test_start": 5,
+            "test_end": 7
+          }
+        ]
+      },
+      "ic_stats": {
+        "series": [
+          0.2,
+          -0.1,
+          0.3
+        ],
+        "ic_mean": 0.13333333333333333,
+        "ic_std": 0.20816659994661327,
+        "icir": 0.6405126152203485,
+        "ic_win_rate": 0.6666666666666666,
+        "ic_max": 0.3,
+        "ic_min": -0.1
+      },
+      "typed_exclusion": "evaluation-only; computeFm consumes the walk-forward subset and does not expose backtest split execution"
+    },
+    "fm_walk_forward.py": {
+      "client_subset": [
+        "stable factor selection",
+        "rank-minus-0.5 combination",
+        "support-weighted composite",
+        "long-only z weights",
+        "forecast scaling",
+        "cutoff",
+        "3bps transfer",
+        "dead-band"
+      ]
+    },
+    "metrics.py": {
+      "client_subset": [
+        "M-by-T Spearman IC",
+        "NaN omission",
+        "sample ICIR with minimum three valid observations"
+      ]
+    },
+    "ASSETS.yaml": {
+      "client_subset": [
+        "tradable asset IDs",
+        "base-currency FX conversion",
+        "lot rounding",
+        "3bps",
+        "free initial allocation"
+      ]
+    }
+  },
+  "inputs": {
+    "cutoff": "2026-07-15",
+    "observations": [
+      {
+        "as_of": "2026-07-14",
+        "close": [
+          100.0,
+          100.0
+        ]
+      },
+      {
+        "as_of": "2026-07-15",
+        "close": [
+          100.0,
+          100.0
+        ]
+      }
+    ],
+    "factors": [
       {
         "id": 20,
         "ic_mean": -0.1,
@@ -33,6 +271,20 @@
           1.0,
           1.0,
           3.0
+        ]
+      },
+      {
+        "id": 10,
+        "ic_mean": 0.2,
+        "icir": 1.5,
+        "admitted": true,
+        "signal": [
+          3.0,
+          1.0,
+          1.0,
+          null,
+          5.0,
+          2.0
         ]
       },
       {
@@ -102,57 +354,74 @@
     "forecast_horizon": 1,
     "ic_signal_assets_by_time": [
       [
-        1.0,
-        2.0,
-        3.0
+        1,
+        2,
+        3
       ],
       [
-        2.0,
-        2.0,
-        1.0
+        2,
+        2,
+        1
       ],
       [
-        1.0,
+        1,
         null,
-        3.0
+        3
       ],
       [
-        4.0,
-        1.0,
-        2.0
+        4,
+        1,
+        2
       ],
       [
-        5.0,
-        3.0,
-        1.0
+        5,
+        3,
+        1
       ]
     ],
     "ic_returns_assets_by_time": [
       [
-        1.0,
-        2.0,
-        3.0
+        1,
+        2,
+        3
       ],
       [
-        3.0,
-        2.0,
-        1.0
+        3,
+        2,
+        1
       ],
       [
-        1.0,
+        1,
         null,
-        2.0
+        2
       ],
       [
-        1.0,
-        2.0,
-        4.0
+        1,
+        2,
+        4
       ],
       [
-        5.0,
-        4.0,
-        1.0
+        5,
+        4,
+        1
       ]
+    ],
+    "asset_registry_sample": [
+      {
+        "id": "USD",
+        "currency": "usd",
+        "fx_to_base": 1.0
+      },
+      {
+        "id": "JPY",
+        "currency": "jpy",
+        "fx_to_base": 0.5
+      },
+      {
+        "id": "EUR",
+        "currency": "eur",
+        "fx_to_base": 2.0
+      }
     ]
   },
   "expected": {
@@ -160,6 +429,11 @@
       10,
       20,
       30
+    ],
+    "stable_tie_selection_ids": [
+      77,
+      3,
+      42
     ],
     "top10_selection_ids": [
       110,
@@ -220,11 +494,11 @@
     "weights": {
       "z": [
         0.9246434481338203,
-        -1.4312973923167356,
+        -1.4312973923167354,
         -1.1273050258069865,
         0.5446529899966339,
         1.2286358146435694,
-        -0.1393298346503017
+        -0.13932983465030166
       ],
       "raw_weights": [
         0.2934532885871164,
@@ -236,6 +510,32 @@
       ],
       "fallback": false
     },
+    "fallback_all_invalid": {
+      "z": [
+        null,
+        null,
+        null
+      ],
+      "raw_weights": [
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333
+      ],
+      "fallback": true
+    },
+    "fallback_single_factor": {
+      "z": [
+        null,
+        null,
+        null
+      ],
+      "raw_weights": [
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333
+      ],
+      "fallback": true
+    },
     "forecast_scale": {
       "cross_sectional_volatility": [
         0.0,
@@ -246,11 +546,11 @@
     },
     "forecast": [
       0.0013869651722007307,
-      -0.002146946088475104,
+      -0.0021469460884751034,
       -0.00169095753871048,
       0.0008169794849949511,
       0.0018429537219653545,
-      -0.00020899475197545255
+      -0.00020899475197545253
     ],
     "metrics": {
       "ic_series": [
@@ -268,10 +568,17 @@
       "cost": 0.06000720086399998,
       "turnover": 0.20002400287999997
     },
+    "initial_allocation": {
+      "post_trade_nav": 1000.0,
+      "transferred": 1000.0,
+      "cost": 0.0,
+      "turnover": 0.0
+    },
     "deadband_equal": {
       "expected_gain": 0.00015,
       "cost": 0.00015,
-      "execute": false
+      "execute": false,
+      "strictly_above": true
     },
     "product_amounts": {
       "units": [

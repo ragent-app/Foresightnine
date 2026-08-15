@@ -117,6 +117,39 @@ Sol's independent Phase 2 re-review of commit 2d5cf57 returned FAIL: the PNG ver
 - corepack pnpm test: passed contracts, design-system, 4 FM parity tests, 4 domain tests, 2 registry tests and 20 API tests.
 # Progress
 
+# Phase 5 FM engine — implementation handoff — 2026-08-15
+
+### Delivered
+
+- Added the pure client `computeFm` orchestration API with intermediate factor
+  signals, selected IDs, combination/support, weights, forecast scale, forecasts,
+  metrics, rebalance/dead-band result, and explicit reasons. Every observation is
+  cutoff-checked before sorting/evaluation; future rows are rejected.
+- Corrected factor-quality ties to Python stable input ordering and retained NaN
+  support semantics, equal-weight fallback, free initial allocation, 3 bps default
+  subsequent transfer, strict dead-band comparison, FX conversion, lot rounding,
+  and canonical hashing.
+- Added the finite AST DSL and browser Worker adapter. Core source contains no
+  Node/DOM imports; the Android-sized test imports and executes the same package
+  entry with 15 assets.
+- Reworked the Python fixture generator to hash all six immutable references and to
+  emit null for non-finite values, input orientation, cutoff data, formula cases for
+  combination/portfolio/metrics/backtest, and the client-bound walk-forward/ASSETS
+  subsets. Import failure is visible and `--require-reference-import` is fail-closed;
+  normal `--check` is deterministic because transient exception text is not stored.
+- Added [ADR-006](architecture/ADR-006-fm-engine.md) with the formula mapping,
+  client-only boundary, Worker/Hermes compatibility, oracle mode, and limitations.
+
+### Verification evidence
+
+- `Set-Location D:\Foresightnine\src; uv run --project apps/api python scripts/fm/generate_oracle.py --check`: passed byte-identical fixture and all six hashes. The local environment reports `ModuleNotFoundError: No module named 'matplotlib'` and uses the documented copied-formula oracle mode.
+- `Set-Location D:\Foresightnine\src; corepack pnpm --filter @foresightnine/fm-engine typecheck`: passed.
+- `Set-Location D:\Foresightnine\src; corepack pnpm --filter @foresightnine/fm-engine test`: passed 12 tests, 0 failures, including Python parity, reference cases, AST rejection, cutoff, Worker, Android-sized smoke, fallback, 3 bps, dead-band, FX, and lot checks.
+
+Workspace and phase gates remain to be run in the primary session before the Phase
+5 commit. Full reference-package import remains unavailable in the current minimal
+`uv` environment; this is the only known oracle limitation.
+
 ## Phase 2 reviewer corrections complete — 2026-08-10
 
 ### Delivered

@@ -48,7 +48,9 @@ export function selectFactors(factors: readonly FactorDescriptor[], maximum = 10
   return factors.filter((factor) => factor.admitted).slice().sort((left, right) => {
     const leftQuality = Math.abs(left.icMean) * Math.abs(left.icir);
     const rightQuality = Math.abs(right.icMean) * Math.abs(right.icir);
-    return rightQuality - leftQuality || left.id - right.id;
+    // Python's ``sorted(..., reverse=True)`` is stable: equal-quality factors
+    // retain library/input order.  Do not use factor IDs as a hidden tie-breaker.
+    return rightQuality - leftQuality;
   }).slice(0, maximum);
 }
 
@@ -62,6 +64,7 @@ export function combineLastSignals(factors: readonly FactorDescriptor[]): Combin
   const qualityWeights = new Map<number, number>();
   const usedFactorIds: number[] = [];
   for (const factor of factors) {
+    if (!finite(factor.icMean) || !finite(factor.icir)) continue;
     let valid = 0;
     for (const value of factor.signal) if (finite(value)) valid += 1;
     if (valid < 2) continue;
@@ -88,7 +91,7 @@ export function rawLongOnlyWeights(combined: Float64Array, kappa = 1): WeightRes
   if (!finite(kappa)) throw new RangeError("kappa must be finite");
   const eligible: number[] = [];
   for (let index = 0; index < combined.length; index += 1) if (finite(combined[index]!)) eligible.push(index);
-  const equal = (): WeightResult => ({ z: new Float64Array(combined.length).fill(Number.NaN), weights: Float64Array.from({ length: combined.length }, () => 1 / combined.length), fallback: true });
+  const equal = (z = new Float64Array(combined.length).fill(Number.NaN)): WeightResult => ({ z, weights: Float64Array.from({ length: combined.length }, () => combined.length === 0 ? 0 : 1 / combined.length), fallback: true });
   if (combined.length === 0 || eligible.length < 2) return equal();
   const values = eligible.map((index) => combined[index]!);
   const average = mean(values);
@@ -102,7 +105,7 @@ export function rawLongOnlyWeights(combined: Float64Array, kappa = 1): WeightRes
   }
   let total = 0;
   for (const weight of weights) total += weight;
-  if (total <= 1e-12) return equal();
+  if (total <= 1e-12) return equal(z);
   for (let index = 0; index < weights.length; index += 1) weights[index] = weights[index]! / total;
   return { z, weights, fallback: false };
 }
@@ -235,3 +238,7 @@ export function sha256Hex(text: string): string {
   for (let offset=0; offset<bytes.length; offset+=64) { const w=new Uint32Array(64); for(let i=0;i<16;i+=1) w[i]=(bytes[offset+i*4]!<<24)|(bytes[offset+i*4+1]!<<16)|(bytes[offset+i*4+2]!<<8)|bytes[offset+i*4+3]!; for(let i=16;i<64;i+=1){const a=rotr(w[i-15]!,7)^rotr(w[i-15]!,18)^(w[i-15]!>>>3),b=rotr(w[i-2]!,17)^rotr(w[i-2]!,19)^(w[i-2]!>>>10);w[i]=(((w[i-16]!+a)>>>0)+((w[i-7]!+b)>>>0))>>>0;} let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7; for(let i=0;i<64;i+=1){const s1=rotr(e,6)^rotr(e,11)^rotr(e,25),ch=(e&f)^(~e&g),t1=(((h+s1)>>>0)+((ch+k[i]!)>>>0)+w[i]!)>>>0,s0=rotr(a,2)^rotr(a,13)^rotr(a,22),maj=(a&b)^(a&c)^(b&c),t2=(s0+maj)>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}h0=(h0+a)>>>0;h1=(h1+b)>>>0;h2=(h2+c)>>>0;h3=(h3+d)>>>0;h4=(h4+e)>>>0;h5=(h5+f)>>>0;h6=(h6+g)>>>0;h7=(h7+h)>>>0; }
   return [h0,h1,h2,h3,h4,h5,h6,h7].map((value)=>value.toString(16).padStart(8,"0")).join("");
 }
+
+export * from "./ast.js";
+export * from "./orchestration.js";
+export * from "./worker.js";
