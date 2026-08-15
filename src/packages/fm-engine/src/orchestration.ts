@@ -25,13 +25,18 @@ export interface FactorExpression {
   readonly expression: FactorAst;
 }
 
+export interface ForwardReturnObservation {
+  readonly asOf: string;
+  readonly values: readonly (number | null)[];
+}
+
 export interface ComputeFmInput {
   readonly cutoff: string;
   readonly observations: readonly FactorObservation[];
   readonly factors: readonly FactorExpression[];
   readonly maxFactors?: number;
   readonly forecastHorizon?: number;
-  readonly forwardReturns?: readonly (readonly (number | null)[])[];
+  readonly forwardReturns?: readonly ForwardReturnObservation[];
   readonly currentValues?: Float64Array;
   readonly initialAllocation?: boolean;
   readonly costBps?: number;
@@ -74,7 +79,7 @@ function returnsMatrix(forwardReturns: ComputeFmInput["forwardReturns"], order: 
   if (forwardReturns === undefined) return null;
   if (forwardReturns.length !== order.length) throw new RangeError("forwardReturns must align with observations");
   return order.map((originalIndex) => {
-    const row = forwardReturns[originalIndex]!;
+    const row = forwardReturns[originalIndex]!.values;
     if (row.length !== width) throw new RangeError("forwardReturns must share the asset width");
     return Float64Array.from(row, (value) => value === null || !Number.isFinite(value) ? Number.NaN : value);
   });
@@ -85,6 +90,14 @@ export function computeFm(input: ComputeFmInput): ComputeFmResult {
   if (input.observations.length === 0) throw new RangeError("observations must not be empty");
   assertCutoff(input.cutoff, input.observations[0]!.asOf);
   for (const observation of input.observations) assertCutoff(input.cutoff, observation.asOf);
+  if (input.forwardReturns !== undefined) {
+    if (input.forwardReturns.length !== input.observations.length) throw new RangeError("forwardReturns must align with observations");
+    for (let index = 0; index < input.forwardReturns.length; index += 1) {
+      const forward = input.forwardReturns[index]!;
+      assertCutoff(input.cutoff, forward.asOf);
+      if (Date.parse(forward.asOf) !== Date.parse(input.observations[index]!.asOf)) throw new RangeError("forwardReturns asOf must match its observation asOf");
+    }
+  }
   const indexed = input.observations.map((observation, index) => ({ observation, index }));
   indexed.sort((left, right) => Date.parse(left.observation.asOf) - Date.parse(right.observation.asOf));
   const ordered = indexed.map((entry) => entry.observation);
@@ -112,7 +125,9 @@ export function computeFm(input: ComputeFmInput): ComputeFmResult {
   const scale = closeRows[0]!.length === width && closeRows.length > (input.forecastHorizon ?? 1)
     ? forecastScale(closeRows, input.forecastHorizon ?? 1)
     : { crossSectionalVolatility: new Float64Array(), returnScale: 0.01 };
-  const forecast = forecasts(combination.combined, selected, scale.returnScale);
+  const usedFactorIds = new Set(combination.usedFactorIds);
+  const usedFactors = selected.filter((factor) => usedFactorIds.has(factor.id));
+  const forecast = forecasts(combination.combined, usedFactors, scale.returnScale);
   const returns = returnsMatrix(input.forwardReturns, order, width);
   let metrics: ComputeFmResult["metrics"] = null;
   if (returns !== null && selected.length > 0) {

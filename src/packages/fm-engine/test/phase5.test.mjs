@@ -7,10 +7,11 @@ import {
 const fixture = JSON.parse(readFileSync(new URL("../../test-fixtures/fm/v1/core-parity.json", import.meta.url), "utf8"));
 
 const rows = [
-  { asOf: "2026-07-13", fields: { alpha: [1, 2, 3], beta: [3, 2, 1], close: [100, 200, 300] } },
-  { asOf: "2026-07-14", fields: { alpha: [2, 3, 4], beta: [2, 3, 4], close: [101, 198, 303] } },
-  { asOf: "2026-07-15", fields: { alpha: [3, null, 5], beta: [1, 4, 2], close: [102, 201, 306] } },
+  { asOf: "2026-07-13", fields: { alpha: [1, 2, 3], beta: [3, 2, 1], invalid: [null, null, null], close: [100, 200, 300] } },
+  { asOf: "2026-07-14", fields: { alpha: [2, 3, 4], beta: [2, 3, 4], invalid: [null, null, null], close: [101, 198, 303] } },
+  { asOf: "2026-07-15", fields: { alpha: [3, null, 5], beta: [1, 4, 2], invalid: [null, null, null], close: [102, 201, 306] } },
 ];
+const forwardReturns = rows.map((row) => ({ asOf: row.asOf, values: [0.01, -0.01, 0.02] }));
 
 test("Python stable factor-selection ties retain non-ID input order", () => {
   const selected = selectFactors([
@@ -18,6 +19,16 @@ test("Python stable factor-selection ties retain non-ID input order", () => {
     { id: 3, icMean: 0.2, icir: 1, admitted: true, signal: new Float64Array([1, 2]) },
   ]);
   assert.deepEqual(selected.map((factor) => factor.id), [77, 3]);
+});
+
+test("selection skips non-finite quality before maxFactors truncation", () => {
+  const selected = selectFactors([
+    { id: 999, icMean: Number.NaN, icir: 100, admitted: true, signal: new Float64Array([1, 2]) },
+    { id: 998, icMean: 100, icir: Number.POSITIVE_INFINITY, admitted: true, signal: new Float64Array([1, 2]) },
+    { id: 77, icMean: 0.2, icir: 1, admitted: true, signal: new Float64Array([1, 2]) },
+  ], 1);
+  assert.deepEqual(selected.map((factor) => factor.id), [77]);
+  assert.deepEqual(Array.from(rawLongOnlyWeights(new Float64Array([Number.NaN, Number.NaN])).weights), [0.5, 0.5]);
 });
 
 test("golden fixture visibly covers the six mapped reference subsets", () => {
@@ -52,7 +63,7 @@ test("computeFm is cutoff-aware, returns intermediates, and keeps initial cost f
       { id: 10, icMean: 0.2, icir: 1, admitted: true, expression: { op: "field", name: "alpha" } },
       { id: 20, icMean: -0.1, icir: 2, admitted: true, expression: { op: "abs", input: { op: "field", name: "beta" } } },
     ],
-    forwardReturns: rows.map(() => [0.01, -0.01, 0.02]),
+    forwardReturns,
     currentValues: new Float64Array([100, 100, 100]),
     initialAllocation: true,
   });
@@ -63,6 +74,23 @@ test("computeFm is cutoff-aware, returns intermediates, and keeps initial cost f
   assert.ok(result.reasons.includes("initial_allocation_free"));
   assert.throws(() => computeFm({ ...({ cutoff: "2026-07-15", observations: [...rows, { asOf: "2026-07-16", fields: rows[0].fields }], factors: [] }) }), /future_data_rejected/);
   assert.throws(() => computeFm({ cutoff: "2026-07-15", observations: rows, factors: [], currentValues: new Float64Array([0, 0, 0]) }), /positive NAV/);
+  assert.throws(() => computeFm({ cutoff: "2026-07-15", observations: rows, factors: [], forwardReturns: [...forwardReturns.slice(0, 2), { asOf: "2026-07-16", values: [0.01, -0.01, 0.02] }] }), /future_data_rejected/);
+  assert.throws(() => computeFm({ cutoff: "2026-07-15", observations: rows, factors: [], forwardReturns: [...forwardReturns.slice(0, 2), { asOf: "2026-07-14", values: [0.01, -0.01, 0.02] }] }), /must match its observation asOf/);
+});
+
+test("forecasts use only factors that contributed and do not alter dead-band", () => {
+  const common = { cutoff: "2026-07-15", observations: rows, currentValues: new Float64Array([100, 100, 100]), forwardReturns };
+  const withUnusedSelected = computeFm({ ...common, factors: [
+    { id: 2, icMean: 0.9, icir: 2, admitted: true, expression: { op: "field", name: "invalid" } },
+    { id: 1, icMean: 0.2, icir: 1, admitted: true, expression: { op: "field", name: "alpha" } },
+  ] });
+  const onlyUsed = computeFm({ ...common, factors: [
+    { id: 1, icMean: 0.2, icir: 1, admitted: true, expression: { op: "field", name: "alpha" } },
+  ] });
+  assert.deepEqual(withUnusedSelected.selectedFactorIds, [2, 1]);
+  assert.deepEqual(withUnusedSelected.combination.usedFactorIds, [1]);
+  assert.deepEqual(Array.from(withUnusedSelected.forecasts), Array.from(onlyUsed.forecasts));
+  assert.deepEqual(withUnusedSelected.deadband, onlyUsed.deadband);
 });
 
 test("dead-band is equality-closed and strictly-above", () => {

@@ -45,7 +45,9 @@ export function pandasPercentRank(values: Float64Array): Float64Array {
 /** Admission is supplied by factor-library metadata; this function never hardcodes thresholds. */
 export function selectFactors(factors: readonly FactorDescriptor[], maximum = 10): readonly FactorDescriptor[] {
   if (!Number.isInteger(maximum) || maximum < 1) throw new RangeError("maximum must be a positive integer");
-  return factors.filter((factor) => factor.admitted).slice().sort((left, right) => {
+  // Non-finite quality metadata cannot establish admission.  Skip it before
+  // truncation so an invalid factor cannot consume the maxFactors boundary.
+  return factors.filter((factor) => factor.admitted && finite(factor.icMean) && finite(factor.icir)).slice().sort((left, right) => {
     const leftQuality = Math.abs(left.icMean) * Math.abs(left.icir);
     const rightQuality = Math.abs(right.icMean) * Math.abs(right.icir);
     // Python's ``sorted(..., reverse=True)`` is stable: equal-quality factors

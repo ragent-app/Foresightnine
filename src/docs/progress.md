@@ -119,6 +119,19 @@ Sol's independent Phase 2 re-review of commit 2d5cf57 returned FAIL: the PNG ver
 
 # Phase 5 FM engine — implementation handoff — 2026-08-15
 
+### Sol P1 remediation in progress
+
+- Corrected forecast scaling to average `|IC|` only over factor IDs that actually
+  contributed to the support-weighted composite; added a regression proving an
+  unused selected factor cannot change forecast values or dead-band decisions.
+- Changed `forwardReturns` to typed `{asOf, values}` rows. Every row must align to
+  its observation timestamp and be no later than `cutoff`; future and mismatched
+  rows fail closed before metrics evaluation. Plain `number[][]` is no longer part
+  of the TypeScript contract and is rejected at runtime as malformed input.
+- Selection now skips non-finite `icMean`/`icir` metadata before `maxFactors`
+  truncation; NaN/Infinity-only inputs retain explicit equal-weight fallback while
+  stable finite-quality ties remain input ordered.
+
 ### Delivered
 
 - Added the pure client `computeFm` orchestration API with intermediate factor

@@ -11,6 +11,12 @@ market/factor snapshot, rejects observations whose `asOf` is after the computati
 does not call FastAPI, read files, read credentials, or calculate a user portfolio
 on the server.
 
+Forward returns are not an unlabelled `number[][]`. `ComputeFmInput` requires one
+`ForwardReturnObservation { asOf, values }` per market observation; each return
+timestamp must exactly match its paired observation timestamp and must be no later
+than `cutoff`. This prevents a caller from bypassing the future-data boundary and
+ensures metrics are computed only from the cutoff-approved ordered rows.
+
 The public orchestration entry point is `computeFm`. Factor expressions are a finite
 discriminated-union AST: `field`, `constant`, `add`, `sub`, `mul`, `div`, `neg`,
 `abs`, `rank`, `rolling_mean`, and `rolling_std`. Runtime validation rejects
@@ -46,6 +52,9 @@ The engine preserves NaN as missing rather than converting missing signal suppor
 neutral zero. All-invalid and insufficient-support composites explicitly fall back
 to equal weights and return reasons. Factor quality ties retain input/library order,
 matching Python stable sorting rather than using factor ID as a tie-breaker.
+Non-finite `icMean` or `icir` metadata is skipped before `maxFactors` truncation, so
+an invalid factor cannot consume an admission slot or prevent the explicit
+equal-weight fallback.
 
 ## Oracle and verification
 
