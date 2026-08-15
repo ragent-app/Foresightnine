@@ -66,10 +66,54 @@ def test_phase4_unknown_provider_output_fails_closed(monkeypatch: pytest.MonkeyP
             }),
         ),
         (
+            "thesis-premise",
+            lambda bundle: bundle.model_copy(update={
+                "worldlines": [bundle.worldlines[0].model_copy(update={"premise": "typed provider rewrite"}), *bundle.worldlines[1:]],
+            }),
+        ),
+        (
+            "baseline",
+            lambda bundle: bundle.model_copy(update={
+                "worldlines": [bundle.worldlines[0].model_copy(update={"baseline_date": bundle.worldlines[0].baseline_date - timedelta(days=1)}), *bundle.worldlines[1:]],
+            }),
+        ),
+        (
+            "horizon",
+            lambda bundle: bundle.model_copy(update={
+                "worldlines": [bundle.worldlines[0].model_copy(update={"horizon_end": bundle.worldlines[0].horizon_end - timedelta(days=1)}), *bundle.worldlines[1:]],
+            }),
+        ),
+        (
             "asset-impact-schema",
             lambda bundle: bundle.model_copy(update={
                 "worldlines": [bundle.worldlines[0].model_copy(update={
                     "asset_impacts": [bundle.worldlines[0].asset_impacts[0].model_copy(update={"already_priced_score": 5})],
+                }), *bundle.worldlines[1:]],
+            }),
+        ),
+        (
+            "causal-parent-edge",
+            lambda bundle: bundle.model_copy(update={
+                "worldlines": [bundle.worldlines[0].model_copy(update={
+                    "nodes": [bundle.worldlines[0].nodes[0], bundle.worldlines[0].nodes[1].model_copy(update={"causal_parents": []})],
+                }), *bundle.worldlines[1:]],
+            }),
+        ),
+        (
+            "schedule-coverage",
+            lambda bundle: bundle.model_copy(update={
+                "worldlines": [bundle.worldlines[0].model_copy(update={
+                    "event_reveal_schedule": [bundle.worldlines[0].event_reveal_schedule[1]],
+                }), *bundle.worldlines[1:]],
+            }),
+        ),
+        (
+            "schedule-event-date",
+            lambda bundle: bundle.model_copy(update={
+                "worldlines": [bundle.worldlines[0].model_copy(update={
+                    "event_reveal_schedule": [bundle.worldlines[0].event_reveal_schedule[0].model_copy(update={
+                        "event_date": bundle.worldlines[0].horizon_end,
+                    }), bundle.worldlines[0].event_reveal_schedule[1]],
                 }), *bundle.worldlines[1:]],
             }),
         ),

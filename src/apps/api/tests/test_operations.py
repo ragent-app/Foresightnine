@@ -63,6 +63,39 @@ def test_provider_failure_and_resume_never_resubmit_without_provider_charge_rece
     assert [event.sequence for event in manager.events_after(operation.operation_id, f"{operation.operation_id}:4")] == []
 
 
+def test_execute_unknown_provider_exception_fails_terminal_and_replays_without_waiting() -> None:
+    manager = OperationManager(FixedClock())
+    response_type = create_model("UnknownFailureResponse", operation=(object, ...), value=(object, ...))
+    attempts = 0
+
+    def build(operation_id: str) -> tuple[BaseModel, str]:
+        nonlocal attempts
+        attempts += 1
+        raise ValueError("sensitive provider implementation detail")
+
+    with pytest.raises(ApiProblem) as failed:
+        manager.execute(
+            endpoint="/v1/worldlines", idempotency_key="unknown-provider-exception-key",
+            request_payload={"challenge_id": "challenge:one"}, response_model=response_type,
+            result_field="value", build_result=build,
+        )
+    operation = next(iter(manager.operations.values()))
+    assert failed.value.status_code == 500 and failed.value.error_code == "internal_error"
+    assert "sensitive provider" not in failed.value.message
+    assert operation.status == "failed"
+    assert manager.events[operation.operation_id][-1].event == "operation.error"
+    assert operation.operation_id not in manager._pending_provider_executions
+    assert not manager._single_flight
+
+    with pytest.raises(ApiProblem) as replayed:
+        manager.execute(
+            endpoint="/v1/worldlines", idempotency_key="unknown-provider-exception-key",
+            request_payload={"challenge_id": "challenge:one"}, response_model=response_type,
+            result_field="value", build_result=lambda operation_id: (_ for _ in ()).throw(AssertionError("replay must not invoke provider")),
+        )
+    assert replayed.value.status_code == 500 and attempts == 1
+
+
 def test_execute_registers_live_cancel_event_and_resume_never_retries_submission() -> None:
     manager = OperationManager(FixedClock())
     payload_type = create_model("CancelledPayload", content_hash=(str, ...))

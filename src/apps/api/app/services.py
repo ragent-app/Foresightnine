@@ -89,6 +89,7 @@ def validate_worldline_bundle_semantics(payload: BaseModel) -> None:
         if len(nodes) != len(worldline["nodes"]):
             raise ContractViolation("Worldline", ["node_id values must be unique"])
         children: dict[str, list[str]] = {node_id: [] for node_id in nodes}
+        incoming: dict[str, set[str]] = {node_id: set() for node_id in nodes}
         for edge in worldline["edges"]:
             source, target = edge["from_node_id"], edge["to_node_id"]
             if source not in nodes or target not in nodes:
@@ -96,6 +97,7 @@ def validate_worldline_bundle_semantics(payload: BaseModel) -> None:
             if nodes[source]["event_date"] > nodes[target]["event_date"]:
                 raise ContractViolation("Worldline", ["edge event dates must be monotonic"])
             children[source].append(target)
+            incoming[target].add(source)
         visiting: set[str] = set()
         visited: set[str] = set()
         def visit(node_id: str) -> None:
@@ -113,11 +115,24 @@ def validate_worldline_bundle_semantics(payload: BaseModel) -> None:
                 raise ContractViolation("Worldline", ["node event_date must be within baseline/horizon"])
             if node["data_as_of"] > baseline or node["data_as_of"] > node["event_date"]:
                 raise ContractViolation("Worldline", ["node data_as_of must not reference future data"])
+            parents = set(node["causal_parents"])
+            if not parents.issubset(nodes):
+                raise ContractViolation("Worldline", ["causal_parents must refer only to declared nodes"])
+            if parents != incoming[node_id]:
+                raise ContractViolation("Worldline", ["causal_parents must match graph incoming edges"])
             visit(node_id)
-        scheduled = {event["event_id"] for event in worldline["event_reveal_schedule"]}
-        if not scheduled.issubset(nodes):
-            raise ContractViolation("Worldline", ["reveal schedule must refer to declared nodes"])
-        for event in worldline["event_reveal_schedule"]:
+        schedule = worldline["event_reveal_schedule"]
+        if not schedule:
+            raise ContractViolation("Worldline", ["event_reveal_schedule must not be empty"])
+        scheduled = {event["event_id"] for event in schedule}
+        if len(scheduled) != len(schedule):
+            raise ContractViolation("Worldline", ["event_reveal_schedule must contain one rule per node"])
+        if scheduled != set(nodes):
+            raise ContractViolation("Worldline", ["event_reveal_schedule must contain every declared node exactly once"])
+        for event in schedule:
+            if event["event_date"] != nodes[event["event_id"]]["event_date"]:
+                raise ContractViolation("Worldline", ["reveal schedule event_date must match the referenced node"])
+        for event in schedule:
             if not baseline <= event["event_date"] <= horizon or not baseline <= event["reveal_date"] <= horizon:
                 raise ContractViolation("Worldline", ["event and reveal dates must remain within baseline/horizon"])
             if event["rule"] in {"scheduled", "observed"} and event["reveal_date"] < event["event_date"]:

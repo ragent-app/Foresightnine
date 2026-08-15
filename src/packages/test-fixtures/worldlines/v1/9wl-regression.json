@@ -1,23 +1,114 @@
 {
-  "fixture_version": "v1",
-  "source": "Minimal scenario titles and trigger timing copied from the read-only WL-data-final wordline-md set; probabilities are deterministic test inputs, not forecasts.",
+  "fixture_version": "v2",
+  "disclaimer": "This is an auditable deterministic regression fixture, not a forecast. Titles and triggers are copied from the read-only WL-data-final narratives; branch alternatives and probability inputs are deliberately synthetic test structure.",
   "baseline_date": "2026-07-17",
-  "premise_probability": { "scalar": 0.2, "range": [0.15, 0.25] },
-  "expected_branch_structure": ["weak", "main", "strong"],
-  "expected_probabilities": {
+  "event_date_rule": "event_date is the deterministic first-day normalization of the narrative's stage-two trigger period; news_date is copied from the matching stage-news record. A reveal earlier than event_date is explicitly marked leak.",
+  "probability_inputs": {
+    "premise": { "scalar": 0.2, "range": [0.15, 0.25] },
     "weak": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] },
     "main": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] },
     "strong": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] }
   },
   "worldlines": [
-    { "id": "WL1", "title": "Taiwan Strait limited-unification shock", "trigger": "Pescadores collision then rapid escalation", "event_date": "2028-04-01", "reveal_date": "2028-04-01", "rule": "observed", "horizon_end": "2035-12-31" },
-    { "id": "WL2", "title": "US-China technology-system split", "trigger": "Internet and financial-technology separation", "event_date": "2028-06-01", "reveal_date": "2028-06-01", "rule": "observed", "horizon_end": "2035-12-31" },
-    { "id": "WL3", "title": "Korean Peninsula succession crisis", "trigger": "Seventh nuclear test and conventional conflict", "event_date": "2028-06-01", "reveal_date": "2028-06-01", "rule": "observed", "horizon_end": "2035-12-31" },
-    { "id": "WL4", "title": "US Treasury Minsky moment", "trigger": "Seven-year Treasury auction failure", "event_date": "2029-04-01", "reveal_date": "2029-04-01", "rule": "scheduled", "horizon_end": "2035-12-31" },
-    { "id": "WL5", "title": "Japanese-yen depreciation spiral", "trigger": "Bank of Japan control failure", "event_date": "2028-07-01", "reveal_date": "2028-07-01", "rule": "observed", "horizon_end": "2035-12-31" },
-    { "id": "WL6", "title": "Central-bank credibility collapse", "trigger": "Inflation expectations de-anchor", "event_date": "2028-01-01", "reveal_date": "2028-01-01", "rule": "observed", "horizon_end": "2035-12-31" },
-    { "id": "WL7", "title": "AI algorithmic deleveraging", "trigger": "Strategy crowding and forced selling", "event_date": "2029-01-01", "reveal_date": "2029-01-01", "rule": "observed", "horizon_end": "2035-12-31" },
-    { "id": "WL8", "title": "Global energy-system disruption", "trigger": "Hormuz shipping blockade", "event_date": "2028-01-01", "reveal_date": "2028-01-01", "rule": "observed", "horizon_end": "2035-12-31" },
-    { "id": "WL9", "title": "Novel-pandemic supply-chain reset", "trigger": "XPV-27 discovery", "event_date": "2028-01-01", "reveal_date": "2028-01-01", "rule": "observed", "horizon_end": "2035-12-31" }
+    {
+      "id": "WL1",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline1.md", "sha256": "07d78d7df4a02388737513402d4a7dc778e1bc89a8ad609f97e752a2272ea096" }, "stage_news": { "path": "D:/WL-data-final/news/WL1_stage_news.json", "sha256": "c02d69361a9344bd54d51d6b46cbf651cdefc5df410505f27985b65374847e40" } },
+      "title": "台海\"有限统一\"",
+      "trigger": "2028.3 澎湖碰撞 → 2028.4 闪电战",
+      "event_date": "2028-03-01", "news_date": "2028-02-22", "reveal_date": "2028-02-22", "rule": "leak", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL1:weak", "kind": "weak", "title": "台海\"有限统一\" — weak deterministic regression branch", "trigger": "2028.3 澎湖碰撞 → 2028.4 闪电战", "event_date": "2028-03-01", "reveal_date": "2028-02-22", "rule": "leak", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL1:main", "kind": "main", "title": "台海\"有限统一\" — main deterministic regression branch", "trigger": "2028.3 澎湖碰撞 → 2028.4 闪电战", "event_date": "2028-03-01", "reveal_date": "2028-02-22", "rule": "leak", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL1:strong", "kind": "strong", "title": "台海\"有限统一\" — strong deterministic regression branch", "trigger": "2028.3 澎湖碰撞 → 2028.4 闪电战", "event_date": "2028-03-01", "reveal_date": "2028-02-22", "rule": "leak", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL2",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline2.md", "sha256": "8e9fccba0c5ed6e928688aadfb03ceea0199c9842db709a63d98541735fd4448" }, "stage_news": { "path": "D:/WL-data-final/news/WL2_stage_news.json", "sha256": "4d65a9b2c669be2a2465ecb2b5ecbba8630e25aad5226149775dfa0635f72cc9" } },
+      "title": "中美科技冷战", "trigger": "互联网/金融科技体系分裂",
+      "event_date": "2028-01-01", "news_date": "2028-09-12", "reveal_date": "2028-09-12", "rule": "observed", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL2:weak", "kind": "weak", "title": "中美科技冷战 — weak deterministic regression branch", "trigger": "互联网/金融科技体系分裂", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL2:main", "kind": "main", "title": "中美科技冷战 — main deterministic regression branch", "trigger": "互联网/金融科技体系分裂", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL2:strong", "kind": "strong", "title": "中美科技冷战 — strong deterministic regression branch", "trigger": "互联网/金融科技体系分裂", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL3",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline3.md", "sha256": "2111a50cf87f323bc15ddf5a2f0956255e3cd8dc51af133bd985430a01934d18" }, "stage_news": { "path": "D:/WL-data-final/news/WL3_stage_news.json", "sha256": "a46c6259528e11cb03aa6c961ce938b05bd37bae67557c94eba1cf73dd8ab8d6" } },
+      "title": "朝鲜半岛核危机", "trigger": "2028.5 朝鲜第七次核试验 → 2028.6 常规冲突",
+      "event_date": "2028-05-01", "news_date": "2028-03-04", "reveal_date": "2028-03-04", "rule": "leak", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL3:weak", "kind": "weak", "title": "朝鲜半岛核危机 — weak deterministic regression branch", "trigger": "2028.5 朝鲜第七次核试验 → 2028.6 常规冲突", "event_date": "2028-05-01", "reveal_date": "2028-03-04", "rule": "leak", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL3:main", "kind": "main", "title": "朝鲜半岛核危机 — main deterministic regression branch", "trigger": "2028.5 朝鲜第七次核试验 → 2028.6 常规冲突", "event_date": "2028-05-01", "reveal_date": "2028-03-04", "rule": "leak", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL3:strong", "kind": "strong", "title": "朝鲜半岛核危机 — strong deterministic regression branch", "trigger": "2028.5 朝鲜第七次核试验 → 2028.6 常规冲突", "event_date": "2028-05-01", "reveal_date": "2028-03-04", "rule": "leak", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL4",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline4.md", "sha256": "2b12047e2967bb2e7cdb807e5560d722ec5c6a8882c9f7691878fa837ae1b95f" }, "stage_news": { "path": "D:/WL-data-final/news/WL4_stage_news.json", "sha256": "600f5ceeae5e4eb8b317ccea45b2f4d69d359141441adfd6a8c1d910ce218839" } },
+      "title": "美债\"明斯基时刻\"", "trigger": "2029.Q2 7年期国债拍卖流标",
+      "event_date": "2029-04-01", "news_date": "2028-09-12", "reveal_date": "2028-09-12", "rule": "leak", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL4:weak", "kind": "weak", "title": "美债\"明斯基时刻\" — weak deterministic regression branch", "trigger": "2029.Q2 7年期国债拍卖流标", "event_date": "2029-04-01", "reveal_date": "2028-09-12", "rule": "leak", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL4:main", "kind": "main", "title": "美债\"明斯基时刻\" — main deterministic regression branch", "trigger": "2029.Q2 7年期国债拍卖流标", "event_date": "2029-04-01", "reveal_date": "2028-09-12", "rule": "leak", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL4:strong", "kind": "strong", "title": "美债\"明斯基时刻\" — strong deterministic regression branch", "trigger": "2029.Q2 7年期国债拍卖流标", "event_date": "2029-04-01", "reveal_date": "2028-09-12", "rule": "leak", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL5",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline5.md", "sha256": "03dba4e0b617cb7eb54a9e6b11a638d1b4fa8c1d6afc825afca559a350996f88" }, "stage_news": { "path": "D:/WL-data-final/news/WL5_stage_news.json", "sha256": "44c8442ce98a7a0b448ce8297e9dd64330f332ae39ef9dd706b4536b805e289b" } },
+      "title": "日本债务危机", "trigger": "日本央行失控→日元恶性贬值螺旋",
+      "event_date": "2028-01-01", "news_date": "2028-09-12", "reveal_date": "2028-09-12", "rule": "observed", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL5:weak", "kind": "weak", "title": "日本债务危机 — weak deterministic regression branch", "trigger": "日本央行失控→日元恶性贬值螺旋", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL5:main", "kind": "main", "title": "日本债务危机 — main deterministic regression branch", "trigger": "日本央行失控→日元恶性贬值螺旋", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL5:strong", "kind": "strong", "title": "日本债务危机 — strong deterministic regression branch", "trigger": "日本央行失控→日元恶性贬值螺旋", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL6",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline6.md", "sha256": "64d5f05eb1e875b76ec2ab268120e8920357043da0961e924aa5fed370b6dc6f" }, "stage_news": { "path": "D:/WL-data-final/news/WL6_stage_news.json", "sha256": "74c6a14626ee851bcbb4d62ceef193ceb00b6ecb60bf1f77a10239cf20a08c28" } },
+      "title": "全球滞胀固化", "trigger": "1970年代式供给侧通胀+央行信用崩塌",
+      "event_date": "2028-01-01", "news_date": "2028-09-12", "reveal_date": "2028-09-12", "rule": "observed", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL6:weak", "kind": "weak", "title": "全球滞胀固化 — weak deterministic regression branch", "trigger": "1970年代式供给侧通胀+央行信用崩塌", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL6:main", "kind": "main", "title": "全球滞胀固化 — main deterministic regression branch", "trigger": "1970年代式供给侧通胀+央行信用崩塌", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL6:strong", "kind": "strong", "title": "全球滞胀固化 — strong deterministic regression branch", "trigger": "1970年代式供给侧通胀+央行信用崩塌", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL7",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline7.md", "sha256": "60a7628eaa3f03764772469b3bebf68a78f40547d3782cf717b02e0d3755b643" }, "stage_news": { "path": "D:/WL-data-final/news/WL7_stage_news.json", "sha256": "f8bc9b9f62bdf9bb447f332852efd7b8059564f18a4cc5fae41f111754a036dc" } },
+      "title": "AI算法挤兑", "trigger": "2029.H1 AI策略同质化→量化共振→闪电崩盘",
+      "event_date": "2029-01-01", "news_date": "2028-07-09", "reveal_date": "2028-07-09", "rule": "leak", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL7:weak", "kind": "weak", "title": "AI算法挤兑 — weak deterministic regression branch", "trigger": "2029.H1 AI策略同质化→量化共振→闪电崩盘", "event_date": "2029-01-01", "reveal_date": "2028-07-09", "rule": "leak", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL7:main", "kind": "main", "title": "AI算法挤兑 — main deterministic regression branch", "trigger": "2029.H1 AI策略同质化→量化共振→闪电崩盘", "event_date": "2029-01-01", "reveal_date": "2028-07-09", "rule": "leak", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL7:strong", "kind": "strong", "title": "AI算法挤兑 — strong deterministic regression branch", "trigger": "2029.H1 AI策略同质化→量化共振→闪电崩盘", "event_date": "2029-01-01", "reveal_date": "2028-07-09", "rule": "leak", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL8",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline8.md", "sha256": "c1149a184db7d627368c33560f7748141a13448002c3478384f6fdfcabaaf3b8" }, "stage_news": { "path": "D:/WL-data-final/news/WL8_stage_news.json", "sha256": "8ad1fc8aa43f0dba8fc118154914343350a4c3c1be875d1562ba48d3ae060986" } },
+      "title": "能源体系崩溃", "trigger": "霍尔木兹海峡封锁→原油$280",
+      "event_date": "2028-01-01", "news_date": "2028-09-12", "reveal_date": "2028-09-12", "rule": "observed", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL8:weak", "kind": "weak", "title": "能源体系崩溃 — weak deterministic regression branch", "trigger": "霍尔木兹海峡封锁→原油$280", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL8:main", "kind": "main", "title": "能源体系崩溃 — main deterministic regression branch", "trigger": "霍尔木兹海峡封锁→原油$280", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL8:strong", "kind": "strong", "title": "能源体系崩溃 — strong deterministic regression branch", "trigger": "霍尔木兹海峡封锁→原油$280", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    },
+    {
+      "id": "WL9",
+      "source": { "narrative": { "path": "D:/WL-data-final/wordline-md/wordline9.md", "sha256": "6b518f8f4c760387e070bee9fc072998fc9c977988f641477eb9c5ff3aef9039" }, "stage_news": { "path": "D:/WL-data-final/news/WL9_stage_news.json", "sha256": "86118e61e6e628b031666e11dc9d13e367d5c491bf5bb5807cbb6b4299a653ce" } },
+      "title": "大流行XPV-27", "trigger": "劳动力核心群体靶向，IFR 7%",
+      "event_date": "2028-01-01", "news_date": "2028-09-12", "reveal_date": "2028-09-12", "rule": "observed", "horizon_end": "2035-12-31",
+      "branches": [
+        { "id": "WL9:weak", "kind": "weak", "title": "大流行XPV-27 — weak deterministic regression branch", "trigger": "劳动力核心群体靶向，IFR 7%", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.2, "conditional_range": [0.15, 0.25], "joint": 0.04, "joint_range": [0.0225, 0.0625] } },
+        { "id": "WL9:main", "kind": "main", "title": "大流行XPV-27 — main deterministic regression branch", "trigger": "劳动力核心群体靶向，IFR 7%", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.5, "conditional_range": [0.4, 0.6], "joint": 0.1, "joint_range": [0.06, 0.15] } },
+        { "id": "WL9:strong", "kind": "strong", "title": "大流行XPV-27 — strong deterministic regression branch", "trigger": "劳动力核心群体靶向，IFR 7%", "event_date": "2028-01-01", "reveal_date": "2028-09-12", "rule": "observed", "probability": { "conditional": 0.3, "conditional_range": [0.25, 0.35], "joint": 0.06, "joint_range": [0.0375, 0.0875] } }
+      ]
+    }
   ]
 }

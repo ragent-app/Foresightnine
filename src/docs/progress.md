@@ -1,5 +1,12 @@
 # Progress
 
+## Phase 4 Sol gate remediation — 2026-08-15
+
+- Closed synchronous unknown-provider failures in `OperationManager.execute`: ordinary exceptions now append the existing safe `operation.error`, transition to `failed`, retain the idempotent terminal error, release single-flight waiters, and remove pending execution state without exposing exception text.
+- Bound accepted typed worldlines to the retained thesis and request: every path must retain the thesis premise, fixed API baseline date, requested horizon, bundle/challenge identity, and the existing probability partition validation before any worldline is persisted.
+- Tightened worldline graph semantics in both API and domain validation: causal parents must exactly match incoming edges; schedules are non-empty, cover every node exactly once, use each node's event date, and retain the documented early-reveal `leak` exception only.
+- Replaced the 9WL index with an auditable deterministic regression fixture. Each record carries source paths/SHA-256 values, copied title/trigger and stage-news reveal date, normalized event-date rationale, and complete synthetic weak/main/strong test branches. The fixture explicitly disclaims forecasts and does not present its probabilities as source estimates.
+
 ## Phase 4 provider-boundary gate reinforcement — 2026-08-15
 
 - Revalidated every typed `WorldlineBundle` at `POST /v1/worldlines` before persistence: canonical schema, request challenge identity, bundle/worldline identity, worldline time/graph/reveal constraints, and weak/main/strong conditional partition plus joint-probability semantics.

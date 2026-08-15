@@ -226,6 +226,27 @@ class OperationManager:
                 self._single_flight.pop(key, None)
                 inflight.completed.set()
             raise
+        except Exception as error:
+            # A provider adapter can still raise an unclassified exception
+            # (for example, a malformed typed result).  It must close the
+            # same durable terminal checkpoint as ProviderFailure so replay
+            # callers do not wait forever or receive implementation details.
+            failure = ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=True)
+            with self._lock:
+                if self.operations[operation_id].status != "cancelled":
+                    self.events[operation_id].append(OperationErrorEvent(
+                        **self._base_event(operation_id, len(self.events[operation_id]) + 1), event="operation.error",
+                        error=ErrorResponse(schema_version="v1", error_code="internal_error", message="Provider result was not accepted.", request_id=deterministic_id("request", operation_id), retryable=True, details=[]),
+                        retryable=True,
+                    ))
+                    self.operations[operation_id] = self._operation(
+                        operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=len(self.events[operation_id]),
+                    )
+                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure)
+                self._pending_provider_executions.pop(operation_id, None)
+                self._single_flight.pop(key, None)
+                inflight.completed.set()
+            raise failure from error
         with self._lock:
             cancelled = self._cancel_events[operation_id].is_set() or self.operations[operation_id].status == "cancelled"
         if cancelled:

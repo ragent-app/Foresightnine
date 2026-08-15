@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import timedelta
+from datetime import date, timedelta
 from hashlib import sha256
 from typing import Annotated, Any
 
@@ -144,7 +144,14 @@ def _validate_request(model: BaseModel, contract: str) -> None:
         raise ApiProblem(422, "validation_error", str(error)) from error
 
 
-def _validate_provider_worldline_bundle(bundle: WorldlineBundle, *, challenge_id: str) -> None:
+def _validate_provider_worldline_bundle(
+    bundle: WorldlineBundle,
+    *,
+    challenge_id: str,
+    expected_premise: str,
+    expected_baseline_date: date,
+    expected_horizon_end: date,
+) -> None:
     """Fail closed before a typed provider result can cross into API state.
 
     Pydantic's ``model_copy`` deliberately permits unvalidated updates, so an
@@ -160,6 +167,12 @@ def _validate_provider_worldline_bundle(bundle: WorldlineBundle, *, challenge_id
             validate_payload(worldline, "Worldline")
             if worldline.bundle_id != bundle.bundle_id:
                 raise ContractViolation("WorldlineBundle", ["every worldline bundle_id must match the bundle_id"])
+            if worldline.premise != expected_premise:
+                raise ContractViolation("WorldlineBundle", ["every worldline premise must match the retained thesis"])
+            if worldline.baseline_date != expected_baseline_date:
+                raise ContractViolation("WorldlineBundle", ["every worldline baseline_date must match the fixed API baseline"])
+            if worldline.horizon_end != expected_horizon_end:
+                raise ContractViolation("WorldlineBundle", ["every worldline horizon_end must match the requested horizon"])
         validate_worldline_bundle_semantics(bundle)
         validate_branch_probability_consistency(bundle.probability_assessments, bundle.worldlines)
     except Exception as error:
@@ -691,7 +704,13 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         ))
         if not isinstance(bundle, WorldlineBundle):
             raise ProviderFailure("invalid_provider_output", "Worldline provider returned an unknown structured result.", retryable=False)
-        _validate_provider_worldline_bundle(bundle, challenge_id=request.challenge_id)
+        _validate_provider_worldline_bundle(
+            bundle,
+            challenge_id=request.challenge_id,
+            expected_premise=thesis.normalized_premise,
+            expected_baseline_date=clock.today(),
+            expected_horizon_end=request.horizon_end,
+        )
         for worldline in bundle.worldlines:
             WORLDLINES[worldline.worldline_id] = worldline
         return bundle, bundle.bundle_id
