@@ -56,7 +56,7 @@ def test_mock_path_is_deterministic_no_search_and_schema_shaped() -> None:
     assert draft.missing_evidence and draft.unresolved_issues
 
 
-def test_opencode_runtime_search_detection_handles_search_and_no_search_envelopes() -> None:
+def test_opencode_native_search_provenance_requires_successful_tool_use_telemetry() -> None:
     calls: list[tuple[list[str], str]] = []
 
     def runner(command: list[str], prompt: str, timeout: float, cancel: Event | None) -> subprocess.CompletedProcess[str]:

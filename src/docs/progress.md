@@ -4,7 +4,7 @@
 
 ### Delivered
 
-- Reworked the OpenCode 1.3.0 adapter for raw JSONL events while retaining only a compatibility path for single-envelope mocks. It now extracts final structured text/payload and usage, recognizes actual `tool_use.part.tool` `search`/`websearch`, and treats `no`/`unavailable`/`error` as unavailable.
+- Reworked the OpenCode 1.3.0 adapter for raw JSONL events while retaining only a compatibility path for single-envelope mocks. It now extracts final structured text/payload and usage, and establishes native-search provenance only from actual `tool_use.part → part.tool` `search`/`websearch` telemetry with `part.state.status` `completed`/`success`; generic `capabilities`, `tools`, `search`, and `results` fields never establish provenance.
 - Added an opt-in asynchronous Phase 3 message endpoint. It returns the existing typed operation receipt before provider completion; `StreamingResponse` supplies replay, typed terminal events and keepalive heartbeats. Cancel signals the actual provider runner event before state commit. Existing synchronous endpoints remain synchronous and unchanged.
 - Made `OperationManager.execute` endpoint-plus-idempotency-key single-flight under concurrency. Same-body callers wait and replay the one submission; mismatch remains a conflict. A Barrier regression test proves one provider call.
 - Made evidence-backed follow-up messages return `CHALLENGING` only when both draft evidence gaps and unresolved issues are clear. Normal confirmation now has an audit regression proving preserved citations/provenance after a valid public-evidence turn.
@@ -20,7 +20,7 @@
 
 ### Corrections and regression evidence
 
-- Replaced static OpenCode search capability with runtime JSON-envelope detection; missing search forces client fallback.
+- Replaced static OpenCode search capability with fail-closed runtime telemetry verification: only a real successful `tool_use.part → part.tool → part.state.status` search event establishes provenance; missing qualifying telemetry forces client fallback.
 - Added canonical-hashed full client evidence bundles, C/not-yet-verified URL evidence, D/no-URL evidence, publication-time enforcement and legacy IPv4/IPv6 SSRF rejection.
 - Made draft fields, rubric objects and citation subset relations strict; D/E cannot support public facts. Normal confirmation additionally requires independently reviewable evidence, while reservation confirmation is unchanged.
 - Added pre-call budget reservation, finite non-negative usage validation, retry only for 429/5xx/timeout, and immediate non-transient CLI failure.
@@ -31,7 +31,7 @@
 
 - Removed unsafe provider re-execution from resume. Cancelled/failed operations now retain their terminal audit checkpoint, replay without a second submission/charge, and do not emit synthetic completion events; a genuinely new user command is required for another provider attempt because OpenCode CLI exposes no auditable charge receipt.
 - Rebuilt `evidence_ids` and `evidence_grades` from all attached challenge evidence on every later message turn.
-- Tightened native search detection to explicit `capabilities.search === true`, usable search tools, successful tool events, or successful result bundles; arbitrary `search: "unavailable"` style fields are rejected as false positives.
+- Tightened native-search provenance to actual completed/successful OpenCode `tool_use.part → part.tool → part.state.status` telemetry. Generic `capabilities`, `tools`, `search`, and `results` fields are all rejected as non-provenance, including result-shaped payloads.
 - Caught `ApiProblem` from `build_result`, records typed `operation.error`, transitions to `failed`, and idempotently replays that error rather than leaving a running operation.
 - Regression suite: `38 passed`, including provider submission-count assertions across failure/cancel/resume, message evidence propagation, native-search false positives and `ApiProblem` lifecycle closure.
 
