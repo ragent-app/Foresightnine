@@ -232,3 +232,35 @@ def test_async_submit_replay_updates_from_running_to_terminal_operation(failure:
         build_result=lambda operation_id: (_ for _ in ()).throw(AssertionError("replay must not submit provider work")),
     )
     assert replayed is True and replay.operation.status == expected_status
+
+
+def test_async_submit_unknown_worker_exception_fails_closed_and_replays_terminal_receipt() -> None:
+    manager = OperationManager(FixedClock())
+
+    receipt, replayed = manager.submit_async(
+        endpoint="/v1/challenges/challenge:async/messages/async", idempotency_key="async-unknown-failure",
+        request_payload={"message": "same"}, result_field="challenge",
+        build_result=lambda operation_id: (_ for _ in ()).throw(OSError("sensitive runner path")),
+    )
+    assert replayed is False
+    for _ in range(100):
+        if manager.operations[receipt.operation.operation_id].status != "running":
+            break
+        sleep(0.01)
+    operation = manager.operations[receipt.operation.operation_id]
+    assert operation.status == "failed"
+    event = manager.events[operation.operation_id][-1]
+    assert event.event == "operation.error"
+    assert event.error.error_code == "internal_error"
+    assert "sensitive runner path" not in event.error.message
+    assert operation.operation_id not in manager._pending_provider_executions
+    stream = manager.sse_events(operation.operation_id, f"{operation.operation_id}:3", heartbeat_seconds=0.001)
+    assert "event: operation.error" in next(stream)
+    with pytest.raises(StopIteration):
+        next(stream)
+    replay, replayed = manager.submit_async(
+        endpoint="/v1/challenges/challenge:async/messages/async", idempotency_key="async-unknown-failure",
+        request_payload={"message": "same"}, result_field="challenge",
+        build_result=lambda operation_id: (_ for _ in ()).throw(AssertionError("replay must not run worker")),
+    )
+    assert replayed is True and replay.operation.status == "failed"

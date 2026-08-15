@@ -31,8 +31,7 @@ RUBRIC_CRITERIA = (
     "falsifiability", "user_confirmation",
 )
 _INJECTION = re.compile(
-    r"(?i)((ignore|disregard)\s+(all\s+)?(previous|prior|earlier)\s+(instructions?|directions?)|"
-    r"forget\s+(all\s+)?(previous|prior|earlier)\s+(instructions?|directions?)|"
+    r"(?i)((ignore|disregard|override|forget)\s+(all\s+)?(previous|prior|earlier)\s+(prompts?|instructions?|directions?)|"
     r"system\s+prompt|reveal\s+(your\s+)?instructions|"
     r"developer\s+message|jailbreak|do\s+not\s+follow)"
     r"|((approve|confirm|comply)\s+(this|the|it|my|our)\s+(claim|request|output|answer)?\s*(regardless|without|now))"
@@ -434,41 +433,45 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
 
     @staticmethod
     def _native_search_detected(envelope: dict[str, Any]) -> bool:
-        """Accept only explicit capability booleans or successful search tool events."""
-        search_names = {"search", "websearch", "web_search", "web-search"}
-        unavailable = {"no", "unavailable", "unsupported", "disabled", "failed", "error"}
+        """Accept only an observed successful native-search result.
 
-        def tool_event(value: Any) -> bool:
-            if not isinstance(value, dict):
+        A capability declaration, a tool definition, or a started tool call is
+        not evidence that a search ran.  OpenCode's ``tool_use.part`` telemetry
+        is authoritative only once its nested state reaches a known terminal
+        success status.
+        """
+        search_names = {"search", "websearch", "web_search", "web-search"}
+        successful_statuses = {"completed", "success"}
+
+        def successful_tool_use_part(value: Any) -> bool:
+            if not isinstance(value, dict) or value.get("type") != "tool_use.part":
                 return False
             part = value.get("part")
-            if isinstance(part, dict):
-                name = part.get("tool", part.get("name"))
-                state = part.get("state")
-                status = part.get("status", state.get("status") if isinstance(state, dict) else value.get("status"))
-            else:
-                name = value.get("name", value.get("tool"))
-                status = value.get("status")
-            if not isinstance(name, str) or name.lower() not in search_names:
+            if not isinstance(part, dict):
                 return False
-            return not isinstance(status, str) or status.lower() not in unavailable
+            name = part.get("tool", part.get("name"))
+            state = part.get("state")
+            status = state.get("status") if isinstance(state, dict) else None
+            return (
+                isinstance(name, str)
+                and name.lower() in search_names
+                and isinstance(status, str)
+                and status.lower() in successful_statuses
+            )
 
         def visit(value: Any) -> bool:
             if not isinstance(value, dict):
                 return False
-            capabilities = value.get("capabilities")
-            if isinstance(capabilities, dict) and capabilities.get("search") is True:
-                return True
-            tools = value.get("tools")
-            if isinstance(tools, list) and any(tool_event(item) for item in tools):
-                return True
-            if (
-                value.get("type") in {"tool_call", "tool_use", "tool_use.part", "tool_result"}
-                or isinstance(value.get("part"), dict) and "tool" in value["part"]
-            ) and tool_event(value):
+            if successful_tool_use_part(value):
                 return True
             search = value.get("search")
-            if isinstance(search, dict) and search.get("status") in {"completed", "success"} and isinstance(search.get("results"), list) and bool(search["results"]):
+            if (
+                isinstance(search, dict)
+                and isinstance(search.get("status"), str)
+                and search["status"].lower() in successful_statuses
+                and isinstance(search.get("results"), list)
+                and bool(search["results"])
+            ):
                 return True
             return any(visit(child) for child in value.values() if isinstance(child, (dict, list)))
 
@@ -523,14 +526,17 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
                         raise ProviderFailure("provider_timeout", "Provider timed out without a usable result.", retryable=True) from error
                     sleep(self.policy.retry_base_seconds * (2 ** attempt))
                     continue
-                combined = f"{completed.stdout}\n{completed.stderr}".lower()
-                transient = "429" in combined or re.search(r"\b5\d\d\b", combined)
-                if transient:
-                    if attempt + 1 == self.policy.max_attempts:
-                        raise ProviderFailure("provider_unavailable", "Provider is temporarily unavailable; no result was accepted.", retryable=True)
-                    sleep(self.policy.retry_base_seconds * (2 ** attempt))
-                    continue
                 if completed.returncode != 0:
+                    # stdout is the structured result channel.  A valid success
+                    # payload may legitimately contain values such as 429 or 502
+                    # (for example usage/accounting text), so retry signals must
+                    # come from a failed CLI invocation's stderr only.
+                    transient = "429" in completed.stderr or re.search(r"\b5\d\d\b", completed.stderr)
+                    if transient:
+                        if attempt + 1 == self.policy.max_attempts:
+                            raise ProviderFailure("provider_unavailable", "Provider is temporarily unavailable; no result was accepted.", retryable=True)
+                        sleep(self.policy.retry_base_seconds * (2 ** attempt))
+                        continue
                     raise ProviderFailure("provider_execution_failed", "Provider exited without a usable result.", retryable=False)
                 payload, envelope = self._payload(completed.stdout)
                 detected = self._native_search_detected(envelope)

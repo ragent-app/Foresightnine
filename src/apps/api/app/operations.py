@@ -336,15 +336,20 @@ class OperationManager:
                         operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="completed", last_sequence=sequence,
                     )
                     self._idempotency[key] = IdempotencyEntry(request_hash, OperationResponse(operation=self.operations[operation_id]))
-            except (ProviderFailure, ApiProblem):
+            except Exception:
+                # Async workers have no caller awaiting their exception.  Every
+                # unexpected failure must therefore become the same safe terminal
+                # record as a provider failure, without exposing exception text.
                 with self._lock:
                     if self.operations[operation_id].status != "cancelled":
                         sequence = len(self.events[operation_id]) + 1
-                        self.events[operation_id].append(OperationErrorEvent(
+                        event = OperationErrorEvent(
                             **self._base_event(operation_id, sequence), event="operation.error",
                             error=ErrorResponse(schema_version="v1", error_code="internal_error", message="Provider result was not accepted.", request_id=deterministic_id("request", operation_id), retryable=True, details=[]),
                             retryable=True,
-                        ))
+                        )
+                        validate_payload(event, "OperationErrorEvent")
+                        self.events[operation_id].append(event)
                         self.operations[operation_id] = self._operation(
                             operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=sequence,
                         )
