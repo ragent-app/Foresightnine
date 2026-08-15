@@ -55,7 +55,15 @@ from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, build_attestation
 from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
-from .services import ContractViolation, content_hash, deterministic_id, validate_payload
+from .services import (
+    ContractViolation,
+    content_hash,
+    deterministic_id,
+    validate_branch_probability_consistency,
+    validate_payload,
+    validate_probability_semantics,
+    validate_worldline_bundle_semantics,
+)
 
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
 
@@ -134,6 +142,47 @@ def _validate_request(model: BaseModel, contract: str) -> None:
         validate_payload(model, contract)
     except ContractViolation as error:
         raise ApiProblem(422, "validation_error", str(error)) from error
+
+
+def _validate_provider_worldline_bundle(bundle: WorldlineBundle, *, challenge_id: str) -> None:
+    """Fail closed before a typed provider result can cross into API state.
+
+    Pydantic's ``model_copy`` deliberately permits unvalidated updates, so an
+    ``isinstance`` check alone is not a provider boundary.  Re-run the
+    canonical schema and every Phase 4 semantic gate before persisting any
+    nested worldline, impact, reveal schedule, or probability assessment.
+    """
+    try:
+        validate_payload(bundle, "WorldlineBundle")
+        if bundle.challenge_id != challenge_id:
+            raise ContractViolation("WorldlineBundle", ["bundle challenge_id must match the requested challenge"])
+        for worldline in bundle.worldlines:
+            validate_payload(worldline, "Worldline")
+            if worldline.bundle_id != bundle.bundle_id:
+                raise ContractViolation("WorldlineBundle", ["every worldline bundle_id must match the bundle_id"])
+        validate_worldline_bundle_semantics(bundle)
+        validate_branch_probability_consistency(bundle.probability_assessments, bundle.worldlines)
+    except Exception as error:
+        # Do not let a typed-but-invalid result bypass the operation terminal
+        # path or disclose provider/schema diagnostics to a client.
+        raise ProviderFailure(
+            "invalid_provider_output",
+            "Worldline provider returned a result outside the accepted boundary.",
+            retryable=False,
+        ) from error
+
+
+def _validate_provider_probability_assessment(assessment: ProbabilityAssessment) -> None:
+    """Re-validate typed probability output at the route boundary."""
+    try:
+        validate_payload(assessment, "ProbabilityAssessment")
+        validate_probability_semantics(assessment)
+    except Exception as error:
+        raise ProviderFailure(
+            "invalid_provider_output",
+            "Probability provider returned a result outside the accepted boundary.",
+            retryable=False,
+        ) from error
 
 
 def _mark_replay(response: Response, replayed: bool) -> None:
@@ -636,6 +685,7 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         ))
         if not isinstance(bundle, WorldlineBundle):
             raise ProviderFailure("invalid_provider_output", "Worldline provider returned an unknown structured result.", retryable=False)
+        _validate_provider_worldline_bundle(bundle, challenge_id=request.challenge_id)
         for worldline in bundle.worldlines:
             WORLDLINES[worldline.worldline_id] = worldline
         return bundle, bundle.bundle_id
@@ -672,6 +722,7 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
         ))
         if not isinstance(result, ProbabilityAssessment):
             raise ProviderFailure("invalid_provider_output", "Probability provider returned an unknown structured result.", retryable=False)
+        _validate_provider_probability_assessment(result)
         return result, result.assessment_id
 
     result, replayed = operations.execute(
