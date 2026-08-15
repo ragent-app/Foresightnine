@@ -119,7 +119,7 @@ Sol's independent Phase 2 re-review of commit 2d5cf57 returned FAIL: the PNG ver
 
 # Phase 5 FM engine — implementation handoff — 2026-08-15
 
-### Sol P1 remediation in progress
+### Sol P1 remediation complete — follow-up commit
 
 - Corrected forecast scaling to average `|IC|` only over factor IDs that actually
   contributed to the support-weighted composite; added a regression proving an
@@ -131,6 +131,11 @@ Sol's independent Phase 2 re-review of commit 2d5cf57 returned FAIL: the PNG ver
 - Selection now skips non-finite `icMean`/`icir` metadata before `maxFactors`
   truncation; NaN/Infinity-only inputs retain explicit equal-weight fallback while
   stable finite-quality ties remain input ordered.
+- `computeFm` now preserves the known asset width when no factor contributes: it
+  returns width-shaped NaN composite/forecast arrays, explicit equal weights,
+  fallback reasons, and a normal initial allocation/rebalance path.
+- `allocateCapital` now rejects non-finite or non-positive price, FX and lot
+  values, as well as non-finite/negative capital and weights, before any arithmetic.
 
 ### Delivered
 
@@ -157,11 +162,15 @@ Sol's independent Phase 2 re-review of commit 2d5cf57 returned FAIL: the PNG ver
 
 - `Set-Location D:\Foresightnine\src; uv run --project apps/api python scripts/fm/generate_oracle.py --check`: passed byte-identical fixture and all six hashes. The local environment reports `ModuleNotFoundError: No module named 'matplotlib'` and uses the documented copied-formula oracle mode.
 - `Set-Location D:\Foresightnine\src; corepack pnpm --filter @foresightnine/fm-engine typecheck`: passed.
-- `Set-Location D:\Foresightnine\src; corepack pnpm --filter @foresightnine/fm-engine test`: passed 12 tests, 0 failures, including Python parity, reference cases, AST rejection, cutoff, Worker, Android-sized smoke, fallback, 3 bps, dead-band, FX, and lot checks.
+- The preceding Phase 5 implementation suite passed 14 tests, 0 failures; this
+  follow-up adds two deterministic regressions, so the current suite passes 16
+  tests, 0 failures, covering Python parity, reference cases, AST rejection,
+  cutoff, Worker, Android-sized smoke, orchestration fallback, finite numeric
+  guards, 3 bps, dead-band, FX, and lot checks.
 
-Workspace and phase gates remain to be run in the primary session before the Phase
-5 commit. Full reference-package import remains unavailable in the current minimal
-`uv` environment; this is the only known oracle limitation.
+The workspace and Phase 0/1/2 gates were run for the preceding Phase 5 commit and
+remain green in the current checkout; the full reference-package import remains
+unavailable in the minimal `uv` environment and is the only known oracle limitation.
 
 ## Phase 2 reviewer corrections complete — 2026-08-10
 

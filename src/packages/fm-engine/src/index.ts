@@ -214,7 +214,7 @@ export function allocateCapital(capital: number, assets: readonly ProductAsset[]
   if (!finite(capital) || capital < 0) throw new RangeError("capital must be non-negative");
   let allocated = 0;
   const allocations = assets.map((asset) => {
-    if (!finite(asset.weight) || asset.weight < 0 || asset.price <= 0 || asset.fxToBase <= 0 || asset.lotSize <= 0) throw new RangeError(`invalid asset ${asset.id}`);
+    if (!finite(asset.weight) || asset.weight < 0 || !finite(asset.price) || asset.price <= 0 || !finite(asset.fxToBase) || asset.fxToBase <= 0 || !finite(asset.lotSize) || asset.lotSize <= 0) throw new RangeError(`invalid asset ${asset.id}`);
     const desiredUnits = capital * asset.weight / (asset.price * asset.fxToBase);
     const units = asset.fractionalSupported ? desiredUnits : Math.floor(desiredUnits / asset.lotSize) * asset.lotSize;
     const allocatedAmount = units * asset.price * asset.fxToBase; allocated += allocatedAmount;

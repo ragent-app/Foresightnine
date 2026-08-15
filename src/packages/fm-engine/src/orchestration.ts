@@ -117,7 +117,17 @@ export function computeFm(input: ComputeFmInput): ComputeFmResult {
   }
   const selected = selectFactors(descriptors, input.maxFactors ?? 10);
   const combination = combineLastSignals(selected);
-  const weights = rawLongOnlyWeights(combination.combined);
+  // ``combineLastSignals([])`` has an empty shape, but the orchestration input
+  // has already established the asset width. Preserve that width through the
+  // explicit equal-weight fallback so rebalance/dead-band never see a shape
+  // mismatch when every factor is invalid.
+  const effectiveCombined = combination.combined.length === width
+    ? combination.combined
+    : new Float64Array(width).fill(Number.NaN);
+  const effectiveCombination: CombinationResult = combination.combined.length === width
+    ? combination
+    : { ...combination, combined: effectiveCombined, supportWeight: new Float64Array(width) };
+  const weights = rawLongOnlyWeights(effectiveCombined);
   const closeRows = ordered.map((row) => {
     const close = row.fields.close;
     return close === undefined ? new Float64Array() : Float64Array.from(close, (value) => value === null || !Number.isFinite(value) ? Number.NaN : value);
@@ -125,9 +135,9 @@ export function computeFm(input: ComputeFmInput): ComputeFmResult {
   const scale = closeRows[0]!.length === width && closeRows.length > (input.forecastHorizon ?? 1)
     ? forecastScale(closeRows, input.forecastHorizon ?? 1)
     : { crossSectionalVolatility: new Float64Array(), returnScale: 0.01 };
-  const usedFactorIds = new Set(combination.usedFactorIds);
+  const usedFactorIds = new Set(effectiveCombination.usedFactorIds);
   const usedFactors = selected.filter((factor) => usedFactorIds.has(factor.id));
-  const forecast = forecasts(combination.combined, usedFactors, scale.returnScale);
+  const forecast = forecasts(effectiveCombined, usedFactors, scale.returnScale);
   const returns = returnsMatrix(input.forwardReturns, order, width);
   let metrics: ComputeFmResult["metrics"] = null;
   if (returns !== null && selected.length > 0) {
@@ -141,8 +151,8 @@ export function computeFm(input: ComputeFmInput): ComputeFmResult {
   let deadband: ReturnType<typeof shouldRebalance> | null = null;
   let rebalance: RebalanceResult | null = null;
   const reasons: Array<"no_valid_factors" | "single_factor_fallback" | "equal_weight_fallback" | "initial_allocation_free" | "no_current_portfolio"> = [];
-  if (selected.length === 0 || combination.usedFactorIds.length === 0) reasons.push("no_valid_factors");
-  if (combination.usedFactorIds.length === 1) reasons.push("single_factor_fallback");
+  if (selected.length === 0 || effectiveCombination.usedFactorIds.length === 0) reasons.push("no_valid_factors");
+  if (effectiveCombination.usedFactorIds.length === 1) reasons.push("single_factor_fallback");
   if (weights.fallback) reasons.push("equal_weight_fallback");
   if (input.currentValues === undefined) reasons.push("no_current_portfolio");
   else {
@@ -165,7 +175,7 @@ export function computeFm(input: ComputeFmInput): ComputeFmResult {
     selectedFactorIds: selected.map((factor) => factor.id),
     factorSignalsByTime,
     lastFactorDescriptors: selected,
-    combination,
+    combination: effectiveCombination,
     weights,
     forecastScale: scale,
     forecasts: forecast,

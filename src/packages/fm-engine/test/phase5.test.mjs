@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  computeFm, evaluateFactorAst, mountFmWorker, rawLongOnlyWeights, selectFactors, shouldRebalance,
+  allocateCapital, computeFm, evaluateFactorAst, mountFmWorker, rawLongOnlyWeights, selectFactors, shouldRebalance,
 } from "../dist/index.js";
 const fixture = JSON.parse(readFileSync(new URL("../../test-fixtures/fm/v1/core-parity.json", import.meta.url), "utf8"));
 
@@ -93,6 +93,28 @@ test("forecasts use only factors that contributed and do not alter dead-band", (
   assert.deepEqual(withUnusedSelected.deadband, onlyUsed.deadband);
 });
 
+test("computeFm keeps width-shaped equal fallback when every factor is invalid", () => {
+  const result = computeFm({
+    cutoff: "2026-07-15",
+    observations: rows,
+    factors: [{ id: 999, icMean: Number.NaN, icir: Number.POSITIVE_INFINITY, admitted: true, expression: { op: "field", name: "alpha" } }],
+    currentValues: new Float64Array([200, 100, 0]),
+  });
+  assert.deepEqual(result.selectedFactorIds, []);
+  assert.equal(result.combination.combined.length, 3);
+  assert.ok(Array.from(result.combination.combined).every((value) => Number.isNaN(value)));
+  assert.equal(result.weights.weights.length, 3);
+  assert.deepEqual(Array.from(result.weights.weights), [1 / 3, 1 / 3, 1 / 3]);
+  assert.equal(result.weights.fallback, true);
+  assert.equal(result.forecasts.length, 3);
+  assert.ok(Array.from(result.forecasts).every((value) => Number.isNaN(value)));
+  assert.ok(result.reasons.includes("no_valid_factors"));
+  assert.ok(result.reasons.includes("equal_weight_fallback"));
+  assert.equal(result.deadband?.execute, true);
+  assert.ok(result.rebalance !== null);
+  assert.ok((result.rebalance?.cost ?? 0) > 0);
+});
+
 test("dead-band is equality-closed and strictly-above", () => {
   const equal = shouldRebalance(new Float64Array([0.5, 0.5]), new Float64Array([0.4, 0.6]), new Float64Array([-0.00015, 0.00015]), 3);
   assert.equal(equal.execute, false);
@@ -133,4 +155,13 @@ test("shared entry executes an Android-sized 15-asset fixture", () => {
 test("all-invalid and single-factor inputs use explicit equal-weight fallback", () => {
   assert.deepEqual(Array.from(rawLongOnlyWeights(new Float64Array([NaN, NaN, NaN])).weights), [1 / 3, 1 / 3, 1 / 3]);
   assert.deepEqual(Array.from(rawLongOnlyWeights(new Float64Array([0.2, NaN, NaN])).weights), [1 / 3, 1 / 3, 1 / 3]);
+});
+
+test("allocateCapital rejects non-finite and non-positive numeric asset inputs", () => {
+  const asset = { id: "A", weight: 1, price: 10, fxToBase: 1, lotSize: 1, fractionalSupported: true };
+  for (const capital of [Number.NaN, Number.POSITIVE_INFINITY, -1]) assert.throws(() => allocateCapital(capital, [asset]), /capital must be non-negative/);
+  for (const [field, value] of [["weight", Number.NaN], ["weight", Number.POSITIVE_INFINITY], ["weight", -1], ["price", Number.NaN], ["price", Number.POSITIVE_INFINITY], ["price", 0], ["price", -1], ["fxToBase", Number.NaN], ["fxToBase", Number.POSITIVE_INFINITY], ["fxToBase", 0], ["fxToBase", -1], ["lotSize", Number.NaN], ["lotSize", Number.POSITIVE_INFINITY], ["lotSize", 0], ["lotSize", -1]]) {
+    const invalid = { ...asset, [field]: value };
+    assert.throws(() => allocateCapital(100, [invalid]), /invalid asset A/);
+  }
 });
