@@ -1,5 +1,50 @@
 # Progress
 
+## Phase 6 Web visual gate completion attempt — 2026-08-23
+
+- Closed the remaining visual-state gap from fresh Sol review: `fm_complete` now keeps the user on the completed FM audit page until “查看配置方案” is selected. This makes the factor table, FM-v1 formula note, Web Worker boundary and JSON-intermediate notice reachable in the actual flow.
+- Added and inspected `apps/web/qa/screenshots/web-11-fm-complete-fixed.png` and `web-12-methods-fixed.png`; refreshed the portfolio desktop/mobile evidence as `web-09-portfolio-desktop-fixed.png` and `web-07-portfolio-mobile-p1.png`.
+- Completed the Web state-by-state comparison log in `docs/design/fidelity-qa.md`, including concept path, implementation evidence, viewport, mismatch/correction and verification result. Web rows are evidence-ready but remain Sol-pending until the next fresh reviewer verdict. Android rows remain pending for Phase 7.
+- Verification after the FM visibility correction: Web 23 tests passed, typecheck passed, Vite build passed. No new provider, key, server-side FM, broker, order or custody path was introduced.
+
+## Phase 6 Web P1 remediation and browser QA — 2026-08-23
+
+- Closed the three functional findings from the Sol freeze review: branch conditional probabilities are exhaustive (`0.27 + 0.54 + 0.19 = 1.00`) and each reveal schedule is derived from the generated node IDs/dates; `allocationRows(null, ...)` is empty and JSON export reports `not_computed` without fabricated weights; D/E SearchEvidenceBundle entries may omit URL/publication date while A–C still require a safe HTTP(S) URL.
+- Kept the full Web audit `evidenceHash` separate from the API-compatible `sourceMaterialHash`. The latter was checked against the Python API canonical hash: `cd3d44755bda8101435b8d21841f2297c1a14bc9ce1427a71b3a60269869f317`.
+- Corrected the Raw/Public mode selector so its selected glyph, `aria-pressed`, panel copy and table caption stay aligned.
+- Independent verification: Web 22 tests passed, typecheck passed, Vite build passed; API 71 tests passed with one unchanged Starlette TestClient deprecation warning; `git diff --check` and secret scan passed.
+- Browser/IAB evidence now covers viewpoint → challenge → no-URL D evidence → reserved confirmation → three worldlines/probability ranges → client FM Worker → Raw/Public Default → stress selection → NAV/drawdown → methods/risk. Browser console `error`/`warn` collections were empty. New inspected screenshots: `apps/web/qa/screenshots/web-07-portfolio-mobile-p1.png` and `web-09-portfolio-desktop-fixed.png`.
+- `view_image` inspection found the implementation visually consistent with the approved warm-paper/editorial concept for the inspected portfolio state at desktop and 390×844 mobile; the complete Web/Android concept matrix and fresh Sol verdict remain pending. Web uses deterministic mock/fixture mode; no live GLM/OpenCode provider claim is made.
+
+## Phase 6 Web visual/interaction QA follow-up — 2026-08-23
+
+- Repaired the reviewer-found medium-width collision: at approximately 1265px the research inspector is now hidden before the three-column probability cards can be clipped. The 1536px desktop inspector layout remains available.
+- Browser/IAB smoke now covers the full client path with current viewpoint propagation, fail-closed 25/40 challenge state, 31/40 plus independently reviewable evidence normal confirmation, worldline premise/three branches, client FM completion, USD formatting, Raw/Public Default, stress selection, NAV interval and drawdown toggle. Fresh console `error`/`warn` collections were empty.
+- Added and visually inspected current Web screenshots: `apps/web/qa/screenshots/web-01-thesis-current.jpg`, `web-02-challenge-current.jpg`, `web-03-worldline-current.jpg`, `web-05-portfolio-current.jpg`, and `web-06-nav-current.jpg`. The current IAB viewport is approximately 1265×709 rather than the 1536×1024 concept artboard; screenshots are therefore evidence for implementation QA, not a final pixel-perfect Sol pass.
+- Web verification after this follow-up: 18 Vitest tests passed, typecheck passed, Vite production build passed, and `git diff --check` passed. No GLM/OpenCode key was read, stored, or used; the Web path remains deterministic mock/fixture mode.
+- Phase remains **in progress**: Android, bilingual shared i18n, live OpenAI-compatible GLM provider boundary, API/PostgreSQL production wiring, security/dependency/licensing gates, and final Sol acceptance are not complete.
+
+### Sol freeze review — 2026-08-23
+
+- Verdict: **fix-first / frozen pause**, with no P0. This is not a Web pass or release-candidate claim.
+- P1 blockers retained for the next continuation: `makeBranches()` conditional probabilities currently sum to `0.99` and its reveal schedule contains node IDs not present in the generated branch graph; `allocationRows(null, ...)` shows deterministic fallback allocations while the no-FM JSON state says no weights exist; and the Web evidence form currently requires a URL, so it cannot represent the approved no-URL D/unreviewable path. Web canonical-hash parity with the API is also not independently demonstrated.
+- Formal concept comparison remains pending: current Web screenshot evidence is implementation QA at approximately 1265×709, with FM and Methods states not yet captured; Android has not entered implementation QA.
+- This is the requested pause point. Do not advance to Android/API production work until the next continuation explicitly resolves these P1 items and obtains a fresh Sol review.
+
+## Phase 6 Web P1 remediation — 2026-08-23
+
+- Dynamic viewpoint input is consumed by challenge start, user reply remains editable and is retained in the transcript/export, and the worldline premise follows the current viewpoint. SearchEvidenceBundle fields remain explicit (`url`, `title`, `publisher`, `published_at`, `excerpt`, `user_note`, direction and grade); content hashes are retained. Evidence classification records D/E and `user_private`/`model_inference` as `independently_reviewable: false`; A/B/C can be independently reviewable only when a URL is present.
+- Public Default preserves FM Raw and applies the 25% single-security cap, 35% high-volatility-class cap, long-only/fully-invested eligibility, historical/stale and low-liquidity exclusion, proxy mapping with reasons, deterministic FX snapshot, and lot-aware Raw/Public amounts, units and residual cash. These are deterministic fixtures; no live provider or API key is configured.
+- Structured JSON/CSV export retains the thesis, challenge transcript, evidence audit fields, three worldline premises/anchors/reveals/invalidation data, local FM arrays/results when available, Raw/Public allocation fields and reasons, method/data labels, risk disclosures, and complete NAV historical/weak/main/strong/interval/drawdown arrays. The NAV drawdown control has a real toggle handler.
+- Verification evidence: Web has 16 passing Vitest tests; direct typecheck, Vite build and `git diff --check` passed. A fresh Browser/IAB session DOM check recorded empty `error`/`warn` evidence. The implementation remains deterministic fixture mode, with no live provider/API key.
+- Fidelity limitation: the screenshot command is unsupported in the current IAB session, so no screenshot artifact was generated or inspected. Fidelity comparison rows remain **pending**; this entry is not a Sol pass.
+
+## Phase 6 Web implementation — 2026-08-23
+
+- Added the strict React + Vite Web MVP under `apps/web`, consuming the shared contracts, domain/design tokens, and FM engine. The local workflow covers draft restore and validation, challenge retry/cancel/recovery, SearchEvidenceBundle fixture import, worldline probability ranges and selection, client-side FM computation through a real Web Worker, FM Raw/Public Default deltas, lot-aware allocation/residual states, historical/simulation NAV and drawdown SVG charts, methods/risk disclosure, and JSON/CSV export.
+- Added deterministic Web tests for thesis validation, challenge state recovery, worker/FM output retention, Raw/Public capping, small-capital residuals, and exports. Focused Web typecheck/build/test and diff checks pass; screenshot-based fidelity evidence remains pending because no screenshot artifact was committed.
+- Material judgment: the default mode is deterministic offline fixture data with explicit historical/simulated/model-estimate labels; no broker, order, custody, live-network, or secret-bearing affordance was added.
+
 ## Phase 4 Sol gate remediation — 2026-08-15
 
 - Closed synchronous unknown-provider failures in `OperationManager.execute`: ordinary exceptions now append the existing safe `operation.error`, transition to `failed`, retain the idempotent terminal error, release single-flight waiters, and remove pending execution state without exposing exception text.
