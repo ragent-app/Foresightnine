@@ -61,47 +61,40 @@ ImageGen concepts are visual specifications, not data fixtures. Production must 
 - Chart colours require contrast checks on the implemented background, and every path must also differ by line style/label.
 - The portfolio concept allocations are illustrative. Actual weight, amount, lot, residual cash and proxy logic come only from client FM output and the signed data snapshot.
 
-## Implementation comparison log
+## Canonical Web comparison log — 2026-08-23
 
-To be completed during Web and Android QA. Each entry must include concept path, implementation screenshot path, viewport/device, observed mismatch, correction commit and Sol verdict.
+Each Web row consolidates the approved concept path, implementation screenshot, viewport, observed mismatch, correction/verification and current Sol status. This is the single source of truth for the Phase 6 visual gate.
+
+| State | Concept path | Implementation screenshot + viewport | Observed mismatch | Correction / verification | Result |
+| --- | --- | --- | --- | --- | --- |
+| Thesis | `concepts/web/01-thesis-input.png` | `apps/web/qa/screenshots/web-01-thesis-current.jpg`; 1265×709 IAB; existing 1536×1024 and 390×844 captures | No blocking mismatch; warm-paper shell and viewpoint-first entry preserved. | IAB smoke reloaded the current entry; `view_image` checked the current thesis and concept. | evidence-ready; Sol pending |
+| Challenge/evidence | `concepts/web/02-challenge-evidence.png` | `apps/web/qa/screenshots/web-02-challenge-current.jpg`; 1265×709 IAB | No blocking mismatch; live DOM exposes the complete evidence form and rubric. | Exercised D/no-URL submission and A–C blank-URL rejection; Web tests and console checks passed. | evidence-ready; Sol pending |
+| Worldline | `concepts/web/03-worldline-probability.png` | `apps/web/qa/screenshots/web-03-worldline-current.jpg`; 1265×709 IAB | Previous medium viewport could crowd the probability cards with the inspector. | Inspector hidden at ≤1340px; current worldline screenshot rechecked and `view_image` inspected. | corrected; evidence-ready; Sol pending |
+| FM | `concepts/web/04-fm-progress.png` | `apps/web/qa/screenshots/web-11-fm-complete-fixed.png`; 1265px default desktop IAB, full-page | Worker completed too quickly to leave the FM audit surface reachable. | `fm_complete` retains `stage: "fm"`; user selects “查看配置方案”. Screenshot shows factor table, formula note, Worker/local boundary and completion state. | corrected; evidence-ready; Sol pending |
+| Portfolio/stress | `concepts/web/05-portfolio-stress.png` | `apps/web/qa/screenshots/web-09-portfolio-desktop-fixed.png`; default desktop; `web-07-portfolio-mobile-p1.png`; 390×844 | Old screenshot had FM Raw selected glyph while Public Default content was displayed. | Dynamic glyphs plus `aria-pressed`; mobile screenshot was refreshed after the fix and checked with `view_image`. | corrected; evidence-ready; Sol pending |
+| NAV | `concepts/web/06-worldline-nav.png` | `apps/web/qa/screenshots/web-06-nav-current.jpg`; 1265×709 IAB | No blocking mismatch; historical/simulated boundary, interval, direct labels and drawdown remain visible. | Existing screenshot plus fresh IAB DOM path check; console warnings/errors empty. | evidence-ready; Sol pending |
+| Methods/risk | `concepts/web/07-methodology-risk.png` | `apps/web/qa/screenshots/web-12-methods-fixed.png`; 1265px default desktop IAB, full-page | No blocking mismatch; methods is a real scrollable state with formula, evidence grades, Raw/Public boundary and disclosures. | Screenshot inspected with `view_image`; methods export remains wired. | evidence-ready; Sol pending |
+
+The Web rows are evidence-ready but remain **Sol pending** until a fresh reviewer accepts this canonical log. Android comparison is intentionally deferred to Phase 7.
+
+### Android comparison backlog
 
 | State | Concept | Implementation evidence | Status |
 | --- | --- | --- | --- |
-| Web thesis | `concepts/web/01-thesis-input.png` | `apps/web/qa/screenshots/web-01-thesis-current.jpg`; 1265×709 IAB + 1536×1024/390×844 implementation captures | evidence-ready; Sol pending |
-| Web challenge/evidence | `concepts/web/02-challenge-evidence.png` | `apps/web/qa/screenshots/web-02-challenge-current.jpg`; 1265×709 IAB | evidence-ready; Sol pending |
-| Web worldline | `concepts/web/03-worldline-probability.png` | `apps/web/qa/screenshots/web-03-worldline-current.jpg`; 1265×709 IAB | evidence-ready; Sol pending |
-| Web FM | `concepts/web/04-fm-progress.png` | `apps/web/qa/screenshots/web-11-fm-complete-fixed.png`; 1265px default desktop IAB, full-page capture | evidence-ready; Sol pending |
-| Web portfolio/stress | `concepts/web/05-portfolio-stress.png` | `apps/web/qa/screenshots/web-09-portfolio-desktop-fixed.png`, `web-07-portfolio-mobile-p1.png`; default desktop + 390×844 | evidence-ready; Sol pending |
-| Web NAV | `concepts/web/06-worldline-nav.png` | `apps/web/qa/screenshots/web-06-nav-current.jpg`; 1265×709 IAB | evidence-ready; Sol pending |
-| Web methods/risk | `concepts/web/07-methodology-risk.png` | `apps/web/qa/screenshots/web-12-methods-fixed.png`; 1265px default desktop IAB, full-page capture | evidence-ready; Sol pending |
-| Android input | `concepts/android/01-thesis-input.png` | pending | pending |
-| Android challenge | `concepts/android/02-challenge-conversation.png` | pending | pending |
-| Android evidence | `concepts/android/03-evidence-workspace.png` | pending | pending |
-| Android worldline | `concepts/android/04-worldline-timeline.png` | pending | pending |
-| Android portfolio/NAV | `concepts/android/05-portfolio-nav.png` | pending | pending |
-| Android export | `concepts/android/06-share-export.png` | pending | pending |
-
-### Web state-by-state comparison log — 2026-08-23
-
-| State | Observed mismatch against concept | Correction / verification | Result |
-| --- | --- | --- | --- |
-| Thesis | No blocking mismatch; implementation keeps the concept's warm-paper shell and viewpoint-first entry. | Existing 1536×1024 and 390×844 captures; current IAB smoke reloaded the same entry. | evidence-ready |
-| Challenge/evidence | No blocking mismatch; the live DOM exposes the complete evidence form and rubric rather than a decorative card. | D/no-URL submission and A–C blank-URL rejection were exercised; 22 Web tests and console checks passed. | evidence-ready |
-| Worldline | At the previous medium viewport, the inspector could crowd the three probability cards. | Hidden inspector breakpoint moved to ≤1340px; `web-03-worldline-current.jpg` rechecked at the affected viewport. | corrected; evidence-ready |
-| FM | The worker completed too quickly to leave the FM state visible; the approved concept's audit surface was unreachable. | `fm_complete` now retains `stage: "fm"`; the user explicitly clicks “查看配置方案”. `web-11-fm-complete-fixed.png` was inspected with factor table, formula note, Worker label and completion state. | corrected; evidence-ready |
-| Portfolio/stress | Mode glyph stayed visually on FM Raw while the table had already switched to Public Default. | Dynamic glyphs plus `aria-pressed`; `web-09-portfolio-desktop-fixed.png` and `web-07-portfolio-mobile-p1.png` inspected after the fix. | corrected; evidence-ready |
-| NAV | No blocking mismatch; historical/simulated boundary, interval, direct labels and drawdown remain visible. | Existing `web-06-nav-current.jpg` plus fresh IAB DOM path check; console warnings/errors empty. | evidence-ready |
-| Methods/risk | No blocking mismatch; methods page is a real scrollable state with formula, evidence grades, Raw/Public boundary and disclosures. | `web-12-methods-fixed.png` inspected; methods export remains wired. | evidence-ready |
-
-The Web rows are now evidence-ready but remain **Sol pending** until a fresh reviewer accepts the complete comparison log. Android rows are intentionally still pending for Phase 7.
+| Input | `concepts/android/01-thesis-input.png` | pending | Phase 7 pending |
+| Challenge | `concepts/android/02-challenge-conversation.png` | pending | Phase 7 pending |
+| Evidence | `concepts/android/03-evidence-workspace.png` | pending | Phase 7 pending |
+| Worldline | `concepts/android/04-worldline-timeline.png` | pending | Phase 7 pending |
+| Portfolio/NAV | `concepts/android/05-portfolio-nav.png` | pending | Phase 7 pending |
+| Export | `concepts/android/06-share-export.png` | pending | Phase 7 pending |
 
 ### Phase 6 Web implementation note — 2026-08-23
 
 - The Web MVP is implemented under `apps/web` with the approved shell, editorial spacing, warm-paper tokens, typed local workflow, client-side FM Worker path, Raw/Public Default delta view, SVG NAV/drawdown charts, and JSON/CSV export controls.
-- A local browser smoke run loaded `http://127.0.0.1:5173/`, rendered the thesis screen, and exercised thesis submission through completed challenge state. No implementation screenshot file path was committed, so all Web comparison rows above remain **pending**; this note is not a Sol fidelity acceptance.
+- A local browser smoke run loaded `http://127.0.0.1:5173/`, rendered the thesis screen, and exercised thesis submission through completed challenge state. The earlier “no screenshot artifact” observation is superseded by the canonical Web comparison log above, which records the later FM, Methods, portfolio and mobile captures. This note is historical and is not itself a Sol fidelity acceptance.
 
 ### Phase 6 Web P1 DOM evidence — 2026-08-23
 
 - Fresh Browser/IAB-session DOM evidence covered the Web shell and primary thesis/challenge/worldline/portfolio/NAV/export path; the captured `error` and `warn` collections were empty. This is DOM acceptance evidence, not a screenshot-based visual comparison.
 - The implementation evidence includes current-viewpoint premise propagation, editable/re-exported reply, SearchEvidenceBundle content hash and grade/source classification, Raw/Public constraint and lot-aware display, structured JSON/CSV audit fields, complete NAV arrays, and the working drawdown toggle.
-- Screenshot evidence remains **pending** because the screenshot command is unsupported in the current IAB session and no screenshot artifact could be generated or inspected. All fidelity comparison rows remain **pending**; no Sol pass is claimed.
+- At the time of this historical entry, screenshot capture was unavailable in that IAB session. It is superseded by the later `view_image`-inspected artifacts and canonical comparison log above; no Sol pass is claimed by this historical entry.
