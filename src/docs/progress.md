@@ -1,11 +1,17 @@
 # Progress
 
-## Phase 6 Web visual gate completion attempt — 2026-08-23
+## Phase 6 Web visual gate — Sol accepted — 2026-08-23
 
 - Closed the remaining visual-state gap from fresh Sol review: `fm_complete` now keeps the user on the completed FM audit page until “查看配置方案” is selected. This makes the factor table, FM-v1 formula note, Web Worker boundary and JSON-intermediate notice reachable in the actual flow.
 - Added and inspected `apps/web/qa/screenshots/web-11-fm-complete-fixed.png` and `web-12-methods-fixed.png`; refreshed the portfolio desktop/mobile evidence as `web-09-portfolio-desktop-fixed.png` and `web-07-portfolio-mobile-p1.png`.
-- Completed the Web state-by-state comparison log in `docs/design/fidelity-qa.md`, including concept path, implementation evidence, viewport, mismatch/correction and verification result. Web rows are evidence-ready but remain Sol-pending until the next fresh reviewer verdict. Android rows remain pending for Phase 7.
+- Completed the single canonical Web comparison log in `docs/design/fidelity-qa.md`, including concept path, implementation evidence, viewport, mismatch/correction and verification result. Android rows remain pending for Phase 7.
 - Verification after the FM visibility correction: Web 23 tests passed, typecheck passed, Vite build passed. No new provider, key, server-side FM, broker, order or custody path was introduced.
+
+### Fresh Sol acceptance
+
+- Verdict: **ship**; no P0/P1. Phase 6 Web is accepted. The reviewer verified the FM audit page is reachable, the refreshed 390×844 Public Default screenshot is semantically aligned, the canonical Web comparison log is complete, and the Browser/IAB console collections are empty.
+- Accepted commits: `ac598a0` (Web workflow) and `84a02f2` (visual evidence gate correction). The repository has no configured remote, so no GitHub push is claimed.
+- Remaining scope is explicitly deferred: Android implementation/QA, live OpenCode/GLM provider verification, production API/PostgreSQL wiring, dependency/security/licensing gates, and final Phase 9 release acceptance.
 
 ## Phase 6 Web P1 remediation and browser QA — 2026-08-23
 

@@ -4,16 +4,16 @@
 
 - The previously observed Public Default selector mismatch was corrected: the selected mode now has the selected glyph and `aria-pressed`, and the table caption/copy agree with the mode.
 - Inspected implementation screenshots: `apps/web/qa/screenshots/web-09-portfolio-desktop-fixed.png` at the default desktop viewport and `apps/web/qa/screenshots/web-07-portfolio-mobile-p1.png` at 390×844. Both preserve the approved warm-paper/editorial rhythm, restrained terracotta/sage/blue semantics, single-column mobile flow and explicit Raw → Public Default explanation.
-- Functional/browser evidence covers the complete Web path and console `error`/`warn` collections are empty. The Web portfolio row is now **evidence available / formal comparison pending**; a fresh Sol verdict is still required before recording a phase pass.
+- Functional/browser evidence covers the complete Web path and console `error`/`warn` collections are empty. The Web portfolio row is **evidence-ready**; fresh Sol verdict `ship` accepted the complete Phase 6 Web gate on commit `84a02f2`.
 
-## Current Web implementation evidence — 2026-08-23
+## Historical Web implementation evidence — 2026-08-23
 
 - A fresh Browser/IAB run produced and inspected current Web screenshots at the active browser viewport (approximately 1265×709): `apps/web/qa/screenshots/web-01-thesis-current.jpg`, `web-02-challenge-current.jpg`, `web-03-worldline-current.jpg`, `web-05-portfolio-current.jpg`, and `web-06-nav-current.jpg`.
 - The screenshots confirm the approved warm-paper/editorial shell, adversarial challenge/evidence layout, interval-first probability cards, Raw → Public Default delta view with stress output, and historical/simulated NAV with labelled today boundary and drawdown section. The medium-width inspector collision was corrected and rechecked in `web-03-worldline-current.jpg`.
 - DOM checks for thesis → challenge → worldline → client FM → portfolio → NAV/export found no browser `error` or `warn` entries. This is implementation evidence; it does not by itself approve the remaining Android or final 1536×1024 concept comparison.
-- Web fidelity rows are now **evidence available / formal comparison pending** because the captured viewport differs from the concept artboard and the current Web screenshots do not yet cover every concept state (FM and methods). Android rows remain **pending**.
+- At the time of this entry, Web fidelity rows were **evidence available / formal comparison pending** because FM and Methods captures had not yet been added. The canonical comparison log and later Sol `ship` verdict supersede that interim status; Android rows remain **pending**.
 
-## Sol freeze review — 2026-08-23
+## Historical Sol freeze review — 2026-08-23
 
 - Verdict: **fix-first**, no P0; the current screenshots are retained as implementation evidence only.
 - The formal fidelity gate is paused with the Web functional P1 blockers recorded in `docs/progress.md`: strict worldline probability/reveal-schema closure, no-FM allocation/export semantics, and no-URL D evidence flow. FM and Methods screenshots, exact concept-artboard comparison, and all Android comparisons remain pending.
