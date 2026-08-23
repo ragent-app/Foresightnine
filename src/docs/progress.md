@@ -1,5 +1,14 @@
 # Progress
 
+## Phase 7 Android — host implementation complete; native acceptance blocked — 2026-08-23
+
+- Added `apps/mobile`, an Expo SDK 57 / Expo Router Android client that consumes the shared FM engine and design tokens. The implemented local-only loop covers bilingual draft input, visible counterargument/rubric/reservation states, client SearchEvidenceBundle import with an explicit API-search-unavailable state, weak/main/strong probability timelines, local `computeFm`, distinct FM Raw/Public Default allocations, risk/NAV summaries and privacy-aware export.
+- Android text/URL receiving uses Expo's official `expo-sharing` config plugin and `app/+native-intent.ts`. Shared text is normalized locally and never fetched. The app remains mock-only: no GLM/OpenCode request, API key, market fetch, broker, order, execution or custody integration was added.
+- Implemented a native archive adapter: AES-256-GCM from `expo-crypto`, its device-local key stored in `expo-secure-store`, and the sealed envelope in `expo-file-system`. Private evidence is excluded by default; opt-in is device-local only and public-safe export rejects it.
+- Host verification passed: mobile typecheck; 6 focused mobile Vitest checks (validation, URL normalization/duplicates, i18n, worldline intervals, shared FM/Public Default, privacy envelope); Android Metro production export; root workspace typecheck/tests; secret scan; `git diff --check`. `expo config --type public` confirms SDK 57 and the text/plain/text/uri-list share configuration.
+- `pnpm audit --prod` was also run. It reports two high-severity `image-size@1.2.1` parser DoS advisories via Expo SDK 57's Metro/React Native toolchain and one moderate `uuid@7.0.3` bounds-check advisory via Expo config tooling. Both are transitive build-tool dependencies, but they are release gates: no unreviewed major-version override was applied, and a compatible Expo/React-Native toolchain update or a reviewed vendor remediation is required before public release.
+- Fresh Sol review returned **fix-first** with no P0: actual APK/native build, Android emulator/device flow, Share Intent dispatch, back/lifecycle behavior, AES/SecureStore/FileSystem round-trip, and six `view_image` screenshot comparisons are not proven. The host has no Java, Android SDK, ADB, emulator or Android Studio. The Android rows in `docs/design/fidelity-qa.md` therefore remain explicitly pending; Phase 7 is **not accepted** and Phase 8 must not start.
+
 ## Phase 6 Web visual gate — Sol accepted — 2026-08-23
 
 - Closed the remaining visual-state gap from fresh Sol review: `fm_complete` now keeps the user on the completed FM audit page until “查看配置方案” is selected. This makes the factor table, FM-v1 formula note, Web Worker boundary and JSON-intermediate notice reachable in the actual flow.

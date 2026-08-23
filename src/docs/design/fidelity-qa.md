@@ -81,12 +81,14 @@ The Web rows are evidence-ready but remain **Sol pending** until a fresh reviewe
 
 | State | Concept | Implementation evidence | Status |
 | --- | --- | --- | --- |
-| Input | `concepts/android/01-thesis-input.png` | pending | Phase 7 pending |
-| Challenge | `concepts/android/02-challenge-conversation.png` | pending | Phase 7 pending |
-| Evidence | `concepts/android/03-evidence-workspace.png` | pending | Phase 7 pending |
-| Worldline | `concepts/android/04-worldline-timeline.png` | pending | Phase 7 pending |
-| Portfolio/NAV | `concepts/android/05-portfolio-nav.png` | pending | Phase 7 pending |
-| Export | `concepts/android/06-share-export.png` | pending | Phase 7 pending |
+| Input | `concepts/android/01-thesis-input.png` | Implemented `apps/mobile/app/index.tsx`; static source/build only | screenshot/device comparison pending |
+| Challenge | `concepts/android/02-challenge-conversation.png` | Implemented `apps/mobile/app/challenge.tsx`; static source/build only | screenshot/device comparison pending |
+| Evidence | `concepts/android/03-evidence-workspace.png` | Implemented `apps/mobile/app/evidence.tsx` and `+native-intent.ts`; actual Android share dispatch pending | screenshot/device comparison pending |
+| Worldline | `concepts/android/04-worldline-timeline.png` | Implemented `apps/mobile/app/worldline.tsx`; static source/build only | screenshot/device comparison pending |
+| Portfolio/NAV | `concepts/android/05-portfolio-nav.png` | Implemented `apps/mobile/app/portfolio.tsx`; shared-FM unit coverage and Metro export passed | screenshot/device comparison pending |
+| Export | `concepts/android/06-share-export.png` | Implemented `apps/mobile/app/archive.tsx` plus AES-GCM adapter; native round-trip pending | screenshot/device comparison pending |
+
+Android source/build evidence does **not** substitute for a concept comparison. The host has no Android SDK, JDK, ADB or emulator. A device/emulator must exercise the input, challenge, evidence/share import, worldline, portfolio/NAV and archive/export states; screenshots must then be inspected with `view_image` before this table can report a pass.
 
 ### Phase 6 Web implementation note — 2026-08-23
 

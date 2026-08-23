@@ -1,0 +1,20 @@
+import { Text, View } from "react-native";
+import { router } from "expo-router";
+import { useMobileStore } from "../src/app-store";
+import { formatMoney, modeWeight, portfolioMetadata } from "../src/portfolio";
+import { BottomNav, Button, Card, Header, Screen, StageRail, Status, styles } from "../src/ui";
+
+export default function PortfolioScreen(): React.JSX.Element {
+  const { state, portfolio, setPortfolioMode } = useMobileStore();
+  if (!portfolio) return <Screen><Header back title="Allocation" subtitle="FM has not produced a local result yet." /><Card tone="warning"><Text style={styles.body}>Run the client-side FM step first. Server calculation is intentionally unavailable.</Text><Button onPress={() => router.replace("/worldline")} label="Go to worldline">Go to worldline</Button></Card><BottomNav /></Screen>;
+  const mode = state.portfolioMode;
+  const total = mode === "raw" ? portfolio.rawTotal : portfolio.publicTotal;
+  return <Screen><Header back title="Allocation" subtitle="Simulation only · not investment advice" /><StageRail active={4} />
+    <Status tone="good">Client FM complete · {state.fmStep}</Status>
+    <Card><Text style={styles.heading}>FM Raw / Public Default</Text><Text style={styles.muted}>Raw retains the model result. Public Default applies tradability, liquidity, freshness, single-security and high-volatility constraints without rewriting the Raw result.</Text><View style={[styles.split, { marginTop: 4 }]}><View style={styles.flex}><Button variant={mode === "raw" ? "primary" : "secondary"} onPress={() => setPortfolioMode("raw")} label="Show FM Raw">FM Raw</Button></View><View style={styles.flex}><Button variant={mode === "public" ? "primary" : "secondary"} onPress={() => setPortfolioMode("public")} label="Show Public Default">Public Default</Button></View></View></Card>
+    <Card><Text style={styles.heading}>Allocation list · {mode === "raw" ? "FM Raw" : "Public Default"}</Text>{portfolio.rows.map((row) => { const weight = modeWeight(row, mode); const amount = mode === "raw" ? row.rawAmount : row.publicAmount; const units = mode === "raw" ? row.rawUnits : row.publicUnits; const delta = row.publicWeight - row.rawWeight; return <View key={row.asset.id} style={styles.listRow}><View style={styles.row}><Text style={[styles.strong, styles.flex]}>{row.asset.name}</Text><Text style={styles.strong}>{(weight * 100).toFixed(1)}%</Text></View><Text style={styles.muted}>{row.asset.role} · {row.asset.instrument}</Text><Text style={styles.tiny}>{formatMoney(amount, state.currency)} · {units.toFixed(row.asset.fractional ? 3 : 0)} units · data as of {row.asset.asOf}</Text>{mode === "public" && Math.abs(delta) > 1e-8 ? <Text style={styles.danger}>Public delta {(delta * 100).toFixed(1)}pp</Text> : null}{row.reasons.map((reason) => <Text key={reason} style={styles.tiny}>• {reason}</Text>)}</View>; })}<Text style={styles.body}>Displayed weights: {(total * 100).toFixed(1)}% · amounts may retain cash residual after lots/FX.</Text></Card>
+    <Card><Text style={styles.heading}>Scenario path & drawdown</Text><View style={styles.chart} accessibilityLabel="Mock scenario NAV rises before a simulated drawdown; no historical performance claim"><View style={styles.chartLine} /><View style={styles.chartDrawdown} /></View><Text style={styles.muted}>{portfolioMetadata.navLabel}. Weak/main/strong differences appear in the worldline, not as guaranteed returns.</Text></Card>
+    <Card tone="warning"><Text style={styles.heading}>Risk & method</Text>{portfolio.rawReasons.map((reason) => <Text key={reason} style={styles.muted}>• FM: {reason}</Text>)}<Text style={styles.muted}>Method {portfolioMetadata.method}; data {portfolioMetadata.dataAsOf}. FX conversion, lot rounding, stale data and public constraints can materially change amounts.</Text><Text style={styles.danger}>No broker connection. No order, trade, execution, or custody action is available.</Text></Card>
+    <Button onPress={() => router.push("/archive")} label="Save privacy-safe local archive">Save research archive</Button><BottomNav />
+  </Screen>;
+}
