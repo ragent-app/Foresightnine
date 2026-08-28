@@ -1,5 +1,24 @@
 # Design fidelity QA
 
+## Phase 9 release-candidate boundary — 2026-08-29
+
+This section separates completed implementation evidence from the final production gate. The Web and Android artifacts below are QA evidence: deterministic/mock behavior, historical fixtures, and a debug APK are not production evidence and must not be described as such.
+
+The historical comparison tables below are retained as an audit trail. Their older `Sol pending` labels and runtime descriptions do not override this Phase 9 section or the dedicated Android Metro smoke record.
+
+### Completed Web and Android implementation evidence
+
+- Web Browser/IAB and local-browser runs exercised the thesis → challenge/evidence → worldline → client FM → Raw/Public Default → NAV/export path. Browser console `error`/`warn` collections were empty in the recorded runs. The current captures were inspected with `view_image` and are retained under `apps/web/qa/screenshots/`, including `web-01-thesis-current.jpg`, `web-02-challenge-current.jpg`, `web-03-worldline-current.jpg`, `web-06-nav-current.jpg`, `web-09-portfolio-desktop-fixed.png`, `web-11-fm-complete-fixed.png`, `web-12-methods-fixed.png`, `web-14-console-desktop.png`, and `web-15-console-mobile.png`.
+- The Web Phase 8 freshness/Public Default state was also inspected with `view_image` at `docs/qa/web/phase8-public-default.png`; unavailable provider freshness correctly disables current Public Default amounts and leaves residual cash visible. The available static QA bundle is `apps/web/dist/`, not a production deployment.
+- Android API-36 emulator evidence was exercised in the documented Metro + `adb reverse tcp:8081` debug/dev-client mode, including thesis, mock challenge/reservation, local FM, fail-closed provider behavior, and disabled Public Default amounts. `view_image` inspected `docs/qa/android/phase8-home.png`, `phase8-provider-fail-closed.png`, `phase8-public-default.png`, and the current re-install capture `phase9-current-home.png`; UI-tree evidence includes `phase8-home.xml` and `phase9-current-home.xml`. The APK used for this evidence is `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`, which is a debug QA artifact only. This does not prove an independently self-contained APK run without Metro; a signed release build remains a separate gate.
+- The API evidence is a deterministic mock run, not a live provider run. The rerunnable command is `uv run --project apps/api pytest apps/api/tests`; the latest recorded result is 124 API tests passed, as documented in `docs/progress.md`.
+
+### Final production gate still missing
+
+- No final production fidelity/launch gate is claimed. The Web bundle is an ignored static QA output, the Android package is debug-signed, and the API path is deterministic/mock unless a separately approved server deployment supplies a provider.
+- The remaining production gates are external or deployment-owned: legal/privacy/terms/risk and investment-advice review; market-data and FX licensing; server-side secret-manager injection with bundle/source-map/log/database scans; CAPTCHA, abuse quotas and Redis operations; UUID/security/dependency/container/CORS/CSP/SSRF review; observability, incident response, kill switches, rollback, retention/deletion approval; signed/fresh provider manifests; staged smoke/abuse/parity/rollback tests; and Android release signing, identity, EAS/Play, privacy and artifact provenance approvals.
+- Until those gates are recorded by the release owner, neither the QA screenshots nor the mock/debug artifacts may be used to claim public production readiness.
+
 ## Latest Web remediation evidence — 2026-08-23
 
 - The previously observed Public Default selector mismatch was corrected: the selected mode now has the selected glyph and `aria-pressed`, and the table caption/copy agree with the mode.
@@ -78,11 +97,11 @@ Each Web row consolidates the approved concept path, implementation screenshot, 
 
 The Web rows are evidence-ready but remain **Sol pending** until a fresh reviewer accepts this canonical log. Android comparison is intentionally deferred to Phase 7.
 
-### Android implementation + device evidence — 2026-08-24
+### Historical Android implementation + device evidence — 2026-08-24
 
 | State | Concept | Implementation evidence | Status |
 | --- | --- | --- | --- |
-| Input | `concepts/android/01-thesis-input.png` | Release artifact `docs/qa/android/phase7-release-home.png`; API 36 emulator, no Metro/reverse mapping | visually inspected; device pass; Sol pending |
+| Input | `concepts/android/01-thesis-input.png` | Historical capture `docs/qa/android/phase7-release-home.png`; its original runtime details are superseded by the explicit Phase 9 Metro + `adb reverse` record above | visually inspected; historical evidence |
 | Challenge | `concepts/android/02-challenge-conversation.png` | `docs/qa/android/phase7-challenge.png` plus UI tree; mock rubric/reply flow and gesture-safe CTA exercised | visually inspected; device pass; Sol pending |
 | Evidence | `concepts/android/03-evidence-workspace.png` | Local B-grade fixture and release `ACTION_SEND text/plain` evidence in `phase7-release-share-import.xml`; no fetch performed | device pass; Sol pending |
 | Worldline | `concepts/android/04-worldline-timeline.png` | `docs/qa/android/phase7-worldline.png`; probability interval, calibration and reveal copy visible | visually inspected; device pass; Sol pending |
