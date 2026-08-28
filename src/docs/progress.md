@@ -1,5 +1,12 @@
 # Progress
 
+## Dependency audit remediation — 2026-08-29
+
+- A fresh Sol commitment-boundary review approved a narrowly scoped fix for `GHSA-w5hq-g745-h8pq`: the only vulnerable production path was Expo's `xcode@3.0.1 -> uuid@7.0.3` edge, and `xcode` only requires the CommonJS `uuid.v4()` interface. No plan, agent, governance, FM reference, or read-only source was changed.
+- Terra first confirmed that `package.json.pnpm.overrides` is ignored by pnpm 11.21.0, reverted that attempt, and left no tracked-file change. The corrected implementation uses the supported root `overrides` entry `xcode@3.0.1>uuid: 11.1.1` in `pnpm-workspace.yaml`; the lockfile changes only the override metadata and the `uuid` package/snapshot edge. The accidental untracked `src/uuid` install log was removed.
+- Primary verification passed: `corepack pnpm audit --prod` (`No known vulnerabilities found`); CommonJS installed-tree smoke (`xcode` 3.0.1 loaded, `uuid` 11.1.1, `uuid.v4()` and xcode project export available); `corepack pnpm test` (FM 16, domain 9, asset registry 2, Web 49, Android 41, API 128); typecheck; generated contracts; governance boundaries; six immutable FM references; 9WL audit; production preflight (9/9); release-candidate verifier; `git diff --check`; and `corepack pnpm scan:secrets` (518 unique Git-history blobs).
+- `corepack pnpm --filter @foresightnine/mobile export:android` passed. Android Gradle debug build remains unverified on this host because neither `java` nor `JAVA_HOME` is available; the existing APK is still QA-only and no signed release artifact is claimed. Overall public-release goal remains active behind live provider/search runtime, database/Redis/CAPTCHA operations, licensed data, approvals, Docker build/startup, signing, and public deployment evidence.
+
 ## Post-Phase 9 production preparation — 2026-08-29
 
 - A fresh Sol production-preparation audit found locally fixable release-safety gaps: unknown or hardened mock LLM selectors could fall back to simulated output, the API Dockerfile omitted `packages/asset-registry`, Compose used an unread provider variable, and Android accepted non-contract search-result hashes. It also separated external blockers that cannot be completed without new credentials, runtime infrastructure, licensed data, legal approval, or release ownership.
