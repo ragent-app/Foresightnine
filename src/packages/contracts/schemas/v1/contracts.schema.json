@@ -92,6 +92,8 @@
             "publisher": { "type": "string", "minLength": 1, "maxLength": 300 },
             "published_at": { "type": "string", "format": "date-time" },
             "retrieved_at": { "type": "string", "format": "date-time" },
+            "search_provider": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "search_result_hash": { "$ref": "#/$defs/Sha256" },
             "excerpt": { "type": "string", "minLength": 1, "maxLength": 10000 },
             "user_note": { "type": "string", "maxLength": 2000 },
             "grade": { "enum": ["A", "B", "C", "D", "E"] },
@@ -634,6 +636,8 @@
         "publisher": { "type": "string", "minLength": 1, "maxLength": 300 },
         "published_at": { "type": "string", "format": "date-time" },
         "retrieved_at": { "type": "string", "format": "date-time" },
+        "search_provider": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "search_result_hash": { "$ref": "#/$defs/Sha256" },
         "excerpt": { "type": "string", "minLength": 1, "maxLength": 10000 },
         "user_note": { "type": "string", "maxLength": 2000 },
         "content_hash": { "$ref": "#/$defs/Sha256" }
@@ -704,7 +708,14 @@
     },
     "HealthResponse": {
       "type": "object", "additionalProperties": false, "required": ["status", "provider", "schema_version", "clock"],
-      "properties": { "status": { "const": "ok" }, "provider": { "const": "deterministic_mock" }, "schema_version": { "$ref": "#/$defs/SchemaVersion" }, "clock": { "type": "string", "format": "date-time" } }
+      "properties": {
+        "status": { "const": "ok" },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "search_provider": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "project_search_available": { "type": "boolean" },
+        "schema_version": { "$ref": "#/$defs/SchemaVersion" },
+        "clock": { "type": "string", "format": "date-time" }
+      }
     },
     "SessionOperationResponse": {
       "type": "object", "additionalProperties": false, "required": ["operation", "session"],
@@ -741,6 +752,32 @@
     "AssetSearchResponse": {
       "type": "object", "additionalProperties": false, "required": ["schema_version", "items", "total"],
       "properties": { "schema_version": { "$ref": "#/$defs/SchemaVersion" }, "items": { "type": "array", "items": { "$ref": "#/$defs/AssetRegistryEntry" } }, "total": { "type": "integer", "minimum": 0 } }
+    },
+    "SearchCandidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["search_result_hash", "search_provider", "title", "url", "excerpt", "retrieved_at", "independently_reviewable"],
+      "properties": {
+        "search_result_hash": { "$ref": "#/$defs/Sha256" },
+        "search_provider": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "url": { "type": "string", "format": "uri" },
+        "excerpt": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "publisher": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "published_at": { "type": "string", "format": "date-time" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "independently_reviewable": { "type": "boolean" }
+      }
+    },
+    "SearchCandidatesResponse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "provider", "project_search_available", "fallback", "candidates"],
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/SchemaVersion" },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "project_search_available": { "type": "boolean" },
+        "fallback": { "const": "client_bundle" },
+        "candidates": { "type": "array", "maxItems": 10, "items": { "$ref": "#/$defs/SearchCandidate" } }
+      }
     },
     "MethodologyResponse": {
       "type": "object", "additionalProperties": false, "required": ["schema_version", "methodology_version", "disclosure", "probability_display", "client_computation"],

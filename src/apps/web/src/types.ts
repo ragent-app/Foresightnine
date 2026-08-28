@@ -1,12 +1,13 @@
 import type { EvidenceItem, ProbabilityAssessment, ThesisDocument, Worldline } from "@foresightnine/contracts";
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
 
-export type Stage = "thesis" | "challenge" | "worldline" | "fm" | "portfolio" | "nav" | "methods";
+export type Stage = "thesis" | "challenge" | "worldline" | "fm" | "portfolio" | "nav" | "console";
 export type ChallengeStatus = "idle" | "streaming" | "cancelled" | "recovering" | "failed" | "complete";
 export type FmStatus = "idle" | "computing" | "complete" | "cancelled" | "failed";
 export type PortfolioMode = "raw" | "public";
 export type StressScenario = "weak" | "main" | "strong";
 export type Currency = "CNY" | "USD" | "EUR";
+export type Language = "zh" | "en";
 export type EvidenceGrade = "A" | "B" | "C" | "D" | "E";
 
 export interface SearchEvidenceBundle {
@@ -24,6 +25,8 @@ export interface SearchEvidenceBundle {
   readonly grade: EvidenceGrade;
   readonly supports_or_challenges: "supports" | "challenges" | "context";
   readonly independently_reviewable: boolean;
+  readonly search_provider?: string;
+  readonly search_result_hash?: string;
   readonly fixture?: boolean;
 }
 
@@ -36,6 +39,27 @@ export interface EvidenceDraft {
   readonly user_note: string;
   readonly supports_or_challenges: SearchEvidenceBundle["supports_or_challenges"];
   readonly grade: EvidenceGrade;
+  readonly search_provider?: string;
+  readonly search_result_hash?: string;
+}
+
+export interface SearchCandidate {
+  readonly search_result_hash: string;
+  readonly search_provider: string;
+  readonly title: string;
+  readonly url: string;
+  readonly excerpt: string;
+  readonly publisher?: string;
+  readonly published_at?: string;
+  readonly retrieved_at: string;
+  readonly independently_reviewable: boolean;
+}
+
+export interface SearchCandidatesResult {
+  readonly provider: string;
+  readonly project_search_available: boolean;
+  readonly fallback: "client_bundle";
+  readonly candidates: readonly SearchCandidate[];
 }
 
 export interface EvidenceErrors {
@@ -60,6 +84,9 @@ export interface EvidenceView extends Pick<EvidenceItem, "evidence_id" | "challe
   readonly publisher: string;
   readonly published_at: string;
   readonly user_note: string;
+  /** Hash/provenance of an explicitly selected project-search candidate. */
+  readonly search_provider?: string;
+  readonly search_result_hash?: string;
   readonly fixture?: boolean;
 }
 
@@ -143,6 +170,7 @@ export interface AllocationRow {
 
 export interface AppState {
   readonly stage: Stage;
+  readonly language: Language;
   readonly viewpoint: string;
   readonly capital: string;
   readonly currency: Currency;
@@ -153,6 +181,8 @@ export interface AppState {
   readonly rubric: readonly RubricView[];
   readonly evidence: readonly EvidenceView[];
   readonly confirmation: "pending" | "confirmed" | "reserved";
+  readonly unresolvedIssuesAcknowledged: boolean;
+  readonly reservationNote: string;
   readonly selectedBranch: BranchView["kind"];
   readonly fmStatus: FmStatus;
   readonly fmProgress: number;
@@ -166,6 +196,7 @@ export interface AppState {
 
 export type AppAction =
   | { readonly type: "set_stage"; readonly stage: Stage }
+  | { readonly type: "set_language"; readonly language: Language }
   | { readonly type: "set_viewpoint"; readonly viewpoint: string }
   | { readonly type: "set_capital"; readonly capital: string }
   | { readonly type: "set_currency"; readonly currency: Currency }
@@ -178,6 +209,8 @@ export type AppAction =
   | { readonly type: "challenge_recover" }
   | { readonly type: "challenge_fail" }
   | { readonly type: "add_evidence"; readonly evidence: EvidenceView }
+  | { readonly type: "set_unresolved_issues_acknowledged"; readonly acknowledged: boolean }
+  | { readonly type: "set_reservation_note"; readonly note: string }
   | { readonly type: "confirm"; readonly confirmation: "confirmed" | "reserved" }
   | { readonly type: "select_branch"; readonly branch: BranchView["kind"] }
   | { readonly type: "fm_start" }

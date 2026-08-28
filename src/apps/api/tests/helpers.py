@@ -20,12 +20,23 @@ def idem(value: str) -> dict[str, str]:
     return {"Idempotency-Key": value}
 
 
-def evidence_hash(*, url: str | None, title: str, published_at: str | None, retrieved_at: str, excerpt: str, user_note: str) -> str:
+def evidence_hash(
+    *,
+    url: str | None,
+    title: str,
+    published_at: str | None,
+    retrieved_at: str,
+    excerpt: str,
+    user_note: str,
+    search_provider: str | None = None,
+    search_result_hash: str | None = None,
+) -> str:
     return SearchEvidenceBundle(
         url=url, title=title,
         published_at=datetime.fromisoformat(published_at.replace("Z", "+00:00")) if published_at else None,
         retrieved_at=datetime.fromisoformat(retrieved_at.replace("Z", "+00:00")),
         excerpt=excerpt, user_note=user_note, supplied_content_hash="",
+        search_provider=search_provider, search_result_hash=search_result_hash,
     ).expected_content_hash()
 
 

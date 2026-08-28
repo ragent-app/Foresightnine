@@ -1,6 +1,7 @@
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
 import { ASSET_FIXTURES, MARKET_DATA_AS_OF, PUBLIC_CONSTRAINTS, fxToBase, isPublicEligible } from "./fixtures";
-import type { AllocationRow, AppAction, AppState, AssetFixture, BranchView, Currency, EvidenceView, PortfolioMode, PublicConstraintReason, RubricView, TranscriptTurn } from "./types";
+import { isSafeEvidenceUrl, parseCapital } from "./validation";
+import type { AllocationRow, AppAction, AppState, AssetFixture, BranchView, ChallengeStatus, Currency, EvidenceView, PortfolioMode, PublicConstraintReason, RubricView, TranscriptTurn } from "./types";
 
 export const rubricDefaults: readonly RubricView[] = [
   { label: "前提清晰度", score: 3, max: 4, rationale: "观点已提交，但仍需确认关键假设。" },
@@ -15,8 +16,36 @@ export const rubricDefaults: readonly RubricView[] = [
   { label: "用户确认", score: 1, max: 4, rationale: "等待用户回复反方问题并选择确认方式。" },
 ];
 
+export const rubricDefaultsEn: readonly RubricView[] = [
+  { label: "Premise clarity", score: 3, max: 4, rationale: "The thesis is submitted, but its key assumptions still need confirmation." },
+  { label: "Time boundary", score: 4, max: 4, rationale: "The baseline and 24-month window are explicit." },
+  { label: "Observable trigger", score: 3, max: 4, rationale: "Observable demand, investment, or order signals are proposed." },
+  { label: "Causal chain", score: 3, max: 4, rationale: "The trigger and asset impact are connected." },
+  { label: "Counterfactuals", score: 2, max: 4, rationale: "Add alternative paths such as tighter financing or weaker demand." },
+  { label: "Evidence quality", score: 1, max: 4, rationale: "No independently reviewable public evidence has been attached yet." },
+  { label: "Asset transmission", score: 3, max: 4, rationale: "The asset direction is proposed, but transmission strength still needs evidence." },
+  { label: "Priced-in risk", score: 2, max: 4, rationale: "It is not yet established how much of the thesis is already priced in." },
+  { label: "Falsifiability", score: 3, max: 4, rationale: "Observable indicators exist, but public evidence still needs strengthening." },
+  { label: "User confirmation", score: 1, max: 4, rationale: "Waiting for the user's counterargument response and confirmation choice." },
+];
+
+export function rubricFor(language: AppState["language"]): readonly RubricView[] {
+  return language === "en" ? rubricDefaultsEn : rubricDefaults;
+}
+
+function localizeRubric(rubric: readonly RubricView[], language: AppState["language"]): readonly RubricView[] {
+  const defaults = rubricFor(language);
+  return defaults.map((item, index) => ({ ...item, score: rubric[index]?.score ?? item.score }));
+}
+
+function rubricLabel(language: AppState["language"], zhLabel: string): string {
+  const index = rubricDefaults.findIndex((item) => item.label === zhLabel);
+  return rubricFor(language)[index]?.label ?? zhLabel;
+}
+
 export const initialState: AppState = {
   stage: "thesis",
+  language: "zh",
   viewpoint: "",
   capital: "100000",
   currency: "CNY",
@@ -27,6 +56,8 @@ export const initialState: AppState = {
   rubric: rubricDefaults,
   evidence: [],
   confirmation: "pending",
+  unresolvedIssuesAcknowledged: false,
+  reservationNote: "",
   selectedBranch: "main",
   fmStatus: "idle",
   fmProgress: 0,
@@ -38,41 +69,89 @@ export const initialState: AppState = {
   exportNotice: "",
 };
 
-function challengeTurnsFor(viewpoint: string): readonly [TranscriptTurn, TranscriptTurn] {
-  const premise = viewpoint.trim() || "（尚未填写观点）";
+function challengeTurnsFor(viewpoint: string, language: AppState["language"]): readonly [TranscriptTurn, TranscriptTurn] {
+  const premise = viewpoint.trim() || (language === "en" ? "(no thesis entered)" : "（尚未填写观点）");
+  const challengerBody = language === "en"
+    ? `Strongest counterargument around "${premise}": which observable evidence would show this causal chain is occurring? If the key trigger does not appear, what would invalidate the conclusion?`
+    : `围绕「${premise}」，最强反方问题是：哪些可观察证据能证明这条因果链正在发生？如果关键触发条件没有出现，哪一项会使结论失效？`;
   return [
     { id: "user-1", author: "user", time: "现在", body: premise },
-    { id: "challenger-1", author: "challenger", time: "现在", body: `围绕「${premise}」，最强反方问题是：哪些可观察证据能证明这条因果链正在发生？如果关键触发条件没有出现，哪一项会使结论失效？` },
+    { id: "challenger-1", author: "challenger", time: "现在", body: challengerBody },
   ];
+}
+
+/** Replies are valid only after a started challenge has a usable transcript. */
+export function canSubmitReply(status: ChallengeStatus, turns: readonly TranscriptTurn[]): boolean {
+  if (!["streaming", "recovering"].includes(status) || !hasStartedChallenge(turns)) return false;
+  const challengerIndex = turns.findIndex((turn) => turn.author === "challenger");
+  return challengerIndex >= 0 && !turns.slice(challengerIndex + 1).some((turn) => turn.author === "user");
+}
+
+function hasStartedChallenge(turns: readonly TranscriptTurn[]): boolean {
+  if (!Array.isArray(turns) || turns.length < 2) return false;
+  const ids = new Set<string>();
+  for (const turn of turns) {
+    if (!turn || typeof turn.id !== "string" || turn.id.trim().length === 0 || ids.has(turn.id) || !["user", "challenger", "system"].includes(turn.author) || typeof turn.body !== "string" || turn.body.trim().length === 0) return false;
+    ids.add(turn.id);
+  }
+  return turns.some((turn) => turn.author === "challenger");
+}
+
+/** A completed challenge must contain a real challenger turn followed by a user reply. */
+export function hasValidCompletedChallenge(status: ChallengeStatus, turns: readonly TranscriptTurn[]): boolean {
+  if (status !== "complete" || !hasStartedChallenge(turns)) return false;
+  const challengerIndex = turns.findIndex((turn) => turn.author === "challenger");
+  return challengerIndex >= 0 && turns.slice(challengerIndex + 1).some((turn) => turn.author === "user");
+}
+
+function resetWorkflow(state: AppState, viewpoint: string): AppState {
+  return { ...initialState, language: state.language, viewpoint, capital: state.capital, currency: state.currency, rubric: rubricFor(state.language), draftRestored: false };
 }
 
 export function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case "set_stage": return { ...state, stage: action.stage };
-    case "set_viewpoint": return { ...state, viewpoint: action.viewpoint, draftRestored: false };
+    case "set_stage": return canEnterStage(state, action.stage) ? { ...state, stage: action.stage } : { ...state, stage: safeStageFor(state) };
+    case "set_language": return { ...state, language: action.language, rubric: localizeRubric(state.rubric, action.language) };
+    case "set_viewpoint": {
+      if (action.viewpoint === state.viewpoint) return { ...state, draftRestored: false };
+      // A viewpoint is the root identity of every downstream artifact.  Keep
+      // only the user inputs and locale when it changes; no challenge,
+      // evidence, worldline, FM, or portfolio state may cross that boundary.
+      return resetWorkflow(state, action.viewpoint);
+    }
     case "set_capital": return { ...state, capital: action.capital, draftRestored: false };
     case "set_currency": return { ...state, currency: action.currency, draftRestored: false };
     case "restore_draft": return { ...state, viewpoint: action.draft.viewpoint, capital: action.draft.capital, currency: action.draft.currency, draftRestored: true };
-    case "start_challenge": return { ...state, stage: "challenge", challengeStatus: "streaming", challengeTurns: [...challengeTurnsFor(action.viewpoint ?? state.viewpoint)], replyDraft: "", exportNotice: "" };
+    case "start_challenge": {
+      const viewpoint = action.viewpoint ?? state.viewpoint;
+      if (viewpoint.trim().length === 0 || parseCapital(state.capital) <= 0) return { ...state, stage: safeStageFor(state) };
+      const fresh = resetWorkflow(state, viewpoint);
+      return { ...fresh, stage: "challenge", challengeStatus: "streaming", challengeTurns: [...challengeTurnsFor(viewpoint, state.language)] };
+    }
     case "set_reply_draft": return { ...state, replyDraft: action.draft };
-    case "submit_reply": return action.body.trim().length === 0 ? state : { ...state, replyDraft: "", rubric: updateRubric(state.rubric, { "用户确认": { score: 3, rationale: "用户已回答反方问题，仍需选择确认方式。" } }), challengeTurns: [...state.challengeTurns, { id: `user-reply-${state.challengeTurns.length + 1}`, author: "user", time: "现在", body: action.body.trim() }] };
-    case "challenge_complete": return { ...state, challengeStatus: "complete", fmStep: "反方审查完成" };
-    case "challenge_cancel": return { ...state, challengeStatus: "cancelled", challengeTurns: [...state.challengeTurns, { id: "cancelled-1", author: "system", time: "现在", body: "已取消生成；已接收内容和证据仍保留。" }] };
-    case "challenge_recover": return { ...state, challengeStatus: "recovering" };
-    case "challenge_fail": return { ...state, challengeStatus: "failed" };
-    case "add_evidence": return state.evidence.some((item) => item.evidence_id === action.evidence.evidence_id) ? state : { ...state, rubric: updateRubric(state.rubric, { "证据质量": { score: 3, rationale: "已附上证据；来源等级与可复核状态仍保留。" }, "反事实与替代解释": { score: 3, rationale: "证据已用于检验替代解释，仍需持续复核。" }, "市场已定价程度": { score: 3, rationale: "证据已进入已定价程度审查，仍不是事实判断。" } }), evidence: [...state.evidence, action.evidence] };
-    case "confirm": return action.confirmation === "confirmed" && !canConfirmNormally(state) ? state : { ...state, confirmation: action.confirmation, stage: "worldline" };
+    case "submit_reply": return action.body.trim().length === 0 || state.stage !== "challenge" || !canSubmitReply(state.challengeStatus, state.challengeTurns) ? state : { ...state, replyDraft: "", challengeStatus: "complete", fmStep: "反方审查完成", rubric: updateRubric(state.rubric, { [rubricLabel(state.language, "用户确认")]: { score: 3, rationale: state.language === "en" ? "The user answered the counterargument; a confirmation choice is still required." : "用户已回答反方问题，仍需选择确认方式。" } }), challengeTurns: [...state.challengeTurns, { id: `user-reply-${state.challengeTurns.length + 1}`, author: "user", time: "现在", body: action.body.trim() }] };
+    case "challenge_complete": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasValidCompletedChallenge("complete", state.challengeTurns) ? { ...state, challengeStatus: "complete", fmStep: "反方审查完成" } : state;
+    case "challenge_cancel": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "cancelled", challengeTurns: [...state.challengeTurns, { id: `cancelled-${state.challengeTurns.length + 1}`, author: "system", time: "现在", body: "已取消生成；已接收内容和证据仍保留。" }] } : state;
+    case "challenge_recover": return ["cancelled", "failed"].includes(state.challengeStatus) && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "recovering" } : state;
+    case "challenge_fail": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "failed" } : state;
+    case "add_evidence": return state.evidence.some((item) => item.evidence_id === action.evidence.evidence_id) ? state : { ...state, rubric: updateRubric(state.rubric, { [rubricLabel(state.language, "证据质量")]: { score: 3, rationale: state.language === "en" ? "Evidence is attached; source grade and reviewability remain explicit." : "已附上证据；来源等级与可复核状态仍保留。" }, [rubricLabel(state.language, "反事实与替代解释")]: { score: 3, rationale: state.language === "en" ? "Evidence is being used to test alternatives; continued review is required." : "证据已用于检验替代解释，仍需持续复核。" }, [rubricLabel(state.language, "市场已定价程度")]: { score: 3, rationale: state.language === "en" ? "Evidence is included in the priced-in review; it is not a fact judgment." : "证据已进入已定价程度审查，仍不是事实判断。" } }), evidence: [...state.evidence, action.evidence] };
+    case "set_unresolved_issues_acknowledged": return { ...state, unresolvedIssuesAcknowledged: action.acknowledged };
+    case "set_reservation_note": return { ...state, reservationNote: action.note };
+    case "confirm": {
+      const allowed = action.confirmation === "confirmed" ? canConfirmNormally(state) : canConfirmReserved(state);
+      return !allowed ? state : { ...state, confirmation: action.confirmation, stage: "worldline" };
+    }
     case "select_branch": return { ...state, selectedBranch: action.branch };
-    case "fm_start": return { ...state, stage: "fm", fmStatus: "computing", fmProgress: 8, fmStep: "正在验证签名数据快照…", exportNotice: "" };
-    case "fm_progress": return { ...state, fmProgress: action.progress, fmStep: action.step };
-    case "fm_complete": return { ...state, fmStatus: "complete", fmProgress: 100, fmStep: "本地计算完成，原始结果已保留", fmResult: action.result, stage: "fm" };
-    case "fm_cancel": return { ...state, fmStatus: "cancelled", fmStep: "本地计算已取消；中间结果未上传。" };
-    case "fm_fail": return { ...state, fmStatus: "failed", fmStep: "计算失败。研究状态仍已保存，可重试。" };
+    case "fm_start": return canStartFm(state) ? { ...state, stage: "fm", fmStatus: "computing", fmProgress: 8, fmStep: "正在验证签名数据快照…", exportNotice: "" } : state;
+    case "fm_progress": return state.fmStatus === "computing" && state.stage === "fm" ? { ...state, fmProgress: action.progress, fmStep: action.step } : state;
+    case "fm_complete": return state.fmStatus === "computing" && state.stage === "fm" ? { ...state, fmStatus: "complete", fmProgress: 100, fmStep: "本地计算完成，原始结果已保留", fmResult: action.result, stage: "fm" } : state;
+    case "fm_cancel": return state.stage === "fm" && state.fmStatus === "computing" ? { ...state, fmStatus: "cancelled", fmStep: "本地计算已取消；中间结果未上传。" } : state;
+    case "fm_fail": return state.stage === "fm" && state.fmStatus === "computing" ? { ...state, fmStatus: "failed", fmStep: "计算失败。研究状态仍已保存，可重试。" } : state;
     case "set_mode": return { ...state, portfolioMode: action.mode };
     case "set_stress": return { ...state, stressScenario: action.scenario };
     case "toggle_drawdown": return { ...state, drawdownVisible: !state.drawdownVisible };
     case "export_notice": return { ...state, exportNotice: action.notice };
-    case "reset": return initialState;
+    case "reset": return { ...initialState, language: state.language, rubric: rubricFor(state.language) };
   }
   return state;
 }
@@ -83,11 +162,81 @@ export function updateRubric(rubric: readonly RubricView[], updates: Readonly<Re
   return rubric.map((item) => updates[item.label] ? { ...item, ...updates[item.label], score: Math.max(0, Math.min(item.max, updates[item.label]!.score)) } : item);
 }
 
-export function canConfirmNormally(state: Pick<AppState, "challengeStatus" | "rubric" | "evidence">): boolean {
-  if (state.challengeStatus !== "complete" || totalRubricScore(state.rubric) < 30) return false;
-  const required = new Set(["前提清晰度", "时间边界", "因果链", "资产传导", "可证伪性"]);
-  if ([...required].some((label) => (state.rubric.find((item) => item.label === label)?.score ?? 0) < 3)) return false;
-  return state.evidence.some((item) => item.independently_reviewable && item.grade !== "D" && item.grade !== "E");
+const PUBLIC_EVIDENCE_SOURCE_GRADE: Readonly<Record<EvidenceView["source_type"], EvidenceView["grade"]>> = {
+  primary: "A",
+  reliable_secondary: "B",
+  commentary: "C",
+  user_private: "D",
+  model_inference: "E",
+};
+
+function isSemanticallyValidEvidence(item: EvidenceView): boolean {
+  const expectedGrade = PUBLIC_EVIDENCE_SOURCE_GRADE[item.source_type];
+  return expectedGrade === item.grade && (item.grade === "D" || item.grade === "E" || isSafeEvidenceUrl(item.url.trim()));
+}
+
+function isDerivedPublicEvidence(item: EvidenceView): boolean {
+  return (item.grade === "A" || item.grade === "B" || item.grade === "C")
+    && PUBLIC_EVIDENCE_SOURCE_GRADE[item.source_type] === item.grade
+    && isSafeEvidenceUrl(item.url.trim());
+}
+
+function isCanonicalRubric(rubric: readonly RubricView[], language: AppState["language"]): boolean {
+  const canonical = rubricFor(language);
+  return rubric.length === canonical.length && rubric.every((item, index) => {
+    const expected = canonical[index];
+    return expected !== undefined && item.label === expected.label && item.max === expected.max && Number.isSafeInteger(item.score) && item.score >= 0 && item.score <= item.max && typeof item.rationale === "string";
+  });
+}
+
+type ConfirmationState = Pick<AppState, "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "unresolvedIssuesAcknowledged" | "reservationNote">;
+
+export function canConfirmNormally(state: ConfirmationState): boolean {
+  if (!hasValidCompletedChallenge(state.challengeStatus, state.challengeTurns) || !isCanonicalRubric(state.rubric, state.language) || totalRubricScore(state.rubric) < 30) return false;
+  const requiredIndices = [0, 1, 3, 6, 8];
+  if (requiredIndices.some((index) => (state.rubric[index]?.score ?? 0) < 3)) return false;
+  return state.evidence.every(isSemanticallyValidEvidence) && state.evidence.some(isDerivedPublicEvidence);
+}
+
+export function canConfirmReserved(state: ConfirmationState): boolean {
+  return hasValidCompletedChallenge(state.challengeStatus, state.challengeTurns)
+    && isCanonicalRubric(state.rubric, state.language)
+    && state.evidence.every(isSemanticallyValidEvidence)
+    && state.unresolvedIssuesAcknowledged
+    && state.reservationNote.trim().length > 0;
+}
+
+export function canEnterWorldline(state: Pick<AppState, "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote">): boolean {
+  return state.confirmation === "confirmed" ? canConfirmNormally(state) : state.confirmation === "reserved" ? canConfirmReserved(state) : false;
+}
+
+export function canStartFm(state: Pick<AppState, "stage" | "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote">): boolean {
+  return (state.stage === "worldline" || state.stage === "fm") && canEnterWorldline(state);
+}
+
+export function canEnterStage(state: AppState, stage: AppState["stage"]): boolean {
+  switch (stage) {
+    case "thesis":
+    case "console":
+      return true;
+    case "challenge":
+      return state.viewpoint.trim().length > 0 && parseCapital(state.capital) > 0;
+    case "worldline":
+      return canEnterWorldline(state);
+    case "fm":
+      return canEnterWorldline(state) && ((state.fmStatus === "complete" && state.fmResult !== null) || (state.stage === "worldline" && state.fmStatus !== "complete") || (state.stage === "fm" && (state.fmStatus === "computing" || state.fmStatus === "complete")));
+    case "portfolio":
+    case "nav":
+      return state.fmStatus === "complete" && state.fmResult !== null && canEnterWorldline(state);
+  }
+}
+
+export function safeStageFor(state: AppState): AppState["stage"] {
+  if (canEnterStage(state, state.stage)) return state.stage;
+  if (state.stage === "thesis" || state.stage === "challenge") return canEnterStage(state, "challenge") ? "challenge" : "thesis";
+  if (!canEnterWorldline(state)) return canEnterStage(state, "challenge") ? "challenge" : "thesis";
+  if (state.stage === "portfolio" || state.stage === "nav") return state.fmStatus === "complete" && state.fmResult !== null ? "fm" : "worldline";
+  return "worldline";
 }
 
 const fallbackCash: AssetFixture = { assetId: "CASH", displayName: "现金等价物", economicExposureId: "cash", instrumentId: "CASH", assetClass: "cash", quoteCurrency: "CNY", price: 1, lotSize: 1, fractionalSupported: true, tradable: true, liquidity: "high", volatility: "low", asOf: MARKET_DATA_AS_OF, freshness: "current" };

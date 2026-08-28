@@ -1,3 +1,3 @@
 /// <reference types="expo/types" />
 
-// Expo Router resolves routes from the app directory at build time.
+// NOTE: This file should not be edited and should be in your git ignore

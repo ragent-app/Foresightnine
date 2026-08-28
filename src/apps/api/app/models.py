@@ -16,7 +16,7 @@ _MODEL_NAMES = (
     "ResumeOperationRequest", "HealthResponse", "SessionOperationResponse", "ChallengeOperationResponse",
     "WorldlineBundleOperationResponse", "ProbabilityOperationResponse", "MarketDataManifestOperationResponse",
     "MarketDataShardOperationResponse", "ClientAttestationOperationResponse", "OperationResponse",
-    "AssetSearchResponse", "MethodologyResponse", "AcceptanceFixtureExpected", "AcceptanceFixture",
+    "AssetSearchResponse", "SearchCandidate", "SearchCandidatesResponse", "MethodologyResponse", "AcceptanceFixtureExpected", "AcceptanceFixture",
 )
 
 globals().update({name: model_for(name) for name in _MODEL_NAMES})

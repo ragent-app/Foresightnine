@@ -10,7 +10,14 @@ from .helpers import CLIENT, assert_contract, confirm_standard_flow, create_chal
 def test_health_and_strict_error_envelope() -> None:
     response = CLIENT.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "provider": "deterministic_mock", "schema_version": "v1", "clock": "2026-08-10T00:00:00Z"}
+    assert response.json() == {
+        "status": "ok",
+        "provider": "deterministic_mock",
+        "search_provider": "client-evidence-bundle",
+        "project_search_available": False,
+        "schema_version": "v1",
+        "clock": "2026-08-10T00:00:00Z",
+    }
     assert_contract(response.json(), "HealthResponse")
 
     invalid = CLIENT.post("/v1/sessions", json={"unknown": True}, headers=idem("invalid-session-key"))

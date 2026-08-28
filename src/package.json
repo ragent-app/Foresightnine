@@ -14,6 +14,7 @@
     "verify:generated-contracts": "node scripts/verify/generated-contracts.mjs",
     "verify:phase1": "corepack pnpm verify:generated-contracts && corepack pnpm --filter @foresightnine/contracts test && corepack pnpm --filter @foresightnine/domain test && corepack pnpm --filter @foresightnine/asset-registry test && uv run --project apps/api pytest apps/api/tests",
     "verify:phase2": "node scripts/verify/design-assets.mjs && node scripts/verify/design-assets-regression.mjs && corepack pnpm --filter @foresightnine/design-system typecheck",
+    "audit:worldline-fixtures": "node scripts/verify/worldline-fixture-audit.mjs",
     "scan:secrets": "node scripts/verify/secret-scan.mjs",
     "typecheck": "corepack pnpm -r typecheck",
     "test:api": "uv run --project apps/api pytest apps/api/tests",

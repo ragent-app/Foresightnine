@@ -47,8 +47,8 @@ export const demoThesis = (viewpoint: string, capital: number, currency: Currenc
   status: "DRAFT",
 });
 
-export function evidenceHash(item: Pick<EvidenceView, "evidence_id" | "challenge_id" | "source_type" | "url" | "title" | "publisher" | "published_at" | "retrieved_at" | "excerpt" | "user_note" | "grade" | "supports_or_challenges" | "independently_reviewable">): string {
-  return sha256Hex(JSON.stringify({ evidence_id: item.evidence_id, challenge_id: item.challenge_id, source_type: item.source_type, url: item.url, title: item.title, publisher: item.publisher, published_at: item.published_at, retrieved_at: item.retrieved_at, excerpt: item.excerpt, user_note: item.user_note, grade: item.grade, supports_or_challenges: item.supports_or_challenges, independently_reviewable: item.independently_reviewable }));
+export function evidenceHash(item: Pick<EvidenceView, "evidence_id" | "challenge_id" | "source_type" | "url" | "title" | "publisher" | "published_at" | "retrieved_at" | "excerpt" | "user_note" | "grade" | "supports_or_challenges" | "independently_reviewable" | "search_provider" | "search_result_hash">): string {
+  return sha256Hex(JSON.stringify({ evidence_id: item.evidence_id, challenge_id: item.challenge_id, source_type: item.source_type, url: item.url, title: item.title, publisher: item.publisher, published_at: item.published_at, retrieved_at: item.retrieved_at, excerpt: item.excerpt, user_note: item.user_note, grade: item.grade, supports_or_challenges: item.supports_or_challenges, independently_reviewable: item.independently_reviewable, search_provider: item.search_provider ?? null, search_result_hash: item.search_result_hash ?? null }));
 }
 
 export interface SourceMaterialHashInput {
@@ -104,6 +104,7 @@ function makeEvidence(item: Omit<EvidenceView, "sourceLabel" | "publisher" | "co
     grade: item.grade,
     supports_or_challenges: item.supports_or_challenges,
     independently_reviewable: isEvidenceIndependentlyReviewable(item.grade, item.source_type, item.url),
+    ...(item.search_provider && item.search_result_hash ? { search_provider: item.search_provider, search_result_hash: item.search_result_hash } : {}),
     sourceLabel: item.sourceLabel,
   };
   return { ...base, content_hash: evidenceHash(base), fixture: true };
@@ -129,7 +130,8 @@ function worldline(kind: BranchView["kind"], title: string, description: string,
     { node_id: `${id}-2`, time_window: "+12 个月", event_date: "2027-08-10", data_as_of: MARKET_DATA_AS_OF, event: "传导结果可见", observable_indicators: ["订单交付", "利用率", "现金流"], causal_parents: [`${id}-1`], state_changes: ["现金流验证"], confidence: "medium" },
     { node_id: `${id}-3`, time_window: "+24 个月", event_date: "2028-08-10", data_as_of: MARKET_DATA_AS_OF, event: "估值再定价或失效", observable_indicators: ["利润兑现", "需求修正"], causal_parents: [`${id}-2`], state_changes: ["路径结算"], confidence: "low" },
   ];
-  return { ...metadata, worldline_id: id, bundle_id: `bundle-web-${suffix}`, branch_kind: kind, title, premise, baseline_date: "2026-08-10", horizon_end: "2028-08-10", nodes, edges: [{ from_node_id: `${id}-0`, to_node_id: `${id}-1` }, { from_node_id: `${id}-1`, to_node_id: `${id}-2` }, { from_node_id: `${id}-2`, to_node_id: `${id}-3` }], asset_anchors: ["GRID", "CHIP", "UTIL"], asset_impacts: [], event_reveal_schedule: nodes.map((node) => ({ event_id: node.node_id, event_date: node.event_date, reveal_date: node.event_date, rule: "scheduled" as const })), invalidation_conditions: [kind === "weak" ? "需求与投资没有恢复" : "需求增长低于用户观点中的基线", kind === "strong" ? "融资收紧或政策约束" : "资本开支指引连续下修"], provenance: "offline deterministic fixture; consumes user viewpoint; model estimate", status: "WORLDLINE_READY" };
+  const revealDates = ["2026-08-10", "2027-02-28", "2027-08-31", "2028-08-31"];
+  return { ...metadata, worldline_id: id, bundle_id: `bundle-web-${suffix}`, branch_kind: kind, title, premise, baseline_date: "2026-08-10", horizon_end: "2028-08-31", nodes, edges: [{ from_node_id: `${id}-0`, to_node_id: `${id}-1` }, { from_node_id: `${id}-1`, to_node_id: `${id}-2` }, { from_node_id: `${id}-2`, to_node_id: `${id}-3` }], asset_anchors: ["GRID", "CHIP", "UTIL"], asset_impacts: [], event_reveal_schedule: nodes.map((node, index) => ({ event_id: node.node_id, event_date: node.event_date, reveal_date: revealDates[index]!, rule: "scheduled" as const })), invalidation_conditions: [kind === "weak" ? "需求与投资没有恢复" : "需求增长低于用户观点中的基线", kind === "strong" ? "融资收紧或政策约束" : "资本开支指引连续下修"], provenance: "offline deterministic fixture; consumes user viewpoint; model estimate", status: "WORLDLINE_READY" };
 }
 
 export function makeBranches(viewpoint: string): readonly BranchView[] {

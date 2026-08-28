@@ -1,0 +1,18 @@
+// Windows-only build helper. It keeps generated CMake/Ninja files out of
+// PNPM's deep package paths; it does not alter application or release config.
+def cxxRoot = new File(System.getProperty('foresightnine.cxx.root', 'C:/fn-cxx'))
+
+gradle.afterProject { project, state ->
+    if (state.failure != null) {
+        return
+    }
+
+    def android = project.extensions.findByName('android')
+    def cmake = android?.externalNativeBuild?.cmake
+    // React Native configures the application's CMake path after this project
+    // is evaluated. Set the staging path even while that path is null so both
+    // its generated app build and linked modules use the short output root.
+    if (cmake != null) {
+        cmake.buildStagingDirectory = new File(cxxRoot, project.path.replace(':', '_'))
+    }
+}

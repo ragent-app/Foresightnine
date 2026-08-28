@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import { assertProbabilityAssessment, assertWorldlineDates } from "@foresightnine/domain";
 import { computeFm, mountFmWorker, type FmWorkerPort, type FmWorkerResponse } from "@foresightnine/fm-engine";
 import { ASSET_FIXTURES, FX_SNAPSHOT, MARKET_DATA_AS_OF, PUBLIC_CONSTRAINTS, branches, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, privateEvidenceFixture, searchEvidenceFixture, sourceMaterialHash } from "./fixtures";
-import { allocationRows, canConfirmNormally, initialState, publicWeights, reducer, rubricDefaults, totalRubricScore } from "./state";
+import { allocationRows, canConfirmNormally, canConfirmReserved, canEnterStage, canSubmitReply, initialState, publicWeights, reducer, rubricDefaults, rubricDefaultsEn, safeStageFor, totalRubricScore } from "./state";
+import { createGenerationGuard } from "./App";
 import { CSV_HEADER, csvExport, navExport, researchExport } from "./exports";
-import { validateSearchEvidence, validateThesis } from "./validation";
+import { isSafeEvidenceUrl, validateSearchEvidence, validateThesis } from "./validation";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NavPanel } from "./components/NavPanel";
 import { ChallengePanel } from "./components/ChallengePanel";
 import { PortfolioPanel } from "./components/PortfolioPanel";
 import { WorldlinePanel } from "./components/WorldlinePanel";
+import { ThesisInput } from "./components/ThesisInput";
+import { LanguageProvider, t } from "./i18n";
+import { SocialLoginPanel } from "./components/SocialLoginPanel";
 import { historical } from "./nav-data";
 
 describe("Web thesis validation", () => {
@@ -19,10 +23,63 @@ describe("Web thesis validation", () => {
     expect(validateThesis({ viewpoint: "a".repeat(2001), capital: "1000", currency: "CNY" }).viewpoint).toContain("2,000");
     expect(validateThesis({ viewpoint: "valid", capital: "1,000", currency: "CNY" })).toEqual({});
   });
+
+  it("rejects trailing-dot spellings of loopback and local hosts", () => {
+    for (const url of [
+      "https://localhost./report",
+      "https://service.localhost./report",
+      "https://127.0.0.1./loopback",
+      "https://127.1./loopback",
+      "https://10.0.0.7./private",
+      "https://[::1]./loopback",
+    ]) expect(isSafeEvidenceUrl(url)).toBe(false);
+    expect(isSafeEvidenceUrl("https://example.com./report")).toBe(true);
+  });
+});
+
+describe("bilingual presentation", () => {
+  it("changes product copy to English while preserving user-entered thesis text", () => {
+    const thesis = "AI data-centre power demand may accelerate grid investment";
+    const markup = renderToStaticMarkup(createElement(LanguageProvider, { language: "en", setLanguage: () => undefined }, createElement(ThesisInput, { viewpoint: thesis, capital: "100000", currency: "USD", draftRestored: false, onViewpoint: () => undefined, onCapital: () => undefined, onCurrency: () => undefined, onStart: () => undefined, onReset: () => undefined })));
+    expect(markup).toContain("Turn a thesis into auditable worldlines");
+    expect(markup).toContain("Investable capital");
+    expect(markup).toContain(thesis);
+    expect(t("en", `「${thesis}」按部分路径兑现，设备与基础设施投资逐步验证。`)).toContain(thesis);
+    expect(reducer(initialState, { type: "set_language", language: "en" }).language).toBe("en");
+  });
+
+  it("rebuilds the English rubric when resetting or starting a challenge", () => {
+    const en = { ...initialState, language: "en" as const, viewpoint: "An English thesis with a testable premise", capital: "100000" };
+    expect(reducer(en, { type: "reset" }).rubric).toEqual(rubricDefaultsEn);
+    expect(reducer(en, { type: "start_challenge" }).rubric).toEqual(rubricDefaultsEn);
+    expect(reducer({ ...en, stage: "challenge", rubric: rubricDefaults }, { type: "set_viewpoint", viewpoint: "A fresh English thesis" }).rubric).toEqual(rubricDefaultsEn);
+    expect(reducer(en, { type: "reset" }).rubric.every((item) => !/[\u4e00-\u9fff]/.test(`${item.label} ${item.rationale}`))).toBe(true);
+  });
+
+  it("translates the complete challenge decision surface", () => {
+    expect(["审查评分", "继续生成世界线", "带保留意见确认", "支持", "反驳", "背景", "。"].map((copy) => t("en", copy))).toEqual([
+      "Challenge score",
+      "Continue to worldlines",
+      "Confirm with reservations",
+      "Supports",
+      "Challenges",
+      "Context",
+      ".",
+    ]);
+  });
+
+  it("renders Google and GitHub as accurately unavailable until the server supplies OAuth readiness", () => {
+    const markup = renderToStaticMarkup(createElement(LanguageProvider, { language: "en", setLanguage: () => undefined }, createElement(SocialLoginPanel)));
+    expect(markup).toContain("Anonymous research");
+    expect(markup).toContain("Google");
+    expect(markup).toContain("GitHub");
+    expect(markup).toContain("Not configured");
+    expect(markup).toContain("disabled=\"\"");
+  });
 });
 
 describe("worldline fixture semantics", () => {
-  it("keeps conditional probabilities exhaustive and reveals every node on its node date", () => {
+  it("keeps conditional probabilities exhaustive and uses auditable event/reveal dates", () => {
     const generated = makeBranches("可观察的电网投资观点");
     expect(generated.reduce((sum, branch) => sum + branch.assessment.conditional_probability, 0)).toBe(1);
     for (const branch of generated) {
@@ -30,11 +87,107 @@ describe("worldline fixture semantics", () => {
       assertWorldlineDates(branch.worldline);
       expect(branch.worldline.event_reveal_schedule.map((reveal) => reveal.event_id)).toEqual(branch.worldline.nodes.map((node) => node.node_id));
       expect(branch.worldline.event_reveal_schedule.every((reveal) => reveal.event_date === branch.worldline.nodes.find((node) => node.node_id === reveal.event_id)?.event_date)).toBe(true);
+      expect(branch.worldline.horizon_end).toBe("2028-08-31");
+      expect(branch.worldline.nodes.find((node) => node.event_date === "2028-08-10") && branch.worldline.event_reveal_schedule.find((reveal) => reveal.event_date === "2028-08-10")?.reveal_date).toBe("2028-08-31");
+      expect(branch.worldline.event_reveal_schedule.some((reveal) => reveal.event_date !== reveal.reveal_date && reveal.reveal_date >= reveal.event_date)).toBe(true);
     }
   });
 });
 
 describe("challenge recovery state", () => {
+  it("fails closed for idle or unstarted reply submissions in the reducer and UI", () => {
+    expect(canSubmitReply("idle", [])).toBe(false);
+    expect(reducer(initialState, { type: "submit_reply", body: "forged reply" })).toEqual(initialState);
+
+    const forged = { ...initialState, stage: "challenge" as const, challengeStatus: "idle" as const, challengeTurns: [{ id: "user-1", author: "user" as const, time: "现在", body: "Forged" }, { id: "challenger-1", author: "challenger" as const, time: "现在", body: "Forged" }] };
+    expect(reducer(forged, { type: "submit_reply", body: "still forged" })).toEqual(forged);
+
+    const markup = renderToStaticMarkup(createElement(ChallengePanel, { status: "idle", turns: [], replyDraft: "forged reply", evidence: [], rubric: initialState.rubric, unresolvedIssuesAcknowledged: false, reservationNote: "", onStart: () => undefined, onCancel: () => undefined, onRetry: () => undefined, onRecover: () => undefined, onReplyDraft: () => undefined, onSubmitReply: () => undefined, onEvidence: () => undefined, onUnresolvedIssuesAcknowledged: () => undefined, onReservationNote: () => undefined, onConfirm: () => undefined }));
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>提交回复<\/button>/);
+  });
+
+  it("fully resets a completed and confirmed workflow when the viewpoint changes", () => {
+    const oldViewpoint = "旧观点：电网设备投资会加速";
+    let state = reducer({ ...initialState, viewpoint: oldViewpoint, capital: "250000", currency: "USD" }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "公开订单数据将验证这条路径。" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    state = reducer(state, { type: "select_branch", branch: "strong" });
+    state = reducer(state, { type: "fm_start" });
+    state = reducer(state, { type: "fm_progress", progress: 65, step: "计算中" });
+    state = reducer(state, { type: "fm_complete", result: computeFm(fmInput()) });
+    state = reducer(state, { type: "set_mode", mode: "public" });
+    state = reducer(state, { type: "set_stress", scenario: "weak" });
+    state = reducer(state, { type: "export_notice", notice: "已导出" });
+
+    const next = reducer(state, { type: "set_viewpoint", viewpoint: "新观点：储能投资会改变资产传导" });
+    expect(next).toMatchObject({
+      stage: "thesis",
+      language: state.language,
+      viewpoint: "新观点：储能投资会改变资产传导",
+      capital: "250000",
+      currency: "USD",
+      challengeStatus: "idle",
+      challengeTurns: [],
+      replyDraft: "",
+      rubric: rubricDefaults,
+      evidence: [],
+      confirmation: "pending",
+      unresolvedIssuesAcknowledged: false,
+      reservationNote: "",
+      selectedBranch: "main",
+      fmStatus: "idle",
+      fmProgress: 0,
+      fmStep: "等待本地计算",
+      fmResult: null,
+      portfolioMode: "raw",
+      stressScenario: "main",
+      exportNotice: "",
+    });
+  });
+
+  it("fully resets a pending partial workflow and starts the new challenge cleanly", () => {
+    const oldViewpoint = "旧观点：需求增长会带动订单";
+    let state = reducer({ ...initialState, viewpoint: oldViewpoint, capital: "90000", currency: "EUR" }, { type: "start_challenge" });
+    state = reducer(state, { type: "set_reply_draft", draft: "旧回复不应被复用" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "set_unresolved_issues_acknowledged", acknowledged: true });
+    state = reducer(state, { type: "set_reservation_note", note: "旧保留意见" });
+    state = reducer(state, { type: "select_branch", branch: "weak" });
+    state = reducer(state, { type: "fm_start" });
+
+    const next = reducer(state, { type: "set_viewpoint", viewpoint: "新观点：融资条件会决定传导强度" });
+    expect(next.challengeStatus).toBe("idle");
+    expect(next.challengeTurns).toEqual([]);
+    expect(next.evidence).toEqual([]);
+    expect(next.fmResult).toBeNull();
+    expect(next.selectedBranch).toBe("main");
+    expect(next.stage).toBe("thesis");
+    expect(next.capital).toBe("90000");
+    expect(next.currency).toBe("EUR");
+
+    const started = reducer(next, { type: "start_challenge" });
+    expect(started.challengeStatus).toBe("streaming");
+    expect(started.challengeTurns[0]?.body).toBe("新观点：融资条件会决定传导强度");
+    expect(started.challengeTurns.some((turn) => turn.body.includes("旧观点") || turn.body.includes("旧回复"))).toBe(false);
+  });
+
+  it("does not reuse downstream state when restarting a challenge for the same viewpoint", () => {
+    const viewpoint = "同一观点重新审查也必须从零开始";
+    let state = reducer({ ...initialState, viewpoint }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "旧回复" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "select_branch", branch: "strong" });
+    state = reducer(state, { type: "fm_start" });
+    const restarted = reducer(state, { type: "start_challenge", viewpoint });
+    expect(restarted).toMatchObject({ stage: "challenge", challengeStatus: "streaming", viewpoint, replyDraft: "", evidence: [], selectedBranch: "main", fmStatus: "idle", fmProgress: 0, fmResult: null, confirmation: "pending" });
+    expect(restarted.challengeTurns[0]?.body).toBe(viewpoint);
+    expect(restarted.rubric).toEqual(rubricDefaults);
+    expect(restarted.challengeTurns.some((turn) => turn.body === "旧回复")).toBe(false);
+  });
+
   it("uses all ten rubric criteria and fail-closed normal confirmation", () => {
     expect(rubricDefaults).toHaveLength(10);
     expect(rubricDefaults.every((item) => item.max === 4)).toBe(true);
@@ -49,8 +202,21 @@ describe("challenge recovery state", () => {
     expect(reducer(state, { type: "confirm", confirmation: "confirmed" }).stage).toBe("worldline");
   });
 
+  it("rejects forged completion flags, transcripts, evidence flags, and direct route jumps", () => {
+    const started = reducer({ ...initialState, viewpoint: "一个用于安全门回归的有效观点" }, { type: "start_challenge" });
+    const prematurelyComplete = reducer(started, { type: "challenge_complete" });
+    expect(prematurelyComplete.challengeStatus).toBe("streaming");
+    const completed = reducer(prematurelyComplete, { type: "submit_reply", body: "我会用公开订单数据验证。" });
+    expect(completed.challengeStatus).toBe("complete");
+    expect(canConfirmNormally({ ...completed, rubric: rubricDefaults.map((item) => ({ ...item, score: 4 })), evidence: [{ ...searchEvidenceFixture, independently_reviewable: false }] })).toBe(true);
+    expect(canConfirmReserved({ ...completed, unresolvedIssuesAcknowledged: true, reservationNote: "仍有未解决的传导风险。", challengeTurns: completed.challengeTurns.filter((turn) => turn.author !== "user" || turn.id === "user-1") })).toBe(false);
+    const forged = { ...completed, stage: "portfolio" as const, confirmation: "confirmed" as const, challengeTurns: completed.challengeTurns.filter((turn) => turn.author !== "user" || turn.id === "user-1"), rubric: rubricDefaults.map((item) => ({ ...item, score: 4 })), evidence: [searchEvidenceFixture], fmStatus: "complete" as const, fmResult: computeFm(fmInput()) };
+    expect(reducer(forged, { type: "set_stage", stage: "portfolio" }).stage).toBe("challenge");
+    expect(researchExport(forged, branches, []).challenge).toMatchObject({ confirmation: "pending", unresolved_issues_acknowledged: false, reservation_note: "" });
+  });
+
   it("retains transcript across cancel/retry and reaches confirmation", () => {
-    let state = reducer(initialState, { type: "start_challenge" });
+    let state = reducer({ ...initialState, viewpoint: "一个用于回归测试的有效观点" }, { type: "start_challenge" });
     expect(state.challengeStatus).toBe("streaming");
     expect(state.challengeTurns.length).toBe(2);
     state = reducer(state, { type: "challenge_cancel" });
@@ -58,6 +224,13 @@ describe("challenge recovery state", () => {
     expect(state.challengeTurns.at(-1)?.body).toContain("仍保留");
     state = reducer(state, { type: "challenge_recover" });
     state = reducer(state, { type: "challenge_complete" });
+    expect(canConfirmReserved(state)).toBe(false);
+    state = reducer(state, { type: "submit_reply", body: "我会继续观察订单和现金流。" });
+    state = reducer(state, { type: "confirm", confirmation: "reserved" });
+    expect(state.stage).toBe("challenge");
+    state = reducer(state, { type: "set_unresolved_issues_acknowledged", acknowledged: true });
+    state = reducer(state, { type: "set_reservation_note", note: "未验证的需求传导仍需观察订单与现金流。" });
+    expect(canConfirmReserved(state)).toBe(true);
     state = reducer(state, { type: "confirm", confirmation: "reserved" });
     expect(state.stage).toBe("worldline");
     expect(state.confirmation).toBe("reserved");
@@ -122,7 +295,7 @@ describe("SearchEvidenceBundle validation and premise rendering", () => {
 
   it("renders editable reply/evidence schema and the viewpoint premise", () => {
     const viewpoint = "亚洲电网投资受数据中心负荷驱动";
-    const challengeMarkup = renderToStaticMarkup(createElement(ChallengePanel, { status: "complete", turns: [{ id: "t1", author: "challenger", time: "现在", body: "问题" }], replyDraft: "", evidence: [], rubric: initialState.rubric, onStart: () => undefined, onCancel: () => undefined, onRetry: () => undefined, onRecover: () => undefined, onReplyDraft: () => undefined, onSubmitReply: () => undefined, onEvidence: () => undefined, onConfirm: () => undefined }));
+    const challengeMarkup = renderToStaticMarkup(createElement(ChallengePanel, { status: "complete", turns: [{ id: "t1", author: "challenger", time: "现在", body: "问题" }], replyDraft: "", evidence: [], rubric: initialState.rubric, unresolvedIssuesAcknowledged: false, reservationNote: "", onStart: () => undefined, onCancel: () => undefined, onRetry: () => undefined, onRecover: () => undefined, onReplyDraft: () => undefined, onSubmitReply: () => undefined, onEvidence: () => undefined, onUnresolvedIssuesAcknowledged: () => undefined, onReservationNote: () => undefined, onConfirm: () => undefined }));
     expect(challengeMarkup).toContain("回答挑战");
     expect(challengeMarkup).toContain("SearchEvidenceBundle");
     expect(challengeMarkup).toContain("A–C 必填；D/E 可留空");
@@ -130,11 +303,31 @@ describe("SearchEvidenceBundle validation and premise rendering", () => {
     const worldlineMarkup = renderToStaticMarkup(createElement(WorldlinePanel, { branches: makeBranches(viewpoint), selected: "main", onSelect: () => undefined, onCompute: () => undefined }));
     expect(worldlineMarkup).toContain(viewpoint);
   });
+
+  it("renders the selected branch assessment and its actual first post-baseline reveal", () => {
+    const weak = makeBranches("A branch-specific premise").find((branch) => branch.kind === "weak")!;
+    const markup = renderToStaticMarkup(createElement(WorldlinePanel, { branches: makeBranches("A branch-specific premise"), selected: "weak", onSelect: () => undefined, onCompute: () => undefined }));
+    expect(markup).toContain("弱情景 W−");
+    expect(markup).toContain(`${(weak.assessment.premise_probability_range.minimum * 100).toFixed(2)}–${(weak.assessment.premise_probability_range.maximum * 100).toFixed(2)}%`);
+    expect(markup).toContain(`${(weak.assessment.conditional_probability_range.minimum * 100).toFixed(2)}–${(weak.assessment.conditional_probability_range.maximum * 100).toFixed(2)}%`);
+    expect(markup).toContain(`${(weak.assessment.joint_probability_range.minimum * 100).toFixed(2)}–${(weak.assessment.joint_probability_range.maximum * 100).toFixed(2)}%`);
+    expect(markup).toContain("2027-02-28");
+    expect(markup).not.toContain("主世界线 P(W₀ | H)");
+  });
+
+  it("generates an English challenger body while preserving the entered premise", () => {
+    const premise = "Data-centre demand accelerates grid investment";
+    const state = reducer({ ...initialState, language: "en", viewpoint: premise }, { type: "start_challenge" });
+    expect(state.challengeTurns[1]?.body).toContain("Strongest counterargument");
+    expect(state.challengeTurns[1]?.body).toContain(premise);
+    expect(state.challengeTurns[1]?.body).not.toContain("最强反方");
+  });
 });
 
 describe("FM worker and public delta", () => {
   it("keeps the completed FM audit state visible before portfolio navigation", () => {
-    let state = reducer(initialState, { type: "fm_start" });
+    const readyRubric = rubricDefaults.map((item) => ({ ...item, score: 3 }));
+    let state = reducer({ ...initialState, stage: "worldline", viewpoint: "一个通过确认门槛的测试观点", challengeStatus: "complete", challengeTurns: [{ id: "system-1", author: "system", time: "现在", body: "挑战已启动" }, { id: "challenger-1", author: "challenger", time: "现在", body: "反方问题" }, { id: "user-1", author: "user", time: "现在", body: "用户回复" }], rubric: readyRubric, evidence: [searchEvidenceFixture], confirmation: "confirmed" }, { type: "fm_start" });
     state = reducer(state, { type: "fm_complete", result: computeFm(fmInput()) });
     expect(state.stage).toBe("fm");
     expect(state.fmStatus).toBe("complete");
@@ -199,6 +392,36 @@ describe("FM worker and public delta", () => {
     expect(weights[0]).toBe(0);
     expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1);
   });
+
+  it("fails closed for direct stage manipulation and FM starts", () => {
+    const ready = { ...initialState, viewpoint: "一个用于 gate 回归的有效观点", capital: "100000" };
+    expect(reducer(initialState, { type: "set_stage", stage: "worldline" }).stage).toBe("thesis");
+    expect(reducer(initialState, { type: "fm_start" }).fmStatus).toBe("idle");
+
+    let state = reducer(ready, { type: "start_challenge" });
+    expect(state.stage).toBe("challenge");
+    expect(reducer(state, { type: "set_stage", stage: "worldline" }).stage).toBe("challenge");
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "我会使用公开订单数据验证这条路径。" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    expect(state.stage).toBe("worldline");
+    expect(reducer(state, { type: "set_stage", stage: "portfolio" }).stage).toBe("worldline");
+    expect(safeStageFor({ ...state, stage: "portfolio", fmStatus: "idle", fmResult: null })).toBe("worldline");
+    expect(canEnterStage(state, "fm")).toBe(true);
+    expect(reducer(state, { type: "fm_start" }).stage).toBe("fm");
+  });
+
+  it("invalidates stale timer or worker results with a generation token", () => {
+    const guard = createGenerationGuard();
+    const first = guard.current();
+    const second = guard.invalidate();
+    expect(guard.isCurrent(first)).toBe(false);
+    expect(guard.isCurrent(second)).toBe(true);
+    const third = guard.invalidate();
+    expect(guard.isCurrent(second)).toBe(false);
+    expect(guard.isCurrent(third)).toBe(true);
+  });
 });
 
 describe("portfolio residual and export", () => {
@@ -237,17 +460,122 @@ describe("portfolio residual and export", () => {
 
   it("exports complete audit fields and actual local FM arrays", () => {
     const fmResult = computeFm(fmInput());
-    const state = { ...initialState, viewpoint: "测试观点进入完整导出", capital: "100000", currency: "USD" as const, portfolioMode: "public" as const, challengeStatus: "complete" as const, challengeTurns: [{ id: "reply-1", author: "user" as const, time: "现在", body: "用户回复保留" }], evidence: [searchEvidenceFixture], fmResult };
+    let state = reducer({ ...initialState, viewpoint: "测试观点进入完整导出", capital: "100000" }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "用户回复保留" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    state = reducer(state, { type: "set_currency", currency: "USD" });
+    state = reducer(state, { type: "fm_start" });
+    state = reducer(state, { type: "fm_complete", result: fmResult });
+    state = reducer(state, { type: "set_mode", mode: "public" });
     const rows = allocationRows(fmResult, 100000, "USD", "public");
     const output = researchExport(state, makeBranches(state.viewpoint), rows);
-    expect(output).toMatchObject({ product: { name: "ForesightNine" }, method_version: expect.any(String), data_as_of: MARKET_DATA_AS_OF, thesis: { raw_text: state.viewpoint, base_currency: "USD" }, challenge: { status: "complete", transcript: state.challengeTurns }, labels: { historical: "historical_only", simulated: "simulated fixture", probability: "model_estimate_unvalidated" } });
-    expect(output.evidence).toEqual([expect.objectContaining({ evidence_id: expect.any(String), challenge_id: expect.any(String), url: expect.any(String), title: expect.any(String), publisher: expect.any(String), published_at: expect.any(String), retrieved_at: expect.any(String), excerpt: expect.any(String), user_note: expect.any(String), content_hash: expect.any(String), source_material_hash: expect.any(String), grade: expect.any(String), source_type: expect.any(String), independently_reviewable: expect.any(Boolean) })]);
+    expect(output).toMatchObject({ product: { name: "ForesightNine" }, method_version: expect.any(String), data_as_of: MARKET_DATA_AS_OF, thesis: { raw_text: state.viewpoint, base_currency: "USD" }, challenge: { status: "complete", confirmation: "confirmed", transcript: state.challengeTurns }, labels: { historical: "historical_only", simulated: "simulated fixture", probability: "model_estimate_unvalidated" } });
+    expect(output.evidence).toEqual([expect.objectContaining({ evidence_id: expect.any(String), challenge_id: expect.any(String), url: expect.any(String), title: expect.any(String), publisher: expect.any(String), published_at: expect.any(String), retrieved_at: expect.any(String), excerpt: expect.any(String), user_note: expect.any(String), content_hash: expect.any(String), source_material_hash: expect.any(String), grade: expect.any(String), source_type: expect.any(String), independently_reviewable: true })]);
     expect(output.worldlines).toHaveLength(3);
     expect(output.portfolio).toEqual(expect.objectContaining({ currency: "USD", allocations: expect.any(Array), raw_residual_cash: expect.any(Number), public_residual_cash: expect.any(Number) }));
     expect(output.fm).toEqual(expect.objectContaining({ status: "computed", fixture: true, data_source: expect.stringContaining("client"), result: expect.objectContaining({ selectedFactorIds: expect.any(Array), metrics: expect.anything(), weights: expect.any(Object), forecasts: expect.any(Array), rawClientResult: expect.any(Object) }) }));
+
+    const idleWorldline = { ...state, stage: "worldline" as const, fmStatus: "idle" as const, fmResult: null };
+    const idleWorldlineOutput = researchExport(idleWorldline, makeBranches(state.viewpoint), []);
+    expect(idleWorldlineOutput.worldlines).toHaveLength(3);
+    expect(idleWorldlineOutput.nav).toMatchObject({ status: "not_available", worldlines: [] });
+
+    const forgedNav = { ...idleWorldline, stage: "nav" as const };
+    const forgedNavOutput = researchExport(forgedNav, makeBranches(state.viewpoint), []);
+    expect(forgedNavOutput.worldlines).toEqual([]);
+    expect(forgedNavOutput.nav).toMatchObject({ status: "not_available", worldlines: [] });
+    expect(forgedNavOutput.portfolio).toMatchObject({ status: "not_available", allocations: [] });
+
     const noFm = researchExport({ ...initialState, viewpoint: "未计算" }, branches, allocationRows(null, 100));
     expect(noFm.fm).toEqual(expect.objectContaining({ status: "not_computed", fixture: true, result: null }));
     expect(noFm.portfolio).toEqual(expect.objectContaining({ status: "not_computed", allocations: [] }));
+  });
+
+  it("fails closed for forged completion, rubric, evidence, and FM results", () => {
+    const forged = {
+      ...initialState,
+      stage: "portfolio" as const,
+      viewpoint: "伪造下游结果不应公开",
+      challengeStatus: "complete" as const,
+      confirmation: "confirmed" as const,
+      rubric: rubricDefaults.map((item) => ({ ...item, score: item.max })),
+      evidence: [{ ...searchEvidenceFixture, independently_reviewable: true }],
+      fmStatus: "complete" as const,
+      fmResult: computeFm(fmInput()),
+    };
+    const output = researchExport(forged, branches, allocationRows(forged.fmResult, 100000));
+    expect(output.worldlines).toEqual([]);
+    expect(output.nav).toMatchObject({ status: "not_available", worldlines: [] });
+    expect(output.portfolio).toMatchObject({ status: "not_available", allocations: [] });
+    expect(output.fm).toMatchObject({ status: "not_available", result: null });
+    expect(JSON.stringify(output.fm)).not.toContain("selectedFactorIds");
+  });
+
+  it("does not export a malformed or stale client FM result", () => {
+    let state = reducer({ ...initialState, viewpoint: "FM shape gate 的有效观点" }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "用户确认挑战回复" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    state = reducer(state, { type: "fm_start" });
+    state = reducer(state, { type: "fm_complete", result: computeFm(fmInput()) });
+    const result = state.fmResult!;
+    const malformed = { ...state, fmResult: { ...result, forecasts: new Float64Array(1) } };
+    const output = researchExport(malformed, makeBranches(state.viewpoint), allocationRows(result, 100000));
+    expect(output.worldlines).toHaveLength(3);
+    expect(output.fm).toMatchObject({ status: "not_available", result: null });
+    expect(output.portfolio).toMatchObject({ status: "not_available", allocations: [] });
+
+    const emptyVolatility = { ...state, fmResult: { ...result, forecastScale: { ...result.forecastScale, crossSectionalVolatility: new Float64Array() } } };
+    expect(researchExport(emptyVolatility, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+
+    const infiniteVolatility = { ...state, fmResult: { ...result, forecastScale: { ...result.forecastScale, crossSectionalVolatility: Float64Array.from([Number.POSITIVE_INFINITY]) } } };
+    expect(researchExport(infiniteVolatility, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+
+    const wrongVolatilityContainer = { ...state, fmResult: { ...result, forecastScale: { ...result.forecastScale, crossSectionalVolatility: [0.1] as unknown as Float64Array } } };
+    expect(researchExport(wrongVolatilityContainer, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+
+    const malformedMetrics = { ...state, fmResult: { ...result, metrics: { icSeries: Float64Array.from([Number.POSITIVE_INFINITY]), icMean: 0, icir: 0 } } };
+    expect(researchExport(malformedMetrics, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+  });
+
+  it.each([
+    ["confirmed", { unresolvedIssuesAcknowledged: false, reservationNote: "" }],
+    ["reserved", { unresolvedIssuesAcknowledged: true, reservationNote: "保留意见仍需后续验证。" }],
+  ] as const)("requires a real transcript before exporting a %s confirmation", (confirmation, reservation) => {
+    const state = {
+      ...initialState,
+      stage: "worldline" as const,
+      viewpoint: "缺少 transcript 的状态",
+      challengeStatus: "complete" as const,
+      confirmation,
+      rubric: rubricDefaults.map((item) => ({ ...item, score: item.max })),
+      evidence: confirmation === "reserved" ? [privateEvidenceFixture] : [searchEvidenceFixture],
+      ...reservation,
+    };
+    const output = researchExport(state, branches, []);
+    expect(output.worldlines).toEqual([]);
+    expect(output.nav).toMatchObject({ status: "not_available" });
+    expect(output.fm).toMatchObject({ status: "not_computed", result: null });
+    expect(output.portfolio).toMatchObject({ allocations: [] });
+    expect(["not_available", "not_computed"]).toContain((output.portfolio as { status: string }).status);
+  });
+
+  it("derives reviewability from source, grade, and safe public URL", () => {
+    const state = {
+      ...initialState,
+      evidence: [
+        { ...searchEvidenceFixture, independently_reviewable: false },
+        { ...privateEvidenceFixture, independently_reviewable: true, url: "https://example.com/private" },
+        { ...privateEvidenceFixture, evidence_id: "evidence-model-no-url", source_type: "model_inference" as const, grade: "E" as const, independently_reviewable: true },
+        { ...searchEvidenceFixture, evidence_id: "evidence-no-url", url: "", independently_reviewable: true },
+        { ...searchEvidenceFixture, evidence_id: "evidence-unsafe-url", url: "http://127.0.0.1/private", independently_reviewable: true },
+      ],
+    };
+    const evidence = researchExport(state, branches, []).evidence as Array<Record<string, unknown>>;
+    expect(evidence.map((item) => item.independently_reviewable)).toEqual([true, false, false, false, false]);
   });
 });
 

@@ -104,6 +104,8 @@ class SearchEvidenceBundle:
     excerpt: str
     user_note: str
     supplied_content_hash: str
+    search_provider: str | None = None
+    search_result_hash: str | None = None
 
     def hash_material(self) -> dict[str, Any]:
         return {
@@ -113,6 +115,8 @@ class SearchEvidenceBundle:
             "retrieved_at": self.retrieved_at,
             "excerpt": self.excerpt,
             "user_note": self.user_note,
+            "search_provider": self.search_provider,
+            "search_result_hash": self.search_result_hash,
         }
 
     def expected_content_hash(self) -> str:
@@ -133,7 +137,16 @@ class LlmProvider(ABC):
 
 
 class SearchEvidenceProvider(ABC):
-    """Search abstraction.  This phase accepts safe client bundles as fallback."""
+    """Search abstraction with a safe client-bundle fallback.
+
+    Search discovery never turns a remote snippet into a fact automatically.
+    A caller must render the candidate, retain its source fields, and obtain an
+    explicit evidence submission before it can enter a challenge record.
+    """
+
+    @property
+    def supports_project_search(self) -> bool:
+        return False
 
     @abstractmethod
     def validate_client_bundle(self, bundle: SearchEvidenceBundle) -> bool: ...
@@ -142,6 +155,7 @@ class SearchEvidenceProvider(ABC):
 class ClientSearchEvidenceProvider(SearchEvidenceProvider):
     """Validates submitted URLs without ever server-fetching untrusted evidence."""
 
+    name = "client-evidence-bundle"
     max_url_length = 2_048
 
     @staticmethod
@@ -217,6 +231,25 @@ class ClientSearchEvidenceProvider(SearchEvidenceProvider):
             raise ProviderFailure("invalid_evidence_bundle", "URL evidence requires a publication timestamp.", retryable=False)
         self.validate_url(bundle.url)
         return True
+
+
+def build_search_evidence_provider() -> SearchEvidenceProvider:
+    """Select only explicit, server-owned project search providers.
+
+    Unknown configuration retains the client bundle path rather than sending a
+    user query or credential to a guessed endpoint.  The GLM Coding MCP profile
+    has a fixed vendor endpoint and reads its secret only when ``search`` is
+    called by the server process.
+    """
+
+    selected = os.environ.get("FORESIGHTNINE_SEARCH_PROVIDER", "client").strip().lower()
+    if selected in {"", "client", "client_bundle", "none"}:
+        return ClientSearchEvidenceProvider()
+    if selected in {"glm_coding_mcp", "zhipu_glm_coding_mcp"}:
+        from .glm_mcp_search import GlmCodingMcpSearchEvidenceProvider
+
+        return GlmCodingMcpSearchEvidenceProvider.from_environment()
+    return ClientSearchEvidenceProvider()
 
 
 def _estimated_tokens(value: str) -> int:
@@ -555,12 +588,20 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
 
 
 def build_llm_provider() -> LlmProvider:
-    """Default mock; a deployment must explicitly opt in to the installed CLI."""
+    """Default mock; deployments must explicitly opt in to a provider."""
     selected = os.environ.get("FORESIGHTNINE_LLM_PROVIDER", "mock").strip().lower()
     if selected in {"", "mock", "deterministic_mock"}:
         return DeterministicMockLlmProvider()
     if selected == "opencode":
         return OpenCodeDeepSeekFlashProvider()
+    if selected == "openai_compatible":
+        from .openai_compatible import OpenAICompatibleLlmProvider
+
+        return OpenAICompatibleLlmProvider.from_environment()
+    if selected in {"glm_coding", "zhipu_glm_coding"}:
+        from .openai_compatible import OpenAICompatibleLlmProvider
+
+        return OpenAICompatibleLlmProvider.from_glm_coding_environment()
     # Unknown deployment configuration fails closed to the offline mock, rather
     # than silently trying a credentialed provider.
     return DeterministicMockLlmProvider()

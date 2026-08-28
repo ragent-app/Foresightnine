@@ -3,13 +3,25 @@ import { File, Paths } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { isAvailableAsync, shareAsync } from "expo-sharing";
 import { sha256Hex } from "@foresightnine/fm-engine";
-import { canRestoreArchive, makeArchiveEnvelope, type ArchiveEnvelope, type PrivacySafeDocument } from "../archive";
+import { archiveIncludesPrivateEvidence, canRestoreArchive, makeArchiveEnvelope, type ArchiveEnvelope, type PrivacySafeDocument } from "../archive";
 
 const KEY_NAME = "f9.archive.key.v1";
 const ARCHIVE_FILE = "foresightnine-research-v1.sealed.json";
 const AAD = "f9-archive-envelope-v1";
 
 function archiveFile(): File { return new File(Paths.document, ARCHIVE_FILE); }
+function reportRestoreRejection(stage: "missing" | "envelope" | "aad" | "decrypt" | "hash"): void {
+  // Development-only diagnostics intentionally exclude the envelope, ciphertext,
+  // key, document, and caught error so device-local research is never logged.
+  if (__DEV__) console.warn(`[archive] restore rejected: ${stage}`);
+}
+function base64ToBytes(value: string): Uint8Array {
+  // The native AES bridge is most reliable when `fromCombined` receives bytes.
+  // `combined` remains base64 in the JSON envelope, never plaintext.
+  if (typeof globalThis.atob !== "function") throw new Error("base64_decoder_unavailable");
+  const binary = globalThis.atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
 
 async function encryptionKey(): Promise<AESEncryptionKey> {
   const stored = await SecureStore.getItemAsync(KEY_NAME);
@@ -42,17 +54,20 @@ export async function saveEncryptedArchive(document: PrivacySafeDocument): Promi
 
 export async function loadEncryptedArchive(): Promise<PrivacySafeDocument | null> {
   const file = archiveFile();
-  if (!file.exists) return null;
+  if (!file.exists) { reportRestoreRejection("missing"); return null; }
   let envelope: unknown;
-  try { envelope = JSON.parse(await file.text()); } catch { return null; }
-  if (!canRestoreArchive(envelope) || envelope.aad !== AAD) return null;
+  try { envelope = JSON.parse(await file.text()); } catch { reportRestoreRejection("envelope"); return null; }
+  if (!canRestoreArchive(envelope)) { reportRestoreRejection("envelope"); return null; }
+  if (envelope.aad !== AAD) { reportRestoreRejection("aad"); return null; }
   try {
     const key = await encryptionKey();
-    const sealed = AESSealedData.fromCombined(envelope.combined);
+    const sealed = AESSealedData.fromCombined(base64ToBytes(envelope.combined));
     const plaintext = await aesDecryptAsync(sealed, key, { additionalData: new TextEncoder().encode(AAD), output: "bytes" });
     const document = JSON.parse(new TextDecoder().decode(plaintext)) as PrivacySafeDocument;
-    return sha256Hex(JSON.stringify(document)) === envelope.documentHash ? document : null;
+    if (sha256Hex(JSON.stringify(document)) !== envelope.documentHash) { reportRestoreRejection("hash"); return null; }
+    return document;
   } catch {
+    reportRestoreRejection("decrypt");
     return null;
   }
 }
@@ -61,7 +76,7 @@ export async function archiveExists(): Promise<boolean> { return archiveFile().e
 
 /** A deliberately public-safe export: private evidence is rejected before this boundary. */
 export async function sharePrivacySafeDocument(document: PrivacySafeDocument): Promise<boolean> {
-  if (document.privatePremiseIncluded || document.evidence.some((item) => item.source_type === "user_private")) throw new Error("private_evidence_export_blocked");
+  if (document.privatePremiseIncluded || archiveIncludesPrivateEvidence(document)) throw new Error("private_evidence_export_blocked");
   if (!(await isAvailableAsync())) return false;
   const file = new File(Paths.cache, "foresightnine-public-research.json");
   if (file.exists) file.delete();

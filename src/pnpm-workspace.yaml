@@ -3,3 +3,6 @@ packages:
   - "apps/*"
 allowBuilds:
   esbuild: true
+# Repository-relative virtual store keeps Android CMake/codegen paths below
+# Windows' legacy 260-character limit while remaining portable in CI.
+virtualStoreDir: nm

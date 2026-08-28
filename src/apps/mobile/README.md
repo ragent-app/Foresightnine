@@ -3,9 +3,13 @@
 This is the Expo SDK 57 Android MVP for the viewpoint → challenge → evidence →
 worldline → local FM → portfolio → privacy-safe archive loop.
 
-The app is deliberately mock-only: it has no provider, search, market, API key,
-broker, ordering, or execution integration. Labels such as “mock / unvalidated”
-and “API search unavailable” are part of the product state, not placeholder copy.
+The app deliberately keeps provider credentials, market retrieval, broker, ordering,
+and execution out of the device. It can query the deployer-configured public
+ForesightNine project-search route for bounded, unverified candidates; if that route
+is absent or unavailable it falls back to browser share/paste of a
+`SearchEvidenceBundle`. Candidate URLs remain inert display data and are never
+opened or fetched by the app. Labels such as “mock / unvalidated” and “API search
+unavailable” are part of the product state, not placeholder copy.
 
 ## Commands
 

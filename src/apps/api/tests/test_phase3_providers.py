@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 import json
 from pathlib import Path
 import subprocess
 from threading import Event, Thread
+from types import SimpleNamespace
 
 import pytest
 
@@ -360,6 +361,99 @@ def test_client_fallback_marks_no_url_unreviewable_and_rejects_ssrf_urls() -> No
         provider.validate_client_bundle(SearchEvidenceBundle(**{**file_url.__dict__, "supplied_content_hash": file_url.expected_content_hash()}))
     with pytest.raises(ProviderFailure, match="private or reserved"):
         provider.validate_redirect_target("https://public.example/next", resolver=lambda host, port: ["10.0.0.8"])
+
+
+def test_project_search_candidates_require_explicit_hashed_evidence_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    class ProjectSearchProvider(ClientSearchEvidenceProvider):
+        name = "project-search-test"
+
+        @property
+        def supports_project_search(self) -> bool:
+            return True
+
+        def search(self, query: str, *, limit: int = 5) -> tuple[SimpleNamespace, ...]:
+            assert query == "grid investment outlook" and limit == 2
+            return (
+                SimpleNamespace(
+                    title="Public grid investment source",
+                    url="https://example.com/grid-investment",
+                    excerpt="Dated public material for user review.",
+                    publisher="Example Research",
+                    published_at=date(2026, 8, 1),
+                    independently_reviewable=True,
+                ),
+            )
+
+    monkeypatch.setattr(app_main, "evidence_provider", ProjectSearchProvider())
+    health = CLIENT.get("/health")
+    assert health.status_code == 200
+    assert health.json()["search_provider"] == "project-search-test"
+    assert health.json()["project_search_available"] is True
+
+    candidates = CLIENT.get("/v1/search/candidates", params={"query": "grid investment outlook", "limit": 2})
+    assert candidates.status_code == 200, candidates.text
+    body = candidates.json()
+    assert body["project_search_available"] is True and body["fallback"] == "client_bundle"
+    assert len(body["candidates"]) == 1 and not EVIDENCE
+    candidate = body["candidates"][0]
+    assert candidate["search_provider"] == "project-search-test"
+    assert len(candidate["search_result_hash"]) == 64
+
+    created = create_challenge(key="project-search-candidate")
+    challenge_id = created["challenge"]["challenge_id"]
+    challenge_turn = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/messages",
+        json={"message": "Please identify independently reviewable evidence."},
+        headers=idem("project-search-candidate-turn"),
+    )
+    assert challenge_turn.status_code == 200 and challenge_turn.json()["challenge"]["status"] == "EVIDENCE_REQUIRED"
+    evidence_body = {
+        "url": candidate["url"],
+        "title": candidate["title"],
+        "publisher": candidate["publisher"],
+        "published_at": candidate["published_at"],
+        "retrieved_at": candidate["retrieved_at"],
+        "excerpt": candidate["excerpt"],
+        "user_note": "Selected after user review.",
+        "search_provider": candidate["search_provider"],
+        "search_result_hash": candidate["search_result_hash"],
+    }
+    accepted = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/evidence",
+        json={
+            **evidence_body,
+            "content_hash": evidence_hash(
+                url=evidence_body["url"], title=evidence_body["title"], published_at=evidence_body["published_at"],
+                retrieved_at=evidence_body["retrieved_at"], excerpt=evidence_body["excerpt"], user_note=evidence_body["user_note"],
+                search_provider=evidence_body["search_provider"], search_result_hash=evidence_body["search_result_hash"],
+            ),
+        },
+        headers=idem("project-search-select"),
+    )
+    assert accepted.status_code == 200, accepted.text
+    evidence = next(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
+    assert evidence.search_provider == candidate["search_provider"]
+    assert evidence.search_result_hash == candidate["search_result_hash"]
+
+    rejected = CLIENT.post(
+        f"/v1/challenges/{challenge_id}/evidence",
+        json={**evidence_body, "content_hash": "0" * 64, "search_result_hash": None},
+        headers=idem("project-search-incomplete"),
+    )
+    assert rejected.status_code == 422
+
+
+def test_search_candidate_endpoint_exposes_client_bundle_fallback_without_project_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app_main, "evidence_provider", ClientSearchEvidenceProvider())
+    response = CLIENT.get("/v1/search/candidates", params={"query": "client fallback"})
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "schema_version": "v1",
+        "provider": "client-evidence-bundle",
+        "project_search_available": False,
+        "fallback": "client_bundle",
+        "candidates": [],
+    }
 
 
 def test_mock_no_search_client_fallback_is_end_to_end_and_never_promotes_private_evidence() -> None:

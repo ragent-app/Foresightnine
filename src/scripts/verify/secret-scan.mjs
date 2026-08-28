@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "../../..");
-const skippedDirectories = new Set([".git", ".venv", "node_modules", "dist", ".pytest_cache", "__pycache__"]);
+// Dependency stores and Android/Gradle outputs are generated and may embed source
+// maps. Tracked source and the complete Git history are still scanned below.
+const skippedDirectories = new Set([".git", ".venv", "node_modules", "nm", "dist", "build", ".gradle", ".cxx", ".pytest_cache", "__pycache__"]);
 const binaryExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".pyc", ".zip", ".gz"]);
 const patterns = [
   { name: "provider-style secret", value: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
@@ -25,7 +27,7 @@ function inspectText(text, location) {
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.isDirectory() && skippedDirectories.has(entry.name)) continue;
+    if (entry.isDirectory() && (skippedDirectories.has(entry.name) || entry.name.startsWith("node_modules."))) continue;
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) {
       await walk(path);

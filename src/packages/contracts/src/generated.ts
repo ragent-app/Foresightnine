@@ -3,7 +3,7 @@
  * Source: schemas/v1/contracts.schema.json
  */
 export const CONTRACT_VERSION = "v1" as const;
-export const CONTRACT_SCHEMA_SHA256 = "fe86c2e837c7e673a876a79ccfa0848085202e2137dd4a814f22e8e87342cf96" as const;
+export const CONTRACT_SCHEMA_SHA256 = "8f09024e2552e9571d0436e685d0e51ec8441def2ebf7bc73786e96498ae103e" as const;
 
 export type SchemaVersion = "v1";
 
@@ -75,6 +75,8 @@ export interface EvidenceItem {
   readonly "publisher"?: string;
   readonly "published_at"?: string;
   readonly "retrieved_at": string;
+  readonly "search_provider"?: string;
+  readonly "search_result_hash"?: Sha256;
   readonly "excerpt": string;
   readonly "user_note"?: string;
   readonly "grade": "A" | "B" | "C" | "D" | "E";
@@ -497,6 +499,8 @@ export interface EvidenceSubmissionRequest {
   readonly "publisher"?: string;
   readonly "published_at"?: string;
   readonly "retrieved_at": string;
+  readonly "search_provider"?: string;
+  readonly "search_result_hash"?: Sha256;
   readonly "excerpt": string;
   readonly "user_note": string;
   readonly "content_hash": Sha256;
@@ -550,7 +554,9 @@ export interface ResumeOperationRequest {
 
 export interface HealthResponse {
   readonly "status": "ok";
-  readonly "provider": "deterministic_mock";
+  readonly "provider": string;
+  readonly "search_provider"?: string;
+  readonly "project_search_available"?: boolean;
   readonly "schema_version": SchemaVersion;
   readonly "clock": string;
 }
@@ -598,6 +604,26 @@ export interface AssetSearchResponse {
   readonly "schema_version": SchemaVersion;
   readonly "items": readonly (AssetRegistryEntry)[];
   readonly "total": number;
+}
+
+export interface SearchCandidate {
+  readonly "search_result_hash": Sha256;
+  readonly "search_provider": string;
+  readonly "title": string;
+  readonly "url": string;
+  readonly "excerpt": string;
+  readonly "publisher"?: string;
+  readonly "published_at"?: string;
+  readonly "retrieved_at": string;
+  readonly "independently_reviewable": boolean;
+}
+
+export interface SearchCandidatesResponse {
+  readonly "schema_version": SchemaVersion;
+  readonly "provider": string;
+  readonly "project_search_available": boolean;
+  readonly "fallback": "client_bundle";
+  readonly "candidates": readonly (SearchCandidate)[];
 }
 
 export interface MethodologyResponse {

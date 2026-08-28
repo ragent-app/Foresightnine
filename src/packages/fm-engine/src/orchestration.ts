@@ -14,7 +14,7 @@ import {
   type ForecastScale,
   type RebalanceResult,
   type WeightResult,
-} from "./index.js";
+} from "./core.js";
 import { evaluateFactorAst, type FactorAst, type FactorObservation } from "./ast.js";
 
 export interface FactorExpression {

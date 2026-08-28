@@ -45,9 +45,13 @@ export function isSafeEvidenceUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
     const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    // WHATWG URL preserves a DNS trailing dot. Strip it for classification so
+    // localhost. and dotted loopback/private literals cannot bypass the same
+    // SSRF guard as their canonical spellings.
+    const normalizedHostname = hostname.replace(/\.+$/u, "");
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
     const defaultPort = parsed.protocol === "https:" ? "443" : "80";
-    if (!hostname || parsed.username || parsed.password || (parsed.port && parsed.port !== defaultPort) || hostname.includes(":") || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal") || isPrivateIpv4(hostname)) return false;
+    if (!normalizedHostname || parsed.username || parsed.password || (parsed.port && parsed.port !== defaultPort) || normalizedHostname.includes(":") || normalizedHostname === "localhost" || normalizedHostname.endsWith(".localhost") || normalizedHostname.endsWith(".local") || normalizedHostname.endsWith(".internal") || isPrivateIpv4(normalizedHostname)) return false;
     return true;
   } catch {
     return false;

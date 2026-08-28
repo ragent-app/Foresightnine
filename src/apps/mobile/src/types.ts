@@ -8,6 +8,13 @@ export type ChallengeFailure = "timeout" | "rate_limited" | "invalid_provider" |
 export type BranchKind = "weak" | "main" | "strong";
 export type PortfolioMode = "raw" | "public";
 export type EvidenceGrade = "A" | "B" | "C" | "D" | "E";
+export type AssetClass = "equity" | "defensive" | "commodity" | "cash";
+export type FixtureState = "historical_reference_and_simulated";
+
+export interface ProbabilityInterval {
+  readonly low: number;
+  readonly high: number;
+}
 
 export interface DraftState {
   readonly viewpoint: string;
@@ -32,6 +39,8 @@ export interface EvidenceBundle {
   readonly grade: EvidenceGrade;
   readonly supports_or_challenges: "supports" | "challenges" | "context";
   readonly independently_reviewable: boolean;
+  readonly search_provider?: string;
+  readonly search_result_hash?: string;
 }
 
 export interface RubricItem {
@@ -54,18 +63,33 @@ export interface BranchNode {
   readonly event: string;
   readonly occurrenceDate: string;
   readonly revealDate: string;
+  readonly dataAsOf: string;
+  readonly observableIndicators: readonly string[];
+  readonly causalParents: readonly string[];
+  readonly assetAnchors: readonly string[];
+  readonly sourceRefs: readonly string[];
+  readonly stateChange: string;
   readonly invalidation?: string;
 }
 
 export interface Branch {
   readonly kind: BranchKind;
   readonly title: string;
-  readonly interval: { readonly low: number; readonly high: number };
-  readonly conditional: { readonly low: number; readonly high: number };
-  readonly joint: { readonly low: number; readonly high: number };
+  readonly baselineDate: string;
+  readonly horizonEnd: string;
+  readonly dataAsOf: string;
+  readonly fixtureState: FixtureState;
+  readonly premise: ProbabilityInterval;
+  readonly premisePoint: number;
+  readonly conditional: ProbabilityInterval;
+  readonly conditionalPoint: number;
+  readonly joint: ProbabilityInterval;
+  readonly jointPoint: number;
   readonly description: string;
   readonly reveal: string;
   readonly nodes: readonly BranchNode[];
+  readonly assetAnchors: readonly string[];
+  readonly sourceRefs: readonly string[];
 }
 
 export interface AssetFixture {
@@ -81,6 +105,7 @@ export interface AssetFixture {
   readonly proxy?: string;
   readonly liquidity: "high" | "medium" | "low";
   readonly volatility: "low" | "high";
+  readonly assetClass: AssetClass;
   readonly asOf: string;
   readonly freshness: "current" | "stale";
 }
@@ -95,7 +120,81 @@ export interface AllocationRow {
   readonly publicUnits: number;
   readonly rawResidual: number;
   readonly publicResidual: number;
+  readonly rawExecutable: boolean;
+  readonly publicExecutable: boolean;
   readonly reasons: readonly string[];
+}
+
+export interface NavPoint {
+  readonly date: string;
+  readonly nav: number;
+  readonly returnFromStart: number;
+  readonly drawdown: number;
+  readonly segment: "historical" | "simulated";
+}
+
+export interface ScenarioNav {
+  readonly branch: BranchKind;
+  readonly dataAsOf: string;
+  readonly simulatedFrom: string;
+  readonly fixtureState: FixtureState;
+  readonly points: readonly NavPoint[];
+  readonly scenarioReturn: number;
+  readonly maxDrawdown: number;
+}
+
+/** JSON-safe FM output retained by the offline archive. Typed arrays/maps are
+ * intentionally reduced to the fields required to recreate the portfolio. */
+export interface ArchivedFmResult {
+  readonly cutoff: string;
+  readonly selectedFactorIds: readonly number[];
+  readonly z: readonly number[];
+  readonly weights: readonly number[];
+  readonly fallback: boolean;
+  readonly forecasts: readonly number[];
+  readonly forecastScale: { readonly crossSectionalVolatility: readonly number[]; readonly returnScale: number };
+  readonly metrics: { readonly icSeries: readonly number[]; readonly icMean: number; readonly icir: number } | null;
+  readonly rebalance: ComputeFmResult["rebalance"];
+  readonly deadband: ComputeFmResult["deadband"];
+  readonly reasons: ComputeFmResult["reasons"];
+  readonly rawClientResult: { readonly targetWeights: readonly number[]; readonly forecastReturns: readonly number[]; readonly transactionCost: number; readonly reasons: readonly string[] };
+}
+
+export interface ResearchMethodData {
+  readonly methodVersion: string;
+  readonly dataAsOf: string;
+  readonly navLabel: string;
+  readonly fixtureState: FixtureState;
+  readonly assetIds: readonly string[];
+}
+
+export interface ResearchSnapshot {
+  readonly schema: "f9-research-snapshot-v1";
+  readonly stage: Stage;
+  readonly language: Language;
+  readonly viewpoint: string;
+  readonly capital: string;
+  readonly currency: Currency;
+  readonly challengeStatus: ChallengeStatus;
+  readonly challengeFailure: ChallengeFailure;
+  readonly challengeTurns: readonly TranscriptTurn[];
+  readonly replyDraft: string;
+  readonly rubric: readonly RubricItem[];
+  readonly evidence: readonly EvidenceBundle[];
+  readonly searchStatus: AppState["searchStatus"];
+  readonly confirmation: AppState["confirmation"];
+  /** Optional for backwards-compatible restore of v1 archives. */
+  readonly unresolvedIssuesAcknowledged?: boolean;
+  /** Optional for backwards-compatible restore of v1 archives. */
+  readonly reservationNote?: string;
+  readonly selectedBranch: BranchKind;
+  readonly branches: readonly Branch[];
+  readonly fmStatus: AppState["fmStatus"];
+  readonly fmProgress: number;
+  readonly fmStep: string;
+  readonly fmResult: ArchivedFmResult | null;
+  readonly portfolioMode: PortfolioMode;
+  readonly methodData: ResearchMethodData;
 }
 
 export interface AppState {
@@ -111,8 +210,11 @@ export interface AppState {
   readonly replyDraft: string;
   readonly rubric: readonly RubricItem[];
   readonly evidence: readonly EvidenceBundle[];
-  readonly searchStatus: "idle" | "mock_ready" | "api_unavailable";
+  readonly branchSnapshot: readonly Branch[] | null;
+  readonly searchStatus: "idle" | "mock_ready" | "loading" | "available" | "api_unavailable" | "api_failed";
   readonly confirmation: "pending" | "confirmed" | "reserved";
+  readonly unresolvedIssuesAcknowledged: boolean;
+  readonly reservationNote: string;
   readonly selectedBranch: BranchKind;
   readonly fmStatus: "idle" | "computing" | "complete" | "cancelled" | "failed";
   readonly fmProgress: number;
@@ -137,6 +239,8 @@ export type AppAction =
   | { readonly type: "challenge_complete" }
   | { readonly type: "add_evidence"; readonly evidence: EvidenceBundle }
   | { readonly type: "set_search_status"; readonly status: AppState["searchStatus"] }
+  | { readonly type: "set_unresolved_issues_acknowledged"; readonly acknowledged: boolean }
+  | { readonly type: "set_reservation_note"; readonly note: string }
   | { readonly type: "confirm"; readonly confirmation: "confirmed" | "reserved" }
   | { readonly type: "select_branch"; readonly branch: BranchKind }
   | { readonly type: "fm_start" }

@@ -1,0 +1,4 @@
+<resources>
+  <string name="app_name">ForesightNine</string>
+  <string name="share_into_scheme" translatable="false">foresightnine</string>
+</resources>

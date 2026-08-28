@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 from typing import Annotated, Any
 
@@ -42,6 +42,8 @@ from .models import (
     ProbabilityRequest,
     ResearchSession,
     ResumeOperationRequest,
+    SearchCandidate,
+    SearchCandidatesResponse,
     SessionOperationResponse,
     SourceRef,
     ThesisDocument,
@@ -51,7 +53,7 @@ from .models import (
     WorldlineRequest,
 )
 from .operations import ApiProblem, OperationManager, format_sse
-from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider
+from .phase3 import ChallengeDraft, ChallengeInput, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, build_attestation
 from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
@@ -86,7 +88,7 @@ research_provider = MockResearchProvider(clock)
 probability_assessor = DeterministicMockProbabilityAssessor(clock)
 worldline_generator = DeterministicMockWorldlineGenerator(probability_assessor, clock)
 challenge_provider = build_llm_provider()
-evidence_provider = ClientSearchEvidenceProvider()
+evidence_provider = build_search_evidence_provider()
 data_provider = MockDataProvider(clock)
 factor_provider = MockFactorProvider(clock)
 operations = OperationManager(clock)
@@ -142,6 +144,88 @@ def _validate_request(model: BaseModel, contract: str) -> None:
         validate_payload(model, contract)
     except ContractViolation as error:
         raise ApiProblem(422, "validation_error", str(error)) from error
+
+
+def _provider_name(provider: object, fallback: str) -> str:
+    """Expose a stable capability label without serialising configuration or secrets."""
+    name = getattr(provider, "name", None)
+    return name if isinstance(name, str) and name else fallback
+
+
+def _candidate_response(raw: object, provider_name: str) -> SearchCandidate:
+    """Convert a provider's unverified candidate into canonical display-only data.
+
+    A candidate cannot become evidence through this route.  The client must still
+    show it to the user and submit a separately hashed EvidenceSubmissionRequest.
+    """
+    title = getattr(raw, "title", None)
+    url = getattr(raw, "url", None)
+    excerpt = getattr(raw, "excerpt", None)
+    publisher = getattr(raw, "publisher", None)
+    raw_published_at = getattr(raw, "published_at", None)
+    independently_reviewable = getattr(raw, "independently_reviewable", None)
+    if not all(isinstance(value, str) and value for value in (title, url, excerpt)):
+        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
+    if publisher is not None and (not isinstance(publisher, str) or not publisher):
+        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
+    if raw_published_at is not None and not isinstance(raw_published_at, date):
+        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
+    if type(independently_reviewable) is not bool:
+        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
+    published_at = (
+        datetime.combine(raw_published_at, time.min, tzinfo=timezone.utc)
+        if raw_published_at is not None
+        else None
+    )
+    retrieved_at = clock.now()
+    hash_payload = {
+        "search_provider": provider_name,
+        "title": title,
+        "url": url,
+        "excerpt": excerpt,
+        "publisher": publisher,
+        "published_at": published_at.isoformat() if published_at else None,
+        "retrieved_at": retrieved_at.isoformat(),
+        "independently_reviewable": independently_reviewable,
+    }
+    return SearchCandidate(
+        search_result_hash=content_hash(hash_payload),
+        search_provider=provider_name,
+        title=title,
+        url=url,
+        excerpt=excerpt,
+        publisher=publisher,
+        published_at=published_at,
+        retrieved_at=retrieved_at,
+        independently_reviewable=independently_reviewable,
+    )
+
+
+def _search_candidates(query: str, limit: int) -> SearchCandidatesResponse:
+    """Discover safe source candidates or return the explicit client fallback.
+
+    Provider failures are intentionally surfaced as capability unavailability,
+    not as fabricated citations and not as raw provider diagnostics.  Discovery
+    is stateless and never fetches, stores, or promotes a selected URL.
+    """
+    provider_name = _provider_name(evidence_provider, "client-evidence-bundle")
+    search = getattr(evidence_provider, "search", None)
+    if not getattr(evidence_provider, "supports_project_search", False) or not callable(search):
+        return SearchCandidatesResponse(
+            schema_version="v1", provider=provider_name, project_search_available=False,
+            fallback="client_bundle", candidates=[],
+        )
+    try:
+        candidates = [_candidate_response(item, provider_name) for item in search(query, limit=limit)]
+    except ProviderFailure:
+        return SearchCandidatesResponse(
+            schema_version="v1", provider=provider_name, project_search_available=False,
+            fallback="client_bundle", candidates=[],
+        )
+    return SearchCandidatesResponse(
+        schema_version="v1", provider=provider_name, project_search_available=True,
+        fallback="client_bundle", candidates=candidates,
+    )
 
 
 def _validate_provider_worldline_bundle(
@@ -319,7 +403,28 @@ async def unhandled_error_handler(request: Request, error: Exception) -> JSONRes
 
 @app.get("/health", response_model=HealthResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="health")
 def health() -> HealthResponse:
-    return HealthResponse(status="ok", provider="deterministic_mock", schema_version="v1", clock=clock.now())
+    return HealthResponse(
+        status="ok",
+        provider=_provider_name(challenge_provider, "deterministic_mock"),
+        search_provider=_provider_name(evidence_provider, "client-evidence-bundle"),
+        project_search_available=bool(getattr(evidence_provider, "supports_project_search", False)),
+        schema_version="v1",
+        clock=clock.now(),
+    )
+
+
+@app.get("/v1/search/candidates", response_model=SearchCandidatesResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="searchEvidenceCandidates")
+def search_evidence_candidates(
+    query: Annotated[str, Query(min_length=1, max_length=70)],
+    limit: Annotated[int, Query(ge=1, le=10)] = 5,
+) -> SearchCandidatesResponse:
+    """Return unverified project-search candidates or an explicit client fallback.
+
+    The endpoint never fetches a candidate URL, does not send candidate text to
+    the challenge model, and does not create an EvidenceItem.  A user selection
+    must take the normal canonical evidence-submission path.
+    """
+    return _search_candidates(query, limit)
 
 
 @app.post("/v1/sessions", response_model=SessionOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createSession")
@@ -477,6 +582,10 @@ def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageR
 @app.post("/v1/challenges/{challenge_id}/evidence", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeEvidence")
 def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
     _validate_request(request, "EvidenceSubmissionRequest")
+    has_search_provider = request.search_provider is not None
+    has_search_result_hash = request.search_result_hash is not None
+    if has_search_provider != has_search_result_hash:
+        raise ApiProblem(422, "validation_error", "Search evidence provenance requires both a provider and result hash.")
     independently_reviewable = evidence_provider.validate_client_bundle(SearchEvidenceBundle(
         url=str(request.url) if request.url is not None else None,
         title=request.title,
@@ -485,6 +594,8 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
         excerpt=request.excerpt,
         user_note=request.user_note,
         supplied_content_hash=request.content_hash,
+        search_provider=request.search_provider,
+        search_result_hash=request.search_result_hash,
     ))
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
@@ -514,6 +625,9 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
             evidence_payload["publisher"] = request.publisher
         if request.published_at is not None:
             evidence_payload["published_at"] = request.published_at
+        if request.search_provider is not None:
+            evidence_payload["search_provider"] = request.search_provider
+            evidence_payload["search_result_hash"] = request.search_result_hash
         evidence = EvidenceItem(**_metadata(evidence_payload, "client:evidence", "Client submitted evidence", "user_submitted"), **evidence_payload)
         validate_payload(evidence, "EvidenceItem")
         turn = CHALLENGE_TURNS[challenge_id] + 1

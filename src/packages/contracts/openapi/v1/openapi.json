@@ -1118,6 +1118,14 @@
                 "format": "date-time",
                 "type": "string"
               },
+              "search_provider": {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              "search_result_hash": {
+                "$ref": "#/components/schemas/Sha256"
+              },
               "source_type": {
                 "enum": [
                   "primary",
@@ -1187,6 +1195,14 @@
           "retrieved_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "search_provider": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "search_result_hash": {
+            "$ref": "#/components/schemas/Sha256"
           },
           "title": {
             "maxLength": 500,
@@ -1459,11 +1475,21 @@
             "format": "date-time",
             "type": "string"
           },
+          "project_search_available": {
+            "type": "boolean"
+          },
           "provider": {
-            "const": "deterministic_mock"
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
           },
           "schema_version": {
             "$ref": "#/components/schemas/SchemaVersion"
+          },
+          "search_provider": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
           },
           "status": {
             "const": "ok"
@@ -2308,6 +2334,93 @@
       "SchemaVersion": {
         "const": "v1"
       },
+      "SearchCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "excerpt": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "independently_reviewable": {
+            "type": "boolean"
+          },
+          "published_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "publisher": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "search_provider": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "search_result_hash": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "search_result_hash",
+          "search_provider",
+          "title",
+          "url",
+          "excerpt",
+          "retrieved_at",
+          "independently_reviewable"
+        ],
+        "type": "object"
+      },
+      "SearchCandidatesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/SearchCandidate"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "fallback": {
+            "const": "client_bundle"
+          },
+          "project_search_available": {
+            "type": "boolean"
+          },
+          "provider": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "schema_version": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          }
+        },
+        "required": [
+          "schema_version",
+          "provider",
+          "project_search_available",
+          "fallback",
+          "candidates"
+        ],
+        "type": "object"
+      },
       "SessionOperationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2777,7 +2890,7 @@
     "description": "Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
     "title": "ForesightNine API",
     "version": "1.0.0",
-    "x-contract-sha256": "69398b44234ce05fa5d9f7be4733dfd6f27e76b9e006c4e1ef49a5b791005f98"
+    "x-contract-sha256": "f3ec725cbb9cf1821eea1eb52a94f14567eef38248f8c28e8fd1c1f46293e8d9"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4583,6 +4696,110 @@
           }
         },
         "summary": "Assess Probability"
+      }
+    },
+    "/v1/search/candidates": {
+      "get": {
+        "description": "Return unverified project-search candidates or an explicit client fallback.\n\nThe endpoint never fetches a candidate URL, does not send candidate text to\nthe challenge model, and does not create an EvidenceItem.  A user selection\nmust take the normal canonical evidence-submission path.",
+        "operationId": "searchEvidenceCandidates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 70,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 10,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchCandidatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Search Evidence Candidates"
       }
     },
     "/v1/sessions": {

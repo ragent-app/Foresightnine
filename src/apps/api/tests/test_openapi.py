@@ -49,6 +49,7 @@ def test_openapi_has_every_phase1_endpoint_operation_error_and_idempotency_contr
         ("post", "/v1/challenges/{challenge_id}/messages"),
         ("post", "/v1/challenges/{challenge_id}/messages/async"),
         ("post", "/v1/challenges/{challenge_id}/evidence"),
+        ("get", "/v1/search/candidates"),
         ("post", "/v1/challenges/{challenge_id}/confirm"),
         ("post", "/v1/worldlines"),
         ("get", "/v1/worldlines/{worldline_id}"),

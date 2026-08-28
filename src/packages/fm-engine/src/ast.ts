@@ -1,4 +1,4 @@
-import { pandasPercentRank } from "./index.js";
+import { pandasPercentRank } from "./core.js";
 
 export type FactorAst =
   | { readonly op: "field"; readonly name: string }
