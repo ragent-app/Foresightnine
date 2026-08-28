@@ -47,3 +47,25 @@ uv run --project apps/api pytest apps/api/tests
 uv run --project apps/api python apps/api/scripts/export_openapi.py --check
 uv run --project apps/api uvicorn app.main:app --app-dir apps/api
 ```
+
+## Entity storage boundary
+
+The API builds typed repositories for sessions, theses, challenges,
+challenge turns, evidence, worldlines, market manifests, and worldline
+challenge links at import time. Development and tests default to deterministic
+in-memory repositories and make no database connection. A deployment must set
+`FORESIGHTNINE_ENV=production` or `FORESIGHTNINE_PUBLIC_HARDENING=true`,
+`FORESIGHTNINE_STORAGE_MODE=postgres`, and a nonblank server-side URL in
+`FORESIGHTNINE_POSTGRES_URL` or `DATABASE_URL`; missing or memory storage then
+fails closed. The existing `FORESIGHTNINE_POSTGRES_DSN` name remains supported
+as a compatibility alias.
+
+PostgreSQL access is lazy, but a selected Postgres operation failure is surfaced
+as a storage runtime error and is never replaced with memory. The migration is
+`infra/migrations/001_research_state.sql`.
+
+This boundary does not make the complete service production-ready: operation
+idempotency/replay persistence, worker leases/restart recovery, and atomic
+multi-process Redis abuse controls remain later work. The development Compose
+file starts Postgres and Redis with healthchecks; Redis is intentionally not
+wired into the API yet.

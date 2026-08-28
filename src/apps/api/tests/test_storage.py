@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
@@ -51,6 +52,23 @@ def test_production_memory_config_is_rejected_by_factory() -> None:
 
     with pytest.raises(StorageConfigurationError):
         build_repository(config, "sessions")
+
+
+def test_in_memory_ordinary_reads_hide_expired_values_but_retention_sees_them() -> None:
+    now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+    repository = InMemoryDocumentRepository(clock=lambda: now)
+    repository["expired"] = type("DocumentWithExpiry", (), {"expires_at": now})()
+    repository["active"] = type("DocumentWithExpiry", (), {"expires_at": now.replace(second=1)})()
+    repository["persistent"] = {"name": "persistent"}
+
+    with pytest.raises(KeyError):
+        repository["expired"]
+    assert list(repository) == ["active", "persistent"]
+    assert len(repository) == 2
+    ordinary_items = dict(repository.items())
+    assert set(ordinary_items) == {"active", "persistent"}
+    assert ordinary_items["active"] == repository["active"]
+    assert set(dict(repository.items_for_retention())) == {"expired", "active", "persistent"}
 
 
 @dataclass(frozen=True)
@@ -153,6 +171,44 @@ def test_postgres_repository_expected_version_cannot_insert_missing_key() -> Non
     assert parameters[2:4] == ("sessions", "missing-session")
     assert parameters[-1] == 7
     assert connection.accepted_mutations == 0
+
+
+def test_postgres_retention_enumeration_includes_expired_documents_without_expiry_filter() -> None:
+    connection = FakeConnection()
+    connection.all_results = [[("expired-session", {"name": "Expired"}, 4)]]
+    repository = PostgresDocumentRepository(
+        "postgresql://db.example.test/app",
+        "sessions",
+        value_loader=lambda value: Document(**value),
+        connection_factory=lambda _dsn: connection,
+    )
+
+    assert dict(repository.items_for_retention()) == {"expired-session": Document("Expired")}
+
+    statement, parameters = connection.calls[0]
+    assert "expires_at" not in statement.lower()
+    assert "current_timestamp" not in statement.lower()
+    assert parameters == ("sessions",)
+
+
+def test_postgres_iteration_and_len_use_ordinary_expiry_filtered_query() -> None:
+    connection = FakeConnection()
+    connection.all_results = [
+        [("active-session", {"name": "Active"}, 2)],
+        [("active-session", {"name": "Active"}, 2)],
+    ]
+    repository = PostgresDocumentRepository(
+        "postgresql://db.example.test/app",
+        "sessions",
+        value_loader=lambda value: Document(**value),
+        connection_factory=lambda _dsn: connection,
+    )
+
+    assert next(iter(repository)) == "active-session"
+    assert len(repository) == 1
+    assert len(connection.calls) == 2
+    assert all("expires_at" in statement.lower() for statement, _parameters in connection.calls)
+    assert all("current_timestamp" in statement.lower() for statement, _parameters in connection.calls)
 
 
 def test_postgres_connection_failures_are_not_swallowed_or_replaced_with_memory() -> None:

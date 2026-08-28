@@ -1,10 +1,12 @@
 """Bounded in-memory retention for anonymous research sessions and operations."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, MutableMapping
 
+from .storage import StorageRuntimeError
 from .telemetry import record_cleanup_failure
 
 
@@ -29,6 +31,23 @@ class CleanupReport:
     removed_idempotency_entries: int = 0
     trimmed_terminal_sse_events: int = 0
     failures: int = 0
+
+
+def _items_for_retention(repository: MutableMapping[str, Any]) -> Iterable[tuple[str, Any]]:
+    """Use a repository's expiry-bypassing enumeration, with a mapping fallback."""
+    retention_items = getattr(repository, "items_for_retention", None)
+    if callable(retention_items):
+        return retention_items()
+    return repository.items()
+
+
+def _remove_document(repository: MutableMapping[str, Any], key: str) -> None:
+    """Delete directly when supported so expired PostgreSQL rows remain removable."""
+    delete = getattr(repository, "delete", None)
+    if callable(delete):
+        delete(key)
+        return
+    repository.pop(key, None)
 
 
 def cleanup_research_state(
@@ -61,41 +80,56 @@ def cleanup_research_state(
     }
     try:
         expired = {
-            session_id for session_id, session in sessions.items()
+            session_id for session_id, session in _items_for_retention(sessions)
             if session_id not in active and getattr(session, "expires_at", current + selected.session_ttl) <= current
         }
-        thesis_ids = {thesis_id for thesis_id, thesis in theses.items() if getattr(thesis, "session_id", None) in expired}
-        challenge_ids = {challenge_id for challenge_id, challenge in challenges.items() if getattr(challenge, "thesis_id", None) in thesis_ids}
-        evidence_ids = {evidence_id for evidence_id, item in evidence.items() if getattr(item, "challenge_id", None) in challenge_ids}
+        thesis_ids = {
+            thesis_id for thesis_id, thesis in _items_for_retention(theses)
+            if getattr(thesis, "session_id", None) in expired
+        }
+        challenge_ids = {
+            challenge_id for challenge_id, challenge in _items_for_retention(challenges)
+            if getattr(challenge, "thesis_id", None) in thesis_ids
+        }
+        evidence_ids = {
+            evidence_id for evidence_id, item in _items_for_retention(evidence)
+            if getattr(item, "challenge_id", None) in challenge_ids
+        }
+        worldline_challenge_items = (
+            _items_for_retention(worldline_challenges) if worldline_challenges is not None else ()
+        )
         worldline_ids = {
-            worldline_id for worldline_id, challenge_id in (worldline_challenges or {}).items()
+            worldline_id for worldline_id, challenge_id in worldline_challenge_items
             if challenge_id in challenge_ids
         }
         for key in expired:
-            sessions.pop(key, None)
+            _remove_document(sessions, key)
         for key in thesis_ids:
-            theses.pop(key, None)
+            _remove_document(theses, key)
         for key in challenge_ids:
-            challenges.pop(key, None)
-            challenge_turns.pop(key, None)
+            _remove_document(challenges, key)
+            _remove_document(challenge_turns, key)
         for key in evidence_ids:
-            evidence.pop(key, None)
+            _remove_document(evidence, key)
         for key in worldline_ids:
-            worldlines.pop(key, None)
+            _remove_document(worldlines, key)
             if worldline_challenges is not None:
-                worldline_challenges.pop(key, None)
+                _remove_document(worldline_challenges, key)
+        manifest_items = _items_for_retention(market_manifests) if market_manifests is not None else ()
         manifest_ids = {
-            manifest_id for manifest_id, manifest in (market_manifests or {}).items()
+            manifest_id for manifest_id, manifest in manifest_items
             if getattr(manifest, "created_at", current + selected.terminal_ttl) + selected.terminal_ttl <= current
         }
         for key in manifest_ids:
             if market_manifests is not None:
-                market_manifests.pop(key, None)
+                _remove_document(market_manifests, key)
         counts.update({
             "expired_sessions": len(expired), "removed_theses": len(thesis_ids),
             "removed_challenges": len(challenge_ids), "removed_evidence": len(evidence_ids),
             "removed_worldlines": len(worldline_ids), "removed_market_manifests": len(manifest_ids),
         })
+    except StorageRuntimeError:
+        raise
     except Exception:
         counts["failures"] += 1
         record_cleanup_failure(kind="research_state")

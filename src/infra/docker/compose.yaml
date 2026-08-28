@@ -1,4 +1,31 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      # Development-only credentials. Replace with secret-manager wiring for any real deployment.
+      POSTGRES_DB: foresightnine
+      POSTGRES_USER: foresightnine
+      POSTGRES_PASSWORD: foresightnine_dev_only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foresightnine -d foresightnine"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - foresightnine-postgres-data:/var/lib/postgresql/data
+      - ../migrations/001_research_state.sql:/docker-entrypoint-initdb.d/001_research_state.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - foresightnine-redis-data:/data
+
   api:
     build:
       context: ../..
@@ -6,5 +33,15 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Phase 0/1 intentionally has no provider credentials; MockResearchProvider is selected.
+      # This Compose file is development-only and intentionally secret-free.
+      FORESIGHTNINE_ENV: development
+      FORESIGHTNINE_STORAGE_MODE: postgres
+      FORESIGHTNINE_POSTGRES_URL: postgresql://foresightnine:foresightnine_dev_only@postgres:5432/foresightnine
       FORESIGHTNINE_LLM_PROVIDER: mock
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  foresightnine-postgres-data:
+  foresightnine-redis-data:

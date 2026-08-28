@@ -119,6 +119,10 @@ class JsonDocumentRepository(Protocol, Generic[ValueT]):
 
     def items(self) -> ItemsView[str, ValueT] | Iterator[tuple[str, ValueT]]: ...
 
+    def items_for_retention(self) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-deleted documents, including expired documents, for cleanup only."""
+        ...
+
     def delete(self, key: str) -> bool: ...
 
     def clear(self) -> None: ...
@@ -153,15 +157,33 @@ def _validate_key(key: str) -> None:
 class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
     """Deterministic, service-free repository for development and tests."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], datetime] | None = None) -> None:
         self._values: dict[str, ValueT] = {}
         self._versions: dict[str, int] = {}
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+
+    def _current_time(self) -> datetime:
+        current = self._clock()
+        if current.tzinfo is None:
+            return current.replace(tzinfo=timezone.utc)
+        return current
+
+    def _is_visible(self, value: ValueT, *, now: datetime) -> bool:
+        expires_at = getattr(value, "expires_at", None)
+        if expires_at is None:
+            return True
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return expires_at > now
 
     def __getitem__(self, key: str) -> ValueT:
         try:
-            return self._values[key]
+            value = self._values[key]
         except KeyError:
             raise KeyError(key) from None
+        if not self._is_visible(value, now=self._current_time()):
+            raise KeyError(key)
+        return value
 
     def __setitem__(self, key: str, value: ValueT) -> None:
         self.put(key, value)
@@ -171,10 +193,12 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             raise KeyError(key)
 
     def __iter__(self) -> Iterator[str]:
-        return iter(self._values)
+        now = self._current_time()
+        return (key for key, value in self._values.items() if self._is_visible(value, now=now))
 
     def __len__(self) -> int:
-        return len(self._values)
+        now = self._current_time()
+        return sum(1 for value in self._values.values() if self._is_visible(value, now=now))
 
     def put(self, key: str, value: ValueT, *, expected_version: int | None = None) -> int:
         _validate_key(key)
@@ -199,6 +223,10 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         self._values.clear()
         self._versions.clear()
 
+    def items_for_retention(self) -> ItemsView[str, ValueT]:
+        """Enumerate all stored documents for retention, including expired values."""
+        return self._values.items()
+
 
 _GET_SQL = f"""
 SELECT document, version
@@ -212,6 +240,13 @@ SELECT document_key, document, version
 FROM {DOCUMENT_TABLE}
 WHERE collection = %s
   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+ORDER BY document_key
+""".strip()
+
+_RETENTION_ITEMS_SQL = f"""
+SELECT document_key, document, version
+FROM {DOCUMENT_TABLE}
+WHERE collection = %s
 ORDER BY document_key
 """.strip()
 
@@ -329,17 +364,17 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             raise KeyError(key)
 
     def __iter__(self) -> Iterator[str]:
-        for key, _value in self._items_with_versions():
+        for key, _value, _version in self._items_with_versions(_ITEMS_SQL):
             yield key
 
     def __len__(self) -> int:
-        return sum(1 for _ in self._items_with_versions())
+        return sum(1 for _ in self._items_with_versions(_ITEMS_SQL))
 
-    def _items_with_versions(self) -> list[tuple[str, ValueT, int]]:
+    def _items_with_versions(self, statement: str) -> list[tuple[str, ValueT, int]]:
         try:
             with self._connection() as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute(_ITEMS_SQL, (self.collection,))
+                    cursor.execute(statement, (self.collection,))
                     rows = cursor.fetchall()
         except StorageRuntimeError:
             raise
@@ -358,7 +393,11 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         return result
 
     def items(self) -> Iterator[tuple[str, ValueT]]:
-        return ((key, value) for key, value, _version in self._items_with_versions())
+        return ((key, value) for key, value, _version in self._items_with_versions(_ITEMS_SQL))
+
+    def items_for_retention(self) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-deleted documents, including expired documents, for cleanup only."""
+        return ((key, value) for key, value, _version in self._items_with_versions(_RETENTION_ITEMS_SQL))
 
     def put(self, key: str, value: ValueT, *, expected_version: int | None = None) -> int:
         _validate_key(key)

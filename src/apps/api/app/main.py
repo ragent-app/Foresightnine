@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from collections.abc import Mapping
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import os
@@ -72,6 +73,7 @@ from .services import (
     validate_probability_semantics,
     validate_worldline_bundle_semantics,
 )
+from .storage import JsonDocumentRepository, StorageConfig, build_repository
 
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
 
@@ -112,14 +114,65 @@ captcha_verifier = build_captcha_verifier(security_config)
 trusted_proxy_resolver = TrustedProxyResolver(security_config.trusted_proxies)
 retention_policy = RetentionPolicy()
 
-SESSIONS: dict[str, ResearchSession] = {}
-THESES: dict[str, ThesisDocument] = {}
-CHALLENGES: dict[str, ChallengeRecord] = {}
-CHALLENGE_TURNS: dict[str, int] = {}
-EVIDENCE: dict[str, EvidenceItem] = {}
-WORLDLINES: dict[str, Worldline] = {}
-MARKET_MANIFESTS: dict[str, MarketDataManifest] = {}
-WORLDLINE_CHALLENGES: dict[str, str] = {}
+def _storage_environment(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Normalize deployment URL names to the storage foundation's safe alias.
+
+    The production preflight intentionally names the server-side URL as either
+    ``FORESIGHTNINE_POSTGRES_URL`` or ``DATABASE_URL``.  ``storage.py`` keeps
+    its narrower ``FORESIGHTNINE_POSTGRES_DSN`` input, so the API adapts the
+    names without changing the storage foundation or ever logging the value.
+    The existing DSN name remains the highest-priority compatibility alias.
+    """
+    normalized = dict(environ if environ is not None else os.environ)
+    if not normalized.get("FORESIGHTNINE_POSTGRES_DSN", "").strip():
+        for name in ("FORESIGHTNINE_POSTGRES_URL", "DATABASE_URL"):
+            configured_url = normalized.get(name)
+            if configured_url and configured_url.strip():
+                normalized["FORESIGHTNINE_POSTGRES_DSN"] = configured_url
+                break
+    return normalized
+
+
+def _storage_config(environ: Mapping[str, str] | None = None) -> StorageConfig:
+    return StorageConfig.from_env(_storage_environment(environ))
+
+
+def _build_entity_repositories(
+    config: StorageConfig,
+) -> tuple[
+    JsonDocumentRepository[ResearchSession],
+    JsonDocumentRepository[ThesisDocument],
+    JsonDocumentRepository[ChallengeRecord],
+    JsonDocumentRepository[int],
+    JsonDocumentRepository[EvidenceItem],
+    JsonDocumentRepository[Worldline],
+    JsonDocumentRepository[MarketDataManifest],
+    JsonDocumentRepository[str],
+]:
+    """Build every API entity map with its canonical typed document loader."""
+    return (
+        build_repository(config, "sessions", value_loader=ResearchSession.model_validate),
+        build_repository(config, "theses", value_loader=ThesisDocument.model_validate),
+        build_repository(config, "challenges", value_loader=ChallengeRecord.model_validate),
+        build_repository(config, "challenge_turns", value_loader=int),
+        build_repository(config, "evidence", value_loader=EvidenceItem.model_validate),
+        build_repository(config, "worldlines", value_loader=Worldline.model_validate),
+        build_repository(config, "market_manifests", value_loader=MarketDataManifest.model_validate),
+        build_repository(config, "worldline_challenges", value_loader=str),
+    )
+
+
+storage_config = _storage_config()
+(
+    SESSIONS,
+    THESES,
+    CHALLENGES,
+    CHALLENGE_TURNS,
+    EVIDENCE,
+    WORLDLINES,
+    MARKET_MANIFESTS,
+    WORLDLINE_CHALLENGES,
+) = _build_entity_repositories(storage_config)
 OPERATION_SESSIONS: dict[str, str] = {}
 
 NORMAL_CONFIRM_MINIMUM_TOTAL = 30

@@ -1,5 +1,13 @@
 # Progress
 
+## PostgreSQL entity storage integration — 2026-08-29
+
+- Implemented the Sol-approved entity-persistence slice under `apps/api`: production-configured repositories now support PostgreSQL for sessions, theses, challenges, challenge turns, evidence, worldlines, market manifests, and worldline-to-challenge relationships. Development and tests retain the explicit in-memory mode; production/public hardening fails closed when PostgreSQL is not configured.
+- Added the idempotent `infra/migrations/001_research_state.sql` migration for versioned JSONB documents, expiry metadata, collection/key validation, and lookup indexes. Added development-only PostgreSQL and Redis services to `infra/docker/compose.yaml`; Redis is provisioned for the next coordination slice but is not yet wired to abuse controls or operation state.
+- Retention now uses an explicit unfiltered retention enumeration, deletes through repository APIs, preserves relationship-based worldline cascade cleanup, and re-raises storage runtime failures. Ordinary reads hide expired documents consistently in memory and PostgreSQL; deterministic clock injection and query-path regressions cover this boundary.
+- Primary verification for the current worktree: focused API storage/security tests 29 passed; full API suite 149 passed; root TypeScript typecheck passed; generated-contract and governance-boundary checks passed; Compose config parsing passed; `git diff --check` passed with only existing line-ending warnings. The API retains the documented Starlette/httpx deprecation warning.
+- This is not public production readiness. OperationManager idempotency/replay state, event logs and worker leases/restart recovery remain in memory; Redis atomic quotas/rate limits, live PostgreSQL/Redis runtime evidence, Docker build/startup evidence, provider/search secrets, licensed data, legal approval, Android signing, and deployment gates remain open.
+
 ## Dependency audit remediation — 2026-08-29
 
 - A fresh Sol commitment-boundary review approved a narrowly scoped fix for `GHSA-w5hq-g745-h8pq`: the only vulnerable production path was Expo's `xcode@3.0.1 -> uuid@7.0.3` edge, and `xcode` only requires the CommonJS `uuid.v4()` interface. No plan, agent, governance, FM reference, or read-only source was changed.
