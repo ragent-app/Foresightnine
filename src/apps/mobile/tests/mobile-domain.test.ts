@@ -124,21 +124,23 @@ describe("mobile thesis and evidence boundaries", () => {
       apiBaseUrl: "https://api.example.com/base",
       fetcher: async (input) => {
         expect(String(input)).toContain("https://api.example.com/base/v1/search/candidates?query=grid+investment&limit=10");
-        return new Response(JSON.stringify({ schema_version: "v1", provider: "glm-coding-mcp-search", project_search_available: true, fallback: "client_bundle", candidates: [{ search_result_hash: "result-1", search_provider: "glm-coding-mcp-search", title: "Safe source", url: "https://example.com/report", excerpt: "A bounded candidate.", publisher: "Example", published_at: "2026-08-01", retrieved_at: "2026-08-27T00:00:00Z", independently_reviewable: true }] }), { status: 200 });
+        return new Response(JSON.stringify({ schema_version: "v1", provider: "glm-coding-mcp-search", project_search_available: true, fallback: "client_bundle", candidates: [{ search_result_hash: "a".repeat(64), search_provider: "glm-coding-mcp-search", title: "Safe source", url: "https://example.com/report", excerpt: "A bounded candidate.", publisher: "Example", published_at: "2026-08-01", retrieved_at: "2026-08-27T00:00:00Z", independently_reviewable: true }] }), { status: 200 });
       },
     });
     expect(response.status).toBe("available");
     expect(response.candidates).toHaveLength(1);
     const bundle = candidateToLocalBundle(response.candidates[0]!, "en");
     expect(bundle.search_provider).toBe("glm-coding-mcp-search");
-    expect(bundle.search_result_hash).toBe("result-1");
+    expect(bundle.search_result_hash).toBe("a".repeat(64));
     expect(bundle.independently_reviewable).toBe(false);
     expect(bundle.user_note).toContain("unverified");
   });
 
   it("fails closed on malformed project-search output or unavailable API status", async () => {
-    const malformed = await searchProjectCandidates("grid", { apiBaseUrl: "https://api.example.com", fetcher: async () => new Response(JSON.stringify({ schema_version: "v1", provider: "test", project_search_available: true, fallback: "client_bundle", candidates: [{ title: "unsafe", url: "https://127.0.0.1/private", excerpt: "no", search_provider: "test", search_result_hash: "x", independently_reviewable: true }] }), { status: 200 }) });
-    expect(malformed).toEqual({ status: "available", candidates: [] });
+    for (const hash of ["result-1", "g".repeat(64)]) {
+      const malformed = await searchProjectCandidates("grid", { apiBaseUrl: "https://api.example.com", fetcher: async () => new Response(JSON.stringify({ schema_version: "v1", provider: "test", project_search_available: true, fallback: "client_bundle", candidates: [{ title: "unsafe", url: "https://example.com/private", excerpt: "no", search_provider: "test", search_result_hash: hash, independently_reviewable: true }] }), { status: 200 }) });
+      expect(malformed).toEqual({ status: "available", candidates: [] });
+    }
     const failed = await searchProjectCandidates("grid", { apiBaseUrl: "https://api.example.com", fetcher: async () => new Response("no", { status: 502 }) });
     expect(failed).toEqual({ status: "api_failed", candidates: [] });
   });

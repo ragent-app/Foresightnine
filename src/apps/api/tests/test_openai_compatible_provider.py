@@ -6,7 +6,7 @@ from threading import Event
 import pytest
 
 import app.openai_compatible as openai_compatible
-from app.phase3 import ChallengeInput, ProviderFailure, ProviderPolicy, build_llm_provider
+from app.phase3 import ChallengeInput, DeterministicMockLlmProvider, ProviderFailure, ProviderPolicy, UnavailableLlmProvider, build_llm_provider
 from app.openai_compatible import HttpResponse, OpenAICompatibleLlmProvider
 
 
@@ -100,6 +100,46 @@ def test_opt_in_selector_builds_server_provider_but_missing_secret_stays_offline
     assert isinstance(built, OpenAICompatibleLlmProvider)
     with pytest.raises(ProviderFailure, match="secret"):
         built.generate_challenge(request())
+
+
+@pytest.mark.parametrize(
+    ("provider", "environment", "public_hardening"),
+    [
+        ("unknown-provider-selector", "development", ""),
+        ("mock", "production", ""),
+        ("deterministic_mock", "development", "true"),
+    ],
+)
+def test_selector_rejects_unknown_or_hardened_mock_without_simulation(
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    environment: str,
+    public_hardening: str,
+) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_LLM_PROVIDER", provider)
+    monkeypatch.setenv("FORESIGHTNINE_ENV", environment)
+    monkeypatch.setenv("FORESIGHTNINE_PUBLIC_HARDENING", public_hardening)
+
+    built = build_llm_provider()
+
+    assert isinstance(built, UnavailableLlmProvider)
+    with pytest.raises(ProviderFailure, match="unavailable") as error:
+        built.generate_challenge(request())
+    assert provider not in str(error.value)
+    assert environment not in str(error.value)
+    if public_hardening:
+        assert public_hardening not in str(error.value)
+
+
+def test_selector_keeps_development_default_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("FORESIGHTNINE_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("FORESIGHTNINE_ENV", raising=False)
+    monkeypatch.delenv("FORESIGHTNINE_PUBLIC_HARDENING", raising=False)
+
+    built = build_llm_provider()
+
+    assert isinstance(built, DeterministicMockLlmProvider)
+    assert built.generate_challenge(request()).provenance == "provider_output_validated; native_search_not_verified"
 
 
 def test_invalid_json_fails_closed_at_completion_boundary(monkeypatch: pytest.MonkeyPatch) -> None:

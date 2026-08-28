@@ -6,6 +6,8 @@ FastAPI adapter for the canonical v1 JSON Schema. Pydantic models are generated 
 
 `DeterministicMockLlmProvider` is the default and needs no key. It exercises the complete Challenge/evidence path offline. `OpenCodeDeepSeekFlashProvider` is opt-in only with the non-secret server setting `FORESIGHTNINE_LLM_PROVIDER=opencode`; it invokes `opencode run --format json -m opencode-go/deepseek-v4-flash` and does not read, print, persist, or inject any credential. A deployment's new OpenCode secret must be supplied only by its server-side secret manager/environment to the CLI.
 
+The development default is never a production fallback: when `FORESIGHTNINE_ENV=production` or `FORESIGHTNINE_PUBLIC_HARDENING=true`, an explicit mock provider and any unknown provider selector fail closed without generating a simulated challenge. Run the repository production preflight before a release.
+
 The live OpenCode path is bounded to one concurrent call, pre-reserved round/token/cost budgets, timeout/cancel handling, and exponential retry only for 429/5xx/timeout. Runtime OpenCode envelopes, not a static setting, determine whether native search was available; absent search results keep client fallback active. Its JSON is rejected unless it can be rebuilt into and validated against the canonical `ChallengeRecord`.
 
 ## Phase 8 public boundary

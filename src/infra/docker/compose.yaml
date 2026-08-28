@@ -7,4 +7,4 @@ services:
       - "8000:8000"
     environment:
       # Phase 0/1 intentionally has no provider credentials; MockResearchProvider is selected.
-      FORESIGHTNINE_PROVIDER: mock
+      FORESIGHTNINE_LLM_PROVIDER: mock

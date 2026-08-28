@@ -7,7 +7,6 @@ const MAX_QUERY_LENGTH = 70;
 const MAX_CANDIDATES = 10;
 const MAX_TITLE_LENGTH = 500;
 const MAX_EXCERPT_LENGTH = 10_000;
-const MAX_HASH_LENGTH = 256;
 
 export interface ProjectSearchCandidate {
   readonly searchResultHash: string;
@@ -79,7 +78,7 @@ function candidateFromUnknown(value: unknown): ProjectSearchCandidate | null {
   const provider = typeof record.search_provider === "string" ? record.search_provider.trim() : "";
   const hash = typeof record.search_result_hash === "string" ? record.search_result_hash.trim() : "";
   const url = typeof record.url === "string" ? normalizeEvidenceUrl(record.url) : null;
-  if (!title || title.length > MAX_TITLE_LENGTH || !excerpt || excerpt.length > MAX_EXCERPT_LENGTH || !provider || !hash || hash.length > MAX_HASH_LENGTH || !url || typeof record.independently_reviewable !== "boolean") return null;
+  if (!title || title.length > MAX_TITLE_LENGTH || !excerpt || excerpt.length > MAX_EXCERPT_LENGTH || !provider || !/^[a-f0-9]{64}$/u.test(hash) || !url || typeof record.independently_reviewable !== "boolean") return null;
   const publisher = typeof record.publisher === "string" && record.publisher.trim() ? record.publisher.trim().slice(0, 500) : null;
   return {
     searchResultHash: hash,

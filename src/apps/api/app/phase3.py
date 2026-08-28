@@ -336,6 +336,23 @@ class DeterministicMockLlmProvider(LlmProvider):
         return _draft_from_payload(payload, request, native_search_used=False)
 
 
+class UnavailableLlmProvider(LlmProvider):
+    """Safe terminal provider for disallowed or unknown deployment settings."""
+
+    name = "unavailable"
+
+    @property
+    def supports_native_search(self) -> bool:
+        return False
+
+    def generate_challenge(self, request: ChallengeInput) -> ChallengeDraft:
+        raise ProviderFailure(
+            "provider_unavailable",
+            "LLM provider is unavailable because its configuration is not permitted.",
+            retryable=False,
+        )
+
+
 class OpenCodeDeepSeekFlashProvider(LlmProvider):
     """Bounded adapter for `opencode run --format json -m opencode-go/deepseek-v4-flash`."""
 
@@ -588,10 +605,12 @@ class OpenCodeDeepSeekFlashProvider(LlmProvider):
 
 
 def build_llm_provider() -> LlmProvider:
-    """Default mock; deployments must explicitly opt in to a provider."""
+    """Select an explicitly configured provider without falling back to a mock."""
     selected = os.environ.get("FORESIGHTNINE_LLM_PROVIDER", "mock").strip().lower()
+    environment = os.environ.get("FORESIGHTNINE_ENV", "development").strip().lower()
+    hardened = os.environ.get("FORESIGHTNINE_PUBLIC_HARDENING", "").strip().lower() in {"1", "true", "yes"} or environment == "production"
     if selected in {"", "mock", "deterministic_mock"}:
-        return DeterministicMockLlmProvider()
+        return UnavailableLlmProvider() if hardened else DeterministicMockLlmProvider()
     if selected == "opencode":
         return OpenCodeDeepSeekFlashProvider()
     if selected == "openai_compatible":
@@ -602,6 +621,5 @@ def build_llm_provider() -> LlmProvider:
         from .openai_compatible import OpenAICompatibleLlmProvider
 
         return OpenAICompatibleLlmProvider.from_glm_coding_environment()
-    # Unknown deployment configuration fails closed to the offline mock, rather
-    # than silently trying a credentialed provider.
-    return DeterministicMockLlmProvider()
+    # Unknown deployment configuration must never silently become simulated data.
+    return UnavailableLlmProvider()
