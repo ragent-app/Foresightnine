@@ -4,7 +4,7 @@
 
 This is a QA release-candidate record for the current checkout, captured on 2026-08-29. The verifier prints the exact `HEAD` used for each run. It is not a production-release approval, a public-launch declaration, or evidence that live providers, licensed current market data, signing credentials, or external operational gates are ready.
 
-The final fresh Sol read-only review returned `ship` for this QA evidence and authorized the Phase 9 commit/push. It did not authorize production release or completion of the overall goal.
+The final fresh Sol read-only review returned `ship` for this QA evidence and authorized the Phase 9 commit/push. The evidence was pushed as commit `dd1a5fe93945f199b2dc55918c678d1311f3429c`. It did not authorize production release or completion of the overall goal.
 
 The candidate is intentionally composed of offline/mock and debug artifacts. They are suitable for static, UI, contract, and emulator QA only. A mock or debug artifact must not be labelled as production in a release system, client store, or public deployment.
 
