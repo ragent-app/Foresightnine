@@ -7,7 +7,7 @@ import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, rubricFor } from "./fixtu
 import { t } from "./i18n";
 import { createPortfolioPlan, portfolioMetadata, type PortfolioPlan } from "./portfolio";
 import { loadDraft, loadLanguage, saveDraft, saveLanguage } from "./storage";
-import type { AppState, Branch, EvidenceBundle, Language } from "./types";
+import type { AppState, Branch, EvidenceBundle, FreshnessContext, Language } from "./types";
 import { canConfirmNormally, canConfirmReserved, canEnterWorldline, parseCapital } from "./validation";
 import { mobileInitialState, reduceChallengeAction, resetMobileWorkflowState } from "./lifecycle";
 import { switchLanguageState } from "./language-state";
@@ -35,6 +35,7 @@ export interface MobileStore {
   selectBranch(branch: AppState["selectedBranch"]): void;
   runFm(): void;
   setPortfolioMode(mode: AppState["portfolioMode"]): void;
+  setFreshness(freshness: FreshnessContext): void;
   saveArchive(includePrivate: boolean): Promise<void>;
   restoreArchive(): Promise<void>;
   exportPublicDocument(): Promise<void>;
@@ -81,6 +82,7 @@ export function AppProvider({ children }: PropsWithChildren): React.JSX.Element 
     try { const result = computeFm(fmInput()); return { ...current, stage: "portfolio", fmStatus: "complete", fmProgress: 100, fmStep: t(current.language, "operationComplete"), fmResult: result }; } catch { return { ...current, fmStatus: "failed", fmStep: t(current.language, "fixtureRejected") }; }
   }), []);
   const setPortfolioMode = useCallback((portfolioMode: AppState["portfolioMode"]) => setState((current) => ({ ...current, portfolioMode })), []);
+  const setFreshness = useCallback((freshness: FreshnessContext) => setState((current) => ({ ...current, freshness })), []);
   const branches = useMemo(() => state.branchSnapshot ?? makeBranches(state.viewpoint, state.language), [state.branchSnapshot, state.viewpoint, state.language]);
   const saveArchive = useCallback(async (includePrivate: boolean) => {
     const snapshot = state;
@@ -105,8 +107,8 @@ export function AppProvider({ children }: PropsWithChildren): React.JSX.Element 
     const shared = await sharePrivacySafeDocument(document);
     setState((current) => ({ ...current, exportNotice: shared ? t(current.language, "exportOpened") : t(current.language, "sharingUnavailable") }));
   }, [state]);
-  const portfolio = useMemo(() => canEnterPortfolio(state) && state.fmResult && parseCapital(state.capital) ? createPortfolioPlan(state.fmResult, parseCapital(state.capital)!, state.currency, undefined, state.language, state.selectedBranch) : null, [state, state.fmResult, state.capital, state.currency, state.language, state.selectedBranch]);
-  const value = useMemo<MobileStore>(() => ({ state, branches, portfolio, archive, archiveAvailable, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, saveArchive, restoreArchive, exportPublicDocument }), [state, branches, portfolio, archive, archiveAvailable, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, saveArchive, restoreArchive, exportPublicDocument]);
+  const portfolio = useMemo(() => canEnterPortfolio(state) && state.fmResult && parseCapital(state.capital) ? createPortfolioPlan(state.fmResult, parseCapital(state.capital)!, state.currency, undefined, state.language, state.selectedBranch, state.freshness) : null, [state, state.fmResult, state.capital, state.currency, state.language, state.selectedBranch, state.freshness]);
+  const value = useMemo<MobileStore>(() => ({ state, branches, portfolio, archive, archiveAvailable, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, setFreshness, saveArchive, restoreArchive, exportPublicDocument }), [state, branches, portfolio, archive, archiveAvailable, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, setFreshness, saveArchive, restoreArchive, exportPublicDocument]);
   return <Store.Provider value={value}>{children}</Store.Provider>;
 }
 

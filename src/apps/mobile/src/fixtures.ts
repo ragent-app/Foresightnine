@@ -1,7 +1,14 @@
 import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
-import type { AssetFixture, Branch, BranchKind, EvidenceBundle, Language, ProbabilityInterval, RubricItem, TranscriptTurn } from "./types";
+import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessDecision, type FreshnessPolicy, type ProviderFreshnessStatus } from "@foresightnine/domain";
+import type { AssetFixture, Branch, BranchKind, EvidenceBundle, FreshnessOptions, Language, ProbabilityInterval, RubricItem, TranscriptTurn } from "./types";
 
 export const MARKET_DATA_AS_OF = "2026-08-09";
+export const RUNTIME_AS_OF = "2026-08-09T00:00:00Z";
+/** Runtime clock for the live app; tests should pass an explicit deterministic value. */
+export const DEFAULT_RUNTIME_AS_OF = new Date().toISOString();
+/** Offline fixtures never establish current-market freshness. */
+export const PROVIDER_FRESHNESS_STATUS: ProviderFreshnessStatus = "unavailable";
+export const FRESHNESS_POLICY: FreshnessPolicy = DEFAULT_FRESHNESS_POLICY;
 export const WORLDLINE_BASELINE_DATE = "2026-08-10";
 export const WORLDLINE_HORIZON_END = "2028-08-31";
 export const FIXTURE_STATE = "historical_reference_and_simulated" as const;
@@ -15,6 +22,10 @@ export const ASSETS: readonly AssetFixture[] = [
   { id: "WORLD", name: "全球股票 ETF", role: "广泛分散", instrument: "WORLD", quoteCurrency: "USD", price: 90, lotSize: 1, fractional: true, tradable: true, liquidity: "low", volatility: "low", assetClass: "equity", asOf: MARKET_DATA_AS_OF, freshness: "stale" },
   { id: "CASH", name: "现金等价物", role: "舍入余量", instrument: "CASH", quoteCurrency: "CNY", price: 1, lotSize: 1, fractional: true, tradable: true, liquidity: "high", volatility: "low", assetClass: "cash", asOf: MARKET_DATA_AS_OF, freshness: "current" },
 ];
+
+export function freshnessFor(asset: AssetFixture, options: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS }): FreshnessDecision {
+  return evaluateFreshness({ dataAsOf: asset.asOf, runtimeAsOf: options.runtimeAsOf, providerStatus: options.providerStatus, declaredFreshness: asset.freshness }, options.policy ?? FRESHNESS_POLICY);
+}
 
 export const RUBRIC: readonly RubricItem[] = [
   { id: "premise", label: "前提清晰度", score: 4, critical: true, rationale: "观点包含方向与受益对象。" },

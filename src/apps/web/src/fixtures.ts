@@ -1,8 +1,15 @@
 import type { EvidenceItem, ProbabilityAssessment, ThesisDocument, Worldline } from "@foresightnine/contracts";
+import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessPolicy, type FreshnessDecision, type ProviderFreshnessStatus } from "@foresightnine/domain";
 import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
-import type { AssetFixture, BranchView, Currency, EvidenceView } from "./types";
+import type { AssetFixture, BranchView, Currency, EvidenceView, FreshnessOptions } from "./types";
 
 export const MARKET_DATA_AS_OF = "2026-08-09";
+export const RUNTIME_AS_OF = "2026-08-09T00:00:00Z";
+/** Runtime clock for the live app; tests should pass an explicit deterministic value. */
+export const DEFAULT_RUNTIME_AS_OF = new Date().toISOString();
+/** Offline fixtures never establish current-market freshness. */
+export const PROVIDER_FRESHNESS_STATUS: ProviderFreshnessStatus = "unavailable";
+export const FRESHNESS_POLICY: FreshnessPolicy = DEFAULT_FRESHNESS_POLICY;
 export const FX_SNAPSHOT = {
   asOf: MARKET_DATA_AS_OF,
   provider: "fixture-fx-snapshot",
@@ -146,10 +153,13 @@ export function makeBranches(viewpoint: string): readonly BranchView[] {
 
 export const branches: readonly BranchView[] = makeBranches("如果未来两年全球数据中心电力需求持续上升，并推动电网设备投资提速，那么电网设备与相关基础设施将受益。");
 
-export function isPublicEligible(asset: AssetFixture): boolean {
-  const asOf = Date.parse(asset.asOf);
-  const snapshot = Date.parse(MARKET_DATA_AS_OF);
-  return (asset.tradable || Boolean(asset.proxyInstrument)) && (asset.liquidity === "high" || asset.liquidity === "medium") && asset.freshness === "current" && Number.isFinite(asOf) && asOf <= snapshot;
+export function freshnessFor(asset: AssetFixture, options: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS }): FreshnessDecision {
+  return evaluateFreshness({ dataAsOf: asset.asOf, runtimeAsOf: options.runtimeAsOf, providerStatus: options.providerStatus, declaredFreshness: asset.freshness }, options.policy ?? FRESHNESS_POLICY);
+}
+
+export function isPublicEligible(asset: AssetFixture, options: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS }): boolean {
+  const freshness = freshnessFor(asset, options);
+  return (asset.tradable || Boolean(asset.proxyInstrument)) && (asset.liquidity === "high" || asset.liquidity === "medium") && freshness.allowCurrentPublicDefault;
 }
 
 export function fxToBase(quoteCurrency: Currency, baseCurrency: Currency): number {

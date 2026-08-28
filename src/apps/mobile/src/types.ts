@@ -1,4 +1,5 @@
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
+import type { FreshnessDecision, ProviderFreshnessStatus } from "@foresightnine/domain";
 
 export type Language = "zh" | "en";
 export type Currency = "CNY" | "USD" | "EUR";
@@ -107,7 +108,16 @@ export interface AssetFixture {
   readonly volatility: "low" | "high";
   readonly assetClass: AssetClass;
   readonly asOf: string;
-  readonly freshness: "current" | "stale";
+  readonly freshness: "current" | "historical_only" | "stale";
+}
+
+export interface FreshnessContext {
+  readonly runtimeAsOf: string;
+  readonly providerStatus: ProviderFreshnessStatus;
+}
+
+export interface FreshnessOptions extends FreshnessContext {
+  readonly policy?: { readonly maxAgeMs: number };
 }
 
 export interface AllocationRow {
@@ -123,6 +133,9 @@ export interface AllocationRow {
   readonly rawExecutable: boolean;
   readonly publicExecutable: boolean;
   readonly reasons: readonly string[];
+  readonly freshness: FreshnessDecision["status"];
+  readonly freshnessLabel: FreshnessDecision["label"];
+  readonly publicExecutionAllowed: boolean;
 }
 
 export interface NavPoint {
@@ -222,6 +235,7 @@ export interface AppState {
   readonly fmResult: ComputeFmResult | null;
   readonly portfolioMode: PortfolioMode;
   readonly exportNotice: string;
+  readonly freshness: FreshnessContext;
 }
 
 export type AppAction =
@@ -249,4 +263,5 @@ export type AppAction =
   | { readonly type: "fm_cancel" }
   | { readonly type: "set_mode"; readonly mode: PortfolioMode }
   | { readonly type: "export_notice"; readonly notice: string }
+  | { readonly type: "set_freshness"; readonly freshness: FreshnessContext }
   | { readonly type: "reset" };

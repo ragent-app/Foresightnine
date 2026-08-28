@@ -43,6 +43,21 @@ class FixedClock:
         return self.now().date()
 
 
+class RuntimeClock:
+    """Wall-clock lifecycle timestamps for retention and operation expiry.
+
+    Deterministic mock providers continue to use ``FixedClock`` for fixture
+    content.  Lifecycle state must use a progressing clock so sessions,
+    manifests and terminal operations can actually age out in a running app.
+    """
+
+    def now(self) -> datetime:
+        return datetime.now(UTC)
+
+    def today(self) -> date:
+        return self.now().date()
+
+
 def _model_ref(ref_id: str, label: str) -> SourceRef:
     return SourceRef(ref_id=ref_id, source_type="model_inference", label=label)
 

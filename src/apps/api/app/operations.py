@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from hashlib import sha256
 from threading import Event, RLock, Thread
 from time import sleep
@@ -23,6 +24,7 @@ from .models import (
 from .phase3 import ProviderFailure
 from .providers import FixedClock
 from .services import canonical_json, content_hash, deterministic_id, validate_payload
+from .telemetry import record_provider_failure
 
 
 class ApiProblem(RuntimeError):
@@ -34,6 +36,7 @@ class ApiProblem(RuntimeError):
         *,
         retryable: bool = False,
         details: list[ErrorDetail] | None = None,
+        retry_after: int | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
@@ -41,12 +44,14 @@ class ApiProblem(RuntimeError):
         self.message = message
         self.retryable = retryable
         self.details = details or []
+        self.retry_after = retry_after
 
 
 @dataclass(frozen=True)
 class IdempotencyEntry:
     request_hash: str
     response: BaseModel | ApiProblem
+    stored_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +74,7 @@ class OperationManager:
         self._idempotency: dict[tuple[str, str], IdempotencyEntry] = {}
         self._single_flight: dict[tuple[str, str], SingleFlight] = {}
         self._pending_provider_executions: dict[str, PendingProviderExecution] = {}
+        self._operation_keys: dict[str, tuple[str, str]] = {}
         self._cancel_events: dict[str, Event] = {}
         self.operations: dict[str, Operation] = {}
         self.events: dict[str, list[BaseModel]] = {}
@@ -79,6 +85,7 @@ class OperationManager:
             self._idempotency.clear()
             self._single_flight.clear()
             self._pending_provider_executions.clear()
+            self._operation_keys.clear()
             self._cancel_events.clear()
             self.operations.clear()
             self.events.clear()
@@ -184,12 +191,14 @@ class OperationManager:
                 operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="running", last_sequence=3,
             )
             self._cancel_events[operation_id] = Event()
+            self._operation_keys[operation_id] = key
             self._pending_provider_executions[operation_id] = PendingProviderExecution(
                 endpoint=endpoint, idempotency_key=idempotency_key, request_hash=request_hash,
             )
         try:
             result, result_ref = build_result(operation_id)
         except ProviderFailure as error:
+            record_provider_failure(endpoint=endpoint)
             failure = ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=error.retryable)
             with self._lock:
                 if self.operations[operation_id].status != "cancelled":
@@ -201,7 +210,7 @@ class OperationManager:
                     self.operations[operation_id] = self._operation(
                         operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=len(self.events[operation_id]),
                     )
-                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure)
+                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure, stored_at=self.clock.now())
                 self._pending_provider_executions.pop(operation_id, None)
                 self._single_flight.pop(key, None)
                 inflight.completed.set()
@@ -221,12 +230,13 @@ class OperationManager:
                     self.operations[operation_id] = self._operation(
                         operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=sequence,
                     )
-                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=error)
+                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=error, stored_at=self.clock.now())
                 self._pending_provider_executions.pop(operation_id, None)
                 self._single_flight.pop(key, None)
                 inflight.completed.set()
             raise
         except Exception as error:
+            record_provider_failure(endpoint=endpoint)
             # A provider adapter can still raise an unclassified exception
             # (for example, a malformed typed result).  It must close the
             # same durable terminal checkpoint as ProviderFailure so replay
@@ -242,7 +252,7 @@ class OperationManager:
                     self.operations[operation_id] = self._operation(
                         operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=len(self.events[operation_id]),
                     )
-                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure)
+                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure, stored_at=self.clock.now())
                 self._pending_provider_executions.pop(operation_id, None)
                 self._single_flight.pop(key, None)
                 inflight.completed.set()
@@ -252,7 +262,7 @@ class OperationManager:
         if cancelled:
             failure = ApiProblem(500, "internal_error", "Provider request was cancelled before an accepted result.", retryable=True)
             with self._lock:
-                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure)
+                self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=failure, stored_at=self.clock.now())
                 self._pending_provider_executions.pop(operation_id, None)
                 self._single_flight.pop(key, None)
                 inflight.completed.set()
@@ -270,7 +280,7 @@ class OperationManager:
         response = response_model(operation=operation, **{result_field: result})
         with self._lock:
             self.operations[operation_id] = operation
-            self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=response)
+            self._idempotency[key] = IdempotencyEntry(request_hash=request_hash, response=response, stored_at=self.clock.now())
             self._pending_provider_executions.pop(operation_id, None)
             self._single_flight.pop(key, None)
             inflight.completed.set()
@@ -294,6 +304,7 @@ class OperationManager:
         self.operations[operation_id] = operation
         self.events[operation_id] = event_log
         self._cancel_events[operation_id] = Event()
+        self._operation_keys[operation_id] = (endpoint, idempotency_key)
         return operation
 
     def submit_async(
@@ -304,6 +315,7 @@ class OperationManager:
         request_payload: dict[str, Any],
         result_field: str,
         build_result: Callable[[str], tuple[BaseModel, str]],
+        before_accept: Callable[[str], None] | None = None,
     ) -> tuple[OperationResponse, bool]:
         """Accept provider work now and run it after returning a typed operation.
 
@@ -324,6 +336,11 @@ class OperationManager:
                     raise ApiProblem(409, "idempotency_conflict", "Idempotency-Key belongs to a different operation response.")
                 return existing.response, True
             operation_id = deterministic_id("operation", f"{endpoint}\0{idempotency_key}")
+            # Run admission checks before creating the 202 receipt.  A quota or
+            # other request-level rejection must retain its HTTP semantics and
+            # must not become an opaque asynchronous internal_error event.
+            if before_accept is not None:
+                before_accept(operation_id)
             event_log: list[BaseModel] = [
                 OperationStartedEvent(**self._base_event(operation_id, 1), event="operation.started", message="Operation accepted."),
                 OperationProgressEvent(**self._base_event(operation_id, 2), event="operation.progress", progress=0.0, message="Operation is awaiting provider output."),
@@ -336,11 +353,12 @@ class OperationManager:
             self.events[operation_id] = event_log
             self.operations[operation_id] = operation
             self._cancel_events[operation_id] = Event()
+            self._operation_keys[operation_id] = key
             self._pending_provider_executions[operation_id] = PendingProviderExecution(endpoint, idempotency_key, request_hash)
             # The first response deliberately remains a running receipt. Clients
             # consume the durable event stream for live status rather than racing
             # a second provider submission for a newer body.
-            self._idempotency[key] = IdempotencyEntry(request_hash, response)
+            self._idempotency[key] = IdempotencyEntry(request_hash, response, self.clock.now())
 
         def worker() -> None:
             try:
@@ -356,7 +374,7 @@ class OperationManager:
                     self.operations[operation_id] = self._operation(
                         operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="completed", last_sequence=sequence,
                     )
-                    self._idempotency[key] = IdempotencyEntry(request_hash, OperationResponse(operation=self.operations[operation_id]))
+                    self._idempotency[key] = IdempotencyEntry(request_hash, OperationResponse(operation=self.operations[operation_id]), self.clock.now())
             except Exception:
                 # Async workers have no caller awaiting their exception.  Every
                 # unexpected failure must therefore become the same safe terminal
@@ -374,7 +392,7 @@ class OperationManager:
                         self.operations[operation_id] = self._operation(
                             operation_id=operation_id, endpoint=endpoint, idempotency_key=idempotency_key, status="failed", last_sequence=sequence,
                         )
-                        self._idempotency[key] = IdempotencyEntry(request_hash, OperationResponse(operation=self.operations[operation_id]))
+                        self._idempotency[key] = IdempotencyEntry(request_hash, OperationResponse(operation=self.operations[operation_id]), self.clock.now())
             finally:
                 with self._lock:
                     self._pending_provider_executions.pop(operation_id, None)
@@ -394,7 +412,7 @@ class OperationManager:
 
     def _store_control(self, endpoint: str, idempotency_key: str, payload: dict[str, Any], response: BaseModel) -> None:
         with self._lock:
-            self._idempotency[(endpoint, idempotency_key)] = IdempotencyEntry(content_hash(payload), response)
+            self._idempotency[(endpoint, idempotency_key)] = IdempotencyEntry(content_hash(payload), response, self.clock.now())
 
     def cancel(self, operation_id: str, cancel_token: str, idempotency_key: str) -> tuple[OperationResponse, bool]:
         endpoint = f"/v1/operations/{operation_id}/cancel"
@@ -426,7 +444,7 @@ class OperationManager:
                 self.operations[operation_id] = operation
                 if pending:
                     self._idempotency[(pending.endpoint, pending.idempotency_key)] = IdempotencyEntry(
-                        pending.request_hash, OperationResponse(operation=operation),
+                        pending.request_hash, OperationResponse(operation=operation), self.clock.now(),
                     )
         response = OperationResponse(operation=operation)
         self._store_control(endpoint, idempotency_key, payload, response)
@@ -516,6 +534,88 @@ class OperationManager:
             # alive without creating an unbounded audited-event log per viewer.
             yield ": heartbeat\n\n"
             sleep(heartbeat_seconds)
+
+    def active_operation_ids(self) -> set[str]:
+        with self._lock:
+            return {operation_id for operation_id, operation in self.operations.items() if operation.status in {"pending", "running"}}
+
+    def prune(
+        self,
+        *,
+        now: datetime | None = None,
+        max_terminal_operations: int = 1000,
+        max_idempotency_entries: int = 5000,
+        max_terminal_sse_events: int = 1000,
+        terminal_ttl_seconds: float | None = 86400.0,
+    ) -> dict[str, int]:
+        """Bound retained terminal state without touching active work."""
+        current = now or self.clock.now()
+        removed_operations = 0
+        trimmed_events = 0
+        with self._lock:
+            terminal = [
+                operation for operation in self.operations.values()
+                if operation.status in {"completed", "failed", "cancelled"}
+            ]
+            terminal.sort(key=lambda operation: operation.updated_at)
+            expired_terminal = [
+                operation for operation in terminal
+                if terminal_ttl_seconds is not None
+                and (operation.updated_at + timedelta(seconds=terminal_ttl_seconds)) <= current
+            ]
+            expired_ids = {operation.operation_id for operation in expired_terminal}
+            excess_terminal = terminal[:max(0, len(terminal) - max_terminal_operations)]
+            remove_ids = expired_ids | {operation.operation_id for operation in excess_terminal}
+            for operation in terminal:
+                if operation.operation_id not in remove_ids:
+                    continue
+                self.operations.pop(operation.operation_id, None)
+                self.events.pop(operation.operation_id, None)
+                self._cancel_events.pop(operation.operation_id, None)
+                key = self._operation_keys.pop(operation.operation_id, None)
+                if key is not None:
+                    self._idempotency.pop(key, None)
+                removed_operations += 1
+
+            for operation_id, event_log in list(self.events.items()):
+                operation = self.operations.get(operation_id)
+                if operation is None or operation.status not in {"completed", "failed", "cancelled"}:
+                    continue
+                if len(event_log) > max_terminal_sse_events:
+                    self.events[operation_id] = event_log[-max_terminal_sse_events:] if max_terminal_sse_events else []
+                    trimmed_events += len(event_log) - len(self.events[operation_id])
+
+            active_keys = {
+                key for operation_id, key in self._operation_keys.items()
+                if operation_id in self.operations and self.operations[operation_id].status in {"pending", "running"}
+            }
+            entries = sorted(
+                self._idempotency.items(),
+                key=lambda item: item[1].stored_at or datetime.min.replace(tzinfo=current.tzinfo),
+            )
+            removed_idempotency = 0
+            if terminal_ttl_seconds is not None:
+                for key, entry in entries:
+                    if key in active_keys or entry.stored_at is None:
+                        continue
+                    if entry.stored_at + timedelta(seconds=terminal_ttl_seconds) <= current:
+                        self._idempotency.pop(key, None)
+                        removed_idempotency += 1
+            entries = [(key, entry) for key, entry in entries if key in self._idempotency]
+            excess = len(entries) - max(0, max_idempotency_entries)
+            for key, _entry in entries:
+                if excess <= 0:
+                    break
+                if key in active_keys:
+                    continue
+                self._idempotency.pop(key, None)
+                excess -= 1
+                removed_idempotency += 1
+        return {
+            "removed_terminal_operations": removed_operations,
+            "removed_idempotency_entries": removed_idempotency,
+            "trimmed_terminal_sse_events": trimmed_events,
+        }
 
 
 def format_sse(events: list[BaseModel]) -> str:

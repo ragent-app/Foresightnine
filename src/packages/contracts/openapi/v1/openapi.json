@@ -1048,6 +1048,13 @@
               "invalid_operation_token",
               "invalid_last_event_id",
               "contract_violation",
+              "lifecycle_conflict",
+              "quota_exceeded",
+              "unsupported_media_type",
+              "request_too_large",
+              "invalid_request",
+              "rate_limited",
+              "captcha_required",
               "internal_error"
             ]
           },
@@ -2890,7 +2897,7 @@
     "description": "Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
     "title": "ForesightNine API",
     "version": "1.0.0",
-    "x-contract-sha256": "f3ec725cbb9cf1821eea1eb52a94f14567eef38248f8c28e8fd1c1f46293e8d9"
+    "x-contract-sha256": "1bb2db84f0fdcb880ef6c63c5546b64fa9a24ce3e828f3ddec7c6335ba9b3a06"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2948,6 +2955,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2957,6 +2984,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3039,6 +3076,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3048,6 +3105,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3128,6 +3195,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3137,6 +3224,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3229,6 +3326,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3238,6 +3355,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3339,6 +3466,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3348,6 +3495,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3449,6 +3606,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3458,6 +3635,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3559,6 +3746,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3568,6 +3775,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3670,6 +3887,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3679,6 +3916,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3780,6 +4027,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3789,6 +4056,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3869,6 +4146,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3878,6 +4175,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -3968,6 +4275,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3977,6 +4304,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4069,6 +4406,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4078,6 +4435,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4170,6 +4537,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4179,6 +4566,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4248,6 +4645,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4257,6 +4674,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4358,6 +4785,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4367,6 +4814,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4463,6 +4920,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4472,6 +4949,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4573,6 +5060,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4582,6 +5089,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4674,6 +5191,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4683,6 +5220,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4778,6 +5325,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4787,6 +5354,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4879,6 +5456,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4888,6 +5485,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -4980,6 +5587,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -4989,6 +5616,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {
@@ -5069,6 +5706,26 @@
             },
             "description": "Idempotency or lifecycle conflict"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -5078,6 +5735,16 @@
               }
             },
             "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
           },
           "500": {
             "content": {

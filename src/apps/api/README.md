@@ -8,6 +8,33 @@ FastAPI adapter for the canonical v1 JSON Schema. Pydantic models are generated 
 
 The live OpenCode path is bounded to one concurrent call, pre-reserved round/token/cost budgets, timeout/cancel handling, and exponential retry only for 429/5xx/timeout. Runtime OpenCode envelopes, not a static setting, determine whether native search was available; absent search results keep client fallback active. Its JSON is rejected unless it can be rebuilt into and validated against the canonical `ChallengeRecord`.
 
+## Phase 8 public boundary
+
+The API has a provider-neutral in-memory hardening layer for the MVP: per-IP and
+per-session sliding-window limits, an at-most-once model-call quota reservation,
+strict JSON body/content-size limits, security response headers, and explicit
+CORS origins. `X-Forwarded-For` is ignored unless the direct peer is in
+`FORESIGHTNINE_TRUSTED_PROXY_CIDRS` (a comma-separated CIDR list). Configure
+`FORESIGHTNINE_PUBLIC_HARDENING=true` or `FORESIGHTNINE_ENV=production` only
+with a real deployment `CaptchaVerifier`; an unavailable verifier fails closed.
+The deterministic accept verifier is limited to non-public development/test
+defaults and is not a production integration.
+
+Relevant settings are `FORESIGHTNINE_CAPTCHA_MODE` (`accept`, `reject`, or
+`unavailable` test doubles), `FORESIGHTNINE_MODEL_CALL_QUOTA`,
+`FORESIGHTNINE_MAX_BODY_BYTES`, and `FORESIGHTNINE_CORS_ORIGINS`. No CAPTCHA
+vendor, key, URL fetcher, or distributed Redis/Postgres limiter is included in
+this MVP. Multi-process deployments must add an external atomic limiter and
+retention job before public launch; the current in-memory controls are honest
+single-process protection and fail closed where verification infrastructure is
+missing.
+
+Telemetry is a bounded allow-list of low-cardinality counters/events. It does
+not retain request content, credentials, tokens, raw URLs, or IP addresses.
+Expired sessions cascade through their thesis, challenge, evidence, and linked
+worldline state; active work is retained. Terminal operation/idempotency/SSE
+state is bounded without deleting pending/running work.
+
 Client evidence is a canonical-hashed bundle of URL, title, publication/retrieval times, excerpt and user note. URL evidence requires `published_at`, begins at grade C and is independently reviewable but not independently verified; no-URL evidence is grade D/non-reviewable. URLs are never fetched by the API and receive protocol, length and private-address guards.
 
 From the workspace root:

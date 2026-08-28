@@ -1,7 +1,7 @@
 import { allocateCapital, type ComputeFmResult } from "@foresightnine/fm-engine";
-import { ASSETS, FIXTURE_STATE, FX_SNAPSHOT, MARKET_DATA_AS_OF, WORLDLINE_BASELINE_DATE } from "./fixtures";
+import { ASSETS, FIXTURE_STATE, FRESHNESS_POLICY, FX_SNAPSHOT, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, RUNTIME_AS_OF, WORLDLINE_BASELINE_DATE, freshnessFor } from "./fixtures";
 import { t, type CopyKey } from "./i18n";
-import type { AllocationRow, AssetFixture, BranchKind, Currency, Language, NavPoint, PortfolioMode, ScenarioNav } from "./types";
+import type { AllocationRow, AssetFixture, BranchKind, Currency, FreshnessOptions, Language, NavPoint, PortfolioMode, ScenarioNav } from "./types";
 
 const SINGLE_SECURITY_CAP = 0.25;
 const HIGH_VOLATILITY_CLASS_CAP = 0.35;
@@ -30,8 +30,8 @@ function isCash(asset: AssetFixture): boolean { return asset.assetClass === "cas
 function rawExecutable(asset: AssetFixture): boolean { return isCash(asset) || asset.tradable || Boolean(asset.proxy); }
 
 /** A proxy is allowed only when it is explicitly named; unknown economic exposure is never silently tradable. */
-export function isPublicEligible(asset: AssetFixture): boolean {
-  return isCash(asset) || (rawExecutable(asset) && asset.liquidity !== "low" && asset.freshness === "current");
+export function isPublicEligible(asset: AssetFixture, freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): boolean {
+  return isCash(asset) ? freshnessFor(asset, freshnessOptions).allowCurrentPublicDefault : (rawExecutable(asset) && asset.liquidity !== "low" && freshnessFor(asset, freshnessOptions).allowCurrentPublicDefault);
 }
 
 function securityCap(asset: AssetFixture): number { return isCash(asset) ? 1 : SINGLE_SECURITY_CAP; }
@@ -54,8 +54,8 @@ function fillRemainder(result: Float64Array, preferred: ArrayLike<number>, eligi
   }
 }
 
-function normalizePublicWeights(raw: Float64Array, assets: readonly AssetFixture[]): Float64Array {
-  const eligible = assets.map(isPublicEligible);
+function normalizePublicWeights(raw: Float64Array, assets: readonly AssetFixture[], freshnessOptions: FreshnessOptions): Float64Array {
+  const eligible = assets.map((asset) => isPublicEligible(asset, freshnessOptions));
   const caps = assets.map(securityCap);
   const initial = Float64Array.from(raw, (weight, index) => eligible[index] ? Math.min(Math.max(weight, 0), caps[index]!) : 0);
   const initialTotal = sum(initial);
@@ -74,9 +74,9 @@ function normalizePublicWeights(raw: Float64Array, assets: readonly AssetFixture
 }
 
 /** Public Default is a separate, deterministic constraint layer; it never mutates FM Raw. */
-export function publicWeights(raw: Float64Array, assets: readonly AssetFixture[] = ASSETS): Float64Array {
+export function publicWeights(raw: Float64Array, assets: readonly AssetFixture[] = ASSETS, freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): Float64Array {
   if (raw.length !== assets.length) throw new RangeError("raw weights and assets must share a shape");
-  return normalizePublicWeights(raw, assets);
+  return normalizePublicWeights(raw, assets, freshnessOptions);
 }
 
 interface AllocationValue { readonly amount: number; readonly units: number; readonly residual: number; }
@@ -86,9 +86,9 @@ interface AllocationComputation {
   readonly executable: boolean;
 }
 
-function allocationFor(weights: Float64Array, capital: number, baseCurrency: Currency, assets: readonly AssetFixture[], requirePublicEligibility: boolean): AllocationComputation {
+function allocationFor(weights: Float64Array, capital: number, baseCurrency: Currency, assets: readonly AssetFixture[], requirePublicEligibility: boolean, freshnessOptions: FreshnessOptions): AllocationComputation {
   const values = new Map<string, AllocationValue>();
-  const candidates = assets.map((asset, index) => ({ asset, index, weight: Math.max(weights[index] ?? 0, 0) })).filter((candidate) => candidate.weight > EPSILON && (!requirePublicEligibility || isPublicEligible(candidate.asset)));
+  const candidates = assets.map((asset, index) => ({ asset, index, weight: Math.max(weights[index] ?? 0, 0) })).filter((candidate) => candidate.weight > EPSILON && (!requirePublicEligibility || isPublicEligible(candidate.asset, freshnessOptions)));
   let executable = candidates.every((candidate) => rawExecutable(candidate.asset));
   if (candidates.length === 0) return { values, cashRemainder: capital, executable: false };
   const products = candidates.map(({ asset, weight }) => ({ id: asset.id, weight, price: asset.price, fxToBase: fxToBase(asset.quoteCurrency, baseCurrency), lotSize: asset.lotSize, fractionalSupported: asset.fractional }));
@@ -102,7 +102,7 @@ function allocationFor(weights: Float64Array, capital: number, baseCurrency: Cur
   const cashRemainder = Math.max(allocated.cashRemainder, 0);
   const cash = assets.find(isCash);
   if (cashRemainder > EPSILON) {
-    if (!cash || (requirePublicEligibility && !isPublicEligible(cash))) executable = false;
+    if (!cash || (requirePublicEligibility && !isPublicEligible(cash, freshnessOptions))) executable = false;
     else {
       const current = values.get(cash.id) ?? { amount: 0, units: 0, residual: 0 };
       const unitValue = cash.price * fxToBase(cash.quoteCurrency, baseCurrency);
@@ -146,10 +146,10 @@ export interface PortfolioPlan {
   readonly rawReasons: readonly string[];
 }
 
-function constraintReasons(asset: AssetFixture, rawWeight: number, publicWeight: number, raw: Float64Array, assets: readonly AssetFixture[], language: Language): string[] {
+function constraintReasons(asset: AssetFixture, rawWeight: number, publicWeight: number, raw: Float64Array, assets: readonly AssetFixture[], language: Language, freshnessOptions: FreshnessOptions): string[] {
   const reasons: string[] = [];
   if (asset.proxy) reasons.push(`${t(language, "proxyReason")} ${asset.proxy}`);
-  if (!isPublicEligible(asset) && rawWeight > EPSILON) reasons.push(asset.freshness === "stale" ? t(language, "staleReason") : t(language, "liquidityReason"));
+  if (!isPublicEligible(asset, freshnessOptions) && rawWeight > EPSILON) reasons.push(freshnessFor(asset, freshnessOptions).historicalOnly ? t(language, "staleReason") : t(language, "liquidityReason"));
   if (asset.volatility === "high" && publicWeight < rawWeight - EPSILON) {
     const highWeight = assets.reduce((total, candidate, index) => total + (candidate.volatility === "high" ? raw[index]! : 0), 0);
     reasons.push(highWeight > HIGH_VOLATILITY_CLASS_CAP + EPSILON ? t(language, "highVolatilityCap") : t(language, "singleSecurityCap"));
@@ -159,20 +159,21 @@ function constraintReasons(asset: AssetFixture, rawWeight: number, publicWeight:
   return reasons;
 }
 
-export function createPortfolioPlan(result: ComputeFmResult, capital: number, baseCurrency: Currency, assets: readonly AssetFixture[] = ASSETS, language: Language = "zh", selectedBranch: BranchKind = "main"): PortfolioPlan {
+export function createPortfolioPlan(result: ComputeFmResult, capital: number, baseCurrency: Currency, assets: readonly AssetFixture[] = ASSETS, language: Language = "zh", selectedBranch: BranchKind = "main", freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): PortfolioPlan {
   const raw = result.weights.weights;
   if (raw.length !== assets.length) throw new RangeError("FM result and asset registry must share a shape");
-  const safe = publicWeights(raw, assets);
-  const rawAllocations = allocationFor(raw, capital, baseCurrency, assets, false);
-  const publicAllocations = allocationFor(safe, capital, baseCurrency, assets, true);
+  const safe = publicWeights(raw, assets, freshnessOptions);
+  const rawAllocations = allocationFor(raw, capital, baseCurrency, assets, false, freshnessOptions);
+  const publicAllocations = allocationFor(safe, capital, baseCurrency, assets, true, freshnessOptions);
   const rows = assets.map((asset, index) => {
     const rawWeight = raw[index] ?? 0;
     const publicWeight = safe[index] ?? 0;
     const rawAllocation = rawAllocations.values.get(asset.id) ?? { amount: 0, units: 0, residual: 0 };
     const publicAllocation = publicAllocations.values.get(asset.id) ?? { amount: 0, units: 0, residual: 0 };
-    const reasons = constraintReasons(asset, rawWeight, publicWeight, raw, assets, language);
+    const freshness = freshnessFor(asset, freshnessOptions);
+    const reasons = constraintReasons(asset, rawWeight, publicWeight, raw, assets, language, freshnessOptions);
     if (rawAllocation.residual > EPSILON || publicAllocation.residual > EPSILON) reasons.push(t(language, "lotReason"));
-    return { asset, rawWeight, publicWeight, rawAmount: rawAllocation.amount, publicAmount: publicAllocation.amount, rawUnits: rawAllocation.units, publicUnits: publicAllocation.units, rawResidual: rawAllocation.residual, publicResidual: publicAllocation.residual, rawExecutable: rawExecutable(asset), publicExecutable: isPublicEligible(asset), reasons };
+    return { asset, rawWeight, publicWeight, rawAmount: rawAllocation.amount, publicAmount: publicAllocation.amount, rawUnits: rawAllocation.units, publicUnits: publicAllocation.units, rawResidual: rawAllocation.residual, publicResidual: publicAllocation.residual, rawExecutable: rawExecutable(asset), publicExecutable: isPublicEligible(asset, freshnessOptions), reasons, freshness: freshness.status, freshnessLabel: freshness.label, publicExecutionAllowed: freshness.allowCurrentPublicDefault };
   });
   return {
     rows,

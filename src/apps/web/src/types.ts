@@ -1,4 +1,5 @@
 import type { EvidenceItem, ProbabilityAssessment, ThesisDocument, Worldline } from "@foresightnine/contracts";
+import type { FreshnessDecision, ProviderFreshnessStatus } from "@foresightnine/domain";
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
 
 export type Stage = "thesis" | "challenge" | "worldline" | "fm" | "portfolio" | "nav" | "console";
@@ -122,6 +123,15 @@ export interface AssetFixture {
   readonly freshness: "current" | "historical_only" | "stale";
 }
 
+export interface FreshnessContext {
+  readonly runtimeAsOf: string;
+  readonly providerStatus: ProviderFreshnessStatus;
+}
+
+export interface FreshnessOptions extends FreshnessContext {
+  readonly policy?: { readonly maxAgeMs: number };
+}
+
 export interface PublicConstraintReason {
   readonly code: string;
   readonly label: string;
@@ -166,6 +176,9 @@ export interface AllocationRow {
   readonly tradable: boolean;
   readonly liquidity: AssetFixture["liquidity"];
   readonly volatility: AssetFixture["volatility"];
+  readonly freshness: FreshnessDecision["status"];
+  readonly freshnessLabel: FreshnessDecision["label"];
+  readonly publicExecutionAllowed: boolean;
 }
 
 export interface AppState {
@@ -192,6 +205,7 @@ export interface AppState {
   readonly stressScenario: StressScenario;
   readonly drawdownVisible: boolean;
   readonly exportNotice: string;
+  readonly freshness: FreshnessContext;
 }
 
 export type AppAction =
@@ -222,4 +236,5 @@ export type AppAction =
   | { readonly type: "set_stress"; readonly scenario: StressScenario }
   | { readonly type: "toggle_drawdown" }
   | { readonly type: "export_notice"; readonly notice: string }
+  | { readonly type: "set_freshness"; readonly freshness: FreshnessContext }
   | { readonly type: "reset" };

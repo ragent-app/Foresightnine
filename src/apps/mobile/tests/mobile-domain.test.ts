@@ -11,6 +11,8 @@ import { mobileInitialState, reduceChallengeAction, resetMobileWorkflowState } f
 import { switchLanguageState } from "../src/language-state";
 import { fmInput as webFmInput } from "../../web/src/fixtures";
 
+const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
+
 describe("mobile thesis and evidence boundaries", () => {
   it("does not complete or open worldline from an idle challenge action", () => {
     const completed = reduceChallengeAction(mobileInitialState, { type: "challenge_complete" });
@@ -171,19 +173,19 @@ describe("worldline, FM and Public Default", () => {
     const result = computeFm(fmInput());
     expect(result.weights.weights).toHaveLength(6);
     expect(result.selectedFactorIds).toEqual([10, 20, 30]);
-    const safe = publicWeights(result.weights.weights);
+    const safe = publicWeights(result.weights.weights, undefined, FRESH_FIXTURE);
     expect(safe).toHaveLength(6);
     expect(safe[4]).toBe(0); // stale / low-liquidity WORLD is excluded from Public Default
     expect(Math.max(...ASSETS.filter((asset) => asset.assetClass !== "cash").map((asset, index) => safe[ASSETS.indexOf(asset)]!))).toBeLessThanOrEqual(0.2500001);
     expect(ASSETS.reduce((total, asset, index) => total + (asset.volatility === "high" ? safe[index]! : 0), 0)).toBeLessThanOrEqual(0.3500001);
-    const plan = createPortfolioPlan(result, 100, "CNY");
+    const plan = createPortfolioPlan(result, 100, "CNY", undefined, "zh", "main", FRESH_FIXTURE);
     expect(plan.rows.some((row) => row.reasons.some((reason) => reason.includes("资金太小")))).toBe(true);
     expect(plan.publicMarketValue).toBeCloseTo(100, 9);
     expect(plan.rawMarketValue).toBeCloseTo(100, 9);
     expect(plan.publicCashRemainder).toBeGreaterThanOrEqual(0);
     expect(plan.rows.find((row) => row.asset.id === "CASH")?.publicAmount).toBeGreaterThan(0);
     expect(displayAsset(plan.rows[0]!.asset, "en").name).toBe("Grid equipment ETF");
-    const englishPlan = createPortfolioPlan(result, 100, "CNY", undefined, "en");
+    const englishPlan = createPortfolioPlan(result, 100, "CNY", undefined, "en", "main", FRESH_FIXTURE);
     expect(englishPlan.rows.some((row) => row.reasons.some((reason) => reason.includes("Capital is too small")))).toBe(true);
   });
 
@@ -202,7 +204,7 @@ describe("worldline, FM and Public Default", () => {
 
   it("enforces the high-volatility boundary and sends residual value to cash", () => {
     const concentrated = Float64Array.from([0.05, 0.45, 0.05, 0.4, 0, 0.05]);
-    const safe = publicWeights(concentrated);
+    const safe = publicWeights(concentrated, undefined, FRESH_FIXTURE);
     expect(safe.reduce((total, value) => total + value, 0)).toBeCloseTo(1, 12);
     expect(ASSETS.reduce((total, asset, index) => total + (asset.volatility === "high" ? safe[index]! : 0), 0)).toBeCloseTo(0.35, 12);
     expect(ASSETS.filter((asset) => asset.assetClass !== "cash").every((asset) => safe[ASSETS.indexOf(asset)]! <= 0.25 + 1e-12)).toBe(true);

@@ -1,7 +1,7 @@
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
-import { ASSET_FIXTURES, MARKET_DATA_AS_OF, PUBLIC_CONSTRAINTS, fxToBase, isPublicEligible } from "./fixtures";
+import { ASSET_FIXTURES, DEFAULT_RUNTIME_AS_OF, FRESHNESS_POLICY, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, PUBLIC_CONSTRAINTS, RUNTIME_AS_OF, freshnessFor, fxToBase, isPublicEligible } from "./fixtures";
 import { isSafeEvidenceUrl, parseCapital } from "./validation";
-import type { AllocationRow, AppAction, AppState, AssetFixture, BranchView, ChallengeStatus, Currency, EvidenceView, PortfolioMode, PublicConstraintReason, RubricView, TranscriptTurn } from "./types";
+import type { AllocationRow, AppAction, AppState, AssetFixture, BranchView, ChallengeStatus, Currency, EvidenceView, FreshnessOptions, PortfolioMode, PublicConstraintReason, RubricView, TranscriptTurn } from "./types";
 
 export const rubricDefaults: readonly RubricView[] = [
   { label: "前提清晰度", score: 3, max: 4, rationale: "观点已提交，但仍需确认关键假设。" },
@@ -67,6 +67,7 @@ export const initialState: AppState = {
   stressScenario: "main",
   drawdownVisible: true,
   exportNotice: "",
+  freshness: { runtimeAsOf: DEFAULT_RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS },
 };
 
 function challengeTurnsFor(viewpoint: string, language: AppState["language"]): readonly [TranscriptTurn, TranscriptTurn] {
@@ -151,6 +152,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "set_stress": return { ...state, stressScenario: action.scenario };
     case "toggle_drawdown": return { ...state, drawdownVisible: !state.drawdownVisible };
     case "export_notice": return { ...state, exportNotice: action.notice };
+    case "set_freshness": return { ...state, freshness: action.freshness };
     case "reset": return { ...initialState, language: state.language, rubric: rubricFor(state.language) };
   }
   return state;
@@ -276,11 +278,11 @@ function weightAssets(rawWeights: readonly number[], assets?: readonly AssetFixt
   return rawWeights.map((_weight, index) => assets?.[index] ?? (index === rawWeights.length - 1 ? fallbackCash : ASSET_FIXTURES[index] ?? fallbackCash));
 }
 
-export function publicWeights(rawWeights: readonly number[], assets?: readonly AssetFixture[]): readonly number[] {
+export function publicWeights(rawWeights: readonly number[], assets?: readonly AssetFixture[], freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): readonly number[] {
   const normalizedAssets = weightAssets(rawWeights, assets);
   const base = rawWeights.map((weight) => Math.max(0, Number.isFinite(weight) ? weight : 0));
   if (base.length === 0) return [];
-  const eligible = normalizedAssets.map((asset, index) => isPublicEligible(asset) ? index : -1).filter((index) => index >= 0);
+  const eligible = normalizedAssets.map((asset, index) => isPublicEligible(asset, freshnessOptions) ? index : -1).filter((index) => index >= 0);
   if (eligible.length === 0) return new Array<number>(base.length).fill(0);
   const eligibleBaseTotal = eligible.reduce((sum, index) => sum + base[index]!, 0);
   const workingBase = base.map((value, index) => eligible.includes(index) ? (eligibleBaseTotal > 0 ? value / eligibleBaseTotal : 1 / eligible.length) : 0);
@@ -297,18 +299,19 @@ export function publicWeights(rawWeights: readonly number[], assets?: readonly A
   return result;
 }
 
-function eligibilityReason(asset: AssetFixture): PublicConstraintReason | undefined {
+function eligibilityReason(asset: AssetFixture, freshnessOptions: FreshnessOptions): PublicConstraintReason | undefined {
   if (!asset.tradable && !asset.proxyInstrument) return { code: "not_tradable", label: "不可直接交易", detail: `${asset.displayName} 没有可用 proxyInstrument。` };
-  if (asset.freshness !== "current" || Date.parse(asset.asOf) > Date.parse(MARKET_DATA_AS_OF)) return { code: "stale_data", label: "过期/历史数据", detail: `Public Default 禁止使用 ${asset.freshness} 数据；data as-of ${asset.asOf}。` };
+  const freshness = freshnessFor(asset, freshnessOptions);
+  if (!freshness.allowCurrentPublicDefault) return { code: "stale_data", label: "过期/历史数据", detail: `Public Default 禁止使用 ${freshness.status} 数据；data as-of ${asset.asOf}。` };
   if (asset.liquidity === "low" || asset.liquidity === "restricted") return { code: "low_liquidity", label: "流动性不足", detail: `liquidity=${asset.liquidity}，不进入 Public Default。` };
   return undefined;
 }
 
-export function allocationRows(result: ComputeFmResult | null, capital: number, baseCurrency: Currency = "CNY", mode: PortfolioMode = "raw"): readonly AllocationRow[] {
+export function allocationRows(result: ComputeFmResult | null, capital: number, baseCurrency: Currency = "CNY", mode: PortfolioMode = "raw", freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): readonly AllocationRow[] {
   if (!result) return [];
   const raw = result.weights.weights;
   const weights = ASSET_FIXTURES.map((_asset, index) => Math.max(0, Number.isFinite(raw[index] ?? 0) ? raw[index] ?? 0 : 0));
-  const publicized = publicWeights(weights, ASSET_FIXTURES);
+  const publicized = publicWeights(weights, ASSET_FIXTURES, freshnessOptions);
   const highVolTotal = publicized.reduce((sum, weight, index) => sum + (ASSET_FIXTURES[index]!.volatility === "high" ? weight : 0), 0);
   const roles: Readonly<Record<string, string>> = { GRID: "核心受益", CHIP: "次级受益", UTIL: "防守", GOLD: "对冲", WORLD: "分散", CASH: "流动性" };
   return ASSET_FIXTURES.map((asset, index) => {
@@ -326,7 +329,8 @@ export function allocationRows(result: ComputeFmResult | null, capital: number, 
     const rawResidualReason = rawUnits === 0 && rawTarget > 0 ? "Raw 金额过小，无法满足最小交易单位。" : rawAmount + 1e-9 < rawTarget ? `Raw lot rounding residual ${formatResidual(rawTarget - rawAmount, baseCurrency)}。` : undefined;
     const publicResidualReason = publicUnits === 0 && publicTarget > 0 ? "Public Default 金额过小，无法满足最小交易单位。" : publicAmount + 1e-9 < publicTarget ? `Public lot rounding residual ${formatResidual(publicTarget - publicAmount, baseCurrency)}。` : undefined;
     const constraintReasons: PublicConstraintReason[] = [];
-    const eligibility = eligibilityReason(asset);
+    const freshness = freshnessFor(asset, freshnessOptions);
+    const eligibility = eligibilityReason(asset, freshnessOptions);
     if (eligibility) constraintReasons.push(eligibility);
     if (!asset.tradable && asset.proxyInstrument) constraintReasons.push({ code: "proxy_mapping", label: "代理映射", detail: `${asset.assetId} 非直接交易资产，使用 ${asset.proxyInstrument} 代理。` });
     if (asset.volatility === "high" && highVolTotal >= PUBLIC_CONSTRAINTS.highVolatilityClassMax - 1e-9 && publicWeight < weight - 1e-9) constraintReasons.push({ code: "high_volatility_cap", label: "高波动类别上限", detail: `高波动资产类别合计上限 ${PUBLIC_CONSTRAINTS.highVolatilityClassMax * 100}%。` });
@@ -334,7 +338,7 @@ export function allocationRows(result: ComputeFmResult | null, capital: number, 
     if (publicWeight > weight + 1e-9) constraintReasons.push({ code: "redistributed_weight", label: "释放权重再分配", detail: "其他不合资格或受限资产释放的权重按可用资产原始权重比例再分配。" });
     const selectedAmount = mode === "public" ? publicAmount : rawAmount;
     const selectedUnits = mode === "public" ? publicUnits : rawUnits;
-    const row: AllocationRow = { id: asset.assetId, role: roles[asset.assetId] ?? asset.displayName, weight, publicWeight, amount: selectedAmount, units: selectedUnits, rawAmount, rawUnits, publicAmount, publicUnits, currency: baseCurrency, price: asset.price, quoteCurrency: asset.quoteCurrency, lotSize: asset.lotSize, constraintReasons, dataAsOf: asset.asOf, instrumentId: asset.instrumentId, tradable: asset.tradable, liquidity: asset.liquidity, volatility: asset.volatility };
+    const row: AllocationRow = { id: asset.assetId, role: roles[asset.assetId] ?? asset.displayName, weight, publicWeight, amount: selectedAmount, units: selectedUnits, rawAmount, rawUnits, publicAmount, publicUnits, currency: baseCurrency, price: asset.price, quoteCurrency: asset.quoteCurrency, lotSize: asset.lotSize, constraintReasons, dataAsOf: asset.asOf, instrumentId: asset.instrumentId, tradable: asset.tradable, liquidity: asset.liquidity, volatility: asset.volatility, freshness: freshness.status, freshnessLabel: freshness.label, publicExecutionAllowed: freshness.allowCurrentPublicDefault };
     return { ...row, ...(rawResidualReason ? { rawResidualReason } : {}), ...(publicResidualReason ? { publicResidualReason } : {}), ...(mode === "raw" && rawResidualReason ? { residualReason: rawResidualReason } : {}), ...(mode === "public" && publicResidualReason ? { residualReason: publicResidualReason } : {}), ...(asset.proxyInstrument ? { proxyInstrument: asset.proxyInstrument } : {}) };
   });
 }

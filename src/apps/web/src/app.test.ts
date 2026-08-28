@@ -17,6 +17,8 @@ import { LanguageProvider, t } from "./i18n";
 import { SocialLoginPanel } from "./components/SocialLoginPanel";
 import { historical } from "./nav-data";
 
+const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
+
 describe("Web thesis validation", () => {
   it("rejects empty, overlong, and non-positive inputs", () => {
     expect(validateThesis({ viewpoint: "", capital: "0", currency: "CNY" })).toEqual({ viewpoint: "请先写下你的观点。", capital: "请输入大于 0 的可投资金额。" });
@@ -349,14 +351,14 @@ describe("FM worker and public delta", () => {
 
   it("caps and renormalises Public Default without mutating Raw", () => {
     const raw = [0.8, 0.1, 0.1];
-    const publicised = publicWeights(raw);
+    const publicised = publicWeights(raw, undefined, FRESH_FIXTURE);
     expect(raw).toEqual([0.8, 0.1, 0.1]);
     expect(publicised[0]).toBeLessThanOrEqual(PUBLIC_CONSTRAINTS.singleSecurityMax);
     expect(publicised.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1);
   });
 
   it("enforces Public caps, eligibility, proxy reasons, and deterministic redistribution", () => {
-    const rows = allocationRows(computeFm(fmInput()), 100000, "CNY", "public");
+    const rows = allocationRows(computeFm(fmInput()), 100000, "CNY", "public", FRESH_FIXTURE);
     const nonCash = rows.filter((row) => row.id !== "CASH");
     const highVolTotal = rows.filter((row) => row.volatility === "high").reduce((sum, row) => sum + row.publicWeight, 0);
     expect(rows.reduce((sum, row) => sum + row.publicWeight, 0)).toBeCloseTo(1);
@@ -388,7 +390,7 @@ describe("FM worker and public delta", () => {
 
   it("rejects future-dated assets from Public Default", () => {
     const futureAssets = ASSET_FIXTURES.map((asset, index) => index === 0 ? { ...asset, asOf: "2026-08-10" } : asset);
-    const weights = publicWeights([0.8, 0.1, 0.1, 0, 0, 0], futureAssets);
+    const weights = publicWeights([0.8, 0.1, 0.1, 0, 0, 0], futureAssets, { runtimeAsOf: "2026-08-09T00:00:00Z", providerStatus: "fresh" });
     expect(weights[0]).toBe(0);
     expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1);
   });

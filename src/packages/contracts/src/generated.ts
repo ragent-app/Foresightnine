@@ -3,7 +3,7 @@
  * Source: schemas/v1/contracts.schema.json
  */
 export const CONTRACT_VERSION = "v1" as const;
-export const CONTRACT_SCHEMA_SHA256 = "8f09024e2552e9571d0436e685d0e51ec8441def2ebf7bc73786e96498ae103e" as const;
+export const CONTRACT_SCHEMA_SHA256 = "564894e81b5857ce7f881d6c3b06d0a2d555ffde9d91c7b931d83ab3dfc6e071" as const;
 
 export type SchemaVersion = "v1";
 
@@ -414,7 +414,7 @@ export interface ErrorDetail {
 
 export interface ErrorResponse {
   readonly "schema_version": SchemaVersion;
-  readonly "error_code": "bad_request" | "validation_error" | "not_found" | "invalid_state_transition" | "confirmation_requirements_not_met" | "idempotency_conflict" | "invalid_operation_token" | "invalid_last_event_id" | "contract_violation" | "internal_error";
+  readonly "error_code": "bad_request" | "validation_error" | "not_found" | "invalid_state_transition" | "confirmation_requirements_not_met" | "idempotency_conflict" | "invalid_operation_token" | "invalid_last_event_id" | "contract_violation" | "lifecycle_conflict" | "quota_exceeded" | "unsupported_media_type" | "request_too_large" | "invalid_request" | "rate_limited" | "captcha_required" | "internal_error";
   readonly "message": string;
   readonly "request_id": Identifier;
   readonly "retryable": boolean;

@@ -38,7 +38,7 @@ export function App() {
   const fmAbort = useRef<AbortController | null>(null);
   const asyncGeneration = useRef<GenerationGuard>(createGenerationGuard());
   const capital = parseCapital(state.capital);
-  const rows = useMemo(() => allocationRows(state.fmResult, capital, state.currency, state.portfolioMode), [state.fmResult, capital, state.currency, state.portfolioMode]);
+  const rows = useMemo(() => allocationRows(state.fmResult, capital, state.currency, state.portfolioMode, state.freshness), [state.fmResult, capital, state.currency, state.portfolioMode, state.freshness]);
   const viewpointBranches = useMemo(() => makeBranches(state.viewpoint), [state.viewpoint]);
 
   useEffect(() => {

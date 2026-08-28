@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
+import os
 from typing import Annotated, Any
 
 from fastapi import FastAPI, Header, Query, Request, Response
@@ -10,8 +11,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+from starlette.middleware.cors import CORSMiddleware
 
 from .contract_models import CONTRACT_SCHEMA
+from .abuse import AbuseControl
 from .models import (
     AssetSearchResponse,
     CancelOperationRequest,
@@ -53,9 +56,12 @@ from .models import (
     WorldlineRequest,
 )
 from .operations import ApiProblem, OperationManager, format_sse
+from .retention import RetentionPolicy, cleanup_research_state
+from .security import SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
+from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
 from .phase3 import ChallengeDraft, ChallengeInput, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
-from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, build_attestation
+from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, RuntimeClock, build_attestation
 from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
 from .services import (
     ContractViolation,
@@ -74,7 +80,10 @@ ERROR_RESPONSES = {
     403: {"model": ErrorResponse, "description": "Invalid operation control token"},
     404: {"model": ErrorResponse, "description": "Entity not found"},
     409: {"model": ErrorResponse, "description": "Idempotency or lifecycle conflict"},
+    413: {"model": ErrorResponse, "description": "Request body exceeds the configured limit"},
+    415: {"model": ErrorResponse, "description": "Unsupported request content type"},
     422: {"model": ErrorResponse, "description": "Strict contract validation failure"},
+    429: {"model": ErrorResponse, "description": "Rate or model-call quota exceeded"},
     500: {"model": ErrorResponse, "description": "Validated internal failure"},
 }
 
@@ -84,6 +93,7 @@ app = FastAPI(
     description="Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
 )
 clock = FixedClock()
+lifecycle_clock = RuntimeClock()
 research_provider = MockResearchProvider(clock)
 probability_assessor = DeterministicMockProbabilityAssessor(clock)
 worldline_generator = DeterministicMockWorldlineGenerator(probability_assessor, clock)
@@ -91,7 +101,16 @@ challenge_provider = build_llm_provider()
 evidence_provider = build_search_evidence_provider()
 data_provider = MockDataProvider(clock)
 factor_provider = MockFactorProvider(clock)
-operations = OperationManager(clock)
+operations = OperationManager(lifecycle_clock)
+security_config = build_security_config()
+try:
+    _model_call_quota = int(os.getenv("FORESIGHTNINE_MODEL_CALL_QUOTA", "20"))
+except ValueError:
+    _model_call_quota = 20
+abuse_control = AbuseControl(model_quota=max(1, _model_call_quota))
+captcha_verifier = build_captcha_verifier(security_config)
+trusted_proxy_resolver = TrustedProxyResolver(security_config.trusted_proxies)
+retention_policy = RetentionPolicy()
 
 SESSIONS: dict[str, ResearchSession] = {}
 THESES: dict[str, ThesisDocument] = {}
@@ -100,6 +119,8 @@ CHALLENGE_TURNS: dict[str, int] = {}
 EVIDENCE: dict[str, EvidenceItem] = {}
 WORLDLINES: dict[str, Worldline] = {}
 MARKET_MANIFESTS: dict[str, MarketDataManifest] = {}
+WORLDLINE_CHALLENGES: dict[str, str] = {}
+OPERATION_SESSIONS: dict[str, str] = {}
 
 NORMAL_CONFIRM_MINIMUM_TOTAL = 30
 NORMAL_CONFIRM_MINIMUM_CRITICAL_SCORE = 3
@@ -114,6 +135,8 @@ NORMAL_CONFIRM_CRITICAL_CRITERIA = (
 
 def reset_state() -> None:
     operations.reset()
+    abuse_control.reset()
+    telemetry.reset()
     SESSIONS.clear()
     THESES.clear()
     CHALLENGES.clear()
@@ -121,6 +144,72 @@ def reset_state() -> None:
     EVIDENCE.clear()
     WORLDLINES.clear()
     MARKET_MANIFESTS.clear()
+    WORLDLINE_CHALLENGES.clear()
+    OPERATION_SESSIONS.clear()
+
+
+def cleanup_expired_state() -> object:
+    active_session_ids = {
+        OPERATION_SESSIONS[operation_id]
+        for operation_id in operations.active_operation_ids()
+        if operation_id in OPERATION_SESSIONS
+    }
+    report = cleanup_research_state(
+        sessions=SESSIONS, theses=THESES, challenges=CHALLENGES,
+        challenge_turns=CHALLENGE_TURNS, evidence=EVIDENCE, worldlines=WORLDLINES,
+        market_manifests=MARKET_MANIFESTS,
+        worldline_challenges=WORLDLINE_CHALLENGES, active_session_ids=active_session_ids,
+        operations=operations, now=lifecycle_clock.now(), policy=retention_policy,
+    )
+    active = operations.active_operation_ids()
+    for operation_id in tuple(OPERATION_SESSIONS):
+        if operation_id not in active:
+            OPERATION_SESSIONS.pop(operation_id, None)
+    return report
+
+
+def _model_subjects(request: Request, session_id: str | None = None) -> tuple[str, ...]:
+    client_ip = getattr(request.state, "client_ip", "0.0.0.0")
+    # Keep a shared rolling 24-hour bucket in addition to per-IP/session
+    # limits.  The provider call reservation is still idempotency keyed, so a
+    # replay cannot consume the global daily allowance twice.
+    subjects = ["global:daily", f"ip:{client_ip}"]
+    retained_session = session_id or getattr(request.state, "session_id", None)
+    if retained_session:
+        subjects.append(f"session:{retained_session}")
+    return tuple(subjects)
+
+
+def _reserve_model_call(request: Request, operation_id: str, *, session_id: str | None = None) -> None:
+    decision = abuse_control.model.reserve(operation_id, _model_subjects(request, session_id))
+    if not decision.allowed:
+        raise ApiProblem(
+            429, "quota_exceeded", "Model-call quota exceeded; retry later.",
+            retryable=True, retry_after=decision.retry_after,
+        )
+
+
+def _bind_operation_session(operation_id: str, session_id: str | None) -> None:
+    if session_id:
+        OPERATION_SESSIONS[operation_id] = session_id
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(security_config.allowed_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
+    max_age=600,
+)
+app.add_middleware(
+    SecurityBoundaryMiddleware,
+    config=security_config,
+    abuse=abuse_control,
+    captcha=lambda: captcha_verifier,
+    resolver=trusted_proxy_resolver,
+    cleanup=cleanup_expired_state,
+)
 
 
 def _metadata(payload: dict[str, Any], ref_id: str, label: str, source_type: str = "model_inference") -> dict[str, Any]:
@@ -218,6 +307,7 @@ def _search_candidates(query: str, limit: int) -> SearchCandidatesResponse:
     try:
         candidates = [_candidate_response(item, provider_name) for item in search(query, limit=limit)]
     except ProviderFailure:
+        record_provider_failure(provider=provider_name, endpoint="/v1/search/candidates")
         return SearchCandidatesResponse(
             schema_version="v1", provider=provider_name, project_search_available=False,
             fallback="client_bundle", candidates=[],
@@ -343,7 +433,7 @@ def _challenge_status(draft: ChallengeDraft) -> str:
     return "EVIDENCE_REQUIRED" if draft.missing_evidence or draft.unresolved_issues else "CHALLENGING"
 
 
-def _error(status_code: int, error_code: str, message: str, request: Request, *, retryable: bool = False, details: list[ErrorDetail] | None = None) -> JSONResponse:
+def _error(status_code: int, error_code: str, message: str, request: Request, *, retryable: bool = False, details: list[ErrorDetail] | None = None, retry_after: int | None = None) -> JSONResponse:
     request_id = deterministic_id("request", f"{request.method}:{request.url.path}:{error_code}")
     payload = ErrorResponse(
         schema_version="v1",
@@ -354,7 +444,10 @@ def _error(status_code: int, error_code: str, message: str, request: Request, *,
         details=details or [],
     )
     validate_payload(payload, "ErrorResponse")
-    return JSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
+    response = JSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
+    if status_code in {403, 429}:
+        response.headers["Retry-After"] = str(max(1, retry_after or 60))
+    return response
 
 
 @app.exception_handler(ApiProblem)
@@ -366,6 +459,7 @@ async def api_problem_handler(request: Request, error: ApiProblem) -> JSONRespon
         request,
         retryable=error.retryable,
         details=error.details,
+        retry_after=error.retry_after,
     )
 
 
@@ -433,8 +527,10 @@ def create_session(request: CreateSessionRequest, response: Response, idempotenc
 
     def build(operation_id: str) -> tuple[ResearchSession, str]:
         session_id = deterministic_id("session", operation_id)
-        payload = {"session_id": session_id, "status": "DRAFT", "expires_at": clock.now() + timedelta(hours=24)}
-        session = ResearchSession(**_metadata(payload, "mock:session", "Deterministic anonymous session"), **payload)
+        payload = {"session_id": session_id, "status": "DRAFT", "expires_at": lifecycle_clock.now() + timedelta(hours=24)}
+        metadata = _metadata(payload, "mock:session", "Deterministic anonymous session")
+        metadata["created_at"] = lifecycle_clock.now()
+        session = ResearchSession(**metadata, **payload)
         validate_payload(session, "ResearchSession")
         SESSIONS[session_id] = session
         return session, session_id
@@ -452,12 +548,14 @@ def create_session(request: CreateSessionRequest, response: Response, idempotenc
 
 
 @app.post("/v1/challenges", response_model=ChallengeOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createChallenge")
-def create_challenge(request: CreateChallengeRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+def create_challenge(request: CreateChallengeRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "CreateChallengeRequest")
     if request.session_id not in SESSIONS:
         raise ApiProblem(404, "not_found", "Session not found.")
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
+        _bind_operation_session(operation_id, request.session_id)
+        _reserve_model_call(http_request, operation_id, session_id=request.session_id)
         thesis = research_provider.thesis(
             operation_id=operation_id,
             session_id=request.session_id,
@@ -498,7 +596,7 @@ def create_challenge(request: CreateChallengeRequest, response: Response, idempo
 
 
 @app.post("/v1/challenges/{challenge_id}/messages", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeMessage")
-def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "ChallengeMessageRequest")
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
@@ -507,6 +605,9 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
             raise ApiProblem(404, "not_found", "Challenge not found.")
         if current.status not in {"CHALLENGING", "EVIDENCE_REQUIRED"}:
             raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
+        session_id = THESES[current.thesis_id].session_id
+        _bind_operation_session(operation_id, session_id)
+        _reserve_model_call(http_request, operation_id, session_id=session_id)
         turn = CHALLENGE_TURNS[challenge_id] + 1
         attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
         draft = challenge_provider.generate_challenge(
@@ -542,9 +643,19 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
 
 
 @app.post("/v1/challenges/{challenge_id}/messages/async", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, responses=ERROR_RESPONSES, operation_id="startChallengeMessageStream")
-def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey) -> OperationResponse:
+def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     """Start a Phase 3 message without waiting for its provider runner."""
     _validate_request(request, "ChallengeMessageRequest")
+
+    def before_accept(operation_id: str) -> None:
+        current = CHALLENGES.get(challenge_id)
+        if not current:
+            raise ApiProblem(404, "not_found", "Challenge not found.")
+        if current.status not in {"CHALLENGING", "EVIDENCE_REQUIRED"}:
+            raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
+        session_id = THESES[current.thesis_id].session_id
+        _bind_operation_session(operation_id, session_id)
+        _reserve_model_call(http_request, operation_id, session_id=session_id)
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
         current = CHALLENGES.get(challenge_id)
@@ -574,13 +685,14 @@ def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageR
     result, replayed = operations.submit_async(
         endpoint=f"/v1/challenges/{challenge_id}/messages/async", idempotency_key=idempotency_key,
         request_payload=_request_payload(request), result_field="challenge", build_result=build,
+        before_accept=before_accept,
     )
     _mark_replay(response, replayed)
     return result
 
 
 @app.post("/v1/challenges/{challenge_id}/evidence", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeEvidence")
-def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "EvidenceSubmissionRequest")
     has_search_provider = request.search_provider is not None
     has_search_result_hash = request.search_result_hash is not None
@@ -604,6 +716,9 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
             raise ApiProblem(404, "not_found", "Challenge not found.")
         if current.status != "EVIDENCE_REQUIRED":
             raise ApiProblem(409, "invalid_state_transition", f"Evidence command cannot transition from {current.status}.")
+        session_id = THESES[current.thesis_id].session_id
+        _bind_operation_session(operation_id, session_id)
+        _reserve_model_call(http_request, operation_id, session_id=session_id)
         evidence_id = deterministic_id("evidence", operation_id)
         evidence_payload: dict[str, Any] = {
             "evidence_id": evidence_id,
@@ -827,6 +942,7 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         )
         for worldline in bundle.worldlines:
             WORLDLINES[worldline.worldline_id] = worldline
+            WORLDLINE_CHALLENGES[worldline.worldline_id] = request.challenge_id
         return bundle, bundle.bundle_id
 
     result, replayed = operations.execute(
@@ -909,6 +1025,10 @@ def create_market_manifest(request: MarketDataManifestRequest, response: Respons
             to_at=request.to,
             assets=ASSET_INDEX,
         )
+        # ``as_of`` remains the deterministic mock data timestamp, while
+        # ``created_at`` tracks storage age for retention.
+        manifest = manifest.model_copy(update={"created_at": lifecycle_clock.now()})
+        validate_payload(manifest, "MarketDataManifest")
         MARKET_MANIFESTS[manifest.manifest_id] = manifest
         return manifest, manifest.manifest_id
 
@@ -932,6 +1052,10 @@ def get_market_shard(request: MarketDataShardRequest, response: Response, idempo
         raise ApiProblem(404, "not_found", "Market-data manifest not found.")
     if request.shard_id not in {item.shard_id for item in manifest.shards}:
         raise ApiProblem(404, "not_found", "Market-data shard not found.")
+    if manifest.freshness != "current":
+        # The public MVP may serve historical data for display, but it must be
+        # observable whenever a current-data decision is impossible.
+        record_stale_data_denial(endpoint="/v1/market-data/shards")
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
         shard = data_provider.shard(manifest, ASSET_INDEX)

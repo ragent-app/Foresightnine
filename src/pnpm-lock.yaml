@@ -20,6 +20,9 @@ importers:
       '@foresightnine/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
+      '@foresightnine/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@foresightnine/fm-engine':
         specifier: workspace:*
         version: link:../../packages/fm-engine

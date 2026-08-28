@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { computeFm } from "@foresightnine/fm-engine";
 import { buildPrivacySafeDocument, buildResearchSnapshot, canRestoreArchive, canRestorePrivacySafeDocument, makeArchiveEnvelope, normalizePrivacySafeDocument, restoreAppState } from "../src/archive";
-import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, MOCK_EVIDENCE, rubricFor } from "../src/fixtures";
+import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, MOCK_EVIDENCE, PROVIDER_FRESHNESS_STATUS, rubricFor, RUNTIME_AS_OF } from "../src/fixtures";
 import { createPortfolioPlan, portfolioMetadata } from "../src/portfolio";
 import type { AppState } from "../src/types";
+
+const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
 
 function stateForCompletedWorkflow(): AppState {
   const language = "en" as const;
@@ -35,6 +37,7 @@ function stateForCompletedWorkflow(): AppState {
     fmStep: "FM client computation complete",
     fmResult: computeFm(fmInput()),
     portfolioMode: "public",
+    freshness: { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS },
     exportNotice: "",
   };
 }
@@ -83,7 +86,7 @@ describe("offline complete snapshot resume", () => {
     expect(restored.fmResult?.selectedFactorIds).toEqual(completed.fmResult?.selectedFactorIds);
     expect(Array.from(restored.fmResult?.weights.weights ?? [])).toEqual(Array.from(completed.fmResult?.weights.weights ?? []));
 
-    const portfolio = restored.fmResult ? createPortfolioPlan(restored.fmResult, 250000, restored.currency, undefined, restored.language, restored.selectedBranch) : null;
+    const portfolio = restored.fmResult ? createPortfolioPlan(restored.fmResult, 250000, restored.currency, undefined, restored.language, restored.selectedBranch, FRESH_FIXTURE) : null;
     expect(portfolio?.scenario.branch).toBe("strong");
     expect(portfolio?.publicMarketValue).toBeCloseTo(250000, 6);
     expect(coldDocument.researchState?.methodData).toEqual(researchState.methodData);
