@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { selectedCandidateDraft } from "./components/ChallengePanel";
 import { evidenceHash } from "./fixtures";
+import { configuredApiBaseUrlFromEnvironment } from "./runtime-config";
 import { clientBundleFallback, searchEvidenceCandidates } from "./search-client";
 import type { EvidenceDraft, SearchCandidate } from "./types";
 
@@ -19,6 +20,12 @@ const candidate: SearchCandidate = {
 const emptyDraft: EvidenceDraft = { url: "", title: "", publisher: "", published_at: "", excerpt: "", user_note: "", supports_or_challenges: "supports", grade: "B" };
 
 describe("project search candidate boundary", () => {
+  it("prefers the canonical API variable and preserves the legacy alias", () => {
+    expect(configuredApiBaseUrlFromEnvironment({ canonical: "https://canonical.example", legacy: "https://legacy.example" })).toBe("https://canonical.example");
+    expect(configuredApiBaseUrlFromEnvironment({ canonical: "", legacy: "https://legacy.example" })).toBe("https://legacy.example");
+    expect(configuredApiBaseUrlFromEnvironment({ canonical: "not-a-url", legacy: "https://legacy.example" })).toBeNull();
+  });
+
   it("falls back without a configured public API and does not call fetch", async () => {
     let calls = 0;
     const result = await searchEvidenceCandidates("grid demand", { fetcher: (async () => { calls += 1; throw new Error("must not fetch"); }) as typeof fetch });

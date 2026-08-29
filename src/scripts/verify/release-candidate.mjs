@@ -105,6 +105,10 @@ const requiredFiles = [
   "docs/qa/android/phase8-public-default.png",
   "docs/qa/android/phase9-current-home.png",
   "docs/qa/android/phase9-current-home.xml",
+  "docs/qa/android/phase9-single-share-only-home.png",
+  "docs/qa/android/phase9-single-share-only-home.xml",
+  "docs/qa/android/phase9-single-share-only-share.png",
+  "docs/qa/android/phase9-single-share-only-share.xml",
   "docs/qa/android/phase9-metro-smoke.md",
 ];
 for (const path of requiredFiles) await requireFile(path);

@@ -1,5 +1,6 @@
 import { sha256Hex } from "@foresightnine/fm-engine";
 import { normalizeEvidenceUrl } from "./evidence";
+import { configuredApiBaseUrl } from "./runtime-config";
 import { t } from "./i18n";
 import type { EvidenceBundle, Language } from "./types";
 
@@ -29,10 +30,6 @@ export interface ProjectSearchOptions {
   readonly apiBaseUrl?: string;
   readonly fetcher?: typeof fetch;
   readonly signal?: AbortSignal;
-}
-
-function configuredApiBase(): string {
-  return typeof process === "undefined" ? "" : process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
 }
 
 /** Only an HTTPS public project API can be configured in an app bundle. */
@@ -112,7 +109,7 @@ function parseSearchResponse(value: unknown): ProjectSearchResult | null {
  * is created. No provider credential reaches Android.
  */
 export async function searchProjectCandidates(query: string, options: ProjectSearchOptions = {}): Promise<ProjectSearchResult> {
-  const baseUrl = safeProjectApiBase(options.apiBaseUrl ?? configuredApiBase());
+  const baseUrl = safeProjectApiBase(options.apiBaseUrl ?? configuredApiBaseUrl() ?? "");
   const normalizedQuery = query.trim().slice(0, MAX_QUERY_LENGTH);
   if (!baseUrl || !normalizedQuery) return { status: "api_unavailable", candidates: [] };
   const endpoint = new URL("v1/search/candidates", `${baseUrl}/`);

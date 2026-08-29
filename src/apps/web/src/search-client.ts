@@ -1,4 +1,5 @@
 import { isSafeEvidenceUrl } from "./validation";
+import { configuredApiBaseUrl } from "./runtime-config";
 import type { SearchCandidate, SearchCandidatesResult } from "./types";
 
 export const SEARCH_CANDIDATE_LIMIT = 10;
@@ -64,7 +65,7 @@ function parseSearchResponse(value: unknown): SearchCandidatesResult | null {
 }
 
 export async function searchEvidenceCandidates(query: string, options: SearchCandidatesOptions = {}): Promise<SearchCandidatesResult> {
-  const baseUrl = safeConfiguredApiBase(options.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL);
+  const baseUrl = safeConfiguredApiBase(options.apiBaseUrl ?? configuredApiBaseUrl());
   const normalizedQuery = query.trim().slice(0, 70);
   if (!baseUrl || !normalizedQuery) return clientBundleFallback();
   const endpoint = new URL("v1/search/candidates", `${baseUrl}/`);

@@ -1,5 +1,107 @@
 # Progress
 
+## Current checkout packaging boundary — 2026-08-30
+
+- Rebuilt the Web static bundle after the search-configuration parity change.
+  The current `apps/web/dist` hashes are `fm.worker-C7HxMD7b.js`
+  `9C2BD44FEA8E04FB35CD42A0CB6A551881A5BBB9C3A42C699C319634E3EC2DA6`,
+  `index-CyysJoc3.js`
+  `7C345429A02816C8FA04B7C3FAF1CA99135A42D7351409A5D2832D94A3599E90`,
+  CSS `8ABA60E0273BE2C84305EFBD42EC045AA31D72552D3371E8F66228D3FC5E2A1C`,
+  and HTML `C1CBF656CAD01B69166508CED67ED2552371B2355F21E3DD631A84FF584E55D3`.
+- The Android debug APK was rebuilt from this checkout successfully with JDK
+  17, x86_64, and the repository helper
+  `scripts/android-short-cmake.init.gradle`; Gradle reported `BUILD SUCCESSFUL`
+  in one minute 51 seconds. The current artifact is `81,070,551` bytes with
+  SHA-256
+  `37DB03028D3FB207664DAB15F419B50F640C66340DD9FA27E0C210E4324CB97D`, and
+  contains `assets/index.android.bundle`, so the debug QA build does not
+  silently require Metro.
+- The current Web bundle and Android APK were installed/served from the same
+  current checkout state. On Google Play API 36 emulator `emulator-5554`, the
+  rebuilt APK cold-launched without fatal/ReactNativeJS/RedBox errors. The
+  packaged manifest was independently inspected with `apkanalyzer`: it has
+  only the declared single `ACTION_SEND` filter for `text/plain` and
+  `text/uri-list`; the empty generated `SEND_MULTIPLE` filter is absent.
+  A real `ACTION_SEND` text intent opened `/evidence`, normalized a safe HTTPS
+  URL, created a local Grade C entry, and showed the expected
+  non-independent-review warning. Current evidence is persisted at
+  `docs/qa/android/phase9-single-share-only-home.{png,xml}` and
+  `docs/qa/android/phase9-single-share-only-share.{png,xml}`; screenshots were
+  inspected with `view_image`.
+- Sol's earlier fresh review returned `fix-first` for stale Android artifact
+  binding. That P1 is now addressed by the current rebuild and evidence. The
+  config-plugin regression test and mobile suite pass (`44` tests). One share
+  UI-tree child still has an invalid bounds rectangle; it is retained as
+  semantic UI-tree evidence only, not as geometry/fidelity evidence.
+- Source-level tests, Web/Android packaging, and emulator QA are now verified
+  for this slice. Release-candidate acceptance remains subject to a fresh Sol
+  review and the external production gates below. No plan, governance file, or
+  read-only source directory was changed.
+- After the manifest hardening, the full regression is green: `50` Web tests,
+  `44` Android tests, `20` FM tests, `9` domain tests, `11` API-client tests,
+  `2` asset-registry tests, and `193` API tests with `1` skipped and the
+  existing Starlette/httpx deprecation warning. Typecheck, generated-contract
+  verification, 9WL audit, production-preflight unit tests, `pnpm audit
+  --prod`, `git diff --check`, and the release-candidate verifier also pass.
+  Secret scan completed with `628` unique Git-history blobs inspected and no
+  findings.
+- On 2026-08-30, the requested fresh Sol planning/review tasks exited before
+  producing a verdict because the Codex sub-agent usage limit was reached.
+  This is recorded as a review dependency, not as a Sol pass or a product
+  failure. The working tree therefore remains uncommitted until a fresh Sol
+  reviewer can inspect this exact artifact set and authorize the phase
+  boundary.
+
+## Android single-share manifest hardening — 2026-08-30
+
+- Expo SDK 57's sharing plugin emits an empty `SEND_MULTIPLE` intent filter
+  when `multipleShareMimeTypes` is empty. Added the scoped
+  `apps/mobile/plugins/with-single-share-intent.cjs` config plugin and its
+  direct `@expo/config-plugins` build-time dependency. The plugin removes only
+  an Expo-generated `SEND_MULTIPLE` filter with no data, preserving unrelated
+  filters and the declared single-share MIME types.
+- `corepack pnpm --filter @foresightnine/mobile test` passes `44` tests. Native
+  prebuild and Gradle rebuild pass, and `apkanalyzer manifest print` confirms
+  the final APK contains no `SEND_MULTIPLE` action. No multi-item share feature
+  is claimed; a future multi-item requirement needs a separate tested design.
+- The prebuild operation regenerated Android native files; the previously
+  approved share routing, debug bundling, release-signing guard, and wrapper
+  timeout were restored and are unchanged relative to the prior approved
+  native configuration except for the intended manifest filter removal.
+
+## Search configuration parity and Android share-intent evidence — 2026-08-29
+
+- Closed the Sol-identified P1 configuration mismatch. Web and Android now
+  resolve the canonical public API variables first
+  (`VITE_FORESIGHTNINE_API_BASE_URL` and
+  `EXPO_PUBLIC_FORESIGHTNINE_API_BASE_URL`) while preserving the documented
+  legacy aliases only when the canonical value is absent. Invalid canonical
+  values fail closed instead of silently selecting a different endpoint.
+  Pure configuration parsing is isolated from native Expo imports so the
+  mobile test runner does not load `expo-crypto` just to test environment
+  selection.
+- Added Web and Android regressions for canonical precedence, legacy
+  compatibility, and malformed-value rejection. The complete repository test
+  suite passes: `50` Web tests, `42` Android tests, `20` FM tests, `9` domain
+  tests, `11` API-client tests, `2` asset-registry tests, and `193` API tests
+  with `1` skipped and the existing Starlette/httpx deprecation warning.
+  TypeScript typecheck also passes.
+- Exercised the embedded Android debug QA APK through a real
+  `android.intent.action.SEND` intent on Google Play API 36. The system
+  resolver listed ForesightNine for `text/plain`; after selection the app
+  cold-opened `/evidence`, normalized a safe HTTPS URL, created a local Grade C
+  entry, and visibly marked it as not independently reviewable. No source URL
+  was fetched. Evidence is persisted at
+  `docs/qa/android/phase9-share-intent-evidence.png` and `.xml`.
+- The remaining P2 is documented rather than hidden: Expo's generated
+  manifest also contains an empty `SEND_MULTIPLE` filter, while the product
+  acceptance path is single text/URL sharing. A future multi-item requirement
+  must either add a tested URI-only flow or remove that filter explicitly.
+  Production provider/search credentials, licensed current data, legal/privacy
+  approval, OAuth callback/token exchange, infrastructure/CAPTCHA, Android
+  release signing, and public deployment evidence remain external gates.
+
 ## Standalone Android QA and GLM adapter hardening — 2026-08-29
 
 - The Android debug QA artifact was rebuilt from the current checkout after

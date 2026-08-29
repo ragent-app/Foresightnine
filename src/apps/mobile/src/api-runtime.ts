@@ -1,17 +1,14 @@
-import { ApiClient, ApiError, apiModeFor, normalizeApiBaseUrl } from "@foresightnine/api-client";
+import { ApiClient, ApiError, apiModeFor } from "@foresightnine/api-client";
 import type { ChallengeRecord, Worldline, WorldlineBundle } from "@foresightnine/contracts";
 import { getRandomBytes } from "expo-crypto";
 import { rubricFor } from "./fixtures";
+import { configuredApiBaseUrl } from "./runtime-config";
+export { configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment } from "./runtime-config";
 import type { Branch, BranchKind, Language, RubricItem, TranscriptTurn } from "./types";
 
 const CRITERIA: Record<string, string> = {
   premise_clarity: "premise", time_boundary: "time", trigger_observability: "trigger", causal_chain: "causal", counterfactuals: "counterfactual", evidence_quality: "evidence", asset_transmission: "transmission", already_priced: "priced", falsifiability: "falsifiable", user_confirmation: "confirmation",
 };
-
-export function configuredApiBaseUrl(): string | null {
-  if (typeof process === "undefined") return null;
-  return normalizeApiBaseUrl(process.env.EXPO_PUBLIC_FORESIGHTNINE_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_BASE_URL);
-}
 
 export function createMobileApiClient(): ApiClient | null {
   const baseUrl = configuredApiBaseUrl();

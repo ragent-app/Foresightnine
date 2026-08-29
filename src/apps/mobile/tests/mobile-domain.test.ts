@@ -3,6 +3,7 @@ import { computeFm } from "@foresightnine/fm-engine";
 import { archiveIncludesPrivateEvidence, buildPrivacySafeDocument, canRestoreArchive, makeArchiveEnvelope } from "../src/archive";
 import { isDuplicateEvidence, normalizeShareToBundle, normalizeSharedText } from "../src/evidence";
 import { candidateToLocalBundle, safeProjectApiBase, searchProjectCandidates } from "../src/search-client";
+import { configuredApiBaseUrlFromEnvironment } from "../src/runtime-config";
 import { ASSETS, MOCK_EVIDENCE, fmInput, makeBranches, mockTurnsFor, rubricFor, validateBranchTimeline, validateProbabilityLedger } from "../src/fixtures";
 import { t } from "../src/i18n";
 import { createPortfolioPlan, displayAsset, publicWeights, scenarioNavFor } from "../src/portfolio";
@@ -14,6 +15,11 @@ import { fmInput as webFmInput } from "../../web/src/fixtures";
 const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
 
 describe("mobile thesis and evidence boundaries", () => {
+  it("prefers the canonical API variable and preserves the legacy alias", () => {
+    expect(configuredApiBaseUrlFromEnvironment({ canonical: "https://canonical.example", legacy: "https://legacy.example" })).toBe("https://canonical.example");
+    expect(configuredApiBaseUrlFromEnvironment({ canonical: "", legacy: "https://legacy.example" })).toBe("https://legacy.example");
+    expect(configuredApiBaseUrlFromEnvironment({ canonical: "not-a-url", legacy: "https://legacy.example" })).toBeNull();
+  });
   it("does not complete or open worldline from an idle challenge action", () => {
     const completed = reduceChallengeAction(mobileInitialState, { type: "challenge_complete" });
     expect(completed).toEqual(mobileInitialState);

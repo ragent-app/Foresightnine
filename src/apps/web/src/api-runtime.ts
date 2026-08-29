@@ -1,6 +1,8 @@
-import { ApiClient, ApiError, apiModeFor, normalizeApiBaseUrl } from "@foresightnine/api-client";
+import { ApiClient, ApiError, apiModeFor } from "@foresightnine/api-client";
 import type { ChallengeRecord, Worldline, WorldlineBundle } from "@foresightnine/contracts";
 import type { BranchView, ChallengeStatus, Language, RubricView, TranscriptTurn } from "./types";
+import { configuredApiBaseUrl } from "./runtime-config";
+export { configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment } from "./runtime-config";
 
 const RUBRIC_LABELS: Record<string, [string, string]> = {
   premise_clarity: ["前提清晰度", "Premise clarity"],
@@ -18,11 +20,6 @@ const RUBRIC_LABELS: Record<string, [string, string]> = {
 function compact(items: readonly string[], fallback: string): string {
   const values = items.map((item) => item.trim()).filter(Boolean);
   return values.length > 0 ? values.join("\n") : fallback;
-}
-
-export function configuredApiBaseUrl(): string | null {
-  const configured = typeof import.meta.env.VITE_FORESIGHTNINE_API_BASE_URL === "string" ? import.meta.env.VITE_FORESIGHTNINE_API_BASE_URL : undefined;
-  return normalizeApiBaseUrl(configured);
 }
 
 export function createWebApiClient(): ApiClient | null {
