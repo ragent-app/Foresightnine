@@ -1,6 +1,6 @@
 # Deployment
 
-**Phase 8 draft — pending security, operations, legal, compliance, and release approval. This is not a public-launch declaration.**
+**Phase 9 release-candidate deployment notes — pending security, operations, legal, compliance, and release approval. This is not a public-launch declaration.**
 
 Public deployment is a gated release-candidate exercise. The deployer must record the exact commit, environment, data-provider manifest, method version, and rollback target. Offline fixtures may support QA only and must remain labelled as historical/simulated; they are not a substitute for licensed production data.
 

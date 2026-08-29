@@ -5,6 +5,9 @@
 - Added `infra/deployment/production-release-runbook.md`, a credential-free
   operator sequence covering commit pinning, production env injection, default
   GLM/MCP smokes, signed Android build, staging, rollback, and traffic approval.
+- Corrected the deployment overview label from the stale “Phase 8 draft” to
+  “Phase 9 release-candidate deployment notes”; the document continues to state
+  that external production approval is required.
 
 - Updated the GLM Coding Plan MCP adapter to call the exact tool name returned
   by `tools/list`. The current official response advertises `web_search_prime`;
