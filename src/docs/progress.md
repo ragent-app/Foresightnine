@@ -15,8 +15,26 @@
   configuration, unavailable mapping, and memory regression, plus an opt-in
   live test that is skipped without explicit deployment settings.
 - Local implementation and fake-backend evidence is code-complete after the
-  focused tests. No live Redis, HA/TLS/eviction/failover/alerting/capacity or
-  production deployment evidence is claimed; Compose remains unchanged.
+  focused tests. A Docker Desktop runtime probe then brought up PostgreSQL,
+  Redis 7, and the API from `infra/docker/compose.yaml`: PostgreSQL and Redis
+  health checks passed, `/health` and `/openapi.json` returned 200, and the
+  migration created the five expected persistence tables. A real API session
+  write produced one durable session document, one completed operation, and
+  four operation events; after an API restart, the same idempotency key returned
+  `201` with `idempotency-replayed=true` and the same persisted result.
+- A live Redis Lua probe against the Compose Redis service passed: the request
+  window admitted two requests then denied the third at the configured IP
+  limit, and the model quota admitted the first reservation, replayed the same
+  operation marker, then denied a different marker. One-off configuration
+  loading selected `RedisAbuseControl|redis`. The repository's opt-in pytest
+  live test remains source-only because the production image intentionally does
+  not package test files; the direct live probe is the runtime evidence for
+  this slice.
+- No HA/TLS/eviction/failover/alerting/capacity or production deployment
+  evidence is claimed. Compose remains a secret-free development setup and its
+  API service intentionally defaults to memory abuse control; public traffic
+  still requires explicit Redis, provider/search, CAPTCHA, licensed data,
+  compliance, and deployment gates.
 
 ## Durable operation state slice — 2026-08-29
 
