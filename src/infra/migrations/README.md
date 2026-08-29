@@ -12,7 +12,18 @@ The migration establishes storage durability for entity documents only. It does
 not persist `OperationManager` idempotency/replay state, worker leases or
 restart recovery, and it does not provide multi-process Redis abuse controls.
 
-For the development Compose stack, PostgreSQL runs this file from its standard
-first-initialization directory. Production deployments should apply the same
-reviewed migration through their normal migration runner; this repository does
-not contain credentials or claim a production migration service.
+`002_operation_state.sql` adds the durable operation boundary: hash-only
+idempotency claims, typed response/error documents, operation status and worker
+leases, append-only SSE events, and operation-to-session associations. Its
+named unique constraint on `(endpoint, idempotency_key_hash)` is the cross-
+process owner gate. Terminal transitions lock the operation row and append the
+event before committing. Rerunning the migration is safe; it does not alter
+existing rows.
+
+For the development Compose stack, PostgreSQL runs both files from its standard
+first-initialization directory. Existing named volumes must be migrated with a
+normal migration runner (or a one-time `psql` invocation) because Docker's
+first-initialization directory is only applied to an empty data directory.
+Production deployments should apply the reviewed files through their normal
+migration runner; this repository does not contain credentials or claim a
+production migration service.

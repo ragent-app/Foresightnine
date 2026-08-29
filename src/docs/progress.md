@@ -1,12 +1,20 @@
 # Progress
 
+## Durable operation state slice — 2026-08-29
+
+- Sol narrowed the next step to PostgreSQL operation state and explicitly deferred Redis. Added `apps/api/app/operation_store.py` and `infra/migrations/002_operation_state.sql`; `OperationManager` now routes idempotency claims, typed terminal receipts/errors, operation records, worker lease metadata, session associations, and append-only SSE events through the selected store.
+- The PostgreSQL path uses a unique endpoint plus SHA-256 idempotency-key hash gate, row locking for terminal transitions, parameterized SQL, and no raw idempotency keys or request bodies. Expired leases are converted to retryable terminal failures; the current provider is never automatically resubmitted without a provider receipt. SSE replay validates the actual retained sequence range.
+- The development/test adapter remains deterministic and thread-safe. Primary regressions cover same-key replay/conflict, typed concurrent replay, control-command replay flags, cancellation/completion serialization, SSE trimming, retention, lease recovery, and two-manager store behavior.
+- Primary verification: focused operation/storage/security tests 49 passed; full API suite 159 passed; Python compileall, root TypeScript typecheck, generated contracts, governance boundaries, Compose config, and `git diff --check` passed. The API retains the documented Starlette/httpx deprecation warning.
+- A fresh Sol gate returned `ship` with no P0/P1/P2 findings for this bounded slice. No live PostgreSQL/psql, migration execution, Docker build/startup, or cross-process runtime evidence is claimed. Redis is provisioned only; distributed rate limits/model quotas remain the next implementation slice. Public provider/search credentials, licensed data, legal approval, Android signing, and deployment gates remain open.
+
 ## PostgreSQL entity storage integration — 2026-08-29
 
 - Implemented the Sol-approved entity-persistence slice under `apps/api`: production-configured repositories now support PostgreSQL for sessions, theses, challenges, challenge turns, evidence, worldlines, market manifests, and worldline-to-challenge relationships. Development and tests retain the explicit in-memory mode; production/public hardening fails closed when PostgreSQL is not configured.
 - Added the idempotent `infra/migrations/001_research_state.sql` migration for versioned JSONB documents, expiry metadata, collection/key validation, and lookup indexes. Added development-only PostgreSQL and Redis services to `infra/docker/compose.yaml`; Redis is provisioned for the next coordination slice but is not yet wired to abuse controls or operation state.
 - Retention now uses an explicit unfiltered retention enumeration, deletes through repository APIs, preserves relationship-based worldline cascade cleanup, and re-raises storage runtime failures. Ordinary reads hide expired documents consistently in memory and PostgreSQL; deterministic clock injection and query-path regressions cover this boundary.
 - Primary verification for the current worktree: focused API storage/security tests 29 passed; full API suite 149 passed; root TypeScript typecheck passed; generated-contract and governance-boundary checks passed; Compose config parsing passed; `git diff --check` passed with only existing line-ending warnings. The API retains the documented Starlette/httpx deprecation warning.
-- This is not public production readiness. OperationManager idempotency/replay state, event logs and worker leases/restart recovery remain in memory; Redis atomic quotas/rate limits, live PostgreSQL/Redis runtime evidence, Docker build/startup evidence, provider/search secrets, licensed data, legal approval, Android signing, and deployment gates remain open.
+- This is not public production readiness. Durable operation state is a separate follow-on slice and is still pending its Sol gate; Redis atomic quotas/rate limits, live PostgreSQL/Redis runtime evidence, Docker build/startup evidence, provider/search secrets, licensed data, legal approval, Android signing, and deployment gates remain open.
 
 ## Dependency audit remediation — 2026-08-29
 

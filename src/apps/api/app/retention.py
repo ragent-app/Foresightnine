@@ -144,6 +144,8 @@ def cleanup_research_state(
                 max_terminal_sse_events=selected.max_terminal_sse_events,
                 terminal_ttl_seconds=selected.terminal_ttl.total_seconds(),
             )
+        except StorageRuntimeError:
+            raise
         except Exception:
             counts["failures"] += 1
             record_cleanup_failure(kind="operation_state")

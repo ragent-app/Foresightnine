@@ -39,7 +39,7 @@ Every POST requires `Idempotency-Key` (8–128 characters). Its scope is endpoin
 - Raw idempotency keys are not returned or persisted in entities; only SHA-256 digests are exposed.
 - Cancel and resume are themselves idempotent commands. A cancel racing a completed operation is a successful no-op. A cancelled running operation retains its event history and can resume from its checkpoint token.
 
-Research entity documents are now persisted through the configured repository: production/public-hardening requires PostgreSQL, while development and tests may explicitly use the deterministic in-memory adapter. Operation idempotency/replay state, SSE event logs, worker leases and distributed Redis controls remain process-local or unimplemented in this slice; the wire semantics and tests are already fixed here.
+Research entity documents and operation/idempotency state are persisted through configured repositories: production/public-hardening requires PostgreSQL, while development and tests may explicitly use deterministic in-memory adapters. Operation records, typed receipts/errors, worker lease metadata, session associations and append-only SSE events are covered by the PostgreSQL operation store; Redis distributed abuse controls, provider receipt recovery and live runtime execution remain deployment work. The wire semantics and tests are already fixed here.
 
 ## SSE event and replay semantics
 

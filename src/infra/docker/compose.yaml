@@ -14,6 +14,7 @@ services:
     volumes:
       - foresightnine-postgres-data:/var/lib/postgresql/data
       - ../migrations/001_research_state.sql:/docker-entrypoint-initdb.d/001_research_state.sql:ro
+      - ../migrations/002_operation_state.sql:/docker-entrypoint-initdb.d/002_operation_state.sql:ro
 
   redis:
     image: redis:7-alpine

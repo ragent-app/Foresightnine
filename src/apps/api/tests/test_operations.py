@@ -7,6 +7,8 @@ from pydantic import BaseModel, create_model
 
 from app.operations import ApiProblem
 from app.operations import OperationManager
+from app.models import Operation
+from app.operation_store import InMemoryOperationStore
 from app.phase3 import ProviderFailure
 from app.providers import FixedClock
 
@@ -19,6 +21,8 @@ def test_running_operation_cancel_resume_preserves_terminal_checkpoint_without_s
     assert replayed is False
     assert cancelled.operation.status == "cancelled"
     assert manager.events[running.operation_id][-1].event == "operation.error"
+    replayed_cancel, control_replayed = manager.cancel(running.operation_id, running.cancel_token, "cancel-running-key")
+    assert control_replayed is True and replayed_cancel.operation.status == "cancelled"
     resumed, replayed = manager.resume(running.operation_id, running.resume_token, "resume-running-key")
     assert replayed is False
     assert resumed.operation.status == "cancelled"
@@ -209,7 +213,32 @@ def test_execute_is_atomic_single_flight_under_same_idempotency_key() -> None:
     assert submissions == 1
     assert len(results) == 2
     assert len({result[0].operation.operation_id for result in results}) == 1
+    assert all(isinstance(result[0], response_type) for result in results)
     assert sorted(result[1] for result in results) == [False, True]
+
+
+def test_separate_manager_deserializes_persisted_response_into_declared_model() -> None:
+    store = InMemoryOperationStore()
+    first_manager = OperationManager(FixedClock(), store=store)
+    second_manager = OperationManager(FixedClock(), store=store)
+    payload_type = create_model("PersistedPayload", content_hash=(str, ...))
+    response_type = create_model("PersistedResponse", operation=(Operation, ...), value=(payload_type, ...))
+
+    first, first_replayed = first_manager.execute(
+        endpoint="/v1/challenges", idempotency_key="persisted-response-key",
+        request_payload={"message": "same"}, response_model=response_type,
+        result_field="value", build_result=lambda operation_id: (payload_type(content_hash="f" * 64), "result:persisted"),
+    )
+    second, second_replayed = second_manager.execute(
+        endpoint="/v1/challenges", idempotency_key="persisted-response-key",
+        request_payload={"message": "same"}, response_model=response_type,
+        result_field="value", build_result=lambda operation_id: (_ for _ in ()).throw(AssertionError("replay must not submit provider work")),
+    )
+
+    assert first_replayed is False and second_replayed is True
+    assert isinstance(second, response_type)
+    assert isinstance(second.operation, Operation)
+    assert isinstance(second.value, payload_type)
 
 
 def test_async_sse_emits_before_provider_completion_and_cancel_reaches_runner() -> None:

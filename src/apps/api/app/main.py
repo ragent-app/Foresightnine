@@ -74,6 +74,7 @@ from .services import (
     validate_worldline_bundle_semantics,
 )
 from .storage import JsonDocumentRepository, StorageConfig, build_repository
+from .operation_store import build_operation_store
 
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
 
@@ -103,7 +104,6 @@ challenge_provider = build_llm_provider()
 evidence_provider = build_search_evidence_provider()
 data_provider = MockDataProvider(clock)
 factor_provider = MockFactorProvider(clock)
-operations = OperationManager(lifecycle_clock)
 security_config = build_security_config()
 try:
     _model_call_quota = int(os.getenv("FORESIGHTNINE_MODEL_CALL_QUOTA", "20"))
@@ -173,6 +173,7 @@ storage_config = _storage_config()
     MARKET_MANIFESTS,
     WORLDLINE_CHALLENGES,
 ) = _build_entity_repositories(storage_config)
+operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
 OPERATION_SESSIONS: dict[str, str] = {}
 
 NORMAL_CONFIRM_MINIMUM_TOTAL = 30
@@ -202,10 +203,11 @@ def reset_state() -> None:
 
 
 def cleanup_expired_state() -> object:
+    durable_operation_sessions = operations.session_ids()
     active_session_ids = {
-        OPERATION_SESSIONS[operation_id]
+        durable_operation_sessions[operation_id]
         for operation_id in operations.active_operation_ids()
-        if operation_id in OPERATION_SESSIONS
+        if operation_id in durable_operation_sessions
     }
     report = cleanup_research_state(
         sessions=SESSIONS, theses=THESES, challenges=CHALLENGES,
@@ -245,6 +247,14 @@ def _reserve_model_call(request: Request, operation_id: str, *, session_id: str 
 def _bind_operation_session(operation_id: str, session_id: str | None) -> None:
     if session_id:
         OPERATION_SESSIONS[operation_id] = session_id
+
+
+def _session_for_challenge(challenge_id: str) -> str | None:
+    challenge = CHALLENGES.get(challenge_id)
+    if challenge is None:
+        return None
+    thesis = THESES.get(challenge.thesis_id)
+    return thesis.session_id if thesis is not None else None
 
 
 app.add_middleware(
@@ -643,6 +653,7 @@ def create_challenge(request: CreateChallengeRequest, response: Response, idempo
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
+        session_id=request.session_id,
     )
     _mark_replay(response, replayed)
     return result
@@ -651,6 +662,7 @@ def create_challenge(request: CreateChallengeRequest, response: Response, idempo
 @app.post("/v1/challenges/{challenge_id}/messages", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeMessage")
 def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "ChallengeMessageRequest")
+    session_id = _session_for_challenge(challenge_id)
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
         current = CHALLENGES.get(challenge_id)
@@ -690,6 +702,7 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
+        session_id=session_id,
     )
     _mark_replay(response, replayed)
     return result
@@ -699,6 +712,7 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
 def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     """Start a Phase 3 message without waiting for its provider runner."""
     _validate_request(request, "ChallengeMessageRequest")
+    session_id = _session_for_challenge(challenge_id)
 
     def before_accept(operation_id: str) -> None:
         current = CHALLENGES.get(challenge_id)
@@ -739,6 +753,7 @@ def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageR
         endpoint=f"/v1/challenges/{challenge_id}/messages/async", idempotency_key=idempotency_key,
         request_payload=_request_payload(request), result_field="challenge", build_result=build,
         before_accept=before_accept,
+        session_id=session_id,
     )
     _mark_replay(response, replayed)
     return result
@@ -747,6 +762,7 @@ def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageR
 @app.post("/v1/challenges/{challenge_id}/evidence", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeEvidence")
 def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "EvidenceSubmissionRequest")
+    session_id = _session_for_challenge(challenge_id)
     has_search_provider = request.search_provider is not None
     has_search_result_hash = request.search_result_hash is not None
     if has_search_provider != has_search_result_hash:
@@ -830,6 +846,7 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
+        session_id=session_id,
     )
     _mark_replay(response, replayed)
     return result
@@ -923,6 +940,7 @@ def _confirmed_challenge(
 @app.post("/v1/challenges/{challenge_id}/confirm", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="confirmChallenge")
 def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
     _validate_request(request, "ConfirmChallengeRequest")
+    session_id = _session_for_challenge(challenge_id)
     reservation = request.command == "CONFIRM_WITH_RESERVATIONS"
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
@@ -961,6 +979,7 @@ def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, respo
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
+        session_id=session_id,
     )
     _mark_replay(response, replayed)
     return result
@@ -976,6 +995,7 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         raise ApiProblem(409, "invalid_state_transition", "Worldlines require a confirmed challenge.")
     if request.horizon_end < clock.today():
         raise ApiProblem(422, "validation_error", "Worldline horizon must not precede the baseline date.")
+    session_id = _session_for_challenge(request.challenge_id)
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
         thesis = THESES.get(challenge.thesis_id)
@@ -1005,6 +1025,7 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         response_model=WorldlineBundleOperationResponse,
         result_field="bundle",
         build_result=build,
+        session_id=session_id,
     )
     _mark_replay(response, replayed)
     return result
@@ -1023,6 +1044,10 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
     _validate_request(request, "ProbabilityRequest")
     if request.worldline_id not in WORLDLINES:
         raise ApiProblem(404, "not_found", "Worldline not found.")
+    session_id = None
+    challenge_id = WORLDLINE_CHALLENGES.get(request.worldline_id)
+    if challenge_id is not None:
+        session_id = _session_for_challenge(challenge_id)
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
         result = probability_assessor.assess(ProbabilityAssessmentInput(
@@ -1040,6 +1065,7 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
         response_model=ProbabilityOperationResponse,
         result_field="probability",
         build_result=build,
+        session_id=session_id,
     )
     _mark_replay(response, replayed)
     return result
@@ -1146,7 +1172,9 @@ def get_factor_shard(version: str, shard_id: Annotated[str, Query(min_length=1)]
 def attest_client_computation(computation_id: str, request: ClientComputationAttestRequest, response: Response, idempotency_key: IdempotencyKey) -> ClientAttestationOperationResponse:
     _validate_request(request, "ClientComputationAttestRequest")
     if request.operation_id not in operations.operations:
-        raise ApiProblem(404, "not_found", "Referenced operation not found.")
+        if operations.store.get_operation(request.operation_id) is None:
+            raise ApiProblem(404, "not_found", "Referenced operation not found.")
+    session_id = operations.session_ids().get(request.operation_id)
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
         result = build_attestation(operation_id=operation_id, computation_id=computation_id, request=request, clock=clock)
@@ -1159,6 +1187,7 @@ def attest_client_computation(computation_id: str, request: ClientComputationAtt
         response_model=ClientAttestationOperationResponse,
         result_field="attestation",
         build_result=build,
+        session_id=session_id,
     )
     _mark_replay(response, replayed)
     return result
