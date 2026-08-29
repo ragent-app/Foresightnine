@@ -1,10 +1,31 @@
-import { useMemo, type PropsWithChildren, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
 import { color, radius, space, typography } from "@foresightnine/design-system";
 import { useMobileStore } from "./app-store";
+import { configuredApiBaseUrl } from "./api-runtime";
 import { t } from "./i18n";
+
+type OAuthProvider = "google" | "github";
+type OAuthProviderReadiness = { readonly provider: OAuthProvider; readonly enabled: boolean };
+type OAuthReadinessStatus = "offline" | "loading" | "ready" | "unavailable";
+const OAUTH_PROVIDERS = ["google", "github"] as const;
+const OAUTH_UNAVAILABLE: readonly OAuthProviderReadiness[] = OAUTH_PROVIDERS.map((provider) => ({ provider, enabled: false }));
+
+function parseOAuthReadiness(value: unknown): readonly OAuthProviderReadiness[] {
+  if (!value || typeof value !== "object" || !Array.isArray((value as { providers?: unknown }).providers)) throw new Error("Invalid OAuth readiness response.");
+  const records = (value as { providers: unknown[] }).providers;
+  if (records.length !== OAUTH_PROVIDERS.length || Object.keys(value).length !== 1) throw new Error("Invalid OAuth readiness response.");
+  const parsed = records.map((record): OAuthProviderReadiness => {
+    if (!record || typeof record !== "object" || Object.keys(record).length !== 2) throw new Error("Invalid OAuth readiness response.");
+    const item = record as { provider?: unknown; enabled?: unknown };
+    if ((item.provider !== "google" && item.provider !== "github") || typeof item.enabled !== "boolean") throw new Error("Invalid OAuth readiness response.");
+    return { provider: item.provider, enabled: item.enabled };
+  });
+  if (new Set(parsed.map(({ provider }) => provider)).size !== OAUTH_PROVIDERS.length) throw new Error("Invalid OAuth readiness response.");
+  return OAUTH_PROVIDERS.map((provider) => parsed.find((item) => item.provider === provider) as OAuthProviderReadiness);
+}
 
 export function Screen({ children, scroll = true }: PropsWithChildren<{ readonly scroll?: boolean }>): React.JSX.Element {
   const content = <View style={styles.page}>{children}</View>;
@@ -46,14 +67,38 @@ export function Status({ children, tone = "neutral" }: PropsWithChildren<{ reado
 export function SocialLoginPanel(): React.JSX.Element {
   const { state } = useMobileStore();
   const { width } = useWindowDimensions();
+  const apiBaseUrl = configuredApiBaseUrl();
+  const [readiness, setReadiness] = useState<{ readonly providers: readonly OAuthProviderReadiness[]; readonly status: OAuthReadinessStatus }>({ providers: OAUTH_UNAVAILABLE, status: apiBaseUrl ? "loading" : "offline" });
   const stacked = width < 600;
+  useEffect(() => {
+    if (!apiBaseUrl) {
+      setReadiness({ providers: OAUTH_UNAVAILABLE, status: "offline" });
+      return;
+    }
+    const controller = new AbortController();
+    setReadiness((current) => ({ ...current, status: "loading" }));
+    void fetch(new URL("v1/auth/providers", `${apiBaseUrl}/`).toString(), { method: "GET", headers: { Accept: "application/json" }, signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error("OAuth readiness request failed."); return response.json() as Promise<unknown>; })
+      .then((payload) => setReadiness({ providers: parseOAuthReadiness(payload), status: "ready" }))
+      .catch(() => { if (!controller.signal.aborted) setReadiness({ providers: OAUTH_UNAVAILABLE, status: "unavailable" }); });
+    return () => controller.abort();
+  }, [apiBaseUrl]);
+  const anyEnabled = readiness.providers.some(({ enabled }) => enabled);
+  const statusCopy = readiness.status === "loading"
+    ? (state.language === "en" ? "Checking server OAuth readiness…" : "正在确认服务端登录状态…")
+    : readiness.status === "ready" && anyEnabled
+      ? (state.language === "en" ? "Server configuration is ready; this build has no safe callback/deep-link handler yet." : "服务端配置已就绪；当前版本尚未接通安全回调/深链处理。")
+      : t(state.language, "signInUnavailable");
   return <Card tone="soft">
     <Text style={styles.heading}>{t(state.language, "optionalSignIn")}</Text>
     <Text style={styles.strong}>{t(state.language, "anonymousResearch")}</Text>
-    <Text style={styles.muted}>{t(state.language, "signInUnavailable")}</Text>
+    <Text style={styles.muted}>{statusCopy}</Text>
     <View style={stacked ? styles.stack : styles.row}>
-      <Button disabled variant="secondary" style={styles.loginButton} onPress={() => undefined} label={`${t(state.language, "signInGoogle")} — ${t(state.language, "notConfigured")}`}>{t(state.language, "signInGoogle")}</Button>
-      <Button disabled variant="secondary" style={styles.loginButton} onPress={() => undefined} label={`${t(state.language, "signInGithub")} — ${t(state.language, "notConfigured")}`}>{t(state.language, "signInGithub")}</Button>
+      {readiness.providers.map(({ provider, enabled }) => {
+        const label = provider === "google" ? t(state.language, "signInGoogle") : t(state.language, "signInGithub");
+        const buttonStatus = enabled ? (state.language === "en" ? "Callback not wired" : "回调未接通") : t(state.language, "notConfigured");
+        return <Button key={provider} disabled variant="secondary" style={styles.loginButton} onPress={() => undefined} label={`${label} — ${buttonStatus}`}>{label}</Button>;
+      })}
     </View>
   </Card>;
 }

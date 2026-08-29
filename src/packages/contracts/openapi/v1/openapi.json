@@ -1901,6 +1901,122 @@
         ],
         "type": "object"
       },
+      "OAuthAuthorizationResponse": {
+        "additionalProperties": false,
+        "description": "Safe authorization parameters returned after a server-side PKCE transaction.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "code_challenge": {
+            "title": "Code Challenge",
+            "type": "string"
+          },
+          "code_challenge_method": {
+            "const": "S256",
+            "title": "Code Challenge Method",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "google",
+              "github"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "title": "Redirect Uri",
+            "type": "string"
+          },
+          "return_uri": {
+            "title": "Return Uri",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "client_id",
+          "redirect_uri",
+          "return_uri",
+          "state",
+          "code_challenge",
+          "code_challenge_method"
+        ],
+        "title": "OAuthAuthorizationResponse",
+        "type": "object"
+      },
+      "OAuthProviderReadiness": {
+        "additionalProperties": false,
+        "description": "Public OAuth capability metadata; no provider credential is serialised.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "provider": {
+            "enum": [
+              "google",
+              "github"
+            ],
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "enabled"
+        ],
+        "title": "OAuthProviderReadiness",
+        "type": "object"
+      },
+      "OAuthProvidersResponse": {
+        "additionalProperties": false,
+        "description": "The complete, fixed provider readiness surface for client consoles.",
+        "properties": {
+          "providers": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/components/schemas/OAuthProviderReadiness"
+              },
+              {
+                "$ref": "#/components/schemas/OAuthProviderReadiness"
+              }
+            ],
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "title": "OAuthProvidersResponse",
+        "type": "object"
+      },
+      "OAuthStartRequest": {
+        "additionalProperties": false,
+        "description": "The only client-controlled value accepted by an OAuth start request.",
+        "properties": {
+          "return_uri": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Return Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "return_uri"
+        ],
+        "title": "OAuthStartRequest",
+        "type": "object"
+      },
       "Operation": {
         "allOf": [
           {
@@ -3247,6 +3363,249 @@
           }
         },
         "summary": "Get Asset"
+      }
+    },
+    "/v1/auth/providers": {
+      "get": {
+        "description": "Return only server-validated OAuth readiness metadata.",
+        "operationId": "getOAuthProviders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthProvidersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Oauth Providers"
+      }
+    },
+    "/v1/auth/{provider}/start": {
+      "post": {
+        "description": "Create a short-lived PKCE authorization request without contacting a provider.",
+        "operationId": "startOAuthAuthorization",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "enum": [
+                "google",
+                "github"
+              ],
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthAuthorizationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed request or replay cursor"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid operation control token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Entity not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Idempotency or lifecycle conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body exceeds the configured limit"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported request content type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Strict contract validation failure"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate or model-call quota exceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validated internal failure"
+          }
+        },
+        "summary": "Start Oauth"
       }
     },
     "/v1/challenges": {

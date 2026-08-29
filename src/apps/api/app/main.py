@@ -14,7 +14,14 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
-from .contract_models import CONTRACT_SCHEMA
+from .contract_models import (
+    CONTRACT_SCHEMA,
+    OAuthAuthorizationResponse,
+    OAuthProviderName,
+    OAuthProvidersResponse,
+    OAuthProviderReadiness,
+    OAuthStartRequest,
+)
 from .abuse import AbuseBackend
 from .redis_abuse import build_abuse_control
 from .models import (
@@ -76,6 +83,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, build_repository
 from .operation_store import build_operation_store
+from .oauth_foundation import OAuthConfigurationError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
 
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
 
@@ -114,6 +122,12 @@ abuse_control: AbuseBackend = build_abuse_control(model_quota=max(1, _model_call
 captcha_verifier = build_captcha_verifier(security_config)
 trusted_proxy_resolver = TrustedProxyResolver(security_config.trusted_proxies)
 retention_policy = RetentionPolicy()
+try:
+    oauth_foundation: OAuthFoundation | None = OAuthFoundation.from_environment()
+except OAuthConfigurationError:
+    # OAuth is optional.  Invalid or absent deployment configuration must make
+    # every provider unavailable without preventing the research API from booting.
+    oauth_foundation = None
 
 def _storage_environment(environ: Mapping[str, str] | None = None) -> dict[str, str]:
     """Normalize deployment URL names to the storage foundation's safe alias.
@@ -534,6 +548,8 @@ async def api_problem_handler(request: Request, error: ApiProblem) -> JSONRespon
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_handler(request: Request, error: RequestValidationError) -> JSONResponse:
+    if request.url.path.startswith("/v1/auth/") and any(item["loc"] == ("path", "provider") for item in error.errors()):
+        return _error(400, "bad_request", "OAuth authorization request is unavailable.", request)
     details = [
         ErrorDetail(location="/".join(str(part) for part in item["loc"]), message=item["msg"])
         for item in error.errors()
@@ -573,6 +589,56 @@ def health() -> HealthResponse:
         project_search_available=bool(getattr(evidence_provider, "supports_project_search", False)),
         schema_version="v1",
         clock=clock.now(),
+    )
+
+
+@app.get(
+    "/v1/auth/providers",
+    response_model=OAuthProvidersResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    operation_id="getOAuthProviders",
+)
+def oauth_providers() -> OAuthProvidersResponse:
+    """Return only server-validated OAuth readiness metadata."""
+
+    configured = oauth_foundation
+    enabled = set(configured.supported_providers) if configured is not None else set()
+    return OAuthProvidersResponse(
+        providers=tuple(
+            OAuthProviderReadiness(provider=provider, enabled=provider in enabled)
+            for provider in SUPPORTED_PROVIDERS
+        )
+    )
+
+
+@app.post(
+    "/v1/auth/{provider}/start",
+    response_model=OAuthAuthorizationResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    operation_id="startOAuthAuthorization",
+)
+def start_oauth(provider: OAuthProviderName, request: OAuthStartRequest) -> OAuthAuthorizationResponse:
+    """Create a short-lived PKCE authorization request without contacting a provider."""
+
+    foundation = oauth_foundation
+    if foundation is None:
+        raise ApiProblem(400, "bad_request", "OAuth authorization is not available.")
+    try:
+        authorization = foundation.create_transaction(provider, request.return_uri)
+    except (OAuthConfigurationError, OAuthTransactionError) as error:
+        # The foundation messages are intentionally generic, but the route also
+        # uses one fixed public message so configuration details never cross the API boundary.
+        raise ApiProblem(400, "bad_request", "OAuth authorization request is unavailable.") from error
+    return OAuthAuthorizationResponse(
+        provider=authorization.provider,
+        client_id=authorization.client_id,
+        redirect_uri=authorization.redirect_uri,
+        return_uri=authorization.return_uri,
+        state=authorization.state,
+        code_challenge=authorization.code_challenge,
+        code_challenge_method="S256",
     )
 
 
@@ -1271,6 +1337,13 @@ def canonical_openapi() -> dict[str, Any]:
                 rewrite_refs(child)
 
     rewrite_refs(component_schemas)
+    # OAuth is deliberately a narrow API-only contract and is not part of the
+    # research payload schema authority.  Preserve its strict route models in
+    # generated OpenAPI while keeping the canonical research schemas unchanged.
+    for name in ("OAuthAuthorizationResponse", "OAuthProviderReadiness", "OAuthProvidersResponse", "OAuthStartRequest"):
+        route_schema = document.get("components", {}).get("schemas", {}).get(name)
+        if route_schema is not None:
+            component_schemas[name] = route_schema
     document.setdefault("components", {})["schemas"] = component_schemas
     app.openapi_schema = document
     return document

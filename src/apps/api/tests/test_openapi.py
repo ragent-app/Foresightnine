@@ -65,6 +65,8 @@ def test_openapi_has_every_phase1_endpoint_operation_error_and_idempotency_contr
         ("post", "/v1/operations/{operation_id}/resume"),
         ("get", "/v1/operations/{operation_id}/events"),
         ("get", "/v1/methodology"),
+        ("get", "/v1/auth/providers"),
+        ("post", "/v1/auth/{provider}/start"),
     }
     observed = {(method, path) for path, item in document["paths"].items() for method in item if method in {"get", "post"}}
     assert observed == expected
@@ -78,8 +80,17 @@ def test_openapi_has_every_phase1_endpoint_operation_error_and_idempotency_contr
             assert {"400", "403", "404", "409", "422", "500"} <= set(operation["responses"]), (method, path)
             if method == "post":
                 header = [parameter for parameter in operation.get("parameters", []) if parameter.get("name") == "Idempotency-Key"]
-                assert len(header) == 1 and header[0]["required"] is True, path
+                if path == "/v1/auth/{provider}/start":
+                    assert header == []
+                else:
+                    assert len(header) == 1 and header[0]["required"] is True, path
                 assert operation.get("requestBody", {}).get("required") is True, path
+    provider_parameter = next(
+        parameter
+        for parameter in document["paths"]["/v1/auth/{provider}/start"]["post"]["parameters"]
+        if parameter["name"] == "provider"
+    )
+    assert provider_parameter["schema"]["enum"] == ["google", "github"]
     assert len(operation_ids) == len(set(operation_ids))
     event_response = document["paths"]["/v1/operations/{operation_id}/events"]["get"]["responses"]["200"]
     assert "text/event-stream" in event_response["content"]

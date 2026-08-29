@@ -9,16 +9,37 @@ import { FmPanel } from "./components/FmPanel";
 import { PortfolioPanel } from "./components/PortfolioPanel";
 import { NavPanel } from "./components/NavPanel";
 import { ConsolePanel } from "./components/MethodsPanel";
-import { SocialLoginPanel } from "./components/SocialLoginPanel";
+import { SocialLoginPanel, type OAuthProviderAvailability, type OAuthReadinessStatus } from "./components/SocialLoginPanel";
 import { evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches } from "./fixtures";
 import { allocationRows, canEnterStage, canStartFm, initialState, reducer, safeStageFor } from "./state";
 import { downloadText, csvExport, navExport, researchExport } from "./exports";
 import { currencySymbol, parseCapital, validateSearchEvidence } from "./validation";
 import { runFmInWorker } from "./fm-client";
-import { apiErrorNotice, challengeToUi, createWebApiClient, webApiMode, worldlineBundleToBranches } from "./api-runtime";
+import { apiErrorNotice, challengeToUi, configuredApiBaseUrl, createWebApiClient, webApiMode, worldlineBundleToBranches } from "./api-runtime";
 import type { Currency, EvidenceDraft, EvidenceView, Language, Stage } from "./types";
 
 const DRAFT_KEY = "foresightnine.web.draft.v1";
+const OAUTH_PROVIDERS = ["google", "github"] as const;
+const OAUTH_UNAVAILABLE: readonly OAuthProviderAvailability[] = OAUTH_PROVIDERS.map((provider) => ({ provider, enabled: false }));
+
+interface OAuthReadiness {
+  readonly providers: readonly OAuthProviderAvailability[];
+  readonly status: OAuthReadinessStatus;
+}
+
+function parseOAuthReadiness(value: unknown): readonly OAuthProviderAvailability[] {
+  if (!value || typeof value !== "object" || !Array.isArray((value as { providers?: unknown }).providers)) throw new Error("Invalid OAuth readiness response.");
+  const records = (value as { providers: unknown[] }).providers;
+  if (records.length !== OAUTH_PROVIDERS.length || Object.keys(value).length !== 1) throw new Error("Invalid OAuth readiness response.");
+  const parsed = records.map((record): OAuthProviderAvailability => {
+    if (!record || typeof record !== "object" || Object.keys(record).length !== 2) throw new Error("Invalid OAuth readiness response.");
+    const item = record as { provider?: unknown; enabled?: unknown };
+    if ((item.provider !== "google" && item.provider !== "github") || typeof item.enabled !== "boolean") throw new Error("Invalid OAuth readiness response.");
+    return { provider: item.provider, enabled: item.enabled };
+  });
+  if (new Set(parsed.map(({ provider }) => provider)).size !== OAUTH_PROVIDERS.length) throw new Error("Invalid OAuth readiness response.");
+  return OAUTH_PROVIDERS.map((provider) => parsed.find((item) => item.provider === provider) as OAuthProviderAvailability);
+}
 
 export interface GenerationGuard {
   readonly current: () => number;
@@ -36,8 +57,24 @@ export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const apiClient = useMemo(() => createWebApiClient(), []);
+  const apiBaseUrl = configuredApiBaseUrl();
+  const [oauthReadiness, setOAuthReadiness] = useState<OAuthReadiness>({ providers: OAUTH_UNAVAILABLE, status: apiBaseUrl ? "loading" : "offline" });
   const apiAbort = useRef<AbortController | null>(null);
   const apiMode = webApiMode();
+
+  useEffect(() => {
+    if (!apiBaseUrl) {
+      setOAuthReadiness({ providers: OAUTH_UNAVAILABLE, status: "offline" });
+      return;
+    }
+    const controller = new AbortController();
+    setOAuthReadiness((current) => ({ ...current, status: "loading" }));
+    void fetch(new URL("v1/auth/providers", `${apiBaseUrl}/`).toString(), { method: "GET", headers: { Accept: "application/json" }, credentials: "omit", signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error("OAuth readiness request failed."); return response.json() as Promise<unknown>; })
+      .then((payload) => setOAuthReadiness({ providers: parseOAuthReadiness(payload), status: "ready" }))
+      .catch(() => { if (!controller.signal.aborted) setOAuthReadiness({ providers: OAUTH_UNAVAILABLE, status: "unavailable" }); });
+    return () => controller.abort();
+  }, [apiBaseUrl]);
   const apiChallengeId = state.apiChallengeId;
   const challengeTimer = useRef<number | null>(null);
   const fmAbort = useRef<AbortController | null>(null);
@@ -192,14 +229,14 @@ export function App() {
   const methodsExport = useCallback(() => { downloadText("foresightnine-methods.txt", state.language === "en" ? "ForesightNine methodology\n\nProbabilities are revisable judgments, not facts.\nScenario simulation is not a forecast or return promise.\n" : "ForesightNine 方法说明\n\n概率是可修订判断，不是事实。\n情景模拟，不是预测或收益承诺。\n", "text/plain;charset=utf-8"); dispatch({ type: "export_notice", notice: "方法说明已导出。" }); }, [state.language]);
 
   const visibleStage = safeStageFor(state);
-  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset });
+  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset }, oauthReadiness);
   const inspector = renderInspector(visibleStage, state, rows, () => dispatch({ type: "toggle_drawdown" }), state.language);
-  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{t(state.language, "数据截止 2026-08-09")}</span>{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" /> : null}</AppShell></LanguageProvider>;
+  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector} oauthProviders={oauthReadiness.providers} oauthReadinessStatus={oauthReadiness.status}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{t(state.language, "数据截止 2026-08-09")}</span>{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} /> : null}</AppShell></LanguageProvider>;
 }
 
 interface Handlers { readonly startChallenge: () => void; readonly cancelChallenge: () => void; readonly retryChallenge: () => void; readonly recoverChallenge: () => void; readonly addEvidence: (draft: EvidenceDraft) => void; readonly submitReply: (body: string) => void; readonly confirm: (confirmation: "confirmed" | "reserved") => void; readonly computeFm: () => void; readonly cancelFm: () => void; readonly exportJson: () => void; readonly exportCsv: () => void; readonly exportPath: () => void; readonly methodsExport: () => void; readonly rows: ReturnType<typeof allocationRows>; readonly viewpointBranches: ReturnType<typeof makeBranches>; readonly setViewpoint: (viewpoint: string) => void; readonly reset: () => void; }
 
-function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: React.Dispatch<Parameters<typeof reducer>[1]>, handlers: Handlers) {
+function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: React.Dispatch<Parameters<typeof reducer>[1]>, handlers: Handlers, oauthReadiness: OAuthReadiness) {
   switch (stage) {
     case "thesis": return <ThesisInput viewpoint={state.viewpoint} capital={state.capital} currency={state.currency} draftRestored={state.draftRestored} onViewpoint={handlers.setViewpoint} onCapital={(capital) => dispatch({ type: "set_capital", capital })} onCurrency={(currency) => dispatch({ type: "set_currency", currency: currency as Currency })} onStart={handlers.startChallenge} onReset={handlers.reset} />;
     case "challenge": return <ChallengePanel status={state.challengeStatus} turns={state.challengeTurns} replyDraft={state.replyDraft} evidence={state.evidence} rubric={state.rubric} unresolvedIssuesAcknowledged={state.unresolvedIssuesAcknowledged} reservationNote={state.reservationNote} onStart={handlers.startChallenge} onCancel={handlers.cancelChallenge} onRetry={handlers.retryChallenge} onRecover={handlers.recoverChallenge} onReplyDraft={(draft) => dispatch({ type: "set_reply_draft", draft })} onSubmitReply={handlers.submitReply} onEvidence={handlers.addEvidence} onUnresolvedIssuesAcknowledged={(acknowledged) => dispatch({ type: "set_unresolved_issues_acknowledged", acknowledged })} onReservationNote={(note) => dispatch({ type: "set_reservation_note", note })} onConfirm={handlers.confirm} />;
@@ -207,7 +244,7 @@ function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: 
     case "fm": return <FmPanel status={state.fmStatus} progress={state.fmProgress} step={state.fmStep} resultReady={Boolean(state.fmResult)} onCompute={handlers.computeFm} onCancel={handlers.cancelFm} onPortfolio={() => dispatch({ type: "set_stage", stage: "portfolio" })} />;
     case "portfolio": return <PortfolioPanel mode={state.portfolioMode} currency={state.currency} rows={handlers.rows} capital={parseCapital(state.capital)} selectedBranch={state.selectedBranch} branches={handlers.viewpointBranches} stress={state.stressScenario} onMode={(mode) => dispatch({ type: "set_mode", mode })} onStress={(scenario) => dispatch({ type: "set_stress", scenario })} onCompute={handlers.computeFm} onNav={() => dispatch({ type: "set_stage", stage: "nav" })} onExport={(kind) => kind === "json" ? handlers.exportJson() : handlers.exportCsv()} fmReady={Boolean(state.fmResult)} canCompute={canStartFm(state)} canNavigate={canEnterStage(state, "nav")} />;
     case "nav": return <NavPanel branches={handlers.viewpointBranches} selected={state.selectedBranch} onSelect={(branch) => dispatch({ type: "select_branch", branch })} stress={state.stressScenario} onExport={handlers.exportPath} drawdownVisible={state.drawdownVisible} onToggleDrawdown={() => dispatch({ type: "toggle_drawdown" })} />;
-    case "console": return <ConsolePanel onExport={handlers.methodsExport} />;
+    case "console": return <ConsolePanel onExport={handlers.methodsExport} providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} />;
   }
 }
 

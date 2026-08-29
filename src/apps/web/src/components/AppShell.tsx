@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useLanguage, t } from "../i18n";
 import type { Stage } from "../types";
-import { SocialLoginPanel } from "./SocialLoginPanel";
+import { SocialLoginPanel, type OAuthProviderAvailability, type OAuthReadinessStatus, type OAuthProvider } from "./SocialLoginPanel";
 
 const navItems: readonly { stage: Stage; label: string; icon: string }[] = [
   { stage: "thesis", label: "新建推演", icon: "✎" },
@@ -19,9 +19,12 @@ interface AppShellProps {
   readonly canNavigate?: (stage: Stage) => boolean;
   readonly children: ReactNode;
   readonly inspector?: ReactNode;
+  readonly oauthProviders?: readonly OAuthProviderAvailability[];
+  readonly oauthReadinessStatus?: OAuthReadinessStatus;
+  readonly onOAuthStart?: (provider: OAuthProvider) => void;
 }
 
-export function AppShell({ stage, onStage, canNavigate = (target) => target === "thesis" || target === "console", children, inspector }: AppShellProps) {
+export function AppShell({ stage, onStage, canNavigate = (target) => target === "thesis" || target === "console", children, inspector, oauthProviders, oauthReadinessStatus, onOAuthStart }: AppShellProps) {
   const { language, setLanguage } = useLanguage();
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">{t(language, "跳到主要内容")}</a>
@@ -32,7 +35,7 @@ export function AppShell({ stage, onStage, canNavigate = (target) => target === 
           <span className="rail-icon" aria-hidden="true">{item.icon}</span><span>{t(language, item.label)}</span>
         </button>)}
       </nav>
-      <SocialLoginPanel />
+      <SocialLoginPanel providers={oauthProviders} readinessStatus={oauthReadinessStatus} onStart={onOAuthStart} />
       <div className="rail-footer">
         <div className="rail-rule" />
         <span aria-hidden="true">♢</span>

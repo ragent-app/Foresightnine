@@ -18,6 +18,44 @@ class StrictContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+OAuthProviderName = Literal["google", "github"]
+
+
+class StrictOAuthModel(StrictContractModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
+class OAuthProviderReadiness(StrictOAuthModel):
+    """Public OAuth capability metadata; no provider credential is serialised."""
+
+    provider: OAuthProviderName
+    enabled: bool
+
+
+class OAuthProvidersResponse(StrictOAuthModel):
+    """The complete, fixed provider readiness surface for client consoles."""
+
+    providers: tuple[OAuthProviderReadiness, OAuthProviderReadiness]
+
+
+class OAuthStartRequest(StrictOAuthModel):
+    """The only client-controlled value accepted by an OAuth start request."""
+
+    return_uri: Annotated[str, Field(min_length=1, max_length=2048)]
+
+
+class OAuthAuthorizationResponse(StrictOAuthModel):
+    """Safe authorization parameters returned after a server-side PKCE transaction."""
+
+    provider: OAuthProviderName
+    client_id: str
+    redirect_uri: str
+    return_uri: str
+    state: str
+    code_challenge: str
+    code_challenge_method: Literal["S256"]
+
+
 _cache: dict[str, Any] = {}
 _building: set[str] = set()
 
