@@ -1,5 +1,19 @@
 # Progress
 
+## Reproducible local API-backed demo — 2026-08-30
+
+- Added `docs/runbooks/local-api-backed-demo.md` with the exact two-terminal
+  commands for running the Web client against the loopback API using the
+  deterministic mock provider. It explicitly keeps the API and Web bindings
+  on `127.0.0.1`, sets the matching development CORS origin, and preserves the
+  client-side Web Worker FM boundary.
+- Re-ran the documented path from the current checkout: API `/health` returned
+  `200` with `deterministic_mock` and `client-evidence-bundle`; the Web root
+  returned `200` and contained the React root mount; the CORS preflight for
+  `POST /v1/sessions` returned the configured loopback origin. Both processes
+  are currently left running for local inspection. This is reproducible local
+  QA, not public production availability.
+
 ## Production startup-mode preflight — 2026-08-30
 
 - Audited the production preflight against the actual API boot contract and
