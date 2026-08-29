@@ -1,5 +1,21 @@
 # Progress
 
+## Browser API transport regression — 2026-08-30
+
+- Browser QA found that the API client detached the native browser `fetch`
+  function before calling it. Chromium's receiver/brand check rejected that
+  call even though direct `window.fetch` and Node tests succeeded, leaving the
+  API-backed Web flow in an incorrect unavailable state.
+- The client now binds its default native fetcher to `globalThis`; injected
+  fetchers remain untouched. Transport failures are classified internally as
+  network versus response-validation failures, while the Web surface exposes
+  only safe, provider-free notices. A regression test covers the browser
+  receiver requirement.
+- Focused checks pass: API client `12/12`, Web `50/50`, and Web typecheck.
+  A clean in-app Browser tab at `http://127.0.0.1:5173/` now reaches the
+  server-backed structured challenge with no error/warning logs. This remains
+  loopback deterministic-mock evidence, not public production availability.
+
 ## Reproducible local API-backed demo — 2026-08-30
 
 - Added `docs/runbooks/local-api-backed-demo.md` with the exact two-terminal

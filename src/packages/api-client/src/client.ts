@@ -93,7 +93,12 @@ export class ApiError extends Error {
 }
 
 export class ApiTransportError extends Error {
-  public constructor() { super("API request could not be completed."); this.name = "ApiTransportError"; }
+  public readonly reason: "network" | "response";
+  public constructor(reason: "network" | "response" = "network") {
+    super("API request could not be completed.");
+    this.name = "ApiTransportError";
+    this.reason = reason;
+  }
 }
 
 export class ApiClient {
@@ -105,7 +110,10 @@ export class ApiClient {
     const normalized = normalizeApiBaseUrl(options.baseUrl);
     if (!normalized) throw new Error("A valid API base URL is required.");
     this.baseUrl = normalized;
-    this.fetcher = options.fetcher ?? fetch;
+    // Browser implementations may brand-check `this` when fetch is detached
+    // from Window. Keep injected test/deployment fetchers untouched, but bind
+    // the native global so the client behaves the same in Browser and Node.
+    this.fetcher = options.fetcher ?? fetch.bind(globalThis);
     this.idempotencyKeyFactory = options.idempotencyKeyFactory ?? newIdempotencyKey;
   }
 
@@ -125,7 +133,7 @@ export class ApiClient {
     try { response = await this.fetcher(this.url(path), requestInit); }
     catch (error) {
       if (isAbortError(error)) throw error;
-      throw new ApiTransportError();
+      throw new ApiTransportError("network");
     }
     if (!response.ok) {
       let parsed: ErrorResponse | null = null;
@@ -133,7 +141,7 @@ export class ApiClient {
       throw new ApiError(response.status, parsed, retryAfter(response.headers.get("Retry-After")));
     }
     try { return validateResponse<T>(await response.json(), contract); }
-    catch (error) { if (error instanceof ContractValidationError) throw error; throw new ApiTransportError(); }
+    catch (error) { if (error instanceof ContractValidationError) throw error; throw new ApiTransportError("response"); }
   }
 
   private post<T>(path: string, body: object, contract: Parameters<typeof validateResponse>[1], options: ApiRequestOptions = {}): Promise<T> {
@@ -196,7 +204,7 @@ export class ApiClient {
     try { response = await this.fetcher(this.url(`v1/operations/${encodeURIComponent(operationId)}/events`), { method: "GET", headers, credentials: "omit", ...(options.signal ? { signal: options.signal } : {}) }); }
     catch (error) {
       if (isAbortError(error)) throw error;
-      throw new ApiTransportError();
+      throw new ApiTransportError("network");
     }
     if (!response.ok) {
       let parsed: ErrorResponse | null = null;
@@ -212,7 +220,7 @@ export class ApiClient {
     try { text = await response.text(); }
     catch (error) {
       if (isAbortError(error)) throw error;
-      throw new ApiTransportError();
+      throw new ApiTransportError("response");
     }
     throwIfAborted(options.signal);
     yield* parseSseText(text);

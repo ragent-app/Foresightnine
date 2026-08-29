@@ -63,6 +63,22 @@ test("POST sends generated Idempotency-Key and JSON request body", async () => {
   assert.equal(new Headers(captured.init.headers).get("Content-Type"), "application/json");
 });
 
+test("default fetch is called with the global receiver for browser brand checks", async () => {
+  const originalFetch = globalThis.fetch;
+  let receiver;
+  globalThis.fetch = function (input, init) {
+    receiver = this;
+    return Promise.resolve(jsonResponse(sessionResponse(), 201));
+  };
+  try {
+    const client = new ApiClient({ baseUrl: "https://api.example.test", idempotencyKeyFactory: () => "k".repeat(16) });
+    await client.createSession();
+    assert.equal(receiver, globalThis);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("runtime response validation rejects malformed generated-contract payloads", async () => {
   const malformed = structuredClone(sessionResponse());
   malformed.session.content_hash = "not-a-sha256";

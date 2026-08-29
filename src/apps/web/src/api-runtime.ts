@@ -1,4 +1,4 @@
-import { ApiClient, ApiError, apiModeFor } from "@foresightnine/api-client";
+import { ApiClient, ApiError, ApiTransportError, apiModeFor } from "@foresightnine/api-client";
 import type { ChallengeRecord, Worldline, WorldlineBundle } from "@foresightnine/contracts";
 import type { BranchView, ChallengeStatus, Language, RubricView, TranscriptTurn } from "./types";
 import { configuredApiBaseUrl } from "./runtime-config";
@@ -34,6 +34,9 @@ export function apiErrorNotice(error: unknown, language: Language): string {
     if (error.retryAfter !== undefined) return language === "en" ? `API is rate limited; retry after ${error.retryAfter}s.` : `API 触发限流，请在 ${error.retryAfter} 秒后重试。`;
     return language === "en" ? "API request was rejected. No provider output was exposed." : "API 请求被拒绝；未展示模型供应商原始输出。";
   }
+  if (error instanceof Error && error.name === "ContractValidationError") return language === "en" ? "API returned a response that failed the client contract check." : "API 返回结果未通过客户端合同校验。";
+  if (error instanceof ApiTransportError && error.reason === "response") return language === "en" ? "The API response failed a safe client-side integrity check." : "API 响应未通过客户端安全完整性检查。";
+  if (error instanceof ApiTransportError) return language === "en" ? "The browser could not complete the API transport request." : "浏览器未能完成 API 传输请求。";
   return language === "en" ? "API is unavailable; use the explicitly labelled offline/mock mode." : "API 暂不可用；请使用明确标注的离线/模拟模式。";
 }
 
