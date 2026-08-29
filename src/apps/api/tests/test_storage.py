@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from app.models import SourceRef
 from app.storage import (
     DOCUMENT_TABLE,
     InMemoryDocumentRepository,
@@ -16,6 +17,7 @@ from app.storage import (
     StorageMode,
     StorageRuntimeError,
     build_repository,
+    pydantic_json_dumper,
 )
 
 
@@ -27,6 +29,54 @@ def test_development_defaults_to_deterministic_memory_repository() -> None:
     assert isinstance(repository, InMemoryDocumentRepository)
     repository["session-1"] = {"status": "DRAFT"}
     assert repository.get("session-1") == {"status": "DRAFT"}
+
+
+def test_pydantic_json_dumper_omits_optional_nulls_for_strict_round_trip() -> None:
+    reference = SourceRef(ref_id="source:session", source_type="model_inference", label="Deterministic session")
+
+    dumped = pydantic_json_dumper(reference)
+
+    assert dumped == {
+        "ref_id": "source:session",
+        "source_type": "model_inference",
+        "label": "Deterministic session",
+    }
+    assert SourceRef.model_validate(dumped) == reference
+
+
+def test_postgres_repository_default_dumper_and_legacy_null_read_compatibility() -> None:
+    reference = SourceRef(ref_id="source:session", source_type="model_inference", label="Deterministic session")
+    connection = FakeConnection(
+        (1,),
+        ({"ref_id": "source:session", "source_type": "model_inference", "label": "Deterministic session", "url": None}, 1),
+    )
+    repository = PostgresDocumentRepository(
+        "postgresql://db.example.test/app",
+        "sessions",
+        value_loader=SourceRef.model_validate,
+        connection_factory=lambda _dsn: connection,
+    )
+
+    assert repository.put("source:session", reference) == 1
+    assert repository["source:session"] == reference
+
+    put_document = connection.calls[0][1][2]
+    assert put_document == {
+        "ref_id": "source:session",
+        "source_type": "model_inference",
+        "label": "Deterministic session",
+    }
+
+
+def test_pydantic_json_dumper_retains_present_optional_url() -> None:
+    reference = SourceRef(
+        ref_id="source:session",
+        source_type="public",
+        label="Public source",
+        url="https://example.com/source",
+    )
+
+    assert pydantic_json_dumper(reference)["url"] == "https://example.com/source"
 
 
 @pytest.mark.parametrize(

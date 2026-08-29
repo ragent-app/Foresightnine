@@ -134,10 +134,36 @@ def pydantic_json_dumper(value: Any) -> Any:
     """Serialize Pydantic-like values using their JSON-compatible model dump."""
     model_dump = getattr(value, "model_dump", None)
     if callable(model_dump):
-        return model_dump(mode="json")
+        # Optional JSON-Schema properties are represented by a missing key,
+        # not JSON null.  Omitting unset values also keeps the persisted
+        # document loadable by the strict generated Pydantic models: an
+        # optional HttpUrl field has a default of None but does not accept an
+        # explicit None when validating a stored JSON object.
+        return model_dump(mode="json", exclude_none=True)
     legacy_dump = getattr(value, "dict", None)
     if callable(legacy_dump):
         return legacy_dump()
+    return value
+
+
+def _drop_legacy_null_fields(value: Any) -> Any:
+    """Remove legacy null object fields that the v1 schema represents as absent.
+
+    Older persisted Pydantic dumps included ``None`` for optional properties
+    such as ``SourceRef.url``.  The canonical v1 schema has no nullable
+    properties, so dropping null-valued object keys is a safe compatibility
+    normalization before strict model validation.  Null list members are kept
+    so malformed data still fails closed instead of silently changing list
+    cardinality.
+    """
+    if isinstance(value, Mapping):
+        return {
+            key: _drop_legacy_null_fields(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    if isinstance(value, list):
+        return [_drop_legacy_null_fields(item) for item in value]
     return value
 
 
@@ -333,8 +359,8 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
     def _document_from_row(row: Any) -> Any:
         value = row[0] if not isinstance(row, Mapping) else row["document"]
         if isinstance(value, str):
-            return json.loads(value)
-        return value
+            value = json.loads(value)
+        return _drop_legacy_null_fields(value)
 
     def __getitem__(self, key: str) -> ValueT:
         _validate_key(key)

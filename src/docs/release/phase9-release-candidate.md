@@ -46,7 +46,7 @@ The candidate is intentionally composed of offline/mock and debug artifacts. The
 
 - Rerunnable command: `uv run --project apps/api pytest apps/api/tests`.
 - The default path is `DeterministicMockLlmProvider` and the corresponding deterministic worldline/probability providers. It is schema-validated offline research material; it does not call a live GLM/OpenCode provider, native search, or licensed market-data service.
-- The original Phase 9 candidate full-suite result was 124 API tests passed, with the documented Starlette/httpx deprecation warning. The later post-Phase 9 production-preparation working-tree regression is 128 API tests passed and is recorded in `docs/progress.md`; it does not retroactively turn this mock/debug candidate into a production release. The request-level smoke evidence is retained in `docs/qa/api/phase9-mock-smoke.md`; it covers health, OpenAPI, strict validation, session creation, and challenge creation without making a live-provider claim.
+- The original Phase 9 candidate full-suite result was 124 API tests passed, with the documented Starlette/httpx deprecation warning. Later production-preparation regressions are retained in `docs/progress.md`; the current storage-compatibility regression is 196 API tests passed, 1 skipped, with the same warning. These results do not turn this mock/debug candidate into a production release. The request-level smoke evidence is retained in `docs/qa/api/phase9-mock-smoke.md`; it covers health, OpenAPI, strict validation, session creation, and challenge creation without making a live-provider claim.
 - The mock-run implementation and tests are retained at `apps/api/README.md`, `apps/api/tests/test_phase3_providers.py`, and `apps/api/tests/test_phase4.py`.
 
 ## Existing implementation evidence included in this RC
@@ -83,7 +83,7 @@ None of these gates is satisfied merely by the Web static bundle, the Android de
 ## Container verification boundary
 
 - `docker compose -f infra/docker/compose.yaml config --quiet` passed after the Dockerfile and Compose configuration corrections.
-- The attempted API image build was not verified because the local Docker Desktop Linux engine/daemon was unavailable. No image startup, database/Redis connectivity, or container health claim is made until a Docker-enabled host reruns the build and staged smoke checks.
+- On 2026-08-30, `docker compose -f infra/docker/compose.yaml up -d --build api` rebuilt the API image successfully. The complete development Compose stack then reported API `200` from `/health`, PostgreSQL accepting connections, and Redis `PONG`; the containers were stopped after the smoke and named volumes were retained. A container request-level regression also advanced a legacy PostgreSQL row containing `source_refs[].url=null` through challenge, evidence, confirmation, and worldline generation. This is development/mock runtime evidence only; it does not satisfy live-provider, licensed-data, signed-artifact, or public-traffic gates.
 
 ## Verifier
 

@@ -9,6 +9,19 @@
   with the root mount present. Both tracked local sessions were stopped after
   the check and both ports were confirmed closed. This proves local
   reachability only, not public deployment or live-provider readiness.
+- Containerized PostgreSQL smoke initially exposed a real persistence bug:
+  the pre-fix dumper stored optional Pydantic fields such as
+  `source_refs[].url` as `null`, and strict reload then caused
+  `POST /v1/challenges` to return `500`. The dumper now omits `None`; the
+  loader performs a narrow legacy compatibility normalization for null-valued
+  object fields while preserving null list members so malformed data still
+  fails closed. Storage tests cover default repository wiring, old null rows,
+  and present URLs. After rebuilding the API image, an old named-volume
+  session was successfully advanced through challenge, evidence, confirmation
+  and worldline generation: 3 paths (`weak`, `main`, `strong`) and 3
+  probability assessments. Sol's fresh review returned `ship` with no P0/P1/P2
+  and authorized submission. This is containerized development/mock evidence,
+  not public production readiness.
 - Rebuilt the Web static bundle after the search-configuration parity change.
   The current `apps/web/dist` hashes are `fm.worker-C7HxMD7b.js`
   `9C2BD44FEA8E04FB35CD42A0CB6A551881A5BBB9C3A42C699C319634E3EC2DA6`,
@@ -47,9 +60,10 @@
   `fa22049` and pushed to `origin/master`; this is still QA acceptance, not
   production approval. No plan, governance file, or read-only source directory
   was changed.
-- After the manifest hardening, the full regression is green: `50` Web tests,
+- After the manifest hardening and storage compatibility fix, the full
+  regression is green: `50` Web tests,
   `44` Android tests, `20` FM tests, `9` domain tests, `11` API-client tests,
-  `2` asset-registry tests, and `193` API tests with `1` skipped and the
+  `2` asset-registry tests, and `196` API tests with `1` skipped and the
   existing Starlette/httpx deprecation warning. Typecheck, generated-contract
   verification, 9WL audit, production-preflight unit tests, `pnpm audit
   --prod`, `git diff --check`, and the release-candidate verifier also pass.
