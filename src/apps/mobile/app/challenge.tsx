@@ -5,18 +5,22 @@ import { useMobileStore } from "../src/app-store";
 import { canConfirmNormally, canConfirmReserved, canUseChallengeRoute } from "../src/validation";
 import { t } from "../src/i18n";
 import { BottomNav, Button, Card, Header, Screen, StageRail, Status, styles } from "../src/ui";
+import { mobileApiMode } from "../src/api-runtime";
 
 export default function ChallengeScreen(): React.JSX.Element {
   const { state, cancelChallenge, retryChallenge, setChallengeFailure, reply, setUnresolvedIssuesAcknowledged, setReservationNote, confirm } = useMobileStore();
   const [message, setMessage] = useState("");
   const canConfirm = canConfirmNormally(state);
   const canReserve = canConfirmReserved(state);
-  if (!canUseChallengeRoute(state)) return <Screen><Header back title={t(state.language, "challenge")} subtitle={t(state.language, "structuredChallenge")} /><StageRail active={1} /><Status tone="warning">{t(state.language, "confirmationRequired")}</Status><Button onPress={() => router.replace("/")} label={t(state.language, "start")}>{t(state.language, "start")}</Button><BottomNav /></Screen>;
+  const apiMode = mobileApiMode() === "api";
+  const challengeSubtitle = apiMode ? (state.language === "en" ? "Structured counterargument · server API" : "结构化反方审查 · 服务端 API") : t(state.language, "structuredChallenge");
+  const providerNotice = apiMode ? (state.language === "en" ? "Validated API output; provider secrets remain server-side." : "已校验的 API 输出；供应商密钥仅保留在服务端。") : t(state.language, "noLiveProvider");
+  if (!canUseChallengeRoute(state)) return <Screen><Header back title={t(state.language, "challenge")} subtitle={challengeSubtitle} /><StageRail active={1} /><Status tone="warning">{t(state.language, "confirmationRequired")}</Status><Button onPress={() => router.replace("/")} label={t(state.language, "start")}>{t(state.language, "start")}</Button><BottomNav /></Screen>;
   const failure = state.challengeFailure ? `${t(state.language, "recoveryState")}: ${state.challengeFailure.replace("_", " ")}` : null;
-  const status = state.challengeStatus === "streaming" ? t(state.language, "streaming") : t(state.language, `status${state.challengeStatus[0]!.toUpperCase()}${state.challengeStatus.slice(1)}` as "statusIdle" | "statusComplete" | "statusCancelled" | "statusFailed");
-  return <Screen><Header back title={t(state.language, "challenge")} subtitle={t(state.language, "structuredChallenge")} /><StageRail active={1} />
+  const status = state.challengeStatus === "streaming" ? (apiMode ? (state.language === "en" ? "Server challenge response is streaming." : "服务端反方审查正在返回。") : t(state.language, "streaming")) : t(state.language, `status${state.challengeStatus[0]!.toUpperCase()}${state.challengeStatus.slice(1)}` as "statusIdle" | "statusComplete" | "statusCancelled" | "statusFailed");
+  return <Screen><Header back title={t(state.language, "challenge")} subtitle={challengeSubtitle} /><StageRail active={1} />
     <Status tone={state.challengeStatus === "failed" ? "warning" : "neutral"}>{status}</Status>
-    <Card tone="warning"><Text style={styles.body}><Text style={styles.strong}>{t(state.language, "challenged")}:</Text> {t(state.language, "challengedBody")}</Text><Text style={styles.tiny}>{t(state.language, "noLiveProvider")}</Text></Card>
+    <Card tone="warning"><Text style={styles.body}><Text style={styles.strong}>{t(state.language, "challenged")}:</Text> {t(state.language, "challengedBody")}</Text><Text style={styles.tiny}>{state.exportNotice || providerNotice}</Text></Card>
     <Card>{state.challengeTurns.map((turn) => <View key={turn.id} style={styles.listRow}><Text style={styles.tiny}>{turn.author === "challenger" ? t(state.language, "challenger").toUpperCase() : turn.author.toUpperCase()}</Text><Text style={styles.body}>{turn.body}</Text></View>)}</Card>
     <Card><Text style={styles.heading}>{t(state.language, "rubric")}</Text>{state.rubric.map((item) => <View key={item.id} style={styles.listRow}><Text style={styles.strong}>{item.label} · {item.score}/4{item.critical ? ` · ${t(state.language, "critical")}` : ""}</Text><Text style={styles.muted}>{item.rationale}</Text></View>)}</Card>
     <TextInput style={[styles.input, { minHeight: 88 }]} accessibilityLabel={t(state.language, "challengeResponse")} multiline value={message} onChangeText={setMessage} placeholder={t(state.language, "challengePlaceholder")} placeholderTextColor="#74675d" /><View style={styles.split}><View style={styles.flex}><Button variant="secondary" onPress={cancelChallenge} label={t(state.language, "cancel")}>{t(state.language, "cancel")}</Button></View><View style={styles.flex}><Button onPress={() => { if (message.trim()) reply(message.trim()); }} disabled={!message.trim()} label={t(state.language, "submitResponse")}>{t(state.language, "submitResponse")}</Button></View></View>

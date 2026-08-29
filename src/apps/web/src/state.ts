@@ -68,6 +68,10 @@ export const initialState: AppState = {
   drawdownVisible: true,
   exportNotice: "",
   freshness: { runtimeAsOf: DEFAULT_RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS },
+  apiSessionId: null,
+  apiChallengeId: null,
+  apiError: "",
+  serverBranches: null,
 };
 
 function challengeTurnsFor(viewpoint: string, language: AppState["language"]): readonly [TranscriptTurn, TranscriptTurn] {
@@ -127,7 +131,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       const viewpoint = action.viewpoint ?? state.viewpoint;
       if (viewpoint.trim().length === 0 || parseCapital(state.capital) <= 0) return { ...state, stage: safeStageFor(state) };
       const fresh = resetWorkflow(state, viewpoint);
-      return { ...fresh, stage: "challenge", challengeStatus: "streaming", challengeTurns: [...challengeTurnsFor(viewpoint, state.language)] };
+      return { ...fresh, stage: "challenge", challengeStatus: "streaming", challengeTurns: action.server ? [{ id: "api-user-pending", author: "user", time: "现在", body: viewpoint }] : [...challengeTurnsFor(viewpoint, state.language)] };
     }
     case "set_reply_draft": return { ...state, replyDraft: action.draft };
     case "submit_reply": return action.body.trim().length === 0 || state.stage !== "challenge" || !canSubmitReply(state.challengeStatus, state.challengeTurns) ? state : { ...state, replyDraft: "", challengeStatus: "complete", fmStep: "反方审查完成", rubric: updateRubric(state.rubric, { [rubricLabel(state.language, "用户确认")]: { score: 3, rationale: state.language === "en" ? "The user answered the counterargument; a confirmation choice is still required." : "用户已回答反方问题，仍需选择确认方式。" } }), challengeTurns: [...state.challengeTurns, { id: `user-reply-${state.challengeTurns.length + 1}`, author: "user", time: "现在", body: action.body.trim() }] };
@@ -153,6 +157,11 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "toggle_drawdown": return { ...state, drawdownVisible: !state.drawdownVisible };
     case "export_notice": return { ...state, exportNotice: action.notice };
     case "set_freshness": return { ...state, freshness: action.freshness };
+    case "api_session_ready": return { ...state, apiSessionId: action.sessionId, apiError: "" };
+    case "api_challenge_update": return { ...state, apiChallengeId: action.challengeId, challengeTurns: action.turns, rubric: action.rubric, challengeStatus: action.status, apiError: "", fmStep: action.status === "complete" ? "反方审查完成" : state.fmStep };
+    case "api_worldlines_ready": return { ...state, serverBranches: action.branches, apiError: "" };
+    case "api_error": return { ...state, apiError: action.notice, ...(state.stage === "challenge" && state.challengeStatus === "streaming" ? { challengeStatus: "failed" as const } : {}) };
+    case "api_cancel": return { ...state, challengeStatus: "cancelled", apiError: "" };
     case "reset": return { ...initialState, language: state.language, rubric: rubricFor(state.language) };
   }
   return state;

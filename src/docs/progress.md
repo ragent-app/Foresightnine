@@ -1,5 +1,48 @@
 # Progress
 
+## Shared API client and dual-runtime API wiring — 2026-08-29
+
+- Added `packages/api-client` as the typed Web/Expo transport boundary. It
+  validates generated response shapes at runtime, rejects unknown fields per
+  SSE union variant, sends POST idempotency keys, propagates `AbortSignal`,
+  URL-encodes path identifiers, preserves safe status/retry-after diagnostics,
+  redacts provider details, and validates `operation_id:sequence` SSE replay
+  IDs with `Last-Event-ID`.
+- The client now uses an injected secure idempotency-key source: Web uses the
+  platform Web Crypto source, while Expo injects `expo-crypto` random bytes.
+  There is no timestamp/counter fallback. Server-side provider credentials
+  remain outside both bundles.
+- Web reads `VITE_FORESIGHTNINE_API_BASE_URL`; Android reads
+  `EXPO_PUBLIC_FORESIGHTNINE_API_BASE_URL` (the legacy
+  `EXPO_PUBLIC_API_BASE_URL` name remains a compatibility alias). Without a
+  valid URL both clients visibly use the deterministic offline/mock provider.
+  With a URL, challenge, evidence, confirmation, and worldline retrieval use
+  the API client; a failed API worldline request does not fall back to mock
+  branches. FM remains a client-local computation path.
+- A direct typed-client run against the local FastAPI deterministic mock
+  completed session → challenge → reply → reservation confirmation →
+  worldlines, returning three worldlines and three matching probability
+  assessments. Worldline-to-assessment mismatches now fail closed rather than
+  selecting the first assessment. Web evidence timestamps are generated at
+  capture time rather than hardcoded.
+- Terra's P1 hardening was verified in the primary session: API-client
+  TypeScript build and 11 tests, Web typecheck and 49 tests, Mobile typecheck
+  and 41 tests, root Vitest (90 tests), Web production build, and
+  `git diff --check` all pass.
+- Android API-36 emulator evidence was refreshed with UI-tree-derived actions.
+  The local API-backed flow now demonstrates server challenge output, a
+  completed response, reservation confirmation, and a three-branch worldline
+  screen in `docs/qa/android/phase-api-mode-worldline-success.{png,xml}`.
+  This uses the deterministic mock provider, not a live GLM/DeepSeek request.
+  The emulator crash buffer is empty. The debug APK remains a QA artifact and
+  is not a signed release artifact.
+- Governance, immutable FM reference hashes, 9-worldline fixture audit, and
+  release-candidate artifact verification pass. Production preflight remains
+  intentionally fail-closed: live provider/search secrets, production
+  Postgres/Redis/CAPTCHA/HTTPS configuration, Android release signing, and an
+  external approval manifest are still missing. No plan or read-only source
+  directory was modified.
+
 ## Android API-36 native regression evidence — 2026-08-29
 
 - Used the Android emulator QA workflow against `emulator-5554` (Google Play

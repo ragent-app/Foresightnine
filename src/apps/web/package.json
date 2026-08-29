@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@foresightnine/api-client": "workspace:*",
     "@foresightnine/contracts": "workspace:*",
     "@foresightnine/design-system": "workspace:*",
     "@foresightnine/domain": "workspace:*",

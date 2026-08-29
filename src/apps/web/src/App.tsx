@@ -15,6 +15,7 @@ import { allocationRows, canEnterStage, canStartFm, initialState, reducer, safeS
 import { downloadText, csvExport, navExport, researchExport } from "./exports";
 import { currencySymbol, parseCapital, validateSearchEvidence } from "./validation";
 import { runFmInWorker } from "./fm-client";
+import { apiErrorNotice, challengeToUi, createWebApiClient, webApiMode, worldlineBundleToBranches } from "./api-runtime";
 import type { Currency, EvidenceDraft, EvidenceView, Language, Stage } from "./types";
 
 const DRAFT_KEY = "foresightnine.web.draft.v1";
@@ -34,12 +35,19 @@ export function createGenerationGuard(): GenerationGuard {
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [draftHydrated, setDraftHydrated] = useState(false);
+  const apiClient = useMemo(() => createWebApiClient(), []);
+  const apiAbort = useRef<AbortController | null>(null);
+  const apiMode = webApiMode();
+  const apiChallengeId = state.apiChallengeId;
   const challengeTimer = useRef<number | null>(null);
   const fmAbort = useRef<AbortController | null>(null);
   const asyncGeneration = useRef<GenerationGuard>(createGenerationGuard());
   const capital = parseCapital(state.capital);
   const rows = useMemo(() => allocationRows(state.fmResult, capital, state.currency, state.portfolioMode, state.freshness), [state.fmResult, capital, state.currency, state.portfolioMode, state.freshness]);
-  const viewpointBranches = useMemo(() => makeBranches(state.viewpoint), [state.viewpoint]);
+  const viewpointBranches = useMemo(() => {
+    if (state.serverBranches) return state.serverBranches;
+    return apiMode === "api" ? [] : makeBranches(state.viewpoint);
+  }, [apiMode, state.serverBranches, state.viewpoint]);
 
   useEffect(() => {
     try {
@@ -65,6 +73,8 @@ export function App() {
     challengeTimer.current = null;
     fmAbort.current?.abort();
     fmAbort.current = null;
+    apiAbort.current?.abort();
+    apiAbort.current = null;
     return asyncGeneration.current.invalidate();
   }, []);
 
@@ -72,19 +82,49 @@ export function App() {
 
   const startChallenge = useCallback(() => {
     const token = invalidateAsync();
-    dispatch({ type: "start_challenge" });
-    challengeTimer.current = window.setTimeout(() => { if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "challenge_complete" }); }, 900);
-  }, [invalidateAsync]);
-  const cancelChallenge = useCallback(() => { invalidateAsync(); dispatch({ type: "challenge_cancel" }); }, [invalidateAsync]);
-  const retryChallenge = useCallback(() => { const token = invalidateAsync(); dispatch({ type: "challenge_recover" }); challengeTimer.current = window.setTimeout(() => { if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "challenge_complete" }); }, 700); }, [invalidateAsync]);
+    dispatch({ type: "start_challenge", server: Boolean(apiClient) });
+    if (!apiClient) {
+      challengeTimer.current = window.setTimeout(() => { if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "challenge_complete" }); }, 900);
+      return;
+    }
+    const controller = new AbortController();
+    apiAbort.current = controller;
+    void (async () => {
+      try {
+        const session = await apiClient.createSession({ client_locale: state.language === "en" ? "en-US" : "zh-CN" }, { signal: controller.signal });
+        if (!asyncGeneration.current.isCurrent(token)) return;
+        dispatch({ type: "api_session_ready", sessionId: session.session.session_id });
+        const challenge = await apiClient.createChallenge({ session_id: session.session.session_id, thesis: state.viewpoint.trim(), capital, base_currency: state.currency, user_private_evidence_claims: false }, { signal: controller.signal });
+        if (!asyncGeneration.current.isCurrent(token)) return;
+        const update = challengeToUi(challenge.challenge, state.viewpoint, state.language, "initial");
+        dispatch({ type: "api_challenge_update", ...update });
+      } catch (error) {
+        if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "api_error", notice: apiErrorNotice(error, state.language) });
+      }
+    })();
+  }, [apiClient, capital, invalidateAsync, state.currency, state.language, state.viewpoint]);
+  const cancelChallenge = useCallback(() => { invalidateAsync(); dispatch({ type: apiClient ? "api_cancel" : "challenge_cancel" }); }, [apiClient, invalidateAsync]);
+  const retryChallenge = useCallback(() => { if (apiClient) { startChallenge(); return; } const token = invalidateAsync(); dispatch({ type: "challenge_recover" }); challengeTimer.current = window.setTimeout(() => { if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "challenge_complete" }); }, 700); }, [apiClient, invalidateAsync, startChallenge]);
   const recoverChallenge = useCallback(() => { retryChallenge(); }, [retryChallenge]);
-  const submitReply = useCallback((body: string) => { dispatch({ type: "submit_reply", body }); }, []);
+  const submitReply = useCallback((body: string) => {
+    const text = body.trim();
+    if (!apiClient || !apiChallengeId) { dispatch({ type: "submit_reply", body }); return; }
+    const token = asyncGeneration.current.current();
+    const controller = new AbortController();
+    apiAbort.current?.abort();
+    apiAbort.current = controller;
+    void apiClient.submitChallengeReply(apiChallengeId, { message: text }, { signal: controller.signal }).then((response) => {
+      if (!asyncGeneration.current.isCurrent(token)) return;
+      const update = challengeToUi(response.challenge, state.viewpoint, state.language, "reply", text);
+      dispatch({ type: "api_challenge_update", ...update });
+    }).catch((error) => { if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "api_error", notice: apiErrorNotice(error, state.language) }); });
+  }, [apiChallengeId, apiClient, state.language, state.viewpoint]);
   const addEvidence = useCallback((draft: EvidenceDraft) => {
     if (Object.keys(validateSearchEvidence(draft)).length > 0) return;
     const searchProvider = draft.search_provider?.trim();
     const searchResultHash = draft.search_result_hash?.trim();
     if (Boolean(searchProvider) !== Boolean(searchResultHash) || (searchProvider && (searchProvider.length > 100 || !searchResultHash || !/^[a-f0-9]{64}$/.test(searchResultHash)))) return;
-    const retrievedAt = "2026-08-10T00:00:00Z";
+    const retrievedAt = new Date().toISOString();
     const sourceType: EvidenceView["source_type"] = draft.grade === "A" ? "primary" : draft.grade === "B" ? "reliable_secondary" : draft.grade === "C" ? "commentary" : draft.grade === "D" ? "user_private" : "model_inference";
     const evidenceId = `evidence-user-${state.evidence.length + 1}`;
     const challengeId = "challenge-web-demo";
@@ -114,8 +154,13 @@ export function App() {
       sourceLabel: publisher,
       ...candidateProvenance,
     };
-    dispatch({ type: "add_evidence", evidence });
-  }, [state.evidence.length]);
+    if (!apiClient || !apiChallengeId) { dispatch({ type: "add_evidence", evidence }); return; }
+    const request: Parameters<typeof apiClient.submitEvidence>[1] = { title, retrieved_at: retrievedAt, excerpt, user_note: userNote, content_hash: evidence.content_hash, ...(url ? { url } : {}), ...(publisher ? { publisher } : {}), ...(publishedAt ? { published_at: publishedAt } : {}), ...candidateProvenance };
+    const controller = new AbortController();
+    apiAbort.current?.abort();
+    apiAbort.current = controller;
+    void apiClient.submitEvidence(apiChallengeId, request, { signal: controller.signal }).then(() => dispatch({ type: "add_evidence", evidence })).catch((error) => dispatch({ type: "api_error", notice: apiErrorNotice(error, state.language) }));
+  }, [apiChallengeId, apiClient, state.evidence.length, state.language]);
 
   const computeFm = useCallback(() => {
     if (!canStartFm(state)) return;
@@ -127,6 +172,18 @@ export function App() {
   const cancelFm = useCallback(() => { invalidateAsync(); dispatch({ type: "fm_cancel" }); }, [invalidateAsync]);
   const setViewpoint = useCallback((viewpoint: string) => { if (viewpoint !== state.viewpoint) invalidateAsync(); dispatch({ type: "set_viewpoint", viewpoint }); }, [invalidateAsync, state.viewpoint]);
   const reset = useCallback(() => { invalidateAsync(); dispatch({ type: "reset" }); }, [invalidateAsync]);
+  const confirm = useCallback((confirmation: "confirmed" | "reserved") => {
+    if (!apiClient || !apiChallengeId) { dispatch({ type: "confirm", confirmation }); return; }
+    const controller = new AbortController();
+    apiAbort.current?.abort();
+    apiAbort.current = controller;
+    void apiClient.confirmChallenge(apiChallengeId, { command: confirmation === "reserved" ? "CONFIRM_WITH_RESERVATIONS" : "CONFIRM", unresolved_issues_acknowledged: state.unresolvedIssuesAcknowledged, ...(confirmation === "reserved" ? { reservation_note: state.reservationNote } : {}) }, { signal: controller.signal }).then(() => apiClient.createWorldlines({ challenge_id: apiChallengeId, horizon_end: "2028-08-31" }, { signal: controller.signal })).then((response) => {
+      const branches = worldlineBundleToBranches(response.bundle, state.language);
+      if (branches.length !== 3) throw new Error("API worldline data is unavailable.");
+      dispatch({ type: "confirm", confirmation });
+      dispatch({ type: "api_worldlines_ready", branches });
+    }).catch((error) => dispatch({ type: "api_error", notice: apiErrorNotice(error, state.language) }));
+  }, [apiChallengeId, apiClient, state.language, state.reservationNote, state.unresolvedIssuesAcknowledged]);
   const navigateTo = useCallback((stage: Stage) => { if (!canEnterStage(state, stage)) { dispatch({ type: "set_stage", stage }); return; } if (stage !== state.stage) invalidateAsync(); dispatch({ type: "set_stage", stage }); }, [invalidateAsync, state]);
 
   const exportJson = useCallback(() => { downloadText("foresightnine-research.json", JSON.stringify(researchExport(state, viewpointBranches, rows), null, 2), "application/json;charset=utf-8"); dispatch({ type: "export_notice", notice: "JSON 已导出；当前观点、挑战回复和证据均保留。" }); }, [rows, state, viewpointBranches]);
@@ -135,17 +192,17 @@ export function App() {
   const methodsExport = useCallback(() => { downloadText("foresightnine-methods.txt", state.language === "en" ? "ForesightNine methodology\n\nProbabilities are revisable judgments, not facts.\nScenario simulation is not a forecast or return promise.\n" : "ForesightNine 方法说明\n\n概率是可修订判断，不是事实。\n情景模拟，不是预测或收益承诺。\n", "text/plain;charset=utf-8"); dispatch({ type: "export_notice", notice: "方法说明已导出。" }); }, [state.language]);
 
   const visibleStage = safeStageFor(state);
-  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset });
+  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset });
   const inspector = renderInspector(visibleStage, state, rows, () => dispatch({ type: "toggle_drawdown" }), state.language);
-  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector}><div className="top-status"><span><StatusDot tone="sage" /> {t(state.language, "本地草稿已启用")}</span><span>{t(state.language, "数据截止 2026-08-09")}</span>{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" /> : null}</AppShell></LanguageProvider>;
+  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{t(state.language, "数据截止 2026-08-09")}</span>{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" /> : null}</AppShell></LanguageProvider>;
 }
 
-interface Handlers { readonly startChallenge: () => void; readonly cancelChallenge: () => void; readonly retryChallenge: () => void; readonly recoverChallenge: () => void; readonly addEvidence: (draft: EvidenceDraft) => void; readonly submitReply: (body: string) => void; readonly computeFm: () => void; readonly cancelFm: () => void; readonly exportJson: () => void; readonly exportCsv: () => void; readonly exportPath: () => void; readonly methodsExport: () => void; readonly rows: ReturnType<typeof allocationRows>; readonly viewpointBranches: ReturnType<typeof makeBranches>; readonly setViewpoint: (viewpoint: string) => void; readonly reset: () => void; }
+interface Handlers { readonly startChallenge: () => void; readonly cancelChallenge: () => void; readonly retryChallenge: () => void; readonly recoverChallenge: () => void; readonly addEvidence: (draft: EvidenceDraft) => void; readonly submitReply: (body: string) => void; readonly confirm: (confirmation: "confirmed" | "reserved") => void; readonly computeFm: () => void; readonly cancelFm: () => void; readonly exportJson: () => void; readonly exportCsv: () => void; readonly exportPath: () => void; readonly methodsExport: () => void; readonly rows: ReturnType<typeof allocationRows>; readonly viewpointBranches: ReturnType<typeof makeBranches>; readonly setViewpoint: (viewpoint: string) => void; readonly reset: () => void; }
 
 function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: React.Dispatch<Parameters<typeof reducer>[1]>, handlers: Handlers) {
   switch (stage) {
     case "thesis": return <ThesisInput viewpoint={state.viewpoint} capital={state.capital} currency={state.currency} draftRestored={state.draftRestored} onViewpoint={handlers.setViewpoint} onCapital={(capital) => dispatch({ type: "set_capital", capital })} onCurrency={(currency) => dispatch({ type: "set_currency", currency: currency as Currency })} onStart={handlers.startChallenge} onReset={handlers.reset} />;
-    case "challenge": return <ChallengePanel status={state.challengeStatus} turns={state.challengeTurns} replyDraft={state.replyDraft} evidence={state.evidence} rubric={state.rubric} unresolvedIssuesAcknowledged={state.unresolvedIssuesAcknowledged} reservationNote={state.reservationNote} onStart={handlers.startChallenge} onCancel={handlers.cancelChallenge} onRetry={handlers.retryChallenge} onRecover={handlers.recoverChallenge} onReplyDraft={(draft) => dispatch({ type: "set_reply_draft", draft })} onSubmitReply={handlers.submitReply} onEvidence={handlers.addEvidence} onUnresolvedIssuesAcknowledged={(acknowledged) => dispatch({ type: "set_unresolved_issues_acknowledged", acknowledged })} onReservationNote={(note) => dispatch({ type: "set_reservation_note", note })} onConfirm={(confirmation) => dispatch({ type: "confirm", confirmation })} />;
+    case "challenge": return <ChallengePanel status={state.challengeStatus} turns={state.challengeTurns} replyDraft={state.replyDraft} evidence={state.evidence} rubric={state.rubric} unresolvedIssuesAcknowledged={state.unresolvedIssuesAcknowledged} reservationNote={state.reservationNote} onStart={handlers.startChallenge} onCancel={handlers.cancelChallenge} onRetry={handlers.retryChallenge} onRecover={handlers.recoverChallenge} onReplyDraft={(draft) => dispatch({ type: "set_reply_draft", draft })} onSubmitReply={handlers.submitReply} onEvidence={handlers.addEvidence} onUnresolvedIssuesAcknowledged={(acknowledged) => dispatch({ type: "set_unresolved_issues_acknowledged", acknowledged })} onReservationNote={(note) => dispatch({ type: "set_reservation_note", note })} onConfirm={handlers.confirm} />;
     case "worldline": return <WorldlinePanel branches={handlers.viewpointBranches} selected={state.selectedBranch} onSelect={(branch) => dispatch({ type: "select_branch", branch })} onCompute={handlers.computeFm} canCompute={canStartFm(state)} />;
     case "fm": return <FmPanel status={state.fmStatus} progress={state.fmProgress} step={state.fmStep} resultReady={Boolean(state.fmResult)} onCompute={handlers.computeFm} onCancel={handlers.cancelFm} onPortfolio={() => dispatch({ type: "set_stage", stage: "portfolio" })} />;
     case "portfolio": return <PortfolioPanel mode={state.portfolioMode} currency={state.currency} rows={handlers.rows} capital={parseCapital(state.capital)} selectedBranch={state.selectedBranch} branches={handlers.viewpointBranches} stress={state.stressScenario} onMode={(mode) => dispatch({ type: "set_mode", mode })} onStress={(scenario) => dispatch({ type: "set_stress", scenario })} onCompute={handlers.computeFm} onNav={() => dispatch({ type: "set_stage", stage: "nav" })} onExport={(kind) => kind === "json" ? handlers.exportJson() : handlers.exportCsv()} fmReady={Boolean(state.fmResult)} canCompute={canStartFm(state)} canNavigate={canEnterStage(state, "nav")} />;

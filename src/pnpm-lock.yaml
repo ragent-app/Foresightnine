@@ -20,6 +20,12 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@foresightnine/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@foresightnine/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@foresightnine/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
@@ -78,6 +84,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@foresightnine/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@foresightnine/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -115,6 +124,16 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@26.2.0)(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.50.0)
+
+  packages/api-client:
+    dependencies:
+      '@foresightnine/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
 
   packages/asset-registry:
     dependencies:

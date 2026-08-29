@@ -5,6 +5,7 @@ import { useMobileStore } from "../src/app-store";
 import { t } from "../src/i18n";
 import { hasValidationErrors, validateThesis } from "../src/validation";
 import { BottomNav, Button, Card, Header, Screen, SocialLoginPanel, StageRail, Status, styles } from "../src/ui";
+import { mobileApiMode } from "../src/api-runtime";
 
 export default function ThesisScreen(): React.JSX.Element {
   const { state, updateDraft, startChallenge } = useMobileStore();
@@ -15,6 +16,6 @@ export default function ThesisScreen(): React.JSX.Element {
     <View style={{ gap: 8 }}><Text style={styles.label}>{t(state.language, "viewpoint")}</Text><TextInput accessibilityLabel={t(state.language, "viewpoint")} accessibilityHint={t(state.language, "viewpointHint")} style={[styles.input, { minHeight: 162 }]} multiline maxLength={2000} value={state.viewpoint} onChangeText={(viewpoint) => updateDraft({ viewpoint })} placeholder={t(state.language, "viewpointHint")} placeholderTextColor="#74675d" /><Text style={styles.tiny}>{state.viewpoint.length}/2000 · {t(state.language, "draftSaved")}</Text>{errors.viewpoint ? <Text style={styles.error}>{errors.viewpoint}</Text> : null}</View>
     <View style={{ gap: 8 }}><Text style={styles.label}>{t(state.language, "capital")}</Text><View style={styles.split}>{<TextInput accessibilityLabel={t(state.language, "capital")} keyboardType="decimal-pad" value={state.capital} onChangeText={(capital) => updateDraft({ capital })} style={[styles.input, styles.flex]} placeholder="1,000,000" placeholderTextColor="#74675d" />}</View><View style={styles.row}>{(["CNY", "USD", "EUR"] as const).map((currency) => <Button key={currency} variant={state.currency === currency ? "primary" : "secondary"} onPress={() => updateDraft({ currency })} label={currency}>{currency}</Button>)}</View>{errors.capital ? <Text style={styles.error}>{errors.capital}</Text> : null}</View>
     <Button onPress={proceed} disabled={hasValidationErrors(errors)} label={t(state.language, "start")} hint="Start a structured counterargument challenge">{t(state.language, "start")}</Button>
-    <Card tone="soft"><Text style={styles.muted}>{t(state.language, "mockNotice")}</Text><Text style={styles.tiny}>{t(state.language, "deviceOnly")}</Text></Card><SocialLoginPanel /><BottomNav />
+    <Card tone="soft"><Text style={styles.muted}>{mobileApiMode() === "api" ? (state.language === "en" ? "API mode · server challenge enabled." : "API 模式 · 已启用服务端挑战。") : t(state.language, "mockNotice")}</Text><Text style={styles.tiny}>{mobileApiMode() === "api" ? (state.language === "en" ? "Provider secrets stay server-side; client FM remains local." : "供应商密钥仅在服务端；FM 仍在客户端计算。") : t(state.language, "deviceOnly")}</Text>{state.exportNotice ? <Text style={styles.error}>{state.exportNotice}</Text> : null}</Card><SocialLoginPanel /><BottomNav />
   </Screen>;
 }

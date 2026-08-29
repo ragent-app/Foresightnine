@@ -206,6 +206,10 @@ export interface AppState {
   readonly drawdownVisible: boolean;
   readonly exportNotice: string;
   readonly freshness: FreshnessContext;
+  readonly apiSessionId: string | null;
+  readonly apiChallengeId: string | null;
+  readonly apiError: string;
+  readonly serverBranches: readonly BranchView[] | null;
 }
 
 export type AppAction =
@@ -215,7 +219,7 @@ export type AppAction =
   | { readonly type: "set_capital"; readonly capital: string }
   | { readonly type: "set_currency"; readonly currency: Currency }
   | { readonly type: "restore_draft"; readonly draft: DraftState }
-  | { readonly type: "start_challenge"; readonly viewpoint?: string }
+  | { readonly type: "start_challenge"; readonly viewpoint?: string; readonly server?: boolean }
   | { readonly type: "set_reply_draft"; readonly draft: string }
   | { readonly type: "submit_reply"; readonly body: string }
   | { readonly type: "challenge_complete" }
@@ -237,4 +241,9 @@ export type AppAction =
   | { readonly type: "toggle_drawdown" }
   | { readonly type: "export_notice"; readonly notice: string }
   | { readonly type: "set_freshness"; readonly freshness: FreshnessContext }
+  | { readonly type: "api_challenge_update"; readonly challengeId: string; readonly turns: readonly TranscriptTurn[]; readonly rubric: readonly RubricView[]; readonly status: ChallengeStatus; readonly unresolvedIssues: readonly string[] }
+  | { readonly type: "api_session_ready"; readonly sessionId: string }
+  | { readonly type: "api_worldlines_ready"; readonly branches: readonly BranchView[] }
+  | { readonly type: "api_error"; readonly notice: string }
+  | { readonly type: "api_cancel" }
   | { readonly type: "reset" };

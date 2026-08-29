@@ -11,6 +11,8 @@
     "android": "expo run:android"
   },
   "dependencies": {
+    "@foresightnine/api-client": "workspace:*",
+    "@foresightnine/contracts": "workspace:*",
     "@foresightnine/domain": "workspace:*",
     "@foresightnine/design-system": "workspace:*",
     "@foresightnine/fm-engine": "workspace:*",
