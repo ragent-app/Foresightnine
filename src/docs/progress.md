@@ -2,6 +2,10 @@
 
 ## GLM provider/MCP hardening and independent WL1 parity — 2026-08-30
 
+- Added `infra/deployment/production-release-runbook.md`, a credential-free
+  operator sequence covering commit pinning, production env injection, default
+  GLM/MCP smokes, signed Android build, staging, rollback, and traffic approval.
+
 - Updated the GLM Coding Plan MCP adapter to call the exact tool name returned
   by `tools/list`. The current official response advertises `web_search_prime`;
   the older `webSearchPrime` spelling remains only as a strict fixture alias.
