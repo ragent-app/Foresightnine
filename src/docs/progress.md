@@ -1,5 +1,30 @@
 # Progress
 
+## Rendered Web/Android flow and live-provider fail-closed gate — 2026-08-29
+
+- Web was verified through the in-app Browser at the Vite network binding
+  `http://192.168.196.222:4174/` after the client blocked loopback URLs. The
+  viewpoint → capital → challenge → reply → reservation confirmation →
+  worldline → Console path completed with meaningful DOM, no horizontal
+  overflow at 390×844 and 834×1112, and no browser warning/error logs.
+- Android API-36 emulator evidence was refreshed from the current Expo
+  development-client bundle (not claimed as a freshly embedded standalone
+  APK): home → challenge → reply → reserved confirmation → worldline →
+  client FM portfolio completed. The tree showed FM Raw and Public Default,
+  stale-data amount disabling, and the safety-constraint explanation. A
+  reversible 1440×2560 tablet-layout pass completed and the emulator was
+  restored to its physical 1080×2400/420-density configuration; crash-log
+  capture was empty.
+- The GLM coding live smoke test failed closed as expected without a new
+  server-injected secret: `status=blocked`, `secret_missing`,
+  `no_network_attempted=true`, exit code 2. No historical key was read,
+  copied, or used, and no live-provider result is claimed.
+- Remaining gates are explicit: fresh standalone Android packaging, OAuth
+  callback/deep-link completion, Google Play Billing, production provider and
+  current licensed-data integration, HTTPS/deployment, privacy/terms/legal
+  review, and release signing. The product is locally usable in mock/offline
+  mode and is not yet a public production service or trading system.
+
 ## Client FM allocation accuracy correction — 2026-08-29
 
 - Closed a client-side allocation edge case found by Sol: `allocateCapital`
