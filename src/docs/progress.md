@@ -35,9 +35,11 @@
   UI-tree child still has an invalid bounds rectangle; it is retained as
   semantic UI-tree evidence only, not as geometry/fidelity evidence.
 - Source-level tests, Web/Android packaging, and emulator QA are now verified
-  for this slice. Release-candidate acceptance remains subject to a fresh Sol
-  review and the external production gates below. No plan, governance file, or
-  read-only source directory was changed.
+  for this slice. A fresh Sol review subsequently returned `ship` with no
+  P0/P1 and the documented dependency P2 corrected. The slice was committed as
+  `fa22049` and pushed to `origin/master`; this is still QA acceptance, not
+  production approval. No plan, governance file, or read-only source directory
+  was changed.
 - After the manifest hardening, the full regression is green: `50` Web tests,
   `44` Android tests, `20` FM tests, `9` domain tests, `11` API-client tests,
   `2` asset-registry tests, and `193` API tests with `1` skipped and the
@@ -46,12 +48,10 @@
   --prod`, `git diff --check`, and the release-candidate verifier also pass.
   Secret scan completed with `628` unique Git-history blobs inspected and no
   findings.
-- On 2026-08-30, the requested fresh Sol planning/review tasks exited before
-  producing a verdict because the Codex sub-agent usage limit was reached.
-  This is recorded as a review dependency, not as a Sol pass or a product
-  failure. The working tree therefore remains uncommitted until a fresh Sol
-  reviewer can inspect this exact artifact set and authorize the phase
-  boundary.
+- Earlier Sol planning/review attempts on 2026-08-30 exited because the Codex
+  sub-agent usage limit was reached. A later fresh Sol review completed after
+  the fix and authorized the QA slice; the usage-limit events are retained in
+  this history for audit clarity.
 
 ## Android single-share manifest hardening — 2026-08-30
 
