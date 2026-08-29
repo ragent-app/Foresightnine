@@ -22,8 +22,14 @@ The candidate is intentionally composed of offline/mock and debug artifacts. The
 
 - Existing artifact: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`.
 - Generation sequence: `corepack pnpm --filter @foresightnine/mobile export:android`, followed by the approved debug Gradle build for the target emulator ABI.
-- Current size: 90,533,667 bytes.
-- Current SHA-256: `1460203312862C137207794F6659AF31F04E5062F3132956CFEAEA7890FDF1AB`.
+- Current size: 82,336,416 bytes.
+- Current SHA-256: `8CF403FEAD63C336E9BBDCF831762DA7272EEECDB715E2200AD8C38BA5331291`.
+- The current debug artifact was generated with `react.debuggableVariants = []`
+  and verified to contain `assets/index.android.bundle`. It was installed on
+  API 36 emulator `emulator-5554` after Metro was stopped; the complete mock
+  research path reached client FM and the Raw/Public Default configuration
+  screen without a listener on port 8081. This strengthens standalone QA
+  evidence only; the APK remains debug-signed and is not a release artifact.
 - This is a debug, QA-only APK. It is not a signed Android release artifact and cannot satisfy Play Console, package identity, keystore, EAS, privacy declaration, or release-provenance gates.
 
 ### API mock run
@@ -39,7 +45,7 @@ The following paths are required evidence for the verifier and are implementatio
 
 - Web Browser/IAB or local browser captures inspected with `view_image`: `apps/web/qa/screenshots/web-01-thesis-current.jpg`, `web-02-challenge-current.jpg`, `web-03-worldline-current.jpg`, `web-06-nav-current.jpg`, `web-09-portfolio-desktop-fixed.png`, `web-11-fm-complete-fixed.png`, `web-12-methods-fixed.png`, `web-14-console-desktop.png`, and `web-15-console-mobile.png`.
 - Web Phase 8 freshness/Public Default capture inspected with `view_image`: `docs/qa/web/phase8-public-default.png`.
-- Android API-36 emulator captures inspected with `view_image`: `docs/qa/android/phase8-home.png`, `phase8-provider-fail-closed.png`, `phase8-public-default.png`, and the freshly installed current APK capture `docs/qa/android/phase9-current-home.png`; UI evidence includes `docs/qa/android/phase8-home.xml` and `docs/qa/android/phase9-current-home.xml`. The exact Metro + `adb reverse` environment is recorded in `docs/qa/android/phase9-metro-smoke.md`; this is not a no-Metro/self-contained APK claim.
+- Android API-36 emulator captures inspected with `view_image`: `docs/qa/android/phase8-home.png`, `phase8-provider-fail-closed.png`, `phase8-public-default.png`, the Metro-era `docs/qa/android/phase9-current-home.png`, and the standalone captures `docs/qa/android/phase9-standalone-home.png`, `phase9-standalone-worldline.png`, and `phase9-standalone-portfolio.png`; corresponding UI evidence includes the same `.xml` paths. The Metro + `adb reverse` environment is recorded in `docs/qa/android/phase9-metro-smoke.md`, while the standalone captures were made with port 8081 unused. Neither debug mode nor these captures is a signed release/public-deployment claim.
 - The evidence interpretation and the explicit mock/debug boundary are maintained in `docs/design/fidelity-qa.md`; the deployment gate inventory remains in `infra/deployment/README.md`.
 
 ## External gates still required before production

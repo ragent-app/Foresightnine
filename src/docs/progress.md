@@ -1,5 +1,54 @@
 # Progress
 
+## Standalone Android QA and GLM adapter hardening — 2026-08-29
+
+- The Android debug QA artifact was rebuilt from the current checkout after
+  setting `react.debuggableVariants = []`. Expo Android export and the
+  approved x86_64 Gradle command passed; the resulting APK is
+  `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`,
+  82,336,416 bytes, SHA-256
+  `8CF403FEAD63C336E9BBDCF831762DA7272EEECDB715E2200AD8C38BA5331291`.
+  `assets/index.android.bundle` is present, so this debug QA artifact does
+  not silently require Metro.
+- After Metro was stopped, the APK installed and cold-launched on
+  `emulator-5554` (Google Play API 36). UI-tree-derived actions completed
+  the standalone path: thesis/capital → challenge → response → reserved
+  confirmation → three-branch worldlines → client FM → FM Raw/Public Default
+  configuration. Port 8081 was not listening, the crash buffer was empty,
+  and the filtered log contained no fatal/ReactNativeJS/RedBox error. Persisted
+  evidence is under `docs/qa/android/phase9-standalone-{home,worldline,portfolio}.{png,xml}`;
+  `view_image` inspection found no material clipping in the reviewed states.
+  This remains a debug-signed QA artifact, not a release APK/AAB.
+- The GLM adapter now gives the fixed Coding profile a 4,000-token budget when
+  no explicit policy is supplied, while preserving explicit generic policies.
+  Its prompt enumerates the exact ten rubric criteria, top-level JSON keys, and
+  one-to-three-question limit. Malformed outer or message JSON raises a
+  cause-free typed failure so raw model output cannot persist in an exception
+  chain. The normal production transport still enforces the public-DNS/host
+  SSRF boundary; no bypass was added.
+- A bounded credentialed adapter test reached the official GLM endpoint with
+  an ephemeral server environment and medium reasoning effort, returned HTTP
+  200, and validated the strict challenge shape, citations, and all ten rubric
+  items. This is adapter-integration evidence only; no key was persisted and
+  no public live-provider deployment is claimed. The stock smoke remains
+  fail-closed without a deployment-injected secret, and this host's reserved
+  DNS resolution is rejected by the production SSRF guard.
+- Verification passed: focused GLM tests `34 passed`; full API suite
+  `193 passed, 1 skipped, 1 warning`; root `corepack pnpm test`; TypeScript
+  typecheck; generated contracts; governance boundaries; 9WL fixture audit;
+  secret scan over `619` unique Git-history blobs; `corepack pnpm audit --prod`;
+  and the release-candidate verifier. The production-preflight test suite
+  passed `9/9`; the real production preflight correctly failed closed because
+  production provider/search secrets, Postgres, Redis, external CAPTCHA,
+  HTTPS CORS, release Android artifact, and external approval manifest remain
+  absent.
+- Fresh Sol review returned `ship` with no P0/P1/P2 findings. No plan,
+  agent, goal, FM reference, or external read-only source directory was
+  modified. Public deployment, legal/privacy/terms/risk approval, licensed
+  current market data, production operations, OAuth callback/token exchange,
+  Google Play billing, release signing, and store/public-domain evidence
+  remain external gates.
+
 ## Rendered Web/Android flow and live-provider fail-closed gate — 2026-08-29
 
 - Web was verified through the in-app Browser at the Vite network binding

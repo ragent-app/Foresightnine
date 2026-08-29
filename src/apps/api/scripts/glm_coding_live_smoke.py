@@ -147,7 +147,7 @@ def run_smoke(*, transport: OpenAICompatibleTransport | None = None) -> tuple[in
 
     recorder = _RecordingTransport(transport or _default_transport)
     provider = OpenAICompatibleLlmProvider.from_glm_coding_environment(
-        policy=ProviderPolicy(max_attempts=1),
+        policy=ProviderPolicy(max_attempts=1, max_output_tokens=4_000),
         transport=recorder,
     )
     try:

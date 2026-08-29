@@ -163,8 +163,17 @@ def test_selector_keeps_development_default_mock(monkeypatch: pytest.MonkeyPatch
 
 def test_invalid_json_fails_closed_at_completion_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
     value = provider(monkeypatch, lambda *_args: HttpResponse(200, "not-json"))
-    with pytest.raises(ProviderFailure, match="invalid JSON"):
+    with pytest.raises(ProviderFailure, match="invalid JSON") as error:
         value.generate_challenge(request())
+    assert error.value.__cause__ is None
+
+
+def test_invalid_message_json_does_not_retain_raw_model_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = json.dumps({"choices": [{"message": {"content": "private-model-output {"}}]})
+    value = provider(monkeypatch, lambda *_args: HttpResponse(200, response))
+    with pytest.raises(ProviderFailure, match="not valid JSON") as error:
+        value.generate_challenge(request())
+    assert error.value.__cause__ is None
 
 
 def test_429_is_retried_only_within_bounded_policy(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -278,6 +287,19 @@ def test_glm_coding_profile_sends_deterministic_generation_defaults(monkeypatch:
     assert "top_p" not in body
     assert body["max_tokens"] == 1500
     assert body["response_format"] == {"type": "json_object"}
+
+
+def test_glm_coding_profile_default_budget_allows_thinking_and_full_rubric(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[bytes] = []
+
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        captured.append(body)
+        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
+
+    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
+    OpenAICompatibleLlmProvider.from_glm_coding_environment(transport=transport).generate_challenge(request())
+
+    assert json.loads(captured[0])["max_tokens"] == 4000
 
 
 @pytest.mark.parametrize(
