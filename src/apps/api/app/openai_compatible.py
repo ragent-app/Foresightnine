@@ -37,14 +37,19 @@ _API_KEY_ENV = "FORESIGHTNINE_LLM_API_KEY"
 _ALLOWED_HOSTS_ENV = "FORESIGHTNINE_LLM_ALLOWED_HOSTS"
 _GLM_CODING_API_KEY_ENV = "FORESIGHTNINE_GLM_CODING_API_KEY"
 _GLM_CODING_MODEL_ENV = "FORESIGHTNINE_GLM_CODING_MODEL"
+_GLM_CODING_THINKING_ENV = "FORESIGHTNINE_GLM_CODING_THINKING"
+_GLM_CODING_REASONING_EFFORT_ENV = "FORESIGHTNINE_GLM_CODING_REASONING_EFFORT"
+_GLM_CODING_DO_SAMPLE_ENV = "FORESIGHTNINE_GLM_CODING_DO_SAMPLE"
 _GLM_CODING_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4"
 _GLM_CODING_ALLOWED_HOST = "open.bigmodel.cn"
-# This remains deliberately configurable.  The product owner selected glm-5.3,
-# while a deployment must still validate that the tenant's provider account
-# exposes that model before enabling live traffic.
+# This product slice is intentionally pinned; the GLM profile must never send a
+# deployment-selected model.
 _GLM_CODING_DEFAULT_MODEL = "glm-5.3"
 _MAX_RESPONSE_BYTES = 256 * 1024
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+# The general GLM API exposes more reasoning labels, but the Coding Plan
+# mapping is limited to these three wire values for this profile.
+_GLM_CODING_REASONING_EFFORTS = frozenset({"low", "medium", "high"})
 _HOST_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -80,6 +85,72 @@ class _TransportTimeout(_TransportFailure):
 class _NoRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, *args: object, **kwargs: object) -> None:
         raise _TransportFailure("redirects are disabled")
+
+
+@dataclass(frozen=True)
+class GlmCodingGenerationSettings:
+    """Server-owned generation controls for the fixed GLM Coding profile."""
+
+    thinking_enabled: bool = True
+    reasoning_effort: str = "high"
+    do_sample: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.thinking_enabled) is not bool:
+            raise _invalid_glm_generation_config("thinking")
+        if type(self.reasoning_effort) is not str or self.reasoning_effort not in _GLM_CODING_REASONING_EFFORTS:
+            raise _invalid_glm_generation_config("reasoning_effort")
+        if type(self.do_sample) is not bool:
+            raise _invalid_glm_generation_config("do_sample")
+
+
+def _invalid_glm_generation_config(field_name: str) -> ProviderFailure:
+    return ProviderFailure(
+        "provider_configuration_invalid",
+        f"GLM Coding {field_name} configuration is invalid.",
+        retryable=False,
+    )
+
+
+def _parse_glm_bool(raw: str, field_name: str, *, thinking: bool = False) -> bool:
+    value = raw.strip().lower()
+    if thinking:
+        if value in {"enabled", "true"}:
+            return True
+    elif value == "true":
+        return True
+    elif value == "false":
+        return False
+    raise _invalid_glm_generation_config(field_name)
+
+
+def _glm_coding_generation_from_environment() -> GlmCodingGenerationSettings:
+    import os
+
+    thinking_raw = os.environ.get(_GLM_CODING_THINKING_ENV, "enabled")
+    reasoning_effort = os.environ.get(_GLM_CODING_REASONING_EFFORT_ENV, "high").strip().lower()
+    do_sample_raw = os.environ.get(_GLM_CODING_DO_SAMPLE_ENV, "false")
+    if reasoning_effort not in _GLM_CODING_REASONING_EFFORTS:
+        raise _invalid_glm_generation_config("reasoning_effort")
+    return GlmCodingGenerationSettings(
+        thinking_enabled=_parse_glm_bool(thinking_raw, "thinking", thinking=True),
+        reasoning_effort=reasoning_effort,
+        do_sample=_parse_glm_bool(do_sample_raw, "do_sample"),
+    )
+
+
+def _glm_coding_model_from_environment() -> str:
+    import os
+
+    # Keep the legacy variable recognizable so an accidental deployment
+    # override cannot silently change the model sent on the wire.
+    if os.environ.get(_GLM_CODING_MODEL_ENV):
+        raise ProviderFailure(
+            "provider_configuration_invalid",
+            "GLM Coding model is fixed to glm-5.3; its model override is not supported.",
+            retryable=False,
+        )
+    return _GLM_CODING_DEFAULT_MODEL
 
 
 def _normalize_hostname(hostname: str) -> str:
@@ -148,6 +219,7 @@ class OpenAICompatibleSettings:
     model: str
     allowed_hosts: frozenset[tuple[str, int]]
     api_key: str | None = field(default=None, repr=False)
+    glm_generation: GlmCodingGenerationSettings | None = None
 
     @classmethod
     def from_environment(cls) -> "OpenAICompatibleSettings":
@@ -168,6 +240,7 @@ class OpenAICompatibleSettings:
         model: str | None,
         api_key: str | None,
         allowlist: str | None,
+        glm_generation: GlmCodingGenerationSettings | None = None,
     ) -> "OpenAICompatibleSettings":
         base_url = (base_url or "").strip()
         model = (model or "").strip()
@@ -198,6 +271,12 @@ class OpenAICompatibleSettings:
                 "LLM base URL must be an HTTPS URL without credentials, query, or fragment.",
                 retryable=False,
             )
+        if glm_generation is not None and model != _GLM_CODING_DEFAULT_MODEL:
+            raise ProviderFailure(
+                "provider_configuration_invalid",
+                "GLM Coding model is fixed to glm-5.3; its model override is not supported.",
+                retryable=False,
+            )
         normalized_host = _normalize_hostname(hostname)
         allowed_hosts = _parse_allowlist(allowlist)
         if (normalized_host, port or 443) not in allowed_hosts:
@@ -206,7 +285,13 @@ class OpenAICompatibleSettings:
                 "LLM base URL host is not in the configured allowlist.",
                 retryable=False,
             )
-        return cls(base_url=base_url.rstrip("/"), model=model, allowed_hosts=allowed_hosts, api_key=api_key)
+        return cls(
+            base_url=base_url.rstrip("/"),
+            model=model,
+            allowed_hosts=allowed_hosts,
+            api_key=api_key,
+            glm_generation=glm_generation,
+        )
 
     @classmethod
     def from_glm_coding_environment(cls) -> "OpenAICompatibleSettings":
@@ -220,9 +305,10 @@ class OpenAICompatibleSettings:
 
         return cls.from_values(
             base_url=_GLM_CODING_BASE_URL,
-            model=os.environ.get(_GLM_CODING_MODEL_ENV, _GLM_CODING_DEFAULT_MODEL),
+            model=_glm_coding_model_from_environment(),
             api_key=os.environ.get(_GLM_CODING_API_KEY_ENV),
             allowlist=_GLM_CODING_ALLOWED_HOST,
+            glm_generation=_glm_coding_generation_from_environment(),
         )
 
 
@@ -397,10 +483,28 @@ class OpenAICompatibleLlmProvider(LlmProvider):
                 },
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0,
             "max_tokens": self.policy.max_output_tokens,
             "response_format": {"type": "json_object"},
         }
+        if self.settings and self.settings.glm_generation is not None:
+            if self.settings.model != _GLM_CODING_DEFAULT_MODEL:
+                raise ProviderFailure(
+                    "provider_configuration_invalid",
+                    "GLM Coding model is fixed to glm-5.3; its model override is not supported.",
+                    retryable=False,
+                )
+            generation = self.settings.glm_generation
+            if not isinstance(generation, GlmCodingGenerationSettings):
+                raise _invalid_glm_generation_config("generation")
+            if generation.thinking_enabled is not True:
+                raise _invalid_glm_generation_config("thinking")
+            payload.update(
+                {
+                    "thinking": {"type": "enabled"},
+                    "reasoning_effort": generation.reasoning_effort,
+                    "do_sample": generation.do_sample,
+                }
+            )
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
     @staticmethod
@@ -419,6 +523,8 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         message = choices[0].get("message")
         if not isinstance(message, dict) or type(message.get("content")) is not str:
             raise ProviderFailure("invalid_provider_output", "Provider response has no structured message content.", retryable=False)
+        # GLM may return reasoning_content when thinking is enabled.  It is
+        # intentionally not exposed, cited, or treated as evidence/fact.
         try:
             payload = json.loads(message["content"])
         except (json.JSONDecodeError, UnicodeError) as error:

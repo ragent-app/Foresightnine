@@ -7,7 +7,7 @@ import pytest
 
 import app.openai_compatible as openai_compatible
 from app.phase3 import ChallengeInput, DeterministicMockLlmProvider, ProviderFailure, ProviderPolicy, UnavailableLlmProvider, build_llm_provider
-from app.openai_compatible import HttpResponse, OpenAICompatibleLlmProvider
+from app.openai_compatible import GlmCodingGenerationSettings, HttpResponse, OpenAICompatibleLlmProvider, OpenAICompatibleSettings
 
 
 _SECRET = "unit-test-only-provider-secret"
@@ -78,6 +78,25 @@ def test_success_posts_chat_completion_and_returns_validated_draft(monkeypatch: 
     assert draft.native_search_used is False
     assert calls[0][0:2] == ("POST", "https://llm.example.test/v1/chat/completions")
     assert json.loads(calls[0][3])["model"] == "test-model"
+
+
+def test_generic_profile_success_excludes_glm_generation_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[bytes] = []
+
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        captured.append(body)
+        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
+
+    configure(monkeypatch)
+    provider_value = OpenAICompatibleLlmProvider.from_environment(
+        policy=ProviderPolicy(max_attempts=1),
+        transport=transport,
+    )
+    provider_value.generate_challenge(request())
+
+    body = json.loads(captured[0])
+    assert set(body) == {"model", "messages", "max_tokens", "response_format"}
+    assert not {"thinking", "reasoning_effort", "do_sample", "temperature", "top_p"}.intersection(body)
 
 
 def test_missing_key_fails_closed_without_call(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -229,16 +248,152 @@ def test_glm_coding_profile_pins_official_endpoint_and_keeps_secret_server_side(
     assert _SECRET not in repr(value)
 
 
-def test_glm_coding_profile_allows_model_override_but_not_endpoint_override(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_glm_coding_profile_sends_deterministic_generation_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[bytes] = []
+
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        captured.append(body)
+        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
+
+    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
+    OpenAICompatibleLlmProvider.from_glm_coding_environment(
+        policy=ProviderPolicy(max_attempts=1),
+        transport=transport,
+    ).generate_challenge(request())
+
+    body = json.loads(captured[0])
+    assert set(body) == {
+        "model",
+        "messages",
+        "thinking",
+        "reasoning_effort",
+        "do_sample",
+        "max_tokens",
+        "response_format",
+    }
+    assert body["thinking"] == {"type": "enabled"}
+    assert body["reasoning_effort"] == "high"
+    assert body["do_sample"] is False
+    assert "temperature" not in body
+    assert "top_p" not in body
+    assert body["max_tokens"] == 1500
+    assert body["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("FORESIGHTNINE_GLM_CODING_THINKING", "maybe"),
+        ("FORESIGHTNINE_GLM_CODING_THINKING", "disabled"),
+        ("FORESIGHTNINE_GLM_CODING_THINKING", "false"),
+        ("FORESIGHTNINE_GLM_CODING_REASONING_EFFORT", "ultra"),
+        ("FORESIGHTNINE_GLM_CODING_DO_SAMPLE", "yes"),
+    ],
+)
+def test_glm_coding_profile_rejects_invalid_server_generation_config(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+) -> None:
+    calls = 0
+
+    def transport(*_args: object) -> HttpResponse:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("invalid configuration must not call the provider")
+
+    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
+    monkeypatch.setenv(name, value)
+    provider = OpenAICompatibleLlmProvider.from_glm_coding_environment(
+        policy=ProviderPolicy(max_attempts=1),
+        transport=transport,
+    )
+    with pytest.raises(ProviderFailure) as error:
+        provider.generate_challenge(request())
+    assert error.value.code == "provider_configuration_invalid"
+    assert error.value.retryable is False
+    assert calls == 0
+
+
+def test_glm_coding_profile_rejects_disabled_direct_generation_before_transport() -> None:
+    calls = 0
+
+    def transport(*_args: object) -> HttpResponse:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("disabled thinking must not call the provider")
+
+    settings = OpenAICompatibleSettings(
+        base_url="https://llm.example.test/v1",
+        model="glm-5.3",
+        allowed_hosts=frozenset({("llm.example.test", 443)}),
+        api_key=_SECRET,
+        glm_generation=GlmCodingGenerationSettings(thinking_enabled=False),
+    )
+    value = OpenAICompatibleLlmProvider(settings, policy=ProviderPolicy(max_attempts=1), transport=transport)
+
+    with pytest.raises(ProviderFailure, match="thinking") as error:
+        value.generate_challenge(request())
+    assert error.value.code == "provider_configuration_invalid"
+    assert error.value.retryable is False
+    assert calls == 0
+
+
+def test_glm_coding_profile_from_values_rejects_model_override_when_generation_is_present() -> None:
+    with pytest.raises(ProviderFailure, match="fixed to glm-5.3") as error:
+        OpenAICompatibleSettings.from_values(
+            base_url="https://llm.example.test/v1",
+            model="glm-tenant-approved",
+            api_key=_SECRET,
+            allowlist="llm.example.test",
+            glm_generation=GlmCodingGenerationSettings(),
+        )
+    assert error.value.code == "provider_configuration_invalid"
+    assert error.value.retryable is False
+
+
+def test_glm_coding_profile_rejects_direct_settings_model_override_before_transport() -> None:
+    calls = 0
+
+    def transport(*_args: object) -> HttpResponse:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("invalid model configuration must not call the provider")
+
+    settings = OpenAICompatibleSettings(
+        base_url="https://llm.example.test/v1",
+        model="glm-tenant-approved",
+        allowed_hosts=frozenset({("llm.example.test", 443)}),
+        api_key=_SECRET,
+        glm_generation=GlmCodingGenerationSettings(),
+    )
+    value = OpenAICompatibleLlmProvider(settings, policy=ProviderPolicy(max_attempts=1), transport=transport)
+
+    with pytest.raises(ProviderFailure, match="fixed to glm-5.3") as error:
+        value.generate_challenge(request())
+    assert error.value.code == "provider_configuration_invalid"
+    assert error.value.retryable is False
+    assert calls == 0
+
+
+def test_glm_coding_profile_rejects_model_override_before_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+
+    def transport(*_args: object) -> HttpResponse:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("invalid model configuration must not call the provider")
+
     monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
     monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_MODEL", "glm-tenant-approved")
     monkeypatch.setenv("FORESIGHTNINE_LLM_BASE_URL", "https://untrusted.example.test/v1")
-    value = OpenAICompatibleLlmProvider.from_glm_coding_environment()
+    value = OpenAICompatibleLlmProvider.from_glm_coding_environment(transport=transport)
 
-    assert value.settings is not None
-    assert value.settings.base_url == "https://open.bigmodel.cn/api/coding/paas/v4"
-    assert value.settings.allowed_hosts == frozenset({("open.bigmodel.cn", 443)})
-    assert value.settings.model == "glm-tenant-approved"
+    with pytest.raises(ProviderFailure, match="fixed to glm-5.3") as error:
+        value.generate_challenge(request())
+    assert error.value.code == "provider_configuration_invalid"
+    assert error.value.retryable is False
+    assert calls == 0
 
 
 def test_glm_coding_selector_stays_fail_closed_without_its_server_secret(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,3 +404,48 @@ def test_glm_coding_selector_stays_fail_closed_without_its_server_secret(monkeyp
     assert isinstance(built, OpenAICompatibleLlmProvider)
     with pytest.raises(ProviderFailure, match="secret"):
         built.generate_challenge(request())
+
+
+def test_5xx_is_retried_then_fails_without_accepting_a_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+
+    def transport(*_args: object) -> HttpResponse:
+        nonlocal attempts
+        attempts += 1
+        return HttpResponse(503, "service unavailable")
+
+    with pytest.raises(ProviderFailure) as error:
+        provider(monkeypatch, transport).generate_challenge(request())
+    assert error.value.code == "provider_unavailable"
+    assert error.value.retryable is True
+    assert attempts == 2
+
+
+def test_citation_mismatch_fails_closed_at_adapter_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = valid_payload()
+    payload["citation_ids"] = ["evidence:not-attached"]
+    attempts = 0
+
+    def transport(*_args: object) -> HttpResponse:
+        nonlocal attempts
+        attempts += 1
+        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(payload)}}]}))
+
+    with pytest.raises(ProviderFailure) as error:
+        provider(monkeypatch, transport).generate_challenge(request())
+    assert error.value.code == "citation_mismatch"
+    assert error.value.retryable is False
+    assert attempts == 1
+
+
+def test_reasoning_content_is_not_exposed_as_challenge_fact(monkeypatch: pytest.MonkeyPatch) -> None:
+    reasoning = "private chain of thought that is not evidence"
+
+    def transport(*_args: object) -> HttpResponse:
+        return HttpResponse(
+            200,
+            json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload()), "reasoning_content": reasoning}}]}),
+        )
+
+    draft = provider(monkeypatch, transport).generate_challenge(request())
+    assert reasoning not in repr(draft)
