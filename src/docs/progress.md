@@ -1,5 +1,31 @@
 # Progress
 
+## GLM-5.3 provider contract and live-smoke boundary — 2026-08-29
+
+- The server-only GLM Coding profile is fixed to the official
+  `https://open.bigmodel.cn/api/coding/paas/v4` endpoint, host allowlist, and
+  `glm-5.3` model. A non-empty legacy model override fails closed before any
+  transport call; the generic OpenAI-compatible profile remains separate.
+- The GLM wire contract sends structured JSON controls for enabled thinking,
+  the Coding Plan reasoning mapping, and strict `do_sample`; it intentionally
+  does not read or send `temperature` or `top_p`, matching the latest product
+  decision. Provider failures, citation mismatches, invalid structured output,
+  and `reasoning_content` leakage have regression coverage.
+- Added the server-only `apps/api/scripts/glm_coding_live_smoke.py` command and
+  its tests. Without `FORESIGHTNINE_GLM_CODING_API_KEY`, it exits 2, emits only
+  a redacted `secret_missing` result with `no_network_attempted=true`, and does
+  not fall back to mock. With a key injected by a deployment secret manager,
+  it sends one synthetic challenge and emits only redacted validation metadata.
+- Verification: provider tests 28 passed; live-smoke tests 4 passed; Python
+  compileall passed; Git-history secret scan passed for 569 unique blobs; Sol
+  returned `ship` for both the wire-contract and live-smoke slices. Commits
+  `138b7a5` and `6b4e744` were pushed to `origin/master`.
+- No credentialed live request has been made. A real `glm-5.3` smoke, provider
+  account authorization, Secret Manager injection, and public deployment
+  remain external release gates. Official parameter references are recorded in
+  `docs/security/glm-openai-compatible-configuration.md` and
+  `docs/qa/api/glm-coding-live-smoke.md`.
+
 ## Redis distributed abuse-control slice — 2026-08-29
 
 - Added `FORESIGHTNINE_ABUSE_MODE=memory|redis`, preserving memory as the
