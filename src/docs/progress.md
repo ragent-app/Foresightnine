@@ -2,6 +2,13 @@
 
 ## Current checkout packaging boundary — 2026-08-30
 
+- Performed a fresh local runtime smoke from this checkout: the mock API
+  started with `uv run ... uvicorn` and returned `200` from
+  `http://127.0.0.1:8000/health`, reporting the deterministic mock provider and
+  client-evidence search fallback; the Web Vite server returned `200` for `/`
+  with the root mount present. Both tracked local sessions were stopped after
+  the check and both ports were confirmed closed. This proves local
+  reachability only, not public deployment or live-provider readiness.
 - Rebuilt the Web static bundle after the search-configuration parity change.
   The current `apps/web/dist` hashes are `fm.worker-C7HxMD7b.js`
   `9C2BD44FEA8E04FB35CD42A0CB6A551881A5BBB9C3A42C699C319634E3EC2DA6`,
