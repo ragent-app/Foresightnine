@@ -83,7 +83,7 @@ None of these gates is satisfied merely by the Web static bundle, the Android de
 ## Container verification boundary
 
 - `docker compose -f infra/docker/compose.yaml config --quiet` passed after the Dockerfile and Compose configuration corrections.
-- On 2026-08-30, `docker compose -f infra/docker/compose.yaml up -d --build api` rebuilt the API image successfully. The complete development Compose stack then reported API `200` from `/health`, PostgreSQL accepting connections, and Redis `PONG`; the containers were stopped after the smoke and named volumes were retained. A container request-level regression also advanced a legacy PostgreSQL row containing `source_refs[].url=null` through challenge, evidence, confirmation, and worldline generation. This is development/mock runtime evidence only; it does not satisfy live-provider, licensed-data, signed-artifact, or public-traffic gates.
+- On 2026-08-30, `docker compose -f infra/docker/compose.yaml up -d --build api` rebuilt the API image successfully. The complete development Compose stack then reported API `200` from `/health`, PostgreSQL accepting connections, and Redis `PONG`; the containers were stopped after the smoke and named volumes were retained. A container request-level regression also advanced a legacy PostgreSQL row containing `source_refs[].url=null` through challenge, evidence, confirmation, and worldline generation. A direct Redis backend smoke additionally observed an allowed request followed by a rate-limit denial and an allowed model reservation followed by a model-quota denial. This is development/mock runtime evidence only; it does not satisfy live-provider, licensed-data, signed-artifact, or public-traffic gates.
 
 ## Verifier
 

@@ -22,6 +22,14 @@
   probability assessments. Sol's fresh review returned `ship` with no P0/P1/P2
   and authorized submission. This is containerized development/mock evidence,
   not public production readiness.
+- With the rebuilt API image and the development Compose Redis service, a
+  direct runtime smoke of the Redis Lua backend passed: the first request was
+  allowed, the second was denied by the IP/session rate limit; the first model
+  reservation was allowed, the second was denied by the model quota. Both
+  decisions remained backend-available, and the stack was stopped afterward.
+  This verifies local Redis protocol/admission behavior only; TLS,
+  authentication, HA, eviction, backup/restore and production operations
+  remain deployment gates.
 - Rebuilt the Web static bundle after the search-configuration parity change.
   The current `apps/web/dist` hashes are `fm.worker-C7HxMD7b.js`
   `9C2BD44FEA8E04FB35CD42A0CB6A551881A5BBB9C3A42C699C319634E3EC2DA6`,
