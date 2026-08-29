@@ -11,4 +11,4 @@ Streaming uses a closed JSON event union. IDs are `operation_id:sequence`; `Last
 
 ## Consequences
 
-Refresh/retry cannot create a second mock result or silently advance lifecycle twice. A changed payload with the same key is a conflict. The current in-memory store is not production durability; PostgreSQL/Redis implementation must preserve request digests, response bodies, control-token verification and append-only event sequence semantics.
+Refresh/retry cannot create a second mock result or silently advance lifecycle twice. A changed payload with the same key is a conflict. The PostgreSQL operation store now provides durable hash-only claims, typed receipts/errors, operation leases and append-only event sequence state; the explicit in-memory adapter remains for development/tests. Redis distributed abuse controls and provider-receipt-based resumption are separate deployment work. Both stores must preserve request digests, response bodies, control-token verification and append-only event sequence semantics.
