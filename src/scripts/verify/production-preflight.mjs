@@ -305,9 +305,9 @@ export function runPreflight({
     ),
     gate(
       "REDIS_URL",
-      isServiceUrl(envValue(env, "FORESIGHTNINE_REDIS_URL") || envValue(env, "REDIS_URL"), new Set(["redis:", "rediss:"])),
-      "Redis URL is configured",
-      "a valid Redis URL is required",
+      isServiceUrl(envValue(env, "FORESIGHTNINE_REDIS_URL") || envValue(env, "REDIS_URL"), new Set(["rediss:"])),
+      "TLS-protected Redis URL is configured",
+      "a TLS-protected rediss:// Redis URL is required",
     ),
     gate(
       "CAPTCHA_EXTERNAL",

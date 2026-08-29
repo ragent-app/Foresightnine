@@ -131,7 +131,10 @@ test("missing or incomplete approval manifest is rejected", () => {
   assert.equal(incomplete.gates.find(({ id }) => id === "RELEASE_APPROVAL_MANIFEST").status, "FAIL");
 });
 
-test("HTTP, query-bearing, and empty CORS declarations are rejected", () => {
+test("plaintext Redis, HTTP, query-bearing, and empty CORS declarations are rejected", () => {
+  const plaintextRedis = resultWithManifest({ FORESIGHTNINE_REDIS_URL: "redis://redis.example.test" });
+  assert.equal(plaintextRedis.gates.find(({ id }) => id === "REDIS_URL").status, "FAIL");
+
   for (const cors of ["http://app.example.test", "https://app.example.test/?query=bad", ""]) {
     const result = resultWithManifest({ FORESIGHTNINE_CORS_ORIGINS: cors });
     assert.equal(result.gates.find(({ id }) => id === "CORS_HTTPS").status, "FAIL");

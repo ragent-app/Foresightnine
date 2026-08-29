@@ -10,7 +10,9 @@ Public deployment is a gated release-candidate exercise. The deployer must recor
 - written market-data and FX licensing/redistribution rights for every production field, symbol, cache, export, and client-delivered shard;
 - a newly issued server-side provider key injected through the deployment secret manager or an uncommitted environment; no key in Web/Android bundles, source maps, logs, fixtures, or databases;
 - CAPTCHA site/secret configuration, abuse thresholds, IP/session quotas, and daily model-call budgets;
-- Redis provisioned with TLS/authentication, bounded TTLs, backup/restore expectations, and a tested failure mode for rate limiting, short-lived cache, and async job state;
+- Redis provisioned with TLS/authentication (the production preflight requires
+  a `rediss://` URL), bounded TTLs, backup/restore expectations, and a tested
+  failure mode for rate limiting, short-lived cache, and async job state;
 - UUID gate: use an approved cryptographically secure UUID generator, validate UUID fields at API boundaries, and verify collision/invalid-input tests before accepting public identifiers;
 - observability, redacted logging, alert ownership, incident runbooks, kill switches, and rollback evidence;
 - secret scan, dependency/container audit, CORS/CSP review, SSRF review, and data-deletion/retention approval;

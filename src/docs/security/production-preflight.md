@@ -11,7 +11,8 @@ The deployment context must provide:
 - `FORESIGHTNINE_ENV=production`;
 - a supported live `FORESIGHTNINE_LLM_PROVIDER` and its corresponding server-side credential (`FORESIGHTNINE_LLM_API_KEY` for `opencode`/`openai_compatible`, or `FORESIGHTNINE_GLM_CODING_API_KEY` for the GLM profiles);
 - a supported external `FORESIGHTNINE_SEARCH_PROVIDER` and its corresponding server-side credential;
-- `FORESIGHTNINE_POSTGRES_URL` or `DATABASE_URL`, and `FORESIGHTNINE_REDIS_URL` or `REDIS_URL`;
+- `FORESIGHTNINE_POSTGRES_URL` or `DATABASE_URL`, and a TLS-protected
+  `rediss://` value in `FORESIGHTNINE_REDIS_URL` or `REDIS_URL`;
 - an external CAPTCHA declaration in `FORESIGHTNINE_CAPTCHA_PROVIDER` (or an equivalent non-disabled `FORESIGHTNINE_CAPTCHA_MODE`) plus `FORESIGHTNINE_CAPTCHA_SECRET`. `accept`, `unavailable`, `reject`, mock, debug, and QA declarations are rejected;
 - comma-separated `FORESIGHTNINE_CORS_ORIGINS`, with every origin using HTTPS and containing no path, query, or fragment;
 - a readable, absolute, repository-external `FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT` ending in `.apk` or `.aab`. Any `app-debug.apk`, `debug`, `qa`, or QA-only path is rejected. The verifier checks the deployment-provided artifact with filesystem stat/access or a test-injected artifact reader/stat function;
