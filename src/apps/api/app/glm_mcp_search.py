@@ -26,12 +26,17 @@ _MCP_HOST = "open.bigmodel.cn"
 _MCP_PROTOCOL_VERSION = "2025-03-26"
 _MCP_CLIENT_NAME = "foresightnine"
 _MCP_CLIENT_VERSION = "1.0"
-_MCP_TOOL_NAME = "webSearchPrime"
+# The Coding Plan currently advertises the snake_case name.  Keep the older
+# camelCase spelling as a strict compatibility alias for recorded fixtures,
+# but always call the exact name returned by tools/list.
+_MCP_TOOL_NAMES = frozenset({"web_search_prime", "webSearchPrime"})
 _MAX_QUERY_LENGTH = 70
 _MAX_RESULTS = 10
 _MAX_RESPONSE_CHARS = 256 * 1024
 _MAX_CONTENT_BLOCKS = 32
 _MAX_CANDIDATES = 50
+_MAX_RESULT_DEPTH = 8
+_MAX_RESULT_NODES = 2048
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _SESSION_VALUE = re.compile(r"^[\x21-\x7e]{1,256}$")
 
@@ -167,12 +172,12 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
         raise last_failure
 
     @staticmethod
-    def _tool_schema(tools_result: Mapping[str, Any]) -> tuple[Mapping[str, Any], str]:
+    def _tool_schema(tools_result: Mapping[str, Any]) -> tuple[Mapping[str, Any], str, str]:
         tools = tools_result.get("tools")
         if not isinstance(tools, list):
             raise ProviderFailure("search_response_invalid", "Search provider returned no tool catalog.", retryable=False)
         for tool in tools:
-            if not isinstance(tool, dict) or tool.get("name") != _MCP_TOOL_NAME:
+            if not isinstance(tool, dict) or tool.get("name") not in _MCP_TOOL_NAMES:
                 continue
             schema = tool.get("inputSchema")
             if not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict):
@@ -181,26 +186,50 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             query_field = "search_query" if "search_query" in properties else "query" if "query" in properties else None
             if query_field is None:
                 break
-            return schema, query_field
+            return schema, query_field, tool["name"]
         raise ProviderFailure("search_response_invalid", "Search provider did not expose the expected search tool.", retryable=False)
 
     @staticmethod
     def _result_rows(value: Any) -> list[Mapping[str, Any]]:
-        if isinstance(value, dict):
-            for key in ("search_result", "search_results", "results"):
-                rows = value.get(key)
-                if isinstance(rows, list):
-                    return [row for row in rows if isinstance(row, dict)]
-            for nested in value.values():
-                rows = GlmCodingMcpSearchEvidenceProvider._result_rows(nested)
-                if rows:
-                    return rows
-        if isinstance(value, list):
-            for nested in value:
-                rows = GlmCodingMcpSearchEvidenceProvider._result_rows(nested)
-                if rows:
-                    return rows
-        return []
+        nodes = 0
+
+        def visit(current: Any, depth: int) -> list[Mapping[str, Any]]:
+            nonlocal nodes
+            if not isinstance(current, (dict, list)):
+                return []
+            if depth > _MAX_RESULT_DEPTH:
+                raise ProviderFailure(
+                    "search_response_invalid",
+                    "Search provider returned overly nested result data.",
+                    retryable=False,
+                )
+            nodes += 1
+            if nodes > _MAX_RESULT_NODES:
+                raise ProviderFailure(
+                    "search_response_invalid",
+                    "Search provider returned excessive result data.",
+                    retryable=False,
+                )
+            if isinstance(current, dict):
+                for key in ("search_result", "search_results", "results"):
+                    rows = current.get(key)
+                    if isinstance(rows, list):
+                        return [row for row in rows if isinstance(row, dict)]
+                for nested in current.values():
+                    rows = visit(nested, depth + 1)
+                    if rows:
+                        return rows
+            else:
+                direct_rows = [row for row in current if isinstance(row, dict)]
+                if any("title" in row and ("link" in row or "url" in row) for row in direct_rows):
+                    return direct_rows
+                for nested in current:
+                    rows = visit(nested, depth + 1)
+                    if rows:
+                        return rows
+            return []
+
+        return visit(value, 0)
 
     def _candidates(self, result: Mapping[str, Any], limit: int) -> tuple[SearchCandidate, ...]:
         content = result.get("content")
@@ -218,6 +247,12 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
                 text = text[7:-3].strip()
             try:
                 parsed = json.loads(text)
+                # The Coding Plan currently wraps the JSON search payload in a
+                # JSON-encoded string inside the MCP text block.  Decode only
+                # this bounded second layer; arbitrary recursive decoding is
+                # intentionally not allowed.
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
             except json.JSONDecodeError:
                 continue
             rows.extend(self._result_rows(parsed))
@@ -292,7 +327,7 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             session_id=session_id,
             expected_id=2,
         )
-        schema, query_field = self._tool_schema(tools)
+        schema, query_field, tool_name = self._tool_schema(tools)
         arguments: dict[str, Any] = {query_field: query.strip()}
         properties = schema["properties"]
         if "count" in properties:
@@ -302,7 +337,7 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
                 "jsonrpc": "2.0",
                 "id": 3,
                 "method": "tools/call",
-                "params": {"name": _MCP_TOOL_NAME, "arguments": arguments},
+                "params": {"name": tool_name, "arguments": arguments},
             },
             session_id=session_id,
             expected_id=3,

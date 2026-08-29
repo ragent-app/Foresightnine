@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -46,6 +47,26 @@ def test_glm_mcp_search_uses_fixed_endpoint_pkce_free_session_protocol_and_retur
     assert calls[-1][3]["params"] == {"name": "webSearchPrime", "arguments": {"search_query": "dated public macro release", "count": 2}}
     assert _SECRET not in repr(provider)
     assert _SECRET not in json.dumps(calls[-1][3])
+
+
+def test_glm_mcp_search_accepts_official_snake_case_tool_and_nested_json_text() -> None:
+    replies = [
+        response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session="safe-session-official"),
+        HttpResponse(202, ""),
+        response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "web_search_prime", "inputSchema": {"type": "object", "properties": {"search_query": {"type": "string"}, "count": {"type": "integer"}}}}]}}),
+        response({"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": json.dumps(json.dumps([{"title": "Official result", "link": "https://example.com/official", "content": "A dated official result.", "publish_date": "2026-08-30"}]))}]}}),
+    ]
+    calls: list[dict[str, object]] = []
+
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        calls.append(json.loads(body))
+        return replies.pop(0)
+
+    candidates = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=transport, sleeper=lambda _delay: None).search("official policy announcement", limit=1)
+
+    assert candidates[0].url == "https://example.com/official"
+    assert candidates[0].independently_reviewable is True
+    assert calls[-1]["params"] == {"name": "web_search_prime", "arguments": {"search_query": "official policy announcement", "count": 1}}
 
 
 def test_glm_mcp_search_missing_secret_makes_no_request() -> None:
@@ -110,6 +131,40 @@ def test_glm_mcp_search_accepts_advertised_query_alias_and_structured_content() 
 
     assert candidates[0].title == "Structured"
     assert calls[-1]["params"] == {"name": "webSearchPrime", "arguments": {"query": "public query"}}
+
+
+def test_glm_mcp_search_fails_closed_when_result_nesting_exceeds_budget() -> None:
+    nested: object = []
+    for index in range(12):
+        nested = {"nested": nested} if index % 2 else [nested]
+
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET)
+
+    with pytest.raises(ProviderFailure) as error:
+        provider._result_rows(nested)
+
+    assert error.value.code == "search_response_invalid"
+    assert error.value.retryable is False
+
+
+def test_glm_mcp_search_fails_closed_when_result_node_budget_is_exceeded() -> None:
+    value = {"nested": [{} for _ in range(2050)]}
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET)
+
+    with pytest.raises(ProviderFailure) as error:
+        provider._result_rows(value)
+
+    assert error.value.code == "search_response_invalid"
+    assert error.value.retryable is False
+
+
+def test_glm_mcp_search_security_document_names_official_tool_and_fixture_alias() -> None:
+    document = Path(__file__).resolve().parents[3] / "docs" / "security" / "glm-coding-mcp-search.md"
+    text = document.read_text(encoding="utf-8")
+
+    assert "`web_search_prime`" in text
+    assert "`webSearchPrime`" in text
+    assert "旧测试夹具" in text
 
 
 def test_search_provider_selector_requires_explicit_glm_mcp_configuration(monkeypatch: pytest.MonkeyPatch) -> None:

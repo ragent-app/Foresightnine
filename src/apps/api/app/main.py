@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import os
 from typing import Annotated, Any
+from uuid import uuid4
 
 from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -264,6 +265,26 @@ def _reserve_model_call(request: Request, operation_id: str, *, session_id: str 
         )
 
 
+def _reserve_search_call(request: Request) -> None:
+    """Reserve one provider-search call before crossing the external boundary.
+
+    The request middleware already enforces the per-IP/session sliding window.
+    Reuse the provider-call quota as the daily budget so MCP search cannot be
+    used to bypass the same public cost bound as challenge generation.
+    """
+    decision = abuse_control.model.reserve(f"search:{uuid4().hex}", _model_subjects(request))
+    if not decision.available:
+        raise ApiProblem(
+            503, "abuse_backend_unavailable", "Abuse controls are temporarily unavailable.",
+            retryable=True, retry_after=decision.retry_after or 1,
+        )
+    if not decision.allowed:
+        raise ApiProblem(
+            429, "quota_exceeded", "Search-provider quota exceeded; retry later.",
+            retryable=True, retry_after=decision.retry_after,
+        )
+
+
 def _bind_operation_session(operation_id: str, session_id: str | None) -> None:
     if session_id:
         OPERATION_SESSIONS[operation_id] = session_id
@@ -373,7 +394,7 @@ def _candidate_response(raw: object, provider_name: str) -> SearchCandidate:
     )
 
 
-def _search_candidates(query: str, limit: int) -> SearchCandidatesResponse:
+def _search_candidates(query: str, limit: int, request: Request) -> SearchCandidatesResponse:
     """Discover safe source candidates or return the explicit client fallback.
 
     Provider failures are intentionally surfaced as capability unavailability,
@@ -387,6 +408,7 @@ def _search_candidates(query: str, limit: int) -> SearchCandidatesResponse:
             schema_version="v1", provider=provider_name, project_search_available=False,
             fallback="client_bundle", candidates=[],
         )
+    _reserve_search_call(request)
     try:
         candidates = [_candidate_response(item, provider_name) for item in search(query, limit=limit)]
     except ProviderFailure:
@@ -644,6 +666,7 @@ def start_oauth(provider: OAuthProviderName, request: OAuthStartRequest) -> OAut
 
 @app.get("/v1/search/candidates", response_model=SearchCandidatesResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="searchEvidenceCandidates")
 def search_evidence_candidates(
+    http_request: Request,
     query: Annotated[str, Query(min_length=1, max_length=70)],
     limit: Annotated[int, Query(ge=1, le=10)] = 5,
 ) -> SearchCandidatesResponse:
@@ -653,7 +676,7 @@ def search_evidence_candidates(
     the challenge model, and does not create an EvidenceItem.  A user selection
     must take the normal canonical evidence-submission path.
     """
-    return _search_candidates(query, limit)
+    return _search_candidates(query, limit, http_request)
 
 
 @app.post("/v1/sessions", response_model=SessionOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createSession")

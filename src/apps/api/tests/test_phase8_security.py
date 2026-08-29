@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import httpx
@@ -108,6 +108,70 @@ def test_model_quota_reserves_once_and_idempotency_replay_does_not_invoke_again(
     assert replay.headers["Idempotency-Replayed"] == "true"
     assert first.json() == replay.json()
     assert calls == 1
+
+
+def test_search_provider_call_consumes_the_shared_daily_quota_before_external_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+
+    class SearchProvider:
+        name = "quota-search-provider"
+        supports_project_search = True
+
+        def search(self, query: str, *, limit: int = 5) -> tuple[SimpleNamespace, ...]:
+            nonlocal calls
+            calls += 1
+            return (SimpleNamespace(
+                title="Dated public source", url="https://example.com/source", excerpt="Reviewable excerpt.",
+                publisher="Example", published_at=date(2026, 8, 1), independently_reviewable=True,
+            ),)
+
+    monkeypatch.setattr(app_main, "evidence_provider", SearchProvider())
+    monkeypatch.setattr(app_main.abuse_control.model, "limit", 1)
+
+    first = CLIENT.get("/v1/search/candidates", params={"query": "public source", "limit": 1})
+    second = CLIENT.get("/v1/search/candidates", params={"query": "public source", "limit": 1})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error_code"] == "quota_exceeded"
+    assert "quota" not in second.json()["message"].lower() or "search" in second.json()["message"].lower()
+    assert calls == 1
+
+
+def test_search_quota_backend_failure_blocks_external_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    class UnavailableQuota:
+        def reserve(self, reservation_id: str, subjects: object) -> AbuseDecision:
+            return AbuseDecision.unavailable(6)
+
+    class Backend:
+        model = UnavailableQuota()
+
+    calls = 0
+
+    class SearchProvider:
+        name = "must-not-run"
+        supports_project_search = True
+
+        def search(self, query: str, *, limit: int = 5) -> tuple[SimpleNamespace, ...]:
+            nonlocal calls
+            calls += 1
+            return ()
+
+    previous_backend = app_main.abuse_control
+    previous_provider = app_main.evidence_provider
+    try:
+        app_main.abuse_control = Backend()
+        app_main.evidence_provider = SearchProvider()
+        with pytest.raises(app_main.ApiProblem) as raised:
+            app_main._search_candidates("public source", 1, SimpleNamespace(state=SimpleNamespace(client_ip="198.51.100.10")))
+    finally:
+        app_main.abuse_control = previous_backend
+        app_main.evidence_provider = previous_provider
+
+    assert raised.value.status_code == 503
+    assert raised.value.error_code == "abuse_backend_unavailable"
+    assert raised.value.retry_after == 6
+    assert calls == 0
 
 
 def test_model_quota_has_a_global_daily_bucket_across_sessions(monkeypatch: pytest.MonkeyPatch) -> None:

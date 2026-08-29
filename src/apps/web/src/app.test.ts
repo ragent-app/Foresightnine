@@ -40,6 +40,19 @@ describe("Web thesis validation", () => {
 });
 
 describe("bilingual presentation", () => {
+  it("translates export notices emitted by the runtime", () => {
+    const notices = [
+      "JSON 已导出；当前观点、挑战回复和证据均保留。",
+      "CSV 已导出；这是 allocation-only 快照，完整审计字段请使用 JSON。",
+      "路径数据已导出，并标记了当前 premise、完整 NAV 数组与历史 / 模拟边界。",
+      "方法说明已导出。",
+    ];
+    for (const notice of notices) {
+      expect(t("zh", notice)).toBe(notice);
+      expect(t("en", notice)).not.toBe(notice);
+    }
+  });
+
   it("changes product copy to English while preserving user-entered thesis text", () => {
     const thesis = "AI data-centre power demand may accelerate grid investment";
     const markup = renderToStaticMarkup(createElement(LanguageProvider, { language: "en", setLanguage: () => undefined }, createElement(ThesisInput, { viewpoint: thesis, capital: "100000", currency: "USD", draftRestored: false, onViewpoint: () => undefined, onCapital: () => undefined, onCurrency: () => undefined, onStart: () => undefined, onReset: () => undefined })));

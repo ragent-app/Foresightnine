@@ -1,5 +1,45 @@
 # Progress
 
+## GLM provider/MCP hardening and independent WL1 parity — 2026-08-30
+
+- Updated the GLM Coding Plan MCP adapter to call the exact tool name returned
+  by `tools/list`. The current official response advertises `web_search_prime`;
+  the older `webSearchPrime` spelling remains only as a strict fixture alias.
+  The parser also accepts the official bounded JSON-encoded text payload and
+  direct candidate-array shape, while retaining HTTPS, size, and candidate
+  validation. Focused MCP tests pass `7/7`.
+- Added a shared provider-call quota reservation before external MCP search.
+  Search requests now fail closed when the abuse backend is unavailable and
+  are denied after the same daily model budget is exhausted. Focused security
+  and provider tests pass `45/45`.
+- Added English translations for all runtime export notices and a bilingual
+  regression covering JSON, CSV, path, and method exports. Web tests now pass
+  `51/51`.
+- Added `scripts/fm/audit_wl_warmup_oracle.py`, which independently recomputes
+  WL1 factor IC/ICIR, stable selection, average-tie ranking, support-weighted
+  signal, long-only weights, volatility scale, forecasts, metrics, and the
+  free initial allocation without importing the TypeScript FM package. The
+  companion Node audit now compares the independent result with the real
+  client engine. On the complete cutoff-safe WL1 slice (20 assets, 64 dates,
+  cutoff `2026-07-15`) parity passed with maximum absolute difference
+  `3.33e-16`; `synthetic_online_segment_used=false` and `cutoff_safe=true`.
+- Added the redacted server-only MCP smoke at
+  `docs/qa/api/glm-mcp-live-smoke.md`. The credentialed default-transport run
+  on this host fails closed because DNS maps the official hostname to reserved
+  `198.18/15`; the SSRF guard remains intact. A one-off diagnostic transport
+  delivered the real GLM/MCP responses to the existing parsers, but this does
+  not replace the approved ordinary-DNS deployment smoke or production gates.
+- Addressed the first Sol review's MCP hardening finding: result traversal now
+  has explicit depth and node budgets and maps budget exhaustion to the typed
+  non-retryable `search_response_invalid` failure. Regression tests cover both
+  budgets. Synchronized the older security note to the official
+  `web_search_prime` name while documenting the camelCase fixture alias.
+- Focused FM audit, Web, API, MCP, and smoke tests pass. Full repository
+  verification and a fresh Sol review remain before integrating this slice;
+  public production remains gated by approved provider networking, licensed
+  current data, infrastructure, security, legal/compliance, and Android
+  release evidence.
+
 ## Browser API transport regression — 2026-08-30
 
 - Browser QA found that the API client detached the native browser `fetch`

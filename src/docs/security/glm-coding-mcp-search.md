@@ -20,7 +20,7 @@ FORESIGHTNINE_GLM_CODING_API_KEY=<server-secret-manager-value>
 ## 协议防护
 
 - 固定主机、HTTPS、禁用重定向，并复用公开 DNS 解析检查。
-- 每次检索使用 MCP `initialize`、`notifications/initialized`、`tools/list`、`tools/call` 顺序；仅调用供应商声明的 `webSearchPrime`，并在返回 session ID 后为每次后续请求带上该 ID。
+- 每次检索使用 MCP `initialize`、`notifications/initialized`、`tools/list`、`tools/call` 顺序；当前官方调用名为 `web_search_prime`。`webSearchPrime` 仅作为旧测试夹具的兼容别名，并在返回 session ID 后为每次后续请求带上该 ID。
 - 查询最长 70 个字符、结果最大 10 条、响应最大 256 KiB；429/5xx/网络超时最多重试一次。
 - 不支持的工具 schema、JSON-RPC 错误、非公开/私有 URL、无有效结果或无密钥均 fail closed。
 - 只解析 MCP `structuredContent` 或受控 JSON 文本中的标题、URL、摘要、来源和发布日期；不取网页正文，不跟随搜索结果 URL，也不把结果文本放入 prompt。
