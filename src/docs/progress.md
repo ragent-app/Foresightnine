@@ -1,5 +1,38 @@
 # Progress
 
+## Android API-36 native regression evidence — 2026-08-29
+
+- Used the Android emulator QA workflow against `emulator-5554` (Google Play
+  image, API 36) with a fresh current-checkout x86_64 debug APK installed via
+  `adb`; the installed activity resolved to
+  `com.foresightnine.mobile/.MainActivity`. The release build was correctly
+  refused because no signing secrets are configured; the debug APK remains a
+  QA artifact, not a signed or store-ready release.
+- Re-ran the current clean mobile flow from the thesis screen into the mock
+  challenge. UI-tree-derived bounds were used for the start action, response
+  field, submit action, and language toggle; the completed challenge state
+  rendered one clean user response and the expected `完成` status. English
+  home and challenge content also rendered without clipping or overflow.
+- `view_image` inspection found the warm paper canvas, restrained type scale,
+  stage rail, warning card, rubric, and CTA hierarchy visually coherent at
+  1080×2400. Current-checkout evidence is stored under
+  `docs/qa/android/phase-current-debug-{home,challenge,challenge-complete}.{png,xml}`;
+  the interaction dumps used to derive the response and submit bounds are
+  kept separately as QA diagnostics, not release evidence. The debug APK was
+  run with the existing Metro bundle through `adb reverse tcp:8081`.
+- Runtime checks: Android SDK 36, package launch succeeded, crash buffer had
+  zero lines, and the filtered app log had no fatal exception, AndroidRuntime,
+  or RedBox entries (only the normal `ReactNativeJS: Running "main"` line).
+  Current QA debug APK SHA-256 is
+  `9E2B2ADAA4132121B613DF342EB1E9FB2D489B5E3A1B6C0B8738DB4FE06DD26E`.
+- Mobile verification also passed: TypeScript typecheck and 41 Vitest tests.
+  The restricted x86_64 `assembleDebug` completed successfully with
+  `422 actionable tasks: 41 executed, 381 up-to-date`; the default arm64
+  attempt is recorded as an environment-specific CMake failure.
+  This is native emulator regression evidence only; it does not establish
+  Android signing, Play Store packaging, self-contained offline launch, or
+  public deployment readiness.
+
 ## GLM-5.3 provider contract and live-smoke boundary — 2026-08-29
 
 - The server-only GLM Coding profile is fixed to the official
