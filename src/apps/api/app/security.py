@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
-from .abuse import AbuseControl
+from .abuse import AbuseBackend
 from .telemetry import record_captcha_denial
 
 
@@ -153,7 +153,7 @@ def _set_security_headers(response: Response) -> None:
 
 
 class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: Any, *, config: SecurityConfig, abuse: AbuseControl, captcha: CaptchaVerifier, resolver: TrustedProxyResolver, cleanup: Callable[[], object] | None = None) -> None:
+    def __init__(self, app: Any, *, config: SecurityConfig, abuse: AbuseBackend, captcha: CaptchaVerifier, resolver: TrustedProxyResolver, cleanup: Callable[[], object] | None = None) -> None:
         super().__init__(app)
         self.config = config
         self.abuse = abuse
@@ -220,6 +220,14 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
             request.state.session_id = session_id
         if request.url.path.startswith("/v1/"):
             decision = self.abuse.check_request(client_ip=client_ip, session_id=session_id)
+            if not decision.available:
+                return _boundary_error(
+                    503,
+                    "abuse_backend_unavailable",
+                    "Abuse controls are temporarily unavailable.",
+                    request,
+                    retry_after=decision.retry_after or 1,
+                )
             if not decision.allowed:
                 return _boundary_error(429, "rate_limited", "Request rate exceeded; retry later.", request, retry_after=decision.retry_after)
             if request.method in {"POST", "PUT", "PATCH"}:

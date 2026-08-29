@@ -6,9 +6,11 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app import main as app_main
-from app.abuse import AbuseControl
+from app.abuse import AbuseControl, AbuseDecision
 from app.retention import RetentionPolicy, cleanup_research_state
 from app.security import (
     AcceptCaptchaVerifier,
@@ -16,6 +18,8 @@ from app.security import (
     TrustedProxyConfig,
     TrustedProxyResolver,
     UnavailableCaptchaVerifier,
+    SecurityBoundaryMiddleware,
+    TrustedProxyResolver,
     build_captcha_verifier,
     build_security_config,
 )
@@ -130,6 +134,61 @@ def test_model_quota_has_a_global_daily_bucket_across_sessions(monkeypatch: pyte
     assert second.status_code == 429
     assert second.json()["error_code"] == "quota_exceeded"
     assert second.headers["Retry-After"].isdigit()
+
+
+def test_unavailable_redis_request_backend_maps_to_retryable_503() -> None:
+    class UnavailableBackend:
+        class Model:
+            def reserve(self, reservation_id: str, subjects: object) -> AbuseDecision:
+                return AbuseDecision.unavailable()
+
+        model = Model()
+
+        def check_request(self, *, client_ip: str, session_id: str | None = None) -> AbuseDecision:
+            return AbuseDecision.unavailable(7)
+
+        def reset(self) -> None:
+            return None
+
+    mini = FastAPI()
+
+    @mini.get("/v1/probe")
+    def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    mini.add_middleware(
+        SecurityBoundaryMiddleware,
+        config=build_security_config(),
+        abuse=UnavailableBackend(),
+        captcha=AcceptCaptchaVerifier(),
+        resolver=TrustedProxyResolver(),
+    )
+    response = TestClient(mini).get("/v1/probe")
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "7"
+    assert response.json()["error_code"] == "abuse_backend_unavailable"
+    assert response.json()["retryable"] is True
+
+
+def test_unavailable_quota_backend_maps_to_retryable_api_problem_before_provider() -> None:
+    class UnavailableQuota:
+        def reserve(self, reservation_id: str, subjects: object) -> AbuseDecision:
+            return AbuseDecision.unavailable(5)
+
+    class Backend:
+        model = UnavailableQuota()
+
+    previous = app_main.abuse_control
+    try:
+        app_main.abuse_control = Backend()
+        with pytest.raises(app_main.ApiProblem) as raised:
+            app_main._reserve_model_call(SimpleNamespace(state=SimpleNamespace(client_ip="198.51.100.10")), "operation-id")
+    finally:
+        app_main.abuse_control = previous
+    assert raised.value.status_code == 503
+    assert raised.value.error_code == "abuse_backend_unavailable"
+    assert raised.value.retryable is True
+    assert raised.value.retry_after == 5
 
 
 def test_async_model_quota_rejection_keeps_http_semantics_before_receipt(monkeypatch: pytest.MonkeyPatch) -> None:

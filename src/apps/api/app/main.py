@@ -15,7 +15,8 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 from .contract_models import CONTRACT_SCHEMA
-from .abuse import AbuseControl
+from .abuse import AbuseBackend
+from .redis_abuse import build_abuse_control
 from .models import (
     AssetSearchResponse,
     CancelOperationRequest,
@@ -109,7 +110,7 @@ try:
     _model_call_quota = int(os.getenv("FORESIGHTNINE_MODEL_CALL_QUOTA", "20"))
 except ValueError:
     _model_call_quota = 20
-abuse_control = AbuseControl(model_quota=max(1, _model_call_quota))
+abuse_control: AbuseBackend = build_abuse_control(model_quota=max(1, _model_call_quota))
 captcha_verifier = build_captcha_verifier(security_config)
 trusted_proxy_resolver = TrustedProxyResolver(security_config.trusted_proxies)
 retention_policy = RetentionPolicy()
@@ -237,6 +238,11 @@ def _model_subjects(request: Request, session_id: str | None = None) -> tuple[st
 
 def _reserve_model_call(request: Request, operation_id: str, *, session_id: str | None = None) -> None:
     decision = abuse_control.model.reserve(operation_id, _model_subjects(request, session_id))
+    if not decision.available:
+        raise ApiProblem(
+            503, "abuse_backend_unavailable", "Abuse controls are temporarily unavailable.",
+            retryable=True, retry_after=decision.retry_after or 1,
+        )
     if not decision.allowed:
         raise ApiProblem(
             429, "quota_exceeded", "Model-call quota exceeded; retry later.",
@@ -508,7 +514,7 @@ def _error(status_code: int, error_code: str, message: str, request: Request, *,
     )
     validate_payload(payload, "ErrorResponse")
     response = JSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
-    if status_code in {403, 429}:
+    if status_code in {403, 429, 503}:
         response.headers["Retry-After"] = str(max(1, retry_after or 60))
     return response
 

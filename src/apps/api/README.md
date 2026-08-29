@@ -12,24 +12,30 @@ The live OpenCode path is bounded to one concurrent call, pre-reserved round/tok
 
 ## Phase 8 public boundary
 
-The API has a provider-neutral in-memory hardening layer for the MVP: per-IP and
-per-session sliding-window limits, an at-most-once model-call quota reservation,
-strict JSON body/content-size limits, security response headers, and explicit
-CORS origins. `X-Forwarded-For` is ignored unless the direct peer is in
+The API has a provider-neutral abuse boundary with a memory default for
+development/tests and an atomic Redis backend for multi-worker deployments.
+Both expose per-IP and per-session sliding-window limits plus an at-most-once
+model-call quota reservation. Redis uses server-clock Lua scripts, hashed
+subjects, one-script multi-subject admission, bounded sorted sets and key TTLs;
+it never falls back to memory after a runtime failure. Strict JSON
+body/content-size limits, security response headers, and explicit CORS origins
+remain enabled. `X-Forwarded-For` is ignored unless the direct peer is in
 `FORESIGHTNINE_TRUSTED_PROXY_CIDRS` (a comma-separated CIDR list). Configure
 `FORESIGHTNINE_PUBLIC_HARDENING=true` or `FORESIGHTNINE_ENV=production` only
 with a real deployment `CaptchaVerifier`; an unavailable verifier fails closed.
 The deterministic accept verifier is limited to non-public development/test
 defaults and is not a production integration.
 
-Relevant settings are `FORESIGHTNINE_CAPTCHA_MODE` (`accept`, `reject`, or
-`unavailable` test doubles), `FORESIGHTNINE_MODEL_CALL_QUOTA`,
-`FORESIGHTNINE_MAX_BODY_BYTES`, and `FORESIGHTNINE_CORS_ORIGINS`. No CAPTCHA
-vendor, key, URL fetcher, or distributed Redis/Postgres limiter is included in
-this MVP. Multi-process deployments must add an external atomic limiter and
-retention job before public launch; the current in-memory controls are honest
-single-process protection and fail closed where verification infrastructure is
-missing.
+Relevant settings are `FORESIGHTNINE_ABUSE_MODE` (`memory` or `redis`),
+`FORESIGHTNINE_REDIS_URL` (or `REDIS_URL`), `FORESIGHTNINE_MODEL_CALL_QUOTA`,
+`FORESIGHTNINE_MAX_BODY_BYTES`, and `FORESIGHTNINE_CORS_ORIGINS`. Redis socket
+and connect timeouts are bounded by `FORESIGHTNINE_REDIS_SOCKET_TIMEOUT_SECONDS`
+and `FORESIGHTNINE_REDIS_CONNECT_TIMEOUT_SECONDS`. Development defaults to
+memory. Production/public-hardening requires an explicit Redis mode and URL;
+memory, unknown, missing-mode, and missing-URL configurations fail closed at
+startup. Redis connection, timeout, or protocol failures become stable retryable
+503 responses, while actual limit exhaustion remains 429. No CAPTCHA vendor,
+key, URL fetcher, or production Redis HA/TLS/eviction policy is selected here.
 
 Telemetry is a bounded allow-list of low-cardinality counters/events. It does
 not retain request content, credentials, tokens, raw URLs, or IP addresses.
@@ -64,8 +70,8 @@ PostgreSQL access is lazy, but a selected Postgres operation failure is surfaced
 as a storage runtime error and is never replaced with memory. The migration is
 `infra/migrations/001_research_state.sql`.
 
-This boundary does not make the complete service production-ready: operation
-idempotency/replay persistence, worker leases/restart recovery, and atomic
-multi-process Redis abuse controls remain later work. The development Compose
-file starts Postgres and Redis with healthchecks; Redis is intentionally not
-wired into the API yet.
+This boundary does not make the complete service production-ready: live Redis
+HA/TLS/eviction/alerting evidence, provider receipt recovery, and deployment
+rollback evidence remain external gates. The development Compose file starts
+Postgres and Redis with healthchecks but keeps the API's secret-free memory
+default and is unchanged by this slice.

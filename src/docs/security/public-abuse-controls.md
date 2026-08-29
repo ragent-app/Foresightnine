@@ -4,6 +4,30 @@
 
 Phase 8 assumes that public testing is protected by layered controls. The product is not considered ready for public launch merely because a UI path works locally.
 
+## Implemented backend boundary
+
+`FORESIGHTNINE_ABUSE_MODE=memory|redis` selects the abuse backend. Development
+and tests default to memory. Production or public-hardening requires an
+explicit `redis` mode plus a server-side URL in `FORESIGHTNINE_REDIS_URL` or
+`REDIS_URL`; missing/unknown/memory configuration fails closed during startup.
+The development default remains secret-free and does not require Redis.
+
+The Redis adapter uses two Lua scripts. Request admission checks the IP and
+optional session keys together; model quota admission checks global, IP, and
+optional session keys together. Each script uses Redis `TIME`, prunes expired
+sorted-set members, and increments all subjects only after every subject passes.
+Subjects, event members, and reservation markers are SHA-256 material under a
+fixed `{abuse}` cluster hash tag. Sorted-set cardinality is bounded by the
+configured limit and subject TTLs do not exceed the relevant window. Denials
+return the ceiling of the oldest required expiry delay. Reservation markers are
+operation-id-derived hashes with bounded configurable retention, making replay
+at-most-once without exposing operation IDs.
+
+Redis failures return the stable unavailable reason and are mapped to retryable
+503 responses with `Retry-After`; they never fall back to memory. Quota
+exhaustion remains 429. Redis `reset()` is intentionally a no-op: it never
+flushes a database or deletes a broad namespace.
+
 ## Required controls
 
 - IP and anonymous-session rate limits enforced server-side, with Redis (or an approved equivalent) for distributed counters, short-lived cache, and job state;

@@ -1,5 +1,23 @@
 # Progress
 
+## Redis distributed abuse-control slice — 2026-08-29
+
+- Added `FORESIGHTNINE_ABUSE_MODE=memory|redis`, preserving memory as the
+  development/test default and failing closed at startup for missing, unknown,
+  memory, or missing-URL hardened configurations.
+- Added Redis Lua request windows and model quota reservations using Redis
+  server `TIME`, atomic multi-subject admission, hashed subjects/markers, the
+  fixed `{abuse}` cluster hash tag, bounded sorted sets, and bounded TTLs.
+  Redis runtime failures are typed retryable 503s with no memory fallback;
+  exhausted limits remain 429s. Redis reset is non-destructive.
+- Added deterministic recording-Redis tests for script calls, atomicity,
+  exact retry boundaries, secrecy, idempotency, TTL/cardinality bounds,
+  configuration, unavailable mapping, and memory regression, plus an opt-in
+  live test that is skipped without explicit deployment settings.
+- Local implementation and fake-backend evidence is code-complete after the
+  focused tests. No live Redis, HA/TLS/eviction/failover/alerting/capacity or
+  production deployment evidence is claimed; Compose remains unchanged.
+
 ## Durable operation state slice — 2026-08-29
 
 - Sol narrowed the next step to PostgreSQL operation state and explicitly deferred Redis. Added `apps/api/app/operation_store.py` and `infra/migrations/002_operation_state.sql`; `OperationManager` now routes idempotency claims, typed terminal receipts/errors, operation records, worker lease metadata, session associations, and append-only SSE events through the selected store.

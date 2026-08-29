@@ -5,7 +5,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from threading import RLock
 from time import monotonic
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Protocol
 
 from .telemetry import record_quota_denial
 
@@ -15,6 +15,29 @@ class AbuseDecision:
     allowed: bool
     retry_after: int = 0
     reason: str = "allowed"
+    available: bool = True
+
+    @classmethod
+    def unavailable(cls, retry_after: int = 1) -> "AbuseDecision":
+        """Return the stable fail-closed decision for an unavailable backend."""
+        return cls(False, max(1, retry_after), "abuse_backend_unavailable", False)
+
+
+class AbuseBackend(Protocol):
+    """Small boundary shared by the memory and Redis implementations."""
+
+    model: "ModelQuotaBackend"
+
+    def check_request(self, *, client_ip: str, session_id: str | None = None) -> AbuseDecision:
+        ...
+
+    def reset(self) -> None:
+        ...
+
+
+class ModelQuotaBackend(Protocol):
+    def reserve(self, reservation_id: str, subjects: Iterable[str]) -> AbuseDecision:
+        ...
 
 
 class SlidingWindowLimiter:
@@ -108,4 +131,3 @@ class AbuseControl:
         self.ip.reset()
         self.session.reset()
         self.model.reset()
-
