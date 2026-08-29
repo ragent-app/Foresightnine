@@ -73,5 +73,7 @@ as a storage runtime error and is never replaced with memory. The migration is
 This boundary does not make the complete service production-ready: live Redis
 HA/TLS/eviction/alerting evidence, provider receipt recovery, and deployment
 rollback evidence remain external gates. The development Compose file starts
-Postgres and Redis with healthchecks but keeps the API's secret-free memory
-default and is unchanged by this slice.
+Postgres and Redis with healthchecks and explicitly wires the API to the
+secret-free Redis backend. It remains a development-only setup without Redis
+TLS/authentication; production still requires deployment-owned hardened Redis
+configuration and runtime evidence.

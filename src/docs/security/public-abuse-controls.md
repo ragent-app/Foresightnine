@@ -10,7 +10,10 @@ Phase 8 assumes that public testing is protected by layered controls. The produc
 and tests default to memory. Production or public-hardening requires an
 explicit `redis` mode plus a server-side URL in `FORESIGHTNINE_REDIS_URL` or
 `REDIS_URL`; missing/unknown/memory configuration fails closed during startup.
-The development default remains secret-free and does not require Redis.
+The process development default remains secret-free and does not require
+Redis. The repository's development Compose profile opts into its local Redis
+service explicitly so the distributed path is exercised; that service has no
+production TLS/authentication and is not a public deployment configuration.
 
 The Redis adapter uses two Lua scripts. Request admission checks the IP and
 optional session keys together; model quota admission checks global, IP, and

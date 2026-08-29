@@ -30,6 +30,13 @@
   This verifies local Redis protocol/admission behavior only; TLS,
   authentication, HA, eviction, backup/restore and production operations
   remain deployment gates.
+- The development Compose profile now explicitly selects `redis` abuse mode,
+  supplies only the internal development Redis URL, and waits for the Redis
+  healthcheck before starting the API. A fresh Compose run confirmed the API
+  environment, `/health` response, and a session/challenge request; Redis
+  admission keys increased from 2 to 8. This exercises the distributed path
+  locally while keeping the process default and production TLS/authentication
+  boundaries unchanged.
 - Rebuilt the Web static bundle after the search-configuration parity change.
   The current `apps/web/dist` hashes are `fm.worker-C7HxMD7b.js`
   `9C2BD44FEA8E04FB35CD42A0CB6A551881A5BBB9C3A42C699C319634E3EC2DA6`,

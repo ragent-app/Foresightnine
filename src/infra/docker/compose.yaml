@@ -39,8 +39,14 @@ services:
       FORESIGHTNINE_STORAGE_MODE: postgres
       FORESIGHTNINE_POSTGRES_URL: postgresql://foresightnine:foresightnine_dev_only@postgres:5432/foresightnine
       FORESIGHTNINE_LLM_PROVIDER: mock
+      # Development-only Redis wiring; production requires TLS/authenticated
+      # Redis and deployment-owned configuration.
+      FORESIGHTNINE_ABUSE_MODE: redis
+      FORESIGHTNINE_REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:
