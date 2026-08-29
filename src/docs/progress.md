@@ -1,5 +1,17 @@
 # Progress
 
+## Public deployment gate audit — 2026-08-30
+
+- Rechecked the pushed `master` state (`813a6a3`) and the repository boundary;
+  the working tree is clean and the remote branch matches. No production
+  `FORESIGHTNINE_*`, database, Redis, CAPTCHA, Android signing, hosting-token,
+  or approval-manifest inputs are present in this workstation environment.
+- The expected GitHub Pages project URL returns HTTP 404, and no approved
+  hosting CLI or deployment target is configured. The product therefore remains
+  a local/private QA candidate rather than a public deployment. The release
+  runbook records the exact external inputs and order needed to proceed; no
+  public traffic is enabled from this environment.
+
 ## GLM provider/MCP hardening and independent WL1 parity — 2026-08-30
 
 - Added `infra/deployment/production-release-runbook.md`, a credential-free
