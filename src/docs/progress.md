@@ -1,5 +1,50 @@
 # Progress
 
+## Client FM allocation accuracy correction — 2026-08-29
+
+- Closed a client-side allocation edge case found by Sol: `allocateCapital`
+  now rejects materially over-invested target weights, preserves valid
+  under-invested targets as non-negative cash, and fails closed when tolerated
+  floating-point overage or allocation arithmetic would produce a negative or
+  non-finite result. It does not silently normalize weights or move any
+  calculation to the server.
+- Added regressions for materially over-invested totals, large-capital
+  tolerated overage (`1e12`), non-finite allocation arithmetic, and valid
+  under-invested residual cash. FM golden behavior remains unchanged.
+- Primary verification: FM TypeScript typecheck passed; native Node test
+  runner passed `20/20`; the real read-only WL1 warm-up audit still selected
+  factors `101, 102`, cutoff `2026-07-15`, used no synthetic online segment,
+  and preserved client result hash
+  `8ec7cccc74bea8c8e79869f5ddbeb4d37bf6a61893fab179b5323dceca22e6b1`.
+  Fresh Sol review returned `ship` with no findings.
+- This remains a historical development audit, not a return/backtest claim or
+  current investable recommendation. Extreme market-data arithmetic and
+  licensed/current-data validation remain product-release concerns.
+
+## OAuth readiness/start slice — 2026-08-29
+
+- Added strict server-side readiness and PKCE-start contracts for Google and
+  GitHub at `/v1/auth/providers` and `/v1/auth/{provider}/start`. Readiness
+  exposes only provider name and enabled state; start returns only the safe
+  authorization fields and enforces the existing HTTPS/deep-link allowlist,
+  PKCE S256, one-use state and TTL boundary. No provider network call, token
+  exchange, nonce/verifier/client secret, or user credential is exposed.
+- Web and Android Console/account surfaces now consult server readiness only
+  when an API base URL is configured. Offline and unavailable states remain
+  disabled; even server-ready providers remain disabled with explicit
+  callback-not-wired copy because callback/deep-link handling is not yet
+  implemented. The visible entry is Console and the methodology and
+  subscription-not-configured content remain available there.
+- Focused OAuth/OpenAPI checks passed (`28 passed, 1 warning`); full API suite
+  passed (`191 passed, 1 skipped, 1 warning`); Web/Mobile/API-client
+  typechecks, 90 Vitest tests, generated-contract checks, governance
+  boundaries, immutable FM reference hashes, 9WL fixture audit and diff check
+  passed. A fresh Sol review returned `ship` with no findings.
+- This is an integration boundary, not production authentication or billing.
+  OAuth provider registration/secrets, callback/token exchange, shared
+  transaction storage, Google Play Billing, and release/legal gates remain
+  external or future work. No plan or read-only source directory was modified.
+
 ## Shared API client and dual-runtime API wiring — 2026-08-29
 
 - Added `packages/api-client` as the typed Web/Expo transport boundary. It

@@ -212,15 +212,28 @@ export interface ProductAsset { readonly id: string; readonly weight: number; re
 export interface ProductAllocation { readonly id: string; readonly units: number; readonly allocatedAmount: number; }
 export function allocateCapital(capital: number, assets: readonly ProductAsset[]): { readonly allocations: readonly ProductAllocation[]; readonly cashRemainder: number } {
   if (!finite(capital) || capital <= 0) throw new RangeError("capital must be positive");
+  let targetWeightTotal = 0;
+  for (const asset of assets) {
+    if (!finite(asset.weight) || asset.weight <= 0 || !finite(asset.price) || asset.price <= 0 || !finite(asset.fxToBase) || asset.fxToBase <= 0 || !finite(asset.lotSize) || asset.lotSize <= 0) throw new RangeError(`invalid asset ${asset.id}`);
+    targetWeightTotal += asset.weight;
+  }
+  // A tiny absolute tolerance protects decimal fixture sums from binary
+  // rounding while still rejecting materially over-invested targets.
+  if (!finite(targetWeightTotal) || targetWeightTotal > 1 + 1e-12) throw new RangeError("asset weights must sum to at most 1");
   let allocated = 0;
   const allocations = assets.map((asset) => {
-    if (!finite(asset.weight) || asset.weight <= 0 || !finite(asset.price) || asset.price <= 0 || !finite(asset.fxToBase) || asset.fxToBase <= 0 || !finite(asset.lotSize) || asset.lotSize <= 0) throw new RangeError(`invalid asset ${asset.id}`);
     const desiredUnits = capital * asset.weight / (asset.price * asset.fxToBase);
     const units = asset.fractionalSupported ? desiredUnits : Math.floor(desiredUnits / asset.lotSize) * asset.lotSize;
-    const allocatedAmount = units * asset.price * asset.fxToBase; allocated += allocatedAmount;
+    const allocatedAmount = units * asset.price * asset.fxToBase;
+    if (!finite(units) || !finite(allocatedAmount)) throw new RangeError(`allocation arithmetic is not finite for asset ${asset.id}`);
+    allocated += allocatedAmount;
+    if (!finite(allocated)) throw new RangeError("allocation arithmetic is not finite");
     return { id: asset.id, units, allocatedAmount };
   });
-  return { allocations, cashRemainder: capital - allocated };
+  const cashRemainder = capital - allocated;
+  if (!finite(cashRemainder)) throw new RangeError("cash remainder is not finite");
+  if (cashRemainder < 0) throw new RangeError("asset allocation exceeds capital");
+  return { allocations, cashRemainder };
 }
 
 export type CanonicalJson = null | boolean | number | string | readonly CanonicalJson[] | { readonly [key: string]: CanonicalJson };

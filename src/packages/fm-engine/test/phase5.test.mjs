@@ -165,3 +165,38 @@ test("allocateCapital rejects non-finite and non-positive numeric asset inputs",
     assert.throws(() => allocateCapital(100, [invalid]), /invalid asset A/);
   }
 });
+
+test("allocateCapital rejects over-invested and non-finite target-weight totals without normalizing", () => {
+  const asset = { id: "A", weight: 0.6, price: 10, fxToBase: 1, lotSize: 1, fractionalSupported: true };
+  assert.throws(() => allocateCapital(100, [asset, { ...asset, id: "B", weight: 0.5 }]), /asset weights must sum to at most 1/);
+  assert.throws(() => allocateCapital(100, [
+    { ...asset, weight: Number.MAX_VALUE },
+    { ...asset, id: "B", weight: Number.MAX_VALUE },
+  ]), /asset weights must sum to at most 1/);
+});
+
+test("allocateCapital preserves under-invested targets as non-negative cash", () => {
+  const result = allocateCapital(100, [
+    { id: "A", weight: 0.5, price: 10, fxToBase: 1, lotSize: 1, fractionalSupported: true },
+    { id: "B", weight: 0.3, price: 10, fxToBase: 1, lotSize: 1, fractionalSupported: true },
+  ]);
+  assert.equal(result.cashRemainder, 20);
+  assert.ok(result.cashRemainder >= 0);
+
+  const slightlyBelow = allocateCapital(100, [
+    { id: "A", weight: 0.5, price: 10, fxToBase: 1, lotSize: 1, fractionalSupported: true },
+    { id: "B", weight: 0.499999999999, price: 10, fxToBase: 1, lotSize: 1, fractionalSupported: true },
+  ]);
+  assert.ok(slightlyBelow.cashRemainder >= 0);
+});
+
+test("allocateCapital fails closed for large-capital tolerated overage", () => {
+  const asset = { id: "A", weight: 0.5, price: 1, fxToBase: 1, lotSize: 1, fractionalSupported: true };
+  assert.throws(() => allocateCapital(1e12, [asset, { ...asset, id: "B", weight: 0.5000000000005 }]), /asset allocation exceeds capital/);
+});
+
+test("allocateCapital rejects non-finite allocation arithmetic", () => {
+  assert.throws(() => allocateCapital(Number.MAX_VALUE, [{
+    id: "A", weight: 1, price: 0.25, fxToBase: 1, lotSize: 1, fractionalSupported: true,
+  }]), /allocation arithmetic is not finite/);
+});
