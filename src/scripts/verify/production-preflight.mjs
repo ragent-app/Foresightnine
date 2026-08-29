@@ -304,10 +304,22 @@ export function runPreflight({
       "a valid Postgres URL is required",
     ),
     gate(
+      "STORAGE_MODE",
+      envValue(env, "FORESIGHTNINE_STORAGE_MODE").toLowerCase() === "postgres",
+      "Postgres storage mode is explicitly selected",
+      "FORESIGHTNINE_STORAGE_MODE must be postgres",
+    ),
+    gate(
       "REDIS_URL",
       isServiceUrl(envValue(env, "FORESIGHTNINE_REDIS_URL") || envValue(env, "REDIS_URL"), new Set(["rediss:"])),
       "TLS-protected Redis URL is configured",
       "a TLS-protected rediss:// Redis URL is required",
+    ),
+    gate(
+      "ABUSE_MODE",
+      envValue(env, "FORESIGHTNINE_ABUSE_MODE").toLowerCase() === "redis",
+      "Redis abuse mode is explicitly selected",
+      "FORESIGHTNINE_ABUSE_MODE must be redis",
     ),
     gate(
       "CAPTCHA_EXTERNAL",

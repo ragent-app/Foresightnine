@@ -12,7 +12,9 @@ function baseEnv() {
     FORESIGHTNINE_GLM_CODING_API_KEY: "dummy-value-not-shaped-like-a-real-secret",
     FORESIGHTNINE_SEARCH_PROVIDER: "glm_coding_mcp",
     FORESIGHTNINE_POSTGRES_URL: "postgresql://db.example.test/foresightnine",
+    FORESIGHTNINE_STORAGE_MODE: "postgres",
     FORESIGHTNINE_REDIS_URL: "rediss://redis.example.test",
+    FORESIGHTNINE_ABUSE_MODE: "redis",
     FORESIGHTNINE_CAPTCHA_PROVIDER: "turnstile",
     FORESIGHTNINE_CAPTCHA_SECRET: "dummy-captcha-value-not-shaped-like-a-real-secret",
     FORESIGHTNINE_CORS_ORIGINS: "https://app.example.test,https://admin.example.test",
@@ -70,6 +72,19 @@ test("mock and unknown LLM providers are rejected", () => {
     const result = resultWithManifest({ FORESIGHTNINE_LLM_PROVIDER: provider });
     assert.equal(result.ok, false);
     assert.equal(result.gates.find(({ id }) => id === "LLM_PROVIDER").status, "FAIL");
+  }
+});
+
+test("memory or absent production storage and abuse modes are rejected", () => {
+  for (const [name, values] of [
+    ["STORAGE_MODE", { FORESIGHTNINE_STORAGE_MODE: "memory" }],
+    ["STORAGE_MODE", { FORESIGHTNINE_STORAGE_MODE: "" }],
+    ["ABUSE_MODE", { FORESIGHTNINE_ABUSE_MODE: "memory" }],
+    ["ABUSE_MODE", { FORESIGHTNINE_ABUSE_MODE: "" }],
+  ]) {
+    const result = resultWithManifest(values);
+    assert.equal(result.ok, false);
+    assert.equal(result.gates.find(({ id }) => id === name).status, "FAIL");
   }
 });
 

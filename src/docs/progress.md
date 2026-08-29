@@ -1,5 +1,22 @@
 # Progress
 
+## Production startup-mode preflight — 2026-08-30
+
+- Audited the production preflight against the actual API boot contract and
+  found that a deployment could previously pass URL checks while still
+  selecting the API's fail-closed-in-production defaults. The verifier now
+  requires `FORESIGHTNINE_STORAGE_MODE=postgres` and
+  `FORESIGHTNINE_ABUSE_MODE=redis`, matching the runtime configuration
+  required by PostgreSQL persistence and distributed Redis admission control.
+- `corepack pnpm test:production-preflight` passes `10/10`, including absent or
+  memory-mode negative cases. The real-environment preflight still exits `1`
+  as intended because this checkout has no production credentials or external
+  deployment inputs; its output remains redacted and lists the missing live
+  provider/search, database, CAPTCHA, CORS, Android release, and approval
+  gates. Sol's fresh review returned `ship`, found no P0/P1, and authorized
+  submission. This improves fail-closed accuracy but does not represent public
+  production readiness.
+
 ## Current checkout packaging boundary — 2026-08-30
 
 - Performed a fresh local runtime smoke from this checkout: the mock API
