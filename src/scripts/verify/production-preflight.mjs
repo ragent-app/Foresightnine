@@ -1,4 +1,5 @@
 import { accessSync, constants, readFileSync, statSync } from "node:fs";
+import { isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -89,6 +90,30 @@ function hasHttpsCorsOrigins(value) {
       return false;
     }
   });
+}
+
+function hasTrustedProxyCidrs(value) {
+  const cidrs = value.split(",").map((cidr) => cidr.trim()).filter(Boolean);
+  if (cidrs.length === 0) return false;
+
+  return cidrs.every((cidr) => {
+    const [address, prefix, ...extra] = cidr.split("/");
+    if (!address || !prefix || extra.length > 0) return false;
+    const addressFamily = isIP(address);
+    if (addressFamily === 0 || !/^\d+$/u.test(prefix)) return false;
+    const prefixLength = Number(prefix);
+    // A universal /0 network would make every peer eligible to supply a
+    // trusted forwarded client address and defeats the abuse boundary.
+    return prefixLength > 0 && prefixLength <= (addressFamily === 4 ? 32 : 128);
+  });
+}
+
+function hasDeclaredProxyTopology(env) {
+  const mode = envValue(env, "FORESIGHTNINE_PROXY_MODE").toLowerCase();
+  const trustedProxyCidrs = envValue(env, "FORESIGHTNINE_TRUSTED_PROXY_CIDRS");
+  if (mode === "direct") return trustedProxyCidrs === "";
+  if (mode === "reverse_proxy") return hasTrustedProxyCidrs(trustedProxyCidrs);
+  return false;
 }
 
 function isOutsideRepositoryFrom(candidatePath, repoRoot) {
@@ -338,6 +363,12 @@ export function runPreflight({
       hasHttpsCorsOrigins(envValue(env, "FORESIGHTNINE_CORS_ORIGINS")),
       "all CORS origins are HTTPS origins",
       "CORS origins must be non-empty HTTPS origins without query or path data",
+    ),
+    gate(
+      "PROXY_TOPOLOGY",
+      hasDeclaredProxyTopology(env),
+      "proxy topology is explicit and trusted proxy CIDRs match the deployment edge",
+      "FORESIGHTNINE_PROXY_MODE must be direct with no trusted CIDRs, or reverse_proxy with valid FORESIGHTNINE_TRUSTED_PROXY_CIDRS",
     ),
     gate(
       "DOCKER_ASSET_REGISTRY",

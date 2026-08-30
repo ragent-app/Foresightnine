@@ -41,10 +41,19 @@ FORESIGHTNINE_STORAGE_MODE=postgres
 FORESIGHTNINE_POSTGRES_URL=<tls-or-provider-managed-postgres-url>
 FORESIGHTNINE_REDIS_URL=rediss://<managed-redis-host>:<port>/<db>
 FORESIGHTNINE_ABUSE_MODE=redis
+FORESIGHTNINE_PROXY_MODE=reverse_proxy
+FORESIGHTNINE_TRUSTED_PROXY_CIDRS=<actual-ingress-proxy-cidrs>
 FORESIGHTNINE_CAPTCHA_PROVIDER=<approved-external-provider>
 FORESIGHTNINE_CAPTCHA_SECRET=<secret-manager-reference>
 FORESIGHTNINE_CORS_ORIGINS=https://<approved-web-origin>
 ```
+
+If the API directly sees clients instead of sitting behind a reverse proxy,
+set `FORESIGHTNINE_PROXY_MODE=direct` and leave
+`FORESIGHTNINE_TRUSTED_PROXY_CIDRS` empty. For a reverse proxy, use
+`reverse_proxy` and provide only the actual ingress proxy networks. The
+release owner must verify the direct peer and forwarded-header path in
+staging; never use a broad placeholder network or a user-controlled value.
 
 The GLM profile is fixed to the official Coding Plan endpoint and `glm-5.3`.
 It uses the server-owned thinking configuration and does not expose or send

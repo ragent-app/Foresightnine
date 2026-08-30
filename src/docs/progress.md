@@ -1,5 +1,57 @@
 # Progress
 
+## Repository architecture and Linux handoff documentation — 2026-08-30
+
+- Expanded `README.md` into the project-level source of truth for the product
+  scope, current local/private QA status, architecture/data boundaries, package
+  map, FM ownership and parity rules, dependency/toolchain requirements,
+  verification commands, Web/Android QA state, remaining production plan and
+  public-launch limitations.
+- Added `docs/deployment/linux-transfer-manifest.md`, separating required
+  product source, reproducibility evidence, optional licensed/cutoff-safe data
+  inputs and explicitly excluded secrets, caches, debug builds, unlicensed data
+  and unrelated research directories.
+- Added `docs/deployment/linux-agent-handoff.md`, which gives a Linux AI agent
+  the read-before-change list, writable/read-only boundary, provider and FM
+  rules, phase protocol, external production dependencies and redacted handoff
+  report format. It explicitly recommends a new writable Linux application
+  workspace and preserves the existing research directories as read-only.
+- No plan, agent, benchmark, paper, server source or read-only data directory
+  was modified. This documentation change does not remove the existing public
+  deployment block: hosting authority, production services/secrets, licensed
+  current data, legal/security approvals and a signed Android release remain
+  external gates.
+- Sol's read-only review initially returned `fix-first`: the original handoff
+  treated Windows-absolute-path reference/boundary checks as portable Linux
+  gates, omitted root governance files from the archive tier, mixed focused and
+  full-suite counts, and used filename globs that could omit required scripts.
+  The documents now record those two checks as Windows-checkout evidence (or a
+  separately reviewed Linux compatibility harness), include `plan.md`,
+  `agent.md` and `GOAL_PROMPT.md` as read-only transfer inputs, use the latest
+  full-suite counts (`196` API + `1` skipped, `50` Web, `44` Android, `20` FM,
+  `9` domain, `2` asset-registry and `11` API-client), and use content-based
+  secret exclusion language that keeps `secret-scan.mjs` in the package.
+- A second Sol review found that the transfer manifest did not list the new
+  deployment directories and that trusted reverse-proxy CIDRs were not a
+  machine-checked production gate. The manifest and handoff now include
+  `docs/deployment/` and `infra/deployment/`; the production preflight adds a
+  `PROXY_TOPOLOGY` gate requiring either direct mode with no trusted CIDRs or
+  reverse-proxy mode with syntactically valid configured CIDRs. The release
+  docs require staging verification that those CIDRs are the actual ingress
+  networks; syntactic validation is not presented as network ownership proof.
+- The final Sol review found that universal trusted networks (`0.0.0.0/0` or
+  `::/0`) would pass the syntax-only proxy gate, and that the Linux manifest
+  omitted `src/tsconfig.base.json`, the configured `nm/` virtual store and
+  TypeScript build-info caches. The gate now rejects universal `/0` networks;
+  the manifest now includes the required base config and explicitly excludes
+  generated dependency/build caches.
+- Re-ran the full repository suite after the preflight change:
+  Web `51/51`, Android `44/44`, FM `20/20`, domain `9/9`, asset-registry
+  `2/2`, API-client `12/12`, and API `205 passed, 1 skipped, 1 existing
+  Starlette/httpx warning`. The run exited successfully. The README uses this
+  latest full-suite snapshot; older entries below are retained as historical
+  evidence for their respective commits.
+
 ## Public deployment gate audit — 2026-08-30
 
 - Rechecked the pushed `master` state (`813a6a3`) and the repository boundary;

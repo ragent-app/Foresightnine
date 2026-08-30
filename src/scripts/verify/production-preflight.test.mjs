@@ -18,6 +18,8 @@ function baseEnv() {
     FORESIGHTNINE_CAPTCHA_PROVIDER: "turnstile",
     FORESIGHTNINE_CAPTCHA_SECRET: "dummy-captcha-value-not-shaped-like-a-real-secret",
     FORESIGHTNINE_CORS_ORIGINS: "https://app.example.test,https://admin.example.test",
+    FORESIGHTNINE_PROXY_MODE: "reverse_proxy",
+    FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
     FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT: "C:\\deployment-owned\\app-release.apk",
   };
 }
@@ -164,6 +166,31 @@ test("accept and unavailable CAPTCHA declarations are rejected", () => {
     });
     assert.equal(result.gates.find(({ id }) => id === "CAPTCHA_EXTERNAL").status, "FAIL");
   }
+});
+
+test("proxy topology is explicit and trusted CIDRs are validated", () => {
+  const missing = resultWithManifest({ FORESIGHTNINE_PROXY_MODE: "" });
+  assert.equal(missing.gates.find(({ id }) => id === "PROXY_TOPOLOGY").status, "FAIL");
+
+  const invalidCidrs = resultWithManifest({ FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "not-a-cidr" });
+  assert.equal(invalidCidrs.gates.find(({ id }) => id === "PROXY_TOPOLOGY").status, "FAIL");
+
+  for (const universalCidr of ["0.0.0.0/0", "::/0"]) {
+    const universal = resultWithManifest({ FORESIGHTNINE_TRUSTED_PROXY_CIDRS: universalCidr });
+    assert.equal(universal.gates.find(({ id }) => id === "PROXY_TOPOLOGY").status, "FAIL");
+  }
+
+  const direct = resultWithManifest({
+    FORESIGHTNINE_PROXY_MODE: "direct",
+    FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "",
+  });
+  assert.equal(direct.gates.find(({ id }) => id === "PROXY_TOPOLOGY").status, "PASS");
+
+  const directWithForwarders = resultWithManifest({
+    FORESIGHTNINE_PROXY_MODE: "direct",
+    FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "127.0.0.1/32",
+  });
+  assert.equal(directWithForwarders.gates.find(({ id }) => id === "PROXY_TOPOLOGY").status, "FAIL");
 });
 
 test("formatted output contains no injected secret or URL query values", () => {

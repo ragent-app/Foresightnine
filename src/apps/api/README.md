@@ -28,7 +28,11 @@ defaults and is not a production integration.
 
 Relevant settings are `FORESIGHTNINE_ABUSE_MODE` (`memory` or `redis`),
 `FORESIGHTNINE_REDIS_URL` (or `REDIS_URL`), `FORESIGHTNINE_MODEL_CALL_QUOTA`,
-`FORESIGHTNINE_MAX_BODY_BYTES`, and `FORESIGHTNINE_CORS_ORIGINS`. Redis socket
+`FORESIGHTNINE_MAX_BODY_BYTES`, and `FORESIGHTNINE_CORS_ORIGINS`. Production
+preflight also requires an explicit `FORESIGHTNINE_PROXY_MODE` (`direct` or
+`reverse_proxy`): direct mode must have an empty
+`FORESIGHTNINE_TRUSTED_PROXY_CIDRS`, while reverse-proxy mode must list the
+actual ingress CIDRs. Redis socket
 and connect timeouts are bounded by `FORESIGHTNINE_REDIS_SOCKET_TIMEOUT_SECONDS`
 and `FORESIGHTNINE_REDIS_CONNECT_TIMEOUT_SECONDS`. Development defaults to
 memory. Production/public-hardening requires an explicit Redis mode and URL;

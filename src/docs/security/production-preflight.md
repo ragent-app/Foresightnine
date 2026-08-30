@@ -15,6 +15,11 @@ The deployment context must provide:
   `FORESIGHTNINE_POSTGRES_URL` or `DATABASE_URL`, and a TLS-protected
   `rediss://` value in `FORESIGHTNINE_REDIS_URL` or `REDIS_URL`;
 - `FORESIGHTNINE_ABUSE_MODE=redis`;
+- an explicit proxy topology: `FORESIGHTNINE_PROXY_MODE=direct` with an empty
+  `FORESIGHTNINE_TRUSTED_PROXY_CIDRS`, or
+  `FORESIGHTNINE_PROXY_MODE=reverse_proxy` with a comma-separated list of the
+  actual ingress proxy CIDRs in `FORESIGHTNINE_TRUSTED_PROXY_CIDRS`; universal
+  `/0` networks are rejected;
 - an external CAPTCHA declaration in `FORESIGHTNINE_CAPTCHA_PROVIDER` (or an equivalent non-disabled `FORESIGHTNINE_CAPTCHA_MODE`) plus `FORESIGHTNINE_CAPTCHA_SECRET`. `accept`, `unavailable`, `reject`, mock, debug, and QA declarations are rejected;
 - comma-separated `FORESIGHTNINE_CORS_ORIGINS`, with every origin using HTTPS and containing no path, query, or fragment;
 - a readable, absolute, repository-external `FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT` ending in `.apk` or `.aab`. Any `app-debug.apk`, `debug`, `qa`, or QA-only path is rejected. The verifier checks the deployment-provided artifact with filesystem stat/access or a test-injected artifact reader/stat function;
@@ -23,6 +28,14 @@ The deployment context must provide:
 The static container gates also read `infra/docker/Dockerfile.api` and `infra/docker/compose.yaml` from the repository (with test injection available). The Dockerfile must copy `packages/asset-registry`; Compose must contain `FORESIGHTNINE_LLM_PROVIDER` and must not contain the legacy `FORESIGHTNINE_PROVIDER` variable.
 
 The verifier checks presence and safe configuration shape; it does not print values and does not prove that a credential is valid. Test fixtures should use dummy values that do not resemble real secrets.
+
+The proxy topology gate is deliberately explicit. In `direct` mode the API
+does not trust forwarded client headers and the trusted CIDR list must be
+empty. In `reverse_proxy` mode the list must be syntactically valid and must
+be restricted by the deployment owner to the actual ingress networks; the
+universal `0.0.0.0/0` and `::/0` networks are rejected. The
+preflight cannot prove network ownership; staging must verify that the direct
+peer and ingress path match the declaration before traffic is exposed.
 
 ## Current expected result
 

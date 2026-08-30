@@ -10,6 +10,10 @@ Public deployment is a gated release-candidate exercise. The deployer must recor
 - written market-data and FX licensing/redistribution rights for every production field, symbol, cache, export, and client-delivered shard;
 - a newly issued server-side provider key injected through the deployment secret manager or an uncommitted environment; no key in Web/Android bundles, source maps, logs, fixtures, or databases;
 - CAPTCHA site/secret configuration, abuse thresholds, IP/session quotas, and daily model-call budgets;
+- explicit edge topology: `FORESIGHTNINE_PROXY_MODE=direct` with no trusted
+  proxy CIDRs, or `reverse_proxy` with the actual ingress networks in
+  `FORESIGHTNINE_TRUSTED_PROXY_CIDRS`; forwarded headers must never be trusted
+  from an unlisted peer;
 - Redis provisioned with TLS/authentication (the production preflight requires
   a `rediss://` URL), bounded TTLs, backup/restore expectations, and a tested
   failure mode for rate limiting, short-lived cache, and async job state;
