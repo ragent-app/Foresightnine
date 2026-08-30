@@ -305,6 +305,11 @@ repository or runtime.
 - Workspace `typecheck` passed for all nine participating packages/apps.
 - `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
   asset registry, and the 25-path OpenAPI export.
+- `corepack pnpm audit --prod --audit-level high` and `uvx --from pip-audit
+  pip-audit apps/api` both reported no known vulnerabilities. The release
+  candidate verifier passed its repository/QA artifact checks, while the
+  production preflight correctly continues to reject the debug APK as a
+  production release artifact.
 - `corepack pnpm verify:boundaries` was run and correctly failed on Linux-only
   portability constraints: the repository intentionally references the
   Windows `D:\Foresightnine` governance files and Windows implementation-root
