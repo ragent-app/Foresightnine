@@ -92,22 +92,30 @@ failover, alerting, capacity, managed backup or certificate-rotation evidence.
 This is private loopback/mock staging evidence. It is not live-provider,
 CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
 
-## Module 5 — Cloudflare staging blocker
+## Module 5 — Cloudflare API staging
 
 - `cloudflared 2026.8.2` is installed and the account certificate is present
   outside the repository with mode `600`.
-- Read-only account inventory shows three existing Tunnel objects, all with
-  no active connections; none was selected because the documented inventory
-  does not identify a usable API route.
-- The API is healthy on `127.0.0.1:8000`, but no Cloudflare Tunnel was created
-  and no DNS record was changed.
-- Module 5 is blocked pending owner confirmation of the exact final API
-  hostname, dedicated Tunnel name/UUID, origin address/port, routing mode,
-  CORS origin, and staging approval. The document's hostname list is marked
-  proposed and must not be treated as authorization.
+- Owner dispatch selected the documented staging values: API hostname
+  `api-staging.foresightnine.com`, Web CORS origin
+  `https://staging.foresightnine.com`, origin `http://127.0.0.1:8000`, and
+  locally managed Tunnel routing.
+- Dedicated Tunnel `foresightnine-api-staging` was created with UUID
+  `b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4`; DNS route creation returned success.
+- The local config is outside Git at
+  `/home/lxx/.cloudflared/foresightnine-api-staging.yml`, with the credential
+  JSON outside Git and mode `600`. The redacted reproducible template is
+  `cloudflared/foresightnine-api-staging.yml.example`.
+- Ingress validation passed. The connector registered two QUIC edge
+  connections (`sin07` and `sin16`), and its metrics showed zero origin
+  request errors.
+- Public `GET /health` returned 200 with a browser User-Agent, and a public
+  CORS preflight returned 200 with the staging Web origin. A bare `curl`
+  User-Agent receives the zone's Cloudflare managed Challenge; this is an
+  edge policy behavior, not a Tunnel/origin failure.
 
-No public DNS, traffic cutover, OAuth callback, or Cloudflare production
-mutation was performed.
+No production hostname, Pages project, traffic cutover, OAuth callback, or
+production Cloudflare mutation was performed.
 
 ## Module 6 — auth/session contract boundary
 

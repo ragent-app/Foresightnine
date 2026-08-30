@@ -1,0 +1,13 @@
+# Copy to the host's cloudflared config directory and keep the credentials
+# file outside Git with mode 600.
+tunnel: b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4
+credentials-file: /etc/cloudflared/b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4.json
+
+ingress:
+  - hostname: api-staging.foresightnine.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404
+
+originRequest:
+  connectTimeout: 10s
+  noTLSVerify: false
