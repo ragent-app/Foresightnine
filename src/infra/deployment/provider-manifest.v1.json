@@ -53,6 +53,11 @@
     }
   ],
   "asset_mappings": [
+    {"asset_id": "GRID", "provider": "yahoo_chart_evaluation", "symbol": "PAVE", "currency": "USD", "proxy_for": "IDX:SPX"},
+    {"asset_id": "CHIP", "provider": "yahoo_chart_evaluation", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
+    {"asset_id": "UTIL", "provider": "yahoo_chart_evaluation", "symbol": "XLU", "currency": "USD", "proxy_for": "IDX:UTIL"},
+    {"asset_id": "GOLD", "provider": "yahoo_chart_evaluation", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
+    {"asset_id": "WORLD", "provider": "yahoo_chart_evaluation", "symbol": "VT", "currency": "USD", "proxy_for": "IDX:WORLD"},
     {"asset_id": "ETF:SPY", "provider": "yahoo_chart_evaluation", "symbol": "SPY", "currency": "USD", "proxy_for": "IDX:SPX"},
     {"asset_id": "ETF:SOXX", "provider": "yahoo_chart_evaluation", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
     {"asset_id": "ETF:GLD", "provider": "yahoo_chart_evaluation", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},

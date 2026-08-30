@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import json
 
 from fastapi.testclient import TestClient
 
@@ -51,6 +52,16 @@ def test_evaluation_mode_requires_the_admission_manifest(monkeypatch, tmp_path) 
 
     assert all(row["status"] == "missing" for row in response["snapshots"])
     assert any("No approved provider" in warning for warning in response["warnings"])
+
+
+def test_evaluation_mode_requires_asset_level_mapping(monkeypatch, tmp_path) -> None:
+    manifest = json.loads(market_provider.PROVIDER_MANIFEST_PATH.read_text(encoding="utf-8"))
+    manifest["asset_mappings"][0]["symbol"] = "WRONG"
+    manifest_path = tmp_path / "provider-manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", manifest_path)
+
+    assert market_provider._evaluation_manifest_allows("yahoo_chart_evaluation") is False
 
 
 def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -> None:

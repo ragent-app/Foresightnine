@@ -55,7 +55,7 @@ def _evaluation_manifest_allows(provider_id: str) -> bool:
     providers = manifest.get("providers")
     if not isinstance(providers, list):
         return False
-    return any(
+    provider_admitted = any(
         isinstance(provider, dict)
         and provider.get("id") == provider_id
         and provider.get("enabled_modes") == ["staging_evaluation"]
@@ -65,6 +65,27 @@ def _evaluation_manifest_allows(provider_id: str) -> bool:
         and provider.get("fx") == "not_authorized"
         and provider.get("public_redistribution") == "not_approved"
         for provider in providers
+    )
+    if not provider_admitted:
+        return False
+
+    mappings = manifest.get("asset_mappings")
+    if not isinstance(mappings, list):
+        return False
+    mapping_by_asset: dict[str, dict[str, Any]] = {}
+    for mapping in mappings:
+        if not isinstance(mapping, dict) or not isinstance(mapping.get("asset_id"), str):
+            return False
+        asset_id = mapping["asset_id"]
+        if asset_id in mapping_by_asset:
+            return False
+        mapping_by_asset[asset_id] = mapping
+    return all(
+        (mapping := mapping_by_asset.get(asset_id)) is not None
+        and mapping.get("provider") == provider_id
+        and mapping.get("symbol") == symbol
+        and mapping.get("currency") == "USD"
+        for asset_id, symbol in ASSET_SYMBOLS.items()
     )
 
 
