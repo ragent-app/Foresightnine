@@ -1,5 +1,19 @@
 # Progress
 
+# Current-head Android release rebuild — 2026-08-31
+
+- Rebuilt the current `8d7dc99` source in the short-path QA clone with the
+  existing Expo/RN workspace, CMake 3.30.5, x86_64 ABI, and the disposable
+  signing bypass used only for local QA. JDK 25 required the process-local
+  `--enable-native-access=ALL-UNNAMED` flag; no repository build configuration
+  was weakened.
+- The non-debug unsigned APK and AAB were produced successfully. Their hashes
+  and reproducible command are recorded in
+  `docs/release/android-qa-release-2026-08-31.md`. This remains an emulator
+  artifact, not a Play-uploadable signed release.
+- The physical-device, production-keystore, App Link, Play App Signing and
+  tablet-emulator gates remain open.
+
 # Public provider second official review — 2026-08-31
 
 - A second official-documentation review checked Twelve Data and Finnhub in

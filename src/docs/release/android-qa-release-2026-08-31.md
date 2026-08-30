@@ -2,7 +2,8 @@
 
 ## Scope
 
-This is a local QA release for the current source commit `239d06d`. It is not
+This is a local QA release for source commit `8d7dc99` (the mobile source is
+unchanged by the later API/market-data commits). It is not
 a Google Play upload and it is not signed with the production release key.
 The build used the existing Expo/RN project, generated workspace `dist`
 outputs, CMake 3.30.5, and the x86_64 ABI required by the local API 36 Play
@@ -24,6 +25,10 @@ node node_modules/typescript/bin/tsc -b packages/api-client/tsconfig.json --pret
 node node_modules/typescript/bin/tsc -b packages/asset-registry/tsconfig.json --pretty false --force
 
 Set-Location apps/mobile/android
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:ANDROID_HOME = 'C:\Users\accel\AppData\Local\Android\Sdk'
+$env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
+$env:JAVA_TOOL_OPTIONS = '--enable-native-access=ALL-UNNAMED'
 ./gradlew.bat :app:generateAutolinkingPackageList :app:generateAutolinkingNewArchitectureFiles `
   --no-daemon --rerun-tasks --console plain
 ./gradlew.bat :app:assembleRelease :app:bundleRelease `
@@ -43,8 +48,8 @@ Artifacts are retained locally under
 
 | Artifact | SHA-256 | Status |
 | --- | --- | --- |
-| `foresightnine-0.1.0-x86_64-release-unsigned.apk` | `824C8209123DBA5BE2E714F4A1D623C55DEB84F4EB7E94664A9F2C47AF461F74` | unsigned build output |
-| `foresightnine-0.1.0-x86_64-release-unsigned.aab` | `B3F6789FB1B6E9582A2789DB72140A92414E510C44714FABE04C221B301DAC1C` | QA bundle before signing |
+| `app-release-current-head-unsigned.apk` | `824C8209123DBA5BE2E714F4A1D623C55DEB84F4EB7E94664A9F2C47AF461F74` | unsigned build output |
+| `app-release-current-head.aab` | `B3F6789FB1B6E9582A2789DB72140A92414E510C44714FABE04C221B301DAC1C` | QA bundle before signing |
 | `foresightnine-0.1.0-x86_64-release-qa-signed.apk` | `FDAFC883AA88DAD08FB24D34324B92D1CD7D7884CD19F16D56E664CC7C5EE769` | signed with disposable local QA key; emulator only |
 | `foresightnine-0.1.0-x86_64-release-qa-signed.aab` | `234D60E996BAB131BC5D8F35DCCE8DAC066EE120B029B5BBABAEF9D85A6AB739` | JAR-signed with disposable local QA key; not Play release |
 
