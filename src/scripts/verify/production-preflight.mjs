@@ -222,6 +222,11 @@ function hasDockerAssetRegistry({ repoRoot, readFile }) {
   return typeof dockerfile === "string" && /(^|\n)\s*COPY\s+packages\/asset-registry(?:\s|$)/m.test(dockerfile);
 }
 
+function hasProviderAdmissionManifest({ repoRoot, readFile }) {
+  const manifest = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
+  return typeof manifest === "string" && /"schema_version"\s*:\s*"provider-admission-manifest\/v1"/u.test(manifest);
+}
+
 function hasValidComposeProviderConfig({ repoRoot, readFile }) {
   const compose = readStaticFile({ repoRoot, relativePath: "src/infra/docker/compose.yaml", readFile });
   if (typeof compose !== "string") return false;
@@ -419,6 +424,12 @@ export function runPreflight({
       hasDockerAssetRegistry({ repoRoot, readFile }),
       "API Dockerfile copies packages/asset-registry",
       "API Dockerfile must copy packages/asset-registry",
+    ),
+    gate(
+      "PROVIDER_ADMISSION_MANIFEST",
+      hasProviderAdmissionManifest({ repoRoot, readFile }),
+      "provider admission manifest is included in the repository",
+      "provider admission manifest must declare provider-admission-manifest/v1",
     ),
     gate(
       "COMPOSE_PROVIDER_CONFIG",

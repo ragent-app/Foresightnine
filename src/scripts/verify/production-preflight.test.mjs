@@ -49,6 +49,7 @@ test("synthetic production preflight passes through argv/env injection without n
     argv: ["--approval-manifest", "/deployment-owned/release-approval.json"],
     readFile: (filePath) => {
       if (filePath.endsWith("Dockerfile.api")) return "COPY packages/asset-registry /app/packages/asset-registry";
+      if (filePath.endsWith("provider-manifest.v1.json")) return '{"schema_version":"provider-admission-manifest/v1"}';
       return "FORESIGHTNINE_LLM_PROVIDER: mock";
     },
     readManifest: (manifestPath) => {
@@ -108,11 +109,24 @@ test("Dockerfile and Compose static gates reject missing or legacy configuration
     repoRoot,
     approvalManifest: APPROVAL_MANIFEST,
     statArtifact: () => ({ exists: true, isFile: true, readable: true }),
-    readFile: (filePath) => filePath.endsWith("Dockerfile.api") ? dockerfile : compose,
+    readFile: (filePath) => filePath.endsWith("Dockerfile.api")
+      ? dockerfile
+      : filePath.endsWith("provider-manifest.v1.json")
+        ? '{"schema_version":"provider-admission-manifest/v1"}'
+        : compose,
   });
 
   const missingCopy = injected("FROM base", validCompose);
   assert.equal(missingCopy.gates.find(({ id }) => id === "DOCKER_ASSET_REGISTRY").status, "FAIL");
+
+  const missingManifest = runPreflight({
+    env: validEnv,
+    repoRoot,
+    approvalManifest: APPROVAL_MANIFEST,
+    statArtifact: () => ({ exists: true, isFile: true, readable: true }),
+    readFile: (filePath) => filePath.endsWith("Dockerfile.api") ? validDocker : validCompose,
+  });
+  assert.equal(missingManifest.gates.find(({ id }) => id === "PROVIDER_ADMISSION_MANIFEST").status, "FAIL");
 
   const legacyCompose = injected(validDocker, "FORESIGHTNINE_PROVIDER: mock");
   assert.equal(legacyCompose.gates.find(({ id }) => id === "COMPOSE_PROVIDER_CONFIG").status, "FAIL");
@@ -130,6 +144,7 @@ test("Dockerfile and Compose static gates reject missing or legacy configuration
 
   const actual = resultWithManifest({}, { statArtifact: () => ({ exists: true, isFile: true, readable: true }) });
   assert.equal(actual.gates.find(({ id }) => id === "DOCKER_ASSET_REGISTRY").status, "PASS");
+  assert.equal(actual.gates.find(({ id }) => id === "PROVIDER_ADMISSION_MANIFEST").status, "PASS");
   assert.equal(actual.gates.find(({ id }) => id === "COMPOSE_PROVIDER_CONFIG").status, "PASS");
 });
 
