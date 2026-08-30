@@ -74,6 +74,10 @@
   main activity, switched language, and reached the staging API Challenge
   screen. Screenshot evidence was visually reviewed. A physical device run is
   still pending.
+- The configured `pov_pixel_tablet_api35` AVD could not start because its
+  Android 35 `google_apis/x86_64` system image is absent; the local SDK only
+  exposes the Android 36 image. Tablet evidence is therefore still pending
+  and this is recorded as a test-environment gate.
 
 ### Current interpretation
 
