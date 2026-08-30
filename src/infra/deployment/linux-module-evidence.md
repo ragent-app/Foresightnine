@@ -54,6 +54,11 @@ claimed by this evidence.
   were skipped idempotently. After restarting PostgreSQL, five tables and 11
   persisted source documents remained available, and the API health check
   succeeded.
+- `backup-staging.sh` passed `bash -n`, rejected a repository-internal output
+  path, and created a repository-external PostgreSQL custom dump (31,442 bytes),
+  Redis RDB snapshot (173 bytes), and SHA-256 sidecar. Checksum verification
+  passed; the generated files were kept mode `600`. Restore remains a separate
+  owner-approved operation.
 
 The database container has no published host port. This is development/mock
 staging evidence only; production PostgreSQL credentials, TLS/HA, backup
