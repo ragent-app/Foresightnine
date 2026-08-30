@@ -49,6 +49,10 @@ claimed by this evidence.
 - A storage bug found during this evidence was fixed: PostgreSQL JSONB scalar
   strings are preserved after the driver has already decoded them. The fix has
   a focused regression test.
+- Both migration files were rerun with `ON_ERROR_STOP=1`; existing relations
+  were skipped idempotently. After restarting PostgreSQL, five tables and 11
+  persisted source documents remained available, and the API health check
+  succeeded.
 
 The database container has no published host port. This is development/mock
 staging evidence only; production PostgreSQL credentials, TLS/HA, backup
@@ -120,3 +124,33 @@ mutation was performed.
 
 The safe state is contract/mock-only OAuth readiness; no provider was contacted
 and no credential was added to the repository or runtime.
+
+## Portable and API validation gates
+
+- `uv run --project apps/api pytest apps/api/tests -q`: 206 passed, 1 skipped.
+- Workspace `typecheck` passed for all eight participating packages/apps.
+- Workspace `test` passed, including generated-contract checks, FM-engine
+  tests, API-client/domain/asset-registry tests, web/mobile tests, and the API
+  suite (206 passed, 1 skipped).
+- OpenAPI export drift check passed with 24 paths; generated TypeScript and
+  asset-registry fingerprints matched their checked-in artifacts.
+- Secret scan passed over 720 unique Git-history blobs.
+- The worldline fixture audit remains unavailable on this Linux checkout
+  because its configured source is the Windows-only path
+  `D:/WL-data-final/wordline-md/wordline1.md`; no substitute data was guessed.
+
+## Checkpoint index
+
+Each module was committed and pushed in sequence. The Module 1 source pin is
+the starting checkout; later module commits are the auditable checkpoints:
+
+- Module 1: `7fda926`
+- Module 2: `70d8822`
+- Module 3: `f016a04`
+- Module 4: `d70bfcd`
+- Module 5: `e43e7d5`
+- Module 6: `febdfdc`
+
+The final evidence-only synchronization commit is recorded by Git history
+after these entries are updated. The user's pre-existing dirty files remain
+unstaged and are intentionally outside all checkpoints.
