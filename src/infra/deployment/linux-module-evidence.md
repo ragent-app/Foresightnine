@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `e6b18ba`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `595a71c`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -291,6 +291,9 @@ repository or runtime.
   declaration and approval manifest are absent. The checked-in provider
   manifest records the owner's authorization, but intentionally remains
   staging-only.
+- After separating the gates, the real preflight reports
+  `DATA_AUTHORIZATION PASS`; `MARKET_DATA_ADMISSION` remains failed because
+  the runtime is intentionally `public_evaluation`, not production `licensed`.
 - Workspace `typecheck` passed for all nine participating packages/apps.
 - `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
   asset registry, and the 24-path OpenAPI export.
@@ -321,7 +324,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `e6b18ba`; external provider authorization input
+implementation checkpoint is `595a71c`; external provider authorization input
 handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
