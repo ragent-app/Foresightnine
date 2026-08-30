@@ -12,7 +12,7 @@ contract, displays price evidence only when a source is explicitly enabled, and
 keeps FM/Public Default limited when factor cells, FX, freshness or rights are
 missing. No key, proxy, cache or provider URL was added to runtime defaults.
 
-## Windows probe evidence
+## Windows probe and official-documentation evidence
 
 All requests below were made from the Windows development environment with an
 `Origin: https://staging.foresightnine.com` request header.
@@ -24,8 +24,10 @@ All requests below were made from the Windows development environment with an
 | Market Data API | `https://api.marketdata.app/v1/stocks/candles/D/AAPL?countback=10` returned HTTP 203 with `Access-Control-Allow-Origin: *`; target ETF coverage needs authorization. Its official CORS policy says self-service browser use is personal/non-public and public redistribution requires a commercial license. | Candidate for user-BYOK or licensed adapter only. |
 | Alpha Vantage | The official daily endpoint with demo credentials returned HTTP 200 and CORS `*`. The documented interface requires an API key for normal use; free access is rate/coverage constrained and its technical indicators are not automatically the ForesightNine FM feature contract. | Candidate for user-BYOK or server-secret commercial review only. |
 | Nasdaq chart API | SPY chart returned HTTP 200 JSON but no CORS header. | Server-side research candidate only, subject to rights and protocol review. |
+| Twelve Data | Official ETF material advertises broad historical ETF coverage, but the API quickstart requires an API key. Its terms/support material defines providing data to third parties as redistribution and says redistribution requires a separate agreement. This is an official-documentation review, not a Windows HTTP/CORS probe. | Licensing candidate based on documented ETF coverage; not a public/free default and not an anonymous direct client source. |
+| Finnhub | Official API documentation requires a token; stock candles are marked Premium and ETF profile/holdings endpoints are also Premium. The response shape is OHLC/profile data, not the approved factor/FX feature contract. This is an official-documentation review, not a Windows HTTP/CORS probe. | Candidate for a licensed or explicit user-BYOK adapter only; no production wiring. |
 
-Official references: [Alpha Vantage API documentation](https://www.alphavantage.co/documentation/), [Market Data API CORS policy](https://www.marketdata.app/docs/api/cors/), [Market Data API overview](https://www.marketdata.app/docs/api/).
+Official references: [Alpha Vantage API documentation](https://www.alphavantage.co/documentation/), [Alpha Vantage market-data policy](https://www.alphavantage.co/realtime_data_policy/), [Market Data API CORS policy](https://www.marketdata.app/docs/api/cors/), [Market Data API overview](https://www.marketdata.app/docs/api/), [Twelve Data ETF coverage](https://twelvedata.com/etf), [Twelve Data API documentation](https://twelvedata.com/docs/etfs/etfs-list), [Twelve Data redistribution guidance](https://support.twelvedata.com/en/articles/5332349-commercial-and-personal-usage), [Finnhub API documentation](https://finnhub.io/docs/api/quote).
 
 ## Closest safe adaptation
 
@@ -54,6 +56,11 @@ The minimal request remains the three anchors already used by the client:
 ```json
 {
   "assetIds": ["ETF:SPY", "ETF:SOXX", "ETF:GLD"],
+  "anchors": {
+    "year_start": "2026-01-01",
+    "latest_month_start": "2026-07-31",
+    "latest_completed_session": "2026-08-28"
+  },
   "cutoff": "2026-08-31T00:00:00Z",
   "timezone": "UTC"
 }
@@ -64,6 +71,13 @@ to identify the latest session on or before each anchor, but it must not claim
 that this window recreates IC/ICIR or the existing historical FM experiment.
 Those metrics require the approved factor/return data and remain offline
 metadata in the current product.
+
+The same boundary applies to Twelve Data and Finnhub. Their documented ETF
+coverage makes them reasonable candidates for a paid, server-side licensing
+track, but an API key or a Premium label is not evidence of redistribution
+rights. Until written rights and exact feature semantics are confirmed, their
+responses may be used only in an isolated adapter test or an explicitly
+user-supplied/BYOK path, never as the public default.
 
 ## Acceptance gate
 

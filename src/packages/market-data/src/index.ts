@@ -23,6 +23,14 @@ export interface MarketSnapshot {
   readonly warnings?: readonly string[];
 }
 
+/** Point-in-time FX rates expressed as CNY per unit of currency. */
+export interface FxSnapshot {
+  readonly asOf: string;
+  readonly retrievedAt: string;
+  readonly provider: string;
+  readonly cnyPerUnit: Readonly<Record<string, number>>;
+}
+
 export interface MarketSnapshotBundle {
   readonly schemaVersion: "market-snapshot-bundle/v1";
   readonly requestedAt: string;
@@ -30,6 +38,8 @@ export interface MarketSnapshotBundle {
   readonly timezone: string;
   readonly assets: readonly string[];
   readonly snapshots: readonly MarketSnapshot[];
+  /** Absent/null FX is valid evidence but never sufficient for Public Default. */
+  readonly fx?: FxSnapshot | null;
   readonly provider: { readonly id: string; readonly mode: ProviderMode };
   readonly warnings: readonly string[];
   readonly integrityHash: string;
@@ -104,18 +114,28 @@ function parseDateTime(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseBoundary(value: string): { readonly date: string; readonly time: number } | null {
+interface CutoffBoundary {
+  readonly date: string;
+  readonly asOfDate: string;
+  readonly time: number;
+}
+
+function parseBoundary(value: string): CutoffBoundary | null {
   const dateTime = parseDateTime(value);
-  if (dateTime !== null) return { date: value.slice(0, 10), time: dateTime };
+  if (dateTime !== null) {
+    const calendarDate = new Date(Date.UTC(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10))));
+    calendarDate.setUTCDate(calendarDate.getUTCDate() - 1);
+    return { date: value.slice(0, 10), asOfDate: calendarDate.toISOString().slice(0, 10), time: dateTime };
+  }
   const dateOnly = parseDateOnly(value);
-  return dateOnly === null ? null : { date: value, time: dateOnly + 86_399_999 };
+  return dateOnly === null ? null : { date: value, asOfDate: value, time: dateOnly + 86_399_999 };
 }
 
 function assertTimezone(value: unknown): asserts value is string {
   if (!isNonEmptyString(value, 128) || !/^[A-Za-z0-9_+./:-]+$/u.test(value)) throw new MarketDataValidationError("invalid_bundle", "timezone must be a bounded identifier");
 }
 
-function assertRequest(request: MarketDataRequest): { readonly cutoff: { readonly date: string; readonly time: number }; readonly assetIds: readonly string[] } {
+function assertRequest(request: MarketDataRequest): { readonly cutoff: CutoffBoundary; readonly assetIds: readonly string[] } {
   if (!Array.isArray(request.assetIds) || request.assetIds.length === 0 || request.assetIds.length > MARKET_DATA_LIMITS.maxAssets) throw new MarketDataValidationError("invalid_request", "assetIds must be a bounded non-empty array");
   const ids = request.assetIds.map((assetId) => {
     if (!isNonEmptyString(assetId, 128)) throw new MarketDataValidationError("invalid_request", "assetIds must contain non-empty identifiers");
@@ -165,9 +185,12 @@ function snapshotSort(left: MarketSnapshot, right: MarketSnapshot): number {
 }
 
 function canonicalBundleData(bundle: Omit<MarketSnapshotBundle, "integrityHash"> | MarketSnapshotBundle): CanonicalValue {
+  const fxRates: { [key: string]: CanonicalValue } = {};
+  for (const key of Object.keys(bundle.fx?.cnyPerUnit ?? {}).sort()) fxRates[key] = bundle.fx?.cnyPerUnit[key] ?? null;
   return {
     assets: [...bundle.assets],
     cutoff: bundle.cutoff,
+    fx: bundle.fx === undefined || bundle.fx === null ? null : { asOf: bundle.fx.asOf, retrievedAt: bundle.fx.retrievedAt, provider: bundle.fx.provider, cnyPerUnit: fxRates },
     integrityHash: null,
     provider: { id: bundle.provider.id, mode: bundle.provider.mode },
     requestedAt: bundle.requestedAt,
@@ -197,6 +220,23 @@ function normalizeWarnings(value: unknown, field: string): readonly string[] {
   return value.map((item) => item as string);
 }
 
+function normalizeFxSnapshot(value: unknown, cutoff: CutoffBoundary): FxSnapshot | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value) || !isNonEmptyString(value.asOf, 32) || parseDateOnly(value.asOf) === null || value.asOf > cutoff.asOfDate
+    || !isNonEmptyString(value.retrievedAt, 64) || parseDateTime(value.retrievedAt) === null
+    || Date.parse(value.retrievedAt) > cutoff.time || !isNonEmptyString(value.provider, 128)
+    || !isRecord(value.cnyPerUnit) || Object.keys(value.cnyPerUnit).length === 0 || Object.keys(value.cnyPerUnit).length > 64) {
+    throw new MarketDataValidationError("invalid_bundle", "fx snapshot metadata is invalid");
+  }
+  const cnyPerUnit: Record<string, number> = {};
+  for (const [currency, rate] of Object.entries(value.cnyPerUnit)) {
+    if (!isNonEmptyString(currency, 16) || typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) throw new MarketDataValidationError("invalid_bundle", "fx rates must be finite positive numbers");
+    cnyPerUnit[currency] = rate;
+  }
+  if (cnyPerUnit.CNY === undefined) throw new MarketDataValidationError("invalid_bundle", "fx snapshot must include CNY");
+  return { asOf: value.asOf, retrievedAt: value.retrievedAt, provider: value.provider, cnyPerUnit };
+}
+
 function normalizeFeatures(value: unknown): Readonly<Record<string, number | null>> | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value) || Object.keys(value).length > MARKET_DATA_LIMITS.maxFeaturesPerSnapshot) throw new MarketDataValidationError("invalid_bundle", "features must be a bounded object");
@@ -209,7 +249,7 @@ function normalizeFeatures(value: unknown): Readonly<Record<string, number | nul
   return result;
 }
 
-function normalizeSnapshot(value: unknown, timezone: string, cutoff: { readonly date: string; readonly time: number }): MarketSnapshot {
+function normalizeSnapshot(value: unknown, timezone: string, cutoff: CutoffBoundary): MarketSnapshot {
   if (!isRecord(value)) throw new MarketDataValidationError("invalid_bundle", "snapshot must be an object");
   const assetId = value.assetId;
   const anchor = value.anchor;
@@ -228,7 +268,7 @@ function normalizeSnapshot(value: unknown, timezone: string, cutoff: { readonly 
     if (asOf !== null && asOf !== undefined) throw new MarketDataValidationError("invalid_bundle", "missing snapshots cannot have asOf");
   } else {
     if (parseDateOnly(asOf) === null) throw new MarketDataValidationError("malformed_date", "snapshot asOf must be a canonical date");
-    if ((asOf as string) > cutoff.date) throw new MarketDataValidationError("future_data", `snapshot asOf ${(asOf as string)} is after cutoff ${cutoff.date}`);
+    if ((asOf as string) > cutoff.asOfDate) throw new MarketDataValidationError("future_data", `snapshot asOf ${(asOf as string)} is after the last completed date ${cutoff.asOfDate}`);
   }
   const price = assertPrice(value.price, "price");
   const close = assertPrice(value.close, "close");
@@ -265,6 +305,7 @@ export function validateMarketSnapshotBundle(value: unknown, request: MarketData
   if (!isRecord(value.provider) || !isNonEmptyString(value.provider.id, 128) || (value.provider.mode !== "public" && value.provider.mode !== "byok" && value.provider.mode !== "mock")) throw new MarketDataValidationError("invalid_bundle", "provider id and mode are required");
   const warnings = normalizeWarnings(value.warnings, "bundle warnings");
   const snapshots = value.snapshots.map((snapshot) => normalizeSnapshot(snapshot, request.timezone, parsedRequest.cutoff));
+  const fx = normalizeFxSnapshot(value.fx, parsedRequest.cutoff);
   const requestedAssets = new Set(parsedRequest.assetIds);
   const keys = new Set<string>();
   for (const snapshot of snapshots) {
@@ -282,6 +323,7 @@ export function validateMarketSnapshotBundle(value: unknown, request: MarketData
     timezone: value.timezone,
     assets: value.assets,
     snapshots,
+    fx,
     provider: value.provider as { readonly id: string; readonly mode: ProviderMode },
     warnings,
   })) throw new MarketDataValidationError("invalid_bundle", "bundle integrityHash does not match non-secret data");
@@ -292,6 +334,7 @@ export function validateMarketSnapshotBundle(value: unknown, request: MarketData
     timezone: value.timezone,
     assets: [...value.assets] as string[],
     snapshots,
+    ...(fx === null ? {} : { fx }),
     provider: { id: value.provider.id, mode: value.provider.mode },
     warnings,
     integrityHash: value.integrityHash,
@@ -313,12 +356,16 @@ function previousWeekday(date: Date): Date {
 export function resolveSnapshotAnchors(cutoff: string): Readonly<Record<SnapshotAnchor, string>> {
   const boundary = parseBoundary(cutoff);
   if (boundary === null) throw new MarketDataValidationError("malformed_date", "cutoff must be an ISO date or offset datetime");
-  const [yearText, monthText] = boundary.date.split("-");
-  const year = Number(yearText);
-  const month = Number(monthText);
+  const effectiveDate = new Date(Date.UTC(Number(boundary.date.slice(0, 4)), Number(boundary.date.slice(5, 7)) - 1, Number(boundary.date.slice(8, 10))));
+  // A date-only cutoff denotes the end of that calendar day. An explicit
+  // datetime is conservatively treated as an intraday boundary, so the
+  // current calendar date can never be mistaken for a completed session.
+  if (cutoff.includes("T")) effectiveDate.setUTCDate(effectiveDate.getUTCDate() - 1);
+  const year = effectiveDate.getUTCFullYear();
+  const month = effectiveDate.getUTCMonth() + 1;
   const yearStart = previousWeekday(new Date(Date.UTC(year, 0, 1)));
   const monthStart = previousWeekday(new Date(Date.UTC(year, month - 1, 1)));
-  const latest = previousWeekday(new Date(Date.UTC(year, month - 1, Number(boundary.date.slice(8, 10)))));
+  const latest = previousWeekday(effectiveDate);
   return {
     year_start: dateFromParts(yearStart.getUTCFullYear(), yearStart.getUTCMonth() + 1, yearStart.getUTCDate()),
     latest_month_start: dateFromParts(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, monthStart.getUTCDate()),
@@ -399,12 +446,13 @@ function providerUrl(baseUrl: string): string { return new URL("snapshots", `${b
 
 interface ProviderPayload {
   readonly snapshots: unknown;
+  readonly fx?: unknown;
   readonly warnings?: unknown;
 }
 
 function normalizeProviderPayload(value: unknown): ProviderPayload {
   if (!isRecord(value) || !Array.isArray(value.snapshots)) throw new MarketDataValidationError("invalid_bundle", "provider response must contain a snapshots array");
-  return { snapshots: value.snapshots, ...(value.warnings === undefined ? {} : { warnings: value.warnings }) };
+  return { snapshots: value.snapshots, ...(value.fx === undefined ? {} : { fx: value.fx }), ...(value.warnings === undefined ? {} : { warnings: value.warnings }) };
 }
 
 async function fetchProviderBundle(request: MarketDataRequest, signal: AbortSignal | undefined, mode: Exclude<ProviderMode, "mock">, providerId: string, baseUrl: string, apiKey: string | undefined, fetcher: typeof fetch): Promise<MarketSnapshotBundle> {
@@ -421,6 +469,8 @@ async function fetchProviderBundle(request: MarketDataRequest, signal: AbortSign
   try { payload = JSON.parse(responseText) as unknown; } catch { throw new MarketDataValidationError("invalid_bundle", "provider response is not JSON"); }
   const providerPayload = normalizeProviderPayload(payload);
   const requestedAt = request.requestedAt ?? new Date().toISOString();
+  const cutoff = assertRequest(request).cutoff;
+  const fx = normalizeFxSnapshot(providerPayload.fx, cutoff);
   const base: Omit<MarketSnapshotBundle, "integrityHash"> = {
     schemaVersion: "market-snapshot-bundle/v1",
     requestedAt,
@@ -428,6 +478,7 @@ async function fetchProviderBundle(request: MarketDataRequest, signal: AbortSign
     timezone: request.timezone,
     assets: [...request.assetIds],
     snapshots: providerPayload.snapshots as readonly MarketSnapshot[],
+    fx,
     provider: { id: providerId, mode },
     warnings: normalizeWarnings(providerPayload.warnings, "provider warnings"),
   };

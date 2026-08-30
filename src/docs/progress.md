@@ -1,5 +1,32 @@
 # Progress
 
+# Public provider second official review — 2026-08-31
+
+- A second official-documentation review checked Twelve Data and Finnhub in
+  addition to the already probed Yahoo, Stooq, Market Data, Alpha Vantage and
+  Nasdaq sources. Twelve Data has useful ETF coverage but requires an API key
+  and its redistribution guidance requires a separate agreement for providing
+  data to third parties. Finnhub requires a token and documents ETF and candle
+  capabilities as Premium; its response shape still does not supply the
+  approved FM factor/FX contract.
+- No source currently satisfies public redistribution rights, target coverage,
+  browser/mobile access, exact FM feature provenance and stable session
+  semantics together. The report and Linux handoff now identify Twelve Data as
+  a licensing candidate based on documented ETF coverage and Finnhub as a
+  secondary candidate,
+  without enabling either source.
+- The safe implementation boundary remains: licensed or explicit BYOK
+  server-side adapter -> allowlisted symbols -> three bounded anchor rows ->
+  `market-snapshot-bundle/v1` -> client validation -> client-only FM. Price-only
+  or three-anchor data must remain `limited_data`; it cannot be relabeled as
+  momentum/quality and cannot recreate IC/ICIR.
+- Added an explicit FX snapshot boundary to the market bundle and both client
+  portfolio gates. Public Default now requires independently validated,
+  current FX rates for CNY/USD/EUR; fixture FX remains available only for
+  transparent Raw/offline calculations. Missing or stale FX keeps public
+  weights, amounts, units and execution permission at zero while retaining
+  Raw results.
+
 ## Android OAuth integration and public-provider recheck — 2026-08-31
 
 ### Current staging check

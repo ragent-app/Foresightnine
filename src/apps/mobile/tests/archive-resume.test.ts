@@ -5,7 +5,7 @@ import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, MOCK_EVIDENCE, PROVIDER_F
 import { createPortfolioPlan, portfolioMetadata } from "../src/portfolio";
 import type { AppState } from "../src/types";
 
-const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
+const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
 
 function stateForCompletedWorkflow(): AppState {
   const language = "en" as const;

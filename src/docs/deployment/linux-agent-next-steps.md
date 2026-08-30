@@ -9,7 +9,7 @@ the approved plan or to enable an unverified market provider.
 - The client requests only three point-in-time anchors and performs FM locally.
 - Missing/stale prices, missing factor cells and missing FX keep Public Default
   disabled while preserving transparent FM Raw/limited-data state.
-- Yahoo, Stooq, Market Data, Alpha Vantage and Nasdaq were rechecked. No tested
+- Yahoo, Stooq, Market Data, Alpha Vantage, Nasdaq, Twelve Data and Finnhub were rechecked. No tested
   source satisfies all of: target coverage, browser/mobile access, exact FM
   features, stable session semantics and rights to redistribute in a public
   free-plus-subscription product.
@@ -39,6 +39,11 @@ the approved plan or to enable an unverified market provider.
    allowlisted adapter that normalizes vendor responses into `v1`, emits all
    three rows per asset, rejects future/duplicate/malformed rows, limits rate
    and payload size, and records source/adjustment/currency/freshness metadata.
+   Twelve Data is a licensing candidate because its official material covers
+   ETFs, but its terms say third-party redistribution requires a separate
+   agreement. Finnhub is a secondary candidate; its ETF
+   and candle endpoints are documented as Premium. Neither is permission to
+   enable Public Default.
 5. **Factor/FX gate after prices.** Do not fill `momentum`, `quality`, IC, ICIR
    or FX by inference from three prices. Only emit factor features when an
    approved source supplies the exact field semantics and rights. Otherwise

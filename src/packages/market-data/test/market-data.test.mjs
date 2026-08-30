@@ -45,7 +45,7 @@ test("resolves all three anchors with weekend-aware calendar semantics", () => {
     latest_month_start: "2026-07-31",
     latest_completed_session: "2026-08-07",
   });
-  assert.deepEqual(resolveSnapshotAnchors("2026-08-10T00:30:00+08:00").latest_completed_session, "2026-08-10");
+  assert.deepEqual(resolveSnapshotAnchors("2026-08-10T00:30:00+08:00").latest_completed_session, "2026-08-07");
 });
 
 test("validates cutoff, timezone, complete anchor matrix, and deterministic integrity", () => {
@@ -54,6 +54,22 @@ test("validates cutoff, timezone, complete anchor matrix, and deterministic inte
   assert.equal(validated.snapshots.length, request.assetIds.length * SNAPSHOT_ANCHORS.length);
   assert.equal(validated.integrityHash, computeMarketSnapshotIntegrityHash(validated));
   assert.equal(marketDataStatus(validated), "mock");
+});
+
+test("validates point-in-time FX independently and includes it in the integrity hash", () => {
+  const fx = { asOf: "2026-08-07", retrievedAt: "2026-08-09T00:00:00Z", provider: "licensed-or-byok", cnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
+  const validated = validateMarketSnapshotBundle(bundle({ fx }), request);
+  assert.deepEqual(validated.fx, fx);
+  assert.equal(validated.integrityHash, computeMarketSnapshotIntegrityHash(validated));
+  expectCode(() => validateMarketSnapshotBundle(bundle({ fx: { ...fx, cnyPerUnit: { USD: 7.18, EUR: 7.82 } } }), request), "invalid_bundle");
+});
+
+test("rejects a same-calendar-date observation after an intraday cutoff", () => {
+  const intradayRequest = { assetIds: ["AAA"], cutoff: "2026-08-10T00:30:00+08:00", timezone: "UTC", requestedAt: "2026-08-09T00:00:00Z" };
+  const base = createMockMarketSnapshotBundle(intradayRequest);
+  const snapshots = base.snapshots.map((snapshot, index) => index === 0 ? { ...snapshot, asOf: "2026-08-10" } : snapshot);
+  const altered = { ...base, snapshots, integrityHash: computeMarketSnapshotIntegrityHash({ ...base, snapshots }) };
+  expectCode(() => validateMarketSnapshotBundle(altered, intradayRequest), "future_data");
 });
 
 test("public provider sends bounded JSON without an Authorization header", async () => {

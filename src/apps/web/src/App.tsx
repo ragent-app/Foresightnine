@@ -25,6 +25,10 @@ const DRAFT_KEY = "foresightnine.web.draft.v1";
 const OAUTH_PROVIDERS = ["google", "github"] as const;
 const OAUTH_UNAVAILABLE: readonly OAuthProviderAvailability[] = OAUTH_PROVIDERS.map((provider) => ({ provider, enabled: false }));
 
+function fxRatesFingerprint(rates: Readonly<Record<string, number>> | undefined): string {
+  return JSON.stringify(Object.entries(rates ?? {}).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 interface OAuthReadiness {
   readonly providers: readonly OAuthProviderAvailability[];
   readonly status: OAuthReadinessStatus;
@@ -86,10 +90,13 @@ export function App() {
     const providerStatus: FreshnessContext["providerStatus"] = marketDataState.status === "ready" && marketDataState.mode !== "mock"
       ? "fresh"
       : marketDataState.status === "limited" ? "stale" : "unavailable";
+    const fxProviderStatus: FreshnessContext["fxProviderStatus"] = providerStatus === "fresh" && marketDataState.bundle?.fx ? "fresh" : "unavailable";
     const runtimeAsOf = marketDataState.bundle?.cutoff ?? state.freshness.runtimeAsOf;
-    if (state.freshness.providerStatus === providerStatus && state.freshness.runtimeAsOf === runtimeAsOf) return;
-    dispatch({ type: "set_freshness", freshness: { runtimeAsOf, providerStatus } });
-  }, [marketDataState, state.freshness.providerStatus, state.freshness.runtimeAsOf]);
+    const fxAsOf = marketDataState.bundle?.fx?.asOf;
+    const fxCnyPerUnit = marketDataState.bundle?.fx?.cnyPerUnit;
+    if (state.freshness.providerStatus === providerStatus && state.freshness.fxProviderStatus === fxProviderStatus && state.freshness.runtimeAsOf === runtimeAsOf && state.freshness.fxAsOf === fxAsOf && fxRatesFingerprint(state.freshness.fxCnyPerUnit) === fxRatesFingerprint(fxCnyPerUnit)) return;
+    dispatch({ type: "set_freshness", freshness: { runtimeAsOf, providerStatus, fxProviderStatus, ...(fxAsOf === undefined ? {} : { fxAsOf }), ...(fxCnyPerUnit === undefined ? {} : { fxCnyPerUnit }) } });
+  }, [marketDataState, state.freshness.fxAsOf, state.freshness.fxProviderStatus, state.freshness.providerStatus, state.freshness.runtimeAsOf]);
 
   useEffect(() => {
     if (!apiBaseUrl) {

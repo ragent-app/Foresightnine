@@ -114,6 +114,10 @@ export interface AssetFixture {
 export interface FreshnessContext {
   readonly runtimeAsOf: string;
   readonly providerStatus: ProviderFreshnessStatus;
+  /** FX is an independent public-data gate; absent means unavailable. */
+  readonly fxProviderStatus?: ProviderFreshnessStatus;
+  readonly fxAsOf?: string;
+  readonly fxCnyPerUnit?: Readonly<Record<string, number>>;
 }
 
 export interface FreshnessOptions extends FreshnessContext {

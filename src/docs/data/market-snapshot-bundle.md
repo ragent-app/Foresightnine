@@ -24,8 +24,12 @@ Every requested asset has one explicit row for each anchor:
 - `latest_completed_session`: the cutoff calendar date when it is a weekday, or
   the preceding Friday on a weekend.
 
-These are calendar anchors. The adapter does not claim exchange-holiday certainty;
-the provider owns the returned canonical trading/session date in `asOf`.
+These are conservative calendar anchors. For a date-only cutoff, the cutoff day
+is treated as complete; for an explicit intraday datetime, the last completed
+calendar date is the preceding calendar day, then weekend handling is applied.
+The adapter does not claim exchange-holiday certainty; the provider owns the
+returned canonical trading/session date in `asOf`, which must not be after the
+last completed date implied by the cutoff.
 Returned observations after `cutoff`, malformed dates, unknown assets, duplicate
 asset/anchor rows, invalid prices, unsafe provider URLs, and oversized payloads are
 rejected. No rolling 60/120/252-day window is requested by default.

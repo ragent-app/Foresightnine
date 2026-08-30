@@ -160,11 +160,23 @@ export function freshnessFor(asset: AssetFixture, options: FreshnessOptions = { 
 
 export function isPublicEligible(asset: AssetFixture, options: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS }): boolean {
   const freshness = freshnessFor(asset, options);
-  return (asset.tradable || Boolean(asset.proxyInstrument)) && (asset.liquidity === "high" || asset.liquidity === "medium") && freshness.allowCurrentPublicDefault;
+  return hasCurrentFx(options, ["CNY", asset.quoteCurrency]) && (asset.tradable || Boolean(asset.proxyInstrument)) && (asset.liquidity === "high" || asset.liquidity === "medium") && freshness.allowCurrentPublicDefault;
 }
 
-export function fxToBase(quoteCurrency: Currency, baseCurrency: Currency): number {
-  return FX_SNAPSHOT.cnyPerUnit[quoteCurrency] / FX_SNAPSHOT.cnyPerUnit[baseCurrency];
+export function fxToBase(quoteCurrency: Currency, baseCurrency: Currency, cnyPerUnit: Readonly<Record<string, number>> = FX_SNAPSHOT.cnyPerUnit): number {
+  const quoteRate = cnyPerUnit[quoteCurrency];
+  const baseRate = cnyPerUnit[baseCurrency];
+  if (typeof quoteRate !== "number" || typeof baseRate !== "number" || !Number.isFinite(quoteRate) || !Number.isFinite(baseRate) || quoteRate <= 0 || baseRate <= 0) return Number.NaN;
+  return quoteRate / baseRate;
+}
+
+export function hasCurrentFx(options: FreshnessOptions, currencies: readonly string[] = ["CNY", "USD", "EUR"]): boolean {
+  if (options.fxProviderStatus !== "fresh" || !options.fxAsOf || !options.fxCnyPerUnit) return false;
+  const fxDecision = evaluateFreshness({ dataAsOf: options.fxAsOf, runtimeAsOf: options.runtimeAsOf, providerStatus: options.fxProviderStatus }, options.policy ?? FRESHNESS_POLICY);
+  return fxDecision.allowCurrentPublicDefault && currencies.every((currency) => {
+    const rate = options.fxCnyPerUnit?.[currency];
+    return typeof rate === "number" && Number.isFinite(rate) && rate > 0;
+  });
 }
 
 export const FM_FACTORS: readonly FactorExpression[] = [

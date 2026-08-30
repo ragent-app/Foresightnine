@@ -22,13 +22,27 @@ describe("Android freshness policy integration", () => {
     expect(Array.from(publicWeights(Float64Array.from([0.5, 0.2, 0.1, 0.1, 0.05, 0.05])))).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
+  it("does not treat fixture FX as current data for Public Default", () => {
+    const weights = publicWeights(Float64Array.from([0.5, 0.2, 0.1, 0.1, 0.05, 0.05]), ASSETS, { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" });
+    expect(Array.from(weights)).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  it("uses revised provider FX values when the FX as-of date is unchanged", () => {
+    const result = computeFm(fmInput());
+    const common = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
+    const revised = { ...common, fxCnyPerUnit: { CNY: 1, USD: 8.18, EUR: 7.82 } };
+    const first = createPortfolioPlan(result, 100000, "CNY", ASSETS, "zh", "main", common);
+    const second = createPortfolioPlan(result, 100000, "CNY", ASSETS, "zh", "main", revised);
+    expect(second.rows.find((row) => row.asset.id === "GRID")?.publicAmount).not.toBe(first.rows.find((row) => row.asset.id === "GRID")?.publicAmount);
+  });
+
   it("keeps fresh and exact-threshold data current and excludes stale or historical-only data", () => {
     const exact = freshnessFor(ASSETS[0]!, { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh", policy: DEFAULT_FRESHNESS_POLICY });
     expect(exact.status).toBe("fresh");
     expect(exact.allowCurrentPublicDefault).toBe(true);
     expect(freshnessFor(ASSETS[4]!, { runtimeAsOf: RUNTIME_AS_OF, providerStatus: "fresh" }).status).toBe("stale");
     const staleAssets = ASSETS.map((asset, index) => index === 0 ? { ...asset, asOf: "2026-08-07" } : asset);
-    const weights = publicWeights(Float64Array.from([0.5, 0.2, 0.1, 0.1, 0.05, 0.05]), staleAssets, { runtimeAsOf: RUNTIME_AS_OF, providerStatus: "fresh" });
+    const weights = publicWeights(Float64Array.from([0.5, 0.2, 0.1, 0.1, 0.05, 0.05]), staleAssets, { runtimeAsOf: RUNTIME_AS_OF, providerStatus: "fresh", fxProviderStatus: "fresh", fxAsOf: RUNTIME_AS_OF.slice(0, 10), fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } });
     expect(weights[0]).toBe(0);
     expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1);
   });

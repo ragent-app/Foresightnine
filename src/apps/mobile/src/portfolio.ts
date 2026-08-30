@@ -1,5 +1,5 @@
 import { allocateCapital, type ComputeFmResult } from "@foresightnine/fm-engine";
-import { ASSETS, FIXTURE_STATE, FRESHNESS_POLICY, FX_SNAPSHOT, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, RUNTIME_AS_OF, WORLDLINE_BASELINE_DATE, freshnessFor } from "./fixtures";
+import { ASSETS, FIXTURE_STATE, FRESHNESS_POLICY, FX_SNAPSHOT, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, RUNTIME_AS_OF, WORLDLINE_BASELINE_DATE, freshnessFor, hasCurrentFx } from "./fixtures";
 import { t, type CopyKey } from "./i18n";
 import type { AllocationRow, AssetFixture, BranchKind, Currency, FreshnessOptions, Language, NavPoint, PortfolioMode, ScenarioNav } from "./types";
 
@@ -16,8 +16,11 @@ export function displayAsset(asset: AssetFixture, language: Language): { readonl
   return keys ? { name: t(language, keys[0]), role: t(language, keys[1]) } : { name: asset.name, role: asset.role };
 }
 
-function fxToBase(quote: Currency, base: Currency): number {
-  return FX_SNAPSHOT.cnyPerUnit[quote] / FX_SNAPSHOT.cnyPerUnit[base];
+function fxToBase(quote: Currency, base: Currency, cnyPerUnit: Readonly<Record<string, number>> = FX_SNAPSHOT.cnyPerUnit): number {
+  const quoteRate = cnyPerUnit[quote];
+  const baseRate = cnyPerUnit[base];
+  if (typeof quoteRate !== "number" || typeof baseRate !== "number" || !Number.isFinite(quoteRate) || !Number.isFinite(baseRate) || quoteRate <= 0 || baseRate <= 0) return Number.NaN;
+  return quoteRate / baseRate;
 }
 
 function sum(values: ArrayLike<number>): number {
@@ -31,7 +34,7 @@ function rawExecutable(asset: AssetFixture): boolean { return isCash(asset) || a
 
 /** A proxy is allowed only when it is explicitly named; unknown economic exposure is never silently tradable. */
 export function isPublicEligible(asset: AssetFixture, freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): boolean {
-  return isCash(asset) ? freshnessFor(asset, freshnessOptions).allowCurrentPublicDefault : (rawExecutable(asset) && asset.liquidity !== "low" && freshnessFor(asset, freshnessOptions).allowCurrentPublicDefault);
+  return hasCurrentFx(freshnessOptions, ["CNY", asset.quoteCurrency]) && (isCash(asset) ? freshnessFor(asset, freshnessOptions).allowCurrentPublicDefault : (rawExecutable(asset) && asset.liquidity !== "low" && freshnessFor(asset, freshnessOptions).allowCurrentPublicDefault));
 }
 
 function securityCap(asset: AssetFixture): number { return isCash(asset) ? 1 : SINGLE_SECURITY_CAP; }
@@ -91,7 +94,7 @@ function allocationFor(weights: Float64Array, capital: number, baseCurrency: Cur
   const candidates = assets.map((asset, index) => ({ asset, index, weight: Math.max(weights[index] ?? 0, 0) })).filter((candidate) => candidate.weight > EPSILON && (!requirePublicEligibility || isPublicEligible(candidate.asset, freshnessOptions)));
   let executable = candidates.every((candidate) => rawExecutable(candidate.asset));
   if (candidates.length === 0) return { values, cashRemainder: capital, executable: false };
-  const products = candidates.map(({ asset, weight }) => ({ id: asset.id, weight, price: asset.price, fxToBase: fxToBase(asset.quoteCurrency, baseCurrency), lotSize: asset.lotSize, fractionalSupported: asset.fractional }));
+  const products = candidates.map(({ asset, weight }) => { const fx = fxToBase(asset.quoteCurrency, baseCurrency, freshnessOptions.fxCnyPerUnit); return { id: asset.id, weight, price: asset.price, fxToBase: Number.isFinite(fx) && fx > 0 ? fx : 1, lotSize: asset.lotSize, fractionalSupported: asset.fractional }; });
   const allocated = allocateCapital(capital, products);
   const byId = new Map(allocated.allocations.map((item) => [item.id, item]));
   for (const candidate of candidates) {
@@ -105,7 +108,8 @@ function allocationFor(weights: Float64Array, capital: number, baseCurrency: Cur
     if (!cash || (requirePublicEligibility && !isPublicEligible(cash, freshnessOptions))) executable = false;
     else {
       const current = values.get(cash.id) ?? { amount: 0, units: 0, residual: 0 };
-      const unitValue = cash.price * fxToBase(cash.quoteCurrency, baseCurrency);
+      const cashFx = fxToBase(cash.quoteCurrency, baseCurrency, freshnessOptions.fxCnyPerUnit);
+      const unitValue = cash.price * (Number.isFinite(cashFx) && cashFx > 0 ? cashFx : 1);
       values.set(cash.id, { amount: current.amount + cashRemainder, units: current.units + cashRemainder / unitValue, residual: current.residual });
     }
   }
@@ -149,7 +153,8 @@ export interface PortfolioPlan {
 function constraintReasons(asset: AssetFixture, rawWeight: number, publicWeight: number, raw: Float64Array, assets: readonly AssetFixture[], language: Language, freshnessOptions: FreshnessOptions): string[] {
   const reasons: string[] = [];
   if (asset.proxy) reasons.push(`${t(language, "proxyReason")} ${asset.proxy}`);
-  if (!isPublicEligible(asset, freshnessOptions) && rawWeight > EPSILON) reasons.push(freshnessFor(asset, freshnessOptions).historicalOnly ? t(language, "staleReason") : t(language, "liquidityReason"));
+    if (!hasCurrentFx(freshnessOptions, ["CNY", asset.quoteCurrency]) && rawWeight > EPSILON) reasons.push(language === "en" ? "Current FX data is unavailable; Public Default is disabled." : "当前汇率数据不可用，Public Default 已停用。");
+    else if (!isPublicEligible(asset, freshnessOptions) && rawWeight > EPSILON) reasons.push(freshnessFor(asset, freshnessOptions).historicalOnly ? t(language, "staleReason") : t(language, "liquidityReason"));
   if (asset.volatility === "high" && publicWeight < rawWeight - EPSILON) {
     const highWeight = assets.reduce((total, candidate, index) => total + (candidate.volatility === "high" ? raw[index]! : 0), 0);
     reasons.push(highWeight > HIGH_VOLATILITY_CLASS_CAP + EPSILON ? t(language, "highVolatilityCap") : t(language, "singleSecurityCap"));
@@ -173,7 +178,7 @@ export function createPortfolioPlan(result: ComputeFmResult, capital: number, ba
     const freshness = freshnessFor(asset, freshnessOptions);
     const reasons = constraintReasons(asset, rawWeight, publicWeight, raw, assets, language, freshnessOptions);
     if (rawAllocation.residual > EPSILON || publicAllocation.residual > EPSILON) reasons.push(t(language, "lotReason"));
-    return { asset, rawWeight, publicWeight, rawAmount: rawAllocation.amount, publicAmount: publicAllocation.amount, rawUnits: rawAllocation.units, publicUnits: publicAllocation.units, rawResidual: rawAllocation.residual, publicResidual: publicAllocation.residual, rawExecutable: rawExecutable(asset), publicExecutable: isPublicEligible(asset, freshnessOptions), reasons, freshness: freshness.status, freshnessLabel: freshness.label, publicExecutionAllowed: freshness.allowCurrentPublicDefault };
+    return { asset, rawWeight, publicWeight, rawAmount: rawAllocation.amount, publicAmount: publicAllocation.amount, rawUnits: rawAllocation.units, publicUnits: publicAllocation.units, rawResidual: rawAllocation.residual, publicResidual: publicAllocation.residual, rawExecutable: rawExecutable(asset), publicExecutable: isPublicEligible(asset, freshnessOptions), reasons, freshness: freshness.status, freshnessLabel: freshness.label, publicExecutionAllowed: isPublicEligible(asset, freshnessOptions) };
   });
   return {
     rows,

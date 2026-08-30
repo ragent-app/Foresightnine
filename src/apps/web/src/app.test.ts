@@ -17,7 +17,7 @@ import { LanguageProvider, t } from "./i18n";
 import { SocialLoginPanel } from "./components/SocialLoginPanel";
 import { historical } from "./nav-data";
 
-const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
+const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
 
 describe("Web thesis validation", () => {
   it("rejects empty, overlong, and non-positive inputs", () => {
@@ -403,7 +403,7 @@ describe("FM worker and public delta", () => {
 
   it("rejects future-dated assets from Public Default", () => {
     const futureAssets = ASSET_FIXTURES.map((asset, index) => index === 0 ? { ...asset, asOf: "2026-08-10" } : asset);
-    const weights = publicWeights([0.8, 0.1, 0.1, 0, 0, 0], futureAssets, { runtimeAsOf: "2026-08-09T00:00:00Z", providerStatus: "fresh" });
+    const weights = publicWeights([0.8, 0.1, 0.1, 0, 0, 0], futureAssets, { ...FRESH_FIXTURE, runtimeAsOf: "2026-08-09T00:00:00Z", fxAsOf: "2026-08-09" });
     expect(weights[0]).toBe(0);
     expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1);
   });

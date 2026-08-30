@@ -17,6 +17,10 @@ import { createMarketRuntimeController, type MarketRuntimeState } from "@foresig
 
 export { switchLanguageState } from "./language-state";
 
+function fxRatesFingerprint(rates: Readonly<Record<string, number>> | undefined): string {
+  return JSON.stringify(Object.entries(rates ?? {}).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 export interface MobileStore {
   readonly state: AppState;
   readonly branches: readonly Branch[];
@@ -61,10 +65,13 @@ export function AppProvider({ children }: PropsWithChildren): React.JSX.Element 
     const providerStatus = marketDataState.status === "ready" && marketDataState.mode !== "mock"
       ? "fresh" as const
       : marketDataState.status === "limited" ? "stale" as const : "unavailable" as const;
+    const fxProviderStatus = providerStatus === "fresh" && marketDataState.bundle?.fx ? "fresh" as const : "unavailable" as const;
     const runtimeAsOf = marketDataState.bundle?.cutoff ?? state.freshness.runtimeAsOf;
-    if (state.freshness.providerStatus === providerStatus && state.freshness.runtimeAsOf === runtimeAsOf) return;
-    setState((current) => ({ ...current, freshness: { runtimeAsOf, providerStatus } }));
-  }, [marketDataState, state.freshness.providerStatus, state.freshness.runtimeAsOf]);
+    const fxAsOf = marketDataState.bundle?.fx?.asOf;
+    const fxCnyPerUnit = marketDataState.bundle?.fx?.cnyPerUnit;
+    if (state.freshness.providerStatus === providerStatus && state.freshness.fxProviderStatus === fxProviderStatus && state.freshness.runtimeAsOf === runtimeAsOf && state.freshness.fxAsOf === fxAsOf && fxRatesFingerprint(state.freshness.fxCnyPerUnit) === fxRatesFingerprint(fxCnyPerUnit)) return;
+    setState((current) => ({ ...current, freshness: { runtimeAsOf, providerStatus, fxProviderStatus, ...(fxAsOf === undefined ? {} : { fxAsOf }), ...(fxCnyPerUnit === undefined ? {} : { fxCnyPerUnit }) } }));
+  }, [marketDataState, state.freshness.fxAsOf, state.freshness.fxProviderStatus, state.freshness.providerStatus, state.freshness.runtimeAsOf]);
   const [archive, setArchive] = useState<PrivacySafeDocument | null>(null);
   const [archiveAvailable, setArchiveAvailable] = useState(false);
   useEffect(() => { void Promise.all([loadDraft(), loadLanguage(), archiveExists()]).then(([draft, language, exists]) => {

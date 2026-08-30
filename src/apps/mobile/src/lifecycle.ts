@@ -4,7 +4,7 @@ import type { AppAction, AppState } from "./types";
 export const mobileInitialState: AppState = {
   stage: "thesis", language: "zh", viewpoint: "如果未来两年数据中心电力需求持续上升，并推动电网设备投资提速，那么电网基础设施将受益。", capital: "1000000", currency: "CNY", draftRestored: false,
   challengeStatus: "idle", challengeFailure: null, challengeTurns: [], replyDraft: "", rubric: rubricFor("zh"), evidence: [], branchSnapshot: null, searchStatus: "idle", confirmation: "pending", unresolvedIssuesAcknowledged: false, reservationNote: "", selectedBranch: "main",
-  fmStatus: "idle", fmProgress: 0, fmStep: "", fmResult: null, portfolioMode: "public", exportNotice: "", freshness: { runtimeAsOf: DEFAULT_RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS },
+  fmStatus: "idle", fmProgress: 0, fmStep: "", fmResult: null, portfolioMode: "public", exportNotice: "", freshness: { runtimeAsOf: DEFAULT_RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, fxProviderStatus: "unavailable" },
 };
 
 /** Reset every derived research field while retaining the user's locale and inputs. */

@@ -28,6 +28,15 @@ export function freshnessFor(asset: AssetFixture, options: FreshnessOptions = { 
   return evaluateFreshness({ dataAsOf: asset.asOf, runtimeAsOf: options.runtimeAsOf, providerStatus: options.providerStatus, declaredFreshness: asset.freshness }, options.policy ?? FRESHNESS_POLICY);
 }
 
+export function hasCurrentFx(options: FreshnessOptions, currencies: readonly string[] = ["CNY", "USD", "EUR"]): boolean {
+  if (options.fxProviderStatus !== "fresh" || !options.fxAsOf || !options.fxCnyPerUnit) return false;
+  const fxDecision = evaluateFreshness({ dataAsOf: options.fxAsOf, runtimeAsOf: options.runtimeAsOf, providerStatus: options.fxProviderStatus }, options.policy ?? FRESHNESS_POLICY);
+  return fxDecision.allowCurrentPublicDefault && currencies.every((currency) => {
+    const rate = options.fxCnyPerUnit?.[currency];
+    return typeof rate === "number" && Number.isFinite(rate) && rate > 0;
+  });
+}
+
 export const RUBRIC: readonly RubricItem[] = [
   { id: "premise", label: "前提清晰度", score: 4, critical: true, rationale: "观点包含方向与受益对象。" },
   { id: "time", label: "时间边界", score: 3, critical: true, rationale: "两年窗口可用于后续验证。" },

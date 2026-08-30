@@ -13,7 +13,7 @@ import { mobileInitialState, reduceChallengeAction, resetMobileWorkflowState } f
 import { switchLanguageState } from "../src/language-state";
 import { fmInput as webFmInput } from "../../web/src/fixtures";
 
-const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
+const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
 
 describe("mobile thesis and evidence boundaries", () => {
   it("keeps the staging default out of deterministic test mode while allowing explicit overrides", () => {
