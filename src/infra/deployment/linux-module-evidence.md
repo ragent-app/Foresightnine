@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `3eaf5dc`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `5303715`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -157,6 +157,10 @@ production Cloudflare mutation was performed.
   asset-level entry in that manifest. The five legacy IDs and five canonical
   ETF IDs are therefore bound to the same fixed Yahoo evaluation provider;
   missing, duplicate, or mismatched mappings fail closed.
+- The fixed-host adapter rejects vendor HTTP redirects instead of allowing a
+  provider response to move the request to an unapproved host. The production
+  preflight parses the manifest and rejects malformed JSON, empty provider or
+  asset lists, and duplicate IDs.
 - The 2026-08-31 Linux probe confirmed Yahoo chart returned JSON for SPY and
   SOXX, Frankfurter returned a no-key USD/EUR reference rate, and Kenneth
   French's daily momentum archive downloaded successfully. Stooq returned a
@@ -201,11 +205,15 @@ runtime.
   `37db03028d3fb207664dab15f419b50f640c66340dd9fa27e0c210e4324cb97d`.
 - Google/GitHub buttons remain intentionally disabled as `尚未配置`; no
   provider credentials or callback exchange were fabricated.
+- Public staging account smoke registered and hard-deleted an ephemeral local
+  mock account: registration returned 201, deletion returned 200, subsequent
+  login returned 401, and the test-created orphan auth session was removed.
 
 ## Portable and API validation gates
 
-- `uv run --project apps/api pytest apps/api/tests -q`: 216 passed, 1 skipped
-  (217 collected). The only skip is the optional Redis integration test because
+- `corepack pnpm test` completed the workspace tests and API suite;
+  the final API run was 217 passed, 1 skipped (218 collected). The only skip is
+  the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
   `verify:production-preflight` command correctly rejects this development
@@ -213,6 +221,12 @@ runtime.
   OAuth configuration, licensed market admission, release artifact, monitoring
   declaration and approval manifest are absent.
 - Workspace `typecheck` passed for all nine participating packages/apps.
+- `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
+  asset registry, and the 24-path OpenAPI export.
+- `corepack pnpm verify:boundaries` was run and correctly failed on Linux-only
+  portability constraints: the repository intentionally references the
+  Windows `D:\Foresightnine` governance files and Windows implementation-root
+  suffix. The baseline was not weakened or rewritten.
 - Workspace `test` passed, including generated-contract checks, FM-engine,
   API-client/domain/asset-registry, market-data, web and mobile tests.
 - OpenAPI export drift check passed with 24 paths; generated TypeScript and
@@ -236,7 +250,8 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `3eaf5dc`; this evidence follow-up records the
+implementation checkpoint is `5303715`; provider mapping and redirect hardening
+are in `3eaf5dc` and `ea8f12c`. This evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
