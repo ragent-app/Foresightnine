@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `7d31dca320b83b359fe90ee0472df7e7d4751179`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `3eaf5dc`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -153,6 +153,10 @@ production Cloudflare mutation was performed.
   or invalid manifest disables evaluation rows rather than enabling a provider
   by code default. The release preflight also checks that the manifest is
   present in the source image inputs.
+- Runtime admission now validates every requested asset symbol against a unique
+  asset-level entry in that manifest. The five legacy IDs and five canonical
+  ETF IDs are therefore bound to the same fixed Yahoo evaluation provider;
+  missing, duplicate, or mismatched mappings fail closed.
 - The 2026-08-31 Linux probe confirmed Yahoo chart returned JSON for SPY and
   SOXX, Frankfurter returned a no-key USD/EUR reference rate, and Kenneth
   French's daily momentum archive downloaded successfully. Stooq returned a
@@ -200,9 +204,9 @@ runtime.
 
 ## Portable and API validation gates
 
-- `uv run --project apps/api pytest apps/api/tests -q`: 215 passed, 1 skipped
-  (216 collected). The only skip is the intentionally unavailable Windows
-  worldline source audit.
+- `uv run --project apps/api pytest apps/api/tests -q`: 216 passed, 1 skipped
+  (217 collected). The only skip is the optional Redis integration test because
+  no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
   `verify:production-preflight` command correctly rejects this development
   environment because production credentials, TLS Redis, external CAPTCHA,
@@ -232,7 +236,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `7d31dca`; this evidence follow-up records the
+implementation checkpoint is `3eaf5dc`; this evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
