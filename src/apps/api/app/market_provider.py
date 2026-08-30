@@ -339,6 +339,12 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
                 snapshots.append(_missing_row(asset_id, anchor, request, "Price or authorized feature data is unavailable for this anchor."))
                 continue
             price = rows[selected]
+            is_stale = selected < anchor_date
+            row_warnings = ["Price-only evaluation row; no licensed factor or FX fields."]
+            if is_stale:
+                row_warnings.append(
+                    f"Provider session {selected.isoformat()} precedes requested anchor {anchor_date.isoformat()}."
+                )
             snapshots.append({
                 "assetId": asset_id,
                 "anchor": anchor,
@@ -348,8 +354,8 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
                 "price": price,
                 "close": price,
                 "currency": "USD",
-                "status": "ok",
-                "warnings": ["Price-only evaluation row; no licensed factor or FX fields."],
+                "status": "stale" if is_stale else "ok",
+                "warnings": row_warnings,
             })
     return {"snapshots": snapshots, "warnings": sorted(set(warnings))}
 

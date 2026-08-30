@@ -101,6 +101,32 @@ def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -
     assert any("No licensed provider mapping" in warning for warning in response["warnings"])
 
 
+def test_evaluation_adapter_marks_rows_before_the_requested_anchor_stale(monkeypatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
+    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {})
+    monkeypatch.setattr(YahooEvaluationAdapter, "fetch", lambda *_args: {
+        date(2026, 8, 2): 490.0,
+        date(2026, 8, 27): 500.0,
+    })
+    request = MarketSnapshotRequest.model_validate({
+        **REQUEST,
+        "assetIds": ["ETF:SPY"],
+        "anchors": {
+            "year_start": "2026-01-01",
+            "latest_month_start": "2026-08-03",
+            "latest_completed_session": "2026-08-28",
+        },
+    })
+
+    rows = build_snapshot_response(request)["snapshots"]
+
+    assert rows[0]["status"] == "missing"
+    assert rows[1]["status"] == "stale"
+    assert rows[2]["status"] == "stale"
+    assert all(any("precedes requested anchor" in warning for warning in row["warnings"]) for row in rows[1:])
+
+
 def test_canonical_registry_etf_ids_are_allowlisted(monkeypatch) -> None:
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
