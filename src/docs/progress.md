@@ -18,6 +18,27 @@
   usable for fail-closed integration testing, not as a live Public Default
   feed.
 
+## OAuth ticket and client-boundary progress — 2026-08-31
+
+- API OAuth callback now uses a server-only, short-lived, one-time opaque
+  exchange ticket. The callback never places a bearer token or provider token
+  in a URL; `POST /v1/auth/oauth/exchange` consumes the ticket before issuing a
+  local session. PKCE/state replay, provider failure, cancellation, ticket
+  replay/expiry, logout and account deletion are covered by API tests.
+- The exchange route and its strict request/response schemas are present in the
+  generated OpenAPI JSON/YAML contract. This work was reviewed by Sol and
+  pushed in commit `483f381`.
+- Web now has a separately reviewed strict OAuth client boundary in
+  `src/apps/web/src/oauth-client.ts`: explicit HTTPS return URI only, safe API
+  base validation, callback parameter rejection, opaque-ticket exchange,
+  sessionStorage-only persistence, and bearer-header logout/delete helpers.
+  The helper tests and Web typecheck pass; pushed in `68ce0fa`.
+- Web UI button/callback lifecycle integration and Android Linking plus
+  SecureStore integration are not yet complete. Current staging OAuth
+  readiness is intentionally disabled because no provider credentials were
+  injected. Android device evidence is also pending; the local `adb devices`
+  check found no attached emulator or physical device.
+
 ## Staging client default and Public Default fail-closed coverage — 2026-08-31
 
 - Wired Web and Android to use `https://api-staging.foresightnine.com` when no
