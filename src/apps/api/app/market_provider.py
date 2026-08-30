@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 import math
 import os
+from pathlib import Path
 import re
 from typing import Any
 from urllib.parse import urlencode
@@ -38,6 +39,33 @@ ASSET_SYMBOLS = {
 MAX_BODY_BYTES = 64 * 1024
 MAX_VENDOR_BYTES = 512 * 1024
 SYMBOL_PATTERN = re.compile(r"^[A-Z][A-Z0-9._-]{0,15}$")
+PROVIDER_MANIFEST_PATH = Path(__file__).resolve().parents[3] / "infra" / "deployment" / "provider-manifest.v1.json"
+
+
+def _evaluation_manifest_allows(provider_id: str) -> bool:
+    """Require the checked-in admission manifest to agree with runtime mode."""
+    try:
+        manifest = json.loads(PROVIDER_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != "provider-admission-manifest/v1":
+        return False
+    if manifest.get("runtime_status") != "staging_only" or manifest.get("production_admission") != "blocked_pending_written_terms":
+        return False
+    providers = manifest.get("providers")
+    if not isinstance(providers, list):
+        return False
+    return any(
+        isinstance(provider, dict)
+        and provider.get("id") == provider_id
+        and provider.get("enabled_modes") == ["staging_evaluation"]
+        and provider.get("credentials") == "none"
+        and provider.get("raw_cache") == "disabled"
+        and provider.get("features") == "not_authorized"
+        and provider.get("fx") == "not_authorized"
+        and provider.get("public_redistribution") == "not_approved"
+        for provider in providers
+    )
 
 
 class MarketSnapshotRequest(BaseModel):
@@ -176,7 +204,11 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
     """Return a client-compatible bundle fragment with explicit limitations."""
 
     mode = os.getenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "unavailable").strip().lower()
-    evaluation_enabled = mode == "yahoo_evaluation" and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
+    evaluation_enabled = (
+        mode == "yahoo_evaluation"
+        and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
+        and _evaluation_manifest_allows("yahoo_chart_evaluation")
+    )
     adapter = YahooEvaluationAdapter() if evaluation_enabled else None
     warnings = [
         "Linux provider adapter is staging/evaluation-only; no production data license is asserted.",

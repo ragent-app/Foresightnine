@@ -4,6 +4,7 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
+from app import market_provider
 from app.main import app
 from app.market_provider import ANCHORS, MarketSnapshotRequest, YahooEvaluationAdapter, build_snapshot_response
 
@@ -36,6 +37,18 @@ def test_default_provider_is_explicitly_limited(monkeypatch) -> None:
     monkeypatch.delenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", raising=False)
     response = build_snapshot_response(MarketSnapshotRequest.model_validate(REQUEST))
     assert len(response["snapshots"]) == 6
+    assert all(row["status"] == "missing" for row in response["snapshots"])
+    assert any("No approved provider" in warning for warning in response["warnings"])
+
+
+def test_evaluation_mode_requires_the_admission_manifest(monkeypatch, tmp_path) -> None:
+    assert market_provider._evaluation_manifest_allows("yahoo_chart_evaluation") is True
+    monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", tmp_path / "missing.json")
+    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
+
+    response = build_snapshot_response(MarketSnapshotRequest.model_validate(REQUEST))
+
     assert all(row["status"] == "missing" for row in response["snapshots"])
     assert any("No approved provider" in warning for warning in response["warnings"])
 

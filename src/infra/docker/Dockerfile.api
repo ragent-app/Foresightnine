@@ -6,6 +6,7 @@ COPY apps/api/app /app/apps/api/app
 COPY packages/contracts/schemas /app/packages/contracts/schemas
 COPY packages/asset-registry /app/packages/asset-registry
 COPY infra/migrations /app/infra/migrations
+COPY infra/deployment/provider-manifest.v1.json /app/infra/deployment/provider-manifest.v1.json
 RUN uv sync --project /app/apps/api --frozen --no-dev --no-install-project
 
 EXPOSE 8000
