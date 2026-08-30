@@ -20,12 +20,37 @@ The deployment context must provide:
   `FORESIGHTNINE_PROXY_MODE=reverse_proxy` with a comma-separated list of the
   actual ingress proxy CIDRs in `FORESIGHTNINE_TRUSTED_PROXY_CIDRS`; universal
   `/0` networks are rejected;
-- an external CAPTCHA declaration in `FORESIGHTNINE_CAPTCHA_PROVIDER` (or an equivalent non-disabled `FORESIGHTNINE_CAPTCHA_MODE`) plus `FORESIGHTNINE_CAPTCHA_SECRET`. `accept`, `unavailable`, `reject`, mock, debug, and QA declarations are rejected;
+- the implemented external Cloudflare Turnstile declaration in
+  `FORESIGHTNINE_CAPTCHA_PROVIDER=turnstile` (or equivalent mode) plus
+  `FORESIGHTNINE_CAPTCHA_SECRET` and a fully-qualified
+  `FORESIGHTNINE_CAPTCHA_HOSTNAME` matching an HTTPS CORS origin hostname;
+  `accept`, `unavailable`, `reject`, unknown,
+  mock, debug, and QA declarations are rejected. The verifier also requires
+  Cloudflare's response hostname to match this configured hostname;
 - comma-separated `FORESIGHTNINE_CORS_ORIGINS`, with every origin using HTTPS and containing no path, query, or fragment;
+- complete server-side Google and GitHub OAuth configuration: an HTTPS callback,
+  a non-empty return-URI allowlist, and client ID/secret values for both
+  providers;
+- `FORESIGHTNINE_MARKET_PROVIDER_MODE=licensed`; the staging-only Stooq
+  evaluation adapter cannot satisfy this production gate;
+- the provider admission manifest must set `production_admission` to
+  `approved` and explicitly mark `market_price`, `factor_features`, and
+  `fx_reference` as approved with written terms and public redistribution
+  rights. A deployment may pass an external manifest with
+  `--provider-admission-manifest <path>` or
+  `FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST`; the path must be absolute and
+  outside the repository. Without it, the checked-in staging manifest is used
+  and intentionally fails this gate;
+- `FORESIGHTNINE_METRICS_ENABLED=true` so the deployment monitor has an
+  explicit redacted metrics surface;
 - a readable, absolute, repository-external `FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT` ending in `.apk` or `.aab`. Any `app-debug.apk`, `debug`, `qa`, or QA-only path is rejected. The verifier checks the deployment-provided artifact with filesystem stat/access or a test-injected artifact reader/stat function;
 - an absolute path supplied as `--approval-manifest <path>` or `FORESIGHTNINE_RELEASE_APPROVAL_MANIFEST`. The path must be outside the repository and owned by the deployment process. Its JSON object must set all of these fields to boolean `true`: `legal`, `privacy`, `terms`, `risk`, `data_license`, `security`, `operations`, `rollback`, `android_signing`, and `artifact_provenance`.
 
-The static container gates also read `infra/docker/Dockerfile.api` and `infra/docker/compose.yaml` from the repository (with test injection available). The Dockerfile must copy `packages/asset-registry`; Compose must contain `FORESIGHTNINE_LLM_PROVIDER` and must not contain the legacy `FORESIGHTNINE_PROVIDER` variable.
+The static container and data gates also read `infra/docker/Dockerfile.api`,
+`infra/docker/compose.yaml`, and the provider admission manifest from the
+repository (with test injection available). The Dockerfile must copy
+`packages/asset-registry`; Compose must contain `FORESIGHTNINE_LLM_PROVIDER`
+and must not contain the legacy `FORESIGHTNINE_PROVIDER` variable.
 
 The verifier checks presence and safe configuration shape; it does not print values and does not prove that a credential is valid. Test fixtures should use dummy values that do not resemble real secrets.
 
@@ -39,7 +64,7 @@ peer and ingress path match the declaration before traffic is exposed.
 
 ## Current expected result
 
-This repository does not contain the external approval manifest, real provider secrets, production Postgres or Redis runtime, an external CAPTCHA runtime, a deployment-owned Android release artifact, or signing Android credentials. Therefore the current repository state is expected to be rejected. The absence of those deployment-owned inputs is a safety result, not a test failure. The checked-in development Compose configuration selects the mock provider and is also unsuitable for production.
+This repository does not contain the external approval manifest, real provider secrets, production Postgres or Redis runtime, an external CAPTCHA runtime, a deployment-owned Android release artifact, or signing Android credentials. Therefore the current repository state is expected to be rejected. The absence of those deployment-owned inputs is a safety result, not a test failure. The checked-in development Compose configuration selects the mock provider and is also unsuitable for production. The preflight also rejects staging-only market mode, incomplete OAuth, disabled monitoring, and the staging manifest's unapproved price/factor/FX status.
 
 Run the local checks with:
 

@@ -45,6 +45,7 @@ FORESIGHTNINE_PROXY_MODE=reverse_proxy
 FORESIGHTNINE_TRUSTED_PROXY_CIDRS=<actual-ingress-proxy-cidrs>
 FORESIGHTNINE_CAPTCHA_PROVIDER=<approved-external-provider>
 FORESIGHTNINE_CAPTCHA_SECRET=<secret-manager-reference>
+FORESIGHTNINE_CAPTCHA_HOSTNAME=<approved-web-hostname>
 FORESIGHTNINE_CORS_ORIGINS=https://<approved-web-origin>
 ```
 
@@ -71,7 +72,7 @@ owner-controlled, non-debug Android `.apk` or `.aab` outside the repository.
 Then run:
 
 ```powershell
-corepack pnpm verify:production-preflight -- --approval-manifest <external-manifest-path>
+corepack pnpm verify:production-preflight -- --approval-manifest <external-manifest-path> --provider-admission-manifest <external-provider-manifest-path>
 uv run --project apps/api python apps/api/scripts/glm_coding_live_smoke.py
 uv run --project apps/api python apps/api/scripts/glm_mcp_live_smoke.py
 ```

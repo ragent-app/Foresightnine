@@ -43,6 +43,12 @@ const DISABLED_CAPTCHA_DECLARATIONS = new Set([
   "false",
 ]);
 
+const REQUIRED_DATA_AUTHORIZATIONS = Object.freeze([
+  "market_price",
+  "factor_features",
+  "fx_reference",
+]);
+
 function envValue(env, name) {
   return typeof env?.[name] === "string" ? env[name].trim() : "";
 }
@@ -92,6 +98,52 @@ function hasHttpsCorsOrigins(value) {
   });
 }
 
+function hasCaptchaHostname(value) {
+  if (!value || /\s/u.test(value) || value.length > 253) return false;
+  const labels = value.toLowerCase().split(".");
+  return labels.length >= 2 && labels.every((label) =>
+    label.length > 0 && label.length <= 63 &&
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label),
+  );
+}
+
+function hasCaptchaHostnameBinding(hostname, corsOrigins) {
+  if (!hasCaptchaHostname(hostname) || !hasHttpsCorsOrigins(corsOrigins)) return false;
+  return corsOrigins.split(",").map((origin) => origin.trim()).filter(Boolean).some((origin) => {
+    try {
+      return new URL(origin).hostname.toLowerCase() === hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+  });
+}
+
+function hasOAuthConfiguration(env) {
+  const callback = envValue(env, "FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL");
+  const returnUris = envValue(env, "FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST");
+  if (!callback || !returnUris) return false;
+  try {
+    const parsed = new URL(callback);
+    if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) return false;
+  } catch {
+    return false;
+  }
+  const validReturnUris = returnUris.split(",").map((value) => value.trim()).filter(Boolean).every((value) => {
+    try {
+      const parsed = new URL(value);
+      if (parsed.username || parsed.password || parsed.search || parsed.hash || !parsed.hostname) return false;
+      return parsed.protocol === "https:" || parsed.protocol === "foresightnine:";
+    } catch {
+      return false;
+    }
+  });
+  const providersConfigured = ["google", "github"].every((provider) =>
+    hasValue(env, `FORESIGHTNINE_OAUTH_${provider.toUpperCase()}_CLIENT_ID`) &&
+    hasValue(env, `FORESIGHTNINE_OAUTH_${provider.toUpperCase()}_CLIENT_SECRET`),
+  );
+  return providersConfigured && validReturnUris;
+}
+
 function hasTrustedProxyCidrs(value) {
   const cidrs = value.split(",").map((cidr) => cidr.trim()).filter(Boolean);
   if (cidrs.length === 0) return false;
@@ -134,6 +186,15 @@ function manifestPathFromArgv(argv) {
   return "";
 }
 
+function providerManifestPathFromArgv(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--provider-admission-manifest") return argv[index + 1] ?? "";
+    if (argument.startsWith("--provider-admission-manifest=")) return argument.slice("--provider-admission-manifest=".length);
+  }
+  return "";
+}
+
 function loadApprovalManifest({ env, argv, repoRoot, approvalManifest, readManifest }) {
   if (approvalManifest !== undefined) return { manifest: approvalManifest };
 
@@ -148,6 +209,30 @@ function loadApprovalManifest({ env, argv, repoRoot, approvalManifest, readManif
     return { manifest: raw };
   } catch {
     return { error: "deployment-owned manifest is unreadable or invalid" };
+  }
+}
+
+function loadProviderAdmissionManifest({ env, argv, repoRoot, providerAdmissionManifest, readFile, readManifest }) {
+  if (providerAdmissionManifest !== undefined) return { manifest: providerAdmissionManifest };
+
+  const requestedPath = providerManifestPathFromArgv(argv) || envValue(env, "FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST");
+  if (!requestedPath) {
+    const raw = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
+    if (typeof raw !== "string") return { error: "provider admission manifest is missing" };
+    try {
+      return { manifest: JSON.parse(raw) };
+    } catch {
+      return { error: "provider admission manifest is unreadable or invalid" };
+    }
+  }
+  if (!path.isAbsolute(requestedPath) || !isOutsideRepositoryFrom(requestedPath, repoRoot)) {
+    return { error: "provider admission manifest is not external" };
+  }
+  try {
+    const raw = (readManifest ?? ((manifestPath) => readFileSync(manifestPath, "utf8")))(requestedPath);
+    return { manifest: typeof raw === "string" ? JSON.parse(raw) : raw };
+  } catch {
+    return { error: "provider admission manifest is unreadable or invalid" };
   }
 }
 
@@ -194,6 +279,57 @@ function stripYamlComment(line) {
 function hasDockerAssetRegistry({ repoRoot, readFile }) {
   const dockerfile = readStaticFile({ repoRoot, relativePath: "src/infra/docker/Dockerfile.api", readFile });
   return typeof dockerfile === "string" && /(^|\n)\s*COPY\s+packages\/asset-registry(?:\s|$)/m.test(dockerfile);
+}
+
+function hasProviderAdmissionManifest({ repoRoot, readFile }) {
+  const manifest = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
+  if (typeof manifest !== "string") return false;
+  try {
+    return isProviderAdmissionManifestShape(JSON.parse(manifest));
+  } catch {
+    return false;
+  }
+}
+
+function isProviderAdmissionManifestShape(parsed) {
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    parsed.schema_version !== "provider-admission-manifest/v1" ||
+    !Array.isArray(parsed.providers) ||
+    !Array.isArray(parsed.asset_mappings) ||
+    parsed.providers.length === 0 ||
+    parsed.asset_mappings.length === 0
+  ) return false;
+  const providerIds = parsed.providers.map((provider) => provider?.id);
+  const assetIds = parsed.asset_mappings.map((mapping) => mapping?.asset_id);
+  return (
+    providerIds.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(providerIds).size === providerIds.length &&
+    assetIds.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(assetIds).size === assetIds.length
+  );
+}
+
+function hasProductionDataAuthorization(manifest) {
+  try {
+    const authorizations = manifest?.data_authorization;
+    return Boolean(
+      isProviderAdmissionManifestShape(manifest) &&
+      authorizations &&
+      typeof authorizations === "object" &&
+      !Array.isArray(authorizations) &&
+      REQUIRED_DATA_AUTHORIZATIONS.every((field) => {
+        const record = authorizations[field];
+        return record && typeof record === "object" && !Array.isArray(record)
+          && record.status === "approved"
+          && record.written_terms === true
+          && record.public_redistribution === true;
+      }),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function hasValidComposeProviderConfig({ repoRoot, readFile }) {
@@ -282,6 +418,7 @@ export function runPreflight({
   readArtifact,
   statArtifact,
   approvalManifest,
+  providerAdmissionManifest,
   readManifest,
 } = {}) {
   const llm = evaluateLlmProvider(env);
@@ -290,6 +427,14 @@ export function runPreflight({
   const searchSecretName = LIVE_SEARCH_PROVIDERS[search.provider];
   const captchaDeclaration = envValue(env, "FORESIGHTNINE_CAPTCHA_PROVIDER") || envValue(env, "FORESIGHTNINE_CAPTCHA_MODE").toLowerCase();
   const loadedManifest = loadApprovalManifest({ env, argv, repoRoot, approvalManifest, readManifest });
+  const loadedProviderManifest = loadProviderAdmissionManifest({
+    env,
+    argv,
+    repoRoot,
+    providerAdmissionManifest,
+    readFile,
+    readManifest,
+  });
 
   const gates = [
     gate(
@@ -348,15 +493,24 @@ export function runPreflight({
     ),
     gate(
       "CAPTCHA_EXTERNAL",
-      !DISABLED_CAPTCHA_DECLARATIONS.has(captchaDeclaration.toLowerCase()),
-      "external CAPTCHA provider declared",
-      "CAPTCHA must declare an external provider, not accept/unavailable/mock/debug/QA",
+      captchaDeclaration.toLowerCase() === "turnstile" && !DISABLED_CAPTCHA_DECLARATIONS.has(captchaDeclaration.toLowerCase()),
+      "supported external Cloudflare Turnstile provider declared",
+      "CAPTCHA must declare the implemented external Turnstile provider, not accept/unavailable/mock/debug/QA",
     ),
     gate(
       "CAPTCHA_SECRET",
       hasValue(env, "FORESIGHTNINE_CAPTCHA_SECRET"),
       "CAPTCHA provider credential is present",
       "CAPTCHA provider credential is missing",
+    ),
+    gate(
+      "CAPTCHA_HOSTNAME",
+      hasCaptchaHostnameBinding(
+        envValue(env, "FORESIGHTNINE_CAPTCHA_HOSTNAME"),
+        envValue(env, "FORESIGHTNINE_CORS_ORIGINS"),
+      ),
+      "CAPTCHA hostname is explicitly bound to an HTTPS CORS origin",
+      "CAPTCHA hostname must be valid and match an HTTPS CORS origin hostname",
     ),
     gate(
       "CORS_HTTPS",
@@ -371,10 +525,40 @@ export function runPreflight({
       "FORESIGHTNINE_PROXY_MODE must be direct with no trusted CIDRs, or reverse_proxy with valid FORESIGHTNINE_TRUSTED_PROXY_CIDRS",
     ),
     gate(
+      "OAUTH_CONFIG",
+      hasOAuthConfiguration(env),
+      "Google and GitHub server-side OAuth configuration is complete",
+      "OAuth callback, return allowlist, and both provider credentials are required",
+    ),
+    gate(
+      "MARKET_DATA_ADMISSION",
+      envValue(env, "FORESIGHTNINE_MARKET_PROVIDER_MODE").toLowerCase() === "licensed",
+      "a licensed market provider is explicitly admitted",
+      "FORESIGHTNINE_MARKET_PROVIDER_MODE must be licensed for production",
+    ),
+    gate(
+      "METRICS_ENDPOINT",
+      ["1", "true", "yes"].includes(envValue(env, "FORESIGHTNINE_METRICS_ENABLED").toLowerCase()),
+      "redacted metrics endpoint is enabled for the deployment monitor",
+      "FORESIGHTNINE_METRICS_ENABLED must be true for production monitoring",
+    ),
+    gate(
       "DOCKER_ASSET_REGISTRY",
       hasDockerAssetRegistry({ repoRoot, readFile }),
       "API Dockerfile copies packages/asset-registry",
       "API Dockerfile must copy packages/asset-registry",
+    ),
+    gate(
+      "PROVIDER_ADMISSION_MANIFEST",
+      hasProviderAdmissionManifest({ repoRoot, readFile }),
+      "provider admission manifest is included in the repository",
+      "provider admission manifest must declare provider-admission-manifest/v1",
+    ),
+    gate(
+      "DATA_AUTHORIZATION",
+      !loadedProviderManifest.error && hasProductionDataAuthorization(loadedProviderManifest.manifest),
+      "market price, factor and FX fields have written redistribution authorization",
+      loadedProviderManifest.error ?? "provider manifest must mark market_price, factor_features and fx_reference approved with written terms and redistribution rights",
     ),
     gate(
       "COMPOSE_PROVIDER_CONFIG",

@@ -7,7 +7,8 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Pinned source at execution start: `3a169d6bf91ef2edc7601027107cb50e7a4f893d`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `595a71c`
+- GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
   `/home/lxx/trade-agent-crisis`, `/home/lxx/trade-agent-benchmark`
@@ -53,6 +54,11 @@ claimed by this evidence.
   were skipped idempotently. After restarting PostgreSQL, five tables and 11
   persisted source documents remained available, and the API health check
   succeeded.
+- `backup-staging.sh` passed `bash -n`, rejected a repository-internal output
+  path, and created a repository-external PostgreSQL custom dump (31,442 bytes),
+  Redis RDB snapshot (173 bytes), and SHA-256 sidecar. Checksum verification
+  passed; the generated files were kept mode `600`. Restore remains a separate
+  owner-approved operation.
 
 The database container has no published host port. This is development/mock
 staging evidence only; production PostgreSQL credentials, TLS/HA, backup
@@ -60,9 +66,9 @@ retention and restore ownership remain external gates.
 
 ## Module 3 — Redis abuse-control local staging evidence
 
-- A separate Redis 7 container was started on the private Compose network with
-  TLS enabled on port `6380`, password authentication, no plaintext port, a
-  64 MiB memory limit, and `allkeys-lru` eviction policy.
+- Redis 7 runs on the private Compose network with a named `/data` volume and
+  AOF `everysec` persistence. Production still requires deployment-owned
+  authenticated TLS Redis and HA policy.
 - The application `RedisAbuseControl` connected through a redacted `rediss://`
   URL and admitted the first two requests before denying the third at the
   configured rate limit.
@@ -71,8 +77,9 @@ retention and restore ownership remain external gates.
 - A deliberately unreachable Redis backend returned unavailable/denied and
   did not fall back to memory.
 
-This is a local TLS/authentication and failure-path probe, not production HA,
-failover, alerting, capacity, managed backup or certificate-rotation evidence.
+This is local persistence and failure-path evidence, not production HA,
+authenticated TLS, failover, alerting, capacity, managed backup or
+certificate-rotation evidence.
 
 ## Module 4 — supervised FastAPI mock staging evidence
 
@@ -83,6 +90,9 @@ failover, alerting, capacity, managed backup or certificate-rotation evidence.
   `init`, a healthcheck, and limits API resources to 1 CPU and 512 MiB.
 - API healthcheck became `healthy`; `/health` and `/openapi.json` returned
   success, reporting `deterministic_mock` and `client-evidence-bundle`.
+- Persistent startup now probes PostgreSQL repositories and Redis before the
+  FastAPI process accepts traffic; a failed probe raises a startup error rather
+  than silently reverting to memory state.
 - A fresh synthetic flow completed session, challenge, message, evidence,
   confirmation, and three-branch worldline generation through the running
   container.
@@ -90,7 +100,8 @@ failover, alerting, capacity, managed backup or certificate-rotation evidence.
   tail; no provider credential or raw evidence payload was emitted.
 
 This is private loopback/mock staging evidence. It is not live-provider,
-CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
+real Turnstile, public TLS, production Redis/PostgreSQL, or public traffic
+evidence.
 
 ## Module 5 — Cloudflare API staging
 
@@ -106,43 +117,195 @@ CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
   `/home/lxx/.cloudflared/foresightnine-api-staging.yml`, with the credential
   JSON outside Git and mode `600`. The redacted reproducible template is
   `cloudflared/foresightnine-api-staging.yml.example`.
-- Ingress validation passed. The connector registered two QUIC edge
-  connections (`sin07` and `sin16`), and its metrics showed zero origin
-  request errors.
+- Ingress validation passed. The connector initially used QUIC, but this
+  Linux network later showed repeated idle QUIC timeouts and temporary 530
+  responses. The config was adjusted to `protocol: http2`; the restarted
+  connector registered two HTTP/2 edge connections (`sin14` and `sin17`), and
+  its metrics showed zero origin request errors across three consecutive public
+  health checks.
 - Public `GET /health` returned 200 with a browser User-Agent, and a public
   CORS preflight returned 200 with the staging Web origin. A bare `curl`
   User-Agent receives the zone's Cloudflare managed Challenge; this is an
   edge policy behavior, not a Tunnel/origin failure.
+- A user-level systemd unit now supervises the connector with
+  `Restart=on-failure`, `ProtectHome=read-only`, `NoNewPrivileges` and
+  `PrivateTmp`; `loginctl` reports linger enabled. A controlled SIGKILL fault
+  test incremented `NRestarts` to 1, then the service returned active/running
+  and both public health endpoints returned 200.
 
-No production hostname, Pages project, traffic cutover, OAuth callback, or
-production Cloudflare mutation was performed.
+No production hostname, Pages project, traffic cutover, credential-backed OAuth
+exchange, or production Cloudflare mutation was performed.
 
-## Module 6 — auth/session contract boundary
+## Module 6 — bounded provider and client market runtime
+
+- The hidden `POST /snapshots` route is protected by the same Redis abuse
+  boundary as `/v1/*` and accepts only the shared three-anchor request shape.
+- Historical pre-authorization staging evidence used a bounded Stooq-first
+  chain with a Yahoo fallback. That chain is retired; Yahoo is no longer
+  configured or called.
+- The current `public_evaluation` mode uses Stooq as the sole fixed-host price
+  adapter. It supports an optional server-only `FORESIGHTNINE_STOOQ_API_KEY`
+  injected outside Git, the fixed symbol allowlist (`GRID/PAVE`, `CHIP/SOXX`,
+  `UTIL/XLU`, `GOLD/GLD`, `WORLD/VT`, and canonical `ETF:SPY`, `ETF:SOXX`,
+  `ETF:GLD`, `ETF:QQQ`, `ETF:IEF`), bounded response size, an eight-second
+  timeout and redirect rejection. It never accepts a URL or credential from a
+  request, caches raw responses, or derives factor or FX values.
+- Compose enables this mode only for local/development staging. Returned rows
+  are price-only and warnings explicitly keep the client runtime limited;
+  `CASH` and any unapproved asset return `missing` rows.
+- The owner confirmed permission for Stooq prices, Kenneth French MOM/RMW, AQR
+  QMJ and Frankfurter reference FX on 2026-08-31. The manifest records Stooq
+  price, Kenneth French MOM, AQR QMJ with Kenneth French RMW fallback, and
+  Frankfurter with ECB preference. Production mode remains disabled until the
+  deployment-owned external manifest and remaining release gates are supplied.
+- Before the policy update, the live staging route accepted a canonical
+  `ETF:SPY`, legacy `GRID`, and unapproved `CASH:USD` request through the
+  Stooq-first chain: 9 rows were returned, with 6 price rows and 3 explicit
+  missing rows; the network challenge caused Yahoo fallback to serve the six
+  price rows. This is historical evidence only. After the policy update, a
+  Stooq challenge produces explicit missing rows rather than silently switching
+  to an unauthorized price source.
+- The container copies and loads the admission manifest at startup; a missing
+  or invalid manifest disables evaluation rows rather than enabling a provider
+  by code default. The release preflight also checks that the manifest is
+  present in the source image inputs.
+- Runtime admission now validates every requested asset symbol against a unique
+  asset-level entry in that manifest. The five legacy IDs and five canonical
+  ETF IDs are therefore bound to the fixed Stooq source; missing, duplicate,
+  or mismatched mappings fail closed.
+- The production preflight now has a separate `DATA_AUTHORIZATION` gate: the
+  manifest must explicitly mark market price, factor features and FX reference
+  fields approved with written terms and public redistribution rights. The
+  checked-in staging manifest records owner-confirmed authorization for all
+  three selected source contracts, while production admission remains blocked.
+- The gate accepts a deployment-owned provider manifest through the external
+  `--provider-admission-manifest` flag or
+  `FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST`; absent that input, it safely
+  evaluates the checked-in staging manifest and fails production admission.
+- The fixed-host adapter rejects vendor HTTP redirects instead of allowing a
+  provider response to move the request to an unapproved host. The production
+  preflight parses the manifest and rejects malformed JSON, empty provider or
+  asset lists, and duplicate IDs.
+- Hardened API startup now validates CORS origins itself: production and
+  public-hardening runtimes reject non-HTTPS, credential-bearing, query-bearing,
+  fragment-bearing, or non-root origins; an absent declaration remains an empty
+  allowlist.
+- Production CAPTCHA now has a concrete Cloudflare Turnstile server verifier:
+  the secret never leaves the server, the fixed siteverify endpoint rejects
+  redirects and oversized responses, and a successful response must match the
+  configured deployment hostname. Missing, rejected, unsupported, or remote-
+  unavailable verification remains fail-closed; staging intentionally has no
+  real CAPTCHA secret.
+- Browser OAuth start/callback routes now share the same IP abuse limiter as
+  `/v1/*` and `/snapshots`, preventing unauthenticated callback flooding from
+  bypassing the production rate boundary.
+- The security regression suite now covers 22 cases, including real Turnstile
+  verifier selection, hostname mismatch rejection, and OAuth route rate limits.
+- The production preflight additionally requires that CAPTCHA hostname to match
+  one of the declared HTTPS CORS origin hostnames, preventing a valid but
+  misbound Turnstile site from satisfying the release gate.
+- The 2026-08-31 Linux probe confirmed Stooq returned a JavaScript verification
+  page, while Frankfurter returned a no-key USD/EUR reference rate and Kenneth
+  French's daily momentum archive downloaded successfully. AQR QMJ remains the
+  quality primary. The factor and FX sources are now authorized/configured in
+  the manifest, but the three-anchor price response intentionally does not emit
+  factor features or FX conversion until the matching client contract is wired.
+  The auditable source order and mappings are in `provider-manifest.v1.json`.
+- The adapter now marks a provider session before the requested anchor as
+  `stale` instead of `ok`, while preserving the real `asOf` date. This keeps
+  delayed or holiday-ambiguous rows visible but prevents the client from
+  treating them as eligible current Public Default data.
+- After rebuilding the API image from `0ca79ba`, the public canonical
+  `ETF:SPY` three-anchor request returned HTTP 200; delayed sessions were
+  explicitly marked `stale` and no factor/FX fields were emitted.
+- The follow-up image from `7a9db9b` remained healthy after restart; a public
+  request for `ETF:SPY` and `ETF:SOXX` returned HTTP 200 with six rows, one
+  exact-anchor `ok` row per asset and four delayed/holiday-ambiguous `stale`
+  rows. Future vendor sessions are rejected before they can reach the client.
+- The image rebuilt from the owner-authorized Stooq policy checkpoint returned
+  HTTP 200 for the same public route with six explicit `missing` rows when the
+  upstream returned its verification page. No Yahoo request or fallback was
+  made; the route's warning is emitted only after all configured price sources
+  are exhausted. `/readyz` remained HTTP 200.
+
+## Module 7 — auth/session contract boundary
 
 - Existing typed server boundary exposes redacted provider readiness for exactly
   Google and GitHub and a strict PKCE start response.
-- Focused OAuth foundation and route tests passed `25/25`, covering HTTPS and
-  deep-link allowlists, provider separation, S256 challenge derivation,
-  one-use/expiry state, strict request fields, and secret redaction.
+- A feature-gated browser OAuth path now provides fixed Google/GitHub
+  authorization redirects, one-use callback state consumption, bounded
+  server-side code exchange, verified identity extraction, persistent OAuth
+  identity records, session issuance, logout, and generic account deletion.
+  Provider access tokens are not persisted or returned to clients.
+- Development staging also exposes an explicit `local_mock` lifecycle for
+  registration, password login, bearer session, logout and account deletion.
+  Passwords are stored only as PBKDF2 digests; deletion removes the account
+  credential/contact document and all sessions, while research data remains
+  under its separate retention policy.
+- Focused OAuth foundation, route, and callback/provider tests passed `29/29`,
+  covering HTTPS and deep-link allowlists, fixed provider redirects, bounded
+  code exchange, verified identities, S256 challenge derivation, one-use/
+  expiry state, strict request fields, and secret redaction.
 - Generated OpenAPI drift check passed with 24 paths.
-- Live callback/token exchange, server session issuance, logout and account
-  deletion are not enabled by the current code. They remain blocked on
-  owner-supplied Google/GitHub client credentials, exact callback URLs,
-  confirmed web/deep-link return URIs, and the session/deletion policy.
+- The callback implementation is not enabled in staging because all six OAuth
+  environment inputs are absent. The live Google/GitHub exchange remains
+  unverified until owner-supplied client credentials, exact callback URLs,
+  confirmed web/deep-link return URIs, provider consent, and the production
+  session/deletion policy exist. Without those inputs, the public callback and
+  browser start routes return a typed 400 without contacting a provider.
 
-The safe state is contract/mock-only OAuth readiness; no provider was contacted
-and no credential was added to the repository or runtime.
+The safe state is a production-capable, feature-gated callback plus local
+staging auth; no OAuth provider was contacted and no credential was added to the
+repository or runtime.
+
+## Module 8 — Web/Android smoke evidence
+
+- Web staging `https://staging.foresightnine.com/` returned HTML 200. A
+  Playwright fallback smoke test (the Browser plugin was unavailable) verified
+  meaningful content, challenge submission entering the receiving state, a
+  390x844 mobile viewport, and zero browser console errors.
+- Staging API `/health` and `/readyz` both returned 200. The API CORS preflight
+  allowed only `https://staging.foresightnine.com` for the tested POST route.
+- A redacted Prometheus text endpoint is enabled for the local supervisor at
+  `/metrics`; the Cloudflare ingress matches that exact path first and returns
+  404, so operational counters are not public.
+- Android debug assembly completed with Temurin JDK 17 and the user-local
+  Android SDK. APK SHA-256:
+  `37db03028d3fb207664dab15f419b50f640c66340dd9fa27e0c210e4324cb97d`.
+- Google/GitHub buttons remain intentionally disabled as `尚未配置`; no
+  provider credentials or callback exchange were fabricated.
+- Public staging account smoke registered and hard-deleted an ephemeral local
+  mock account: registration returned 201, deletion returned 200, subsequent
+  login returned 401, and the test-created orphan auth session was removed.
 
 ## Portable and API validation gates
 
-- `uv run --project apps/api pytest apps/api/tests -q`: 206 passed, 1 skipped.
-- Workspace `typecheck` passed for all eight participating packages/apps.
-- Workspace `test` passed, including generated-contract checks, FM-engine
-  tests, API-client/domain/asset-registry tests, web/mobile tests, and the API
-  suite (206 passed, 1 skipped).
+- `corepack pnpm test` completed the workspace tests and API suite;
+  the latest run was 230 passed, 1 skipped. The only skip is
+  the optional Redis integration test because
+  no external integration URL was supplied.
+- `corepack pnpm test:production-preflight`: 13 passed. The real
+  `verify:production-preflight` command correctly rejects this development
+  environment because production credentials, TLS Redis, external CAPTCHA,
+  OAuth configuration, production admission, release artifact, monitoring
+  declaration and approval manifest are absent. The checked-in provider
+  manifest records the owner's authorization, but intentionally remains
+  staging-only.
+- After separating the gates, the real preflight reports
+  `DATA_AUTHORIZATION PASS`; `MARKET_DATA_ADMISSION` remains failed because
+  the runtime is intentionally `public_evaluation`, not production `licensed`.
+- Workspace `typecheck` passed for all nine participating packages/apps.
+- `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
+  asset registry, and the 24-path OpenAPI export.
+- `corepack pnpm verify:boundaries` was run and correctly failed on Linux-only
+  portability constraints: the repository intentionally references the
+  Windows `D:\Foresightnine` governance files and Windows implementation-root
+  suffix. The baseline was not weakened or rewritten.
+- Workspace `test` passed, including generated-contract checks, FM-engine,
+  API-client/domain/asset-registry, market-data, web and mobile tests.
 - OpenAPI export drift check passed with 24 paths; generated TypeScript and
   asset-registry fingerprints matched their checked-in artifacts.
-- Secret scan passed over 720 unique Git-history blobs.
+- Secret scan passed over 864 unique Git-history blobs.
 - The worldline fixture audit remains unavailable on this Linux checkout
   because its configured source is the Windows-only path
   `D:/WL-data-final/wordline-md/wordline1.md`; no substitute data was guessed.
@@ -160,6 +323,11 @@ the starting checkout; later module commits are the auditable checkpoints:
 - Module 6: `febdfdc`
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
-Compose CORS wiring is `e797bb4`. These commits contain only the redacted
-config/evidence and staging runtime configuration. The user's pre-existing
-dirty files remain unstaged and are intentionally outside all checkpoints.
+Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
+implementation checkpoint is `595a71c`; external provider authorization input
+handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
+and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
+evidence follow-up records the final test/artifact details. These commits contain only the redacted
+config/evidence and staging runtime configuration. The user's
+pre-existing dirty files remain unstaged and are intentionally outside all
+checkpoints.

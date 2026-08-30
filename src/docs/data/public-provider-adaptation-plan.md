@@ -1,13 +1,14 @@
 # Public market-provider assessment and adaptation plan
 
 **Date:** 2026-08-30  
-**Status:** assessment complete; no real provider is approved or configured  
+**Status:** owner-confirmed provider set configured for staged use; production traffic remains gated
 **Scope:** the product runtime's three point-in-time anchors, not a historical
 backtest warehouse
 
 ## Decision
 
-No currently verified source satisfies all of the following at the same time:
+Before the owner authorization recorded below, no currently verified source
+satisfied all of the following at the same time:
 
 1. no user or server key;
 2. browser-compatible access for a public Web app;
@@ -16,12 +17,30 @@ No currently verified source satisfies all of the following at the same time:
 5. permission to redistribute the data to public users; and
 6. the approved FM factor-feature contract.
 
-The nearest technical source is Yahoo Finance's chart endpoint for the small
-USD ETF subset already probed. It is **not** approved for production. If the
-owner later obtains redistribution permission, it can be placed behind a thin
-Linux/Cloudflare adapter. That adapter would translate protocol and enforce
-the bundle contract; it would not calculate FM, store a historical warehouse,
-or manufacture factor values.
+The owner has now confirmed permission to use Stooq, Kenneth French, AQR QMJ,
+and Frankfurter for this deployment. The Linux runtime therefore uses Stooq as
+the sole configured price source and records the other three sources for their
+distinct factor/FX contracts. Yahoo is not configured or used. The adapter
+translates protocol and enforces the bundle contract; it does not calculate FM,
+store a historical warehouse, or manufacture factor values.
+
+## Owner authorization update — 2026-08-31
+
+The deployment owner authorized the following source order:
+
+| Canonical field | Primary | Fallback | Runtime boundary |
+| --- | --- | --- | --- |
+| price | Stooq | none currently approved | Thin server-side adapter, price-only three-anchor bundle |
+| momentum | Kenneth French MOM | none | Source configured; no feature emitted until the exact client feature contract is wired |
+| quality | AQR QMJ | Kenneth French RMW | RMW is a documented fallback proxy, not a renamed QMJ value |
+| FX reference | Frankfurter, ECB preference | none | Reference rate only; no bid/ask or execution semantics |
+
+For the same canonical field, the checked-in manifest resolves a conflict by
+provider priority, then majority among equal-priority observations; an
+unresolved tie is returned as missing. A source from another category is never
+used as a substitute. The owner's confirmation is recorded as deployment input,
+while production admission still requires the external release, security,
+privacy, operations, TLS/HA, and OAuth gates.
 
 ## Read-only provider evidence
 

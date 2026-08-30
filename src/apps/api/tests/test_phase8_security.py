@@ -19,7 +19,9 @@ from app.security import (
     TrustedProxyResolver,
     UnavailableCaptchaVerifier,
     SecurityBoundaryMiddleware,
+    SecurityConfigurationError,
     TrustedProxyResolver,
+    TurnstileCaptchaVerifier,
     build_captcha_verifier,
     build_security_config,
 )
@@ -35,6 +37,15 @@ def test_rate_limit_uses_peer_when_forwarded_header_is_untrusted(monkeypatch: py
     assert second.status_code == 429
     assert second.headers["Retry-After"].isdigit()
     assert "198.51.100.2" not in second.text
+
+
+def test_browser_oauth_routes_share_the_ip_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app_main.abuse_control.ip, "limit", 1)
+    first = CLIENT.get("/oauth/callback", params={"code": "code", "state": "state"})
+    second = CLIENT.get("/oauth/callback", params={"code": "code", "state": "state-2"})
+    assert first.status_code == 400
+    assert second.status_code == 429
+    assert second.json()["error_code"] == "rate_limited"
 
 
 def test_trusted_proxy_chain_only_applies_when_peer_is_configured() -> None:
@@ -289,6 +300,50 @@ def test_unconfigured_production_captcha_factory_is_unavailable(monkeypatch: pyt
     assert config.require_captcha is True
     assert isinstance(build_captcha_verifier(config), UnavailableCaptchaVerifier)
     assert isinstance(build_captcha_verifier(config), UnavailableCaptchaVerifier)
+
+
+def test_turnstile_verifier_is_server_side_and_fail_closed() -> None:
+    calls: list[str] = []
+
+    def fake_request(token: str, _request: object) -> object:
+        calls.append(token)
+        if token == "accepted-token":
+            return {"success": True, "hostname": "staging.foresightnine.com"}
+        if token == "wrong-host-token":
+            return {"success": True, "hostname": "evil.example.test"}
+        if token == "provider-rejected-token":
+            return {"success": False, "error-codes": ["invalid-input-response"]}
+        raise RuntimeError("provider unavailable")
+
+    verifier = TurnstileCaptchaVerifier("server-only-secret", expected_hostname="staging.foresightnine.com", request_json=fake_request)
+    request = SimpleNamespace()
+    assert verifier.verify("accepted-token", request) is True
+    assert verifier.verify("wrong-host-token", request) is False
+    assert verifier.verify("provider-rejected-token", request) is False
+    assert verifier.verify("provider-error-token", request) is None
+    assert verifier.verify(None, request) is False
+    assert verifier.verify("x" * 4097, request) is False
+    assert calls == ["accepted-token", "wrong-host-token", "provider-rejected-token", "provider-error-token"]
+
+
+def test_turnstile_configuration_selects_the_real_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "production")
+    monkeypatch.setenv("FORESIGHTNINE_CAPTCHA_PROVIDER", "turnstile")
+    monkeypatch.setenv("FORESIGHTNINE_CAPTCHA_SECRET", "server-only-secret")
+    monkeypatch.setenv("FORESIGHTNINE_CAPTCHA_HOSTNAME", "staging.foresightnine.com")
+    monkeypatch.delenv("FORESIGHTNINE_CAPTCHA_MODE", raising=False)
+    verifier = build_captcha_verifier(build_security_config())
+    assert isinstance(verifier, TurnstileCaptchaVerifier)
+
+
+def test_hardened_security_rejects_unsafe_cors_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "production")
+    monkeypatch.setenv("FORESIGHTNINE_CORS_ORIGINS", "http://staging.example.test")
+    with pytest.raises(SecurityConfigurationError):
+        build_security_config()
+
+    monkeypatch.setenv("FORESIGHTNINE_CORS_ORIGINS", "https://app.example.test/")
+    assert build_security_config().allowed_origins == ("https://app.example.test",)
 
 
 def test_body_content_type_and_security_headers_are_bounded() -> None:

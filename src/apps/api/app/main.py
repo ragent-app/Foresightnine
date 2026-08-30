@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from collections.abc import Mapping
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import os
+import secrets
 from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
@@ -82,9 +84,25 @@ from .services import (
     validate_probability_semantics,
     validate_worldline_bundle_semantics,
 )
-from .storage import JsonDocumentRepository, StorageConfig, build_repository
+from .storage import JsonDocumentRepository, StorageConfig, StorageMode, build_repository
 from .operation_store import build_operation_store
 from .oauth_foundation import OAuthConfigurationError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
+from .oauth_identity import OAuthIdentity, OAuthSessionResponse
+from .oauth_provider import OAuthProviderClient, OAuthProviderError
+from .market_provider import MarketSnapshotRequest, build_snapshot_response
+from .local_auth import (
+    LocalAccount,
+    LocalAuthError,
+    LocalRegisterRequest,
+    LocalSession,
+    authenticate as authenticate_local,
+    delete_account as delete_local_account,
+    login as login_local,
+    logout as logout_local,
+    purge_expired_sessions,
+    register as register_local,
+    issue_session as issue_local_session,
+)
 
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
 
@@ -100,10 +118,18 @@ ERROR_RESPONSES = {
     500: {"model": ErrorResponse, "description": "Validated internal failure"},
 }
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Verify external state before accepting traffic in a persistent runtime."""
+    _assert_runtime_ready()
+    yield
+
+
 app = FastAPI(
     title="ForesightNine API",
     version="1.0.0",
     description="Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
+    lifespan=lifespan,
 )
 clock = FixedClock()
 lifecycle_clock = RuntimeClock()
@@ -129,6 +155,16 @@ except OAuthConfigurationError:
     # OAuth is optional.  Invalid or absent deployment configuration must make
     # every provider unavailable without preventing the research API from booting.
     oauth_foundation = None
+
+
+def _oauth_client_secret(provider: str) -> str:
+    foundation = oauth_foundation
+    if foundation is None:
+        raise OAuthProviderError("OAuth client secret is unavailable")
+    return foundation.configuration.provider_config(provider).client_secret
+
+
+oauth_provider_client = OAuthProviderClient(client_secret_for=_oauth_client_secret)
 
 def _storage_environment(environ: Mapping[str, str] | None = None) -> dict[str, str]:
     """Normalize deployment URL names to the storage foundation's safe alias.
@@ -164,6 +200,9 @@ def _build_entity_repositories(
     JsonDocumentRepository[Worldline],
     JsonDocumentRepository[MarketDataManifest],
     JsonDocumentRepository[str],
+    JsonDocumentRepository[LocalAccount],
+    JsonDocumentRepository[LocalSession],
+    JsonDocumentRepository[OAuthIdentity],
 ]:
     """Build every API entity map with its canonical typed document loader."""
     return (
@@ -175,6 +214,9 @@ def _build_entity_repositories(
         build_repository(config, "worldlines", value_loader=Worldline.model_validate),
         build_repository(config, "market_manifests", value_loader=MarketDataManifest.model_validate),
         build_repository(config, "worldline_challenges", value_loader=str),
+        build_repository(config, "accounts", value_loader=LocalAccount.model_validate),
+        build_repository(config, "auth_sessions", value_loader=LocalSession.model_validate),
+        build_repository(config, "oauth_identities", value_loader=OAuthIdentity.model_validate),
     )
 
 
@@ -188,9 +230,29 @@ storage_config = _storage_config()
     WORLDLINES,
     MARKET_MANIFESTS,
     WORLDLINE_CHALLENGES,
+    ACCOUNTS,
+    AUTH_SESSIONS,
+    OAUTH_IDENTITIES,
 ) = _build_entity_repositories(storage_config)
 operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
 OPERATION_SESSIONS: dict[str, str] = {}
+
+
+def _assert_runtime_ready() -> None:
+    """Probe every external dependency required by the selected runtime."""
+    if storage_config.mode is StorageMode.POSTGRES:
+        try:
+            SESSIONS.check_ready()
+            ACCOUNTS.check_ready()
+            AUTH_SESSIONS.check_ready()
+            OAUTH_IDENTITIES.check_ready()
+            operations.store.check_ready()
+        except Exception as error:
+            raise RuntimeError("Persistent PostgreSQL state is not ready.") from error
+    try:
+        abuse_control.check_ready()
+    except Exception as error:
+        raise RuntimeError("Abuse-control state is not ready.") from error
 
 NORMAL_CONFIRM_MINIMUM_TOTAL = 30
 NORMAL_CONFIRM_MINIMUM_CRITICAL_SCORE = 3
@@ -215,10 +277,14 @@ def reset_state() -> None:
     WORLDLINES.clear()
     MARKET_MANIFESTS.clear()
     WORLDLINE_CHALLENGES.clear()
+    ACCOUNTS.clear()
+    AUTH_SESSIONS.clear()
+    OAUTH_IDENTITIES.clear()
     OPERATION_SESSIONS.clear()
 
 
 def cleanup_expired_state() -> object:
+    purge_expired_sessions(AUTH_SESSIONS, now=lifecycle_clock.now())
     durable_operation_sessions = operations.session_ids()
     active_session_ids = {
         durable_operation_sessions[operation_id]
@@ -303,7 +369,7 @@ app.add_middleware(
     allow_origins=list(security_config.allowed_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
     max_age=600,
 )
 app.add_middleware(
@@ -614,6 +680,128 @@ def health() -> HealthResponse:
     )
 
 
+@app.get("/readyz", include_in_schema=False)
+def readyz(request: Request) -> JSONResponse:
+    """Dependency readiness probe for the supervisor and deployment monitor."""
+    try:
+        _assert_runtime_ready()
+    except Exception:
+        return _error(503, "internal_error", "Required runtime dependencies are not ready.", request, retryable=True)
+    return JSONResponse({"status": "ready"}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request) -> Response:
+    """Expose fixed redacted counters only when local scraping is enabled."""
+    if os.getenv("FORESIGHTNINE_METRICS_ENABLED", "false").strip().lower() not in {"1", "true", "yes"}:
+        return _error(404, "not_found", "Not found.", request)
+    return PlainTextResponse(
+        telemetry.prometheus_text(),
+        media_type="text/plain; version=0.0.4",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/snapshots", include_in_schema=False)
+def market_snapshots(request: MarketSnapshotRequest) -> JSONResponse:
+    """Serve the bounded client market runtime without exposing a vendor API."""
+    return JSONResponse(build_snapshot_response(request))
+
+
+def _local_auth_available() -> bool:
+    return (
+        os.getenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "disabled").strip().lower() == "mock"
+        and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
+    )
+
+
+def _local_auth_problem(error: LocalAuthError) -> ApiProblem:
+    return ApiProblem(error.status_code, error.error_code, error.message)
+
+
+def _local_auth_unavailable() -> None:
+    if not _local_auth_available():
+        raise ApiProblem(503, "internal_error", "Local staging authentication is not enabled.", retryable=False)
+
+
+@app.post("/v1/auth/local/register", include_in_schema=False, status_code=201)
+def local_register(request: LocalRegisterRequest) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        result = register_local(
+            ACCOUNTS,
+            AUTH_SESSIONS,
+            email=request.email,
+            password=request.password,
+            now=lifecycle_clock.now(),
+        )
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse(result, status_code=201, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/v1/auth/local/login", include_in_schema=False)
+def local_login(request: LocalRegisterRequest) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        result = login_local(
+            ACCOUNTS,
+            AUTH_SESSIONS,
+            email=request.email,
+            password=request.password,
+            now=lifecycle_clock.now(),
+        )
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/v1/auth/local/logout", include_in_schema=False)
+def local_logout(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        _account, session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        logout_local(AUTH_SESSIONS, session)
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse({"logged_out": True}, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/v1/auth/logout", include_in_schema=False)
+def logout_authenticated_session(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
+    """Revoke any server-issued session, including an OAuth session."""
+
+    try:
+        _account, session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        logout_local(AUTH_SESSIONS, session)
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse({"logged_out": True}, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/v1/auth/local/account", include_in_schema=False)
+def local_delete_account(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/v1/auth/account", include_in_schema=False)
+def delete_authenticated_account(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
+    """Delete a local or OAuth account and revoke every related session."""
+
+    try:
+        account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
+
+
 @app.get(
     "/v1/auth/providers",
     response_model=OAuthProvidersResponse,
@@ -661,6 +849,122 @@ def start_oauth(provider: OAuthProviderName, request: OAuthStartRequest) -> OAut
         state=authorization.state,
         code_challenge=authorization.code_challenge,
         code_challenge_method="S256",
+    )
+
+
+def _oauth_identity_key(provider: str, subject: str) -> str:
+    return f"oauth_identity_{sha256(f'{provider}\0{subject}'.encode('utf-8')).hexdigest()}"
+
+
+def _oauth_account(identity: Any) -> LocalAccount:
+    """Find or create an account for a provider-verified identity."""
+
+    identity_key = _oauth_identity_key(identity.provider, identity.subject)
+    existing_identity = OAUTH_IDENTITIES.get(identity_key)
+    now = lifecycle_clock.now()
+    if existing_identity is not None:
+        account = ACCOUNTS.get(existing_identity.account_id)
+        if account is None or account.deleted_at is not None:
+            raise OAuthProviderError("OAuth identity account is unavailable")
+        if existing_identity.email != identity.email:
+            OAUTH_IDENTITIES.put(
+                identity_key,
+                existing_identity.model_copy(update={"email": identity.email, "updated_at": now}),
+            )
+        return account
+
+    if any(account.email == identity.email and account.deleted_at is None for _, account in ACCOUNTS.items()):
+        # Do not silently link an OAuth identity to a password account.  An
+        # authenticated account-linking flow can be added later with explicit
+        # user intent and a separate audit record.
+        raise OAuthProviderError("An account with this email already exists")
+
+    account = LocalAccount(
+        account_id=f"account_{uuid4().hex}",
+        email=identity.email,
+        # This is an unusable sentinel, not a password hash. OAuth accounts
+        # can only authenticate through the bound provider identity.
+        password_digest=f"oauth_identity${secrets.token_urlsafe(48)}",
+        created_at=now,
+    )
+    record = OAuthIdentity(
+        identity_id=identity_key,
+        provider=identity.provider,
+        subject=identity.subject,
+        account_id=account.account_id,
+        email=identity.email,
+        created_at=now,
+        updated_at=now,
+    )
+    try:
+        ACCOUNTS.put(account.account_id, account)
+        OAUTH_IDENTITIES.put(identity_key, record)
+    except Exception:
+        ACCOUNTS.delete(account.account_id)
+        OAUTH_IDENTITIES.delete(identity_key)
+        raise
+    return account
+
+
+@app.get("/oauth/{provider}/start", include_in_schema=False)
+def browser_oauth_start(
+    provider: OAuthProviderName,
+    return_uri: Annotated[str, Query(min_length=1, max_length=2048)],
+) -> RedirectResponse:
+    """Start a browser OAuth redirect using the same server-held PKCE state."""
+
+    foundation = oauth_foundation
+    if foundation is None:
+        raise ApiProblem(400, "bad_request", "OAuth authorization is not available.")
+    try:
+        authorization = foundation.create_transaction(provider, return_uri)
+        transaction = foundation.transaction_for_state(authorization.state)
+    except (OAuthConfigurationError, OAuthTransactionError) as error:
+        raise ApiProblem(400, "bad_request", "OAuth authorization request is unavailable.") from error
+    return RedirectResponse(
+        OAuthProviderClient.authorization_url(transaction),
+        status_code=307,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/oauth/callback", include_in_schema=False)
+def browser_oauth_callback(
+    code: Annotated[str | None, Query(max_length=4096)] = None,
+    state: Annotated[str | None, Query(max_length=512)] = None,
+    error: Annotated[str | None, Query(max_length=256)] = None,
+) -> JSONResponse:
+    """Complete a configured provider callback without persisting provider tokens."""
+
+    foundation = oauth_foundation
+    if foundation is None:
+        raise ApiProblem(400, "bad_request", "OAuth callback is not available.")
+    if state is None:
+        raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.")
+    if error is not None or code is None:
+        try:
+            foundation.consume_state(state)
+        except OAuthTransactionError:
+            pass
+        raise ApiProblem(400, "bad_request", "OAuth callback was cancelled or unavailable.")
+    try:
+        transaction = foundation.consume_state(state)
+        access_token = oauth_provider_client.exchange_code(transaction, code)
+        provider_identity = oauth_provider_client.identity(transaction.provider, access_token)
+        if provider_identity.provider != transaction.provider:
+            raise OAuthProviderError("OAuth provider identity mismatch")
+        account = _oauth_account(provider_identity)
+        session = issue_local_session(
+            AUTH_SESSIONS,
+            account,
+            now=lifecycle_clock.now(),
+            auth_mode="oauth",
+        )
+    except (OAuthTransactionError, OAuthProviderError) as exception:
+        raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.") from exception
+    return JSONResponse(
+        OAuthSessionResponse(**{**session, "provider": provider_identity.provider}).model_dump(mode="json"),
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
     )
 
 

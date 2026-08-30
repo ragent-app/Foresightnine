@@ -236,6 +236,7 @@ class RedisAbuseControl:
 
     def __init__(self, client: Any, *, settings: RedisAbuseSettings | None = None) -> None:
         settings = settings or RedisAbuseSettings()
+        self.client = client
         self.ip = RedisSlidingWindowLimiter(client, limit=settings.ip_limit, window_seconds=settings.request_window_seconds)
         self.session = RedisSlidingWindowLimiter(client, limit=settings.session_limit, window_seconds=settings.request_window_seconds)
         self.model = RedisModelCallQuota(
@@ -259,6 +260,14 @@ class RedisAbuseControl:
         # Redis reset is deliberately non-destructive. TTLs and normal pruning
         # reclaim this namespace; never FLUSHDB or scan/delete a broad prefix.
         return None
+
+    def check_ready(self) -> None:
+        """Fail startup if Redis cannot answer the first readiness probe."""
+        try:
+            if self.client.ping() is not True:
+                raise RuntimeError("Redis did not acknowledge the readiness probe.")
+        except Exception as error:
+            raise RuntimeError("Redis abuse controls are unavailable.") from error
 
 
 def _parse_script_result(result: Any) -> tuple[bool, int]:

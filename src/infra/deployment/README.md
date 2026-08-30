@@ -32,4 +32,19 @@ Public deployment is a gated release-candidate exercise. The deployer must recor
 5. Deploy API and clients to a private/staged environment, run smoke, abuse, rollback, and client-parity tests, and inspect logs for secrets or personal data.
 6. Obtain written approval from legal, security, privacy, operations, data licensing, and release owners before changing traffic exposure.
 
+## Reproducible staging backup
+
+The local Compose stack has a repository-external backup helper. It writes a
+PostgreSQL custom dump, a Redis RDB snapshot, and a SHA-256 sidecar without
+printing credentials:
+
+```bash
+bash src/infra/deployment/backup-staging.sh /absolute/path/outside/Foresightnine-backups
+```
+
+The helper has no restore mode. A restore is an owner-approved destructive
+operation and must be performed into a separately verified database/Redis
+target before any traffic is exposed. Do not put backup files in the Git
+checkout or commit them.
+
 No step above authorizes brokerage connectivity, order routing, custody, or real-money execution. Those remain out of scope and would require a separate approved product and regulatory design.
