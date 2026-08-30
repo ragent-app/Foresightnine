@@ -12,6 +12,7 @@ Linux goal. This is an execution brief, not authorization by itself.
 - src/docs/progress.md
 - src/docs/architecture/client-market-data-runtime.md
 - src/docs/data/market-snapshot-bundle.md
+- src/docs/data/public-provider-adaptation-plan.md
 - src/docs/deployment/twopaltformpipeline.md
 - src/docs/deployment/linux-production-goal.md
 - src/docs/deployment/linux-agent-handoff.md
@@ -103,3 +104,12 @@ local implementation; it is the deployment-owned combination of CORS/edge
 proxy, provider protocol adaptation, factor/FX licensing and persistent
 services. The Yahoo probe is evidence for Linux planning only, not an approval
 to use Yahoo in production.
+
+The latest read-only provider assessment is in
+`src/docs/data/public-provider-adaptation-plan.md`. It records that no
+verified source currently satisfies public redistribution, target-asset
+coverage and the FM feature contract together. Linux must preserve the
+canonical `MarketSnapshotBundle v1` and may only add a thin, allowlisted
+protocol adapter after written data-use approval. Price-only responses must
+remain explicit `limited_data`; Linux must not derive or rename vendor
+indicators into FM features.

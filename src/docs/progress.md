@@ -1,5 +1,29 @@
 # Progress
 
+## Public-provider assessment and canonical adaptation plan — 2026-08-30
+
+- Continued read-only evaluation of public sources. Market Data's no-token
+  demonstration is limited to unlocked symbols: the Windows probe received
+  HTTP 401 for PAVE, SOXX, XLU, GLD and VT. Its official CORS/data policy also
+  prohibits using self-service CORS data to serve public users.
+- biquote health and symbol discovery were reachable, but the actual response
+  had no CORS header and daily bars for PAVE, SOXX, XLU, GLD and VT were empty.
+  Xoomar macro/ETF-flow and Fear & Greed Chart responses are useful only as
+  optional context; neither covers the current price-and-FM contract. HF
+  Market Data's claimed keyless endpoint timed out in the Windows probe and
+  remains unverified.
+- Added `docs/data/public-provider-adaptation-plan.md`. It concludes that no
+  verified provider currently meets unauthenticated access, public
+  redistribution, target-asset coverage and exact FM feature provenance at
+  once. It specifies the nearest safe path: preserve `MarketSnapshotBundle v1`,
+  use a thin allowlisted Linux/Cloudflare adapter only after licensing approval,
+  normalize vendor bars to the three anchors, and fail closed with explicit
+  limited data when factor or FX fields are absent.
+- Updated `docs/deployment/linux-market-provider-next-prompt.md` to make this
+  assessment the Linux handoff reference. No provider URL, credential, proxy,
+  cache or unlicensed dataset was added; no Linux or Cloudflare operation was
+  executed.
+
 ## Public-provider probe and Linux follow-up prompt — 2026-08-30
 
 - Performed a read-only network probe against the Yahoo Finance chart endpoint.
