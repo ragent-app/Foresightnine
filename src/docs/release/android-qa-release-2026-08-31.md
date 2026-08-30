@@ -68,9 +68,12 @@ The APK was verified with APK Signature Scheme v2/v3. The AAB was verified by
 - No `FATAL EXCEPTION` or `ReactNativeJS:E` entries were present in the
   filtered post-flow logcat output.
 - Screenshots reviewed with `view_image`:
-  - `android-release-cold-start.png`
-  - `android-release-language-toggle.png`
-  - `android-release-challenge.png`
+  - `phase9-current-head-home.png`
+  - `phase9-current-head-en.png`
+  - `phase9-current-head-challenge.png`
+- UI hierarchy dumps for the same states are retained beside the screenshots;
+  tap targets were selected from the dumped bounds rather than guessed screen
+  coordinates.
 
 ## Remaining release gates
 

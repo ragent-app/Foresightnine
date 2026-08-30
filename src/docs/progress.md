@@ -1,5 +1,18 @@
 # Progress
 
+# Current-head Android emulator QA evidence — 2026-08-31
+
+- Reinstalled the disposable QA-signed Android build whose mobile sources are
+  identical to current HEAD `2620bdd`, cold-started `com.foresightnine.mobile`
+  on `emulator-5554` (API 36 Play), switched the language to English, and
+  reached the server-backed Challenge state against staging.
+- UI hierarchy dumps and screenshots are retained in
+  `docs/qa/android/phase9-current-head-{home,en,challenge}.{xml,png}`. The
+  interaction bounds were read from the dumped UI tree; they were not guessed.
+- Post-flow logcat had no `FATAL EXCEPTION`, `ReactNativeJS:E`, or
+  `AndroidRuntime:E` entries. This is emulator evidence only; a physical-device
+  run remains an external gate.
+
 # Current-head Android release rebuild — 2026-08-31
 
 - Rebuilt the current `8d7dc99` source in the short-path QA clone with the
