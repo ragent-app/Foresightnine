@@ -1,5 +1,34 @@
 # Progress
 
+## Client market runtime and Linux boundary — 2026-08-30
+
+- Extended the shared client market-data package from a static contract into a
+  runtime controller with explicit `mock`, `public` and request-only `byok`
+  modes. It emits `idle/loading/ready/limited/error`, clears BYOK credentials
+  after the one request, and never silently substitutes mock data after an
+  explicitly selected public-provider failure or missing URL.
+- Web and Android now request the bounded three-anchor bundle when FM starts,
+  map only the latest completed-session price into their own asset shape, and
+  feed the validated bundle into the existing local FM path. Web keeps the
+  Worker boundary; Android keeps the shared TypeScript engine. The Web top
+  status and Android FM completion state identify the provider mode and the
+  three-point limitation.
+- This is not a historical backtest or a server-side portfolio calculation.
+  The client requests year-start, latest-month-start and latest-completed-
+  session rows only; missing/stale rows remain visible as limited data. A real
+  provider, data license, FX contract and factor-manifest approval are still
+  external gates.
+- Linux scope is explicitly reduced for this slice: deploy and supervise the
+  API, Cloudflare ingress, OAuth/account boundary, PostgreSQL and Redis. Linux
+  must not implement market-data aggregation, FM formulas, factor selection,
+  weights, amounts or shares. It may expose a bounded provider endpoint or
+  signed metadata only after the deployment owner supplies the approved data
+  contract.
+- Focused verification after this slice: market-data `14/14`, Web `52/52`,
+  Android `45/45`; typecheck, Web production build and Android Expo Android
+  export are required before the slice is committed. The full-history secret
+  scan remains a release gate and is not claimed by this entry.
+
 ## Client market snapshot data plane — 2026-08-30
 
 - Pulled the latest Linux Module 1–6 evidence at commit `bfcd6d2`. Linux

@@ -21,6 +21,11 @@ Linux and Windows goal files contain the scoped instructions for each side:
    billing activation or Play release is implied by this planning document.
 6. Never guess a domain, origin, callback, package identity, secret or data
    license. Record the blocker and stop only the dependent module.
+7. The client data plane is Windows-owned: only the three bounded market
+   anchors are requested, validated and converted into local FM inputs. Linux
+   provides deployment, identity/database/abuse services and, if approved, a
+   provider contract; it does not compute FM or replace client data with a
+   historical warehouse.
 
 ## Confirmed decisions and Cloudflare evidence
 

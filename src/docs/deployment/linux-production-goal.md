@@ -186,6 +186,14 @@ Store evidence. Do not edit `src/apps/web`, `src/apps/mobile`,
 `src/docs/progress.md` during the Linux task. Return changes to the primary
 integrator for documentation and commit coordination.
 
+For avoidance of doubt, Linux is not responsible for the product's market
+data computation. The client-side implementation already owns the bounded
+three-anchor request, provider response validation, latest-session price
+mapping, FM input conversion and all final factor/portfolio calculations.
+Linux may only deploy the API and the approved provider/metadata contract;
+it must not add a historical data warehouse or move FM, weights, amounts,
+shares or Public Default computation into FastAPI.
+
 ## Required implementation outcome
 
 1. **Persistent API runtime**

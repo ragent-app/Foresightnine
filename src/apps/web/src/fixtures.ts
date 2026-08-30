@@ -1,7 +1,7 @@
 import type { EvidenceItem, ProbabilityAssessment, ThesisDocument, Worldline } from "@foresightnine/contracts";
 import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessPolicy, type FreshnessDecision, type ProviderFreshnessStatus } from "@foresightnine/domain";
 import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
-import { createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
+import { applyLatestCompletedSessionPrices, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
 import type { AssetFixture, BranchView, Currency, EvidenceView, FreshnessOptions } from "./types";
 
 export const MARKET_DATA_AS_OF = "2026-08-09";
@@ -167,7 +167,7 @@ export function fxToBase(quoteCurrency: Currency, baseCurrency: Currency): numbe
   return FX_SNAPSHOT.cnyPerUnit[quoteCurrency] / FX_SNAPSHOT.cnyPerUnit[baseCurrency];
 }
 
-const FM_FACTORS: readonly FactorExpression[] = [
+export const FM_FACTORS: readonly FactorExpression[] = [
   { id: 10, icMean: 0.072, icir: 0.64, admitted: true, expression: { op: "field", name: "momentum" } },
   { id: 20, icMean: 0.051, icir: 0.58, admitted: true, expression: { op: "field", name: "quality" } },
   { id: 30, icMean: -0.044, icir: -0.52, admitted: true, expression: { op: "rank", input: { op: "field", name: "momentum" } } },
@@ -177,8 +177,12 @@ const FM_FACTORS: readonly FactorExpression[] = [
 export const MARKET_SNAPSHOT_BUNDLE: MarketSnapshotBundle = createMockMarketSnapshotBundle({ assetIds: ASSET_FIXTURES.map((asset) => asset.assetId), cutoff: MARKET_DATA_AS_OF, timezone: "UTC", requestedAt: "2026-08-09T00:00:00Z" });
 export const MARKET_DATA_STATUS = marketDataStatus(MARKET_SNAPSHOT_BUNDLE);
 
-export function fmInput(): ComputeFmInput {
-  const converted = marketSnapshotBundleToFmInput(MARKET_SNAPSHOT_BUNDLE, FM_FACTORS, { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
+export function assetsForMarketBundle(bundle: MarketSnapshotBundle): readonly AssetFixture[] {
+  return applyLatestCompletedSessionPrices(ASSET_FIXTURES, bundle);
+}
+
+export function fmInput(bundle: MarketSnapshotBundle = MARKET_SNAPSHOT_BUNDLE): ComputeFmInput {
+  const converted = marketSnapshotBundleToFmInput(bundle, FM_FACTORS, { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
   if (converted.status !== "ready") throw new Error("The deterministic market snapshot bundle is limited and cannot drive the FM fixture.");
   return converted.input;
 }

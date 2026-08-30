@@ -16,7 +16,7 @@ The most recent repository evidence is recorded in [`docs/progress.md`](docs/pro
 | Challenge and evidence | Implemented | Deterministic mock provider; server-only provider boundary; client SearchEvidenceBundle fallback |
 | Worldlines and probabilities | Implemented | Weak/main/strong paths with premise, conditional, and joint probability fields; live model still deployment-gated |
 | Client FM | Implemented | TypeScript engine, Web Worker adapter, Android shared entry, Python independent WL1 oracle and parity audit |
-| Client market data | Implemented as a bounded data plane | Shared `MarketSnapshotBundle` uses three point-in-time anchors, validates cutoff/freshness/integrity, supports public and BYOK adapters, and feeds local FM; current apps intentionally remain explicit mock/offline until an approved provider is configured |
+| Client market data | Implemented as a bounded runtime data plane | Shared `MarketSnapshotBundle` uses three point-in-time anchors, validates cutoff/freshness/integrity, supports public and request-only BYOK adapters, exposes loading/limited/error states, maps latest-session prices into both clients, and feeds local FM; mock remains the explicit default until an approved provider is configured |
 | Web | Implemented for local QA | React/Vite flow and Browser/IAB evidence; public host is not configured |
 | Android | Implemented for QA | Expo/RN app and API-36 emulator evidence; current APK is debug-only, not a release artifact |
 | API persistence | Implemented for development/staging | FastAPI repositories, PostgreSQL migrations, Redis abuse-control adapter; production HA/TLS/backup evidence remains external |
@@ -74,7 +74,7 @@ Data/compute boundary:
 2. The API stores a typed thesis and asks the configured provider to challenge it. The challenge must expose counterexamples, logical jumps, potentially priced-in claims, missing evidence, and a bounded rubric score.
 3. The user adds evidence or a `SearchEvidenceBundle`. Provider-native search is preferred; when it is unavailable, the client bundle remains visibly labelled as user-supplied and independently reviewable rather than provider-verified.
 4. The API accepts a normal confirmation or an explicit confirmation-with-reservations. It then produces weak, main, and strong worldlines with time anchors, revealing events, asset impacts, evidence references, probability intervals, confidence, and calibration status.
-5. The client receives a bounded `MarketSnapshotBundle` for the selected assets and three point-in-time anchors. The Web path runs FM in a Worker; Android uses the same pure TypeScript engine through the shared package. The public provider path sends no credential, while BYOK credentials are request-only and excluded from bundle/hash/export data.
+5. The client requests a bounded `MarketSnapshotBundle` for the selected assets and three point-in-time anchors when the user runs FM. The shared runtime state machine exposes loading, ready, limited-data and error states; an explicitly selected public provider never falls back to mock. The Web path runs FM in a Worker; Android uses the same pure TypeScript engine through the shared package. The public provider path sends no credential, while BYOK credentials are request-only, single-use and excluded from bundle/hash/export data.
 6. The UI displays both `FM Raw` and a separately derived `Public Default`. Public constraints never overwrite raw output. The result includes explanation, risks, stress tests, method version, data timestamp, uncertainty, and risk disclosure.
 
 ### Package and application map
@@ -218,10 +218,22 @@ The recommended Linux application workspace is a new directory owned by the depl
 - The current FM audit demonstrates formula and cutoff parity for the recorded WL1 slice, not investability, out-of-sample returns, or a guarantee that future data will be available or licensed.
 - The development Compose file is secret-free and intentionally unsuitable for public production: it has development credentials, non-TLS Redis and mock provider wiring.
 - Public launch, current-data delivery, legal/regulatory interpretation and target-region availability remain deployment gates, not claims made by this repository.
+- The current client data adapter is intentionally small: it requests only the
+  three bounded anchors (year start, latest month start, latest completed
+  session), not a historical backtest panel. A real provider must return the
+  approved asset manifest, prices/features, currency, timestamps and explicit
+  missing/stale rows. Current FX and any portfolio holdings supplied by a
+  product flow still require a separately approved data contract; the client
+  must not infer them from future or unlicensed data.
+- Linux is not the owner of this market-data computation. Linux only hosts the
+  API/identity/database/edge services and may publish a validated provider
+  contract or metadata. Web/Android request, validation, FM input conversion,
+  factor computation, weights, amounts and shares remain client-side.
 
 ## Further reading
 
 - [`docs/architecture/README.md`](docs/architecture/README.md) — architecture baseline and decisions.
+- [`docs/architecture/client-market-data-runtime.md`](docs/architecture/client-market-data-runtime.md) — bounded client data request, provider modes and Linux boundary.
 - [`docs/progress.md`](docs/progress.md) — chronological implementation and QA evidence.
 - [`docs/deployment/linux-transfer-manifest.md`](docs/deployment/linux-transfer-manifest.md) — what to package and what to exclude.
 - [`docs/deployment/linux-agent-handoff.md`](docs/deployment/linux-agent-handoff.md) — Linux operator/AI-agent instructions.

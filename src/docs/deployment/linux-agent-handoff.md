@@ -65,6 +65,30 @@ On Linux, use the approved read-only mount or its separately verified copy. Do n
 - Keep `FM Raw` and `Public Default` as separate outputs with a visible derivation and constraints explanation.
 - Run the independent Python oracle only as an audit. Do not import the TypeScript implementation into the oracle or use server computation as a substitute for client parity.
 
+## Client market-data boundary
+
+The current Windows implementation owns the market-data request and FM data
+plane. Linux must not recreate it as a server-side portfolio service:
+
+- Web and Android request only the bounded year-start, latest-month-start and
+  latest-completed-session anchors for the user-selected assets.
+- The clients validate asset identity, cutoff, timestamps, missing/stale rows,
+  prices, payload size and integrity, then map the latest completed-session
+  price into the local asset registry.
+- The clients convert the bundle to FM observations and perform factor
+  evaluation, rank/tie/NaN handling, IC/ICIR metadata use, signal combination,
+  weights, cost dead-band, amounts and shares. Web uses a Worker and Android
+  uses the shared TypeScript engine.
+- Linux may host an approved HTTPS provider endpoint, signed asset/factor
+  metadata, OAuth, PostgreSQL and abuse controls. It must not add a raw
+  historical-data pull, compute a replacement portfolio, or silently fill a
+  missing/stale client row with mock data.
+- No Windows path such as `D:/WL-data-final/...` is a Linux runtime
+  dependency. That path belongs to the research/QA fixture audit and is not
+  part of the three-anchor product request. If a Linux parity audit is later
+  required, use a separately packaged, cutoff-labelled, hash-verified fixture
+  bundle; do not substitute a new dataset or modify the source directory.
+
 ## Phase execution protocol
 
 1. Inspect the current commit, working tree and read-only boundary. Record the environment without secrets.

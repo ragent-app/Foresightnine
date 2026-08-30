@@ -1,6 +1,6 @@
 import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
 import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessDecision, type FreshnessPolicy, type ProviderFreshnessStatus } from "@foresightnine/domain";
-import { createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
+import { applyLatestCompletedSessionPrices, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
 import type { AssetFixture, Branch, BranchKind, EvidenceBundle, FreshnessOptions, Language, ProbabilityInterval, RubricItem, TranscriptTurn } from "./types";
 
 export const MARKET_DATA_AS_OF = "2026-08-09";
@@ -168,8 +168,12 @@ const FM_FACTORS: readonly FactorExpression[] = [
 export const MARKET_SNAPSHOT_BUNDLE: MarketSnapshotBundle = createMockMarketSnapshotBundle({ assetIds: ASSETS.map((asset) => asset.id), cutoff: MARKET_DATA_AS_OF, timezone: "UTC", requestedAt: "2026-08-09T00:00:00Z" });
 export const MARKET_DATA_STATUS = marketDataStatus(MARKET_SNAPSHOT_BUNDLE);
 
-export function fmInput(): ComputeFmInput {
-  const converted = marketSnapshotBundleToFmInput(MARKET_SNAPSHOT_BUNDLE, FM_FACTORS, { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
+export function assetsForMarketBundle(bundle: MarketSnapshotBundle): readonly AssetFixture[] {
+  return applyLatestCompletedSessionPrices(ASSETS, bundle);
+}
+
+export function fmInput(bundle: MarketSnapshotBundle = MARKET_SNAPSHOT_BUNDLE): ComputeFmInput {
+  const converted = marketSnapshotBundleToFmInput(bundle, FM_FACTORS, { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
   if (converted.status !== "ready") throw new Error("The deterministic market snapshot bundle is limited and cannot drive the FM fixture.");
   return converted.input;
 }

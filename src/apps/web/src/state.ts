@@ -316,14 +316,14 @@ function eligibilityReason(asset: AssetFixture, freshnessOptions: FreshnessOptio
   return undefined;
 }
 
-export function allocationRows(result: ComputeFmResult | null, capital: number, baseCurrency: Currency = "CNY", mode: PortfolioMode = "raw", freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): readonly AllocationRow[] {
+export function allocationRows(result: ComputeFmResult | null, capital: number, baseCurrency: Currency = "CNY", mode: PortfolioMode = "raw", freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }, assets: readonly AssetFixture[] = ASSET_FIXTURES): readonly AllocationRow[] {
   if (!result) return [];
   const raw = result.weights.weights;
-  const weights = ASSET_FIXTURES.map((_asset, index) => Math.max(0, Number.isFinite(raw[index] ?? 0) ? raw[index] ?? 0 : 0));
-  const publicized = publicWeights(weights, ASSET_FIXTURES, freshnessOptions);
-  const highVolTotal = publicized.reduce((sum, weight, index) => sum + (ASSET_FIXTURES[index]!.volatility === "high" ? weight : 0), 0);
+  const weights = assets.map((_asset, index) => Math.max(0, Number.isFinite(raw[index] ?? 0) ? raw[index] ?? 0 : 0));
+  const publicized = publicWeights(weights, assets, freshnessOptions);
+  const highVolTotal = publicized.reduce((sum, weight, index) => sum + (assets[index]!.volatility === "high" ? weight : 0), 0);
   const roles: Readonly<Record<string, string>> = { GRID: "核心受益", CHIP: "次级受益", UTIL: "防守", GOLD: "对冲", WORLD: "分散", CASH: "流动性" };
-  return ASSET_FIXTURES.map((asset, index) => {
+  return assets.map((asset, index) => {
     const weight = weights[index] ?? 0;
     const publicWeight = publicized[index] ?? 0;
     const fx = fxToBase(asset.quoteCurrency, baseCurrency);

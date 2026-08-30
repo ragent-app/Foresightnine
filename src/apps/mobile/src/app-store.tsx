@@ -3,7 +3,7 @@ import { computeFm, type ComputeFmResult } from "@foresightnine/fm-engine";
 import { archiveExists, loadEncryptedArchive, saveEncryptedArchive, sharePrivacySafeDocument } from "./adapters/native-archive";
 import { buildPrivacySafeDocument, buildResearchSnapshot, canEnterPortfolio, canRestorePrivacySafeDocument, normalizePrivacySafeDocument, restoreAppState, type PrivacySafeDocument } from "./archive";
 import { isDuplicateEvidence } from "./evidence";
-import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, MARKET_DATA_STATUS, rubricFor } from "./fixtures";
+import { ASSETS, assetsForMarketBundle, FIXTURE_STATE, fmInput, makeBranches, rubricFor } from "./fixtures";
 import { t } from "./i18n";
 import { createPortfolioPlan, portfolioMetadata, type PortfolioPlan } from "./portfolio";
 import { loadDraft, loadLanguage, saveDraft, saveLanguage } from "./storage";
@@ -12,6 +12,8 @@ import { canConfirmNormally, canConfirmReserved, canEnterWorldline, parseCapital
 import { mobileInitialState, reduceChallengeAction, resetMobileWorkflowState } from "./lifecycle";
 import { switchLanguageState } from "./language-state";
 import { apiErrorNotice, challengeToMobileUi, createMobileApiClient, worldlineBundleToBranches } from "./api-runtime";
+import { configuredMarketDataRuntimeConfig } from "./runtime-config";
+import { createMarketRuntimeController, type MarketRuntimeState } from "@foresightnine/market-data";
 
 export { switchLanguageState } from "./language-state";
 
@@ -21,6 +23,7 @@ export interface MobileStore {
   readonly portfolio: PortfolioPlan | null;
   readonly archive: PrivacySafeDocument | null;
   readonly archiveAvailable: boolean;
+  readonly marketDataState: MarketRuntimeState;
   updateDraft(patch: Partial<Pick<AppState, "viewpoint" | "capital" | "currency">>): void;
   setLanguage(language: Language): void;
   startChallenge(): void;
@@ -47,8 +50,21 @@ const Store = createContext<MobileStore | null>(null);
 export function AppProvider({ children }: PropsWithChildren): React.JSX.Element {
   const [state, setState] = useState<AppState>(mobileInitialState);
   const apiClient = useMemo(() => createMobileApiClient(), []);
+  const marketRuntime = useMemo(() => createMarketRuntimeController(), []);
+  const marketConfig = useMemo(() => configuredMarketDataRuntimeConfig(), []);
+  const [marketDataState, setMarketDataState] = useState<MarketRuntimeState>(marketRuntime.getState());
+  const [marketAssets, setMarketAssets] = useState(ASSETS);
   const apiChallengeId = useRef<string | null>(null);
   const apiAbort = useRef<AbortController | null>(null);
+  useEffect(() => { const unsubscribe = marketRuntime.subscribe(setMarketDataState); marketRuntime.configure(marketConfig); return unsubscribe; }, [marketConfig, marketRuntime]);
+  useEffect(() => {
+    const providerStatus = marketDataState.status === "ready" && marketDataState.mode !== "mock"
+      ? "fresh" as const
+      : marketDataState.status === "limited" ? "stale" as const : "unavailable" as const;
+    const runtimeAsOf = marketDataState.bundle?.cutoff ?? state.freshness.runtimeAsOf;
+    if (state.freshness.providerStatus === providerStatus && state.freshness.runtimeAsOf === runtimeAsOf) return;
+    setState((current) => ({ ...current, freshness: { runtimeAsOf, providerStatus } }));
+  }, [marketDataState, state.freshness.providerStatus, state.freshness.runtimeAsOf]);
   const [archive, setArchive] = useState<PrivacySafeDocument | null>(null);
   const [archiveAvailable, setArchiveAvailable] = useState(false);
   useEffect(() => { void Promise.all([loadDraft(), loadLanguage(), archiveExists()]).then(([draft, language, exists]) => {
@@ -124,10 +140,17 @@ export function AppProvider({ children }: PropsWithChildren): React.JSX.Element 
     }).catch((error) => setState((current) => ({ ...current, exportNotice: apiErrorNotice(error, current.language) })));
   }, [apiClient, state.reservationNote, state.unresolvedIssuesAcknowledged]);
   const selectBranch = useCallback((selectedBranch: AppState["selectedBranch"]) => setState((current) => ({ ...current, selectedBranch })), []);
-  const runFm = useCallback(() => setState((current) => {
-    if (!canEnterWorldline(current)) return current;
-    try { const result = computeFm(fmInput()); return { ...current, stage: "portfolio", fmStatus: "complete", fmProgress: 100, fmStep: `${t(current.language, "operationComplete")} · ${MARKET_DATA_STATUS} · ${current.language === "en" ? "three point-in-time anchors" : "三个时点锚点"}`, fmResult: result }; } catch { return { ...current, fmStatus: "failed", fmStep: t(current.language, "fixtureRejected") }; }
-  }), []);
+  const runFm = useCallback(() => {
+    if (!canEnterWorldline(state)) return;
+    setState((current) => ({ ...current, stage: "portfolio", fmStatus: "computing", fmProgress: 20, fmStep: t(current.language, "runFm") }));
+    const request = { assetIds: ASSETS.map((asset) => asset.id), cutoff: marketConfig.mode === "mock" ? "2026-08-09" : new Date().toISOString(), timezone: "UTC" } as const;
+    void marketRuntime.refresh(request).then((bundle) => {
+      const nextAssets = assetsForMarketBundle(bundle);
+      setMarketAssets(nextAssets);
+      const result = computeFm(fmInput(bundle));
+      setState((current) => ({ ...current, stage: "portfolio", fmStatus: "complete", fmProgress: 100, fmStep: `${t(current.language, "operationComplete")} · ${bundle.provider.mode} · ${current.language === "en" ? "three point-in-time anchors" : "三个时点锚点"}`, fmResult: result }));
+    }).catch(() => setState((current) => ({ ...current, fmStatus: "failed", fmProgress: 0, fmStep: t(current.language, "fixtureRejected") })));
+  }, [marketConfig.mode, marketRuntime, state]);
   const setPortfolioMode = useCallback((portfolioMode: AppState["portfolioMode"]) => setState((current) => ({ ...current, portfolioMode })), []);
   const setFreshness = useCallback((freshness: FreshnessContext) => setState((current) => ({ ...current, freshness })), []);
   const branches = useMemo(() => {
@@ -157,8 +180,8 @@ export function AppProvider({ children }: PropsWithChildren): React.JSX.Element 
     const shared = await sharePrivacySafeDocument(document);
     setState((current) => ({ ...current, exportNotice: shared ? t(current.language, "exportOpened") : t(current.language, "sharingUnavailable") }));
   }, [state]);
-  const portfolio = useMemo(() => canEnterPortfolio(state) && state.fmResult && parseCapital(state.capital) ? createPortfolioPlan(state.fmResult, parseCapital(state.capital)!, state.currency, undefined, state.language, state.selectedBranch, state.freshness) : null, [state, state.fmResult, state.capital, state.currency, state.language, state.selectedBranch, state.freshness]);
-  const value = useMemo<MobileStore>(() => ({ state, branches, portfolio, archive, archiveAvailable, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, setFreshness, saveArchive, restoreArchive, exportPublicDocument }), [state, branches, portfolio, archive, archiveAvailable, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, setFreshness, saveArchive, restoreArchive, exportPublicDocument]);
+  const portfolio = useMemo(() => canEnterPortfolio(state) && state.fmResult && parseCapital(state.capital) ? createPortfolioPlan(state.fmResult, parseCapital(state.capital)!, state.currency, marketAssets, state.language, state.selectedBranch, state.freshness) : null, [marketAssets, state, state.fmResult, state.capital, state.currency, state.language, state.selectedBranch, state.freshness]);
+  const value = useMemo<MobileStore>(() => ({ state, branches, portfolio, archive, archiveAvailable, marketDataState, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, setFreshness, saveArchive, restoreArchive, exportPublicDocument }), [state, branches, portfolio, archive, archiveAvailable, marketDataState, updateDraft, setLanguage, startChallenge, cancelChallenge, retryChallenge, setChallengeFailure, reply, addEvidence, setSearchStatus, setUnresolvedIssuesAcknowledged, setReservationNote, confirm, selectBranch, runFm, setPortfolioMode, setFreshness, saveArchive, restoreArchive, exportPublicDocument]);
   return <Store.Provider value={value}>{children}</Store.Provider>;
 }
 

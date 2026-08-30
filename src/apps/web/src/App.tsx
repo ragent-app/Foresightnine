@@ -10,13 +10,15 @@ import { PortfolioPanel } from "./components/PortfolioPanel";
 import { NavPanel } from "./components/NavPanel";
 import { ConsolePanel } from "./components/MethodsPanel";
 import { SocialLoginPanel, type OAuthProviderAvailability, type OAuthReadinessStatus } from "./components/SocialLoginPanel";
-import { evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, MARKET_DATA_STATUS } from "./fixtures";
+import { ASSET_FIXTURES, assetsForMarketBundle, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, MARKET_DATA_AS_OF } from "./fixtures";
 import { allocationRows, canEnterStage, canStartFm, initialState, reducer, safeStageFor } from "./state";
 import { downloadText, csvExport, navExport, researchExport } from "./exports";
 import { currencySymbol, parseCapital, validateSearchEvidence } from "./validation";
 import { runFmInWorker } from "./fm-client";
 import { apiErrorNotice, challengeToUi, configuredApiBaseUrl, createWebApiClient, webApiMode, worldlineBundleToBranches } from "./api-runtime";
-import type { Currency, EvidenceDraft, EvidenceView, Language, Stage } from "./types";
+import { configuredMarketDataRuntimeConfig } from "./runtime-config";
+import { createMarketRuntimeController } from "@foresightnine/market-data";
+import type { Currency, EvidenceDraft, EvidenceView, FreshnessContext, Language, Stage } from "./types";
 
 const DRAFT_KEY = "foresightnine.web.draft.v1";
 const OAUTH_PROVIDERS = ["google", "github"] as const;
@@ -57,10 +59,30 @@ export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const apiClient = useMemo(() => createWebApiClient(), []);
+  const marketRuntime = useMemo(() => createMarketRuntimeController(), []);
+  const marketConfig = useMemo(() => configuredMarketDataRuntimeConfig(), []);
+  const [marketDataState, setMarketDataState] = useState(marketRuntime.getState());
+  const [marketAssets, setMarketAssets] = useState(ASSET_FIXTURES);
+  const marketDataAsOf = marketDataState.bundle?.cutoff ?? MARKET_DATA_AS_OF;
   const apiBaseUrl = configuredApiBaseUrl();
   const [oauthReadiness, setOAuthReadiness] = useState<OAuthReadiness>({ providers: OAUTH_UNAVAILABLE, status: apiBaseUrl ? "loading" : "offline" });
   const apiAbort = useRef<AbortController | null>(null);
   const apiMode = webApiMode();
+
+  useEffect(() => {
+    const unsubscribe = marketRuntime.subscribe(setMarketDataState);
+    marketRuntime.configure(marketConfig);
+    return unsubscribe;
+  }, [marketConfig, marketRuntime]);
+
+  useEffect(() => {
+    const providerStatus: FreshnessContext["providerStatus"] = marketDataState.status === "ready" && marketDataState.mode !== "mock"
+      ? "fresh"
+      : marketDataState.status === "limited" ? "stale" : "unavailable";
+    const runtimeAsOf = marketDataState.bundle?.cutoff ?? state.freshness.runtimeAsOf;
+    if (state.freshness.providerStatus === providerStatus && state.freshness.runtimeAsOf === runtimeAsOf) return;
+    dispatch({ type: "set_freshness", freshness: { runtimeAsOf, providerStatus } });
+  }, [marketDataState, state.freshness.providerStatus, state.freshness.runtimeAsOf]);
 
   useEffect(() => {
     if (!apiBaseUrl) {
@@ -80,7 +102,7 @@ export function App() {
   const fmAbort = useRef<AbortController | null>(null);
   const asyncGeneration = useRef<GenerationGuard>(createGenerationGuard());
   const capital = parseCapital(state.capital);
-  const rows = useMemo(() => allocationRows(state.fmResult, capital, state.currency, state.portfolioMode, state.freshness), [state.fmResult, capital, state.currency, state.portfolioMode, state.freshness]);
+  const rows = useMemo(() => allocationRows(state.fmResult, capital, state.currency, state.portfolioMode, state.freshness, marketAssets), [state.fmResult, capital, state.currency, state.portfolioMode, state.freshness, marketAssets]);
   const viewpointBranches = useMemo(() => {
     if (state.serverBranches) return state.serverBranches;
     return apiMode === "api" ? [] : makeBranches(state.viewpoint);
@@ -204,8 +226,14 @@ export function App() {
     const token = invalidateAsync();
     const controller = new AbortController(); fmAbort.current = controller;
     dispatch({ type: "fm_start" });
-    void runFmInWorker(fmInput(), { signal: controller.signal, onProgress: (progress, step) => { if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "fm_progress", progress, step }); } }).then((result) => { if (!controller.signal.aborted && asyncGeneration.current.isCurrent(token)) dispatch({ type: "fm_complete", result }); }).catch(() => { if (!controller.signal.aborted && asyncGeneration.current.isCurrent(token)) dispatch({ type: "fm_fail" }); });
-  }, [invalidateAsync, state]);
+    const request = { assetIds: ASSET_FIXTURES.map((asset) => asset.assetId), cutoff: marketConfig.mode === "mock" ? "2026-08-09" : new Date().toISOString(), timezone: "UTC" } as const;
+    void (async () => {
+      const bundle = await marketRuntime.refresh(request);
+      if (controller.signal.aborted || !asyncGeneration.current.isCurrent(token)) return null;
+      setMarketAssets(assetsForMarketBundle(bundle));
+      return runFmInWorker(fmInput(bundle), { signal: controller.signal, onProgress: (progress, step) => { if (asyncGeneration.current.isCurrent(token)) dispatch({ type: "fm_progress", progress, step }); } });
+    })().then((result) => { if (result && !controller.signal.aborted && asyncGeneration.current.isCurrent(token)) dispatch({ type: "fm_complete", result }); }).catch(() => { if (!controller.signal.aborted && asyncGeneration.current.isCurrent(token)) dispatch({ type: "fm_fail" }); });
+  }, [invalidateAsync, marketConfig.mode, marketRuntime, state]);
   const cancelFm = useCallback(() => { invalidateAsync(); dispatch({ type: "fm_cancel" }); }, [invalidateAsync]);
   const setViewpoint = useCallback((viewpoint: string) => { if (viewpoint !== state.viewpoint) invalidateAsync(); dispatch({ type: "set_viewpoint", viewpoint }); }, [invalidateAsync, state.viewpoint]);
   const reset = useCallback(() => { invalidateAsync(); dispatch({ type: "reset" }); }, [invalidateAsync]);
@@ -223,16 +251,16 @@ export function App() {
   }, [apiChallengeId, apiClient, state.language, state.reservationNote, state.unresolvedIssuesAcknowledged]);
   const navigateTo = useCallback((stage: Stage) => { if (!canEnterStage(state, stage)) { dispatch({ type: "set_stage", stage }); return; } if (stage !== state.stage) invalidateAsync(); dispatch({ type: "set_stage", stage }); }, [invalidateAsync, state]);
 
-  const exportJson = useCallback(() => { downloadText("foresightnine-research.json", JSON.stringify(researchExport(state, viewpointBranches, rows), null, 2), "application/json;charset=utf-8"); dispatch({ type: "export_notice", notice: "JSON 已导出；当前观点、挑战回复和证据均保留。" }); }, [rows, state, viewpointBranches]);
+  const exportJson = useCallback(() => { downloadText("foresightnine-research.json", JSON.stringify(researchExport(state, viewpointBranches, rows, marketDataAsOf), null, 2), "application/json;charset=utf-8"); dispatch({ type: "export_notice", notice: "JSON 已导出；当前观点、挑战回复和证据均保留。" }); }, [marketDataAsOf, rows, state, viewpointBranches]);
   const exportCsv = useCallback(() => { downloadText("foresightnine-allocation.csv", csvExport(rows), "text/csv;charset=utf-8"); dispatch({ type: "export_notice", notice: "CSV 已导出；这是 allocation-only 快照，完整审计字段请使用 JSON。" }); }, [rows]);
-  const exportPath = useCallback(() => { downloadText("foresightnine-worldline-nav.json", JSON.stringify(navExport(state, viewpointBranches), null, 2), "application/json;charset=utf-8"); dispatch({ type: "export_notice", notice: "路径数据已导出，并标记了当前 premise、完整 NAV 数组与历史 / 模拟边界。" }); }, [state, viewpointBranches]);
+  const exportPath = useCallback(() => { downloadText("foresightnine-worldline-nav.json", JSON.stringify(navExport(state, viewpointBranches, marketDataAsOf), null, 2), "application/json;charset=utf-8"); dispatch({ type: "export_notice", notice: "路径数据已导出，并标记了当前 premise、完整 NAV 数组与历史 / 模拟边界。" }); }, [marketDataAsOf, state, viewpointBranches]);
   const methodsExport = useCallback(() => { downloadText("foresightnine-methods.txt", state.language === "en" ? "ForesightNine methodology\n\nProbabilities are revisable judgments, not facts.\nScenario simulation is not a forecast or return promise.\n" : "ForesightNine 方法说明\n\n概率是可修订判断，不是事实。\n情景模拟，不是预测或收益承诺。\n", "text/plain;charset=utf-8"); dispatch({ type: "export_notice", notice: "方法说明已导出。" }); }, [state.language]);
 
   const visibleStage = safeStageFor(state);
   const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset }, oauthReadiness);
   const inspector = renderInspector(visibleStage, state, rows, () => dispatch({ type: "toggle_drawdown" }), state.language);
-  const marketStatusLabel = state.language === "en" ? `Data source: ${MARKET_DATA_STATUS} · three point-in-time anchors` : `数据源：${MARKET_DATA_STATUS} · 三个时点锚点`;
-  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector} oauthProviders={oauthReadiness.providers} oauthReadinessStatus={oauthReadiness.status}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{t(state.language, "数据截止 2026-08-09")}</span><span>{marketStatusLabel}</span>{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} /> : null}</AppShell></LanguageProvider>;
+  const marketStatusLabel = state.language === "en" ? `Data: ${marketDataState.mode}/${marketDataState.status} · three anchors` : `数据：${marketDataState.mode}/${marketDataState.status} · 三个时点锚点`;
+  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector} oauthProviders={oauthReadiness.providers} oauthReadinessStatus={oauthReadiness.status}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{state.language === "en" ? `Data cutoff ${marketDataAsOf}` : `数据截止 ${marketDataAsOf}`}</span><span>{marketStatusLabel}</span>{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} /> : null}</AppShell></LanguageProvider>;
 }
 
 interface Handlers { readonly startChallenge: () => void; readonly cancelChallenge: () => void; readonly retryChallenge: () => void; readonly recoverChallenge: () => void; readonly addEvidence: (draft: EvidenceDraft) => void; readonly submitReply: (body: string) => void; readonly confirm: (confirmation: "confirmed" | "reserved") => void; readonly computeFm: () => void; readonly cancelFm: () => void; readonly exportJson: () => void; readonly exportCsv: () => void; readonly exportPath: () => void; readonly methodsExport: () => void; readonly rows: ReturnType<typeof allocationRows>; readonly viewpointBranches: ReturnType<typeof makeBranches>; readonly setViewpoint: (viewpoint: string) => void; readonly reset: () => void; }

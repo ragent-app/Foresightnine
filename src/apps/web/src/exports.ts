@@ -46,6 +46,12 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function isSafeFmCutoff(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/u.test(value)) return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && parsed <= Date.now();
+}
+
 function hasConfirmedResearchLifecycle(state: AppState): boolean {
   try {
     return ["worldline", "fm", "portfolio", "nav"].includes(state.stage) && canEnterWorldline(state);
@@ -69,7 +75,7 @@ function isFmResultShape(value: unknown): value is ComputeFmResult {
   // The Web client has a six-asset FM shape. Require the worker's typed intermediates and
   // the raw client arrays to agree before serializing any computed downstream artifact.
   const result = value as Record<string, unknown>;
-  if (!isRecord(value) || result.cutoff !== MARKET_DATA_AS_OF
+  if (!isRecord(value) || !isSafeFmCutoff(result.cutoff)
     || !Array.isArray(result.selectedFactorIds)
     || !result.selectedFactorIds.every((id) => Number.isSafeInteger(id))
     || !(result.factorSignalsByTime instanceof Map)
@@ -164,7 +170,7 @@ function allocationExport(state: AppState, rows: readonly AllocationRow[], fmAva
   return { mode: state.portfolioMode, currency: state.currency, current_public_default_enabled: rows.some((row) => row.publicExecutionAllowed && row.publicWeight > 0), selected: { amount: rows.reduce((sum, row) => sum + row.amount, 0), units: rows.reduce((sum, row) => sum + row.units, 0), residual_cash: Math.max(0, capital - rows.reduce((sum, row) => sum + row.amount, 0)) }, raw_residual_cash: Math.max(0, capital - rawAllocated), public_residual_cash: Math.max(0, capital - publicAllocated), constraints: PUBLIC_CONSTRAINTS, allocations: rows.map((row) => ({ asset: row.id, role: row.role, currency: row.currency, quote_currency: row.quoteCurrency, price: row.price, lot_size: row.lotSize, instrument_id: row.instrumentId, proxy_instrument: row.proxyInstrument ?? null, data_as_of: row.dataAsOf, freshness: row.freshness, freshness_label: row.freshnessLabel, public_execution_allowed: row.publicExecutionAllowed, raw: { weight: row.weight, amount: row.rawAmount, units: row.rawUnits, residual_reason: row.rawResidualReason ?? null }, public: { weight: row.publicWeight, amount: row.publicAmount, units: row.publicUnits, residual_reason: row.publicResidualReason ?? null }, selected: { weight: state.portfolioMode === "public" ? row.publicWeight : row.weight, amount: row.amount, units: row.units, residual_reason: row.residualReason ?? null }, constraint_reasons: row.constraintReasons, tradable: row.tradable, liquidity: row.liquidity, volatility: row.volatility })) };
 }
 
-export function researchExport(state: AppState, branches: readonly BranchView[], rows: readonly AllocationRow[]): Record<string, unknown> {
+export function researchExport(state: AppState, branches: readonly BranchView[], rows: readonly AllocationRow[], dataAsOf = MARKET_DATA_AS_OF): Record<string, unknown> {
   const capital = Number(state.capital.replace(/,/g, ""));
   const challengeLifecycleVerified = hasConfirmedResearchLifecycle(state);
   const currentFmResult = isFmResultShape(state.fmResult) ? state.fmResult : null;
@@ -174,12 +180,12 @@ export function researchExport(state: AppState, branches: readonly BranchView[],
     && currentFmResult !== null;
   const lifecycleVerified = hasExportableWorldlineLifecycle(state, fmVerified);
   const unavailableFm = { status: "not_available", fixture: true, result: null, note: "当前确认、生命周期或客户端 FM 结果无效；未导出计算结果。" };
-  const unavailableNav = { status: "not_available", selected: null, current_premise: null, worldlines: [], method_version: EXPORT_METHOD_VERSION, data_as_of: MARKET_DATA_AS_OF, labels: { historical: "historical_only", simulated: "simulated fixture" }, note: "当前确认、生命周期或客户端 FM 结果无效；未导出 NAV 路径。" };
-  const nav = fmVerified && lifecycleVerified ? navExport(state, branches) : unavailableNav;
+  const unavailableNav = { status: "not_available", selected: null, current_premise: null, worldlines: [], method_version: EXPORT_METHOD_VERSION, data_as_of: dataAsOf, labels: { historical: "historical_only", simulated: "simulated fixture" }, note: "当前确认、生命周期或客户端 FM 结果无效；未导出 NAV 路径。" };
+  const nav = fmVerified && lifecycleVerified ? navExport(state, branches, dataAsOf) : unavailableNav;
   return {
     product: { name: "ForesightNine", mode: "public research", simulated_only: true },
     method_version: EXPORT_METHOD_VERSION,
-    data_as_of: MARKET_DATA_AS_OF,
+    data_as_of: dataAsOf,
     thesis: demoThesis(state.viewpoint, capital, state.currency),
     challenge: { status: state.challengeStatus, confirmation: lifecycleVerified ? state.confirmation : "pending", unresolved_issues_acknowledged: lifecycleVerified ? state.unresolvedIssuesAcknowledged : false, reservation_note: lifecycleVerified ? state.reservationNote : "", transcript: state.challengeTurns, evidence_ids: state.evidence.map((item) => item.evidence_id) },
     evidence: state.evidence.map(evidenceExport),
@@ -192,9 +198,9 @@ export function researchExport(state: AppState, branches: readonly BranchView[],
   };
 }
 
-export function navExport(state: AppState, branches: readonly BranchView[]): Record<string, unknown> {
+export function navExport(state: AppState, branches: readonly BranchView[], dataAsOf = MARKET_DATA_AS_OF): Record<string, unknown> {
   const nav = buildNavExport();
-  return { ...nav, selected: state.selectedBranch, current_premise: branches.find((branch) => branch.kind === state.selectedBranch)?.worldline.premise ?? state.viewpoint, worldlines: branches.map(worldlineExport), method_version: EXPORT_METHOD_VERSION, data_as_of: MARKET_DATA_AS_OF, labels: { historical: "historical_only", simulated: "simulated fixture" } };
+  return { ...nav, selected: state.selectedBranch, current_premise: branches.find((branch) => branch.kind === state.selectedBranch)?.worldline.premise ?? state.viewpoint, worldlines: branches.map(worldlineExport), method_version: EXPORT_METHOD_VERSION, data_as_of: dataAsOf, labels: { historical: "historical_only", simulated: "simulated fixture" } };
 }
 
 export const CSV_HEADER = ["asset", "role", "currency", "raw_weight", "public_weight", "raw_amount", "public_amount", "raw_units", "public_units", "selected_amount", "selected_units", "price", "lot_size", "quote_currency", "instrument_id", "proxy_instrument", "raw_residual_reason", "public_residual_reason", "selected_reason", "constraint_reasons", "data_as_of", "freshness", "freshness_label", "public_execution_allowed", "method_version"] as const;

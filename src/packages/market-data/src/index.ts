@@ -541,3 +541,111 @@ export function marketSnapshotBundleToFmInput(bundle: MarketSnapshotBundle, fact
 export function marketDataStatus(bundle: MarketSnapshotBundle): MarketDataStatus {
   return bundle.snapshots.some((snapshot) => snapshot.status !== "ok") ? "limited_data" : bundle.provider.mode;
 }
+
+export type MarketRuntimeStatus = "idle" | "loading" | "ready" | "limited" | "error";
+
+export interface MarketRuntimeState {
+  readonly status: MarketRuntimeStatus;
+  readonly mode: ProviderMode;
+  readonly providerId: string | null;
+  readonly bundle: MarketSnapshotBundle | null;
+  readonly integrityHash: string | null;
+  readonly lastError: string | null;
+}
+
+export interface MarketRuntimeConfig {
+  readonly mode: ProviderMode;
+  readonly providerId?: string;
+  readonly publicBaseUrl?: string;
+  readonly byokBaseUrl?: string;
+  readonly byokApiKey?: string;
+}
+
+export interface MarketRuntimeController {
+  readonly getState: () => MarketRuntimeState;
+  readonly subscribe: (listener: (state: MarketRuntimeState) => void) => () => void;
+  readonly configure: (config: MarketRuntimeConfig) => void;
+  readonly refresh: (request: MarketDataRequest) => Promise<MarketSnapshotBundle>;
+}
+
+const INITIAL_RUNTIME_STATE: MarketRuntimeState = { status: "idle", mode: "mock", providerId: null, bundle: null, integrityHash: null, lastError: null };
+
+function runtimeErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0 ? error.message : "Market data provider is unavailable.";
+}
+
+function withoutByokKey(config: MarketRuntimeConfig): MarketRuntimeConfig {
+  const { byokApiKey: _discarded, ...safeConfig } = config;
+  return safeConfig;
+}
+
+/** Shared state machine for Web and Android. Secrets are held only by the selected source closure. */
+export function createMarketRuntimeController(options: { readonly fetcher?: typeof fetch } = {}): MarketRuntimeController {
+  let config: MarketRuntimeConfig = { mode: "mock", providerId: "deterministic-mock" };
+  let source: MarketDataSource | null = null;
+  let state = INITIAL_RUNTIME_STATE;
+  const listeners = new Set<(next: MarketRuntimeState) => void>();
+  const emit = (next: MarketRuntimeState): void => { state = next; listeners.forEach((listener) => listener(state)); };
+  const configure = (next: MarketRuntimeConfig): void => {
+    config = { ...next };
+    source = null;
+    emit({ status: "idle", mode: next.mode, providerId: next.providerId ?? null, bundle: null, integrityHash: null, lastError: null });
+  };
+  const refresh = async (request: MarketDataRequest): Promise<MarketSnapshotBundle> => {
+    emit({ ...state, status: "loading", lastError: null });
+    try {
+      if (source === null) {
+        const providerId = config.providerId ?? (config.mode === "mock" ? "deterministic-mock" : "configured-provider");
+        if (config.mode === "mock") source = { fetchSnapshots: async (nextRequest) => createMockMarketSnapshotBundle(nextRequest, { providerId }) };
+        else if (config.mode === "public") {
+          if (!config.publicBaseUrl) throw new MarketDataValidationError("invalid_provider_url", "Public provider URL is not configured.");
+          source = createPublicMarketDataSource({ baseUrl: config.publicBaseUrl, providerId, ...(options.fetcher ? { fetcher: options.fetcher } : {}) });
+        } else {
+          if (!config.byokBaseUrl || !config.byokApiKey) throw new MarketDataValidationError("invalid_request", "BYOK provider URL and key are required.");
+          source = createByokMarketDataSource({ baseUrl: config.byokBaseUrl, providerId, apiKey: config.byokApiKey, ...(options.fetcher ? { fetcher: options.fetcher } : {}) });
+        }
+      }
+      const bundle = await source.fetchSnapshots(request);
+      const status = marketDataStatus(bundle) === "limited_data" ? "limited" : "ready";
+      emit({ status, mode: config.mode, providerId: bundle.provider.id, bundle, integrityHash: bundle.integrityHash, lastError: null });
+      if (config.mode === "byok") {
+        source = null;
+        config = withoutByokKey(config);
+      }
+      return bundle;
+    } catch (error) {
+      source = null;
+      if (config.mode === "byok") config = withoutByokKey(config);
+      emit({ ...state, status: "error", bundle: null, integrityHash: null, lastError: runtimeErrorMessage(error) });
+      throw error;
+    }
+  };
+  return { getState: () => state, subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); }, configure, refresh };
+}
+
+export interface LatestPriceAsset {
+  readonly price: number;
+  readonly quoteCurrency: string;
+  readonly asOf: string;
+  readonly freshness: string;
+  readonly assetClass?: string;
+}
+
+type AssetWithId = LatestPriceAsset & ({ readonly id: string } | { readonly assetId: string });
+
+function latestPriceAssetId(asset: AssetWithId): string {
+  return "assetId" in asset ? asset.assetId : asset.id;
+}
+
+/** Applies only the latest completed-session rows; cash remains a fixture-safe residual. */
+export function applyLatestCompletedSessionPrices<T extends AssetWithId>(assets: readonly T[], bundle: MarketSnapshotBundle): readonly T[] {
+  const latest = new Map(bundle.snapshots.filter((snapshot) => snapshot.anchor === "latest_completed_session").map((snapshot) => [snapshot.assetId, snapshot]));
+  return assets.map((asset) => {
+    const assetId = latestPriceAssetId(asset);
+    if (asset.assetClass === "cash" || assetId === "CASH") return asset;
+    const row = latest.get(assetId);
+    const price = row?.close ?? row?.price;
+    if (!row || row.status !== "ok" || price === null || price === undefined || !Number.isFinite(price) || price <= 0) throw new MarketDataValidationError("invalid_price", `No valid latest completed-session price for ${assetId}.`);
+    return { ...asset, price, quoteCurrency: row.currency, asOf: row.asOf ?? bundle.cutoff.slice(0, 10), freshness: "current" };
+  });
+}

@@ -8,6 +8,8 @@ import {
   createByokMarketDataSource,
   createMockMarketSnapshotBundle,
   createPublicMarketDataSource,
+  createMarketRuntimeController,
+  applyLatestCompletedSessionPrices,
   marketDataStatus,
   marketSnapshotBundleToFmInput,
   redactedMarketSnapshotBundleJson,
@@ -151,4 +153,58 @@ test("rejects oversized provider responses before making an unbounded bundle", a
     fetcher: async () => new Response("x".repeat(MARKET_DATA_LIMITS.maxResponseBytes + 1), { status: 200 }),
   });
   await assert.rejects(source.fetchSnapshots(request), (error) => error instanceof MarketDataValidationError && error.code === "oversized_payload");
+});
+
+test("runtime controller starts with explicit mock and records a ready bundle", async () => {
+  const controller = createMarketRuntimeController();
+  controller.configure({ mode: "mock", providerId: "runtime-mock" });
+  const bundle = await controller.refresh(request);
+  assert.equal(bundle.provider.id, "runtime-mock");
+  assert.equal(controller.getState().status, "ready");
+  assert.equal(controller.getState().mode, "mock");
+});
+
+test("selected public provider failure does not silently fall back to mock", async () => {
+  const controller = createMarketRuntimeController({ fetcher: async () => new Response("unavailable", { status: 503 }) });
+  controller.configure({ mode: "public", providerId: "public-test", publicBaseUrl: "https://market.example.test" });
+  await assert.rejects(controller.refresh(request), /HTTP 503/);
+  assert.equal(controller.getState().status, "error");
+  assert.equal(controller.getState().mode, "public");
+  assert.equal(controller.getState().bundle, null);
+});
+
+test("selected public provider without a URL fails closed", async () => {
+  const controller = createMarketRuntimeController();
+  controller.configure({ mode: "public", providerId: "public-missing-url" });
+  await assert.rejects(controller.refresh(request), (error) => error instanceof MarketDataValidationError && error.code === "invalid_provider_url");
+  assert.equal(controller.getState().status, "error");
+  assert.equal(controller.getState().mode, "public");
+  assert.equal(controller.getState().bundle, null);
+});
+
+test("runtime BYOK is request-only and cannot be reused after success", async () => {
+  let calls = 0;
+  const controller = createMarketRuntimeController({
+    fetcher: async (_url, init) => {
+      calls += 1;
+      assert.equal(new Headers(init.headers).get("Authorization"), "Bearer runtime-secret");
+      return new Response(JSON.stringify({ snapshots: createMockMarketSnapshotBundle(request).snapshots }), { status: 200 });
+    },
+  });
+  controller.configure({ mode: "byok", providerId: "runtime-byok", byokBaseUrl: "https://market.example.test", byokApiKey: "runtime-secret" });
+  const first = await controller.refresh(request);
+  assert.equal(first.provider.mode, "byok");
+  assert.equal(controller.getState().status, "ready");
+  await assert.rejects(controller.refresh(request), (error) => error instanceof MarketDataValidationError && error.code === "invalid_request");
+  assert.equal(controller.getState().status, "error");
+  assert.equal(calls, 1);
+  assert.equal(JSON.stringify(controller.getState()).includes("runtime-secret"), false);
+});
+
+test("latest completed-session prices map for both Web and Android asset key shapes", () => {
+  const snapshotBundle = createMockMarketSnapshotBundle(request);
+  const webAssets = [{ assetId: "AAA", price: 1, quoteCurrency: "USD", asOf: "2020-01-01", freshness: "historical_only" }];
+  const androidAssets = [{ id: "AAA", price: 1, quoteCurrency: "USD", asOf: "2020-01-01", freshness: "historical_only" }];
+  assert.equal(applyLatestCompletedSessionPrices(webAssets, snapshotBundle)[0].price, 102);
+  assert.equal(applyLatestCompletedSessionPrices(androidAssets, snapshotBundle)[0].price, 102);
 });
