@@ -59,7 +59,7 @@ def _evaluation_manifest_allows(provider_id: str, fallback_provider_id: str | No
         return False
     if not isinstance(manifest, dict) or manifest.get("schema_version") != "provider-admission-manifest/v1":
         return False
-    if manifest.get("runtime_status") != "staging_only" or manifest.get("production_admission") != "blocked_pending_written_terms":
+    if manifest.get("runtime_status") != "staging_only" or manifest.get("production_admission") != "blocked_pending_external_release_approvals":
         return False
     providers = manifest.get("providers")
     if not isinstance(providers, list):

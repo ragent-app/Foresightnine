@@ -2,7 +2,7 @@
   "schema_version": "provider-admission-manifest/v1",
   "generated_at": "2026-08-31T00:00:00Z",
   "runtime_status": "staging_only",
-  "production_admission": "blocked_pending_written_terms",
+  "production_admission": "blocked_pending_external_release_approvals",
   "source_selection": {
     "fallback_order": {
       "market_price": ["stooq"],
