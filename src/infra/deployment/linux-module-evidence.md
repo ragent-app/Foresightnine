@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source before this Linux checkpoint: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
+- Synced source and Linux provider/auth checkpoint: `06ba1f7eaf477d7e782c09cf00c258d29aa9cc47`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -114,7 +114,7 @@ CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
 - Ingress validation passed. The connector initially used QUIC, but this
   Linux network later showed repeated idle QUIC timeouts and temporary 530
   responses. The config was adjusted to `protocol: http2`; the restarted
-  connector registered two HTTP/2 edge connections (`sin13` and `sin20`), and
+  connector registered two HTTP/2 edge connections (`sin07` and `sin18`), and
   its metrics showed zero origin request errors across three consecutive public
   health checks.
 - Public `GET /health` returned 200 with a browser User-Agent, and a public
@@ -141,6 +141,9 @@ production Cloudflare mutation was performed.
 - Provider authorization, factor/FX licensing and redistribution approval are
   not asserted. Production mode disables this adapter unless an approved
   provider implementation is supplied.
+- The live staging route accepted a canonical `ETF:SPY`, legacy `GRID`, and
+  unapproved `CASH:USD` request: 9 rows were returned, with 6 price rows and
+  3 explicit missing rows. No client-side vendor URL or credential was used.
 - The 2026-08-31 Linux probe confirmed Yahoo chart returned JSON for SPY and
   SOXX, Frankfurter returned a no-key USD/EUR reference rate, and Kenneth
   French's daily momentum archive downloaded successfully. Stooq returned a
@@ -168,6 +171,20 @@ production Cloudflare mutation was performed.
 The safe state is contract/mock-only OAuth readiness plus local staging auth; no
 OAuth provider was contacted and no credential was added to the repository or
 runtime.
+
+## Module 8 — Web/Android smoke evidence
+
+- Web staging `https://staging.foresightnine.com/` returned HTML 200. A
+  Playwright fallback smoke test (the Browser plugin was unavailable) verified
+  meaningful content, challenge submission entering the receiving state, a
+  390x844 mobile viewport, and zero browser console errors.
+- Staging API `/health` and `/readyz` both returned 200. The API CORS preflight
+  allowed only `https://staging.foresightnine.com` for the tested POST route.
+- Android debug assembly completed with Temurin JDK 17 and the user-local
+  Android SDK. APK SHA-256:
+  `37db03028d3fb207664dab15f419b50f640c66340dd9fa27e0c210e4324cb97d`.
+- Google/GitHub buttons remain intentionally disabled as `尚未配置`; no
+  provider credentials or callback exchange were fabricated.
 
 ## Portable and API validation gates
 
@@ -197,8 +214,9 @@ the starting checkout; later module commits are the auditable checkpoints:
 - Module 6: `febdfdc`
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
-Compose CORS wiring is `e797bb4`. The current Linux provider/auth checkpoint
-will be added below after the final verification commit. These commits contain
-only the redacted config/evidence and staging runtime configuration. The user's
+Compose CORS wiring is `e797bb4`. The current Linux provider/auth implementation
+checkpoint is `06ba1f7`; this evidence follow-up records the final test/artifact
+details. These commits contain only the redacted config/evidence and staging
+runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
 checkpoints.
