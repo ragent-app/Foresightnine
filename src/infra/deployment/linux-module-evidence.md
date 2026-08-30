@@ -87,3 +87,20 @@ failover, alerting, capacity, managed backup or certificate-rotation evidence.
 
 This is private loopback/mock staging evidence. It is not live-provider,
 CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
+
+## Module 5 — Cloudflare staging blocker
+
+- `cloudflared 2026.8.2` is installed and the account certificate is present
+  outside the repository with mode `600`.
+- Read-only account inventory shows three existing Tunnel objects, all with
+  no active connections; none was selected because the documented inventory
+  does not identify a usable API route.
+- The API is healthy on `127.0.0.1:8000`, but no Cloudflare Tunnel was created
+  and no DNS record was changed.
+- Module 5 is blocked pending owner confirmation of the exact final API
+  hostname, dedicated Tunnel name/UUID, origin address/port, routing mode,
+  CORS origin, and staging approval. The document's hostname list is marked
+  proposed and must not be treated as authorization.
+
+No public DNS, traffic cutover, OAuth callback, or Cloudflare production
+mutation was performed.
