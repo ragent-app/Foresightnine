@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth checkpoint: `06ba1f7eaf477d7e782c09cf00c258d29aa9cc47`
+- Synced source and Linux provider/auth/observability checkpoint: `e61361a508704cb45de1e120bc5002aad6225418`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -114,7 +114,7 @@ CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
 - Ingress validation passed. The connector initially used QUIC, but this
   Linux network later showed repeated idle QUIC timeouts and temporary 530
   responses. The config was adjusted to `protocol: http2`; the restarted
-  connector registered two HTTP/2 edge connections (`sin07` and `sin18`), and
+  connector registered two HTTP/2 edge connections (`sin12` and `sin21`), and
   its metrics showed zero origin request errors across three consecutive public
   health checks.
 - Public `GET /health` returned 200 with a browser User-Agent, and a public
@@ -180,6 +180,9 @@ runtime.
   390x844 mobile viewport, and zero browser console errors.
 - Staging API `/health` and `/readyz` both returned 200. The API CORS preflight
   allowed only `https://staging.foresightnine.com` for the tested POST route.
+- A redacted Prometheus text endpoint is enabled for the local supervisor at
+  `/metrics`; the Cloudflare ingress matches that exact path first and returns
+  404, so operational counters are not public.
 - Android debug assembly completed with Temurin JDK 17 and the user-local
   Android SDK. APK SHA-256:
   `37db03028d3fb207664dab15f419b50f640c66340dd9fa27e0c210e4324cb97d`.
@@ -188,15 +191,15 @@ runtime.
 
 ## Portable and API validation gates
 
-- `uv run --project apps/api pytest apps/api/tests -q`: 213 passed, 1 skipped
-  (214 collected). The only skip is the intentionally unavailable Windows
+- `uv run --project apps/api pytest apps/api/tests -q`: 214 passed, 1 skipped
+  (215 collected). The only skip is the intentionally unavailable Windows
   worldline source audit.
-- Workspace `typecheck` passed for all eight participating packages/apps.
+- Workspace `typecheck` passed for all nine participating packages/apps.
 - Workspace `test` passed, including generated-contract checks, FM-engine,
   API-client/domain/asset-registry, market-data, web and mobile tests.
 - OpenAPI export drift check passed with 24 paths; generated TypeScript and
   asset-registry fingerprints matched their checked-in artifacts.
-- Secret scan passed over 720 unique Git-history blobs.
+- Secret scan passed over 767 unique Git-history blobs.
 - The worldline fixture audit remains unavailable on this Linux checkout
   because its configured source is the Windows-only path
   `D:/WL-data-final/wordline-md/wordline1.md`; no substitute data was guessed.
@@ -214,9 +217,9 @@ the starting checkout; later module commits are the auditable checkpoints:
 - Module 6: `febdfdc`
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
-Compose CORS wiring is `e797bb4`. The current Linux provider/auth implementation
-checkpoint is `06ba1f7`; this evidence follow-up records the final test/artifact
-details. These commits contain only the redacted config/evidence and staging
-runtime configuration. The user's
+Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
+implementation checkpoint is `e61361a`; this evidence follow-up records the
+final test/artifact details. These commits contain only the redacted
+config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
 checkpoints.
