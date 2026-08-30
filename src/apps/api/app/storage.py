@@ -359,7 +359,14 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
     def _document_from_row(row: Any) -> Any:
         value = row[0] if not isinstance(row, Mapping) else row["document"]
         if isinstance(value, str):
-            value = json.loads(value)
+            # psycopg decodes JSONB scalar strings to Python ``str`` already,
+            # while lightweight/test drivers may return serialized JSON text.
+            # Preserve a decoded scalar and only parse strings that are
+            # actually JSON documents.
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                pass
         return _drop_legacy_null_fields(value)
 
     def __getitem__(self, key: str) -> ValueT:

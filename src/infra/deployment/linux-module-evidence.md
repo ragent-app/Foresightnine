@@ -29,3 +29,27 @@ docker compose -f src/infra/docker/compose.yaml config --quiet
 The repository checkout is writable and the Compose configuration parses
 successfully. Production traffic, public DNS, and production secrets are not
 claimed by this evidence.
+
+## Module 2 — PostgreSQL local staging evidence
+
+- Compose PostgreSQL 16 container reached `healthy`.
+- Both checked-in migrations were applied; five expected public tables were
+  present: `research_state_documents`, `operation_state`,
+  `operation_idempotency`, `operation_events`, and
+  `operation_session_associations`.
+- A synthetic mock flow completed session, challenge, message, evidence,
+  confirmation, and worldline generation with three branches.
+- A custom-format `pg_dump` completed at 23,014 bytes; restoring it into a
+  fresh database restored all 11 source documents.
+- After an API restart, the same session idempotency key replayed the same
+  persisted session result with `Idempotency-Replayed: true`.
+- Expiry cleanup was exercised against the PostgreSQL-backed repositories and
+  removed the expired session plus its thesis, challenge, evidence, turns,
+  worldline links, and worldlines.
+- A storage bug found during this evidence was fixed: PostgreSQL JSONB scalar
+  strings are preserved after the driver has already decoded them. The fix has
+  a focused regression test.
+
+The database container has no published host port. This is development/mock
+staging evidence only; production PostgreSQL credentials, TLS/HA, backup
+retention and restore ownership remain external gates.

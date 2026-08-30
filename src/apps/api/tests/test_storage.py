@@ -68,6 +68,18 @@ def test_postgres_repository_default_dumper_and_legacy_null_read_compatibility()
     }
 
 
+def test_postgres_repository_preserves_decoded_jsonb_scalar_strings() -> None:
+    connection = FakeConnection(("challenge:one", 1))
+    repository = PostgresDocumentRepository(
+        "postgresql://db.example.test/app",
+        "worldline_challenges",
+        value_loader=lambda value: value,
+        connection_factory=lambda _dsn: connection,
+    )
+
+    assert repository["worldline:one"] == "challenge:one"
+
+
 def test_pydantic_json_dumper_retains_present_optional_url() -> None:
     reference = SourceRef(
         ref_id="source:session",
