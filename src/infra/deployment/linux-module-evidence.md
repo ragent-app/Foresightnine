@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `2609a44`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `56ff428`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -179,6 +179,9 @@ exchange, or production Cloudflare mutation was performed.
   configured deployment hostname. Missing, rejected, unsupported, or remote-
   unavailable verification remains fail-closed; staging intentionally has no
   real CAPTCHA secret.
+- The production preflight additionally requires that CAPTCHA hostname to match
+  one of the declared HTTPS CORS origin hostnames, preventing a valid but
+  misbound Turnstile site from satisfying the release gate.
 - The 2026-08-31 Linux probe confirmed Stooq returned a JavaScript verification
   page, so the chain's explicit Yahoo fallback returned JSON for SPY and SOXX.
   Frankfurter returned a no-key USD/EUR reference rate, and Kenneth French's
@@ -277,7 +280,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `2609a44`; OAuth callback, provider mapping, redirect hardening
+implementation checkpoint is `56ff428`; OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
