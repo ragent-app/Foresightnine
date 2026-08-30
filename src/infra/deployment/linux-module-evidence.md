@@ -69,3 +69,21 @@ retention and restore ownership remain external gates.
 
 This is a local TLS/authentication and failure-path probe, not production HA,
 failover, alerting, capacity, managed backup or certificate-rotation evidence.
+
+## Module 4 — supervised FastAPI mock staging evidence
+
+- API image built successfully from the pinned checkout with the locked Python
+  environment, generated contracts, asset registry, and migrations included.
+- Compose now keeps PostgreSQL and Redis on the private Docker network, binds
+  API port `8000` to loopback only, uses `unless-stopped` restart policy,
+  `init`, a healthcheck, and limits API resources to 1 CPU and 512 MiB.
+- API healthcheck became `healthy`; `/health` and `/openapi.json` returned
+  success, reporting `deterministic_mock` and `client-evidence-bundle`.
+- A fresh synthetic flow completed session, challenge, message, evidence,
+  confirmation, and three-branch worldline generation through the running
+  container.
+- API logs contained only normal startup/request metadata in the inspected
+  tail; no provider credential or raw evidence payload was emitted.
+
+This is private loopback/mock staging evidence. It is not live-provider,
+CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
