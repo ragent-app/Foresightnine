@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `0ca79ba`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `7a9db9b`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -204,6 +204,10 @@ exchange, or production Cloudflare mutation was performed.
 - After rebuilding the API image from `0ca79ba`, the public canonical
   `ETF:SPY` three-anchor request returned HTTP 200; delayed sessions were
   explicitly marked `stale` and no factor/FX fields were emitted.
+- The follow-up image from `7a9db9b` remained healthy after restart; a public
+  request for `ETF:SPY` and `ETF:SOXX` returned HTTP 200 with six rows, one
+  exact-anchor `ok` row per asset and four delayed/holiday-ambiguous `stale`
+  rows. Future vendor sessions are rejected before they can reach the client.
 
 ## Module 7 — auth/session contract boundary
 
@@ -296,7 +300,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `0ca79ba`; external provider authorization input
+implementation checkpoint is `7a9db9b`; external provider authorization input
 handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
