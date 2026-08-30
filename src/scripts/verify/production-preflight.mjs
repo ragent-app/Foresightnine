@@ -285,34 +285,38 @@ function hasProviderAdmissionManifest({ repoRoot, readFile }) {
   const manifest = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
   if (typeof manifest !== "string") return false;
   try {
-    const parsed = JSON.parse(manifest);
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      parsed.schema_version !== "provider-admission-manifest/v1" ||
-      !Array.isArray(parsed.providers) ||
-      !Array.isArray(parsed.asset_mappings) ||
-      parsed.providers.length === 0 ||
-      parsed.asset_mappings.length === 0
-    ) return false;
-    const providerIds = parsed.providers.map((provider) => provider?.id);
-    const assetIds = parsed.asset_mappings.map((mapping) => mapping?.asset_id);
-    return (
-      providerIds.every((id) => typeof id === "string" && id.length > 0) &&
-      new Set(providerIds).size === providerIds.length &&
-      assetIds.every((id) => typeof id === "string" && id.length > 0) &&
-      new Set(assetIds).size === assetIds.length
-    );
+    return isProviderAdmissionManifestShape(JSON.parse(manifest));
   } catch {
     return false;
   }
+}
+
+function isProviderAdmissionManifestShape(parsed) {
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    parsed.schema_version !== "provider-admission-manifest/v1" ||
+    !Array.isArray(parsed.providers) ||
+    !Array.isArray(parsed.asset_mappings) ||
+    parsed.providers.length === 0 ||
+    parsed.asset_mappings.length === 0
+  ) return false;
+  const providerIds = parsed.providers.map((provider) => provider?.id);
+  const assetIds = parsed.asset_mappings.map((mapping) => mapping?.asset_id);
+  return (
+    providerIds.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(providerIds).size === providerIds.length &&
+    assetIds.every((id) => typeof id === "string" && id.length > 0) &&
+    new Set(assetIds).size === assetIds.length
+  );
 }
 
 function hasProductionDataAuthorization(manifest) {
   try {
     const authorizations = manifest?.data_authorization;
     return Boolean(
-      manifest?.production_admission === "approved" &&
+      isProviderAdmissionManifestShape(manifest) &&
+      manifest.production_admission === "approved" &&
       authorizations &&
       typeof authorizations === "object" &&
       !Array.isArray(authorizations) &&

@@ -79,6 +79,15 @@ def test_stooq_challenge_payload_is_rejected() -> None:
         raise AssertionError("challenge HTML must not be treated as market data")
 
 
+def test_future_vendor_sessions_are_rejected() -> None:
+    try:
+        market_provider._reject_future_rows({date(2026, 8, 31): 123.45}, date(2026, 8, 30))
+    except ValueError as error:
+        assert "after the request cutoff" in str(error)
+    else:
+        raise AssertionError("future vendor sessions must be rejected")
+
+
 def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -> None:
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")

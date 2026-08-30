@@ -101,6 +101,26 @@ test("deployment-owned provider authorization manifest is accepted only outside 
     statArtifact: () => ({ exists: true, isFile: true, readable: true }),
   });
   assert.equal(inside.gates.find(({ id }) => id === "DATA_AUTHORIZATION").status, "FAIL");
+
+  const incomplete = runPreflight({
+    env: { ...baseEnv(), FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST: "/deployment-owned/incomplete.json" },
+    repoRoot: "/synthetic-repository",
+    approvalManifest: APPROVAL_MANIFEST,
+    readFile: (filePath) => filePath.endsWith("Dockerfile.api")
+      ? "COPY packages/asset-registry /app/packages/asset-registry"
+      : PROVIDER_MANIFEST,
+    readManifest: (manifestPath) => manifestPath.endsWith("incomplete.json")
+      ? JSON.stringify({
+        schema_version: "provider-admission-manifest/v1",
+        production_admission: "approved",
+        data_authorization: JSON.parse(PROVIDER_MANIFEST).data_authorization,
+        providers: [],
+        asset_mappings: [],
+      })
+      : APPROVAL_MANIFEST,
+    statArtifact: () => ({ exists: true, isFile: true, readable: true }),
+  });
+  assert.equal(incomplete.gates.find(({ id }) => id === "DATA_AUTHORIZATION").status, "FAIL");
 });
 
 test("default empty environment fails closed and lists missing gates", () => {

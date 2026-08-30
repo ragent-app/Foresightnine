@@ -179,6 +179,12 @@ def _missing_row(asset_id: str, anchor: str, request: MarketSnapshotRequest, war
     }
 
 
+def _reject_future_rows(rows: dict[date, float], cutoff: date) -> dict[date, float]:
+    if any(observed > cutoff for observed in rows):
+        raise ValueError("vendor response contained a session after the request cutoff")
+    return rows
+
+
 def _safe_vendor_rows(payload: bytes) -> dict[date, float]:
     if len(payload) > MAX_VENDOR_BYTES:
         raise ValueError("vendor response exceeded the bounded payload")
@@ -263,7 +269,7 @@ class StooqEvaluationAdapter:
         )
         with build_opener(_RejectVendorRedirect).open(request, timeout=8) as response:
             payload = response.read(MAX_VENDOR_BYTES + 1)
-        return _safe_stooq_rows(payload)
+        return _reject_future_rows(_safe_stooq_rows(payload), cutoff)
 
 
 class YahooEvaluationAdapter:
@@ -290,7 +296,7 @@ class YahooEvaluationAdapter:
         )
         with build_opener(_RejectVendorRedirect).open(request, timeout=8) as response:
             payload = response.read(MAX_VENDOR_BYTES + 1)
-        return _safe_vendor_rows(payload)
+        return _reject_future_rows(_safe_vendor_rows(payload), cutoff)
 
 
 def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
