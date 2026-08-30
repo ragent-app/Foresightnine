@@ -29,4 +29,17 @@ class OAuthIdentity(BaseModel):
     updated_at: datetime
 
 
-__all__ = ["OAuthIdentity", "OAuthIdentityProvider"]
+class OAuthSessionResponse(BaseModel):
+    """Strict callback response; the provider access token is never included."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    account: dict[str, str]
+    session_id: str = Field(min_length=8, max_length=80)
+    access_token: str = Field(min_length=32, max_length=256)
+    expires_at: str = Field(min_length=20, max_length=80)
+    auth_mode: Literal["oauth"]
+    provider: OAuthIdentityProvider
+
+
+__all__ = ["OAuthIdentity", "OAuthIdentityProvider", "OAuthSessionResponse"]

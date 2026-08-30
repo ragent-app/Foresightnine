@@ -87,7 +87,7 @@ from .services import (
 from .storage import JsonDocumentRepository, StorageConfig, StorageMode, build_repository
 from .operation_store import build_operation_store
 from .oauth_foundation import OAuthConfigurationError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
-from .oauth_identity import OAuthIdentity
+from .oauth_identity import OAuthIdentity, OAuthSessionResponse
 from .oauth_provider import OAuthProviderClient, OAuthProviderError
 from .market_provider import MarketSnapshotRequest, build_snapshot_response
 from .local_auth import (
@@ -963,7 +963,7 @@ def browser_oauth_callback(
     except (OAuthTransactionError, OAuthProviderError) as exception:
         raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.") from exception
     return JSONResponse(
-        {**session, "provider": provider_identity.provider},
+        OAuthSessionResponse(**{**session, "provider": provider_identity.provider}).model_dump(mode="json"),
         headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
     )
 
