@@ -280,13 +280,16 @@ test("OAuth, licensed market admission, and monitoring are explicit production g
     ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "http://evil.example.test/callback" }],
     ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "https://app.example.test/callback?next=evil" }],
     ["MARKET_DATA_ADMISSION", { FORESIGHTNINE_MARKET_PROVIDER_MODE: "yahoo_evaluation" }],
-    ["DATA_AUTHORIZATION", {}],
     ["CAPTCHA_HOSTNAME", { FORESIGHTNINE_CAPTCHA_HOSTNAME: "captcha.example.test" }],
     ["METRICS_ENDPOINT", { FORESIGHTNINE_METRICS_ENABLED: "false" }],
   ]) {
     const result = resultWithManifest(overrides);
     assert.equal(result.gates.find(({ id }) => id === name).status, "FAIL");
   }
+  const missingAuthorization = JSON.parse(PROVIDER_MANIFEST);
+  missingAuthorization.data_authorization.factor_features.status = "not_approved";
+  const result = resultWithManifest({}, { providerAdmissionManifest: missingAuthorization });
+  assert.equal(result.gates.find(({ id }) => id === "DATA_AUTHORIZATION").status, "FAIL");
 });
 
 test("formatted output contains no injected secret or URL query values", () => {

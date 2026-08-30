@@ -316,7 +316,6 @@ function hasProductionDataAuthorization(manifest) {
     const authorizations = manifest?.data_authorization;
     return Boolean(
       isProviderAdmissionManifestShape(manifest) &&
-      manifest.production_admission === "approved" &&
       authorizations &&
       typeof authorizations === "object" &&
       !Array.isArray(authorizations) &&
