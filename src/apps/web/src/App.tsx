@@ -18,6 +18,7 @@ import { runFmInWorker } from "./fm-client";
 import { apiErrorNotice, challengeToUi, configuredApiBaseUrl, createWebApiClient, webApiMode, worldlineBundleToBranches } from "./api-runtime";
 import { configuredMarketDataRuntimeConfig } from "./runtime-config";
 import { createMarketRuntimeController } from "@foresightnine/market-data";
+import { clearOAuthSession, configuredOAuthReturnUri, deleteOAuthAccount, exchangeOAuthTicket, logoutOAuthSession, oauthStartUrl, parseOAuthCallbackUrl, readOAuthSession, saveOAuthSession, type OAuthSession } from "./oauth-client";
 import type { Currency, EvidenceDraft, EvidenceView, FreshnessContext, Language, Stage } from "./types";
 
 const DRAFT_KEY = "foresightnine.web.draft.v1";
@@ -65,6 +66,12 @@ export function App() {
   const [marketAssets, setMarketAssets] = useState(ASSET_FIXTURES);
   const marketDataAsOf = marketDataState.bundle?.cutoff ?? MARKET_DATA_AS_OF;
   const apiBaseUrl = configuredApiBaseUrl();
+  const oauthReturnUri = configuredOAuthReturnUri();
+  const [oauthSession, setOAuthSession] = useState<OAuthSession | null>(null);
+  const [oauthNotice, setOAuthNotice] = useState<string | null>(null);
+  const oauthGeneration = useRef(0);
+  const languageRef = useRef(state.language);
+  languageRef.current = state.language;
   const [oauthReadiness, setOAuthReadiness] = useState<OAuthReadiness>({ providers: OAUTH_UNAVAILABLE, status: apiBaseUrl ? "loading" : "offline" });
   const apiAbort = useRef<AbortController | null>(null);
   const apiMode = webApiMode();
@@ -97,6 +104,42 @@ export function App() {
       .catch(() => { if (!controller.signal.aborted) setOAuthReadiness({ providers: OAUTH_UNAVAILABLE, status: "unavailable" }); });
     return () => controller.abort();
   }, [apiBaseUrl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setOAuthSession(readOAuthSession());
+    if (!oauthReturnUri) return;
+    let callback;
+    try { callback = parseOAuthCallbackUrl(window.location.href, oauthReturnUri); } catch {
+      const target = new URL(oauthReturnUri); const current = new URL(window.location.href);
+      if (current.origin === target.origin && current.pathname === target.pathname) window.history.replaceState({}, "", `${target.pathname}${target.search}`);
+      setOAuthNotice(languageRef.current === "en" ? "OAuth callback was rejected." : "登录回调未通过安全校验。"); return;
+    }
+    if (callback.kind === "none") return;
+    const target = new URL(oauthReturnUri);
+    window.history.replaceState({}, "", `${target.pathname}${target.search}`);
+    if (callback.kind === "error") { setOAuthNotice(languageRef.current === "en" ? "Sign-in was cancelled or unavailable." : "登录已取消或暂不可用。"); return; }
+    if (!callback.ticket) return;
+    if (!apiBaseUrl) { setOAuthNotice(languageRef.current === "en" ? "Sign-in service is unavailable." : "登录服务暂不可用。" ); return; }
+    const generation = ++oauthGeneration.current;
+    void exchangeOAuthTicket(apiBaseUrl, callback.ticket).then((session) => { if (generation !== oauthGeneration.current) return; saveOAuthSession(session); setOAuthSession(session); setOAuthNotice(null); }).catch(() => { if (generation !== oauthGeneration.current) return; setOAuthNotice(languageRef.current === "en" ? "Sign-in could not be completed." : "登录未能完成。"); });
+    return () => { oauthGeneration.current += 1; };
+  }, [apiBaseUrl, oauthReturnUri]);
+
+  const startOAuth = useCallback((provider: "google" | "github") => {
+    if (typeof window === "undefined" || !apiBaseUrl || !oauthReturnUri) return;
+    try { window.location.assign(oauthStartUrl(apiBaseUrl, provider, oauthReturnUri)); } catch { setOAuthNotice(state.language === "en" ? "Sign-in is not configured for this build." : "此版本尚未配置登录回调地址。"); }
+  }, [apiBaseUrl, oauthReturnUri, state.language]);
+  const logoutOAuth = useCallback(() => {
+    if (!apiBaseUrl || !oauthSession) return;
+    oauthGeneration.current += 1;
+    void logoutOAuthSession(apiBaseUrl, oauthSession.access_token).then(() => { clearOAuthSession(); setOAuthSession(null); }).catch(() => { clearOAuthSession(); setOAuthSession(null); setOAuthNotice(state.language === "en" ? "Could not log out; local session was cleared." : "退出登录失败，但本地会话已清除。" ); });
+  }, [apiBaseUrl, oauthSession, state.language]);
+  const deleteOAuth = useCallback(() => {
+    if (!apiBaseUrl || !oauthSession || (typeof window !== "undefined" && !window.confirm(state.language === "en" ? "Delete this account and revoke its sessions?" : "删除账户并撤销所有登录会话？"))) return;
+    oauthGeneration.current += 1;
+    void deleteOAuthAccount(apiBaseUrl, oauthSession.access_token).then(() => { clearOAuthSession(); setOAuthSession(null); }).catch(() => { clearOAuthSession(); setOAuthSession(null); setOAuthNotice(state.language === "en" ? "Account deletion failed; local session was cleared." : "删除账户失败，但本地会话已清除。" ); });
+  }, [apiBaseUrl, oauthSession, state.language]);
   const apiChallengeId = state.apiChallengeId;
   const challengeTimer = useRef<number | null>(null);
   const fmAbort = useRef<AbortController | null>(null);
@@ -257,15 +300,17 @@ export function App() {
   const methodsExport = useCallback(() => { downloadText("foresightnine-methods.txt", state.language === "en" ? "ForesightNine methodology\n\nProbabilities are revisable judgments, not facts.\nScenario simulation is not a forecast or return promise.\n" : "ForesightNine 方法说明\n\n概率是可修订判断，不是事实。\n情景模拟，不是预测或收益承诺。\n", "text/plain;charset=utf-8"); dispatch({ type: "export_notice", notice: "方法说明已导出。" }); }, [state.language]);
 
   const visibleStage = safeStageFor(state);
-  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset }, oauthReadiness);
+  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset }, oauthReadiness, { session: oauthSession, onStart: oauthReturnUri ? startOAuth : undefined, onLogout: logoutOAuth, onDelete: deleteOAuth });
   const inspector = renderInspector(visibleStage, state, rows, () => dispatch({ type: "toggle_drawdown" }), state.language);
   const marketStatusLabel = state.language === "en" ? `Data: ${marketDataState.mode}/${marketDataState.status} · three anchors` : `数据：${marketDataState.mode}/${marketDataState.status} · 三个时点锚点`;
-  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector} oauthProviders={oauthReadiness.providers} oauthReadinessStatus={oauthReadiness.status}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{state.language === "en" ? `Data cutoff ${marketDataAsOf}` : `数据截止 ${marketDataAsOf}`}</span><span>{marketStatusLabel}</span>{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} /> : null}</AppShell></LanguageProvider>;
+  return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector} oauthProviders={oauthReadiness.providers} oauthReadinessStatus={oauthReadiness.status} onOAuthStart={oauthReturnUri ? startOAuth : undefined} oauthSession={oauthSession} onOAuthLogout={logoutOAuth} onOAuthDelete={deleteOAuth}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{state.language === "en" ? `Data cutoff ${marketDataAsOf}` : `数据截止 ${marketDataAsOf}`}</span><span>{marketStatusLabel}</span>{oauthNotice ? <span className="export-notice" role="alert">{oauthNotice}</span> : null}{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} onStart={oauthReturnUri ? startOAuth : undefined} session={oauthSession} onLogout={logoutOAuth} onDelete={deleteOAuth} /> : null}</AppShell></LanguageProvider>;
 }
 
 interface Handlers { readonly startChallenge: () => void; readonly cancelChallenge: () => void; readonly retryChallenge: () => void; readonly recoverChallenge: () => void; readonly addEvidence: (draft: EvidenceDraft) => void; readonly submitReply: (body: string) => void; readonly confirm: (confirmation: "confirmed" | "reserved") => void; readonly computeFm: () => void; readonly cancelFm: () => void; readonly exportJson: () => void; readonly exportCsv: () => void; readonly exportPath: () => void; readonly methodsExport: () => void; readonly rows: ReturnType<typeof allocationRows>; readonly viewpointBranches: ReturnType<typeof makeBranches>; readonly setViewpoint: (viewpoint: string) => void; readonly reset: () => void; }
 
-function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: React.Dispatch<Parameters<typeof reducer>[1]>, handlers: Handlers, oauthReadiness: OAuthReadiness) {
+interface OAuthHandlers { readonly session: OAuthSession | null; readonly onStart?: ((provider: "google" | "github") => void) | undefined; readonly onLogout: () => void; readonly onDelete: () => void; }
+
+function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: React.Dispatch<Parameters<typeof reducer>[1]>, handlers: Handlers, oauthReadiness: OAuthReadiness, oauth: OAuthHandlers) {
   switch (stage) {
     case "thesis": return <ThesisInput viewpoint={state.viewpoint} capital={state.capital} currency={state.currency} draftRestored={state.draftRestored} onViewpoint={handlers.setViewpoint} onCapital={(capital) => dispatch({ type: "set_capital", capital })} onCurrency={(currency) => dispatch({ type: "set_currency", currency: currency as Currency })} onStart={handlers.startChallenge} onReset={handlers.reset} />;
     case "challenge": return <ChallengePanel status={state.challengeStatus} turns={state.challengeTurns} replyDraft={state.replyDraft} evidence={state.evidence} rubric={state.rubric} unresolvedIssuesAcknowledged={state.unresolvedIssuesAcknowledged} reservationNote={state.reservationNote} onStart={handlers.startChallenge} onCancel={handlers.cancelChallenge} onRetry={handlers.retryChallenge} onRecover={handlers.recoverChallenge} onReplyDraft={(draft) => dispatch({ type: "set_reply_draft", draft })} onSubmitReply={handlers.submitReply} onEvidence={handlers.addEvidence} onUnresolvedIssuesAcknowledged={(acknowledged) => dispatch({ type: "set_unresolved_issues_acknowledged", acknowledged })} onReservationNote={(note) => dispatch({ type: "set_reservation_note", note })} onConfirm={handlers.confirm} />;
@@ -273,9 +318,10 @@ function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: 
     case "fm": return <FmPanel status={state.fmStatus} progress={state.fmProgress} step={state.fmStep} resultReady={Boolean(state.fmResult)} onCompute={handlers.computeFm} onCancel={handlers.cancelFm} onPortfolio={() => dispatch({ type: "set_stage", stage: "portfolio" })} />;
     case "portfolio": return <PortfolioPanel mode={state.portfolioMode} currency={state.currency} rows={handlers.rows} capital={parseCapital(state.capital)} selectedBranch={state.selectedBranch} branches={handlers.viewpointBranches} stress={state.stressScenario} onMode={(mode) => dispatch({ type: "set_mode", mode })} onStress={(scenario) => dispatch({ type: "set_stress", scenario })} onCompute={handlers.computeFm} onNav={() => dispatch({ type: "set_stage", stage: "nav" })} onExport={(kind) => kind === "json" ? handlers.exportJson() : handlers.exportCsv()} fmReady={Boolean(state.fmResult)} canCompute={canStartFm(state)} canNavigate={canEnterStage(state, "nav")} />;
     case "nav": return <NavPanel branches={handlers.viewpointBranches} selected={state.selectedBranch} onSelect={(branch) => dispatch({ type: "select_branch", branch })} stress={state.stressScenario} onExport={handlers.exportPath} drawdownVisible={state.drawdownVisible} onToggleDrawdown={() => dispatch({ type: "toggle_drawdown" })} />;
-    case "console": return <ConsolePanel onExport={handlers.methodsExport} providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} />;
+    case "console": return <ConsolePanel onExport={handlers.methodsExport} providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} onOAuthStart={oauth.onStart} oauthSession={oauth.session} onOAuthLogout={oauth.onLogout} onOAuthDelete={oauth.onDelete} />;
   }
 }
+
 
 function renderInspector(stage: Stage, state: ReturnType<typeof reducer>, rows: ReturnType<typeof allocationRows>, onToggleDrawdown: () => void, language: Language) {
   if (stage === "challenge") return <div className="inspector-content"><h2>{t(language, "证据工作台")}</h2><p>{t(language, "来源等级表示来源与可核验性，不代表结论正确。")}</p>{state.evidence.map((item) => <div className="inspector-row" key={item.evidence_id}><Tag tone={item.grade === "E" ? "warning" : "strong"}>{item.grade}</Tag><span>{item.title}</span></div>)}<Disclosure compact /></div>;

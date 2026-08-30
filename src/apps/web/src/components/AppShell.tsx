@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useLanguage, t } from "../i18n";
 import type { Stage } from "../types";
 import { SocialLoginPanel, type OAuthProviderAvailability, type OAuthReadinessStatus, type OAuthProvider } from "./SocialLoginPanel";
+import type { OAuthSession } from "../oauth-client";
 
 const navItems: readonly { stage: Stage; label: string; icon: string }[] = [
   { stage: "thesis", label: "新建推演", icon: "✎" },
@@ -21,10 +22,13 @@ interface AppShellProps {
   readonly inspector?: ReactNode;
   readonly oauthProviders?: readonly OAuthProviderAvailability[];
   readonly oauthReadinessStatus?: OAuthReadinessStatus;
-  readonly onOAuthStart?: (provider: OAuthProvider) => void;
+  readonly onOAuthStart?: ((provider: OAuthProvider) => void) | undefined;
+  readonly oauthSession?: OAuthSession | null | undefined;
+  readonly onOAuthLogout?: (() => void) | undefined;
+  readonly onOAuthDelete?: (() => void) | undefined;
 }
 
-export function AppShell({ stage, onStage, canNavigate = (target) => target === "thesis" || target === "console", children, inspector, oauthProviders, oauthReadinessStatus, onOAuthStart }: AppShellProps) {
+export function AppShell({ stage, onStage, canNavigate = (target) => target === "thesis" || target === "console", children, inspector, oauthProviders, oauthReadinessStatus, onOAuthStart, oauthSession, onOAuthLogout, onOAuthDelete }: AppShellProps) {
   const { language, setLanguage } = useLanguage();
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">{t(language, "跳到主要内容")}</a>
@@ -35,7 +39,7 @@ export function AppShell({ stage, onStage, canNavigate = (target) => target === 
           <span className="rail-icon" aria-hidden="true">{item.icon}</span><span>{t(language, item.label)}</span>
         </button>)}
       </nav>
-      <SocialLoginPanel providers={oauthProviders} readinessStatus={oauthReadinessStatus} onStart={onOAuthStart} />
+      <SocialLoginPanel providers={oauthProviders} readinessStatus={oauthReadinessStatus} onStart={onOAuthStart} session={oauthSession} onLogout={onOAuthLogout} onDelete={onOAuthDelete} />
       <div className="rail-footer">
         <div className="rail-rule" />
         <span aria-hidden="true">♢</span>

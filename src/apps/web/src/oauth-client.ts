@@ -97,7 +97,7 @@ function parseSession(payload: unknown): OAuthSession {
   const accountValue = account as Record<string, unknown>;
   if (Object.keys(value).sort().join(",") !== "access_token,account,auth_mode,expires_at,provider,session_id" || Object.keys(accountValue).sort().join(",") !== "account_id,created_at,email") throw new Error("OAuth session response is invalid.");
   if (typeof accountValue.account_id !== "string" || !accountValue.account_id || typeof accountValue.email !== "string" || !accountValue.email || typeof accountValue.created_at !== "string" || !accountValue.created_at) throw new Error("OAuth session response is invalid.");
-  if (typeof value.session_id !== "string" || !value.session_id || typeof value.access_token !== "string" || !/^\S{32,256}$/.test(value.access_token) || typeof value.expires_at !== "string" || !value.expires_at || value.auth_mode !== "oauth" || (value.provider !== "google" && value.provider !== "github")) throw new Error("OAuth session response is invalid.");
+  if (typeof value.session_id !== "string" || !value.session_id || typeof value.access_token !== "string" || !/^\S{32,256}$/.test(value.access_token) || typeof value.expires_at !== "string" || !value.expires_at || !Number.isFinite(Date.parse(value.expires_at)) || Date.parse(value.expires_at) <= Date.now() || value.auth_mode !== "oauth" || (value.provider !== "google" && value.provider !== "github")) throw new Error("OAuth session response is invalid.");
   return { account: { account_id: accountValue.account_id, email: accountValue.email, created_at: accountValue.created_at }, session_id: value.session_id, access_token: value.access_token, expires_at: value.expires_at, auth_mode: "oauth", provider: value.provider };
 }
 
@@ -111,7 +111,7 @@ export async function exchangeOAuthTicket(apiBaseUrl: string, ticket: string, fe
 export function readOAuthSession(storage: Storage = sessionStorage): OAuthSession | null {
   const raw = storage.getItem(WEB_OAUTH_SESSION_KEY);
   if (!raw) return null;
-  try { return parseSession(JSON.parse(raw)); } catch { storage.removeItem(WEB_OAUTH_SESSION_KEY); return null; }
+  try { const session = parseSession(JSON.parse(raw)); if (Date.parse(session.expires_at) <= Date.now()) throw new Error("OAuth session expired."); return session; } catch { storage.removeItem(WEB_OAUTH_SESSION_KEY); return null; }
 }
 
 export function saveOAuthSession(session: OAuthSession, storage: Storage = sessionStorage): void { storage.setItem(WEB_OAUTH_SESSION_KEY, JSON.stringify(session)); }
