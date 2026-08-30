@@ -8,7 +8,9 @@ Public Default amounts.
 """
 from __future__ import annotations
 
+import csv
 from datetime import date, datetime, timedelta, timezone
+import io
 import json
 import math
 import os
@@ -49,7 +51,7 @@ class _RejectVendorRedirect(HTTPRedirectHandler):
         raise ValueError("vendor redirects are not allowed")
 
 
-def _evaluation_manifest_allows(provider_id: str) -> bool:
+def _evaluation_manifest_allows(provider_id: str, fallback_provider_id: str | None = None) -> bool:
     """Require the checked-in admission manifest to agree with runtime mode."""
     try:
         manifest = json.loads(PROVIDER_MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -62,18 +64,22 @@ def _evaluation_manifest_allows(provider_id: str) -> bool:
     providers = manifest.get("providers")
     if not isinstance(providers, list):
         return False
-    provider_admitted = any(
-        isinstance(provider, dict)
-        and provider.get("id") == provider_id
+    expected_provider_ids = {provider_id}
+    if fallback_provider_id is not None:
+        expected_provider_ids.add(fallback_provider_id)
+    admitted_provider_ids = {
+        provider.get("id")
+        for provider in providers
+        if isinstance(provider, dict)
+        and provider.get("id") in expected_provider_ids
         and provider.get("enabled_modes") == ["staging_evaluation"]
         and provider.get("credentials") == "none"
         and provider.get("raw_cache") == "disabled"
         and provider.get("features") == "not_authorized"
         and provider.get("fx") == "not_authorized"
         and provider.get("public_redistribution") == "not_approved"
-        for provider in providers
-    )
-    if not provider_admitted:
+    }
+    if admitted_provider_ids != expected_provider_ids:
         return False
 
     mappings = manifest.get("asset_mappings")
@@ -90,6 +96,7 @@ def _evaluation_manifest_allows(provider_id: str) -> bool:
     return all(
         (mapping := mapping_by_asset.get(asset_id)) is not None
         and mapping.get("provider") == provider_id
+        and (fallback_provider_id is None or mapping.get("fallback_provider") == fallback_provider_id)
         and mapping.get("symbol") == symbol
         and mapping.get("currency") == "USD"
         for asset_id, symbol in ASSET_SYMBOLS.items()
@@ -201,6 +208,64 @@ def _safe_vendor_rows(payload: bytes) -> dict[date, float]:
     return rows
 
 
+def _safe_stooq_rows(payload: bytes) -> dict[date, float]:
+    """Parse only the bounded Date/Close subset of the Stooq CSV response."""
+    if len(payload) > MAX_VENDOR_BYTES:
+        raise ValueError("vendor response exceeded the bounded payload")
+    try:
+        text = payload.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ValueError("vendor response was not valid UTF-8") from error
+    reader = csv.DictReader(io.StringIO(text))
+    fields = set((field or "").strip() for field in (reader.fieldnames or []))
+    if not {"Date", "Close"} <= fields:
+        raise ValueError("vendor response was not the expected CSV shape")
+    rows: dict[date, float] = {}
+    for record in reader:
+        observed = _date_only((record.get("Date") or "").strip())
+        raw_close = (record.get("Close") or "").strip()
+        if observed is None or not raw_close:
+            continue
+        try:
+            close = float(raw_close)
+        except ValueError:
+            continue
+        if not math.isfinite(close) or close <= 0:
+            continue
+        if observed in rows:
+            raise ValueError("vendor response had duplicate session dates")
+        rows[observed] = close
+    if not rows:
+        raise ValueError("vendor response had no usable close series")
+    return rows
+
+
+class StooqEvaluationAdapter:
+    """No-key, no-cache, fixed-host CSV evaluation adapter."""
+
+    endpoint = "https://stooq.com/q/d/l/"
+
+    def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
+        if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
+            raise ValueError("symbol is outside the fixed provider allowlist")
+        anchor_dates = [_date_only(value) for value in anchors]
+        valid_dates = [value for value in anchor_dates if value is not None]
+        start = min(valid_dates, default=cutoff) - timedelta(days=5)
+        query = urlencode({
+            "s": f"{symbol.lower()}.us",
+            "i": "d",
+            "d1": start.strftime("%Y%m%d"),
+            "d2": cutoff.strftime("%Y%m%d"),
+        })
+        request = Request(
+            f"{self.endpoint}?{query}",
+            headers={"Accept": "text/csv", "User-Agent": "ForesightNine-staging-provider-evaluation/1"},
+        )
+        with build_opener(_RejectVendorRedirect).open(request, timeout=8) as response:
+            payload = response.read(MAX_VENDOR_BYTES + 1)
+        return _safe_stooq_rows(payload)
+
+
 class YahooEvaluationAdapter:
     """No-key, no-cache, fixed-host evaluation adapter for the staging edge."""
 
@@ -233,11 +298,14 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
 
     mode = os.getenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "unavailable").strip().lower()
     evaluation_enabled = (
-        mode == "yahoo_evaluation"
+        mode in {"public_evaluation", "yahoo_evaluation"}
         and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
-        and _evaluation_manifest_allows("yahoo_chart_evaluation")
+        and _evaluation_manifest_allows("stooq", "yahoo_chart_evaluation")
     )
-    adapter = YahooEvaluationAdapter() if evaluation_enabled else None
+    adapters = (
+        ("stooq", StooqEvaluationAdapter()),
+        ("yahoo_chart_evaluation", YahooEvaluationAdapter()),
+    ) if evaluation_enabled else ()
     warnings = [
         "Linux provider adapter is staging/evaluation-only; no production data license is asserted.",
         "No factor features or FX conversion are supplied; client Public Default must remain disabled.",
@@ -248,11 +316,18 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
     for asset_id in request.assetIds:
         symbol = ASSET_SYMBOLS.get(asset_id)
         rows: dict[date, float] = {}
-        if adapter is not None and symbol is not None:
-            try:
-                rows = adapter.fetch(symbol, tuple(request.anchors[anchor] for anchor in ANCHORS), cutoff)
-            except Exception:
-                warnings.append(f"Price provider unavailable for {asset_id}; rows are limited.")
+        if adapters and symbol is not None:
+            for provider_id, adapter in adapters:
+                try:
+                    candidate_rows = adapter.fetch(symbol, tuple(request.anchors[anchor] for anchor in ANCHORS), cutoff)
+                    if not candidate_rows:
+                        raise ValueError("provider returned no usable rows")
+                    rows = candidate_rows
+                    if provider_id != "stooq":
+                        warnings.append("Primary public price provider unavailable; staging fallback was used.")
+                    break
+                except Exception:
+                    warnings.append(f"{provider_id} unavailable for {asset_id}; trying the next staging provider.")
         elif symbol is None:
             warnings.append(f"No licensed provider mapping is configured for {asset_id}.")
         else:
@@ -279,4 +354,11 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
     return {"snapshots": snapshots, "warnings": sorted(set(warnings))}
 
 
-__all__ = ["ASSET_SYMBOLS", "ANCHORS", "MarketSnapshotRequest", "YahooEvaluationAdapter", "build_snapshot_response"]
+__all__ = [
+    "ASSET_SYMBOLS",
+    "ANCHORS",
+    "MarketSnapshotRequest",
+    "StooqEvaluationAdapter",
+    "YahooEvaluationAdapter",
+    "build_snapshot_response",
+]

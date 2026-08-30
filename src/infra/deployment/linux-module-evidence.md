@@ -134,12 +134,13 @@ exchange, or production Cloudflare mutation was performed.
 
 - The hidden `POST /snapshots` route is protected by the same Redis abuse
   boundary as `/v1/*` and accepts only the shared three-anchor request shape.
-- The optional `yahoo_evaluation` mode uses a fixed HTTPS host, fixed symbol
-  allowlist (`GRID/PAVE`, `CHIP/SOXX`, `UTIL/XLU`, `GOLD/GLD`, `WORLD/VT`,
-  and the canonical `ETF:SPY`, `ETF:SOXX`, `ETF:GLD`, `ETF:QQQ`, `ETF:IEF`),
-  bounded response size and an eight-second timeout. It does not accept a URL
-  or credential from a request, does not cache raw responses, and does not
-  derive factor or FX values.
+- The `public_evaluation` mode uses an explicit fixed-host chain: Stooq CSV is
+  tried first and Yahoo chart is used only as a bounded fallback when Stooq is
+  challenged or unavailable. Both use the fixed symbol allowlist (`GRID/PAVE`,
+  `CHIP/SOXX`, `UTIL/XLU`, `GOLD/GLD`, `WORLD/VT`, and canonical `ETF:SPY`,
+  `ETF:SOXX`, `ETF:GLD`, `ETF:QQQ`, `ETF:IEF`), bounded response size and an
+  eight-second timeout. Neither accepts a URL or credential from a request,
+  caches raw responses, or derives factor or FX values.
 - Compose enables this mode only for local/development staging. Returned rows
   are price-only and warnings explicitly keep the client runtime limited;
   `CASH` and any unapproved asset return `missing` rows.
@@ -147,16 +148,18 @@ exchange, or production Cloudflare mutation was performed.
   not asserted. Production mode disables this adapter unless an approved
   provider implementation is supplied.
 - The live staging route accepted a canonical `ETF:SPY`, legacy `GRID`, and
-  unapproved `CASH:USD` request: 9 rows were returned, with 6 price rows and
-  3 explicit missing rows. No client-side vendor URL or credential was used.
+  unapproved `CASH:USD` request through the Stooq-first chain: 9 rows were
+  returned, with 6 price rows and 3 explicit missing rows. The current network
+  challenge caused the explicit Yahoo fallback to serve the six price rows; no
+  client-side vendor URL or credential was used.
 - The container copies and loads the admission manifest at startup; a missing
   or invalid manifest disables evaluation rows rather than enabling a provider
   by code default. The release preflight also checks that the manifest is
   present in the source image inputs.
 - Runtime admission now validates every requested asset symbol against a unique
   asset-level entry in that manifest. The five legacy IDs and five canonical
-  ETF IDs are therefore bound to the same fixed Yahoo evaluation provider;
-  missing, duplicate, or mismatched mappings fail closed.
+  ETF IDs are therefore bound to the fixed Stooq primary and explicit Yahoo
+  fallback; missing, duplicate, or mismatched mappings fail closed.
 - The fixed-host adapter rejects vendor HTTP redirects instead of allowing a
   provider response to move the request to an unapproved host. The production
   preflight parses the manifest and rejects malformed JSON, empty provider or
@@ -165,11 +168,12 @@ exchange, or production Cloudflare mutation was performed.
   public-hardening runtimes reject non-HTTPS, credential-bearing, query-bearing,
   fragment-bearing, or non-root origins; an absent declaration remains an empty
   allowlist.
-- The 2026-08-31 Linux probe confirmed Yahoo chart returned JSON for SPY and
-  SOXX, Frankfurter returned a no-key USD/EUR reference rate, and Kenneth
-  French's daily momentum archive downloaded successfully. Stooq returned a
-  JavaScript verification page, so it was not enabled. The auditable status
-  and mappings are in `provider-manifest.v1.json`.
+- The 2026-08-31 Linux probe confirmed Stooq returned a JavaScript verification
+  page, so the chain's explicit Yahoo fallback returned JSON for SPY and SOXX.
+  Frankfurter returned a no-key USD/EUR reference rate, and Kenneth French's
+  daily momentum archive downloaded successfully. Neither factor nor FX source
+  is enabled in the runtime. The auditable chain and mappings are in
+  `provider-manifest.v1.json`.
 
 ## Module 7 — auth/session contract boundary
 
@@ -224,7 +228,7 @@ repository or runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the final API run was 222 passed, 1 skipped (223 collected). The only skip is
+  the latest API run was 224 passed, 1 skipped (225 collected). The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
@@ -264,8 +268,7 @@ The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
 implementation checkpoint is `798f204`; OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
-evidence follow-up records the
-final test/artifact details. These commits contain only the redacted
+evidence follow-up records the final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
 checkpoints.

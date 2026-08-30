@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app import market_provider
 from app.main import app
-from app.market_provider import ANCHORS, MarketSnapshotRequest, YahooEvaluationAdapter, build_snapshot_response
+from app.market_provider import ANCHORS, MarketSnapshotRequest, StooqEvaluationAdapter, YahooEvaluationAdapter, build_snapshot_response
 
 
 REQUEST = {
@@ -43,7 +43,7 @@ def test_default_provider_is_explicitly_limited(monkeypatch) -> None:
 
 
 def test_evaluation_mode_requires_the_admission_manifest(monkeypatch, tmp_path) -> None:
-    assert market_provider._evaluation_manifest_allows("yahoo_chart_evaluation") is True
+    assert market_provider._evaluation_manifest_allows("stooq", "yahoo_chart_evaluation") is True
     monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", tmp_path / "missing.json")
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
@@ -61,7 +61,22 @@ def test_evaluation_mode_requires_asset_level_mapping(monkeypatch, tmp_path) -> 
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", manifest_path)
 
-    assert market_provider._evaluation_manifest_allows("yahoo_chart_evaluation") is False
+    assert market_provider._evaluation_manifest_allows("stooq", "yahoo_chart_evaluation") is False
+
+
+def test_stooq_csv_parser_accepts_only_valid_positive_close_rows() -> None:
+    payload = b"Date,Open,High,Low,Close,Volume\n2026-08-27,1,2,0.5,123.45,10\n2026-08-28,1,2,0.5,124.50,11\n"
+    rows = market_provider._safe_stooq_rows(payload)
+    assert rows == {date(2026, 8, 27): 123.45, date(2026, 8, 28): 124.5}
+
+
+def test_stooq_challenge_payload_is_rejected() -> None:
+    try:
+        market_provider._safe_stooq_rows(b"<html><title>JavaScript verification</title></html>")
+    except ValueError as error:
+        assert "CSV shape" in str(error)
+    else:
+        raise AssertionError("challenge HTML must not be treated as market data")
 
 
 def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -> None:
@@ -74,6 +89,7 @@ def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -
         assert anchors == tuple(REQUEST["anchors"][anchor] for anchor in ANCHORS)
         return {date(2026, 8, 28): 123.45}
 
+    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {})
     monkeypatch.setattr(YahooEvaluationAdapter, "fetch", fake_fetch)
     response = build_snapshot_response(MarketSnapshotRequest.model_validate(REQUEST))
     grid_rows = [row for row in response["snapshots"] if row["assetId"] == "GRID"]
@@ -88,6 +104,7 @@ def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -
 def test_canonical_registry_etf_ids_are_allowlisted(monkeypatch) -> None:
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
+    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {})
     monkeypatch.setattr(YahooEvaluationAdapter, "fetch", lambda *_args: {date(2026, 8, 28): 500.0})
     request = MarketSnapshotRequest.model_validate({**REQUEST, "assetIds": ["ETF:SPY"]})
     rows = build_snapshot_response(request)["snapshots"]

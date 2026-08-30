@@ -5,6 +5,18 @@
   "production_admission": "blocked_pending_written_terms",
   "providers": [
     {
+      "id": "stooq",
+      "kind": "market_price_evaluation",
+      "enabled_modes": ["staging_evaluation"],
+      "endpoint": "https://stooq.com/q/d/l/",
+      "credentials": "none",
+      "raw_cache": "disabled",
+      "features": "not_authorized",
+      "fx": "not_authorized",
+      "public_redistribution": "not_approved",
+      "notes": "Primary fixed-host CSV adapter; challenge/availability failures may use the explicit Yahoo staging fallback."
+    },
+    {
       "id": "yahoo_chart_evaluation",
       "kind": "market_price",
       "enabled_modes": ["staging_evaluation"],
@@ -15,15 +27,6 @@
       "fx": "not_authorized",
       "public_redistribution": "not_approved",
       "notes": "Fixed-host thin adapter; price-only and limited_data semantics."
-    },
-    {
-      "id": "stooq",
-      "kind": "market_price_candidate",
-      "enabled_modes": [],
-      "endpoint": "https://stooq.com/q/d/l/",
-      "credentials": "unknown_or_challenge_required",
-      "public_redistribution": "not_reviewed",
-      "notes": "Linux probe returned a JavaScript verification page; not enabled."
     },
     {
       "id": "frankfurter",
@@ -53,16 +56,16 @@
     }
   ],
   "asset_mappings": [
-    {"asset_id": "GRID", "provider": "yahoo_chart_evaluation", "symbol": "PAVE", "currency": "USD", "proxy_for": "IDX:SPX"},
-    {"asset_id": "CHIP", "provider": "yahoo_chart_evaluation", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
-    {"asset_id": "UTIL", "provider": "yahoo_chart_evaluation", "symbol": "XLU", "currency": "USD", "proxy_for": "IDX:UTIL"},
-    {"asset_id": "GOLD", "provider": "yahoo_chart_evaluation", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
-    {"asset_id": "WORLD", "provider": "yahoo_chart_evaluation", "symbol": "VT", "currency": "USD", "proxy_for": "IDX:WORLD"},
-    {"asset_id": "ETF:SPY", "provider": "yahoo_chart_evaluation", "symbol": "SPY", "currency": "USD", "proxy_for": "IDX:SPX"},
-    {"asset_id": "ETF:SOXX", "provider": "yahoo_chart_evaluation", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
-    {"asset_id": "ETF:GLD", "provider": "yahoo_chart_evaluation", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
-    {"asset_id": "ETF:QQQ", "provider": "yahoo_chart_evaluation", "symbol": "QQQ", "currency": "USD", "proxy_for": "IDX:NDX"},
-    {"asset_id": "ETF:IEF", "provider": "yahoo_chart_evaluation", "symbol": "IEF", "currency": "USD", "proxy_for": "YIELD:US10Y"},
+    {"asset_id": "GRID", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "PAVE", "currency": "USD", "proxy_for": "IDX:SPX"},
+    {"asset_id": "CHIP", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
+    {"asset_id": "UTIL", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "XLU", "currency": "USD", "proxy_for": "IDX:UTIL"},
+    {"asset_id": "GOLD", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
+    {"asset_id": "WORLD", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "VT", "currency": "USD", "proxy_for": "IDX:WORLD"},
+    {"asset_id": "ETF:SPY", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "SPY", "currency": "USD", "proxy_for": "IDX:SPX"},
+    {"asset_id": "ETF:SOXX", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
+    {"asset_id": "ETF:GLD", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
+    {"asset_id": "ETF:QQQ", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "QQQ", "currency": "USD", "proxy_for": "IDX:NDX"},
+    {"asset_id": "ETF:IEF", "provider": "stooq", "fallback_provider": "yahoo_chart_evaluation", "symbol": "IEF", "currency": "USD", "proxy_for": "YIELD:US10Y"},
     {"asset_id": "CASH:USD", "provider": null, "symbol": null, "currency": "USD", "proxy_for": "CASH:USD"}
   ],
   "feature_policy": "No live factor features are admitted; clients must report limited_data and disable Public Default.",

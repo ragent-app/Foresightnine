@@ -58,10 +58,12 @@ services:
       FORESIGHTNINE_LLM_PROVIDER: mock
       # Staging Web origin for the Cloudflare API Tunnel.
       FORESIGHTNINE_CORS_ORIGINS: https://staging.foresightnine.com
-      # Temporary no-key evaluation adapter; never use for production traffic
-      # until provider license, factor/FX authorization and redistribution rules
-      # are approved. It returns price-only rows and explicit limited status.
-      FORESIGHTNINE_MARKET_PROVIDER_MODE: yahoo_evaluation
+      # Temporary no-key evaluation chain; Stooq is tried first and Yahoo is an
+      # explicit fallback when the public CSV endpoint challenges/unavailable.
+      # Never use for production traffic until provider license, factor/FX
+      # authorization and redistribution rules are approved. It returns
+      # price-only rows and explicit limited status.
+      FORESIGHTNINE_MARKET_PROVIDER_MODE: public_evaluation
       # Staging-only account lifecycle for local QA. Real OAuth is disabled
       # until provider credentials, callback URIs and deletion policy are approved.
       FORESIGHTNINE_LOCAL_AUTH_MODE: mock
