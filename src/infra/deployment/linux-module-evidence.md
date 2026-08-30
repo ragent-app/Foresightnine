@@ -165,6 +165,10 @@ exchange, or production Cloudflare mutation was performed.
   manifest must explicitly mark market price, factor features and FX reference
   fields approved with written terms and public redistribution rights. The
   checked-in staging manifest intentionally marks all three `not_approved`.
+- The gate accepts a deployment-owned provider manifest through the external
+  `--provider-admission-manifest` flag or
+  `FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST`; absent that input, it safely
+  evaluates the checked-in staging manifest and fails production admission.
 - The fixed-host adapter rejects vendor HTTP redirects instead of allowing a
   provider response to move the request to an unapproved host. The production
   preflight parses the manifest and rejects malformed JSON, empty provider or

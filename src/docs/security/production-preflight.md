@@ -36,7 +36,11 @@ The deployment context must provide:
 - the provider admission manifest must set `production_admission` to
   `approved` and explicitly mark `market_price`, `factor_features`, and
   `fx_reference` as approved with written terms and public redistribution
-  rights. The checked-in staging manifest intentionally fails this gate;
+  rights. A deployment may pass an external manifest with
+  `--provider-admission-manifest <path>` or
+  `FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST`; the path must be absolute and
+  outside the repository. Without it, the checked-in staging manifest is used
+  and intentionally fails this gate;
 - `FORESIGHTNINE_METRICS_ENABLED=true` so the deployment monitor has an
   explicit redacted metrics surface;
 - a readable, absolute, repository-external `FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT` ending in `.apk` or `.aab`. Any `app-debug.apk`, `debug`, `qa`, or QA-only path is rejected. The verifier checks the deployment-provided artifact with filesystem stat/access or a test-injected artifact reader/stat function;

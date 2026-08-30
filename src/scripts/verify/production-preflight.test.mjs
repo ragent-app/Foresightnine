@@ -80,6 +80,29 @@ test("synthetic production preflight passes through argv/env injection without n
   assert.ok(result.gates.every(({ status }) => status === "PASS"));
 });
 
+test("deployment-owned provider authorization manifest is accepted only outside the repository", () => {
+  const result = runPreflight({
+    env: { ...baseEnv(), FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST: "/deployment-owned/provider-admission.json" },
+    repoRoot: "/synthetic-repository",
+    argv: ["--approval-manifest", "/deployment-owned/release-approval.json"],
+    approvalManifest: APPROVAL_MANIFEST,
+    readFile: (filePath) => filePath.endsWith("Dockerfile.api")
+      ? "COPY packages/asset-registry /app/packages/asset-registry"
+      : PROVIDER_MANIFEST,
+    readManifest: (manifestPath) => manifestPath.endsWith("provider-admission.json") ? PROVIDER_MANIFEST : APPROVAL_MANIFEST,
+    statArtifact: () => ({ exists: true, isFile: true, readable: true }),
+  });
+  assert.equal(result.gates.find(({ id }) => id === "DATA_AUTHORIZATION").status, "PASS");
+
+  const inside = runPreflight({
+    env: { ...baseEnv(), FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST: "/synthetic-repository/provider.json" },
+    repoRoot: "/synthetic-repository",
+    approvalManifest: APPROVAL_MANIFEST,
+    statArtifact: () => ({ exists: true, isFile: true, readable: true }),
+  });
+  assert.equal(inside.gates.find(({ id }) => id === "DATA_AUTHORIZATION").status, "FAIL");
+});
+
 test("default empty environment fails closed and lists missing gates", () => {
   const result = runPreflight({ env: {}, argv: [] });
   const failedIds = result.gates.filter(({ status }) => status === "FAIL").map(({ id }) => id);

@@ -186,6 +186,15 @@ function manifestPathFromArgv(argv) {
   return "";
 }
 
+function providerManifestPathFromArgv(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--provider-admission-manifest") return argv[index + 1] ?? "";
+    if (argument.startsWith("--provider-admission-manifest=")) return argument.slice("--provider-admission-manifest=".length);
+  }
+  return "";
+}
+
 function loadApprovalManifest({ env, argv, repoRoot, approvalManifest, readManifest }) {
   if (approvalManifest !== undefined) return { manifest: approvalManifest };
 
@@ -200,6 +209,30 @@ function loadApprovalManifest({ env, argv, repoRoot, approvalManifest, readManif
     return { manifest: raw };
   } catch {
     return { error: "deployment-owned manifest is unreadable or invalid" };
+  }
+}
+
+function loadProviderAdmissionManifest({ env, argv, repoRoot, providerAdmissionManifest, readFile, readManifest }) {
+  if (providerAdmissionManifest !== undefined) return { manifest: providerAdmissionManifest };
+
+  const requestedPath = providerManifestPathFromArgv(argv) || envValue(env, "FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST");
+  if (!requestedPath) {
+    const raw = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
+    if (typeof raw !== "string") return { error: "provider admission manifest is missing" };
+    try {
+      return { manifest: JSON.parse(raw) };
+    } catch {
+      return { error: "provider admission manifest is unreadable or invalid" };
+    }
+  }
+  if (!path.isAbsolute(requestedPath) || !isOutsideRepositoryFrom(requestedPath, repoRoot)) {
+    return { error: "provider admission manifest is not external" };
+  }
+  try {
+    const raw = (readManifest ?? ((manifestPath) => readFileSync(manifestPath, "utf8")))(requestedPath);
+    return { manifest: typeof raw === "string" ? JSON.parse(raw) : raw };
+  } catch {
+    return { error: "provider admission manifest is unreadable or invalid" };
   }
 }
 
@@ -275,14 +308,11 @@ function hasProviderAdmissionManifest({ repoRoot, readFile }) {
   }
 }
 
-function hasProductionDataAuthorization({ repoRoot, readFile }) {
-  const manifest = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
-  if (typeof manifest !== "string") return false;
+function hasProductionDataAuthorization(manifest) {
   try {
-    const parsed = JSON.parse(manifest);
-    const authorizations = parsed?.data_authorization;
+    const authorizations = manifest?.data_authorization;
     return Boolean(
-      parsed?.production_admission === "approved" &&
+      manifest?.production_admission === "approved" &&
       authorizations &&
       typeof authorizations === "object" &&
       !Array.isArray(authorizations) &&
@@ -385,6 +415,7 @@ export function runPreflight({
   readArtifact,
   statArtifact,
   approvalManifest,
+  providerAdmissionManifest,
   readManifest,
 } = {}) {
   const llm = evaluateLlmProvider(env);
@@ -393,6 +424,14 @@ export function runPreflight({
   const searchSecretName = LIVE_SEARCH_PROVIDERS[search.provider];
   const captchaDeclaration = envValue(env, "FORESIGHTNINE_CAPTCHA_PROVIDER") || envValue(env, "FORESIGHTNINE_CAPTCHA_MODE").toLowerCase();
   const loadedManifest = loadApprovalManifest({ env, argv, repoRoot, approvalManifest, readManifest });
+  const loadedProviderManifest = loadProviderAdmissionManifest({
+    env,
+    argv,
+    repoRoot,
+    providerAdmissionManifest,
+    readFile,
+    readManifest,
+  });
 
   const gates = [
     gate(
@@ -514,9 +553,9 @@ export function runPreflight({
     ),
     gate(
       "DATA_AUTHORIZATION",
-      hasProductionDataAuthorization({ repoRoot, readFile }),
+      !loadedProviderManifest.error && hasProductionDataAuthorization(loadedProviderManifest.manifest),
       "market price, factor and FX fields have written redistribution authorization",
-      "provider manifest must mark market_price, factor_features and fx_reference approved with written terms and redistribution rights",
+      loadedProviderManifest.error ?? "provider manifest must mark market_price, factor_features and fx_reference approved with written terms and redistribution rights",
     ),
     gate(
       "COMPOSE_PROVIDER_CONFIG",
