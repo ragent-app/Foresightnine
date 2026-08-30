@@ -140,24 +140,31 @@ exchange, or production Cloudflare mutation was performed.
 
 - The hidden `POST /snapshots` route is protected by the same Redis abuse
   boundary as `/v1/*` and accepts only the shared three-anchor request shape.
-- The `public_evaluation` mode uses an explicit fixed-host chain: Stooq CSV is
-  tried first and Yahoo chart is used only as a bounded fallback when Stooq is
-  challenged or unavailable. Both use the fixed symbol allowlist (`GRID/PAVE`,
-  `CHIP/SOXX`, `UTIL/XLU`, `GOLD/GLD`, `WORLD/VT`, and canonical `ETF:SPY`,
-  `ETF:SOXX`, `ETF:GLD`, `ETF:QQQ`, `ETF:IEF`), bounded response size and an
-  eight-second timeout. Neither accepts a URL or credential from a request,
-  caches raw responses, or derives factor or FX values.
+- Historical pre-authorization staging evidence used a bounded Stooq-first
+  chain with a Yahoo fallback. That chain is retired; Yahoo is no longer
+  configured or called.
+- The current `public_evaluation` mode uses Stooq as the sole fixed-host price
+  adapter. It supports an optional server-only `FORESIGHTNINE_STOOQ_API_KEY`
+  injected outside Git, the fixed symbol allowlist (`GRID/PAVE`, `CHIP/SOXX`,
+  `UTIL/XLU`, `GOLD/GLD`, `WORLD/VT`, and canonical `ETF:SPY`, `ETF:SOXX`,
+  `ETF:GLD`, `ETF:QQQ`, `ETF:IEF`), bounded response size, an eight-second
+  timeout and redirect rejection. It never accepts a URL or credential from a
+  request, caches raw responses, or derives factor or FX values.
 - Compose enables this mode only for local/development staging. Returned rows
   are price-only and warnings explicitly keep the client runtime limited;
   `CASH` and any unapproved asset return `missing` rows.
-- Provider authorization, factor/FX licensing and redistribution approval are
-  not asserted. Production mode disables this adapter unless an approved
-  provider implementation is supplied.
-- The live staging route accepted a canonical `ETF:SPY`, legacy `GRID`, and
-  unapproved `CASH:USD` request through the Stooq-first chain: 9 rows were
-  returned, with 6 price rows and 3 explicit missing rows. The current network
-  challenge caused the explicit Yahoo fallback to serve the six price rows; no
-  client-side vendor URL or credential was used.
+- The owner confirmed permission for Stooq prices, Kenneth French MOM/RMW, AQR
+  QMJ and Frankfurter reference FX on 2026-08-31. The manifest records Stooq
+  price, Kenneth French MOM, AQR QMJ with Kenneth French RMW fallback, and
+  Frankfurter with ECB preference. Production mode remains disabled until the
+  deployment-owned external manifest and remaining release gates are supplied.
+- Before the policy update, the live staging route accepted a canonical
+  `ETF:SPY`, legacy `GRID`, and unapproved `CASH:USD` request through the
+  Stooq-first chain: 9 rows were returned, with 6 price rows and 3 explicit
+  missing rows; the network challenge caused Yahoo fallback to serve the six
+  price rows. This is historical evidence only. After the policy update, a
+  Stooq challenge produces explicit missing rows rather than silently switching
+  to an unauthorized price source.
 - The container copies and loads the admission manifest at startup; a missing
   or invalid manifest disables evaluation rows rather than enabling a provider
   by code default. The release preflight also checks that the manifest is
@@ -197,11 +204,12 @@ exchange, or production Cloudflare mutation was performed.
   one of the declared HTTPS CORS origin hostnames, preventing a valid but
   misbound Turnstile site from satisfying the release gate.
 - The 2026-08-31 Linux probe confirmed Stooq returned a JavaScript verification
-  page, so the chain's explicit Yahoo fallback returned JSON for SPY and SOXX.
-  Frankfurter returned a no-key USD/EUR reference rate, and Kenneth French's
-  daily momentum archive downloaded successfully. Neither factor nor FX source
-  is enabled in the runtime. The auditable chain and mappings are in
-  `provider-manifest.v1.json`.
+  page, while Frankfurter returned a no-key USD/EUR reference rate and Kenneth
+  French's daily momentum archive downloaded successfully. AQR QMJ remains the
+  quality primary. The factor and FX sources are now authorized/configured in
+  the manifest, but the three-anchor price response intentionally does not emit
+  factor features or FX conversion until the matching client contract is wired.
+  The auditable source order and mappings are in `provider-manifest.v1.json`.
 - The adapter now marks a provider session before the requested anchor as
   `stale` instead of `ok`, while preserving the real `asOf` date. This keeps
   delayed or holiday-ambiguous rows visible but prevents the client from

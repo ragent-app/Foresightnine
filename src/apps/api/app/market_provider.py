@@ -16,7 +16,7 @@ import math
 import os
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Mapping, Sequence
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -73,11 +73,12 @@ def _evaluation_manifest_allows(provider_id: str, fallback_provider_id: str | No
         if isinstance(provider, dict)
         and provider.get("id") in expected_provider_ids
         and provider.get("enabled_modes") == ["staging_evaluation"]
-        and provider.get("credentials") == "none"
+        and provider.get("credentials") in {"none", "optional_server_secret"}
         and provider.get("raw_cache") == "disabled"
         and provider.get("features") == "not_authorized"
         and provider.get("fx") == "not_authorized"
-        and provider.get("public_redistribution") == "not_approved"
+        and provider.get("authorization_status") == "owner_confirmed"
+        and provider.get("public_redistribution") == "approved"
     }
     if admitted_provider_ids != expected_provider_ids:
         return False
@@ -185,33 +186,30 @@ def _reject_future_rows(rows: dict[date, float], cutoff: date) -> dict[date, flo
     return rows
 
 
-def _safe_vendor_rows(payload: bytes) -> dict[date, float]:
-    if len(payload) > MAX_VENDOR_BYTES:
-        raise ValueError("vendor response exceeded the bounded payload")
-    document = json.loads(payload.decode("utf-8"))
-    result = document.get("chart", {}).get("result") if isinstance(document, dict) else None
-    if not isinstance(result, list) or not result or not isinstance(result[0], dict):
-        raise ValueError("vendor response had no chart result")
-    chart = result[0]
-    timestamps = chart.get("timestamp")
-    quote = chart.get("indicators", {}).get("quote") if isinstance(chart.get("indicators"), dict) else None
-    closes = quote[0].get("close") if isinstance(quote, list) and quote and isinstance(quote[0], dict) else None
-    if not isinstance(timestamps, list) or not isinstance(closes, list):
-        raise ValueError("vendor response had no close series")
-    rows: dict[date, float] = {}
-    for timestamp, close in zip(timestamps, closes, strict=False):
-        if not isinstance(timestamp, int) or isinstance(timestamp, bool) or not isinstance(close, (int, float)) or isinstance(close, bool):
-            continue
-        if not math.isfinite(float(close)) or close <= 0:
-            continue
-        try:
-            observed = datetime.fromtimestamp(timestamp, tz=timezone.utc).date()
-        except (OverflowError, OSError, ValueError) as error:
-            raise ValueError("vendor response had an invalid timestamp") from error
-        if observed in rows:
-            raise ValueError("vendor response had duplicate session dates")
-        rows[observed] = float(close)
-    return rows
+def resolve_provider_consensus(
+    observations: Sequence[tuple[str, Any]],
+    priority: Mapping[str, int],
+) -> Any | None:
+    """Resolve observations for one canonical field without cross-category fallback.
+
+    The highest-priority available provider wins. When several providers share
+    that priority, a strict majority of equal values is required; ties and
+    missing priorities fail closed as ``None``.
+    """
+    ranked = [
+        (priority[provider_id], value)
+        for provider_id, value in observations
+        if provider_id in priority and value is not None
+    ]
+    if not ranked:
+        return None
+    best_rank = min(rank for rank, _value in ranked)
+    candidates = [value for rank, value in ranked if rank == best_rank]
+    for candidate in candidates:
+        votes = sum(value == candidate for value in candidates)
+        if votes * 2 > len(candidates):
+            return candidate
+    return None
 
 
 def _safe_stooq_rows(payload: bytes) -> dict[date, float]:
@@ -247,7 +245,7 @@ def _safe_stooq_rows(payload: bytes) -> dict[date, float]:
 
 
 class StooqEvaluationAdapter:
-    """No-key, no-cache, fixed-host CSV evaluation adapter."""
+    """Fixed-host CSV adapter with an optional server-only API key."""
 
     endpoint = "https://stooq.com/q/d/l/"
 
@@ -257,12 +255,19 @@ class StooqEvaluationAdapter:
         anchor_dates = [_date_only(value) for value in anchors]
         valid_dates = [value for value in anchor_dates if value is not None]
         start = min(valid_dates, default=cutoff) - timedelta(days=5)
-        query = urlencode({
+        query_params: dict[str, str] = {
             "s": f"{symbol.lower()}.us",
             "i": "d",
             "d1": start.strftime("%Y%m%d"),
             "d2": cutoff.strftime("%Y%m%d"),
-        })
+        }
+        # Stooq permits deployments with no key as well as deployments issued
+        # a server-side key.  Never accept this value from a client request or
+        # expose it in a bundle/log; it is injected only by the process env.
+        api_key = os.getenv("FORESIGHTNINE_STOOQ_API_KEY", "").strip()
+        if api_key:
+            query_params["apikey"] = api_key
+        query = urlencode(query_params)
         request = Request(
             f"{self.endpoint}?{query}",
             headers={"Accept": "text/csv", "User-Agent": "ForesightNine-staging-provider-evaluation/1"},
@@ -272,49 +277,19 @@ class StooqEvaluationAdapter:
         return _reject_future_rows(_safe_stooq_rows(payload), cutoff)
 
 
-class YahooEvaluationAdapter:
-    """No-key, no-cache, fixed-host evaluation adapter for the staging edge."""
-
-    endpoint = "https://query1.finance.yahoo.com/v8/finance/chart/"
-
-    def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
-        if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
-            raise ValueError("symbol is outside the fixed provider allowlist")
-        anchor_dates = [_date_only(value) for value in anchors]
-        valid_dates = [value for value in anchor_dates if value is not None]
-        start = min(valid_dates, default=cutoff) - timedelta(days=5)
-        query = urlencode({
-            "period1": int(datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc).timestamp()),
-            "period2": int(datetime.combine(cutoff + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc).timestamp()),
-            "interval": "1d",
-            "events": "history",
-            "includeAdjustedClose": "true",
-        })
-        request = Request(
-            f"{self.endpoint}{symbol}?{query}",
-            headers={"Accept": "application/json", "User-Agent": "ForesightNine-staging-provider-evaluation/1"},
-        )
-        with build_opener(_RejectVendorRedirect).open(request, timeout=8) as response:
-            payload = response.read(MAX_VENDOR_BYTES + 1)
-        return _reject_future_rows(_safe_vendor_rows(payload), cutoff)
-
-
 def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
     """Return a client-compatible bundle fragment with explicit limitations."""
 
     mode = os.getenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "unavailable").strip().lower()
     evaluation_enabled = (
-        mode in {"public_evaluation", "yahoo_evaluation"}
+        mode in {"public_evaluation", "stooq_evaluation"}
         and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
-        and _evaluation_manifest_allows("stooq", "yahoo_chart_evaluation")
+        and _evaluation_manifest_allows("stooq")
     )
-    adapters = (
-        ("stooq", StooqEvaluationAdapter()),
-        ("yahoo_chart_evaluation", YahooEvaluationAdapter()),
-    ) if evaluation_enabled else ()
+    adapters = (("stooq", StooqEvaluationAdapter()),) if evaluation_enabled else ()
     warnings = [
-        "Linux provider adapter is staging/evaluation-only; no production data license is asserted.",
-        "No factor features or FX conversion are supplied; client Public Default must remain disabled.",
+        "Linux provider adapter is staging/evaluation-only; Stooq price use is owner-confirmed for this deployment.",
+        "Kenneth French, AQR QMJ and Frankfurter are configured in the admission manifest, but this three-anchor price response does not emit factor features or FX conversion.",
         "Only three point-in-time anchors are returned; this is not a backtest window.",
     ]
     snapshots: list[dict[str, Any]] = []
@@ -329,11 +304,9 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
                     if not candidate_rows:
                         raise ValueError("provider returned no usable rows")
                     rows = candidate_rows
-                    if provider_id != "stooq":
-                        warnings.append("Primary public price provider unavailable; staging fallback was used.")
                     break
                 except Exception:
-                    warnings.append(f"{provider_id} unavailable for {asset_id}; trying the next staging provider.")
+                    warnings.append(f"{provider_id} unavailable for {asset_id}; returning explicit missing rows.")
         elif symbol is None:
             warnings.append(f"No licensed provider mapping is configured for {asset_id}.")
         else:
@@ -346,7 +319,7 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
                 continue
             price = rows[selected]
             is_stale = selected < anchor_date
-            row_warnings = ["Price-only evaluation row; no licensed factor or FX fields."]
+            row_warnings = ["Price-only evaluation row; factor and FX values are not included in this contract."]
             if is_stale:
                 row_warnings.append(
                     f"Provider session {selected.isoformat()} precedes requested anchor {anchor_date.isoformat()}."
@@ -370,7 +343,7 @@ __all__ = [
     "ASSET_SYMBOLS",
     "ANCHORS",
     "MarketSnapshotRequest",
+    "resolve_provider_consensus",
     "StooqEvaluationAdapter",
-    "YahooEvaluationAdapter",
     "build_snapshot_response",
 ]

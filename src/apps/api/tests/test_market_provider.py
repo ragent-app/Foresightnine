@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app import market_provider
 from app.main import app
-from app.market_provider import ANCHORS, MarketSnapshotRequest, StooqEvaluationAdapter, YahooEvaluationAdapter, build_snapshot_response
+from app.market_provider import ANCHORS, MarketSnapshotRequest, StooqEvaluationAdapter, build_snapshot_response
 
 
 REQUEST = {
@@ -43,9 +43,9 @@ def test_default_provider_is_explicitly_limited(monkeypatch) -> None:
 
 
 def test_evaluation_mode_requires_the_admission_manifest(monkeypatch, tmp_path) -> None:
-    assert market_provider._evaluation_manifest_allows("stooq", "yahoo_chart_evaluation") is True
+    assert market_provider._evaluation_manifest_allows("stooq") is True
     monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", tmp_path / "missing.json")
-    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
+    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
 
     response = build_snapshot_response(MarketSnapshotRequest.model_validate(REQUEST))
@@ -61,7 +61,7 @@ def test_evaluation_mode_requires_asset_level_mapping(monkeypatch, tmp_path) -> 
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", manifest_path)
 
-    assert market_provider._evaluation_manifest_allows("stooq", "yahoo_chart_evaluation") is False
+    assert market_provider._evaluation_manifest_allows("stooq") is False
 
 
 def test_stooq_csv_parser_accepts_only_valid_positive_close_rows() -> None:
@@ -88,8 +88,21 @@ def test_future_vendor_sessions_are_rejected() -> None:
         raise AssertionError("future vendor sessions must be rejected")
 
 
+def test_provider_consensus_uses_priority_then_majority() -> None:
+    priority = {"frankfurter": 0, "secondary": 1, "tertiary": 1}
+    assert market_provider.resolve_provider_consensus(
+        [("frankfurter", 7), ("secondary", 8), ("tertiary", 8)], priority,
+    ) == 7
+    assert market_provider.resolve_provider_consensus(
+        [("secondary", 8), ("tertiary", 8)], priority,
+    ) == 8
+    assert market_provider.resolve_provider_consensus(
+        [("secondary", 8), ("tertiary", 9)], priority,
+    ) is None
+
+
 def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -> None:
-    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
+    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
 
     def fake_fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
@@ -98,8 +111,7 @@ def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -
         assert anchors == tuple(REQUEST["anchors"][anchor] for anchor in ANCHORS)
         return {date(2026, 8, 28): 123.45}
 
-    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {})
-    monkeypatch.setattr(YahooEvaluationAdapter, "fetch", fake_fetch)
+    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", fake_fetch)
     response = build_snapshot_response(MarketSnapshotRequest.model_validate(REQUEST))
     grid_rows = [row for row in response["snapshots"] if row["assetId"] == "GRID"]
     cash_rows = [row for row in response["snapshots"] if row["assetId"] == "CASH"]
@@ -111,10 +123,9 @@ def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -
 
 
 def test_evaluation_adapter_marks_rows_before_the_requested_anchor_stale(monkeypatch) -> None:
-    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
+    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
-    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {})
-    monkeypatch.setattr(YahooEvaluationAdapter, "fetch", lambda *_args: {
+    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {
         date(2026, 8, 2): 490.0,
         date(2026, 8, 27): 500.0,
     })
@@ -137,10 +148,9 @@ def test_evaluation_adapter_marks_rows_before_the_requested_anchor_stale(monkeyp
 
 
 def test_canonical_registry_etf_ids_are_allowlisted(monkeypatch) -> None:
-    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "yahoo_evaluation")
+    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
-    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {})
-    monkeypatch.setattr(YahooEvaluationAdapter, "fetch", lambda *_args: {date(2026, 8, 28): 500.0})
+    monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {date(2026, 8, 28): 500.0})
     request = MarketSnapshotRequest.model_validate({**REQUEST, "assetIds": ["ETF:SPY"]})
     rows = build_snapshot_response(request)["snapshots"]
     assert len(rows) == 3

@@ -31,7 +31,7 @@ The deployment context must provide:
 - complete server-side Google and GitHub OAuth configuration: an HTTPS callback,
   a non-empty return-URI allowlist, and client ID/secret values for both
   providers;
-- `FORESIGHTNINE_MARKET_PROVIDER_MODE=licensed`; the staging-only Yahoo
+- `FORESIGHTNINE_MARKET_PROVIDER_MODE=licensed`; the staging-only Stooq
   evaluation adapter cannot satisfy this production gate;
 - the provider admission manifest must set `production_admission` to
   `approved` and explicitly mark `market_price`, `factor_features`, and
