@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
- - Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `b6acb7c`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `0ca79ba`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -197,6 +197,13 @@ exchange, or production Cloudflare mutation was performed.
   daily momentum archive downloaded successfully. Neither factor nor FX source
   is enabled in the runtime. The auditable chain and mappings are in
   `provider-manifest.v1.json`.
+- The adapter now marks a provider session before the requested anchor as
+  `stale` instead of `ok`, while preserving the real `asOf` date. This keeps
+  delayed or holiday-ambiguous rows visible but prevents the client from
+  treating them as eligible current Public Default data.
+- After rebuilding the API image from `0ca79ba`, the public canonical
+  `ETF:SPY` three-anchor request returned HTTP 200; delayed sessions were
+  explicitly marked `stale` and no factor/FX fields were emitted.
 
 ## Module 7 — auth/session contract boundary
 
@@ -251,10 +258,10 @@ repository or runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the latest API run was 227 passed, 1 skipped (228 collected). The only skip is
+  the latest API run was 228 passed, 1 skipped (229 collected). The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
-- `corepack pnpm test:production-preflight`: 12 passed. The real
+- `corepack pnpm test:production-preflight`: 13 passed. The real
   `verify:production-preflight` command correctly rejects this development
   environment because production credentials, TLS Redis, external CAPTCHA,
   OAuth configuration, licensed market admission, explicit data authorization,
@@ -289,7 +296,8 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `b6acb7c`; OAuth callback, provider mapping, redirect hardening
+implementation checkpoint is `0ca79ba`; external provider authorization input
+handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
