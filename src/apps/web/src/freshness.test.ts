@@ -2,9 +2,21 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_FRESHNESS_POLICY } from "@foresightnine/domain";
-import { ASSET_FIXTURES, RUNTIME_AS_OF, freshnessFor, fmInput, branches } from "./fixtures";
+import { computeMarketSnapshotIntegrityHash, marketDataStatus } from "@foresightnine/market-data";
+import { ASSET_FIXTURES, MARKET_SNAPSHOT_BUNDLE, RUNTIME_AS_OF, assetsForMarketBundle, freshnessFor, fmInput, branches } from "./fixtures";
 import { allocationRows, publicWeights } from "./state";
 import { PortfolioPanel } from "./components/PortfolioPanel";
+
+function bundleWithExplicitRowStatus(status: "missing" | "stale") {
+  const snapshots = MARKET_SNAPSHOT_BUNDLE.snapshots.map((snapshot) => {
+    if (snapshot.assetId !== "GRID" || snapshot.anchor !== "latest_completed_session") return snapshot;
+    return status === "missing"
+      ? { ...snapshot, status, asOf: null, price: null, close: null }
+      : { ...snapshot, status };
+  });
+  const base = { ...MARKET_SNAPSHOT_BUNDLE, snapshots };
+  return { ...base, integrityHash: computeMarketSnapshotIntegrityHash(base) };
+}
 
 describe("Web freshness policy integration", () => {
   it("fails closed by default for offline fixture data", () => {
@@ -33,6 +45,27 @@ describe("Web freshness policy integration", () => {
     const invalid = freshnessFor({ ...ASSET_FIXTURES[0]!, asOf: "not-a-date" }, { runtimeAsOf: RUNTIME_AS_OF, providerStatus: "fresh" });
     expect(invalid.status).toBe("invalid_date");
     expect(invalid.allowCurrentPublicDefault).toBe(false);
+  });
+
+  it("rejects explicit missing/stale market rows instead of silently substituting mock prices", () => {
+    for (const status of ["missing", "stale"] as const) {
+      const bundle = bundleWithExplicitRowStatus(status);
+      expect(marketDataStatus(bundle)).toBe("limited_data");
+      expect(() => assetsForMarketBundle(bundle)).toThrow("No valid latest completed-session price for GRID.");
+    }
+  });
+
+  it("never enables Public Default for a missing row or stale provider result while retaining Raw", () => {
+    const result = ({ weights: { weights: Float64Array.from([0.5, 0.2, 0.1, 0.1, 0.05, 0.05]) } } as never);
+    const missingAssets = ASSET_FIXTURES.map((asset, index) => index === 0 ? { ...asset, asOf: "" } : asset);
+    const missingRows = allocationRows(result, 100000, "CNY", "public", { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" }, missingAssets);
+    expect(missingRows[0]).toMatchObject({ publicWeight: 0, publicAmount: 0, publicUnits: 0, publicExecutionAllowed: false });
+    expect(missingRows[0]?.weight).toBeGreaterThan(0);
+    for (const providerStatus of ["stale", "unavailable"] as const) {
+      const rows = allocationRows(result, 100000, "CNY", "public", { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus });
+      expect(rows.every((row) => row.publicAmount === 0 && row.publicUnits === 0 && !row.publicExecutionAllowed)).toBe(true);
+      expect(rows.some((row) => row.rawAmount > 0)).toBe(true);
+    }
   });
 
   it("uses the same historical/simulated wording in the portfolio surface", () => {

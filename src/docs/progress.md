@@ -1,5 +1,32 @@
 # Progress
 
+## Staging client default and Public Default fail-closed coverage — 2026-08-31
+
+- Wired Web and Android to use `https://api-staging.foresightnine.com` when no
+  supported API override is supplied. Canonical configuration still wins,
+  legacy configuration remains a fallback, malformed explicit configuration
+  fails closed, and Vitest keeps both clients deterministic/offline.
+- Strengthened Web and Android freshness coverage for explicit missing/stale
+  market rows and stale/unavailable provider status. Public Default remains
+  disabled while FM Raw is retained; invalid market rows are rejected rather
+  than replaced with fixture/mock prices.
+- No production enablement, OAuth credential, provider, factor, FX, server,
+  or commit change was made.
+
+### Verification
+
+- `corepack pnpm --filter @foresightnine/web test`: passed, 4 test files and 56 tests.
+- `corepack pnpm --filter @foresightnine/mobile test`: passed, 5 test files and 49 tests.
+- `corepack pnpm --filter @foresightnine/web typecheck`: passed (`tsc --noEmit`).
+- `corepack pnpm --filter @foresightnine/mobile typecheck`: passed (`tsc --noEmit`).
+- `git diff --check`: passed; the diff contains only the seven owned paths and no added credential pattern matches.
+
+### Material judgment call
+
+- The staging default is applied only by the app-facing runtime lookup and is
+  suppressed under Vitest; the pure environment helper continues to return
+  `null` for absent values so tests and explicit offline callers remain safe.
+
 ## Public-provider assessment and canonical adaptation plan — 2026-08-30
 
 - Continued read-only evaluation of public sources. Market Data's no-token

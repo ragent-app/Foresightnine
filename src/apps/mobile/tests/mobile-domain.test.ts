@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { computeFm } from "@foresightnine/fm-engine";
+import { createMarketRuntimeController } from "@foresightnine/market-data";
 import { archiveIncludesPrivateEvidence, buildPrivacySafeDocument, canRestoreArchive, makeArchiveEnvelope } from "../src/archive";
 import { isDuplicateEvidence, normalizeShareToBundle, normalizeSharedText } from "../src/evidence";
 import { candidateToLocalBundle, safeProjectApiBase, searchProjectCandidates } from "../src/search-client";
-import { configuredApiBaseUrlFromEnvironment } from "../src/runtime-config";
+import { configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment, configuredMarketDataRuntimeConfigFromEnvironment, STAGING_API_BASE_URL } from "../src/runtime-config";
 import { ASSETS, MOCK_EVIDENCE, fmInput, makeBranches, mockTurnsFor, rubricFor, validateBranchTimeline, validateProbabilityLedger } from "../src/fixtures";
 import { t } from "../src/i18n";
 import { createPortfolioPlan, displayAsset, publicWeights, scenarioNavFor } from "../src/portfolio";
@@ -15,10 +16,25 @@ import { fmInput as webFmInput } from "../../web/src/fixtures";
 const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const };
 
 describe("mobile thesis and evidence boundaries", () => {
+  it("keeps the staging default out of deterministic test mode while allowing explicit overrides", () => {
+    expect(STAGING_API_BASE_URL).toBe("https://api-staging.foresightnine.com");
+    expect(configuredApiBaseUrl()).toBeNull();
+    expect(configuredApiBaseUrlFromEnvironment({ canonical: "http://127.0.0.1:8000", legacy: undefined })).toBe("http://127.0.0.1:8000");
+  });
+
   it("prefers the canonical API variable and preserves the legacy alias", () => {
     expect(configuredApiBaseUrlFromEnvironment({ canonical: "https://canonical.example", legacy: "https://legacy.example" })).toBe("https://canonical.example");
     expect(configuredApiBaseUrlFromEnvironment({ canonical: "", legacy: "https://legacy.example" })).toBe("https://legacy.example");
     expect(configuredApiBaseUrlFromEnvironment({ canonical: "not-a-url", legacy: "https://legacy.example" })).toBeNull();
+  });
+
+  it("keeps an explicit public market mode from silently becoming mock when its URL is missing", async () => {
+    let calls = 0;
+    const runtime = createMarketRuntimeController({ fetcher: (async () => { calls += 1; throw new Error("must not fetch"); }) as typeof fetch });
+    runtime.configure(configuredMarketDataRuntimeConfigFromEnvironment({ mode: "public" }));
+    await expect(runtime.refresh({ assetIds: ["GRID"], cutoff: "2026-08-09", timezone: "UTC" })).rejects.toMatchObject({ code: "invalid_provider_url" });
+    expect(calls).toBe(0);
+    expect(runtime.getState()).toMatchObject({ status: "error", mode: "public", providerId: "configured-public", bundle: null });
   });
   it("does not complete or open worldline from an idle challenge action", () => {
     const completed = reduceChallengeAction(mobileInitialState, { type: "challenge_complete" });
