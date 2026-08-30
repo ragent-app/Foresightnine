@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `595a71c`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `69e01b0`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -55,8 +55,8 @@ claimed by this evidence.
   persisted source documents remained available, and the API health check
   succeeded.
 - `backup-staging.sh` passed `bash -n`, rejected a repository-internal output
-  path, and created a repository-external PostgreSQL custom dump (31,442 bytes),
-  Redis RDB snapshot (173 bytes), and SHA-256 sidecar. Checksum verification
+  path, and created a repository-external PostgreSQL custom dump (37,800 bytes),
+  Redis RDB snapshot (2,540 bytes), and SHA-256 sidecar. Checksum verification
   passed; the generated files were kept mode `600`. Restore remains a separate
   owner-approved operation.
 
@@ -143,16 +143,17 @@ exchange, or production Cloudflare mutation was performed.
 - Historical pre-authorization staging evidence used a bounded Stooq-first
   chain with a Yahoo fallback. That chain is retired; Yahoo is no longer
   configured or called.
-- The current `public_evaluation` mode uses Stooq as the sole fixed-host price
-  adapter. It supports an optional server-only `FORESIGHTNINE_STOOQ_API_KEY`
-  injected outside Git, the fixed symbol allowlist (`GRID/PAVE`, `CHIP/SOXX`,
-  `UTIL/XLU`, `GOLD/GLD`, `WORLD/VT`, and canonical `ETF:SPY`, `ETF:SOXX`,
-  `ETF:GLD`, `ETF:QQQ`, `ETF:IEF`), bounded response size, an eight-second
-  timeout and redirect rejection. It never accepts a URL or credential from a
-  request, caches raw responses, or derives factor or FX values.
-- Compose enables this mode only for local/development staging. Returned rows
-  are price-only and warnings explicitly keep the client runtime limited;
-  `CASH` and any unapproved asset return `missing` rows.
+- The code contains an isolated `public_evaluation` Stooq adapter with an
+  optional server-only `FORESIGHTNINE_STOOQ_API_KEY` input, the fixed symbol
+  allowlist (`GRID/PAVE`, `CHIP/SOXX`, `UTIL/XLU`, `GOLD/GLD`, `WORLD/VT`, and
+  canonical `ETF:SPY`, `ETF:SOXX`, `ETF:GLD`, `ETF:QQQ`, `ETF:IEF`), bounded
+  response size, an eight-second timeout and redirect rejection. It never
+  accepts a URL or credential from a request, caches raw responses, or derives
+  factor or FX values. The current manifest enables no provider, so this path
+  is not admitted at runtime.
+- Compose retains the explicit staging mode, but the unapproved manifest makes
+  all requested provider rows `missing` and keeps Public Default disabled;
+  `CASH` and any unapproved asset also return `missing` rows.
 - The current provider recheck records Stooq, Kenneth French MOM/RMW, AQR QMJ
   and Frankfurter as candidates only. No public production provider is
   approved; the manifest keeps all four data-authorizations unapproved and
@@ -205,11 +206,12 @@ exchange, or production Cloudflare mutation was performed.
   misbound Turnstile site from satisfying the release gate.
 - The 2026-08-31 Linux probe confirmed Stooq returned a JavaScript verification
   page, while Frankfurter returned a no-key USD/EUR reference rate and Kenneth
-  French's daily momentum archive downloaded successfully. AQR QMJ remains the
-  quality primary. The factor and FX sources are now authorized/configured in
-  the manifest, but the three-anchor price response intentionally does not emit
-  factor features or FX conversion until the matching client contract is wired.
-  The auditable source order and mappings are in `provider-manifest.v1.json`.
+  French's daily momentum archive downloaded successfully. AQR QMJ remains a
+  candidate quality primary. These observations grant no redistribution rights:
+  all price, factor and FX authorizations remain unapproved in the manifest,
+  and the three-anchor response emits neither factor features nor FX
+  conversion. The auditable candidate order and mappings are in
+  `provider-manifest.v1.json`.
 - The adapter now marks a provider session before the requested anchor as
   `stale` instead of `ok`, while preserving the real `asOf` date. This keeps
   delayed or holiday-ambiguous rows visible but prevents the client from
@@ -221,11 +223,10 @@ exchange, or production Cloudflare mutation was performed.
   request for `ETF:SPY` and `ETF:SOXX` returned HTTP 200 with six rows, one
   exact-anchor `ok` row per asset and four delayed/holiday-ambiguous `stale`
   rows. Future vendor sessions are rejected before they can reach the client.
-- The image rebuilt from the unapproved Stooq candidate checkpoint returned
-  HTTP 200 for the same public route with six explicit `missing` rows when the
-  upstream returned its verification page. No Yahoo request or fallback was
-  made; the route's warning is emitted only after all configured price sources
-  are exhausted. `/readyz` remained HTTP 200.
+- The image rebuilt from `69e01b0` returned HTTP 200 for the public canonical
+  route with three explicit `missing` rows for `ETF:SPY`; no provider request,
+  Yahoo fallback or unauthorized factor/FX value was made because the current
+  manifest enables no provider. `/readyz` remained HTTP 200.
 
 ## Module 7 — auth/session contract boundary
 
@@ -294,16 +295,16 @@ repository or runtime.
   authorization or licensed production mode is being claimed.
 - Workspace `typecheck` passed for all nine participating packages/apps.
 - `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
-  asset registry, and the 24-path OpenAPI export.
+  asset registry, and the 25-path OpenAPI export.
 - `corepack pnpm verify:boundaries` was run and correctly failed on Linux-only
   portability constraints: the repository intentionally references the
   Windows `D:\Foresightnine` governance files and Windows implementation-root
   suffix. The baseline was not weakened or rewritten.
 - Workspace `test` passed, including generated-contract checks, FM-engine,
   API-client/domain/asset-registry, market-data, web and mobile tests.
-- OpenAPI export drift check passed with 24 paths; generated TypeScript and
+- OpenAPI export drift check passed with 25 paths; generated TypeScript and
   asset-registry fingerprints matched their checked-in artifacts.
-- Secret scan passed over 864 unique Git-history blobs.
+- Secret scan passed over 1,097 unique Git-history blobs.
 - The worldline fixture audit remains unavailable on this Linux checkout
   because its configured source is the Windows-only path
   `D:/WL-data-final/wordline-md/wordline1.md`; no substitute data was guessed.
@@ -321,8 +322,9 @@ the starting checkout; later module commits are the auditable checkpoints:
 - Module 6: `febdfdc`
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
-Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `595a71c`; external provider authorization input
+Compose CORS wiring is `e797bb4`. The historical Linux provider/auth/observability
+implementation checkpoint is `595a71c`; the current unapproved-provider
+checkpoint is `69e01b0`; external provider authorization input
 handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
