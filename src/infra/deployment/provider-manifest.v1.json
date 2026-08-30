@@ -1,0 +1,65 @@
+{
+  "schema_version": "provider-admission-manifest/v1",
+  "generated_at": "2026-08-31T00:00:00Z",
+  "runtime_status": "staging_only",
+  "production_admission": "blocked_pending_written_terms",
+  "providers": [
+    {
+      "id": "yahoo_chart_evaluation",
+      "kind": "market_price",
+      "enabled_modes": ["staging_evaluation"],
+      "endpoint": "https://query1.finance.yahoo.com/v8/finance/chart/",
+      "credentials": "none",
+      "raw_cache": "disabled",
+      "features": "not_authorized",
+      "fx": "not_authorized",
+      "public_redistribution": "not_approved",
+      "notes": "Fixed-host thin adapter; price-only and limited_data semantics."
+    },
+    {
+      "id": "stooq",
+      "kind": "market_price_candidate",
+      "enabled_modes": [],
+      "endpoint": "https://stooq.com/q/d/l/",
+      "credentials": "unknown_or_challenge_required",
+      "public_redistribution": "not_reviewed",
+      "notes": "Linux probe returned a JavaScript verification page; not enabled."
+    },
+    {
+      "id": "frankfurter",
+      "kind": "reference_fx_candidate",
+      "enabled_modes": [],
+      "endpoint": "https://api.frankfurter.dev/v2/",
+      "credentials": "none",
+      "raw_cache": "disabled",
+      "public_redistribution": "terms_review_required",
+      "notes": "Reference rates only; no executable bid/ask or trading feed."
+    },
+    {
+      "id": "kenneth_french",
+      "kind": "research_factor_candidate",
+      "enabled_modes": [],
+      "endpoint": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/",
+      "credentials": "none",
+      "runtime_use": "not_enabled",
+      "notes": "Research factor source; not copied into live snapshot features."
+    },
+    {
+      "id": "aqr_qmj",
+      "kind": "research_factor_candidate",
+      "enabled_modes": [],
+      "runtime_use": "not_enabled",
+      "notes": "Requires separate feature provenance and redistribution review."
+    }
+  ],
+  "asset_mappings": [
+    {"asset_id": "ETF:SPY", "provider": "yahoo_chart_evaluation", "symbol": "SPY", "currency": "USD", "proxy_for": "IDX:SPX"},
+    {"asset_id": "ETF:SOXX", "provider": "yahoo_chart_evaluation", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
+    {"asset_id": "ETF:GLD", "provider": "yahoo_chart_evaluation", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
+    {"asset_id": "ETF:QQQ", "provider": "yahoo_chart_evaluation", "symbol": "QQQ", "currency": "USD", "proxy_for": "IDX:NDX"},
+    {"asset_id": "ETF:IEF", "provider": "yahoo_chart_evaluation", "symbol": "IEF", "currency": "USD", "proxy_for": "YIELD:US10Y"},
+    {"asset_id": "CASH:USD", "provider": null, "symbol": null, "currency": "USD", "proxy_for": "CASH:USD"}
+  ],
+  "feature_policy": "No live factor features are admitted; clients must report limited_data and disable Public Default.",
+  "fx_policy": "No FX conversion is admitted; preserve quote currency and keep executable-looking amounts disabled when conversion is required."
+}

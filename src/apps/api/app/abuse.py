@@ -34,6 +34,10 @@ class AbuseBackend(Protocol):
     def reset(self) -> None:
         ...
 
+    def check_ready(self) -> None:
+        """Verify that the selected abuse backend can serve requests."""
+        ...
+
 
 class ModelQuotaBackend(Protocol):
     def reserve(self, reservation_id: str, subjects: Iterable[str]) -> AbuseDecision:
@@ -131,3 +135,7 @@ class AbuseControl:
         self.ip.reset()
         self.session.reset()
         self.model.reset()
+
+    def check_ready(self) -> None:
+        """The in-memory adapter has no external dependency to probe."""
+        return None

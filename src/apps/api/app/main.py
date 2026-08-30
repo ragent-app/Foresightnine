@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from collections.abc import Mapping
 from datetime import date, datetime, time, timedelta, timezone
@@ -82,9 +83,22 @@ from .services import (
     validate_probability_semantics,
     validate_worldline_bundle_semantics,
 )
-from .storage import JsonDocumentRepository, StorageConfig, build_repository
+from .storage import JsonDocumentRepository, StorageConfig, StorageMode, build_repository
 from .operation_store import build_operation_store
 from .oauth_foundation import OAuthConfigurationError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
+from .market_provider import MarketSnapshotRequest, build_snapshot_response
+from .local_auth import (
+    LocalAccount,
+    LocalAuthError,
+    LocalRegisterRequest,
+    LocalSession,
+    authenticate as authenticate_local,
+    delete_account as delete_local_account,
+    login as login_local,
+    logout as logout_local,
+    purge_expired_sessions,
+    register as register_local,
+)
 
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
 
@@ -100,10 +114,18 @@ ERROR_RESPONSES = {
     500: {"model": ErrorResponse, "description": "Validated internal failure"},
 }
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Verify external state before accepting traffic in a persistent runtime."""
+    _assert_runtime_ready()
+    yield
+
+
 app = FastAPI(
     title="ForesightNine API",
     version="1.0.0",
     description="Contract-first research scenario API. Deterministic mock providers only in Phase 1.",
+    lifespan=lifespan,
 )
 clock = FixedClock()
 lifecycle_clock = RuntimeClock()
@@ -164,6 +186,8 @@ def _build_entity_repositories(
     JsonDocumentRepository[Worldline],
     JsonDocumentRepository[MarketDataManifest],
     JsonDocumentRepository[str],
+    JsonDocumentRepository[LocalAccount],
+    JsonDocumentRepository[LocalSession],
 ]:
     """Build every API entity map with its canonical typed document loader."""
     return (
@@ -175,6 +199,8 @@ def _build_entity_repositories(
         build_repository(config, "worldlines", value_loader=Worldline.model_validate),
         build_repository(config, "market_manifests", value_loader=MarketDataManifest.model_validate),
         build_repository(config, "worldline_challenges", value_loader=str),
+        build_repository(config, "accounts", value_loader=LocalAccount.model_validate),
+        build_repository(config, "auth_sessions", value_loader=LocalSession.model_validate),
     )
 
 
@@ -188,9 +214,27 @@ storage_config = _storage_config()
     WORLDLINES,
     MARKET_MANIFESTS,
     WORLDLINE_CHALLENGES,
+    ACCOUNTS,
+    AUTH_SESSIONS,
 ) = _build_entity_repositories(storage_config)
 operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
 OPERATION_SESSIONS: dict[str, str] = {}
+
+
+def _assert_runtime_ready() -> None:
+    """Probe every external dependency required by the selected runtime."""
+    if storage_config.mode is StorageMode.POSTGRES:
+        try:
+            SESSIONS.check_ready()
+            ACCOUNTS.check_ready()
+            AUTH_SESSIONS.check_ready()
+            operations.store.check_ready()
+        except Exception as error:
+            raise RuntimeError("Persistent PostgreSQL state is not ready.") from error
+    try:
+        abuse_control.check_ready()
+    except Exception as error:
+        raise RuntimeError("Abuse-control state is not ready.") from error
 
 NORMAL_CONFIRM_MINIMUM_TOTAL = 30
 NORMAL_CONFIRM_MINIMUM_CRITICAL_SCORE = 3
@@ -215,10 +259,13 @@ def reset_state() -> None:
     WORLDLINES.clear()
     MARKET_MANIFESTS.clear()
     WORLDLINE_CHALLENGES.clear()
+    ACCOUNTS.clear()
+    AUTH_SESSIONS.clear()
     OPERATION_SESSIONS.clear()
 
 
 def cleanup_expired_state() -> object:
+    purge_expired_sessions(AUTH_SESSIONS, now=lifecycle_clock.now())
     durable_operation_sessions = operations.session_ids()
     active_session_ids = {
         durable_operation_sessions[operation_id]
@@ -303,7 +350,7 @@ app.add_middleware(
     allow_origins=list(security_config.allowed_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
     max_age=600,
 )
 app.add_middleware(
@@ -612,6 +659,92 @@ def health() -> HealthResponse:
         schema_version="v1",
         clock=clock.now(),
     )
+
+
+@app.get("/readyz", include_in_schema=False)
+def readyz(request: Request) -> JSONResponse:
+    """Dependency readiness probe for the supervisor and deployment monitor."""
+    try:
+        _assert_runtime_ready()
+    except Exception:
+        return _error(503, "internal_error", "Required runtime dependencies are not ready.", request, retryable=True)
+    return JSONResponse({"status": "ready"}, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/snapshots", include_in_schema=False)
+def market_snapshots(request: MarketSnapshotRequest) -> JSONResponse:
+    """Serve the bounded client market runtime without exposing a vendor API."""
+    return JSONResponse(build_snapshot_response(request))
+
+
+def _local_auth_available() -> bool:
+    return (
+        os.getenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "disabled").strip().lower() == "mock"
+        and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
+    )
+
+
+def _local_auth_problem(error: LocalAuthError) -> ApiProblem:
+    return ApiProblem(error.status_code, error.error_code, error.message)
+
+
+def _local_auth_unavailable() -> None:
+    if not _local_auth_available():
+        raise ApiProblem(503, "internal_error", "Local staging authentication is not enabled.", retryable=False)
+
+
+@app.post("/v1/auth/local/register", include_in_schema=False, status_code=201)
+def local_register(request: LocalRegisterRequest) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        result = register_local(
+            ACCOUNTS,
+            AUTH_SESSIONS,
+            email=request.email,
+            password=request.password,
+            now=lifecycle_clock.now(),
+        )
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse(result, status_code=201, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/v1/auth/local/login", include_in_schema=False)
+def local_login(request: LocalRegisterRequest) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        result = login_local(
+            ACCOUNTS,
+            AUTH_SESSIONS,
+            email=request.email,
+            password=request.password,
+            now=lifecycle_clock.now(),
+        )
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/v1/auth/local/logout", include_in_schema=False)
+def local_logout(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        _account, session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        logout_local(AUTH_SESSIONS, session)
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse({"logged_out": True}, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/v1/auth/local/account", include_in_schema=False)
+def local_delete_account(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
+    _local_auth_unavailable()
+    try:
+        account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now())
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+    return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
 
 
 @app.get(
