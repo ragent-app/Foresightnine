@@ -54,6 +54,10 @@ services:
       FORESIGHTNINE_STORAGE_MODE: postgres
       FORESIGHTNINE_POSTGRES_URL: postgresql://foresightnine:foresightnine_dev_only@postgres:5432/foresightnine
       FORESIGHTNINE_LLM_PROVIDER: mock
+      # Staging Web origin for the Cloudflare API Tunnel.
+      FORESIGHTNINE_CORS_ORIGINS: https://staging.foresightnine.com
+      FORESIGHTNINE_PROXY_MODE: direct
+      FORESIGHTNINE_TRUSTED_PROXY_CIDRS: ""
       # Development-only Redis wiring; production requires TLS/authenticated
       # Redis and deployment-owned configuration.
       FORESIGHTNINE_ABUSE_MODE: redis
