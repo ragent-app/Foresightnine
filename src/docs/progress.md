@@ -1,5 +1,68 @@
 # Progress
 
+## Android OAuth integration and public-provider recheck — 2026-08-31
+
+### Delivered
+
+- Added the mobile OAuth client boundary and five focused tests, then added
+  `OAuthSessionProvider` to the Expo root layout. Android now listens for the
+  initial URL and runtime deep-link events, exchanges only the server-issued
+  one-time ticket, and stores the validated local session through SecureStore.
+- Login buttons are gated by server provider readiness, safe API base, and an
+  explicit callback URI. Logout and account deletion clear in-memory state
+  before the network call and attempt SecureStore cleanup in `finally`; account
+  deletion requires a native confirmation dialog. Phone/tablet layouts retain
+  the existing `<600px` stacked control behavior.
+- Added build-time HTTPS App Link intent-filter generation in
+  `apps/mobile/app.config.cjs` and documented the required domain
+  `assetlinks.json`, release certificate fingerprint, API allowlist and
+  provider-console checks in `docs/deployment/oauth-mobile-app-links.md`.
+- Preserved the existing `market-snapshot-bundle/v1` boundary. A current
+  Windows probe confirmed that Market Data's AAPL demo endpoint is CORS-enabled
+  but target ETFs require authorization and its official CORS policy prohibits
+  public redistribution under self-service terms. Alpha Vantage's official
+  endpoint is CORS-enabled but requires a user key and exposes price/technical
+  APIs rather than the approved FM feature contract. Nasdaq's chart response
+  returned no CORS header. None is enabled as a public provider.
+
+### Verification evidence
+
+- `corepack pnpm --filter @foresightnine/mobile test`: **55 passed**.
+- `corepack pnpm --filter @foresightnine/mobile typecheck`: passed.
+- `corepack pnpm --filter @foresightnine/mobile export:android`: passed; Expo
+  bundled 1,313 modules and emitted the Android Hermes bundle.
+- Dynamic `app.config.cjs` check produced an HTTPS `autoVerify` intent filter
+  with the configured host and callback path.
+- ADB is installed but `adb devices -l` currently reports no attached emulator
+  or physical device. No Android install, deep-link, logcat or screenshot
+  evidence can therefore be claimed yet.
+- Native Gradle debug/release assembly reached CMake but failed in the linked
+  `react-native-screens` and `react-native-worklets` builds with
+  `ninja: error: manifest 'build.ninja' still dirty after 100 tries`. The
+  first attempt also showed the environment lacked `JAVA_HOME`; rerunning with
+  Android Studio JBR and explicit SDK paths reproduced only the CMake/Ninja
+  failure. Release signing is separately fail-closed until the owner injects
+  all `FORESIGHTNINE_ANDROID_KEY*` values.
+- A short-drive retry avoided the original long-path warning but failed earlier
+  because Expo bundling resolved dependencies under `D:` while the mapped
+  project used `F:` (`this and base files have different roots`). No source or
+  dependency workaround was applied.
+- `corepack pnpm scan:secrets` was started against the source and Git history,
+  but did not finish within the bounded verification window and produced no
+  finding. It is therefore recorded as **incomplete**, not as a passing scan.
+
+### Current interpretation
+
+- The Android OAuth flow is code-integrated and exportable, but it is not
+  production-ready until the HTTPS App Link is deployed and verified, release
+  signing is supplied, native Gradle assembly succeeds, and a real emulator or
+  device completes the flow.
+- The closest market-data adaptation remains a provider-side or explicit
+  user-BYOK adapter that emits exactly three bounded anchor rows per asset.
+  Price-only data may be displayed as evidence, but must remain `limited_data`
+  for FM/Public Default until exact factor features, FX semantics and public
+  redistribution rights are present.
+
 ## Public provider re-check — 2026-08-31
 
 - Windows reached the Stooq CSV endpoint with HTTP 200, but the response was

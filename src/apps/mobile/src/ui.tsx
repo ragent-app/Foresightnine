@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
 import { color, radius, space, typography } from "@foresightnine/design-system";
 import { useMobileStore } from "./app-store";
 import { configuredApiBaseUrl } from "./api-runtime";
 import { t } from "./i18n";
+import { useOAuthSession } from "./oauth-session";
 
 type OAuthProvider = "google" | "github";
 type OAuthProviderReadiness = { readonly provider: OAuthProvider; readonly enabled: boolean };
@@ -60,12 +61,12 @@ export function Button({ children, onPress, variant = "primary", disabled = fals
 export function Status({ children, tone = "neutral" }: PropsWithChildren<{ readonly tone?: "neutral" | "warning" | "good" }>): React.JSX.Element { return <View style={[styles.status, tone === "warning" && styles.statusWarning, tone === "good" && styles.statusGood]}><Text style={styles.statusText}>{children}</Text></View>; }
 
 /**
- * The controls are deliberately disabled until a future server readiness
- * response verifies provider configuration and supplies a PKCE start action.
- * No client ID, redirect URI, or OAuth secret is bundled into the app.
+ * Provider readiness comes from the server. The app only opens a server-owned
+ * redirect route and stores the exchanged local session in SecureStore.
  */
 export function SocialLoginPanel(): React.JSX.Element {
   const { state } = useMobileStore();
+  const oauth = useOAuthSession();
   const { width } = useWindowDimensions();
   const apiBaseUrl = configuredApiBaseUrl();
   const [readiness, setReadiness] = useState<{ readonly providers: readonly OAuthProviderReadiness[]; readonly status: OAuthReadinessStatus }>({ providers: OAUTH_UNAVAILABLE, status: apiBaseUrl ? "loading" : "offline" });
@@ -87,19 +88,25 @@ export function SocialLoginPanel(): React.JSX.Element {
   const statusCopy = readiness.status === "loading"
     ? (state.language === "en" ? "Checking server OAuth readiness…" : "正在确认服务端登录状态…")
     : readiness.status === "ready" && anyEnabled
-      ? (state.language === "en" ? "Server configuration is ready; this build has no safe callback/deep-link handler yet." : "服务端配置已就绪；当前版本尚未接通安全回调/深链处理。")
+      ? oauth.status === "signed_in"
+        ? (state.language === "en" ? `Signed in with ${oauth.session?.provider}.` : `已使用 ${oauth.session?.provider === "google" ? "Google" : "GitHub"} 登录。`)
+        : oauth.canStart
+          ? (state.language === "en" ? "Server configuration is ready; sign-in returns through a protected app link." : "服务端配置已就绪；登录将通过受保护的应用深链返回。")
+          : (state.language === "en" ? "Server is ready, but this build has no explicit safe callback URI." : "服务端已就绪，但当前构建没有显式安全回调 URI。")
       : t(state.language, "signInUnavailable");
   return <Card tone="soft">
     <Text style={styles.heading}>{t(state.language, "optionalSignIn")}</Text>
-    <Text style={styles.strong}>{t(state.language, "anonymousResearch")}</Text>
+    <Text style={styles.strong}>{oauth.session ? `${oauth.session.account.email}` : t(state.language, "anonymousResearch")}</Text>
     <Text style={styles.muted}>{statusCopy}</Text>
+    {oauth.errorNotice ? <Text style={styles.error}>{state.language === "en" ? oauth.errorNotice : "安全登录未能完成，请重试。"}</Text> : null}
     <View style={stacked ? styles.stack : styles.row}>
       {readiness.providers.map(({ provider, enabled }) => {
         const label = provider === "google" ? t(state.language, "signInGoogle") : t(state.language, "signInGithub");
-        const buttonStatus = enabled ? (state.language === "en" ? "Callback not wired" : "回调未接通") : t(state.language, "notConfigured");
-        return <Button key={provider} disabled variant="secondary" style={styles.loginButton} onPress={() => undefined} label={`${label} — ${buttonStatus}`}>{label}</Button>;
+        const buttonStatus = enabled && oauth.canStart ? label : enabled ? (state.language === "en" ? "Callback unavailable" : "回调不可用") : t(state.language, "notConfigured");
+        return <Button key={provider} disabled={!enabled || !oauth.canStart || oauth.status === "loading" || Boolean(oauth.session)} variant="secondary" style={styles.loginButton} onPress={() => { void oauth.startLogin(provider).catch(() => undefined); }} label={`${label} — ${buttonStatus}`}>{label}</Button>;
       })}
     </View>
+    {oauth.session ? <View style={stacked ? styles.stack : styles.row}><Button variant="quiet" onPress={() => { void oauth.logout().catch(() => undefined); }} label={state.language === "en" ? "Sign out" : "退出登录"}>{state.language === "en" ? "Sign out" : "退出登录"}</Button><Button variant="caution" onPress={() => Alert.alert(state.language === "en" ? "Delete account?" : "删除账户？", state.language === "en" ? "This permanently deletes the account." : "此操作会永久删除账户。", [{ text: state.language === "en" ? "Cancel" : "取消", style: "cancel" }, { text: state.language === "en" ? "Delete" : "删除", style: "destructive", onPress: () => { void oauth.deleteAccount().catch(() => undefined); } }])} label={state.language === "en" ? "Delete account" : "删除账户"}>{state.language === "en" ? "Delete account" : "删除账户"}</Button></View> : null}
   </Card>;
 }
 
