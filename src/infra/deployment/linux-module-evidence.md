@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight checkpoint: `8433438d8e925bfe6e13f5b1abaa25f16d02ec11`
+- Synced source and Linux provider/auth/observability/preflight checkpoint: `07983879d17497e62f148be7501c8af1151ab5fe`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -144,6 +144,10 @@ production Cloudflare mutation was performed.
 - The live staging route accepted a canonical `ETF:SPY`, legacy `GRID`, and
   unapproved `CASH:USD` request: 9 rows were returned, with 6 price rows and
   3 explicit missing rows. No client-side vendor URL or credential was used.
+- The container copies and loads the admission manifest at startup; a missing
+  or invalid manifest disables evaluation rows rather than enabling a provider
+  by code default. The release preflight also checks that the manifest is
+  present in the source image inputs.
 - The 2026-08-31 Linux probe confirmed Yahoo chart returned JSON for SPY and
   SOXX, Frankfurter returned a no-key USD/EUR reference rate, and Kenneth
   French's daily momentum archive downloaded successfully. Stooq returned a
@@ -191,8 +195,8 @@ runtime.
 
 ## Portable and API validation gates
 
-- `uv run --project apps/api pytest apps/api/tests -q`: 214 passed, 1 skipped
-  (215 collected). The only skip is the intentionally unavailable Windows
+- `uv run --project apps/api pytest apps/api/tests -q`: 215 passed, 1 skipped
+  (216 collected). The only skip is the intentionally unavailable Windows
   worldline source audit.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
   `verify:production-preflight` command correctly rejects this development
@@ -223,7 +227,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `8433438`; this evidence follow-up records the
+implementation checkpoint is `0798387`; this evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
