@@ -63,6 +63,11 @@ claimed by this evidence.
   Redis RDB snapshot (2,540 bytes), and SHA-256 sidecar. Checksum verification
   passed; the generated files were kept mode `600`. Restore remains a separate
   owner-approved operation.
+- The current backup was restored into isolated empty PostgreSQL and Redis
+  containers: PostgreSQL recovered five public tables and 22 operation-state
+  rows; Redis loaded the RDB with `loading=0` and eight keys. The temporary
+  containers were removed after verification; the staging volumes were not
+  used as restore targets.
 
 The database container has no published host port. This is development/mock
 staging evidence only; production PostgreSQL credentials, TLS/HA, backup
