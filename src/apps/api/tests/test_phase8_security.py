@@ -19,6 +19,7 @@ from app.security import (
     TrustedProxyResolver,
     UnavailableCaptchaVerifier,
     SecurityBoundaryMiddleware,
+    SecurityConfigurationError,
     TrustedProxyResolver,
     build_captcha_verifier,
     build_security_config,
@@ -289,6 +290,16 @@ def test_unconfigured_production_captcha_factory_is_unavailable(monkeypatch: pyt
     assert config.require_captcha is True
     assert isinstance(build_captcha_verifier(config), UnavailableCaptchaVerifier)
     assert isinstance(build_captcha_verifier(config), UnavailableCaptchaVerifier)
+
+
+def test_hardened_security_rejects_unsafe_cors_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "production")
+    monkeypatch.setenv("FORESIGHTNINE_CORS_ORIGINS", "http://staging.example.test")
+    with pytest.raises(SecurityConfigurationError):
+        build_security_config()
+
+    monkeypatch.setenv("FORESIGHTNINE_CORS_ORIGINS", "https://app.example.test/")
+    assert build_security_config().allowed_origins == ("https://app.example.test",)
 
 
 def test_body_content_type_and_security_headers_are_bounded() -> None:

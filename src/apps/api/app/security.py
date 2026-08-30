@@ -6,6 +6,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
+from urllib.parse import urlsplit
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -46,6 +47,10 @@ class UnavailableCaptchaVerifier(DeterministicCaptchaVerifier):
 
 class BodyTooLarge(Exception):
     """Raised while consuming a request stream that exceeds the byte cap."""
+
+
+class SecurityConfigurationError(RuntimeError):
+    """Raised when hardened transport configuration is unsafe."""
 
 
 @dataclass(frozen=True)
@@ -97,6 +102,31 @@ def _parse_networks(raw: str) -> tuple[ipaddress._BaseNetwork, ...]:
     return tuple(networks)
 
 
+def _parse_origins(raw: str, *, hardened: bool) -> tuple[str, ...]:
+    values = tuple(item.strip() for item in raw.split(",") if item.strip())
+    if not hardened or not values:
+        return values
+    normalized: list[str] = []
+    for value in values:
+        try:
+            parts = urlsplit(value)
+            _ = parts.port
+        except ValueError as error:
+            raise SecurityConfigurationError("Hardened CORS origins must be valid HTTPS origins.") from error
+        if (
+            parts.scheme != "https"
+            or not parts.hostname
+            or parts.username is not None
+            or parts.password is not None
+            or parts.query
+            or parts.fragment
+            or parts.path not in ("", "/")
+        ):
+            raise SecurityConfigurationError("Hardened CORS origins must be valid HTTPS origins.")
+        normalized.append(value[:-1] if value.endswith("/") else value)
+    return tuple(normalized)
+
+
 @dataclass(frozen=True)
 class SecurityConfig:
     max_body_bytes: int = 256 * 1024
@@ -112,7 +142,10 @@ def build_security_config() -> SecurityConfig:
         max_body = int(os.getenv("FORESIGHTNINE_MAX_BODY_BYTES", str(256 * 1024)))
     except ValueError:
         max_body = 256 * 1024
-    origins = tuple(item.strip() for item in os.getenv("FORESIGHTNINE_CORS_ORIGINS", "").split(",") if item.strip())
+    origins = _parse_origins(
+        os.getenv("FORESIGHTNINE_CORS_ORIGINS", ""),
+        hardened=require_captcha,
+    )
     return SecurityConfig(
         max_body_bytes=max(1024, max_body),
         allowed_origins=origins,
