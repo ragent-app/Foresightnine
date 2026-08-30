@@ -43,48 +43,80 @@ async function walk(directory) {
 await walk(projectRoot);
 
 function inspectGitHistory() {
-  let commits;
+  let listing;
   try {
-    commits = execFileSync("git", ["rev-list", "--all"], {
-      cwd: projectRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim().split(/\r?\n/).filter(Boolean);
-  } catch {
-    console.log("INFO Git history scan skipped: repository metadata unavailable");
-    return;
-  }
-
-  const inspectedBlobs = new Set();
-  for (const commit of commits) {
-    const paths = execFileSync("git", ["ls-tree", "-r", "--name-only", "-z", commit], {
+    listing = execFileSync("git", ["rev-list", "--objects", "--all"], {
       cwd: projectRoot,
       encoding: "buffer",
-      maxBuffer: 64 * 1024 * 1024,
-    }).toString("utf8").split("\0").filter(Boolean);
-    for (const path of paths) {
-      if (binaryExtensions.has(extname(path).toLowerCase())) continue;
-      const objectId = execFileSync("git", ["rev-parse", `${commit}:${path}`], {
-        cwd: projectRoot,
-        encoding: "utf8",
-      }).trim();
-      if (inspectedBlobs.has(objectId)) continue;
-      inspectedBlobs.add(objectId);
-      const bytes = execFileSync("git", ["cat-file", "blob", objectId], {
-        cwd: projectRoot,
-        encoding: "buffer",
-        maxBuffer: 64 * 1024 * 1024,
-      });
-      if (bytes.includes(0)) continue;
-      inspectText(bytes.toString("utf8"), `git:${objectId}:${path}`);
-    }
+      maxBuffer: 512 * 1024 * 1024,
+    });
+  } catch {
+    console.error("FAIL Git history scan unavailable: repository metadata could not be read");
+    return false;
   }
-  console.log(`PASS inspected ${inspectedBlobs.size} unique Git-history blobs`);
+
+  const objectIds = [...new Set(listing.toString("utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim().split(/\s+/, 1)[0])
+    .filter((objectId) => /^[0-9a-f]{40}$/.test(objectId)))];
+  if (objectIds.length === 0) {
+    console.error("FAIL Git history scan returned no objects");
+    return false;
+  }
+
+  let batch;
+  try {
+    batch = execFileSync("git", ["cat-file", "--batch"], {
+      cwd: projectRoot,
+      input: Buffer.from(`${objectIds.join("\n")}\n`, "utf8"),
+      encoding: "buffer",
+      maxBuffer: 512 * 1024 * 1024,
+    });
+  } catch {
+    console.error("FAIL Git history scan could not read the batch blob stream");
+    return false;
+  }
+
+  let offset = 0;
+  let inspectedBlobs = 0;
+  let parseError = false;
+  for (const objectId of objectIds) {
+    const headerEnd = batch.indexOf(0x0a, offset);
+    if (headerEnd < 0) {
+      parseError = true;
+      break;
+    }
+    const header = batch.toString("utf8", offset, headerEnd).split(" ");
+    offset = headerEnd + 1;
+    const type = header[1];
+    const size = Number(header[2]);
+    if (header[0] !== objectId || type === "missing" || !Number.isSafeInteger(size) || size < 0 || offset + size >= batch.length) {
+      parseError = true;
+      break;
+    }
+    const bytes = batch.subarray(offset, offset + size);
+    if (batch[offset + size] !== 0x0a) {
+      parseError = true;
+      break;
+    }
+    offset += size + 1;
+    if (type !== "blob") continue;
+    inspectedBlobs += 1;
+    if (bytes.includes(0)) continue;
+    inspectText(bytes.toString("utf8"), `git:${objectId}`);
+  }
+  if (parseError || inspectedBlobs === 0) {
+    console.error(`FAIL Git history scan could not fully parse ${objectIds.length} requested objects`);
+    return false;
+  }
+  console.log(`PASS inspected ${inspectedBlobs} unique Git-history blobs`);
+  return true;
 }
 
-inspectGitHistory();
+const historyScanPassed = inspectGitHistory();
 if (findings.length > 0) {
   for (const finding of findings) console.error(`FAIL ${finding.pattern}: ${finding.path}`);
   process.exit(1);
 }
+if (!historyScanPassed) process.exit(1);
 console.log(`PASS secret scan ${projectRoot}`);

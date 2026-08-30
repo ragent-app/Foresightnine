@@ -33,30 +33,45 @@
   bundled 1,313 modules and emitted the Android Hermes bundle.
 - Dynamic `app.config.cjs` check produced an HTTPS `autoVerify` intent filter
   with the configured host and callback path.
-- ADB is installed but `adb devices -l` currently reports no attached emulator
-  or physical device. No Android install, deep-link, logcat or screenshot
-  evidence can therefore be claimed yet.
-- Native Gradle debug/release assembly reached CMake but failed in the linked
-  `react-native-screens` and `react-native-worklets` builds with
-  `ninja: error: manifest 'build.ninja' still dirty after 100 tries`. The
-  first attempt also showed the environment lacked `JAVA_HOME`; rerunning with
-  Android Studio JBR and explicit SDK paths reproduced only the CMake/Ninja
-  failure. Release signing is separately fail-closed until the owner injects
-  all `FORESIGHTNINE_ANDROID_KEY*` values.
+- The initial ADB check found no target, but a later QA session started
+  `emulator-5554` (`sdk_gphone64_x86_64`, API 36 Play). The signed QA APK
+  installed, cold-started, switched language, reached the staging Challenge
+  screen, and produced reviewed screenshots; a physical-device run remains
+  pending.
+- Native Gradle assembly in the long-path repository layout reached CMake but
+  failed in linked `react-native-screens`/`react-native-worklets` with
+  `ninja: error: manifest 'build.ninja' still dirty after 100 tries`. A clean
+  short-path QA clone with workspace dist outputs and CMake 3.30.5 later
+  produced the non-debug x86_64 APK/AAB; release signing remains fail-closed
+  until the owner injects all `FORESIGHTNINE_ANDROID_KEY*` values.
 - A short-drive retry avoided the original long-path warning but failed earlier
   because Expo bundling resolved dependencies under `D:` while the mapped
   project used `F:` (`this and base files have different roots`). No source or
   dependency workaround was applied.
-- `corepack pnpm scan:secrets` was started against the source and Git history,
-  but did not finish within the bounded verification window and produced no
-  finding. It is therefore recorded as **incomplete**, not as a passing scan.
+- The secret scanner now reads reachable Git objects through one batched
+  `git cat-file` process instead of spawning one process per path. The current
+  run inspected 1,048 unique Git-history blobs and passed with no findings.
+
+### Android QA release follow-up
+
+- A clean short-path QA clone with hoisted dependencies and CMake 3.30.5
+  produced non-debug x86_64 release APK/AAB outputs. The exact commands,
+  hashes, signing boundary, emulator evidence and remaining physical-device
+  gate are recorded in `docs/release/android-qa-release-2026-08-31.md`.
+- A disposable local QA key signed copies for emulator installation only; the
+  project's production signing gate was not weakened and no production key was
+  created or stored.
+- `emulator-5554` (API 36 Play) installed the signed APK, cold-started the
+  main activity, switched language, and reached the staging API Challenge
+  screen. Screenshot evidence was visually reviewed. A physical device run is
+  still pending.
 
 ### Current interpretation
 
-- The Android OAuth flow is code-integrated and exportable, but it is not
-  production-ready until the HTTPS App Link is deployed and verified, release
-  signing is supplied, native Gradle assembly succeeds, and a real emulator or
-  device completes the flow.
+- The Android OAuth flow is code-integrated and exportable, and the core app
+  flow has emulator evidence. It is not production-ready until the HTTPS App
+  Link is deployed and verified, production signing is supplied, the approved
+  ABI set is built, and a physical-device run completes the flow.
 - The closest market-data adaptation remains a provider-side or explicit
   user-BYOK adapter that emits exactly three bounded anchor rows per asset.
   Price-only data may be displayed as evidence, but must remain `limited_data`
