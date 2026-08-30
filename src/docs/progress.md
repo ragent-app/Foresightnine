@@ -2,6 +2,15 @@
 
 ## Android OAuth integration and public-provider recheck — 2026-08-31
 
+### Current staging check
+
+- `GET https://api-staging.foresightnine.com/health` returned `200` with the
+  deterministic mock provider and `client-evidence-bundle` search mode.
+- `GET https://api-staging.foresightnine.com/v1/auth/providers` returned
+  Google and GitHub with `enabled: false`. The clients therefore correctly
+  keep provider login disabled until protected staging credentials and the
+  allowlisted callback are configured; no credential was guessed or embedded.
+
 ### Delivered
 
 - Added the mobile OAuth client boundary and five focused tests, then added
