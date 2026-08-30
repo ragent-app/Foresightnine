@@ -1,5 +1,23 @@
 # Progress
 
+## Public provider re-check — 2026-08-31
+
+- Windows reached the Stooq CSV endpoint with HTTP 200, but the response was
+  an anti-automation verification HTML page rather than CSV. The staging
+  adapter therefore correctly returned explicit `missing` rows for SPY, SOXX
+  and GLD instead of treating the challenge page as market data.
+- Yahoo Finance chart data remains technically retrievable from a server-side
+  probe, but it is a vendor GET protocol with no browser CORS, price-only
+  fields, and no approved FM feature or public-redistribution contract. It is
+  not wired into production or used as a factor source.
+- The nearest safe adaptation remains a thin server-side provider adapter:
+  normalize only bounded point-in-time price rows into the existing
+  `market-snapshot-bundle/v1`, preserve explicit `missing`/`stale` status, and
+  keep factor features and FX unavailable until their exact contracts and
+  rights are separately approved. The current staging endpoint is therefore
+  usable for fail-closed integration testing, not as a live Public Default
+  feed.
+
 ## Staging client default and Public Default fail-closed coverage — 2026-08-31
 
 - Wired Web and Android to use `https://api-staging.foresightnine.com` when no
