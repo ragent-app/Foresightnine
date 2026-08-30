@@ -103,16 +103,29 @@ def test_oauth_callback_creates_persistent_identity_session_and_consumes_state(m
     assert started.status_code == 200, started.text
     state = started.json()["state"]
 
-    completed = CLIENT.get("/oauth/callback", params={"code": "authorization-code", "state": state})
-    assert completed.status_code == 200, completed.text
-    payload = completed.json()
-    assert payload["auth_mode"] == "oauth"
-    assert payload["provider"] == "google"
-    assert payload["account"]["email"] == "oauth@example.test"
+    completed = CLIENT.get("/oauth/callback", params={"code": "authorization-code", "state": state}, follow_redirects=False)
+    assert completed.status_code == 303, completed.text
+    location = completed.headers["location"]
+    query = parse_qs(urlsplit(location).query)
+    assert urlsplit(location).scheme == "foresightnine"
+    assert set(query) == {"ticket"}
+    assert query["ticket"][0] not in {"", "provider-token-never-returned"}
     assert "provider-token-never-returned" not in completed.text
     assert len(main_module.OAUTH_IDENTITIES) == 1
 
-    replay = CLIENT.get("/oauth/callback", params={"code": "authorization-code", "state": state})
+    exchange = CLIENT.post("/v1/auth/oauth/exchange", json={"ticket": query["ticket"][0]})
+    assert exchange.status_code == 200, exchange.text
+    payload = exchange.json()
+    assert payload["auth_mode"] == "oauth"
+    assert payload["provider"] == "google"
+    assert payload["account"]["email"] == "oauth@example.test"
+    assert "provider-token-never-returned" not in exchange.text
+
+    replay_ticket = CLIENT.post("/v1/auth/oauth/exchange", json={"ticket": query["ticket"][0]})
+    assert replay_ticket.status_code == 400
+    assert "provider-token-never-returned" not in replay_ticket.text
+
+    replay = CLIENT.get("/oauth/callback", params={"code": "authorization-code", "state": state}, follow_redirects=False)
     assert replay.status_code == 400
     assert "provider-token-never-returned" not in replay.text
 

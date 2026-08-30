@@ -8,6 +8,7 @@ from hashlib import sha256
 import os
 import secrets
 from typing import Annotated, Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, Query, Request, Response
@@ -24,6 +25,7 @@ from .contract_models import (
     OAuthProvidersResponse,
     OAuthProviderReadiness,
     OAuthStartRequest,
+    OAuthTicketExchangeRequest,
 )
 from .abuse import AbuseBackend
 from .redis_abuse import build_abuse_control
@@ -86,7 +88,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageMode, build_repository
 from .operation_store import build_operation_store
-from .oauth_foundation import OAuthConfigurationError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
+from .oauth_foundation import OAuthConfigurationError, OAuthExchangeTicketError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
 from .oauth_identity import OAuthIdentity, OAuthSessionResponse
 from .oauth_provider import OAuthProviderClient, OAuthProviderError
 from .market_provider import MarketSnapshotRequest, build_snapshot_response
@@ -928,44 +930,90 @@ def browser_oauth_start(
     )
 
 
-@app.get("/oauth/callback", include_in_schema=False)
+@app.get("/oauth/callback", include_in_schema=False, response_model=None)
 def browser_oauth_callback(
     code: Annotated[str | None, Query(max_length=4096)] = None,
     state: Annotated[str | None, Query(max_length=512)] = None,
     error: Annotated[str | None, Query(max_length=256)] = None,
-) -> JSONResponse:
-    """Complete a configured provider callback without persisting provider tokens."""
+) -> RedirectResponse | JSONResponse:
+    """Complete a provider callback and redirect with a one-time opaque ticket."""
+
+    def callback_redirect(return_uri: str, *, ticket: str | None = None) -> RedirectResponse:
+        # The return URI came from the server-held transaction and was checked
+        # against the allowlist before the provider redirect was constructed.
+        # Remove reserved values if a deployment's allowlisted URI already has
+        # them, then append only the fixed ticket/error result.
+        parsed = urlsplit(return_uri)
+        query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True) if key not in {"ticket", "error"}]
+        query.append(("ticket", ticket) if ticket is not None else ("error", "oauth_callback_failed"))
+        location = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), ""))
+        return RedirectResponse(
+            location,
+            status_code=303,
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Referrer-Policy": "no-referrer"},
+        )
 
     foundation = oauth_foundation
     if foundation is None:
         raise ApiProblem(400, "bad_request", "OAuth callback is not available.")
     if state is None:
         raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.")
-    if error is not None or code is None:
-        try:
-            foundation.consume_state(state)
-        except OAuthTransactionError:
-            pass
-        raise ApiProblem(400, "bad_request", "OAuth callback was cancelled or unavailable.")
+    transaction = None
     try:
         transaction = foundation.consume_state(state)
+        if error is not None or code is None:
+            return callback_redirect(transaction.return_uri)
         access_token = oauth_provider_client.exchange_code(transaction, code)
         provider_identity = oauth_provider_client.identity(transaction.provider, access_token)
         if provider_identity.provider != transaction.provider:
             raise OAuthProviderError("OAuth provider identity mismatch")
         account = _oauth_account(provider_identity)
+        ticket = foundation.issue_exchange_ticket(
+            provider=provider_identity.provider,
+            account_id=account.account_id,
+            return_uri=transaction.return_uri,
+        )
+    except (OAuthTransactionError, OAuthProviderError, OAuthExchangeTicketError) as exception:
+        if transaction is not None:
+            return callback_redirect(transaction.return_uri)
+        raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.") from exception
+    return callback_redirect(transaction.return_uri, ticket=ticket)
+
+
+@app.post(
+    "/v1/auth/oauth/exchange",
+    response_model=OAuthSessionResponse,
+    response_model_exclude_none=True,
+    responses=ERROR_RESPONSES,
+    operation_id="exchangeOAuthTicket",
+)
+def exchange_oauth_ticket(request: OAuthTicketExchangeRequest, response: Response) -> OAuthSessionResponse:
+    """Consume a callback ticket before issuing a local bearer session."""
+
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    foundation = oauth_foundation
+    if foundation is None:
+        raise ApiProblem(400, "bad_request", "OAuth exchange is unavailable.")
+    try:
+        ticket = foundation.consume_exchange_ticket(request.ticket)
+        account = ACCOUNTS.get(ticket.account_id)
+        if account is None or account.deleted_at is not None:
+            raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
+        if not any(
+            identity.account_id == ticket.account_id and identity.provider == ticket.provider
+            for _, identity in OAUTH_IDENTITIES.items()
+        ):
+            raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
         session = issue_local_session(
             AUTH_SESSIONS,
             account,
             now=lifecycle_clock.now(),
             auth_mode="oauth",
         )
-    except (OAuthTransactionError, OAuthProviderError) as exception:
-        raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.") from exception
-    return JSONResponse(
-        OAuthSessionResponse(**{**session, "provider": provider_identity.provider}).model_dump(mode="json"),
-        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
-    )
+        return OAuthSessionResponse(**{**session, "provider": ticket.provider})
+    except OAuthExchangeTicketError as exception:
+        raise ApiProblem(400, "bad_request", "OAuth exchange is unavailable.") from exception
 
 
 @app.get("/v1/search/candidates", response_model=SearchCandidatesResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="searchEvidenceCandidates")
@@ -1667,7 +1715,7 @@ def canonical_openapi() -> dict[str, Any]:
     # OAuth is deliberately a narrow API-only contract and is not part of the
     # research payload schema authority.  Preserve its strict route models in
     # generated OpenAPI while keeping the canonical research schemas unchanged.
-    for name in ("OAuthAuthorizationResponse", "OAuthProviderReadiness", "OAuthProvidersResponse", "OAuthStartRequest"):
+    for name in ("OAuthAuthorizationResponse", "OAuthProviderReadiness", "OAuthProvidersResponse", "OAuthSessionResponse", "OAuthStartRequest", "OAuthTicketExchangeRequest"):
         route_schema = document.get("components", {}).get("schemas", {}).get(name)
         if route_schema is not None:
             component_schemas[name] = route_schema

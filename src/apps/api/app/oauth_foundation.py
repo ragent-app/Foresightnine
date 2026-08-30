@@ -36,6 +36,8 @@ ENV_CLIENT_SECRET = {
 
 DEFAULT_TRANSACTION_TTL_SECONDS = 300
 MAX_TRANSACTION_TTL_SECONDS = 600
+DEFAULT_EXCHANGE_TICKET_TTL_SECONDS = 90
+MAX_EXCHANGE_TICKET_TTL_SECONDS = 300
 PKCE_METHOD = "S256"
 
 
@@ -45,6 +47,10 @@ class OAuthConfigurationError(ValueError):
 
 class OAuthTransactionError(ValueError):
     """Raised when a PKCE transaction is invalid, expired, or already consumed."""
+
+
+class OAuthExchangeTicketError(ValueError):
+    """Raised when a one-time OAuth exchange ticket is invalid or unavailable."""
 
 
 def pkce_s256_challenge(code_verifier: str) -> str:
@@ -250,6 +256,46 @@ class OAuthTransaction:
 
 
 @dataclass(frozen=True, repr=False)
+class OAuthExchangeTicket:
+    """Server-only ticket payload; the opaque ticket itself is never retained."""
+
+    provider: OAuthProvider
+    account_id: str
+    return_uri: str
+    created_at: float
+    expires_at: float
+
+    def __repr__(self) -> str:
+        return (
+            "OAuthExchangeTicket("
+            f"provider={self.provider!r}, account_id=<redacted>, "
+            f"return_uri={self.return_uri!r}, created_at={self.created_at!r}, "
+            f"expires_at={self.expires_at!r})"
+        )
+
+
+@dataclass(frozen=True, repr=False)
+class _StoredExchangeTicket:
+    provider: OAuthProvider
+    account_id: str
+    return_uri: str
+    created_at: float
+    expires_at: float
+
+    def consumed(self) -> OAuthExchangeTicket:
+        return OAuthExchangeTicket(
+            provider=self.provider,
+            account_id=self.account_id,
+            return_uri=self.return_uri,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+        )
+
+    def __repr__(self) -> str:
+        return "_StoredExchangeTicket(provider=<configured>, account_id=<redacted>)"
+
+
+@dataclass(frozen=True, repr=False)
 class _StoredTransaction:
     provider: OAuthProvider
     client_id: str
@@ -323,6 +369,7 @@ class OAuthFoundation:
         self._transaction_ttl_seconds = transaction_ttl_seconds
         self._clock = clock
         self._transactions: dict[str, _StoredTransaction] = {}
+        self._exchange_tickets: dict[str, _StoredExchangeTicket] = {}
         self._lock = threading.Lock()
 
     @classmethod
@@ -469,6 +516,56 @@ class OAuthFoundation:
                 raise OAuthTransactionError("OAuth state is expired")
             return transaction.consumed()
 
+    def issue_exchange_ticket(
+        self,
+        *,
+        provider: str,
+        account_id: str,
+        return_uri: str,
+        ttl_seconds: int = DEFAULT_EXCHANGE_TICKET_TTL_SECONDS,
+    ) -> str:
+        """Create a short-lived ticket for an already verified OAuth identity."""
+
+        if provider not in SUPPORTED_PROVIDERS or not isinstance(account_id, str) or not account_id:
+            raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
+        if return_uri not in self._configuration.return_uri_allowlist:
+            raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
+        if not 1 <= ttl_seconds <= MAX_EXCHANGE_TICKET_TTL_SECONDS:
+            raise ValueError("OAuth exchange ticket TTL is outside the allowed range")
+        _validate_return_uri(return_uri)
+        created_at = float(self._clock())
+        opaque_ticket = secrets.token_urlsafe(32)
+        stored = _StoredExchangeTicket(
+            provider=provider,
+            account_id=account_id,
+            return_uri=return_uri,
+            created_at=created_at,
+            expires_at=created_at + ttl_seconds,
+        )
+        with self._lock:
+            self._remove_expired(created_at)
+            self._exchange_tickets[sha256(opaque_ticket.encode("ascii")).hexdigest()] = stored
+        return opaque_ticket
+
+    def consume_exchange_ticket(self, ticket: str) -> OAuthExchangeTicket:
+        """Atomically consume a ticket exactly once, never returning its digest."""
+
+        if not isinstance(ticket, str) or not ticket or len(ticket) > 256:
+            raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
+        try:
+            digest = sha256(ticket.encode("ascii")).hexdigest()
+        except UnicodeEncodeError as error:
+            raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable") from error
+        now = float(self._clock())
+        with self._lock:
+            stored = self._exchange_tickets.get(digest)
+            if stored is None:
+                raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
+            del self._exchange_tickets[digest]
+            if now >= stored.expires_at:
+                raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
+            return stored.consumed()
+
     def _remove_expired(self, now: float) -> None:
         expired_states = [
             state
@@ -477,6 +574,13 @@ class OAuthFoundation:
         ]
         for state in expired_states:
             del self._transactions[state]
+        expired_tickets = [
+            digest
+            for digest, ticket in self._exchange_tickets.items()
+            if now >= ticket.expires_at
+        ]
+        for digest in expired_tickets:
+            del self._exchange_tickets[digest]
 
 
 # Short alias for callers that prefer the concise configuration name.

@@ -17,7 +17,7 @@ OAuthIdentityProvider = Literal["google", "github"]
 
 
 class OAuthIdentity(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
     schema_version: Literal["v1"] = "v1"
     identity_id: str = Field(min_length=8, max_length=160)
@@ -30,9 +30,9 @@ class OAuthIdentity(BaseModel):
 
 
 class OAuthSessionResponse(BaseModel):
-    """Strict callback response; the provider access token is never included."""
+    """Strict exchange response; the provider access token is never included."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
     account: dict[str, str]
     session_id: str = Field(min_length=8, max_length=80)

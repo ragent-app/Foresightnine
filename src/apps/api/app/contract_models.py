@@ -44,6 +44,12 @@ class OAuthStartRequest(StrictOAuthModel):
     return_uri: Annotated[str, Field(min_length=1, max_length=2048)]
 
 
+class OAuthTicketExchangeRequest(StrictOAuthModel):
+    """The only client-controlled value accepted by the ticket exchange route."""
+
+    ticket: Annotated[str, Field(min_length=43, max_length=256, pattern=r"^[A-Za-z0-9_-]+$")]
+
+
 class OAuthAuthorizationResponse(StrictOAuthModel):
     """Safe authorization parameters returned after a server-side PKCE transaction."""
 

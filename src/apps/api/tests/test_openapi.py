@@ -67,6 +67,7 @@ def test_openapi_has_every_phase1_endpoint_operation_error_and_idempotency_contr
         ("get", "/v1/methodology"),
         ("get", "/v1/auth/providers"),
         ("post", "/v1/auth/{provider}/start"),
+        ("post", "/v1/auth/oauth/exchange"),
     }
     observed = {(method, path) for path, item in document["paths"].items() for method in item if method in {"get", "post"}}
     assert observed == expected
@@ -80,7 +81,7 @@ def test_openapi_has_every_phase1_endpoint_operation_error_and_idempotency_contr
             assert {"400", "403", "404", "409", "422", "500"} <= set(operation["responses"]), (method, path)
             if method == "post":
                 header = [parameter for parameter in operation.get("parameters", []) if parameter.get("name") == "Idempotency-Key"]
-                if path == "/v1/auth/{provider}/start":
+                if path in {"/v1/auth/{provider}/start", "/v1/auth/oauth/exchange"}:
                     assert header == []
                 else:
                     assert len(header) == 1 and header[0]["required"] is True, path
@@ -95,3 +96,17 @@ def test_openapi_has_every_phase1_endpoint_operation_error_and_idempotency_contr
     event_response = document["paths"]["/v1/operations/{operation_id}/events"]["get"]["responses"]["200"]
     assert "text/event-stream" in event_response["content"]
     assert document["components"]["schemas"]["SseEvent"]["oneOf"]
+
+
+def test_openapi_exposes_oauth_ticket_exchange_contract() -> None:
+    document = app.openapi()
+    operation = document["paths"]["/v1/auth/oauth/exchange"]["post"]
+
+    assert "OAuthTicketExchangeRequest" in document["components"]["schemas"]
+    assert "OAuthSessionResponse" in document["components"]["schemas"]
+    assert operation["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/OAuthTicketExchangeRequest"
+    }
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/OAuthSessionResponse"
+    }
