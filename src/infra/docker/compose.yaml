@@ -67,6 +67,8 @@ services:
       FORESIGHTNINE_LOCAL_AUTH_MODE: mock
       FORESIGHTNINE_PROXY_MODE: direct
       FORESIGHTNINE_TRUSTED_PROXY_CIDRS: ""
+      # Local supervisor/Prometheus scrape only; the Tunnel ingress denies this path.
+      FORESIGHTNINE_METRICS_ENABLED: "true"
       # Development-only Redis wiring; production requires TLS/authenticated
       # Redis and deployment-owned configuration.
       FORESIGHTNINE_ABUSE_MODE: redis

@@ -12,7 +12,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
@@ -669,6 +669,18 @@ def readyz(request: Request) -> JSONResponse:
     except Exception:
         return _error(503, "internal_error", "Required runtime dependencies are not ready.", request, retryable=True)
     return JSONResponse({"status": "ready"}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request) -> Response:
+    """Expose fixed redacted counters only when local scraping is enabled."""
+    if os.getenv("FORESIGHTNINE_METRICS_ENABLED", "false").strip().lower() not in {"1", "true", "yes"}:
+        return _error(404, "not_found", "Not found.", request)
+    return PlainTextResponse(
+        telemetry.prometheus_text(),
+        media_type="text/plain; version=0.0.4",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/snapshots", include_in_schema=False)

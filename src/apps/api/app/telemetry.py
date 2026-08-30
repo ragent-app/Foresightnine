@@ -66,6 +66,20 @@ class Telemetry:
         with self._lock:
             return {"counters": dict(self._counters), "events": list(self._events)}
 
+    def prometheus_text(self) -> str:
+        """Render only fixed, low-cardinality counters for a local scrape."""
+        with self._lock:
+            values = {event: self._counters.get(event, 0) for event in sorted(_KNOWN_EVENTS)}
+        lines = [
+            "# HELP foresightnine_events_total Redacted application boundary events.",
+            "# TYPE foresightnine_events_total counter",
+        ]
+        lines.extend(
+            f'foresightnine_events_total{{event="{event}"}} {count}'
+            for event, count in values.items()
+        )
+        return "\n".join(lines) + "\n"
+
 
 telemetry = Telemetry()
 
