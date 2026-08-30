@@ -104,3 +104,19 @@ CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
 
 No public DNS, traffic cutover, OAuth callback, or Cloudflare production
 mutation was performed.
+
+## Module 6 — auth/session contract boundary
+
+- Existing typed server boundary exposes redacted provider readiness for exactly
+  Google and GitHub and a strict PKCE start response.
+- Focused OAuth foundation and route tests passed `25/25`, covering HTTPS and
+  deep-link allowlists, provider separation, S256 challenge derivation,
+  one-use/expiry state, strict request fields, and secret redaction.
+- Generated OpenAPI drift check passed with 24 paths.
+- Live callback/token exchange, server session issuance, logout and account
+  deletion are not enabled by the current code. They remain blocked on
+  owner-supplied Google/GitHub client credentials, exact callback URLs,
+  confirmed web/deep-link return URIs, and the session/deletion policy.
+
+The safe state is contract/mock-only OAuth readiness; no provider was contacted
+and no credential was added to the repository or runtime.
