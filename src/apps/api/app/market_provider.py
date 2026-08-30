@@ -298,6 +298,7 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
         symbol = ASSET_SYMBOLS.get(asset_id)
         rows: dict[date, float] = {}
         if adapters and symbol is not None:
+            failed_providers: list[str] = []
             for provider_id, adapter in adapters:
                 try:
                     candidate_rows = adapter.fetch(symbol, tuple(request.anchors[anchor] for anchor in ANCHORS), cutoff)
@@ -306,7 +307,11 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
                     rows = candidate_rows
                     break
                 except Exception:
-                    warnings.append(f"{provider_id} unavailable for {asset_id}; returning explicit missing rows.")
+                    failed_providers.append(provider_id)
+            if not rows and failed_providers:
+                warnings.append(
+                    f"All configured price providers unavailable for {asset_id}; returning explicit missing rows."
+                )
         elif symbol is None:
             warnings.append(f"No licensed provider mapping is configured for {asset_id}.")
         else:
