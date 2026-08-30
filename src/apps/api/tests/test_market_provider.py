@@ -96,6 +96,16 @@ def test_canonical_registry_etf_ids_are_allowlisted(monkeypatch) -> None:
     assert all(row["currency"] == "USD" for row in rows)
 
 
+def test_vendor_redirects_are_rejected() -> None:
+    handler = market_provider._RejectVendorRedirect()
+    try:
+        handler.redirect_request(None, None, 302, "Found", {}, "https://untrusted.example/")
+    except ValueError as error:
+        assert "redirects are not allowed" in str(error)
+    else:
+        raise AssertionError("vendor redirects must not be followed")
+
+
 def test_snapshot_route_is_client_compatible(monkeypatch) -> None:
     monkeypatch.delenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", raising=False)
     response = TestClient(app).post("/snapshots", json=REQUEST)

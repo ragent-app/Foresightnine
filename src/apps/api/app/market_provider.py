@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 from typing import Any
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -40,6 +40,13 @@ MAX_BODY_BYTES = 64 * 1024
 MAX_VENDOR_BYTES = 512 * 1024
 SYMBOL_PATTERN = re.compile(r"^[A-Z][A-Z0-9._-]{0,15}$")
 PROVIDER_MANIFEST_PATH = Path(__file__).resolve().parents[3] / "infra" / "deployment" / "provider-manifest.v1.json"
+
+
+class _RejectVendorRedirect(HTTPRedirectHandler):
+    """Keep a fixed-host adapter from following a vendor redirect elsewhere."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        raise ValueError("vendor redirects are not allowed")
 
 
 def _evaluation_manifest_allows(provider_id: str) -> bool:
@@ -216,7 +223,7 @@ class YahooEvaluationAdapter:
             f"{self.endpoint}{symbol}?{query}",
             headers={"Accept": "application/json", "User-Agent": "ForesightNine-staging-provider-evaluation/1"},
         )
-        with urlopen(request, timeout=8) as response:
+        with build_opener(_RejectVendorRedirect).open(request, timeout=8) as response:
             payload = response.read(MAX_VENDOR_BYTES + 1)
         return _safe_vendor_rows(payload)
 
