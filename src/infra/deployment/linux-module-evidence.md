@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `f8a9488`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `2609a44`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -95,7 +95,8 @@ certificate-rotation evidence.
   tail; no provider credential or raw evidence payload was emitted.
 
 This is private loopback/mock staging evidence. It is not live-provider,
-CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
+real Turnstile, public TLS, production Redis/PostgreSQL, or public traffic
+evidence.
 
 ## Module 5 — Cloudflare API staging
 
@@ -172,6 +173,12 @@ exchange, or production Cloudflare mutation was performed.
   public-hardening runtimes reject non-HTTPS, credential-bearing, query-bearing,
   fragment-bearing, or non-root origins; an absent declaration remains an empty
   allowlist.
+- Production CAPTCHA now has a concrete Cloudflare Turnstile server verifier:
+  the secret never leaves the server, the fixed siteverify endpoint rejects
+  redirects and oversized responses, and a successful response must match the
+  configured deployment hostname. Missing, rejected, unsupported, or remote-
+  unavailable verification remains fail-closed; staging intentionally has no
+  real CAPTCHA secret.
 - The 2026-08-31 Linux probe confirmed Stooq returned a JavaScript verification
   page, so the chain's explicit Yahoo fallback returned JSON for SPY and SOXX.
   Frankfurter returned a no-key USD/EUR reference rate, and Kenneth French's
@@ -232,7 +239,7 @@ repository or runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the latest API run was 224 passed, 1 skipped (225 collected). The only skip is
+  the latest API run was 226 passed, 1 skipped (227 collected). The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
@@ -270,7 +277,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `f8a9488`; OAuth callback, provider mapping, redirect hardening
+implementation checkpoint is `2609a44`; OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
