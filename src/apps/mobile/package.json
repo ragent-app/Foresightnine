@@ -16,6 +16,7 @@
     "@foresightnine/domain": "workspace:*",
     "@foresightnine/design-system": "workspace:*",
     "@foresightnine/fm-engine": "workspace:*",
+    "@foresightnine/market-data": "workspace:*",
     "expo": "~57.0.15",
     "expo-crypto": "~57.0.1",
     "expo-file-system": "~57.0.5",

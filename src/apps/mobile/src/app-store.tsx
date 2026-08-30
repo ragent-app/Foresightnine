@@ -3,7 +3,7 @@ import { computeFm, type ComputeFmResult } from "@foresightnine/fm-engine";
 import { archiveExists, loadEncryptedArchive, saveEncryptedArchive, sharePrivacySafeDocument } from "./adapters/native-archive";
 import { buildPrivacySafeDocument, buildResearchSnapshot, canEnterPortfolio, canRestorePrivacySafeDocument, normalizePrivacySafeDocument, restoreAppState, type PrivacySafeDocument } from "./archive";
 import { isDuplicateEvidence } from "./evidence";
-import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, rubricFor } from "./fixtures";
+import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, MARKET_DATA_STATUS, rubricFor } from "./fixtures";
 import { t } from "./i18n";
 import { createPortfolioPlan, portfolioMetadata, type PortfolioPlan } from "./portfolio";
 import { loadDraft, loadLanguage, saveDraft, saveLanguage } from "./storage";
@@ -126,7 +126,7 @@ export function AppProvider({ children }: PropsWithChildren): React.JSX.Element 
   const selectBranch = useCallback((selectedBranch: AppState["selectedBranch"]) => setState((current) => ({ ...current, selectedBranch })), []);
   const runFm = useCallback(() => setState((current) => {
     if (!canEnterWorldline(current)) return current;
-    try { const result = computeFm(fmInput()); return { ...current, stage: "portfolio", fmStatus: "complete", fmProgress: 100, fmStep: t(current.language, "operationComplete"), fmResult: result }; } catch { return { ...current, fmStatus: "failed", fmStep: t(current.language, "fixtureRejected") }; }
+    try { const result = computeFm(fmInput()); return { ...current, stage: "portfolio", fmStatus: "complete", fmProgress: 100, fmStep: `${t(current.language, "operationComplete")} · ${MARKET_DATA_STATUS} · ${current.language === "en" ? "three point-in-time anchors" : "三个时点锚点"}`, fmResult: result }; } catch { return { ...current, fmStatus: "failed", fmStep: t(current.language, "fixtureRejected") }; }
   }), []);
   const setPortfolioMode = useCallback((portfolioMode: AppState["portfolioMode"]) => setState((current) => ({ ...current, portfolioMode })), []);
   const setFreshness = useCallback((freshness: FreshnessContext) => setState((current) => ({ ...current, freshness })), []);

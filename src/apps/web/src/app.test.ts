@@ -490,7 +490,7 @@ describe("portfolio residual and export", () => {
     expect(output.evidence).toEqual([expect.objectContaining({ evidence_id: expect.any(String), challenge_id: expect.any(String), url: expect.any(String), title: expect.any(String), publisher: expect.any(String), published_at: expect.any(String), retrieved_at: expect.any(String), excerpt: expect.any(String), user_note: expect.any(String), content_hash: expect.any(String), source_material_hash: expect.any(String), grade: expect.any(String), source_type: expect.any(String), independently_reviewable: true })]);
     expect(output.worldlines).toHaveLength(3);
     expect(output.portfolio).toEqual(expect.objectContaining({ currency: "USD", allocations: expect.any(Array), raw_residual_cash: expect.any(Number), public_residual_cash: expect.any(Number) }));
-    expect(output.fm).toEqual(expect.objectContaining({ status: "computed", fixture: true, data_source: expect.stringContaining("client"), result: expect.objectContaining({ selectedFactorIds: expect.any(Array), metrics: expect.anything(), weights: expect.any(Object), forecasts: expect.any(Array), rawClientResult: expect.any(Object) }) }));
+    expect(output.fm).toEqual(expect.objectContaining({ status: "computed", fixture: true, data_source: expect.stringContaining("client"), result: expect.objectContaining({ selectedFactorIds: expect.any(Array), metrics: null, weights: expect.any(Object), forecasts: expect.any(Array), rawClientResult: expect.any(Object) }) }));
 
     const idleWorldline = { ...state, stage: "worldline" as const, fmStatus: "idle" as const, fmResult: null };
     const idleWorldlineOutput = researchExport(idleWorldline, makeBranches(state.viewpoint), []);

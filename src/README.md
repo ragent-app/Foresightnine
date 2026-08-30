@@ -16,6 +16,7 @@ The most recent repository evidence is recorded in [`docs/progress.md`](docs/pro
 | Challenge and evidence | Implemented | Deterministic mock provider; server-only provider boundary; client SearchEvidenceBundle fallback |
 | Worldlines and probabilities | Implemented | Weak/main/strong paths with premise, conditional, and joint probability fields; live model still deployment-gated |
 | Client FM | Implemented | TypeScript engine, Web Worker adapter, Android shared entry, Python independent WL1 oracle and parity audit |
+| Client market data | Implemented as a bounded data plane | Shared `MarketSnapshotBundle` uses three point-in-time anchors, validates cutoff/freshness/integrity, supports public and BYOK adapters, and feeds local FM; current apps intentionally remain explicit mock/offline until an approved provider is configured |
 | Web | Implemented for local QA | React/Vite flow and Browser/IAB evidence; public host is not configured |
 | Android | Implemented for QA | Expo/RN app and API-36 emulator evidence; current APK is debug-only, not a release artifact |
 | API persistence | Implemented for development/staging | FastAPI repositories, PostgreSQL migrations, Redis abuse-control adapter; production HA/TLS/backup evidence remains external |
@@ -24,7 +25,7 @@ The most recent repository evidence is recorded in [`docs/progress.md`](docs/pro
 
 ### Verified local evidence snapshot
 
-The latest full regression rerun in this checkout contains 205 API tests passed and 1 skipped, 51 Web tests passed, 44 Android tests passed, 20 FM tests passed, 9 domain tests passed, 2 asset-registry tests passed, and 12 API-client tests passed, with the existing Starlette/httpx warning. Typecheck, generated-contract checks, reference-hash checks, 9WL fixture audit, production-preflight unit tests, dependency audit, and the repository secret scan also pass in the recorded environment. Older historical counts remain in `docs/progress.md`; do not mix focused counts into this full-suite snapshot without labelling them.
+The latest full regression rerun in this checkout contains 205 API tests passed and 1 skipped, 52 Web tests passed, 45 Android tests passed, 20 FM tests passed, 9 domain tests passed, 2 asset-registry tests passed, and 12 API-client tests passed, with the existing Starlette/httpx warning. Typecheck, generated-contract checks, reference-hash checks, 9WL fixture audit, production-preflight unit tests, dependency audit, and the repository secret scan also pass in the recorded environment. Older historical counts remain in `docs/progress.md`; do not mix focused counts into this full-suite snapshot without labelling them.
 
 The cutoff-safe WL1 audit used 20 assets and 64 dates through `2026-07-15`, explicitly excluded the online segment beginning `2026-07-17`, and matched the independent Python oracle to the TypeScript engine with maximum absolute difference `3.33e-16`. This is reproducible research/QA evidence, not a current investable recommendation or a public backtest claim.
 
@@ -73,7 +74,7 @@ Data/compute boundary:
 2. The API stores a typed thesis and asks the configured provider to challenge it. The challenge must expose counterexamples, logical jumps, potentially priced-in claims, missing evidence, and a bounded rubric score.
 3. The user adds evidence or a `SearchEvidenceBundle`. Provider-native search is preferred; when it is unavailable, the client bundle remains visibly labelled as user-supplied and independently reviewable rather than provider-verified.
 4. The API accepts a normal confirmation or an explicit confirmation-with-reservations. It then produces weak, main, and strong worldlines with time anchors, revealing events, asset impacts, evidence references, probability intervals, confidence, and calibration status.
-5. The client receives an approved market/factor snapshot and computes FM locally. The Web path runs in a Worker; Android uses the same pure TypeScript engine through the shared package.
+5. The client receives a bounded `MarketSnapshotBundle` for the selected assets and three point-in-time anchors. The Web path runs FM in a Worker; Android uses the same pure TypeScript engine through the shared package. The public provider path sends no credential, while BYOK credentials are request-only and excluded from bundle/hash/export data.
 6. The UI displays both `FM Raw` and a separately derived `Public Default`. Public constraints never overwrite raw output. The result includes explanation, risks, stress tests, method version, data timestamp, uncertainty, and risk disclosure.
 
 ### Package and application map
@@ -86,6 +87,7 @@ Data/compute boundary:
 | `packages/contracts` | Canonical v1 JSON Schema, generated runtime types, OpenAPI snapshots and errors |
 | `packages/domain` | Dependency-free lifecycle, worldline, probability and invariant logic |
 | `packages/fm-engine` | Pure deterministic TypeScript FM computation and client parity tests |
+| `packages/market-data` | Three-anchor client data contract, provider adapters, validation, integrity hashing and FM-input conversion |
 | `packages/design-system` | Shared design tokens and platform-neutral component semantics |
 | `packages/asset-registry` | Asset identity, proxy, currency, price and trading-rule metadata |
 | `packages/api-client` | Typed HTTP/SSE client and safe transport/error classification |

@@ -1,5 +1,44 @@
 # Progress
 
+## Client market snapshot data plane — 2026-08-30
+
+- Pulled the latest Linux Module 1–6 evidence at commit `bfcd6d2`. Linux
+  staging, PostgreSQL/Redis supervision, API mock service, Cloudflare API
+  tunnel/CORS smoke and OAuth contract-only tests are recorded in
+  `infra/deployment/linux-module-evidence.md`. No Linux research source was
+  modified.
+- Added `packages/market-data`, a shared `MarketSnapshotBundle` contract for
+  user-selected assets and exactly three bounded anchors: year start, latest
+  month start and latest completed session. Weekend roll-back is implemented;
+  exchange-holiday resolution remains provider-owned. The validator rejects
+  unknown/duplicate assets, malformed or future-dated rows, invalid prices,
+  oversized payloads and integrity mismatches, and preserves explicit stale or
+  missing rows as `limited_data` without fixture substitution.
+- Added provider mode A (approved HTTPS public endpoint, no authorization
+  header) and mode B (user BYOK, request-only bearer header). BYOK keys are
+  excluded from bundle fields, integrity hashes, serialization and logs by
+  design. No server secret or historical market-data pipeline is used by this
+  client path.
+- Web and Android now consume the same three-anchor mock bundle and convert it
+  to the existing local FM input. No forward returns are invented, so IC/ICIR
+  remain offline factor metadata and FM metrics are `null` for this product
+  slice. The actual apps remain visibly `mock/offline`; provider configuration
+  and async refresh are intentionally a subsequent Windows client phase.
+- Verification: market-data typecheck and 9 focused tests passed; Web
+  typecheck and 52 tests passed; Android typecheck and 45 tests passed; full
+  workspace typecheck and test passed; Web production build and Android Expo
+  Android export passed after fixing Metro to import the workspace package.
+  The modified/new source set secret audit scanned 13 files with 0 findings.
+  The repository's full-history secret scan was attempted but stopped after
+  exceeding the local runtime window; the prior clean history result remains
+  unchanged and must be rerun before a release gate.
+- This change does not claim live market data, licensing, current executable
+  allocations, or production readiness. The next Windows phase must connect
+  an approved A/B provider at runtime, expose data freshness and limited-data
+  states in both clients, and run real Web Worker/Android parity cases. The
+  Linux phase only needs to verify the API boundary and must not add a raw
+  historical-data dependency or move final FM computation to the server.
+
 ## Repository architecture and Linux handoff documentation — 2026-08-30
 
 - Expanded `README.md` into the project-level source of truth for the product

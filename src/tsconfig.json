@@ -5,6 +5,7 @@
     { "path": "./packages/api-client" },
     { "path": "./packages/domain" },
     { "path": "./packages/asset-registry" },
-    { "path": "./packages/fm-engine" }
+    { "path": "./packages/fm-engine" },
+    { "path": "./packages/market-data" }
   ]
 }

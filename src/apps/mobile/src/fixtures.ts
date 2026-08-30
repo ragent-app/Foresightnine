@@ -1,5 +1,6 @@
 import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
 import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessDecision, type FreshnessPolicy, type ProviderFreshnessStatus } from "@foresightnine/domain";
+import { createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
 import type { AssetFixture, Branch, BranchKind, EvidenceBundle, FreshnessOptions, Language, ProbabilityInterval, RubricItem, TranscriptTurn } from "./types";
 
 export const MARKET_DATA_AS_OF = "2026-08-09";
@@ -157,14 +158,18 @@ export function makeBranches(viewpoint: string, language: Language = "zh"): read
   ];
 }
 
+const FM_FACTORS: readonly FactorExpression[] = [
+  { id: 10, icMean: 0.072, icir: 0.64, admitted: true, expression: { op: "field", name: "momentum" } },
+  { id: 20, icMean: 0.051, icir: 0.58, admitted: true, expression: { op: "field", name: "quality" } },
+  { id: 30, icMean: -0.044, icir: -0.52, admitted: true, expression: { op: "rank", input: { op: "field", name: "momentum" } } },
+];
+
+/** Explicit offline fallback bundle. A future configured provider must replace this at acquisition time. */
+export const MARKET_SNAPSHOT_BUNDLE: MarketSnapshotBundle = createMockMarketSnapshotBundle({ assetIds: ASSETS.map((asset) => asset.id), cutoff: MARKET_DATA_AS_OF, timezone: "UTC", requestedAt: "2026-08-09T00:00:00Z" });
+export const MARKET_DATA_STATUS = marketDataStatus(MARKET_SNAPSHOT_BUNDLE);
+
 export function fmInput(): ComputeFmInput {
-  const dates = ["2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09"];
-  const close = [[100, 80, 40, 12, 90, 1], [101, 81, 40.2, 12.1, 89, 1], [102, 82, 40.1, 12.2, 91, 1], [103, 83, 40.4, 12.1, 92, 1], [104, 84, 40.7, 12.3, 94, 1]];
-  const observations = dates.map((asOf, index) => ({ asOf, fields: { close: close[index]!, momentum: [1 + index * 0.1, 2 + index * 0.05, 3 - index * 0.04, 4 + index * 0.02, 5 + index * 0.08, 2 + index * 0.03], quality: [5 - index * 0.1, 4 + index * 0.06, 2 + index * 0.1, 3 + index * 0.04, 1 + index * 0.08, 4 + index * 0.02] } }));
-  const factors: readonly FactorExpression[] = [
-    { id: 10, icMean: 0.072, icir: 0.64, admitted: true, expression: { op: "field", name: "momentum" } },
-    { id: 20, icMean: 0.051, icir: 0.58, admitted: true, expression: { op: "field", name: "quality" } },
-    { id: 30, icMean: -0.044, icir: -0.52, admitted: true, expression: { op: "rank", input: { op: "field", name: "momentum" } } },
-  ];
-  return { cutoff: "2026-08-09", observations, factors, maxFactors: 10, forecastHorizon: 1, forwardReturns: dates.map((asOf, index) => ({ asOf, values: close[index]!.map((value, asset) => (value / close[Math.max(0, index - 1)]![asset]! - 1) || 0) })), currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), initialAllocation: true, costBps: 3 };
+  const converted = marketSnapshotBundleToFmInput(MARKET_SNAPSHOT_BUNDLE, FM_FACTORS, { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
+  if (converted.status !== "ready") throw new Error("The deterministic market snapshot bundle is limited and cannot drive the FM fixture.");
+  return converted.input;
 }
