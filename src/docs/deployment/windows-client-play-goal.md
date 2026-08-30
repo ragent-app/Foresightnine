@@ -56,6 +56,11 @@ the final client portfolio calculation.
 
 ## Confirmed release strategy and strict serial order
 
+The project-level control bus is
+[twopaltformpipeline.md](./twopaltformpipeline.md). It is the authoritative
+serial order and synchronization record; this file defines the Windows/client
+scope and evidence requirements for the same modules.
+
 The first public release is planned as **free Web + free Android**, with a
 subscription entry reserved in Console for a later entitlement release. The
 owner's Google Play developer account being marked paid is an account/billing

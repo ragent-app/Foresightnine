@@ -78,6 +78,11 @@ Cloudflare account without explicit execution dispatch.
 
 ## Strict serial execution plan
 
+The project-level control bus is
+[twopaltformpipeline.md](./twopaltformpipeline.md). It is the authoritative
+serial order and synchronization record; this file defines the Linux scope
+and evidence requirements for the same modules.
+
 This plan is intentionally sequential. Even when two tasks are technically
 independent, the next numbered module must not start until the previous module
 has produced its evidence and Sol reviewer has passed its gate. `WIN` and
