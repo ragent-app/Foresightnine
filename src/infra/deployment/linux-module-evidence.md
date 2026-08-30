@@ -53,3 +53,19 @@ claimed by this evidence.
 The database container has no published host port. This is development/mock
 staging evidence only; production PostgreSQL credentials, TLS/HA, backup
 retention and restore ownership remain external gates.
+
+## Module 3 — Redis abuse-control local staging evidence
+
+- A separate Redis 7 container was started on the private Compose network with
+  TLS enabled on port `6380`, password authentication, no plaintext port, a
+  64 MiB memory limit, and `allkeys-lru` eviction policy.
+- The application `RedisAbuseControl` connected through a redacted `rediss://`
+  URL and admitted the first two requests before denying the third at the
+  configured rate limit.
+- Model quota reservation admitted the first operation and denied a second
+  distinct operation; generated abuse keys had positive TTLs.
+- A deliberately unreachable Redis backend returned unavailable/denied and
+  did not fall back to memory.
+
+This is a local TLS/authentication and failure-path probe, not production HA,
+failover, alerting, capacity, managed backup or certificate-rotation evidence.
