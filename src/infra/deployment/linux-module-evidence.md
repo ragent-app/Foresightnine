@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `7a9db9b`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `d5798b3`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -171,12 +171,13 @@ exchange, or production Cloudflare mutation was performed.
   present in the source image inputs.
 - Runtime admission now validates every requested asset symbol against a unique
   asset-level entry in that manifest. The five legacy IDs and five canonical
-  ETF IDs are therefore bound to the fixed Stooq primary and explicit Yahoo
-  fallback; missing, duplicate, or mismatched mappings fail closed.
+  ETF IDs are therefore bound to the fixed Stooq source; missing, duplicate,
+  or mismatched mappings fail closed.
 - The production preflight now has a separate `DATA_AUTHORIZATION` gate: the
   manifest must explicitly mark market price, factor features and FX reference
   fields approved with written terms and public redistribution rights. The
-  checked-in staging manifest intentionally marks all three `not_approved`.
+  checked-in staging manifest records owner-confirmed authorization for all
+  three selected source contracts, while production admission remains blocked.
 - The gate accepts a deployment-owned provider manifest through the external
   `--provider-admission-manifest` flag or
   `FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST`; absent that input, it safely
@@ -221,6 +222,11 @@ exchange, or production Cloudflare mutation was performed.
   request for `ETF:SPY` and `ETF:SOXX` returned HTTP 200 with six rows, one
   exact-anchor `ok` row per asset and four delayed/holiday-ambiguous `stale`
   rows. Future vendor sessions are rejected before they can reach the client.
+- The image rebuilt from the owner-authorized Stooq policy checkpoint returned
+  HTTP 200 for the same public route with six explicit `missing` rows when the
+  upstream returned its verification page. No Yahoo request or fallback was
+  made; the route's warning is emitted only after all configured price sources
+  are exhausted. `/readyz` remained HTTP 200.
 
 ## Module 7 — auth/session contract boundary
 
@@ -275,14 +281,16 @@ repository or runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the latest API run was 228 passed, 1 skipped (229 collected). The only skip is
+  the latest run was 230 passed, 1 skipped. The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 13 passed. The real
   `verify:production-preflight` command correctly rejects this development
   environment because production credentials, TLS Redis, external CAPTCHA,
-  OAuth configuration, licensed market admission, explicit data authorization,
-  release artifact, monitoring declaration and approval manifest are absent.
+  OAuth configuration, production admission, release artifact, monitoring
+  declaration and approval manifest are absent. The checked-in provider
+  manifest records the owner's authorization, but intentionally remains
+  staging-only.
 - Workspace `typecheck` passed for all nine participating packages/apps.
 - `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
   asset registry, and the 24-path OpenAPI export.
@@ -313,7 +321,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `7a9db9b`; external provider authorization input
+implementation checkpoint is `d5798b3`; external provider authorization input
 handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
