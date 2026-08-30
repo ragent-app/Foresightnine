@@ -58,9 +58,112 @@ Cloudflare DNS/TLS/WAF/CDN
               private PostgreSQL  private TLS Redis
 ```
 
-Use `<DOMAIN>` until the owner supplies the actual purchased Cloudflare
-domain. Never guess a hostname, add an unapproved CORS origin, or access the
-Cloudflare account without explicit authorization.
+The owner has confirmed the purchased Cloudflare zone as
+`foresightnine.com`. The browser-only preflight on 2026-08-30 found
+`DNS Setup: Full`, zero DNS records, no Workers & Pages projects, and three
+existing Tunnel objects that are all `Down` with no usable route. Treat these
+as observed facts, not as authorization to change Cloudflare. The execution
+agent must still confirm the exact final hostnames before adding CORS or OAuth
+redirects:
+
+```text
+staging.foresightnine.com       Web staging
+api-staging.foresightnine.com   API staging
+app.foresightnine.com           Web production
+api.foresightnine.com           API production
+```
+
+Never guess a hostname, add an unapproved CORS origin, or access/change the
+Cloudflare account without explicit execution dispatch.
+
+## Strict serial execution plan
+
+This plan is intentionally sequential. Even when two tasks are technically
+independent, the next numbered module must not start until the previous module
+has produced its evidence and Sol reviewer has passed its gate. `WIN` and
+`LINUX` identify the execution environment, not long-lived Git branches.
+
+1. `[WIN]` Freeze the source commit, exact domain/hostname list, free-first
+   release decision, OAuth application inputs, Android identity and Play
+   permissions. Gate: the external-input checklist is complete enough to
+   create staging without guessing.
+2. `[LINUX]` Clone the pinned commit into a writable Linux deployment
+   workspace, preserve read-only research mounts, and establish artifact,
+     secret and rollback boundaries. Gate: install path and commit SHA are
+     recorded.
+3. `[LINUX]` Provision private PostgreSQL, apply migrations, and prove
+   restart persistence, backup, restore, expiry and cascade behavior. Gate:
+     the persistence evidence is complete.
+4. `[LINUX]` Provision authenticated private Redis, quotas, TTLs, failure
+   behavior and explicit proxy topology/CIDRs. Gate: no-memory-fallback and
+     Redis failure tests pass.
+5. `[LINUX]` Run FastAPI as a supervised staging service with health/readiness,
+     bounded resources, redacted logs, mock provider and rollback target. Gate:
+     the mock viewpoint-to-worldline API flow passes.
+6. `[LINUX]` Configure Cloudflare staging only after the owner approves the
+     observed zone and hostnames: Pages for static Web and Tunnel or a strict
+   reverse proxy for API. Gate: HTTPS staging Web/API reachability, TLS,
+     CORS, WAF and health checks pass.
+7. `[LINUX]` Publish the typed server auth/session boundary and contract tests
+     for Google/GitHub OAuth, logout and account deletion. Gate: generated
+     contract is stable for the client.
+8. `[WIN]` Point Web and Android build-time configuration at Linux staging;
+     keep mock mode and all provider/database secrets out of client artifacts.
+     Gate: both clients connect to staging on the pinned commit.
+9. `[WIN]` Implement the approved Console, Web states, Android phone layout
+     and Android tablet layout. Gate: design and state QA pass separately for
+     Web, phone and tablet.
+10. `[WIN]` Run Browser/IAB Web staging QA and API 36 Play emulator QA for the
+    complete viewpoint-to-portfolio flow, including language switching and
+    error/retry states. Gate: core-flow evidence is recorded.
+11. `[LINUX]` Inject the real OpenAI-compatible provider/search configuration
+    through server secrets, test timeout/quota/fallback behavior, and keep
+    provider keys server-only. Gate: redacted provider/search smoke passes or
+    the missing-secret blocker is recorded.
+12. `[LINUX]` Configure real OAuth server credentials and exact callbacks only
+    after the domain and redirect list are approved. Gate: server callback,
+    state/PKCE, session, replay and expiry tests pass.
+13. `[WIN]` Complete Web OAuth and Android deep-link integration against
+    staging. Gate: cancel, wrong-account, replay, expiry, logout, deletion
+    and provider-failure cases pass.
+14. `[WIN]` Run real client FM parity and scenario review; Sol challenges event
+    dates, probabilities, market paths and portfolio paths. Gate: FM golden,
+    cost and Public Default evidence passes.
+15. `[LINUX]` Apply production data freshness/licensing policy, monitoring,
+    secret rotation, backups, incident response and production preflight. Gate:
+    legal/privacy/security/data-license/operations approvals are explicit.
+16. `[WIN]` Build the signed non-debug Android AAB, record provenance/hash,
+    prepare privacy/data-safety/support/store materials and validate phone and
+    tablet release behavior. Gate: release candidate is installable.
+17. `[WIN]` Upload to Google Play internal testing and execute install,
+    upgrade, login, sharing, offline and account tests. Gate: internal-test
+    evidence passes. The first release remains free; subscription is a future
+    entitlement milestone.
+18. `[LINUX]` Deploy the production Pages/API configuration and cut traffic
+    only after written release approval. Gate: health, rollback and monitoring
+    evidence pass.
+19. `[WIN]` Run final production Browser/Android QA, then submit the approved
+    Android release to Play. Gate: Sol final review passes.
+20. `[LINUX]` Receive the operations handoff and run the first backup,
+    rollback, secret-rotation and incident drills. Gate: production ownership
+    and runbooks are accepted.
+
+### Release policy
+
+The first public product is **free Web + free Android**. The Console may show
+that subscription is planned, but no paid entitlement is required for the
+first release. Google Play may retain the existing paid-developer account;
+that account status does not make the app paid. When subscriptions are later
+activated, Google Play purchase-token verification and entitlement state must
+be authoritative on Linux before any paid feature is enabled.
+
+### Repository and handoff discipline
+
+Use one protected `main` line plus short-lived `feature/*` and optional
+`release/*` branches. Deploy the exact commit tested on Windows. Record every
+module's commit, evidence and Sol verdict before starting the next module.
+Use separate GitHub `staging` and `production` environments for protected
+secrets and approvals; do not use `win`/`linux` as persistent branches.
 
 ## Scope and ownership
 

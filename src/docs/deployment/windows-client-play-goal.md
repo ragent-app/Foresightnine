@@ -54,6 +54,81 @@ Web Worker; Android uses the shared TypeScript engine. The API may provide
 validated data manifests/shards and method metadata, but it must not replace
 the final client portfolio calculation.
 
+## Confirmed release strategy and strict serial order
+
+The first public release is planned as **free Web + free Android**, with a
+subscription entry reserved in Console for a later entitlement release. The
+owner's Google Play developer account being marked paid is an account/billing
+capability fact; it does not require the first app version to charge users.
+
+Cloudflare browser preflight on 2026-08-30 confirmed the zone
+`foresightnine.com` with `DNS Setup: Full`. It currently has zero DNS records,
+no Workers & Pages project, and the visible Tunnel inventory is all `Down`
+with no usable routes. The client plan therefore consumes staging only after
+Linux creates and verifies these approved hostnames:
+
+```text
+staging.foresightnine.com       Web staging
+api-staging.foresightnine.com   API staging
+app.foresightnine.com           Web production
+api.foresightnine.com           API production
+```
+
+Execution is strictly serial; do not run the next module before the previous
+module's evidence and Sol gate are complete. `WIN` and `LINUX` are execution
+labels, not permanent Git branches.
+
+1. `[WIN]` Freeze the pinned commit, exact Cloudflare hostnames, free-first
+   product decision, OAuth inputs, Android package/signing identity and Play
+   permissions. Gate: no client task depends on a guessed external value.
+2. `[LINUX]` Create the writable Linux workspace, PostgreSQL, Redis and the
+   supervised FastAPI staging service. Gate: persistence, abuse-control,
+   health/readiness and mock API evidence passes.
+3. `[LINUX]` Create Cloudflare staging Pages/API routes only after owner
+   approval of the zone and hostnames. Gate: HTTPS Web/API staging is healthy
+   with the required CORS/TLS/WAF behavior.
+4. `[LINUX]` Publish the auth/session and provider/search contracts. Gate:
+   client-consumable contracts and server contract tests are stable.
+5. `[WIN]` Configure Web and Android for mock/staging/production build-time
+   API bases. Gate: no provider, OAuth, database, billing or signing secret is
+   present in source, source maps or artifacts.
+6. `[WIN]` Implement the approved Console and separately adapt Web, Android
+   phone and Android tablet states. Gate: the three form factors pass design
+   state review; Console contains the future subscription entry and does not
+   expose obsolete temperature/top-p controls.
+7. `[WIN]` Test Web in Browser/IAB and Android on `api36_play:5554`, including
+   keyboard, safe area, back navigation, share, loading, retry and error
+   states. Gate: core-flow evidence is recorded.
+8. `[LINUX]` Enable real server-side AI/search and OAuth credentials only after
+   secret, domain and callback approvals. Gate: redacted provider and OAuth
+   smoke evidence passes or a precise blocker is recorded.
+9. `[WIN]` Run real Web OAuth and Android deep-link flows. Gate: cancellation,
+   wrong account, replay, expiry, logout, deletion and provider failure pass.
+10. `[WIN]` Run client FM parity and scenario QA with Sol review of event dates,
+    probabilities, expected market paths and portfolio paths. Gate: golden
+    parity, 3 bps cost, dead-band, rounding and Raw/Public Default checks pass.
+11. `[LINUX]` Complete production hardening, current-data/licensing policy,
+    monitoring, backup/restore, rollback and release preflight. Gate: all
+    legal, privacy, security, data and operational approvals are explicit.
+12. `[WIN]` Build and sign the non-debug AAB; record hash/provenance and
+    prepare privacy policy, data-safety, support URL and Play listing assets.
+    Gate: release candidate works on phone and tablet.
+13. `[WIN]` Upload to Play internal testing and verify install, upgrade,
+    account, sharing, offline and disclosure flows. Gate: internal testing is
+    accepted; paid billing remains out of the first-release critical path.
+14. `[LINUX]` Cut production traffic through the approved Cloudflare Pages/API
+    setup after written release approval. Gate: health, monitoring and
+    rollback checks pass.
+15. `[WIN]` Test the production Web and Android clients, then submit the Play
+    release after Sol's final pass. Gate: no unresolved client or production
+    blocker remains.
+16. `[LINUX]` Accept the operations handoff and complete the first production
+    backup, rollback, secret-rotation and incident drills.
+
+The client agent must not create a separate `win` branch or fork server
+contracts. It consumes the exact Linux-published contract and tests the exact
+commit that Linux deploys.
+
 ## Scope and ownership
 
 The Windows agent owns only:
