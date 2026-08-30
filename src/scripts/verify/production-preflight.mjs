@@ -107,6 +107,17 @@ function hasCaptchaHostname(value) {
   );
 }
 
+function hasCaptchaHostnameBinding(hostname, corsOrigins) {
+  if (!hasCaptchaHostname(hostname) || !hasHttpsCorsOrigins(corsOrigins)) return false;
+  return corsOrigins.split(",").map((origin) => origin.trim()).filter(Boolean).some((origin) => {
+    try {
+      return new URL(origin).hostname.toLowerCase() === hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+  });
+}
+
 function hasOAuthConfiguration(env) {
   const callback = envValue(env, "FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL");
   const returnUris = envValue(env, "FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST");
@@ -452,9 +463,12 @@ export function runPreflight({
     ),
     gate(
       "CAPTCHA_HOSTNAME",
-      hasCaptchaHostname(envValue(env, "FORESIGHTNINE_CAPTCHA_HOSTNAME")),
-      "CAPTCHA hostname is explicitly bound to the deployment site",
-      "FORESIGHTNINE_CAPTCHA_HOSTNAME must be a valid fully-qualified hostname",
+      hasCaptchaHostnameBinding(
+        envValue(env, "FORESIGHTNINE_CAPTCHA_HOSTNAME"),
+        envValue(env, "FORESIGHTNINE_CORS_ORIGINS"),
+      ),
+      "CAPTCHA hostname is explicitly bound to an HTTPS CORS origin",
+      "CAPTCHA hostname must be valid and match an HTTPS CORS origin hostname",
     ),
     gate(
       "CORS_HTTPS",

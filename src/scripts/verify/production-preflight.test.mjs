@@ -238,6 +238,7 @@ test("OAuth, licensed market admission, and monitoring are explicit production g
     ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "https://app.example.test/callback?next=evil" }],
     ["MARKET_DATA_ADMISSION", { FORESIGHTNINE_MARKET_PROVIDER_MODE: "yahoo_evaluation" }],
     ["DATA_AUTHORIZATION", {}],
+    ["CAPTCHA_HOSTNAME", { FORESIGHTNINE_CAPTCHA_HOSTNAME: "captcha.example.test" }],
     ["METRICS_ENDPOINT", { FORESIGHTNINE_METRICS_ENABLED: "false" }],
   ]) {
     const result = resultWithManifest(overrides);

@@ -23,7 +23,8 @@ The deployment context must provide:
 - the implemented external Cloudflare Turnstile declaration in
   `FORESIGHTNINE_CAPTCHA_PROVIDER=turnstile` (or equivalent mode) plus
   `FORESIGHTNINE_CAPTCHA_SECRET` and a fully-qualified
-  `FORESIGHTNINE_CAPTCHA_HOSTNAME`; `accept`, `unavailable`, `reject`, unknown,
+  `FORESIGHTNINE_CAPTCHA_HOSTNAME` matching an HTTPS CORS origin hostname;
+  `accept`, `unavailable`, `reject`, unknown,
   mock, debug, and QA declarations are rejected. The verifier also requires
   Cloudflare's response hostname to match this configured hostname;
 - comma-separated `FORESIGHTNINE_CORS_ORIGINS`, with every origin using HTTPS and containing no path, query, or fragment;
