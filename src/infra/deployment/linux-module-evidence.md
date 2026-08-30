@@ -179,6 +179,9 @@ exchange, or production Cloudflare mutation was performed.
   configured deployment hostname. Missing, rejected, unsupported, or remote-
   unavailable verification remains fail-closed; staging intentionally has no
   real CAPTCHA secret.
+- Browser OAuth start/callback routes now share the same IP abuse limiter as
+  `/v1/*` and `/snapshots`, preventing unauthenticated callback flooding from
+  bypassing the production rate boundary.
 - The production preflight additionally requires that CAPTCHA hostname to match
   one of the declared HTTPS CORS origin hostnames, preventing a valid but
   misbound Turnstile site from satisfying the release gate.

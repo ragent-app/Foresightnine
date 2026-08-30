@@ -312,10 +312,10 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
             request.state.session_id = session_id
         else:
             request.state.session_id = session_id
-        # The bounded market adapter is intentionally kept outside the
-        # generated /v1 contract, but it is still a public data-plane route
-        # and must receive the same abuse controls as every API endpoint.
-        if request.url.path.startswith("/v1/") or request.url.path == "/snapshots":
+        # The bounded market adapter and browser OAuth endpoints are kept
+        # outside the generated /v1 contract, but they are still public
+        # data-plane routes and must receive the same abuse controls.
+        if request.url.path.startswith("/v1/") or request.url.path == "/snapshots" or request.url.path.startswith("/oauth/"):
             decision = self.abuse.check_request(client_ip=client_ip, session_id=session_id)
             if not decision.available:
                 return _boundary_error(

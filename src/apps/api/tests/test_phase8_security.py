@@ -39,6 +39,15 @@ def test_rate_limit_uses_peer_when_forwarded_header_is_untrusted(monkeypatch: py
     assert "198.51.100.2" not in second.text
 
 
+def test_browser_oauth_routes_share_the_ip_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app_main.abuse_control.ip, "limit", 1)
+    first = CLIENT.get("/oauth/callback", params={"code": "code", "state": "state"})
+    second = CLIENT.get("/oauth/callback", params={"code": "code", "state": "state-2"})
+    assert first.status_code == 400
+    assert second.status_code == 429
+    assert second.json()["error_code"] == "rate_limited"
+
+
 def test_trusted_proxy_chain_only_applies_when_peer_is_configured() -> None:
     request = SimpleNamespace(
         client=SimpleNamespace(host="10.0.0.5"),
