@@ -4,6 +4,11 @@ import test from "node:test";
 import { formatReport, REQUIRED_APPROVALS, runPreflight } from "./production-preflight.mjs";
 
 const APPROVAL_MANIFEST = Object.freeze(Object.fromEntries(REQUIRED_APPROVALS.map((key) => [key, true])));
+const PROVIDER_MANIFEST = JSON.stringify({
+  schema_version: "provider-admission-manifest/v1",
+  providers: [{ id: "fixture-provider" }],
+  asset_mappings: [{ asset_id: "fixture-asset" }],
+});
 
 function baseEnv() {
   return {
@@ -49,7 +54,7 @@ test("synthetic production preflight passes through argv/env injection without n
     argv: ["--approval-manifest", "/deployment-owned/release-approval.json"],
     readFile: (filePath) => {
       if (filePath.endsWith("Dockerfile.api")) return "COPY packages/asset-registry /app/packages/asset-registry";
-      if (filePath.endsWith("provider-manifest.v1.json")) return '{"schema_version":"provider-admission-manifest/v1"}';
+      if (filePath.endsWith("provider-manifest.v1.json")) return PROVIDER_MANIFEST;
       return "FORESIGHTNINE_LLM_PROVIDER: mock";
     },
     readManifest: (manifestPath) => {
@@ -104,7 +109,7 @@ test("Dockerfile and Compose static gates reject missing or legacy configuration
   const validDocker = "COPY packages/asset-registry /app/packages/asset-registry";
   const validCompose = "FORESIGHTNINE_LLM_PROVIDER: mock";
   const validEnv = baseEnv();
-  const injected = (dockerfile, compose) => runPreflight({
+  const injected = (dockerfile, compose, providerManifest = PROVIDER_MANIFEST) => runPreflight({
     env: validEnv,
     repoRoot,
     approvalManifest: APPROVAL_MANIFEST,
@@ -112,7 +117,7 @@ test("Dockerfile and Compose static gates reject missing or legacy configuration
     readFile: (filePath) => filePath.endsWith("Dockerfile.api")
       ? dockerfile
       : filePath.endsWith("provider-manifest.v1.json")
-        ? '{"schema_version":"provider-admission-manifest/v1"}'
+        ? providerManifest
         : compose,
   });
 
@@ -127,6 +132,9 @@ test("Dockerfile and Compose static gates reject missing or legacy configuration
     readFile: (filePath) => filePath.endsWith("Dockerfile.api") ? validDocker : validCompose,
   });
   assert.equal(missingManifest.gates.find(({ id }) => id === "PROVIDER_ADMISSION_MANIFEST").status, "FAIL");
+
+  const malformedManifest = injected(validDocker, validCompose, '{"schema_version":"provider-admission-manifest/v1"}');
+  assert.equal(malformedManifest.gates.find(({ id }) => id === "PROVIDER_ADMISSION_MANIFEST").status, "FAIL");
 
   const legacyCompose = injected(validDocker, "FORESIGHTNINE_PROVIDER: mock");
   assert.equal(legacyCompose.gates.find(({ id }) => id === "COMPOSE_PROVIDER_CONFIG").status, "FAIL");

@@ -224,7 +224,29 @@ function hasDockerAssetRegistry({ repoRoot, readFile }) {
 
 function hasProviderAdmissionManifest({ repoRoot, readFile }) {
   const manifest = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
-  return typeof manifest === "string" && /"schema_version"\s*:\s*"provider-admission-manifest\/v1"/u.test(manifest);
+  if (typeof manifest !== "string") return false;
+  try {
+    const parsed = JSON.parse(manifest);
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      parsed.schema_version !== "provider-admission-manifest/v1" ||
+      !Array.isArray(parsed.providers) ||
+      !Array.isArray(parsed.asset_mappings) ||
+      parsed.providers.length === 0 ||
+      parsed.asset_mappings.length === 0
+    ) return false;
+    const providerIds = parsed.providers.map((provider) => provider?.id);
+    const assetIds = parsed.asset_mappings.map((mapping) => mapping?.asset_id);
+    return (
+      providerIds.every((id) => typeof id === "string" && id.length > 0) &&
+      new Set(providerIds).size === providerIds.length &&
+      assetIds.every((id) => typeof id === "string" && id.length > 0) &&
+      new Set(assetIds).size === assetIds.length
+    );
+  } catch {
+    return false;
+  }
 }
 
 function hasValidComposeProviderConfig({ repoRoot, readFile }) {
