@@ -1,0 +1,17 @@
+[Unit]
+Description=ForesightNine staging Cloudflare Tunnel
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared --config /etc/cloudflared/foresightnine-api-staging.yml tunnel run foresightnine-api-staging
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=default.target
