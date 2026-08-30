@@ -44,6 +44,10 @@ claimed by this evidence.
   fresh database restored all 11 source documents.
 - After an API restart, the same session idempotency key replayed the same
   persisted session result with `Idempotency-Replayed: true`.
+- A fresh staging account was registered, the API container was restarted, and
+  the account then logged in successfully before being hard-deleted; the
+  post-deletion login returned 401. This directly verifies account persistence
+  across an API process restart without retaining the test account.
 - Expiry cleanup was exercised against the PostgreSQL-backed repositories and
   removed the expired session plus its thesis, challenge, evidence, turns,
   worldline links, and worldlines.
