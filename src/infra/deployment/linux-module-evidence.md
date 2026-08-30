@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `a0fb7b3`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `798f204`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -127,8 +127,8 @@ CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
   test incremented `NRestarts` to 1, then the service returned active/running
   and both public health endpoints returned 200.
 
-No production hostname, Pages project, traffic cutover, OAuth callback, or
-production Cloudflare mutation was performed.
+No production hostname, Pages project, traffic cutover, credential-backed OAuth
+exchange, or production Cloudflare mutation was performed.
 
 ## Module 6 — bounded provider and client market runtime
 
@@ -175,23 +175,31 @@ production Cloudflare mutation was performed.
 
 - Existing typed server boundary exposes redacted provider readiness for exactly
   Google and GitHub and a strict PKCE start response.
+- A feature-gated browser OAuth path now provides fixed Google/GitHub
+  authorization redirects, one-use callback state consumption, bounded
+  server-side code exchange, verified identity extraction, persistent OAuth
+  identity records, session issuance, logout, and generic account deletion.
+  Provider access tokens are not persisted or returned to clients.
 - Development staging also exposes an explicit `local_mock` lifecycle for
   registration, password login, bearer session, logout and account deletion.
   Passwords are stored only as PBKDF2 digests; deletion removes the account
   credential/contact document and all sessions, while research data remains
   under its separate retention policy.
-- Focused OAuth foundation and route tests passed `25/25`, covering HTTPS and
-  deep-link allowlists, provider separation, S256 challenge derivation,
-  one-use/expiry state, strict request fields, and secret redaction.
+- Focused OAuth foundation, route, and callback/provider tests passed `29/29`,
+  covering HTTPS and deep-link allowlists, fixed provider redirects, bounded
+  code exchange, verified identities, S256 challenge derivation, one-use/
+  expiry state, strict request fields, and secret redaction.
 - Generated OpenAPI drift check passed with 24 paths.
-- Live Google/GitHub callback and token exchange remain disabled. They are
-  blocked on owner-supplied client credentials, exact callback URLs, confirmed
-  web/deep-link return URIs, provider consent, and the production session/
-  deletion policy.
+- The callback implementation is not enabled in staging because all six OAuth
+  environment inputs are absent. The live Google/GitHub exchange remains
+  unverified until owner-supplied client credentials, exact callback URLs,
+  confirmed web/deep-link return URIs, provider consent, and the production
+  session/deletion policy exist. Without those inputs, the public callback and
+  browser start routes return a typed 400 without contacting a provider.
 
-The safe state is contract/mock-only OAuth readiness plus local staging auth; no
-OAuth provider was contacted and no credential was added to the repository or
-runtime.
+The safe state is a production-capable, feature-gated callback plus local
+staging auth; no OAuth provider was contacted and no credential was added to the
+repository or runtime.
 
 ## Module 8 — Web/Android smoke evidence
 
@@ -216,7 +224,7 @@ runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the final API run was 218 passed, 1 skipped (219 collected). The only skip is
+  the final API run was 222 passed, 1 skipped (223 collected). The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
@@ -254,8 +262,9 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `a0fb7b3`; provider mapping and redirect hardening
-are in `3eaf5dc` and `ea8f12c`. This evidence follow-up records the
+implementation checkpoint is `798f204`; OAuth callback, provider mapping, redirect hardening
+and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
+evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
