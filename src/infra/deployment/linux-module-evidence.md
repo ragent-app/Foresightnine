@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight checkpoint: `7c929b1da5b42408bbe8e32ce5c17e4b3affc5fa`
+- Synced source and Linux provider/auth/observability/preflight checkpoint: `3a5595336f16c76bd49472ed3578ba18539212a6`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -194,10 +194,11 @@ runtime.
 - `uv run --project apps/api pytest apps/api/tests -q`: 214 passed, 1 skipped
   (215 collected). The only skip is the intentionally unavailable Windows
   worldline source audit.
-- `corepack pnpm test:production-preflight`: 11 passed. The real
+- `corepack pnpm test:production-preflight`: 12 passed. The real
   `verify:production-preflight` command correctly rejects this development
   environment because production credentials, TLS Redis, external CAPTCHA,
-  release artifact and approval manifest are absent.
+  OAuth configuration, licensed market admission, release artifact, monitoring
+  declaration and approval manifest are absent.
 - Workspace `typecheck` passed for all nine participating packages/apps.
 - Workspace `test` passed, including generated-contract checks, FM-engine,
   API-client/domain/asset-registry, market-data, web and mobile tests.
@@ -222,7 +223,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `7c929b1`; this evidence follow-up records the
+implementation checkpoint is `3a55953`; this evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
