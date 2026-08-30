@@ -15,72 +15,72 @@
   },
   "data_authorization": {
     "market_price": {
-      "status": "approved",
-      "written_terms": true,
-      "public_redistribution": true,
-      "basis": "owner_confirmed_permission_2026-08-31"
+      "status": "not_approved",
+      "written_terms": false,
+      "public_redistribution": false,
+      "basis": "written_permission_required"
     },
     "factor_features": {
-      "status": "approved",
-      "written_terms": true,
-      "public_redistribution": true,
-      "basis": "owner_confirmed_permission_2026-08-31"
+      "status": "not_approved",
+      "written_terms": false,
+      "public_redistribution": false,
+      "basis": "written_permission_required"
     },
     "fx_reference": {
-      "status": "approved",
-      "written_terms": true,
-      "public_redistribution": true,
-      "basis": "owner_confirmed_permission_2026-08-31"
+      "status": "not_approved",
+      "written_terms": false,
+      "public_redistribution": false,
+      "basis": "written_permission_required"
     }
   },
   "providers": [
     {
       "id": "stooq",
       "kind": "market_price_evaluation",
-      "enabled_modes": ["staging_evaluation"],
+      "enabled_modes": [],
       "endpoint": "https://stooq.com/q/d/l/",
       "credentials": "optional_server_secret",
       "raw_cache": "disabled",
       "features": "not_authorized",
       "fx": "not_authorized",
-      "authorization_status": "owner_confirmed",
-      "public_redistribution": "approved",
-      "notes": "Primary and currently only market-price source. Optional server-side API key is injected outside Git; no client key or raw cache."
+      "authorization_status": "not_approved",
+      "public_redistribution": "not_approved",
+      "notes": "Isolated candidate only. Do not bypass anti-automation verification; an optional server-side key may be evaluated only after written permission and deployment approval."
     },
     {
       "id": "frankfurter",
       "kind": "reference_fx_candidate",
-      "enabled_modes": ["staging_reference"],
+      "enabled_modes": [],
       "endpoint": "https://api.frankfurter.dev/v2/",
       "credentials": "none",
       "raw_cache": "disabled",
-      "authorization_status": "owner_confirmed",
-      "public_redistribution": "approved",
-      "notes": "Primary FX reference source; ECB may be selected by provider preference. No executable bid/ask or trading feed."
+      "authorization_status": "not_approved",
+      "public_redistribution": "not_approved",
+      "notes": "Candidate FX reference source; ECB preference is recorded but no runtime/public redistribution is enabled. No executable bid/ask or trading feed."
     },
     {
       "id": "kenneth_french",
       "kind": "research_factor_candidate",
-      "enabled_modes": ["staging_reference"],
+      "enabled_modes": [],
       "endpoint": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/",
       "credentials": "none",
       "runtime_use": "not_enabled",
       "raw_cache": "disabled",
-      "authorization_status": "owner_confirmed",
-      "public_redistribution": "approved",
-      "notes": "Momentum MOM primary and RMW quality fallback; source remains reference-only until a matching feature contract is wired."
+      "authorization_status": "not_approved",
+      "public_redistribution": "not_approved",
+      "notes": "Candidate for Momentum MOM and RMW quality fallback; no runtime/public redistribution is enabled."
     },
     {
       "id": "aqr_qmj",
       "kind": "research_factor_candidate",
-      "enabled_modes": ["staging_reference"],
+      "enabled_modes": [],
       "endpoint": "https://www.aqr.com/Insights/Datasets/Quality-Minus-Junk-Factors-Daily",
       "credentials": "none",
       "raw_cache": "disabled",
-      "authorization_status": "owner_confirmed",
-      "public_redistribution": "approved",
+      "authorization_status": "not_approved",
+      "public_redistribution": "not_approved",
       "runtime_use": "not_enabled",
-      "notes": "Quality QMJ primary; source remains reference-only until a matching feature contract is wired."
+      "notes": "Candidate for Quality QMJ; no runtime/public redistribution is enabled."
     }
   ],
   "asset_mappings": [
@@ -101,6 +101,6 @@
     "quality": {"primary": "aqr_qmj", "factor": "QMJ", "fallback": [{"provider": "kenneth_french", "factor": "RMW"}]}
   },
   "fx_mapping": {"primary": "frankfurter", "provider_preference": ["ECB"]},
-  "feature_policy": "Approved source rights are recorded, but the current three-anchor snapshot contract does not emit factor features; clients must keep Public Default disabled when required feature cells are absent.",
-  "fx_policy": "Frankfurter is approved for reference FX only; no executable bid/ask is implied. Preserve quote currency and keep executable-looking amounts disabled when conversion is missing."
+  "feature_policy": "No factor source is approved for public runtime; clients must report missing/limited data and disable Public Default.",
+  "fx_policy": "No FX source is approved for public runtime; preserve quote currency and disable executable-looking amounts when conversion is missing."
 }

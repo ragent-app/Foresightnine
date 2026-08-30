@@ -153,11 +153,10 @@ exchange, or production Cloudflare mutation was performed.
 - Compose enables this mode only for local/development staging. Returned rows
   are price-only and warnings explicitly keep the client runtime limited;
   `CASH` and any unapproved asset return `missing` rows.
-- The owner confirmed permission for Stooq prices, Kenneth French MOM/RMW, AQR
-  QMJ and Frankfurter reference FX on 2026-08-31. The manifest records Stooq
-  price, Kenneth French MOM, AQR QMJ with Kenneth French RMW fallback, and
-  Frankfurter with ECB preference. Production mode remains disabled until the
-  deployment-owned external manifest and remaining release gates are supplied.
+- The current provider recheck records Stooq, Kenneth French MOM/RMW, AQR QMJ
+  and Frankfurter as candidates only. No public production provider is
+  approved; the manifest keeps all four data-authorizations unapproved and
+  leaves production mode disabled.
 - Before the policy update, the live staging route accepted a canonical
   `ETF:SPY`, legacy `GRID`, and unapproved `CASH:USD` request through the
   Stooq-first chain: 9 rows were returned, with 6 price rows and 3 explicit
@@ -176,8 +175,8 @@ exchange, or production Cloudflare mutation was performed.
 - The production preflight now has a separate `DATA_AUTHORIZATION` gate: the
   manifest must explicitly mark market price, factor features and FX reference
   fields approved with written terms and public redistribution rights. The
-  checked-in staging manifest records owner-confirmed authorization for all
-  three selected source contracts, while production admission remains blocked.
+  checked-in staging manifest records all three authorizations as unapproved;
+  production admission remains blocked.
 - The gate accepts a deployment-owned provider manifest through the external
   `--provider-admission-manifest` flag or
   `FORESIGHTNINE_PROVIDER_ADMISSION_MANIFEST`; absent that input, it safely
@@ -222,7 +221,7 @@ exchange, or production Cloudflare mutation was performed.
   request for `ETF:SPY` and `ETF:SOXX` returned HTTP 200 with six rows, one
   exact-anchor `ok` row per asset and four delayed/holiday-ambiguous `stale`
   rows. Future vendor sessions are rejected before they can reach the client.
-- The image rebuilt from the owner-authorized Stooq policy checkpoint returned
+- The image rebuilt from the unapproved Stooq candidate checkpoint returned
   HTTP 200 for the same public route with six explicit `missing` rows when the
   upstream returned its verification page. No Yahoo request or fallback was
   made; the route's warning is emitted only after all configured price sources
@@ -289,11 +288,10 @@ repository or runtime.
   environment because production credentials, TLS Redis, external CAPTCHA,
   OAuth configuration, production admission, release artifact, monitoring
   declaration and approval manifest are absent. The checked-in provider
-  manifest records the owner's authorization, but intentionally remains
-  staging-only.
-- After separating the gates, the real preflight reports
-  `DATA_AUTHORIZATION PASS`; `MARKET_DATA_ADMISSION` remains failed because
-  the runtime is intentionally `public_evaluation`, not production `licensed`.
+  manifest intentionally remains staging-only and unapproved.
+- After the provider recheck, the real preflight reports
+  `DATA_AUTHORIZATION FAIL` and `MARKET_DATA_ADMISSION FAIL`; no provider
+  authorization or licensed production mode is being claimed.
 - Workspace `typecheck` passed for all nine participating packages/apps.
 - `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
   asset registry, and the 24-path OpenAPI export.
