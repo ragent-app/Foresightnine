@@ -6,6 +6,12 @@ import { formatReport, REQUIRED_APPROVALS, runPreflight } from "./production-pre
 const APPROVAL_MANIFEST = Object.freeze(Object.fromEntries(REQUIRED_APPROVALS.map((key) => [key, true])));
 const PROVIDER_MANIFEST = JSON.stringify({
   schema_version: "provider-admission-manifest/v1",
+  production_admission: "approved",
+  data_authorization: {
+    market_price: { status: "approved", written_terms: true, public_redistribution: true },
+    factor_features: { status: "approved", written_terms: true, public_redistribution: true },
+    fx_reference: { status: "approved", written_terms: true, public_redistribution: true },
+  },
   providers: [{ id: "fixture-provider" }],
   asset_mappings: [{ asset_id: "fixture-asset" }],
 });
@@ -230,6 +236,7 @@ test("OAuth, licensed market admission, and monitoring are explicit production g
     ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "http://evil.example.test/callback" }],
     ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "https://app.example.test/callback?next=evil" }],
     ["MARKET_DATA_ADMISSION", { FORESIGHTNINE_MARKET_PROVIDER_MODE: "yahoo_evaluation" }],
+    ["DATA_AUTHORIZATION", {}],
     ["METRICS_ENDPOINT", { FORESIGHTNINE_METRICS_ENABLED: "false" }],
   ]) {
     const result = resultWithManifest(overrides);

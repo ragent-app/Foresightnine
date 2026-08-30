@@ -3,6 +3,23 @@
   "generated_at": "2026-08-31T00:00:00Z",
   "runtime_status": "staging_only",
   "production_admission": "blocked_pending_written_terms",
+  "data_authorization": {
+    "market_price": {
+      "status": "not_approved",
+      "written_terms": false,
+      "public_redistribution": false
+    },
+    "factor_features": {
+      "status": "not_approved",
+      "written_terms": false,
+      "public_redistribution": false
+    },
+    "fx_reference": {
+      "status": "not_approved",
+      "written_terms": false,
+      "public_redistribution": false
+    }
+  },
   "providers": [
     {
       "id": "stooq",

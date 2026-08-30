@@ -160,6 +160,10 @@ exchange, or production Cloudflare mutation was performed.
   asset-level entry in that manifest. The five legacy IDs and five canonical
   ETF IDs are therefore bound to the fixed Stooq primary and explicit Yahoo
   fallback; missing, duplicate, or mismatched mappings fail closed.
+- The production preflight now has a separate `DATA_AUTHORIZATION` gate: the
+  manifest must explicitly mark market price, factor features and FX reference
+  fields approved with written terms and public redistribution rights. The
+  checked-in staging manifest intentionally marks all three `not_approved`.
 - The fixed-host adapter rejects vendor HTTP redirects instead of allowing a
   provider response to move the request to an unapproved host. The production
   preflight parses the manifest and rejects malformed JSON, empty provider or
@@ -234,8 +238,8 @@ repository or runtime.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
   `verify:production-preflight` command correctly rejects this development
   environment because production credentials, TLS Redis, external CAPTCHA,
-  OAuth configuration, licensed market admission, release artifact, monitoring
-  declaration and approval manifest are absent.
+  OAuth configuration, licensed market admission, explicit data authorization,
+  release artifact, monitoring declaration and approval manifest are absent.
 - Workspace `typecheck` passed for all nine participating packages/apps.
 - `corepack pnpm verify:generated-contracts` passed for generated TypeScript,
   asset registry, and the 24-path OpenAPI export.

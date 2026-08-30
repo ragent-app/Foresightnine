@@ -43,6 +43,12 @@ const DISABLED_CAPTCHA_DECLARATIONS = new Set([
   "false",
 ]);
 
+const REQUIRED_DATA_AUTHORIZATIONS = Object.freeze([
+  "market_price",
+  "factor_features",
+  "fx_reference",
+]);
+
 function envValue(env, name) {
   return typeof env?.[name] === "string" ? env[name].trim() : "";
 }
@@ -243,6 +249,30 @@ function hasProviderAdmissionManifest({ repoRoot, readFile }) {
       new Set(providerIds).size === providerIds.length &&
       assetIds.every((id) => typeof id === "string" && id.length > 0) &&
       new Set(assetIds).size === assetIds.length
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasProductionDataAuthorization({ repoRoot, readFile }) {
+  const manifest = readStaticFile({ repoRoot, relativePath: "src/infra/deployment/provider-manifest.v1.json", readFile });
+  if (typeof manifest !== "string") return false;
+  try {
+    const parsed = JSON.parse(manifest);
+    const authorizations = parsed?.data_authorization;
+    return Boolean(
+      parsed?.production_admission === "approved" &&
+      authorizations &&
+      typeof authorizations === "object" &&
+      !Array.isArray(authorizations) &&
+      REQUIRED_DATA_AUTHORIZATIONS.every((field) => {
+        const record = authorizations[field];
+        return record && typeof record === "object" && !Array.isArray(record)
+          && record.status === "approved"
+          && record.written_terms === true
+          && record.public_redistribution === true;
+      }),
     );
   } catch {
     return false;
@@ -452,6 +482,12 @@ export function runPreflight({
       hasProviderAdmissionManifest({ repoRoot, readFile }),
       "provider admission manifest is included in the repository",
       "provider admission manifest must declare provider-admission-manifest/v1",
+    ),
+    gate(
+      "DATA_AUTHORIZATION",
+      hasProductionDataAuthorization({ repoRoot, readFile }),
+      "market price, factor and FX fields have written redistribution authorization",
+      "provider manifest must mark market_price, factor_features and fx_reference approved with written terms and redistribution rights",
     ),
     gate(
       "COMPOSE_PROVIDER_CONFIG",
