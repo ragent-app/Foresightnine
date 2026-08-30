@@ -434,6 +434,41 @@ class OAuthFoundation:
             del self._transactions[state]
             return transaction.consumed()
 
+    def consume_state(self, state: str) -> OAuthTransaction:
+        """Consume a valid transaction when the callback has no provider path.
+
+        The provider is bound to the stored state, so the callback does not
+        trust a provider name supplied by the browser.
+        """
+
+        if not isinstance(state, str) or not state:
+            raise OAuthTransactionError("OAuth state is invalid or expired")
+        now = float(self._clock())
+        with self._lock:
+            transaction = self._transactions.get(state)
+            if transaction is None:
+                raise OAuthTransactionError("OAuth state is invalid or expired")
+            if now >= transaction.expires_at:
+                del self._transactions[state]
+                raise OAuthTransactionError("OAuth state is expired")
+            del self._transactions[state]
+            return transaction.consumed()
+
+    def transaction_for_state(self, state: str) -> OAuthTransaction:
+        """Read a still-valid transaction for server-side redirect construction."""
+
+        if not isinstance(state, str) or not state:
+            raise OAuthTransactionError("OAuth state is invalid or expired")
+        now = float(self._clock())
+        with self._lock:
+            transaction = self._transactions.get(state)
+            if transaction is None:
+                raise OAuthTransactionError("OAuth state is invalid or expired")
+            if now >= transaction.expires_at:
+                del self._transactions[state]
+                raise OAuthTransactionError("OAuth state is expired")
+            return transaction.consumed()
+
     def _remove_expired(self, now: float) -> None:
         expired_states = [
             state

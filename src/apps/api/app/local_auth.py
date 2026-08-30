@@ -111,7 +111,13 @@ def _public_account(account: LocalAccount) -> dict[str, Any]:
     return {"account_id": account.account_id, "email": account.email, "created_at": account.created_at.isoformat()}
 
 
-def _new_session(sessions: Any, account: LocalAccount, now: datetime) -> dict[str, Any]:
+def _new_session(
+    sessions: Any,
+    account: LocalAccount,
+    now: datetime,
+    *,
+    auth_mode: Literal["local_mock", "oauth"] = "local_mock",
+) -> dict[str, Any]:
     token = secrets.token_urlsafe(32)
     session = LocalSession(
         session_id=f"session_{uuid4().hex}",
@@ -126,8 +132,20 @@ def _new_session(sessions: Any, account: LocalAccount, now: datetime) -> dict[st
         "session_id": session.session_id,
         "access_token": token,
         "expires_at": session.expires_at.isoformat(),
-        "auth_mode": "local_mock",
+        "auth_mode": auth_mode,
     }
+
+
+def issue_session(
+    sessions: Any,
+    account: LocalAccount,
+    *,
+    now: datetime,
+    auth_mode: Literal["local_mock", "oauth"] = "local_mock",
+) -> dict[str, Any]:
+    """Issue the same server-side bearer session for a verified OAuth account."""
+
+    return _new_session(sessions, account, _now_utc(now), auth_mode=auth_mode)
 
 
 def register(
@@ -197,12 +215,16 @@ def logout(sessions: Any, session: LocalSession) -> None:
     sessions.delete(session.session_id)
 
 
-def delete_account(accounts: Any, sessions: Any, account: LocalAccount, *, now: datetime) -> None:
+def delete_account(accounts: Any, sessions: Any, account: LocalAccount, *, now: datetime, identities: Any | None = None) -> None:
     # Remove every session before deleting the account record so a token cannot
     # remain usable after a successful deletion request.
     for key, session in tuple(sessions.items()):
         if session.account_id == account.account_id:
             sessions.delete(key)
+    if identities is not None:
+        for key, identity in tuple(identities.items()):
+            if getattr(identity, "account_id", None) == account.account_id:
+                identities.delete(key)
     # Account credentials and contact data are hard-deleted. Research records
     # are separate and continue under their existing retention policy.
     accounts.delete(account.account_id)
@@ -219,6 +241,6 @@ def purge_expired_sessions(sessions: Any, *, now: datetime) -> int:
 
 __all__ = [
     "LocalAccount", "LocalAuthError", "LocalRegisterRequest", "LocalSession",
-    "authenticate", "delete_account", "hash_password", "login", "logout",
+    "authenticate", "delete_account", "hash_password", "issue_session", "login", "logout",
     "purge_expired_sessions", "register", "verify_password",
 ]
