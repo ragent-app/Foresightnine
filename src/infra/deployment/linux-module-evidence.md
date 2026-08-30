@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight checkpoint: `07983879d17497e62f148be7501c8af1151ab5fe`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `7d31dca320b83b359fe90ee0472df7e7d4751179`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -114,13 +114,18 @@ CAPTCHA, public TLS, production Redis/PostgreSQL, or public traffic evidence.
 - Ingress validation passed. The connector initially used QUIC, but this
   Linux network later showed repeated idle QUIC timeouts and temporary 530
   responses. The config was adjusted to `protocol: http2`; the restarted
-  connector registered two HTTP/2 edge connections (`sin12` and `sin21`), and
+  connector registered two HTTP/2 edge connections (`sin14` and `sin17`), and
   its metrics showed zero origin request errors across three consecutive public
   health checks.
 - Public `GET /health` returned 200 with a browser User-Agent, and a public
   CORS preflight returned 200 with the staging Web origin. A bare `curl`
   User-Agent receives the zone's Cloudflare managed Challenge; this is an
   edge policy behavior, not a Tunnel/origin failure.
+- A user-level systemd unit now supervises the connector with
+  `Restart=on-failure`, `ProtectHome=read-only`, `NoNewPrivileges` and
+  `PrivateTmp`; `loginctl` reports linger enabled. A controlled SIGKILL fault
+  test incremented `NRestarts` to 1, then the service returned active/running
+  and both public health endpoints returned 200.
 
 No production hostname, Pages project, traffic cutover, OAuth callback, or
 production Cloudflare mutation was performed.
@@ -227,7 +232,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `0798387`; this evidence follow-up records the
+implementation checkpoint is `7d31dca`; this evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
