@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `798f204`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `6b8f5ff`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -247,7 +247,7 @@ repository or runtime.
   API-client/domain/asset-registry, market-data, web and mobile tests.
 - OpenAPI export drift check passed with 24 paths; generated TypeScript and
   asset-registry fingerprints matched their checked-in artifacts.
-- Secret scan passed over 797 unique Git-history blobs.
+- Secret scan passed over 833 unique Git-history blobs.
 - The worldline fixture audit remains unavailable on this Linux checkout
   because its configured source is the Windows-only path
   `D:/WL-data-final/wordline-md/wordline1.md`; no substitute data was guessed.
