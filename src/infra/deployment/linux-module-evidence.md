@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `5303715`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `a0fb7b3`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -161,6 +161,10 @@ production Cloudflare mutation was performed.
   provider response to move the request to an unapproved host. The production
   preflight parses the manifest and rejects malformed JSON, empty provider or
   asset lists, and duplicate IDs.
+- Hardened API startup now validates CORS origins itself: production and
+  public-hardening runtimes reject non-HTTPS, credential-bearing, query-bearing,
+  fragment-bearing, or non-root origins; an absent declaration remains an empty
+  allowlist.
 - The 2026-08-31 Linux probe confirmed Yahoo chart returned JSON for SPY and
   SOXX, Frankfurter returned a no-key USD/EUR reference rate, and Kenneth
   French's daily momentum archive downloaded successfully. Stooq returned a
@@ -212,7 +216,7 @@ runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the final API run was 217 passed, 1 skipped (218 collected). The only skip is
+  the final API run was 218 passed, 1 skipped (219 collected). The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
@@ -250,7 +254,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `5303715`; provider mapping and redirect hardening
+implementation checkpoint is `a0fb7b3`; provider mapping and redirect hardening
 are in `3eaf5dc` and `ea8f12c`. This evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
