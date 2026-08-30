@@ -159,6 +159,6 @@ the starting checkout; later module commits are the auditable checkpoints:
 - Module 5: `e43e7d5`
 - Module 6: `febdfdc`
 
-The final evidence-only synchronization commit is recorded by Git history
-after these entries are updated. The user's pre-existing dirty files remain
-unstaged and are intentionally outside all checkpoints.
+The Cloudflare staging synchronization commit is `25d7f90`; it contains only
+the redacted config template and updated evidence. The user's pre-existing
+dirty files remain unstaged and are intentionally outside all checkpoints.
