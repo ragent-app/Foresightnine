@@ -45,6 +45,7 @@ FORESIGHTNINE_PROXY_MODE=reverse_proxy
 FORESIGHTNINE_TRUSTED_PROXY_CIDRS=<actual-ingress-proxy-cidrs>
 FORESIGHTNINE_CAPTCHA_PROVIDER=<approved-external-provider>
 FORESIGHTNINE_CAPTCHA_SECRET=<secret-manager-reference>
+FORESIGHTNINE_CAPTCHA_HOSTNAME=<approved-web-hostname>
 FORESIGHTNINE_CORS_ORIGINS=https://<approved-web-origin>
 ```
 

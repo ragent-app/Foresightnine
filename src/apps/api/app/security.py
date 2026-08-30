@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request as UrlRequest, build_opener
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -43,6 +44,60 @@ class RejectCaptchaVerifier(DeterministicCaptchaVerifier):
 class UnavailableCaptchaVerifier(DeterministicCaptchaVerifier):
     def __init__(self) -> None:
         super().__init__(None)
+
+
+TURNSTILE_VERIFY_ENDPOINT = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+MAX_CAPTCHA_TOKEN_LENGTH = 4096
+MAX_CAPTCHA_RESPONSE_BYTES = 16 * 1024
+
+
+class _RejectCaptchaRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        raise ValueError("CAPTCHA verification redirect rejected")
+
+
+class TurnstileCaptchaVerifier:
+    """Server-side Cloudflare Turnstile verifier with a fixed endpoint."""
+
+    def __init__(self, secret: str, *, expected_hostname: str | None = None, request_json: Callable[[str, Request], object] | None = None) -> None:
+        self._secret = secret
+        self._expected_hostname = expected_hostname.strip().lower() if expected_hostname else None
+        self._request_json = request_json or self._verify_remote
+
+    def verify(self, token: str | None, request: Request) -> bool | None:
+        if not isinstance(token, str) or not token or len(token) > MAX_CAPTCHA_TOKEN_LENGTH:
+            return False
+        try:
+            response = self._request_json(token, request)
+        except Exception:
+            return None
+        if not isinstance(response, dict) or response.get("success") is not True:
+            return False
+        return self._expected_hostname is None or response.get("hostname") == self._expected_hostname
+
+    def _verify_remote(self, token: str, request: Request) -> object:
+        body = json.dumps({
+            "secret": self._secret,
+            "response": token,
+        }, separators=(",", ":")).encode("utf-8")
+        outbound = UrlRequest(
+            TURNSTILE_VERIFY_ENDPOINT,
+            data=body,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "ForesightNine-captcha/1",
+            },
+            method="POST",
+        )
+        with build_opener(_RejectCaptchaRedirect).open(outbound, timeout=8) as response:
+            payload = response.read(MAX_CAPTCHA_RESPONSE_BYTES + 1)
+        if len(payload) > MAX_CAPTCHA_RESPONSE_BYTES:
+            raise ValueError("CAPTCHA response exceeded the bounded payload")
+        decoded = json.loads(payload.decode("utf-8"))
+        if not isinstance(decoded, dict):
+            raise ValueError("CAPTCHA response had an invalid shape")
+        return decoded
 
 
 class BodyTooLarge(Exception):
@@ -156,10 +211,16 @@ def build_security_config() -> SecurityConfig:
 
 def build_captcha_verifier(config: SecurityConfig | None = None) -> CaptchaVerifier:
     config = config or build_security_config()
-    mode = os.getenv("FORESIGHTNINE_CAPTCHA_MODE", "unavailable" if config.require_captcha else "accept").lower()
-    if mode == "accept" and not config.require_captcha:
+    mode = os.getenv("FORESIGHTNINE_CAPTCHA_MODE", "").strip().lower()
+    provider = os.getenv("FORESIGHTNINE_CAPTCHA_PROVIDER", "").strip().lower()
+    selected = provider or mode or ("unavailable" if config.require_captcha else "accept")
+    if selected == "turnstile":
+        secret = os.getenv("FORESIGHTNINE_CAPTCHA_SECRET", "").strip()
+        expected_hostname = os.getenv("FORESIGHTNINE_CAPTCHA_HOSTNAME", "").strip()
+        return TurnstileCaptchaVerifier(secret, expected_hostname=expected_hostname) if secret and expected_hostname else UnavailableCaptchaVerifier()
+    if selected == "accept" and not config.require_captcha:
         return AcceptCaptchaVerifier()
-    if mode == "reject":
+    if selected == "reject":
         return RejectCaptchaVerifier()
     return UnavailableCaptchaVerifier()
 

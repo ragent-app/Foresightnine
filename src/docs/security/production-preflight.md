@@ -20,7 +20,12 @@ The deployment context must provide:
   `FORESIGHTNINE_PROXY_MODE=reverse_proxy` with a comma-separated list of the
   actual ingress proxy CIDRs in `FORESIGHTNINE_TRUSTED_PROXY_CIDRS`; universal
   `/0` networks are rejected;
-- an external CAPTCHA declaration in `FORESIGHTNINE_CAPTCHA_PROVIDER` (or an equivalent non-disabled `FORESIGHTNINE_CAPTCHA_MODE`) plus `FORESIGHTNINE_CAPTCHA_SECRET`. `accept`, `unavailable`, `reject`, mock, debug, and QA declarations are rejected;
+- the implemented external Cloudflare Turnstile declaration in
+  `FORESIGHTNINE_CAPTCHA_PROVIDER=turnstile` (or equivalent mode) plus
+  `FORESIGHTNINE_CAPTCHA_SECRET` and a fully-qualified
+  `FORESIGHTNINE_CAPTCHA_HOSTNAME`; `accept`, `unavailable`, `reject`, unknown,
+  mock, debug, and QA declarations are rejected. The verifier also requires
+  Cloudflare's response hostname to match this configured hostname;
 - comma-separated `FORESIGHTNINE_CORS_ORIGINS`, with every origin using HTTPS and containing no path, query, or fragment;
 - complete server-side Google and GitHub OAuth configuration: an HTTPS callback,
   a non-empty return-URI allowlist, and client ID/secret values for both

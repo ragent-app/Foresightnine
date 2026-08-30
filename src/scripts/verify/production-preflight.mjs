@@ -98,6 +98,15 @@ function hasHttpsCorsOrigins(value) {
   });
 }
 
+function hasCaptchaHostname(value) {
+  if (!value || /\s/u.test(value) || value.length > 253) return false;
+  const labels = value.toLowerCase().split(".");
+  return labels.length >= 2 && labels.every((label) =>
+    label.length > 0 && label.length <= 63 &&
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u.test(label),
+  );
+}
+
 function hasOAuthConfiguration(env) {
   const callback = envValue(env, "FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL");
   const returnUris = envValue(env, "FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST");
@@ -431,15 +440,21 @@ export function runPreflight({
     ),
     gate(
       "CAPTCHA_EXTERNAL",
-      !DISABLED_CAPTCHA_DECLARATIONS.has(captchaDeclaration.toLowerCase()),
-      "external CAPTCHA provider declared",
-      "CAPTCHA must declare an external provider, not accept/unavailable/mock/debug/QA",
+      captchaDeclaration.toLowerCase() === "turnstile" && !DISABLED_CAPTCHA_DECLARATIONS.has(captchaDeclaration.toLowerCase()),
+      "supported external Cloudflare Turnstile provider declared",
+      "CAPTCHA must declare the implemented external Turnstile provider, not accept/unavailable/mock/debug/QA",
     ),
     gate(
       "CAPTCHA_SECRET",
       hasValue(env, "FORESIGHTNINE_CAPTCHA_SECRET"),
       "CAPTCHA provider credential is present",
       "CAPTCHA provider credential is missing",
+    ),
+    gate(
+      "CAPTCHA_HOSTNAME",
+      hasCaptchaHostname(envValue(env, "FORESIGHTNINE_CAPTCHA_HOSTNAME")),
+      "CAPTCHA hostname is explicitly bound to the deployment site",
+      "FORESIGHTNINE_CAPTCHA_HOSTNAME must be a valid fully-qualified hostname",
     ),
     gate(
       "CORS_HTTPS",

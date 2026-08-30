@@ -28,6 +28,7 @@ function baseEnv() {
     FORESIGHTNINE_ABUSE_MODE: "redis",
     FORESIGHTNINE_CAPTCHA_PROVIDER: "turnstile",
     FORESIGHTNINE_CAPTCHA_SECRET: "dummy-captcha-value-not-shaped-like-a-real-secret",
+    FORESIGHTNINE_CAPTCHA_HOSTNAME: "app.example.test",
     FORESIGHTNINE_CORS_ORIGINS: "https://app.example.test,https://admin.example.test",
     FORESIGHTNINE_PROXY_MODE: "reverse_proxy",
     FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
@@ -195,8 +196,8 @@ test("plaintext Redis, HTTP, query-bearing, and empty CORS declarations are reje
   }
 });
 
-test("accept and unavailable CAPTCHA declarations are rejected", () => {
-  for (const declaration of ["accept", "unavailable"]) {
+test("accept, unavailable, and unsupported CAPTCHA declarations are rejected", () => {
+  for (const declaration of ["accept", "unavailable", "recaptcha"]) {
     const result = resultWithManifest({
       FORESIGHTNINE_CAPTCHA_PROVIDER: "",
       FORESIGHTNINE_CAPTCHA_MODE: declaration,
