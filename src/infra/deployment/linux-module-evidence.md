@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight checkpoint: `3a5595336f16c76bd49472ed3578ba18539212a6`
+- Synced source and Linux provider/auth/observability/preflight checkpoint: `8433438d8e925bfe6e13f5b1abaa25f16d02ec11`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -223,7 +223,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `3a55953`; this evidence follow-up records the
+implementation checkpoint is `8433438`; this evidence follow-up records the
 final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
 pre-existing dirty files remain unstaged and are intentionally outside all
