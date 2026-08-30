@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `56ff428`
+ - Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `b6acb7c`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -182,6 +182,8 @@ exchange, or production Cloudflare mutation was performed.
 - Browser OAuth start/callback routes now share the same IP abuse limiter as
   `/v1/*` and `/snapshots`, preventing unauthenticated callback flooding from
   bypassing the production rate boundary.
+- The security regression suite now covers 22 cases, including real Turnstile
+  verifier selection, hostname mismatch rejection, and OAuth route rate limits.
 - The production preflight additionally requires that CAPTCHA hostname to match
   one of the declared HTTPS CORS origin hostnames, preventing a valid but
   misbound Turnstile site from satisfying the release gate.
@@ -245,7 +247,7 @@ repository or runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the latest API run was 226 passed, 1 skipped (227 collected). The only skip is
+  the latest API run was 227 passed, 1 skipped (228 collected). The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 12 passed. The real
@@ -283,7 +285,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The current Linux provider/auth/observability
-implementation checkpoint is `56ff428`; OAuth callback, provider mapping, redirect hardening
+implementation checkpoint is `b6acb7c`; OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
 config/evidence and staging runtime configuration. The user's
