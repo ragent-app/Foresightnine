@@ -159,6 +159,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 - Module 5: `e43e7d5`
 - Module 6: `febdfdc`
 
-The Cloudflare staging synchronization commit is `25d7f90`; it contains only
-the redacted config template and updated evidence. The user's pre-existing
+The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
+Compose CORS wiring is `e797bb4`. These commits contain only the redacted
+config/evidence and staging runtime configuration. The user's pre-existing
 dirty files remain unstaged and are intentionally outside all checkpoints.
