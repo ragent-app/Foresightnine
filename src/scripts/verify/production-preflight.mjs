@@ -92,6 +92,23 @@ function hasHttpsCorsOrigins(value) {
   });
 }
 
+function hasOAuthConfiguration(env) {
+  const callback = envValue(env, "FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL");
+  const returnUris = envValue(env, "FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST");
+  if (!callback || !returnUris) return false;
+  try {
+    const parsed = new URL(callback);
+    if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash) return false;
+  } catch {
+    return false;
+  }
+  const providersConfigured = ["google", "github"].every((provider) =>
+    hasValue(env, `FORESIGHTNINE_OAUTH_${provider.toUpperCase()}_CLIENT_ID`) &&
+    hasValue(env, `FORESIGHTNINE_OAUTH_${provider.toUpperCase()}_CLIENT_SECRET`),
+  );
+  return providersConfigured && returnUris.split(",").some((value) => value.trim().length > 0);
+}
+
 function hasTrustedProxyCidrs(value) {
   const cidrs = value.split(",").map((cidr) => cidr.trim()).filter(Boolean);
   if (cidrs.length === 0) return false;
@@ -369,6 +386,24 @@ export function runPreflight({
       hasDeclaredProxyTopology(env),
       "proxy topology is explicit and trusted proxy CIDRs match the deployment edge",
       "FORESIGHTNINE_PROXY_MODE must be direct with no trusted CIDRs, or reverse_proxy with valid FORESIGHTNINE_TRUSTED_PROXY_CIDRS",
+    ),
+    gate(
+      "OAUTH_CONFIG",
+      hasOAuthConfiguration(env),
+      "Google and GitHub server-side OAuth configuration is complete",
+      "OAuth callback, return allowlist, and both provider credentials are required",
+    ),
+    gate(
+      "MARKET_DATA_ADMISSION",
+      envValue(env, "FORESIGHTNINE_MARKET_PROVIDER_MODE").toLowerCase() === "licensed",
+      "a licensed market provider is explicitly admitted",
+      "FORESIGHTNINE_MARKET_PROVIDER_MODE must be licensed for production",
+    ),
+    gate(
+      "METRICS_ENDPOINT",
+      ["1", "true", "yes"].includes(envValue(env, "FORESIGHTNINE_METRICS_ENABLED").toLowerCase()),
+      "redacted metrics endpoint is enabled for the deployment monitor",
+      "FORESIGHTNINE_METRICS_ENABLED must be true for production monitoring",
     ),
     gate(
       "DOCKER_ASSET_REGISTRY",

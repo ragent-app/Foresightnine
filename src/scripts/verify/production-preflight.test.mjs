@@ -20,6 +20,14 @@ function baseEnv() {
     FORESIGHTNINE_CORS_ORIGINS: "https://app.example.test,https://admin.example.test",
     FORESIGHTNINE_PROXY_MODE: "reverse_proxy",
     FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+    FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL: "https://api.example.test/oauth/callback",
+    FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "https://app.example.test/oauth/complete,foresightnine://oauth/complete",
+    FORESIGHTNINE_OAUTH_GOOGLE_CLIENT_ID: "google-client-id",
+    FORESIGHTNINE_OAUTH_GOOGLE_CLIENT_SECRET: "google-client-secret",
+    FORESIGHTNINE_OAUTH_GITHUB_CLIENT_ID: "github-client-id",
+    FORESIGHTNINE_OAUTH_GITHUB_CLIENT_SECRET: "github-client-secret",
+    FORESIGHTNINE_MARKET_PROVIDER_MODE: "licensed",
+    FORESIGHTNINE_METRICS_ENABLED: "true",
     FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT: "/deployment-owned/app-release.apk",
   };
 }
@@ -191,6 +199,17 @@ test("proxy topology is explicit and trusted CIDRs are validated", () => {
     FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "127.0.0.1/32",
   });
   assert.equal(directWithForwarders.gates.find(({ id }) => id === "PROXY_TOPOLOGY").status, "FAIL");
+});
+
+test("OAuth, licensed market admission, and monitoring are explicit production gates", () => {
+  for (const [name, overrides] of [
+    ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_GITHUB_CLIENT_SECRET: "" }],
+    ["MARKET_DATA_ADMISSION", { FORESIGHTNINE_MARKET_PROVIDER_MODE: "yahoo_evaluation" }],
+    ["METRICS_ENDPOINT", { FORESIGHTNINE_METRICS_ENABLED: "false" }],
+  ]) {
+    const result = resultWithManifest(overrides);
+    assert.equal(result.gates.find(({ id }) => id === name).status, "FAIL");
+  }
 });
 
 test("formatted output contains no injected secret or URL query values", () => {
