@@ -204,6 +204,8 @@ test("proxy topology is explicit and trusted CIDRs are validated", () => {
 test("OAuth, licensed market admission, and monitoring are explicit production gates", () => {
   for (const [name, overrides] of [
     ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_GITHUB_CLIENT_SECRET: "" }],
+    ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "http://evil.example.test/callback" }],
+    ["OAUTH_CONFIG", { FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST: "https://app.example.test/callback?next=evil" }],
     ["MARKET_DATA_ADMISSION", { FORESIGHTNINE_MARKET_PROVIDER_MODE: "yahoo_evaluation" }],
     ["METRICS_ENDPOINT", { FORESIGHTNINE_METRICS_ENABLED: "false" }],
   ]) {

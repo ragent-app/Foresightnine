@@ -102,11 +102,20 @@ function hasOAuthConfiguration(env) {
   } catch {
     return false;
   }
+  const validReturnUris = returnUris.split(",").map((value) => value.trim()).filter(Boolean).every((value) => {
+    try {
+      const parsed = new URL(value);
+      if (parsed.username || parsed.password || parsed.search || parsed.hash || !parsed.hostname) return false;
+      return parsed.protocol === "https:" || parsed.protocol === "foresightnine:";
+    } catch {
+      return false;
+    }
+  });
   const providersConfigured = ["google", "github"].every((provider) =>
     hasValue(env, `FORESIGHTNINE_OAUTH_${provider.toUpperCase()}_CLIENT_ID`) &&
     hasValue(env, `FORESIGHTNINE_OAUTH_${provider.toUpperCase()}_CLIENT_SECRET`),
   );
-  return providersConfigured && returnUris.split(",").some((value) => value.trim().length > 0);
+  return providersConfigured && validReturnUris;
 }
 
 function hasTrustedProxyCidrs(value) {
