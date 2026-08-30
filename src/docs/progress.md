@@ -1,5 +1,24 @@
 # Progress
 
+## Public-provider probe and Linux follow-up prompt — 2026-08-30
+
+- Performed a read-only network probe against the Yahoo Finance chart endpoint.
+  PAVE, SOXX, XLU, GLD and VT each returned HTTP 200 and 165 daily rows for
+  the 2026-01-01 through 2026-08-30 probe window, with a first session on
+  2026-01-02 and a latest session on 2026-08-28.
+- The candidate is not configured as a production provider: the endpoint did
+  not return `Access-Control-Allow-Origin`, uses a vendor protocol rather than
+  the product `POST /snapshots` contract, and supplies prices but not the
+  approved FM feature fields. No client URL, proxy, cache or unlicensed data
+  was added.
+- Added `docs/deployment/linux-market-provider-next-prompt.md`, a ready-to-send
+  Linux agent prompt. It directs Linux to deploy persistent API/PostgreSQL/
+  Redis/Cloudflare/OAuth/account services, optionally build only a thin audited
+  provider adapter after licensing approval, and never move FM or invent factor
+  features. Windows-side implementation is exhausted for this provider
+  decision; the remaining work is deployment authority, provider contract,
+  licensing and production service integration.
+
 ## Client market runtime and Linux boundary — 2026-08-30
 
 - Extended the shared client market-data package from a static contract into a
