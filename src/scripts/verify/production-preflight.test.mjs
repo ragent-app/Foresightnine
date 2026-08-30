@@ -20,7 +20,7 @@ function baseEnv() {
     FORESIGHTNINE_CORS_ORIGINS: "https://app.example.test,https://admin.example.test",
     FORESIGHTNINE_PROXY_MODE: "reverse_proxy",
     FORESIGHTNINE_TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-    FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT: "C:\\deployment-owned\\app-release.apk",
+    FORESIGHTNINE_ANDROID_RELEASE_ARTIFACT: "/deployment-owned/app-release.apk",
   };
 }
 
@@ -37,8 +37,8 @@ test("synthetic production preflight passes through argv/env injection without n
   let injectedArtifactPath = "";
   const result = runPreflight({
     env: baseEnv(),
-    repoRoot: "C:\\synthetic-repository",
-    argv: ["--approval-manifest", "C:\\deployment-owned\\release-approval.json"],
+    repoRoot: "/synthetic-repository",
+    argv: ["--approval-manifest", "/deployment-owned/release-approval.json"],
     readFile: (filePath) => {
       if (filePath.endsWith("Dockerfile.api")) return "COPY packages/asset-registry /app/packages/asset-registry";
       return "FORESIGHTNINE_LLM_PROVIDER: mock";
