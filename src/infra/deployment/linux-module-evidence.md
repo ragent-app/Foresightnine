@@ -310,6 +310,10 @@ repository or runtime.
   candidate verifier passed its repository/QA artifact checks, while the
   production preflight correctly continues to reject the debug APK as a
   production release artifact.
+- `corepack pnpm verify:phase2` passed the design-asset, image-regression,
+  contrast and design-system checks. `verify:reference-hashes` remains a
+  Windows-only gate because its six authoritative references use unavailable
+  `D:\` paths; the baseline was not rewritten.
 - `corepack pnpm verify:boundaries` was run and correctly failed on Linux-only
   portability constraints: the repository intentionally references the
   Windows `D:\Foresightnine` governance files and Windows implementation-root
