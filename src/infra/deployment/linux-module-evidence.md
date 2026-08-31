@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `69e01b0`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `11cfb1c`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -97,6 +97,10 @@ certificate-rotation evidence.
 - Compose now keeps PostgreSQL and Redis on the private Docker network, binds
   API port `8000` to loopback only, uses `unless-stopped` restart policy,
   `init`, a healthcheck, and limits API resources to 1 CPU and 512 MiB.
+- The staging Web preview binds to loopback `127.0.0.1:4173` under the enabled
+  user service `foresightnine-web.service` with `Restart=on-failure`; its Vite
+  preview responses now include CSP, COOP, Permissions-Policy, Referrer-Policy,
+  `nosniff` and `DENY` frame protection.
 - API healthcheck became `healthy`; `/health` and `/openapi.json` returned
   success, reporting `deterministic_mock` and `client-evidence-bundle`.
 - Persistent startup now probes PostgreSQL repositories and Redis before the
@@ -273,6 +277,9 @@ repository or runtime.
   Playwright fallback smoke test (the Browser plugin was unavailable) verified
   meaningful content, challenge submission entering the receiving state, a
   390x844 mobile viewport, and zero browser console errors.
+- After the Web supervisor/security-header hardening, the same public Web route
+  returned 200 with the expected CSP, COOP, Permissions-Policy, Referrer-Policy,
+  `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` headers.
 - Staging API `/health` and `/readyz` both returned 200. The API CORS preflight
   allowed only `https://staging.foresightnine.com` for the tested POST route.
 - A redacted Prometheus text endpoint is enabled for the local supervisor at
@@ -341,8 +348,8 @@ the starting checkout; later module commits are the auditable checkpoints:
 
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The historical Linux provider/auth/observability
-implementation checkpoint is `595a71c`; the current unapproved-provider
-checkpoint is `69e01b0`; external provider authorization input
+implementation checkpoint is `595a71c`; the current unapproved-provider and
+Web-hardening checkpoint is `11cfb1c`; external provider authorization input
 handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
