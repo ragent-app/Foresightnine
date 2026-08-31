@@ -2,8 +2,8 @@
 
 ## Scope
 
-This is a local QA release for source commit `8d7dc99` (the mobile source is
-unchanged by the later API/market-data commits). It is not
+This is a local QA release for source commit `305f69a` (the mobile production
+source and build-time configuration were synced from the merged HEAD). It is not
 a Google Play upload and it is not signed with the production release key.
 The build used the existing Expo/RN project, generated workspace `dist`
 outputs, CMake 3.30.5, and the x86_64 ABI required by the local API 36 Play
@@ -40,6 +40,11 @@ $env:JAVA_TOOL_OPTIONS = '--enable-native-access=ALL-UNNAMED'
 
 The final `-x` is only for producing an unsigned QA candidate. A production
 build must omit it and provide all four `FORESIGHTNINE_ANDROID_KEY*` values.
+
+The merged-HEAD revalidation completed on 2026-08-31 at 06:09 local time in
+the short-path QA clone. The build was successful with 503 actionable tasks
+(20 executed, 483 up-to-date); the retained hashes below are the resulting
+merged-HEAD outputs.
 
 ## Artifacts and hashes
 

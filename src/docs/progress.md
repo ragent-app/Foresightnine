@@ -2,9 +2,10 @@
 
 ## Current implementation correction status — 2026-08-31
 
-- The current repository HEAD is `f1c70ef`; the Android artifacts named below
-  were produced from earlier snapshots and are retained as historical QA, not
-  current-head release evidence.
+- The current repository HEAD is `305f69a` and is aligned with `origin/master`.
+  The Android release artifacts were revalidated from the merged HEAD after
+  the build-time production App Link checks were merged; they remain QA-only
+  because signing, App Links and physical-device gates are still open.
 - OAuth state and one-time exchange tickets now use the existing PostgreSQL
   document repository when persistent storage is configured. They retain the
   bounded-TTL and generic fail-closed behavior when persistence is unavailable;
