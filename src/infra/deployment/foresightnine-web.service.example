@@ -1,0 +1,16 @@
+[Unit]
+Description=ForesightNine staging Web preview
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/lxx/Foresightnine/src
+ExecStart=/home/lxx/.local/bin/corepack pnpm --filter @foresightnine/web exec vite preview --host 127.0.0.1 --port 4173 --strictPort
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

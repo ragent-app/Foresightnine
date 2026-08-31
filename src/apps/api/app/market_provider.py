@@ -288,8 +288,8 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
     )
     adapters = (("stooq", StooqEvaluationAdapter()),) if evaluation_enabled else ()
     warnings = [
-        "Linux provider adapter is staging/evaluation-only; Stooq price use is owner-confirmed for this deployment.",
-        "Kenneth French, AQR QMJ and Frankfurter are configured in the admission manifest, but this three-anchor price response does not emit factor features or FX conversion.",
+        "Linux provider adapter is isolated staging-only; no public production provider permission is asserted.",
+        "Kenneth French, AQR QMJ and Frankfurter remain unapproved candidates; this three-anchor response does not emit factor features or FX conversion.",
         "Only three point-in-time anchors are returned; this is not a backtest window.",
     ]
     snapshots: list[dict[str, Any]] = []

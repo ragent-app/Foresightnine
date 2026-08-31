@@ -43,7 +43,7 @@ def test_default_provider_is_explicitly_limited(monkeypatch) -> None:
 
 
 def test_evaluation_mode_requires_the_admission_manifest(monkeypatch, tmp_path) -> None:
-    assert market_provider._evaluation_manifest_allows("stooq") is True
+    assert market_provider._evaluation_manifest_allows("stooq") is False
     monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", tmp_path / "missing.json")
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
@@ -79,6 +79,17 @@ def test_stooq_challenge_payload_is_rejected() -> None:
         raise AssertionError("challenge HTML must not be treated as market data")
 
 
+def _enable_isolated_stooq(monkeypatch, tmp_path) -> None:
+    manifest = json.loads(market_provider.PROVIDER_MANIFEST_PATH.read_text(encoding="utf-8"))
+    stooq = next(provider for provider in manifest["providers"] if provider["id"] == "stooq")
+    stooq["enabled_modes"] = ["staging_evaluation"]
+    stooq["authorization_status"] = "owner_confirmed"
+    stooq["public_redistribution"] = "approved"
+    manifest_path = tmp_path / "isolated-authorized-provider-manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(market_provider, "PROVIDER_MANIFEST_PATH", manifest_path)
+
+
 def test_future_vendor_sessions_are_rejected() -> None:
     try:
         market_provider._reject_future_rows({date(2026, 8, 31): 123.45}, date(2026, 8, 30))
@@ -101,7 +112,8 @@ def test_provider_consensus_uses_priority_then_majority() -> None:
     ) is None
 
 
-def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -> None:
+def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch, tmp_path) -> None:
+    _enable_isolated_stooq(monkeypatch, tmp_path)
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
 
@@ -122,7 +134,8 @@ def test_evaluation_adapter_returns_prices_without_features_or_fx(monkeypatch) -
     assert any("No licensed provider mapping" in warning for warning in response["warnings"])
 
 
-def test_evaluation_adapter_marks_rows_before_the_requested_anchor_stale(monkeypatch) -> None:
+def test_evaluation_adapter_marks_rows_before_the_requested_anchor_stale(monkeypatch, tmp_path) -> None:
+    _enable_isolated_stooq(monkeypatch, tmp_path)
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
     monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {
@@ -147,7 +160,8 @@ def test_evaluation_adapter_marks_rows_before_the_requested_anchor_stale(monkeyp
     assert all(any("precedes requested anchor" in warning for warning in row["warnings"]) for row in rows[1:])
 
 
-def test_canonical_registry_etf_ids_are_allowlisted(monkeypatch) -> None:
+def test_canonical_registry_etf_ids_are_allowlisted(monkeypatch, tmp_path) -> None:
+    _enable_isolated_stooq(monkeypatch, tmp_path)
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
     monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
     monkeypatch.setattr(StooqEvaluationAdapter, "fetch", lambda *_args: {date(2026, 8, 28): 500.0})
