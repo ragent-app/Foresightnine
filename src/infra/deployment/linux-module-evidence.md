@@ -7,7 +7,7 @@ agent modules. It is not production approval and contains no credentials.
 
 - Workspace: `/home/lxx/Foresightnine`
 - Application source root: `/home/lxx/Foresightnine/src`
-- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `11cfb1c`
+- Synced source and Linux provider/auth/observability/preflight/ops checkpoint: `305f69a`
 - GitHub provider-guidance sync: `d0c8204d9c3e42c83ec3fc1c034ebba8dd47a92b`
 - Branch: `master`, tracking `origin/master`
 - Research/reference roots observed and left untouched:
@@ -261,7 +261,10 @@ exchange, or production Cloudflare mutation was performed.
   covering HTTPS and deep-link allowlists, fixed provider redirects, bounded
   code exchange, verified identities, S256 challenge derivation, one-use/
   expiry state, strict request fields, and secret redaction.
-- Generated OpenAPI drift check passed with 24 paths.
+- A live synthetic OAuth probe in the API container used PostgreSQL storage:
+  a second `OAuthFoundation` instance consumed the persisted state and ticket,
+  both replays were rejected, and the consumed tombstones were removed.
+- Generated OpenAPI drift check passed with 25 paths.
 - The callback implementation is not enabled in staging because all six OAuth
   environment inputs are absent. The live Google/GitHub exchange remains
   unverified until owner-supplied client credentials, exact callback URLs,
@@ -299,7 +302,7 @@ repository or runtime.
 ## Portable and API validation gates
 
 - `corepack pnpm test` completed the workspace tests and API suite;
-  the latest run was 230 passed, 1 skipped. The only skip is
+  the latest run was 237 passed, 1 skipped. The only skip is
   the optional Redis integration test because
   no external integration URL was supplied.
 - `corepack pnpm test:production-preflight`: 13 passed. The real
@@ -331,7 +334,7 @@ repository or runtime.
   API-client/domain/asset-registry, market-data, web and mobile tests.
 - OpenAPI export drift check passed with 25 paths; generated TypeScript and
   asset-registry fingerprints matched their checked-in artifacts.
-- Secret scan passed over 1,097 unique Git-history blobs.
+- Secret scan passed over 1,115 unique Git-history blobs.
 - The worldline fixture audit remains unavailable on this Linux checkout
   because its configured source is the Windows-only path
   `D:/WL-data-final/wordline-md/wordline1.md`; no substitute data was guessed.
@@ -351,7 +354,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The historical Linux provider/auth/observability
 implementation checkpoint is `595a71c`; the current unapproved-provider and
-Web-hardening checkpoint is `ad4d8ae`; external provider authorization input
+Web-hardening/OAuth-persistence checkpoint is `305f69a`; external provider authorization input
 handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
