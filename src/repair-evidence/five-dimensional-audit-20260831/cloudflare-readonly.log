@@ -1,0 +1,34 @@
+config_mode:
+600
+ingress_validate:
+Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+user_service_status:
+foresightnine-cloudflared=active
+foresightnine-web=active
+route_inventory:
+  - hostname: app.foresightnine.com
+    path: ^/metrics$
+    service: http_status:404
+  - hostname: app.foresightnine.com
+    path: '^/oauth/complete(/.*)?$'
+    service: http://127.0.0.1:4173
+  - hostname: app.foresightnine.com
+    path: '^/(api|oauth|v1)(/.*)?$'
+    service: http://127.0.0.1:8000
+  - hostname: app.foresightnine.com
+    path: '^/(health|docs|openapi\.json)(/.*)?$'
+    service: http://127.0.0.1:8000
+  - hostname: app.foresightnine.com
+    service: http://127.0.0.1:4173
+  - hostname: api-staging.foresightnine.com
+    path: ^/metrics$
+    service: http_status:404
+  - hostname: api-staging.foresightnine.com
+    service: http://127.0.0.1:8000
+  - hostname: staging.foresightnine.com
+    service: http://127.0.0.1:4173
+tls_summary:
+app.foresightnine.com issuer=C=US, O=Google Trust Services, CN=WE1;subject=CN=foresightnine.com;notBefore=Aug 30 09:23:37 2026 GMT;notAfter=Nov 28 10:20:58 2026 GMT;
+staging.foresightnine.com issuer=C=US, O=Google Trust Services, CN=WE1;subject=CN=foresightnine.com;notBefore=Aug 30 09:23:37 2026 GMT;notAfter=Nov 28 10:20:58 2026 GMT;
+api-staging.foresightnine.com issuer=C=US, O=Google Trust Services, CN=WE1;subject=CN=foresightnine.com;notBefore=Aug 30 09:23:37 2026 GMT;notAfter=Nov 28 10:20:58 2026 GMT;

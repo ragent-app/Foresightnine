@@ -1,0 +1,6 @@
+url_path=/v1/factor-libraries/v1.0.0/manifest HTTP=200 bytes=877
+keys=admission,as_of,content_hash,created_at,dsl_version,factor_ids,integrity,library_version,metric_version,schema_version,shards,source_refs
+factor_count=1
+url_path=/v1/factor-libraries/v1.0.0/shards?shard_id=factor-shard%3Acore HTTP=200 bytes=761
+keys=content_hash,created_at,factors,integrity,library_version,schema_version,shard_id,source_refs
+factor_count=1

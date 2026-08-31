@@ -1,0 +1,2 @@
+app_start provider=google HTTP=307 redirect_host=accounts.google.com
+app_start provider=github HTTP=307 redirect_host=github.com

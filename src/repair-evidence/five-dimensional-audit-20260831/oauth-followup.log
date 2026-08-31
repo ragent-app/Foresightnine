@@ -1,0 +1,17 @@
+recent_oauth_requests:
+INFO:     172.20.0.1:53480 - "GET /api/auth/callback/github?code=<redacted>&iss=https%3A%2F%2Fgithub.com%2Flogin%2Foauth&state=<redacted> HTTP/1.1" 400 Bad Request
+INFO:     172.20.0.1:53480 - "GET /api/auth/callback/github?code=<redacted>&iss=https%3A%2F%2Fgithub.com%2Flogin%2Foauth&state=<redacted> HTTP/1.1" 400 Bad Request
+INFO:     172.20.0.1:36552 - "GET /api/auth/callback/google?state=<redacted>&iss=<url-redacted> HTTP/1.1" 400 Bad Request
+INFO:     172.20.0.1:51536 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:51536 - "GET /oauth/github/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:38600 - "GET /api/auth/callback/github?code=<redacted>&iss=https%3A%2F%2Fgithub.com%2Flogin%2Foauth&state=<redacted> HTTP/1.1" 303 See Other
+INFO:     172.20.0.1:50446 - "OPTIONS /v1/auth/oauth/exchange HTTP/1.1" 200 OK
+INFO:     172.20.0.1:50448 - "POST /v1/auth/oauth/exchange HTTP/1.1" 200 OK
+INFO:     172.20.0.1:46862 - "GET /api/auth/callback/google?state=<redacted>&iss=<url-redacted> HTTP/1.1" 303 See Other
+INFO:     172.20.0.1:36362 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:52428 - "GET /api/auth/callback/google?state=<redacted>&iss=<url-redacted> HTTP/1.1" 303 See Other
+provider_readiness:
+google=True github=True
+callback_fail_closed:
+google=HTTP=400
+github=HTTP=400

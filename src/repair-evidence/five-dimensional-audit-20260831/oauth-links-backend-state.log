@@ -1,0 +1,12 @@
+oauth_start_validation:
+provider=google HTTP=307 redirect_host=accounts.google.com
+provider=github HTTP=307 redirect_host=github.com
+callback_observation:
+INFO:     172.20.0.1:50670 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:50670 - "GET /oauth/github/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:50680 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:50680 - "GET /oauth/github/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:58910 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:58910 - "GET /oauth/github/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+provider_readiness:
+providers=google:True,github:True

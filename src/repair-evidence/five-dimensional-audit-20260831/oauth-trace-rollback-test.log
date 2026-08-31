@@ -1,0 +1,2 @@
+rollback_restored=1 target=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/rollback-test-final/main.py baseline_bytes=82094 target_bytes=82094
+rollback_compare=identical

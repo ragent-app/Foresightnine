@@ -1,0 +1,13 @@
+credential_file_exists=1
+credential_mode= 0o600
+credential_json=valid
+required_fields_present= 1
+token_exchange_http= 200
+access_token_in_memory= 1
+tokeninfo_http= 200
+tokeninfo_androidpublisher_scope= 1
+tokeninfo_expiry_present= 1
+track_internal_http= 404
+track_closed_http= 404
+track_open_http= 404
+developer_id_lookup=not_run_no_repo_reference

@@ -1,0 +1,26 @@
+$ node scripts/verify/production-preflight.mjs
+ENV_PRODUCTION FAIL FORESIGHTNINE_ENV must be production
+LLM_PROVIDER FAIL LLM provider must be an explicitly supported live provider
+LLM_SECRET FAIL LLM provider credential is missing
+SEARCH_PROVIDER FAIL search provider must be an explicitly supported external provider
+SEARCH_SECRET FAIL search provider credential is missing
+POSTGRES_URL FAIL a valid Postgres URL is required
+STORAGE_MODE FAIL FORESIGHTNINE_STORAGE_MODE must be postgres
+REDIS_URL FAIL a TLS-protected rediss:// Redis URL is required
+ABUSE_MODE FAIL FORESIGHTNINE_ABUSE_MODE must be redis
+CAPTCHA_EXTERNAL FAIL CAPTCHA must declare the implemented external Turnstile provider, not accept/unavailable/mock/debug/QA
+CAPTCHA_SECRET FAIL CAPTCHA provider credential is missing
+CAPTCHA_HOSTNAME FAIL CAPTCHA hostname must be valid and match an HTTPS CORS origin hostname
+CORS_HTTPS FAIL CORS origins must be non-empty HTTPS origins without query or path data
+PROXY_TOPOLOGY FAIL FORESIGHTNINE_PROXY_MODE must be direct with no trusted CIDRs, or reverse_proxy with valid FORESIGHTNINE_TRUSTED_PROXY_CIDRS
+OAUTH_CONFIG FAIL OAuth callback, return allowlist, and both provider credentials are required
+MARKET_DATA_ADMISSION FAIL FORESIGHTNINE_MARKET_PROVIDER_MODE must be licensed for production
+METRICS_ENDPOINT FAIL FORESIGHTNINE_METRICS_ENABLED must be true for production monitoring
+DOCKER_ASSET_REGISTRY PASS API Dockerfile copies packages/asset-registry
+PROVIDER_ADMISSION_MANIFEST PASS provider admission manifest is included in the repository
+DATA_AUTHORIZATION FAIL provider manifest must mark market_price, factor_features and fx_reference approved with written terms and redistribution rights
+COMPOSE_PROVIDER_CONFIG PASS Compose uses the actual LLM provider configuration variable
+ANDROID_RELEASE_ARTIFACT FAIL a readable external release APK/AAB is required; debug and QA artifacts are rejected
+RELEASE_APPROVAL_MANIFEST FAIL deployment-owned manifest is missing or not external
+PRODUCTION_PREFLIGHT FAIL one or more gates failed
+[ELIFECYCLE] Command failed with exit code 1.

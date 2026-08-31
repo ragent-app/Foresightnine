@@ -60,9 +60,11 @@ services:
       FORESIGHTNINE_ENV: development
       FORESIGHTNINE_STORAGE_MODE: postgres
       FORESIGHTNINE_POSTGRES_URL: ${FORESIGHTNINE_POSTGRES_URL:?FORESIGHTNINE_POSTGRES_URL must be supplied by the deployment secret file}
-      FORESIGHTNINE_LLM_PROVIDER: mock
-      # Staging Web origin for the Cloudflare API Tunnel.
-      FORESIGHTNINE_CORS_ORIGINS: https://staging.foresightnine.com
+      # Let the deployment env file select the provider; keep mock as the
+      # secret-free local default when no staging env file is supplied.
+      FORESIGHTNINE_LLM_PROVIDER: ${FORESIGHTNINE_LLM_PROVIDER:-mock}
+      # Both Web entry points call this API during staging/OAuth QA.
+      FORESIGHTNINE_CORS_ORIGINS: https://app.foresightnine.com,https://staging.foresightnine.com
       # Stooq-only price evaluation. An optional server-side
       # FORESIGHTNINE_STOOQ_API_KEY may be injected by deployment secret
       # management; never put it in this file or a client bundle. Kenneth

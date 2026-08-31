@@ -1,0 +1,11 @@
+docker-api-1|Up 13 seconds (healthy)
+docker-postgres-1|Up 10 hours (healthy)
+docker-redis-1|Up 10 hours (healthy)
+llm_provider=glm_coding
+cors_app_present=1
+cors_staging_present=1
+cors_probe_app:
+HTTP/2 200 
+access-control-allow-origin: https://app.foresightnine.com
+health_summary:
+provider=openai-compatible status=ok

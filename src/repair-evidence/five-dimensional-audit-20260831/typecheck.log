@@ -1,0 +1,20 @@
+$ corepack pnpm -r typecheck
+Scope: 9 of 10 workspace projects
+packages/contracts typecheck$ tsc -b --pretty false
+packages/design-system typecheck$ tsc --noEmit
+packages/fm-engine typecheck$ tsc -b --pretty false
+packages/contracts typecheck: Done
+packages/fm-engine typecheck: Done
+packages/design-system typecheck: Done
+packages/api-client typecheck$ tsc -b --pretty false
+packages/domain typecheck$ tsc -b --pretty false
+packages/asset-registry typecheck$ tsc -b --pretty false
+packages/market-data typecheck$ tsc -b --pretty false
+packages/market-data typecheck: Done
+packages/api-client typecheck: Done
+packages/asset-registry typecheck: Done
+packages/domain typecheck: Done
+apps/mobile typecheck$ tsc --noEmit
+apps/web typecheck$ tsc --noEmit
+apps/mobile typecheck: Done
+apps/web typecheck: Done

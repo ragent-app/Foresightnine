@@ -1,0 +1,220 @@
+ForesightNine sequential fix and OAuth test verification
+
+Changed branch/fields
+---------------------
+changed_branch=五维只读审计报告（含修复后复测）
+changed_field=/home/lxx/Foresightnine/src/docs/problem.md
+additional_changed_fields=infra/docker/compose.yaml: API CORS + deployment provider selector
+additional_changed_fields_2=/home/lxx/.cloudflared/foresightnine-api-staging.yml: app /readyz -> API 8000
+additional_changed_fields_3=apps/web/vite.config.ts: Strict-Transport-Security response header
+business_logic_modified=0
+
+Artifacts
+---------
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/ROLLBACK.sh
+LIVE_MODIFIED_FILE=/home/lxx/Foresightnine/src/docs/problem.md
+
+BASELINE
+--------
+Exact command:
+  cp -p docs/problem.md repair-evidence/five-dimensional-audit-20260831/baseline-problem.md && sha256sum docs/problem.md && stat -c '%s' docs/problem.md
+Input:
+  pre-fix empty docs/problem.md
+Literal output/result:
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  docs/problem.md
+  size=0 bytes; mode=664
+Exit status: 0
+
+FIX 1: API CORS + provider selector
+-----------------------------------
+Exact commands:
+  docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml config --quiet
+  docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml up -d api
+Input:
+  existing staging.env; no credential values printed or changed
+Literal output/result:
+  config_exit=0
+  docker-api-1 recreated and started
+  runtime llm_provider=glm_coding
+  cors_app_present=1; cors_staging_present=1
+  app Origin probe: HTTP/2 200; access-control-allow-origin: https://app.foresightnine.com
+  health: provider=openai-compatible status=ok
+Exit status: 0
+
+FIX 2: app readiness Tunnel route
+-------------------------------
+Exact commands:
+  cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate
+  systemctl --user restart foresightnine-cloudflared.service
+  curl -sS -o /tmp/readyz-after-fix.json -w 'HTTP=%{http_code} TYPE=%{content_type}' https://app.foresightnine.com/readyz
+Input:
+  exact app /readyz route added to Cloudflare ingress; no OAuth or user data
+Literal output/result:
+  Validating rules ... OK
+  validate_exit=0; restart_exit=0; service=active
+  HTTP=200 TYPE=application/json; status=ready
+Exit status: 0
+
+FIX 3: Web HSTS
+---------------
+Exact commands:
+  corepack pnpm --filter @foresightnine/web build
+  systemctl --user restart foresightnine-web.service
+  curl -sS -D - -o /dev/null https://staging.foresightnine.com/ | grep strict-transport-security
+Input:
+  Web preview security header configuration; no business logic change
+Literal output/result:
+  build_exit=0; restart_exit=0
+  strict-transport-security: max-age=31536000; includeSubDomains
+Exit status: 0
+
+POST-FIX TESTS
+--------------
+Exact commands and results:
+  corepack pnpm -r typecheck
+    exit=0
+  corepack pnpm --filter @foresightnine/web test
+    exit=0
+  uv run --project apps/api pytest apps/api/tests/test_oauth_foundation.py apps/api/tests/test_oauth_callback.py apps/api/tests/test_oauth_ticket_flow.py apps/api/tests/test_oauth_persistence.py apps/api/tests/test_oauth_routes.py apps/api/tests/test_local_auth.py
+    41 passed, 1 warning; exit=0
+  uv run --project apps/api pytest apps/api/tests/test_market_provider.py apps/api/tests/test_contracts.py
+    28 passed, 1 warning; exit=0
+  docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml config --quiet
+    exit=0
+  cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate
+    OK; exit=0
+  corepack pnpm test
+    API 249 passed, 1 skipped, 1 warning; Web 64 passed; Mobile 60 passed; exit=0
+
+OAUTH TEST LINKS / BACKEND STATE
+--------------------------------
+Exact command:
+  curl -sS -D - -o /dev/null 'https://app.foresightnine.com/oauth/{google,github}/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete'
+Input:
+  real provider start requests with app return URI; authorization is completed only by the user in provider UI
+Literal output/result:
+  Google HTTP 307 to accounts.google.com
+  GitHub HTTP 307 to github.com
+  API provider readiness: google=True, github=True
+  backend log observation: start 307 entries present; no callback/exchange/session entries observed yet
+Exit status: 0
+
+ROLLBACK
+--------
+Exact command:
+  TARGET_FILE=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/rollback-test-final/problem.md BASELINE_FILE=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/baseline-problem.md /home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/ROLLBACK.sh
+Input:
+  rollback-test-final/problem.md copied from modified report; baseline is original empty file
+Literal output/result:
+  rollback_restored=1 target=/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/rollback-test-final/problem.md baseline_bytes=0 target_bytes=0
+  rollback_compare=identical
+Exit status: 0
+
+RESTORED BEHAVIOR/STATUS
+------------------------
+The rollback copy is byte-identical to the original empty baseline; the live report and fixes remain applied.
+Live report sha256=9640f8c23f06d50210b85b7418b49b11addbca6af28ec80abb04a3243c74e985
+Live report bytes=19281
+Live status=modified report retained
+No OAuth code, access token, credential JSON, private key, Cookie, production release, Play write, billing, or paid Cloudflare operation was executed.
+
+OAUTH FULL-CHAIN TRACE APPENDIX
+-------------------------------
+Changed branch/field:
+  changed_branch=OAuth 全链路诊断（不改变 OAuth 协议或凭据）
+  changed_field=apps/api/app/main.py: safe callback stage logging
+  baseline_main_sha256=a5d0bf891c72c8523202291280553baab62c4e632f77592404b394349f490c7d
+  modified_main_sha256=5dad0e63a4578a51b0da9fd2b02b6f448c4b85fa1f1e6a608a5493149540dce5
+
+BASELINE exact command:
+  cp -p apps/api/app/main.py repair-evidence/five-dimensional-audit-20260831/baseline-main-before-oauth-trace.py && sha256sum apps/api/app/main.py
+BASELINE input:
+  main.py before diagnostic instrumentation
+BASELINE literal result:
+  a5d0bf891c72c8523202291280553baab62c4e632f77592404b394349f490c7d  apps/api/app/main.py
+BASELINE exit status: 0
+
+MODIFIED exact commands:
+  uv run --project apps/api pytest apps/api/tests/test_oauth_callback.py apps/api/tests/test_oauth_ticket_flow.py
+  python3 -m py_compile apps/api/app/main.py
+  docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml build api
+  docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml up -d --force-recreate api
+  curl -sS https://api-staging.foresightnine.com/health
+MODIFIED input:
+  safe stage logging only; no OAuth Client ID/Secret changes
+MODIFIED literal result:
+  9 passed, 1 warning; exit=0
+  py_compile_exit=0
+  build_exit=0; recreate_exit=0; container source verified at /app/apps/api/app/main.py
+  HTTP=200; {"status":"ok","provider":"openai-compatible",...}
+MODIFIED exit status: 0
+
+TRACE fields:
+  provider, stage, error_type, has_error, has_code only
+  authorization_code, access_token, identity, account, ticket and raw provider error are excluded
+
+ROLLBACK exact command:
+  TARGET_FILE=repair-evidence/five-dimensional-audit-20260831/rollback-test-final/main.py BASELINE_FILE=repair-evidence/five-dimensional-audit-20260831/baseline-main-before-oauth-trace.py repair-evidence/five-dimensional-audit-20260831/ROLLBACK.sh
+ROLLBACK input:
+  rollback-test-final/main.py copied from modified main.py; baseline is the pre-trace main.py
+ROLLBACK literal result:
+  rollback_restored=1; baseline_bytes=82094; target_bytes=82094; rollback_compare=identical
+ROLLBACK exit status: 0
+
+RESTORED behavior/status:
+  Live apps/api/app/main.py remains the modified diagnostic version; rollback was tested on another copy and restored byte-identically.
+  API container source contains the trace logger and public /health remains HTTP 200.
+  No OAuth code, token, cookie, credential, or private key was persisted or printed.
+
+GOOGLE OAUTH TOKEN EXCHANGE FIX APPENDIX
+----------------------------------------
+Changed branch/field:
+  changed_branch=Google OAuth token exchange repair
+  changed_field=apps/api/app/oauth_provider.py: Google grant_type=authorization_code
+  regression_test_field=apps/api/tests/test_oauth_callback.py: request-body assertion
+  baseline_google_sha256=2f00b5c5ad9d913b699549d5ba863866a1b6f72a3debc194f0cf226965fec404
+  modified_google_sha256=60682d9341b116d75bf5b978833fccfc9c8e93907dc535a12a09dfa2c2afa0a1
+
+BASELINE exact command:
+  uv run --project apps/api pytest apps/api/tests/test_oauth_callback.py apps/api/tests/test_oauth_ticket_flow.py
+BASELINE input:
+  Google exchange implementation without grant_type; existing mocked provider tests
+BASELINE literal result:
+  9 passed, 1 warning in 0.46s
+BASELINE exit status: 0
+
+MODIFIED exact commands:
+  uv run --project apps/api pytest apps/api/tests/test_oauth_callback.py apps/api/tests/test_oauth_ticket_flow.py
+  uv run --project apps/api pytest apps/api/tests
+  corepack pnpm -r typecheck
+  docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml build api
+  docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml up -d --force-recreate api
+  curl -sS https://api-staging.foresightnine.com/health
+  docker exec docker-api-1 /app/apps/api/.venv/bin/python <Google invalid-code token probe with grant_type>
+MODIFIED input:
+  Google branch adds grant_type=authorization_code; GitHub request shape remains unchanged; no credentials changed
+MODIFIED literal result:
+  focused OAuth tests: 9 passed, 1 warning; exit=0
+  API full tests: 249 passed, 1 skipped, 1 warning; exit=0
+  typecheck: exit=0
+  image build: exit=0; forced recreate: exit=0
+  container source verified; health HTTP=200
+  deployed Google invalid-code probe: HTTP=400 error=invalid_grant expected_for_invalid_code=true
+MODIFIED exit status: 0
+
+ROLLBACK exact command:
+  TARGET_FILE=repair-evidence/five-dimensional-audit-20260831/rollback-test-final/oauth_provider.py BASELINE_FILE=repair-evidence/five-dimensional-audit-20260831/baseline-google-grant-type.py repair-evidence/five-dimensional-audit-20260831/ROLLBACK.sh
+ROLLBACK input:
+  rollback-test-final/oauth_provider.py copied from modified provider; baseline is the pre-fix provider
+ROLLBACK literal result:
+  rollback_restored=1; baseline_bytes=7620; target_bytes=7620; rollback_compare=identical
+ROLLBACK exit status: 0
+
+RESTORED behavior/status:
+  Live oauth_provider.py remains the fixed version; rollback was tested on another copy and restored byte-identically.
+  API container contains the fixed Google request and public /health is HTTP 200.
+  Fresh Google start returns HTTP 307 with the configured callback; provider readiness reports Google enabled.
+  Full interactive provider callback, identity, session persistence, refresh, and logout remain pending one real browser authorization.

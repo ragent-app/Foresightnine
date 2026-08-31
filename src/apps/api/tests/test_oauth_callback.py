@@ -86,6 +86,9 @@ def test_oauth_callback_creates_persistent_identity_session_and_consumes_state(m
 
     def fake_request(method: str, url: str, **_kwargs):
         if method == "POST" and url == "https://oauth2.googleapis.com/token":
+            body = _kwargs.get("body")
+            assert body is not None
+            assert parse_qs(body.decode("ascii"))["grant_type"] == ["authorization_code"]
             return {"access_token": "provider-token-never-returned"}
         if method == "GET" and url == "https://openidconnect.googleapis.com/v1/userinfo":
             return {"sub": "google-subject-1", "email": "oauth@example.test", "email_verified": True}

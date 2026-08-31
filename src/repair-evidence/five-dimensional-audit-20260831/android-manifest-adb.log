@@ -1,0 +1,7 @@
+          A: android:autoVerify(0x010104ee)=(type 0x12)0xffffffff
+            A: android:host(0x01010028)="staging.foresightnine.com" (Raw: "staging.foresightnine.com")
+            A: android:pathPrefix(0x0101002b)="/oauth/mobile-callback" (Raw: "/oauth/mobile-callback")
+          A: android:autoVerify(0x010104ee)=(type 0x12)0x0
+adb_devices:
+List of devices attached
+

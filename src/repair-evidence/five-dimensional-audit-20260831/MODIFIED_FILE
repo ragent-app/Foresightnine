@@ -1,0 +1,27 @@
+MODIFIED_FILE
+path=/home/lxx/Foresightnine/src/docs/problem.md
+changed_branch=五维只读审计报告（含修复后复测）
+changed_field=docs/problem.md
+additional_changed_fields=infra/docker/compose.yaml: CORS/provider; /home/lxx/.cloudflared/foresightnine-api-staging.yml: app/readyz route; apps/web/vite.config.ts: HSTS
+baseline_sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+modified_sha256=9640f8c23f06d50210b85b7418b49b11addbca6af28ec80abb04a3243c74e985
+baseline_bytes=0
+modified_bytes=19281
+modified_status=report_and_fix_status_retained
+business_logic_modified=0
+
+TRACE_APPENDIX
+changed_branch=OAuth 全链路诊断（不改变 OAuth 协议或凭据）
+changed_field=apps/api/app/main.py: safe callback stage logging
+baseline_main_sha256=a5d0bf891c72c8523202291280553baab62c4e632f77592404b394349f490c7d
+modified_main_sha256=5dad0e63a4578a51b0da9fd2b02b6f448c4b85fa1f1e6a608a5493149540dce5
+logged_fields=provider,stage,error_type,has_error,has_code
+excluded_fields=authorization_code,access_token,identity,account,ticket,raw_provider_error
+
+FIX_APPENDIX
+changed_branch=Google OAuth token exchange repair
+changed_field=apps/api/app/oauth_provider.py: Google grant_type=authorization_code
+regression_test_field=apps/api/tests/test_oauth_callback.py: asserts Google token request grant_type
+baseline_google_sha256=2f00b5c5ad9d913b699549d5ba863866a1b6f72a3debc194f0cf226965fec404
+modified_google_sha256=60682d9341b116d75bf5b978833fccfc9c8e93907dc535a12a09dfa2c2afa0a1
+business_logic_scope=Google token request parameter only

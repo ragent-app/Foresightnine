@@ -1,0 +1,22 @@
+https://app.foresightnine.com/	HTTP=200	TYPE=text/html	SIZE=1658	non-json
+https://app.foresightnine.com/health	HTTP=200	TYPE=application/json	SIZE=176	{"project_search_available": false, "provider": "deterministic_mock", "schema_version": "v1", "search_provider": "client-evidence-bundle", "status": "ok"}
+https://app.foresightnine.com/readyz	HTTP=200	TYPE=text/html	SIZE=1658	non-json
+https://app.foresightnine.com/v1/auth/providers	HTTP=200	TYPE=application/json	SIZE=89	{"providers": [{"enabled": true, "provider": "google"}, {"enabled": true, "provider": "github"}]}
+https://app.foresightnine.com/.well-known/assetlinks.json	HTTP=200	TYPE=application/json	SIZE=558	{"entries": 1, "fingerprint_count": 3, "package": "com.foresightnine.mobile"}
+https://app.foresightnine.com/metrics	HTTP=404	TYPE=	SIZE=0	non-json
+https://staging.foresightnine.com/	HTTP=200	TYPE=text/html	SIZE=1658	non-json
+https://staging.foresightnine.com/health	HTTP=200	TYPE=text/html	SIZE=1658	non-json
+https://staging.foresightnine.com/readyz	HTTP=200	TYPE=text/html	SIZE=1658	non-json
+https://staging.foresightnine.com/v1/auth/providers	HTTP=200	TYPE=text/html	SIZE=1658	non-json
+https://staging.foresightnine.com/.well-known/assetlinks.json	HTTP=200	TYPE=application/json	SIZE=558	{"entries": 1, "fingerprint_count": 3, "package": "com.foresightnine.mobile"}
+https://staging.foresightnine.com/metrics	HTTP=200	TYPE=text/html	SIZE=1658	non-json
+https://api-staging.foresightnine.com/health	HTTP=200	TYPE=application/json	SIZE=176	{"project_search_available": false, "provider": "deterministic_mock", "schema_version": "v1", "search_provider": "client-evidence-bundle", "status": "ok"}
+https://api-staging.foresightnine.com/readyz	HTTP=200	TYPE=application/json	SIZE=18	{"status": "ready"}
+https://api-staging.foresightnine.com/v1/auth/providers	HTTP=200	TYPE=application/json	SIZE=89	{"providers": [{"enabled": true, "provider": "google"}, {"enabled": true, "provider": "github"}]}
+https://api-staging.foresightnine.com/v1/assets/search?q=SPY	HTTP=200	TYPE=application/json	SIZE=32549	{"item_count": 36, "item_ids": ["IDX:000300.SH", "IDX:SPX", "IDX:HSI", "IDX:N225", "IDX:SX5E"], "total": 36}
+https://api-staging.foresightnine.com/v1/assets/ETF%3ASPY	HTTP=200	TYPE=application/json	SIZE=862	{"asset_id": "ETF:SPY", "keys": ["asset_class", "asset_id", "content_hash", "contract_multiplier", "created_at", "currency", "data_license", "default_allocation_eligible", "display_name", "economic_exposure_id", "exchange", "fractional_supported"]}
+https://api-staging.foresightnine.com/v1/factor-libraries/v1/manifest	HTTP=404	TYPE=application/json	SIZE=173	{"keys": ["details", "error_code", "message", "request_id", "retryable", "schema_version"]}
+https://api-staging.foresightnine.com/v1/factor-libraries/v1/shards?shard_id=core	HTTP=404	TYPE=application/json	SIZE=171	{"keys": ["details", "error_code", "message", "request_id", "retryable", "schema_version"]}
+https://api-staging.foresightnine.com/v1/methodology	HTTP=200	TYPE=application/json	SIZE=226	{"keys": ["client_computation", "disclosure", "methodology_version", "probability_display", "schema_version"]}
+https://api-staging.foresightnine.com/.well-known/assetlinks.json	HTTP=200	TYPE=application/json	SIZE=558	{"entries": 1, "fingerprint_count": 3, "package": "com.foresightnine.mobile"}
+https://api-staging.foresightnine.com/metrics	HTTP=404	TYPE=	SIZE=0	non-json

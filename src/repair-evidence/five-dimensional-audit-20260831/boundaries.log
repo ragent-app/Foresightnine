@@ -1,0 +1,6 @@
+$ node scripts/verify/boundaries.mjs
+FAIL governance D:\Foresightnine\plan.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\plan.md'
+FAIL governance D:\Foresightnine\agent.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\agent.md'
+FAIL governance D:\Foresightnine\GOAL_PROMPT.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\GOAL_PROMPT.md'
+FAIL unexpected implementation root: /home/lxx/Foresightnine/src
+[ELIFECYCLE] Command failed with exit code 1.

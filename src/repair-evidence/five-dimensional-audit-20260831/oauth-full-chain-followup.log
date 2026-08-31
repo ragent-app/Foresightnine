@@ -1,0 +1,19 @@
+=== API recent OAuth chain ===
+INFO:     172.20.0.1:34234 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:40642 - "GET /api/auth/callback/google?state=<redacted>&iss=https://accounts.google.com&code=<redacted>&scope=email+profile+https://www.googleapis.com/auth/userinfo.profile+https://www.googleapis.com/auth/userinfo.email+openid&authuser=0&prompt=consent HTTP/1.1" 400 Bad Request
+INFO:     172.20.0.1:53312 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:53312 - "GET /v1/auth/providers HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44584 - "GET /api/auth/callback/google?state=<redacted>&iss=https://accounts.google.com&code=<redacted>&scope=email+profile+https://www.googleapis.com/auth/userinfo.profile+https://www.googleapis.com/auth/userinfo.email+openid&authuser=0&prompt=consent HTTP/1.1" 303 See Other
+INFO:     172.20.0.1:44600 - "GET /v1/auth/providers HTTP/1.1" 200 OK
+INFO:     172.20.0.1:44600 - "GET /oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete HTTP/1.1" 307 Temporary Redirect
+INFO:     172.20.0.1:54554 - "GET /api/auth/callback/google?state=<redacted>&iss=https://accounts.google.com&code=<redacted>&scope=email+profile+https://www.googleapis.com/auth/userinfo.profile+https://www.googleapis.com/auth/userinfo.email+openid&authuser=0&prompt=consent HTTP/1.1" 303 See Other
+INFO:     172.20.0.1:54562 - "GET /v1/auth/providers HTTP/1.1" 200 OK
+=== persistent auth counts ===
+auth_sessions|7
+oauth_foundation|2
+oauth_identities|3
+=== foundation states ===
+kinds=transaction:2
+providers=google:2
+=== public readiness ===
+{'providers': [{'provider': 'google', 'enabled': True}, {'provider': 'github', 'enabled': True}]}

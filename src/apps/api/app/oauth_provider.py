@@ -116,13 +116,16 @@ class OAuthProviderClient:
             endpoint = "https://oauth2.googleapis.com/token"
         else:
             endpoint = "https://github.com/login/oauth/access_token"
-        body = urlencode({
+        parameters = {
             "client_id": transaction.client_id,
             "client_secret": self._client_secret(transaction.provider),
             "code": code,
             "redirect_uri": transaction.redirect_uri,
             "code_verifier": transaction.code_verifier,
-        }).encode("ascii")
+        }
+        if transaction.provider == "google":
+            parameters["grant_type"] = "authorization_code"
+        body = urlencode(parameters).encode("ascii")
         response = self._request_json(
             "POST",
             endpoint,

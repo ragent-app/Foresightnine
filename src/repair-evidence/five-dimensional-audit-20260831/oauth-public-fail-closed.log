@@ -1,0 +1,6 @@
+start provider=google HTTP=307 redirect_host=accounts.google.com
+start provider=github HTTP=307 redirect_host=github.com
+callback provider=google no_parameters HTTP=400 body_bytes=172
+callback_body_class= json_error sensitive_fields_present= False
+callback provider=github no_parameters HTTP=400 body_bytes=172
+callback_body_class= json_error sensitive_fields_present= False

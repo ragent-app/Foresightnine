@@ -1,0 +1,7 @@
+ Container docker-postgres-1 Running 
+ Container docker-redis-1 Running 
+ Container docker-api-1 Running 
+ Container docker-postgres-1 Waiting 
+ Container docker-redis-1 Waiting 
+ Container docker-postgres-1 Healthy 
+ Container docker-redis-1 Healthy 

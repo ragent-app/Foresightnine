@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      # Database credentials are deployment-owned and loaded with --env-file;
+      # no password is committed in this Compose file.
+      POSTGRES_DB: foresightnine
+      POSTGRES_USER: foresightnine
+      POSTGRES_PASSWORD: ${FORESIGHTNINE_POSTGRES_PASSWORD:?FORESIGHTNINE_POSTGRES_PASSWORD must be supplied by the deployment secret file}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foresightnine -d foresightnine"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - foresightnine-postgres-data:/var/lib/postgresql/data
+      - ../migrations/001_research_state.sql:/docker-entrypoint-initdb.d/001_research_state.sql:ro
+      - ../migrations/002_operation_state.sql:/docker-entrypoint-initdb.d/002_operation_state.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Local/staging persistence for abuse-control counters. Production still
+    # requires deployment-owned authenticated TLS Redis and HA policy.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - foresightnine-redis-data:/data
+
+  api:
+    init: true
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "uv run --project /app/apps/api python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)\" > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    env_file:
+      # Deployment-owned secrets (OAuth clients, GLM key, App Link fingerprint,
+      # licensed provider keys). Never commit the real file; only the .example.
+      - ./staging.env
+    environment:
+      # This Compose file is development-only and intentionally secret-free.
+      FORESIGHTNINE_ENV: development
+      FORESIGHTNINE_STORAGE_MODE: postgres
+      FORESIGHTNINE_POSTGRES_URL: ${FORESIGHTNINE_POSTGRES_URL:?FORESIGHTNINE_POSTGRES_URL must be supplied by the deployment secret file}
+      FORESIGHTNINE_LLM_PROVIDER: mock
+      # Staging Web origin for the Cloudflare API Tunnel.
+      FORESIGHTNINE_CORS_ORIGINS: https://staging.foresightnine.com
+      # Stooq-only price evaluation. An optional server-side
+      # FORESIGHTNINE_STOOQ_API_KEY may be injected by deployment secret
+      # management; never put it in this file or a client bundle. Kenneth
+      # French MOM/RMW, AQR QMJ and Frankfurter are recorded in the provider
+      # manifest for their distinct factor/FX contracts; this route remains
+      # price-only until those fields are wired to the client contract.
+      FORESIGHTNINE_MARKET_PROVIDER_MODE: public_evaluation
+      # Default to the fastest admitted priority source; set to `all` for
+      # explicit multi-vendor comparison/majority evaluation.
+      FORESIGHTNINE_MARKET_CONSENSUS_MODE: priority
+      # Staging-only account lifecycle for local QA. Real OAuth is disabled
+      # until provider credentials, callback URIs and deletion policy are approved.
+      FORESIGHTNINE_LOCAL_AUTH_MODE: mock
+      FORESIGHTNINE_PROXY_MODE: direct
+      FORESIGHTNINE_TRUSTED_PROXY_CIDRS: ""
+      # Local supervisor/Prometheus scrape only; the Tunnel ingress denies this path.
+      FORESIGHTNINE_METRICS_ENABLED: "true"
+      # Development-only Redis wiring; production requires TLS/authenticated
+      # Redis and deployment-owned configuration.
+      FORESIGHTNINE_ABUSE_MODE: redis
+      FORESIGHTNINE_REDIS_URL: redis://redis:6379/0
+      FORESIGHTNINE_MARKET_CACHE_TTL_SECONDS: "900"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  foresightnine-postgres-data:
+  foresightnine-redis-data:

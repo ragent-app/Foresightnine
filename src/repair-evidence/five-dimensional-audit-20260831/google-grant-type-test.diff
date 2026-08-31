@@ -1,0 +1,12 @@
+--- /home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/baseline-oauth-callback-test.py	2026-08-31 07:39:10.692700013 +0800
++++ apps/api/tests/test_oauth_callback.py	2026-08-31 21:44:27.783836524 +0800
+@@ -86,6 +86,9 @@
+ 
+     def fake_request(method: str, url: str, **_kwargs):
+         if method == "POST" and url == "https://oauth2.googleapis.com/token":
++            body = _kwargs.get("body")
++            assert body is not None
++            assert parse_qs(body.decode("ascii"))["grant_type"] == ["authorization_code"]
+             return {"access_token": "provider-token-never-returned"}
+         if method == "GET" and url == "https://openidconnect.googleapis.com/v1/userinfo":
+             return {"sub": "google-subject-1", "email": "oauth@example.test", "email_verified": True}

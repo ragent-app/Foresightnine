@@ -1,0 +1,5 @@
+report_exists= 1
+report_nonempty= 1
+required_sections= 6 of 6
+forbidden_credential_markers= 0
+changed_field=docs/problem.md

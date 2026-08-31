@@ -1,0 +1,17 @@
+container_state:
+error while interpolating services.api.environment.FORESIGHTNINE_POSTGRES_URL: required variable FORESIGHTNINE_POSTGRES_URL is missing a value: FORESIGHTNINE_POSTGRES_URL must be supplied by the deployment secret file
+error while interpolating services.postgres.environment.POSTGRES_PASSWORD: required variable FORESIGHTNINE_POSTGRES_PASSWORD is missing a value: FORESIGHTNINE_POSTGRES_PASSWORD must be supplied by the deployment secret file
+api_env_keys_only:
+FORESIGHTNINE_ABUSE_MODE=<redacted>
+FORESIGHTNINE_CORS_ORIGINS=<redacted>
+FORESIGHTNINE_LLM_PROVIDER=<redacted>
+FORESIGHTNINE_MARKET_PROVIDER_MODE=<redacted>
+FORESIGHTNINE_METRICS_ENABLED=<redacted>
+FORESIGHTNINE_POSTGRES_PASSWORD=<redacted>
+FORESIGHTNINE_POSTGRES_URL=<redacted>
+FORESIGHTNINE_REDIS_URL=<redacted>
+FORESIGHTNINE_STORAGE_MODE=<redacted>
+staging_env_declared_keys_only:
+FORESIGHTNINE_LLM_PROVIDER=<redacted>
+health_summary:
+{'status': 'ok', 'provider': 'deterministic_mock', 'search_provider': 'client-evidence-bundle', 'project_search_available': False, 'schema_version': 'v1'}

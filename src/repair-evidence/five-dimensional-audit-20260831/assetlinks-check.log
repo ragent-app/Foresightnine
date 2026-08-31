@@ -1,0 +1,3 @@
+app.foresightnine.com HTTP= 200 json=1 package_match= 1 fingerprint_count= 3
+staging.foresightnine.com HTTP= 200 json=1 package_match= 1 fingerprint_count= 3
+api-staging.foresightnine.com HTTP= 200 json=1 package_match= 1 fingerprint_count= 3

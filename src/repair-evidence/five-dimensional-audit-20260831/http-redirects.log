@@ -1,0 +1,4 @@
+--- HTTP redirect checks ---
+app.foresightnine.com HTTP=200 location=absent
+staging.foresightnine.com HTTP=200 location=absent
+api-staging.foresightnine.com HTTP=404 location=absent

@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import json
+import logging
 import os
 import secrets
 from typing import Annotated, Any
@@ -88,6 +89,9 @@ from .services import (
     validate_worldline_bundle_semantics,
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageMode, build_repository
+
+
+oauth_trace_logger = logging.getLogger("foresightnine.oauth")
 from .operation_store import build_operation_store
 from .oauth_foundation import OAuthConfigurationError, OAuthExchangeTicketError, OAuthFoundation, OAuthTransactionError, SUPPORTED_PROVIDERS
 from .oauth_identity import OAuthIdentity, OAuthSessionResponse
@@ -1021,24 +1025,43 @@ def browser_oauth_callback(
     if state is None:
         raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.")
     transaction = None
+    stage = "consume_state"
     try:
         transaction = foundation.consume_state(state)
         if error is not None or code is None:
+            oauth_trace_logger.info(
+                "oauth_callback_provider_result provider=%s has_error=%s has_code=%s",
+                transaction.provider,
+                error is not None,
+                code is not None,
+            )
             return callback_redirect(transaction.return_uri)
+        stage = "token_exchange"
         access_token = oauth_provider_client.exchange_code(transaction, code)
+        stage = "identity"
         provider_identity = oauth_provider_client.identity(transaction.provider, access_token)
+        stage = "provider_match"
         if provider_identity.provider != transaction.provider:
             raise OAuthProviderError("OAuth provider identity mismatch")
+        stage = "account"
         account = _oauth_account(provider_identity)
+        stage = "ticket"
         ticket = foundation.issue_exchange_ticket(
             provider=provider_identity.provider,
             account_id=account.account_id,
             return_uri=transaction.return_uri,
         )
     except (OAuthTransactionError, OAuthProviderError, OAuthExchangeTicketError) as exception:
+        oauth_trace_logger.warning(
+            "oauth_callback_failed provider=%s stage=%s error_type=%s",
+            transaction.provider if transaction is not None else "unknown",
+            stage,
+            type(exception).__name__,
+        )
         if transaction is not None:
             return callback_redirect(transaction.return_uri)
         raise ApiProblem(400, "bad_request", "OAuth callback is unavailable.") from exception
+    oauth_trace_logger.info("oauth_callback_ticket_issued provider=%s", provider_identity.provider)
     return callback_redirect(transaction.return_uri, ticket=ticket)
 
 
