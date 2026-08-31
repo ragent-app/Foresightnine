@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { clearOAuthSession, configuredOAuthReturnUriFromEnvironment, deleteOAuthAccount, exchangeOAuthTicket, logoutOAuthSession, oauthStartUrl, parseOAuthCallbackUrl, readOAuthSession, saveOAuthSession, MOBILE_OAUTH_SESSION_KEY } from "../src/oauth-client";
+// @ts-expect-error The Expo dynamic app config is intentionally CommonJS.
+import appConfig from "../app.config.cjs";
 
 const session = { account: { account_id: "account_12345678", email: "user@example.test", created_at: "2026-08-31T00:00:00Z" }, session_id: "session_12345678", access_token: "token_abcdefghijklmnopqrstuvwxyz0123456789", expires_at: "2026-09-30T00:00:00Z", auth_mode: "oauth" as const, provider: "google" as const };
 const store = () => { const data = new Map<string, string>(); return { getItemAsync: vi.fn(async (key: string) => data.get(key) ?? null), setItemAsync: vi.fn(async (key: string, value: string) => { data.set(key, value); }), deleteItemAsync: vi.fn(async (key: string) => { data.delete(key); }) }; };
@@ -51,5 +53,28 @@ describe("mobile OAuth client boundary", () => {
     expect((fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit])[1]).toMatchObject({ method: "POST", headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}` }) });
     await clearOAuthSession(sessionStore);
     expect((await sessionStore.getItemAsync(MOBILE_OAUTH_SESSION_KEY))).toBeNull();
+  });
+
+  it("fails closed for production without an exact HTTPS callback and verified App Link inputs", () => {
+    const baseConfig = { scheme: "foresightnine", android: { intentFilters: [] } };
+    const fingerprint = Array.from({ length: 32 }, () => "AA").join(":");
+    try {
+      vi.stubEnv("FORESIGHTNINE_ENV", "production");
+      vi.stubEnv("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_RETURN_URI", "foresightnine://oauth/complete");
+      expect(() => appConfig({ config: baseConfig })).toThrow("exact HTTPS callback");
+
+      vi.stubEnv("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_RETURN_URI", "https://app.example.test/oauth/mobile-callback");
+      expect(() => appConfig({ config: baseConfig })).toThrow("verified App Link inputs");
+
+      vi.stubEnv("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_VERIFIED", "true");
+      vi.stubEnv("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_HOST", "app.example.test");
+      vi.stubEnv("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_PACKAGE", "com.foresightnine.mobile");
+      vi.stubEnv("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_SHA256_CERT_FINGERPRINT", fingerprint);
+      const configured = appConfig({ config: baseConfig });
+      expect(configured.scheme).toBeUndefined();
+      expect(configured.android.intentFilters).toContainEqual(expect.objectContaining({ autoVerify: true }));
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

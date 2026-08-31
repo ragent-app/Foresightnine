@@ -91,4 +91,33 @@ describe("Web freshness policy integration", () => {
     const staleMarkup = renderToStaticMarkup(createElement(PortfolioPanel, { mode: "public", currency: "CNY", rows: staleRows, capital: 100000, selectedBranch: "main", branches, stress: "main", onMode: () => undefined, onStress: () => undefined, onCompute: () => undefined, onNav: () => undefined, onExport: () => undefined, fmReady: true }));
     expect(staleMarkup).toContain("历史/模拟展示；过期或无效数据下，当前 Public Default 金额已停用。");
   });
+
+  it("visibly disables Public Default when any portfolio-wide readiness gate has no eligible row", () => {
+    const result = ({ weights: { weights: Float64Array.from([0.5, 0.2, 0.1, 0.1, 0.05, 0.05]) } } as never);
+    const render = (options: Parameters<typeof allocationRows>[4], assets = ASSET_FIXTURES) => renderToStaticMarkup(createElement(PortfolioPanel, {
+      mode: "public", currency: "CNY", rows: allocationRows(result, 100000, "CNY", "public", options, assets), capital: 100000,
+      selectedBranch: "main", branches, stress: "main", onMode: () => undefined, onStress: () => undefined,
+      onCompute: () => undefined, onNav: () => undefined, onExport: () => undefined, fmReady: true,
+    }));
+
+    const cases = [
+      { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const },
+      { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "unavailable" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } },
+      { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "stale" as const, fxAsOf: "2026-08-07", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } },
+    ];
+    for (const options of cases) {
+      const markup = render(options);
+      expect(markup).toContain('disabled=""');
+      expect(markup).toContain("Public Default 当前停用");
+    }
+
+    const staleAssets = ASSET_FIXTURES.map((asset) => ({ ...asset, asOf: "2026-08-07" }));
+    const staleMarkup = render({ runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" }, staleAssets);
+    expect(staleMarkup).toContain('disabled=""');
+    expect(staleMarkup).toContain("Public Default 当前停用");
+    const missingAssets = ASSET_FIXTURES.map((asset) => ({ ...asset, asOf: "" }));
+    const missingMarkup = render({ runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" }, missingAssets);
+    expect(missingMarkup).toContain('disabled=""');
+    expect(missingMarkup).toContain("Public Default 当前停用");
+  });
 });

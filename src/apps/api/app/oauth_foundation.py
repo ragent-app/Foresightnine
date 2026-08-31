@@ -1,8 +1,8 @@
 """Secret-free OAuth configuration and PKCE transaction primitives.
 
 This module deliberately does not make HTTP requests or expose OAuth endpoints.  It
-only validates server configuration and keeps short-lived authorization transactions
-in server memory until a future callback handler consumes them.
+validates server configuration and keeps short-lived authorization transactions in
+the configured server-side repository, with an in-memory development fallback.
 """
 
 from __future__ import annotations
@@ -14,10 +14,20 @@ import secrets
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from hashlib import sha256
 from types import MappingProxyType
-from typing import Callable, Literal, Mapping
+from typing import Any, Callable, Literal, Mapping, cast
 from urllib.parse import urlsplit
+
+from .storage import (
+    JsonDocumentRepository,
+    StorageConfig,
+    StorageConfigurationError,
+    StorageMode,
+    StorageRuntimeError,
+    build_repository,
+)
 
 
 OAuthProvider = Literal["google", "github"]
@@ -51,6 +61,146 @@ class OAuthTransactionError(ValueError):
 
 class OAuthExchangeTicketError(ValueError):
     """Raised when a one-time OAuth exchange ticket is invalid or unavailable."""
+
+
+@dataclass(frozen=True, slots=True)
+class _PersistentOAuthRecord:
+    """Repository value with a database-visible expiry and no raw state key."""
+
+    kind: Literal["transaction", "exchange_ticket"]
+    provider: OAuthProvider
+    return_uri: str
+    created_at: float
+    expires_at: datetime
+    consumed: bool = False
+    client_id: str | None = None
+    redirect_uri: str | None = None
+    state_digest: str | None = None
+    nonce: str | None = None
+    code_verifier: str | None = None
+    code_challenge: str | None = None
+    account_id: str | None = None
+
+    @classmethod
+    def for_transaction(cls, transaction: _StoredTransaction) -> _PersistentOAuthRecord:
+        return cls(
+            kind="transaction",
+            provider=transaction.provider,
+            return_uri=transaction.return_uri,
+            created_at=transaction.created_at,
+            expires_at=_utc_datetime(transaction.expires_at),
+            client_id=transaction.client_id,
+            redirect_uri=transaction.redirect_uri,
+            state_digest=sha256(transaction.state.encode("ascii")).hexdigest(),
+            nonce=transaction.nonce,
+            code_verifier=transaction.code_verifier,
+            code_challenge=transaction.code_challenge,
+        )
+
+    @classmethod
+    def for_exchange_ticket(cls, ticket: _StoredExchangeTicket) -> _PersistentOAuthRecord:
+        return cls(
+            kind="exchange_ticket",
+            provider=ticket.provider,
+            return_uri=ticket.return_uri,
+            created_at=ticket.created_at,
+            expires_at=_utc_datetime(ticket.expires_at),
+            account_id=ticket.account_id,
+        )
+
+    def consumed_copy(self) -> _PersistentOAuthRecord:
+        return _PersistentOAuthRecord(
+            kind=self.kind,
+            provider=self.provider,
+            return_uri=self.return_uri,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+            consumed=True,
+            # A replay tombstone retains no PKCE or identity material after
+            # the successful atomic consume.
+            client_id=None,
+            redirect_uri=None,
+            state_digest=None,
+            nonce=None,
+            code_verifier=None,
+            code_challenge=None,
+            account_id=None,
+        )
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "provider": self.provider,
+            "return_uri": self.return_uri,
+            "created_at": self.created_at,
+            "expires_at": self.expires_at.isoformat(),
+            "consumed": self.consumed,
+            **({"client_id": self.client_id} if self.client_id is not None else {}),
+            **({"redirect_uri": self.redirect_uri} if self.redirect_uri is not None else {}),
+            **({"state_digest": self.state_digest} if self.state_digest is not None else {}),
+            **({"nonce": self.nonce} if self.nonce is not None else {}),
+            **({"code_verifier": self.code_verifier} if self.code_verifier is not None else {}),
+            **({"code_challenge": self.code_challenge} if self.code_challenge is not None else {}),
+            **({"account_id": self.account_id} if self.account_id is not None else {}),
+        }
+
+    @classmethod
+    def from_document(cls, value: Any) -> _PersistentOAuthRecord:
+        if not isinstance(value, Mapping):
+            raise ValueError("OAuth record is malformed")
+        kind = value.get("kind")
+        provider = value.get("provider")
+        if kind not in {"transaction", "exchange_ticket"} or provider not in SUPPORTED_PROVIDERS:
+            raise ValueError("OAuth record is malformed")
+        expires_at = value.get("expires_at")
+        if not isinstance(expires_at, str):
+            raise ValueError("OAuth record is malformed")
+        try:
+            expires = datetime.fromisoformat(expires_at)
+        except ValueError as error:
+            raise ValueError("OAuth record is malformed") from error
+        if expires.tzinfo is None:
+            raise ValueError("OAuth record is malformed")
+        strings = {name: value.get(name) for name in ("return_uri", "client_id", "redirect_uri", "state_digest", "nonce", "code_verifier", "code_challenge", "account_id")}
+        if not isinstance(strings["return_uri"], str) or not isinstance(value.get("created_at"), (int, float)):
+            raise ValueError("OAuth record is malformed")
+        if not isinstance(value.get("consumed"), bool):
+            raise ValueError("OAuth record is malformed")
+        if any(item is not None and not isinstance(item, str) for item in strings.values()):
+            raise ValueError("OAuth record is malformed")
+        if not value["consumed"] and kind == "transaction" and any(strings[name] is None for name in ("client_id", "redirect_uri", "state_digest", "nonce", "code_verifier", "code_challenge")):
+            raise ValueError("OAuth record is malformed")
+        if not value["consumed"] and kind == "exchange_ticket" and strings["account_id"] is None:
+            raise ValueError("OAuth record is malformed")
+        return cls(
+            kind=cast(Literal["transaction", "exchange_ticket"], kind),
+            provider=cast(OAuthProvider, provider),
+            return_uri=strings["return_uri"],
+            created_at=float(value["created_at"]),
+            expires_at=expires,
+            consumed=value["consumed"],
+            client_id=strings["client_id"],
+            redirect_uri=strings["redirect_uri"],
+            state_digest=strings["state_digest"],
+            nonce=strings["nonce"],
+            code_verifier=strings["code_verifier"],
+            code_challenge=strings["code_challenge"],
+            account_id=strings["account_id"],
+        )
+
+
+def _utc_datetime(timestamp: float) -> datetime:
+    return datetime.fromtimestamp(timestamp, timezone.utc)
+
+
+def _persistent_record_dumper(value: _PersistentOAuthRecord) -> dict[str, Any]:
+    if not isinstance(value, _PersistentOAuthRecord):
+        raise ValueError("OAuth record is malformed")
+    return value.to_document()
+
+
+def _persistent_record_loader(value: Any) -> _PersistentOAuthRecord:
+    return _PersistentOAuthRecord.from_document(value)
 
 
 def pkce_s256_challenge(code_verifier: str) -> str:
@@ -351,6 +501,41 @@ def _environment_configuration(environ: Mapping[str, str]) -> OAuthConfiguration
     )
 
 
+def _storage_environment(environ: Mapping[str, str]) -> dict[str, str]:
+    """Apply the same server-side PostgreSQL URL aliases as the API bootstrap."""
+
+    normalized = dict(environ)
+    if not normalized.get("FORESIGHTNINE_POSTGRES_DSN", "").strip():
+        for name in ("FORESIGHTNINE_POSTGRES_URL", "DATABASE_URL"):
+            configured_url = normalized.get(name)
+            if configured_url and configured_url.strip():
+                normalized["FORESIGHTNINE_POSTGRES_DSN"] = configured_url
+                break
+    return normalized
+
+
+def _build_persistent_repository(environ: Mapping[str, str]) -> JsonDocumentRepository[_PersistentOAuthRecord] | None:
+    """Use the existing storage selection and fail closed if PostgreSQL is unavailable."""
+
+    try:
+        storage = StorageConfig.from_env(_storage_environment(environ))
+        if storage.mode is StorageMode.MEMORY:
+            return None
+        repository = build_repository(
+            storage,
+            "oauth_foundation",
+            value_loader=_persistent_record_loader,
+            value_dumper=_persistent_record_dumper,
+        )
+        check_ready = getattr(repository, "check_ready", None)
+        if not callable(check_ready):
+            raise StorageRuntimeError("Persistent OAuth storage does not expose a readiness check.")
+        check_ready()
+        return repository
+    except (StorageConfigurationError, StorageRuntimeError, OSError) as error:
+        raise OAuthConfigurationError("OAuth persistence is unavailable") from error
+
+
 class OAuthFoundation:
     """Pure server-side OAuth setup and one-use PKCE transaction storage."""
 
@@ -360,6 +545,7 @@ class OAuthFoundation:
         *,
         transaction_ttl_seconds: int = DEFAULT_TRANSACTION_TTL_SECONDS,
         clock: Callable[[], float] = time.time,
+        repository: JsonDocumentRepository[_PersistentOAuthRecord] | None = None,
     ) -> None:
         if not isinstance(configuration, OAuthConfiguration):
             raise TypeError("configuration must be OAuthConfiguration")
@@ -371,6 +557,7 @@ class OAuthFoundation:
         self._transactions: dict[str, _StoredTransaction] = {}
         self._exchange_tickets: dict[str, _StoredExchangeTicket] = {}
         self._lock = threading.Lock()
+        self._repository = repository
 
     @classmethod
     def from_environment(
@@ -379,6 +566,7 @@ class OAuthFoundation:
         environ: Mapping[str, str] | None = None,
         transaction_ttl_seconds: int = DEFAULT_TRANSACTION_TTL_SECONDS,
         clock: Callable[[], float] = time.time,
+        repository: JsonDocumentRepository[_PersistentOAuthRecord] | None = None,
     ) -> OAuthFoundation:
         """Build a foundation from environment-only configuration.
 
@@ -388,10 +576,12 @@ class OAuthFoundation:
 
         source = os.environ if environ is None else environ
         configuration = _environment_configuration(source)
+        selected_repository = repository if repository is not None else _build_persistent_repository(source)
         return cls(
             configuration,
             transaction_ttl_seconds=transaction_ttl_seconds,
             clock=clock,
+            repository=selected_repository,
         )
 
     @property
@@ -403,6 +593,109 @@ class OAuthFoundation:
     @property
     def supported_providers(self) -> tuple[OAuthProvider, ...]:
         return tuple(provider for provider in SUPPORTED_PROVIDERS if provider in self._configuration.providers)
+
+    @staticmethod
+    def _state_key(state: str) -> str:
+        return f"state_{sha256(state.encode('ascii')).hexdigest()}"
+
+    @staticmethod
+    def _ticket_key(digest: str) -> str:
+        return f"ticket_{digest}"
+
+    def _persist(self, key: str, record: _PersistentOAuthRecord, now: float) -> None:
+        repository = self._repository
+        if repository is None:
+            return
+        try:
+            for existing_key, existing in repository.items_for_retention():
+                if existing.expires_at.timestamp() <= now:
+                    repository.delete(existing_key)
+            repository.put(key, record)
+        except Exception as error:
+            raise OAuthTransactionError("OAuth authorization is unavailable") from error
+
+    def _load_persistent(
+        self,
+        key: str,
+        error_type: type[OAuthTransactionError] | type[OAuthExchangeTicketError],
+    ) -> _PersistentOAuthRecord:
+        repository = self._repository
+        if repository is None:
+            raise error_type("OAuth state or ticket is unavailable")
+        try:
+            record = repository.get(key)
+        except Exception as error:
+            raise error_type("OAuth state or ticket is unavailable") from error
+        if not isinstance(record, _PersistentOAuthRecord):
+            raise error_type("OAuth state or ticket is unavailable")
+        return record
+
+    def _consume_persistent(
+        self,
+        key: str,
+        *,
+        now: float,
+        error_type: type[OAuthTransactionError] | type[OAuthExchangeTicketError],
+        provider: str | None = None,
+        kind: Literal["transaction", "exchange_ticket"],
+    ) -> _PersistentOAuthRecord:
+        record = self._load_persistent(key, error_type)
+        if record.kind != kind or record.consumed:
+            raise error_type("OAuth state or ticket is unavailable")
+        if now >= record.expires_at.timestamp():
+            try:
+                self._repository.delete(key)  # type: ignore[union-attr]
+            except Exception:
+                pass
+            raise error_type("OAuth state or ticket is expired")
+        if provider is not None and record.provider != provider:
+            raise error_type("OAuth state provider mismatch")
+        version = getattr(self._repository, "version", None)
+        if not callable(version):
+            raise error_type("OAuth state or ticket is unavailable")
+        try:
+            expected_version = version(key)
+            if expected_version is None:
+                raise error_type("OAuth state or ticket is unavailable")
+            self._repository.put(key, record.consumed_copy(), expected_version=expected_version)
+        except (OAuthTransactionError, OAuthExchangeTicketError):
+            raise
+        except Exception as error:
+            # The expected-version update is the cross-process one-use gate.
+            raise error_type("OAuth state or ticket is unavailable") from error
+        return record
+
+    @staticmethod
+    def _transaction_from_persistent(state: str, record: _PersistentOAuthRecord) -> _StoredTransaction:
+        if record.kind != "transaction" or record.state_digest != sha256(state.encode("ascii")).hexdigest():
+            raise OAuthTransactionError("OAuth state is invalid or expired")
+        required = (record.client_id, record.redirect_uri, record.nonce, record.code_verifier, record.code_challenge)
+        if any(value is None for value in required):
+            raise OAuthTransactionError("OAuth state is invalid or expired")
+        return _StoredTransaction(
+            provider=record.provider,
+            client_id=cast(str, record.client_id),
+            redirect_uri=cast(str, record.redirect_uri),
+            return_uri=record.return_uri,
+            state=state,
+            nonce=cast(str, record.nonce),
+            code_verifier=cast(str, record.code_verifier),
+            code_challenge=cast(str, record.code_challenge),
+            created_at=record.created_at,
+            expires_at=record.expires_at.timestamp(),
+        )
+
+    @staticmethod
+    def _ticket_from_persistent(record: _PersistentOAuthRecord) -> _StoredExchangeTicket:
+        if record.kind != "exchange_ticket" or record.account_id is None:
+            raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable")
+        return _StoredExchangeTicket(
+            provider=record.provider,
+            account_id=record.account_id,
+            return_uri=record.return_uri,
+            created_at=record.created_at,
+            expires_at=record.expires_at.timestamp(),
+        )
 
     def create_transaction(
         self,
@@ -439,7 +732,10 @@ class OAuthFoundation:
 
         with self._lock:
             self._remove_expired(created_at)
-            self._transactions[state] = transaction
+            if self._repository is None:
+                self._transactions[state] = transaction
+            else:
+                self._persist(self._state_key(state), _PersistentOAuthRecord.for_transaction(transaction), created_at)
 
         return OAuthAuthorizationRequest(
             provider=provider_config.provider,
@@ -469,6 +765,18 @@ class OAuthFoundation:
             raise OAuthTransactionError("OAuth provider is not supported")
 
         now = float(self._clock())
+        if self._repository is not None:
+            try:
+                consumed = self._consume_persistent(
+                    self._state_key(state),
+                    now=now,
+                    error_type=OAuthTransactionError,
+                    provider=provider,
+                    kind="transaction",
+                )
+                return self._transaction_from_persistent(state, consumed).consumed()
+            except UnicodeEncodeError as error:
+                raise OAuthTransactionError("OAuth state is invalid or expired") from error
         with self._lock:
             transaction = self._transactions.get(state)
             if transaction is None:
@@ -491,6 +799,14 @@ class OAuthFoundation:
         if not isinstance(state, str) or not state:
             raise OAuthTransactionError("OAuth state is invalid or expired")
         now = float(self._clock())
+        if self._repository is not None:
+            try:
+                consumed = self._consume_persistent(
+                    self._state_key(state), now=now, error_type=OAuthTransactionError, kind="transaction"
+                )
+                return self._transaction_from_persistent(state, consumed).consumed()
+            except UnicodeEncodeError as error:
+                raise OAuthTransactionError("OAuth state is invalid or expired") from error
         with self._lock:
             transaction = self._transactions.get(state)
             if transaction is None:
@@ -507,6 +823,16 @@ class OAuthFoundation:
         if not isinstance(state, str) or not state:
             raise OAuthTransactionError("OAuth state is invalid or expired")
         now = float(self._clock())
+        if self._repository is not None:
+            try:
+                record = self._load_persistent(self._state_key(state), OAuthTransactionError)
+                if record.consumed:
+                    raise OAuthTransactionError("OAuth state is invalid or expired")
+                if now >= record.expires_at.timestamp():
+                    raise OAuthTransactionError("OAuth state is expired")
+                return self._transaction_from_persistent(state, record).consumed()
+            except UnicodeEncodeError as error:
+                raise OAuthTransactionError("OAuth state is invalid or expired") from error
         with self._lock:
             transaction = self._transactions.get(state)
             if transaction is None:
@@ -544,7 +870,14 @@ class OAuthFoundation:
         )
         with self._lock:
             self._remove_expired(created_at)
-            self._exchange_tickets[sha256(opaque_ticket.encode("ascii")).hexdigest()] = stored
+            if self._repository is None:
+                self._exchange_tickets[sha256(opaque_ticket.encode("ascii")).hexdigest()] = stored
+            else:
+                digest = sha256(opaque_ticket.encode("ascii")).hexdigest()
+                try:
+                    self._persist(self._ticket_key(digest), _PersistentOAuthRecord.for_exchange_ticket(stored), created_at)
+                except OAuthTransactionError as error:
+                    raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable") from error
         return opaque_ticket
 
     def consume_exchange_ticket(self, ticket: str) -> OAuthExchangeTicket:
@@ -557,6 +890,11 @@ class OAuthFoundation:
         except UnicodeEncodeError as error:
             raise OAuthExchangeTicketError("OAuth exchange ticket is unavailable") from error
         now = float(self._clock())
+        if self._repository is not None:
+            consumed = self._consume_persistent(
+                self._ticket_key(digest), now=now, error_type=OAuthExchangeTicketError, kind="exchange_ticket"
+            )
+            return self._ticket_from_persistent(consumed).consumed()
         with self._lock:
             stored = self._exchange_tickets.get(digest)
             if stored is None:

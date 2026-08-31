@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from hashlib import sha256
 import base64
 
@@ -11,9 +12,11 @@ from app.oauth_foundation import (
     ENV_CLIENT_SECRET,
     ENV_RETURN_URI_ALLOWLIST,
     OAuthConfigurationError,
+    OAuthExchangeTicketError,
     OAuthFoundation,
     OAuthTransactionError,
 )
+from app.storage import InMemoryDocumentRepository, StorageRuntimeError
 
 
 TEST_SECRET = "oauth-unit-test-secret-only"
@@ -148,3 +151,43 @@ def test_secrets_are_redacted_from_repr_and_errors() -> None:
             ENV_CLIENT_SECRET["github"]: "github-incomplete-secret-only",
         })
     assert TEST_SECRET not in str(error.value)
+
+
+def test_persistent_repository_survives_foundation_restart_and_consumes_state_and_ticket_once() -> None:
+    repository = InMemoryDocumentRepository(clock=lambda: datetime.fromtimestamp(1000.0, timezone.utc))
+    first = OAuthFoundation.from_environment(environ=environment(), repository=repository, clock=lambda: 1000.0)
+    authorization = first.create_transaction("google", "foresightnine://oauth/complete")
+    ticket = first.issue_exchange_ticket(
+        provider="google", account_id="account-persisted", return_uri="foresightnine://oauth/complete"
+    )
+
+    restarted = OAuthFoundation.from_environment(environ=environment(), repository=repository, clock=lambda: 1000.0)
+    consumed = restarted.consume_state(authorization.state)
+    assert consumed.code_challenge == authorization.code_challenge
+    assert restarted.consume_exchange_ticket(ticket).account_id == "account-persisted"
+
+    with pytest.raises(OAuthTransactionError):
+        first.consume_state(authorization.state)
+    with pytest.raises(OAuthExchangeTicketError):
+        first.consume_exchange_ticket(ticket)
+
+    stored_documents = [record.to_document() for _key, record in repository.items_for_retention()]
+    assert stored_documents
+    assert all("client_secret" not in document for document in stored_documents)
+    assert all("code_verifier" not in document and "nonce" not in document and "account_id" not in document for document in stored_documents)
+
+
+def test_postgres_selection_fails_closed_when_the_existing_persistent_store_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    values = environment() | {
+        "FORESIGHTNINE_ENV": "production",
+        "FORESIGHTNINE_STORAGE_MODE": "postgres",
+        "FORESIGHTNINE_POSTGRES_DSN": "postgresql://server-side-only.example.test/f9",
+    }
+
+    class UnavailableRepository:
+        def check_ready(self) -> None:
+            raise StorageRuntimeError("unavailable")
+
+    monkeypatch.setattr("app.oauth_foundation.build_repository", lambda *_args, **_kwargs: UnavailableRepository())
+    with pytest.raises(OAuthConfigurationError, match="persistence is unavailable"):
+        OAuthFoundation.from_environment(environ=values)

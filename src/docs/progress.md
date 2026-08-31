@@ -1,9 +1,27 @@
 # Progress
 
-# Current-head Android emulator QA evidence — 2026-08-31
+## Current implementation correction status — 2026-08-31
+
+- The current repository HEAD is `f1c70ef`; the Android artifacts named below
+  were produced from earlier snapshots and are retained as historical QA, not
+  current-head release evidence.
+- OAuth state and one-time exchange tickets now use the existing PostgreSQL
+  document repository when persistent storage is configured. They retain the
+  bounded-TTL and generic fail-closed behavior when persistence is unavailable;
+  development/test memory behavior is unchanged.
+- Production Android configuration now throws at build time unless an exact
+  HTTPS callback, matching App Link host/package, verified marker and release
+  certificate fingerprint are supplied. The custom scheme is a local/QA path
+  only.
+- No market, factor or FX source is approved for public production in the
+  provider manifest. Stooq, Frankfurter, Kenneth French and AQR remain
+  staging/reference candidates until written terms, coverage and feature/FX
+  gates are evidenced.
+
+# Prior Android emulator QA evidence — 2026-08-31
 
 - Reinstalled the disposable QA-signed Android build whose mobile sources are
-  identical to current HEAD `2620bdd`, cold-started `com.foresightnine.mobile`
+  identical to prior source snapshot `2620bdd`, not current HEAD `f1c70ef`, and cold-started `com.foresightnine.mobile`
   on `emulator-5554` (API 36 Play), switched the language to English, and
   reached the server-backed Challenge state against staging.
 - UI hierarchy dumps and screenshots are retained in
@@ -13,9 +31,9 @@
   `AndroidRuntime:E` entries. This is emulator evidence only; a physical-device
   run remains an external gate.
 
-# Current-head Android release rebuild — 2026-08-31
+# Prior Android release rebuild — 2026-08-31
 
-- Rebuilt the current `8d7dc99` source in the short-path QA clone with the
+- Rebuilt the prior `8d7dc99` source in the short-path QA clone with the
   existing Expo/RN workspace, CMake 3.30.5, x86_64 ABI, and the disposable
   signing bypass used only for local QA. JDK 25 required the process-local
   `--enable-native-access=ALL-UNNAMED` flag; no repository build configuration
@@ -169,20 +187,22 @@
   exchange ticket. The callback never places a bearer token or provider token
   in a URL; `POST /v1/auth/oauth/exchange` consumes the ticket before issuing a
   local session. PKCE/state replay, provider failure, cancellation, ticket
-  replay/expiry, logout and account deletion are covered by API tests.
-- The exchange route and its strict request/response schemas are present in the
-  generated OpenAPI JSON/YAML contract. This work was reviewed by Sol and
-  pushed in commit `483f381`.
+  replay/expiry, logout and account deletion are covered by API tests. State
+  and ticket records use the existing versioned PostgreSQL repository when
+  configured, so a process restart does not discard a live transaction and a
+  concurrent replay cannot win a second consume.
+- The exchange route and its strict request/response schemas remain present in
+  the generated OpenAPI JSON/YAML contract; no contract or wire semantics were
+  changed by the persistence correction.
 - Web now has a separately reviewed strict OAuth client boundary in
   `src/apps/web/src/oauth-client.ts`: explicit HTTPS return URI only, safe API
   base validation, callback parameter rejection, opaque-ticket exchange,
   sessionStorage-only persistence, and bearer-header logout/delete helpers.
   The helper tests and Web typecheck pass; pushed in `68ce0fa`.
-- Web UI button/callback lifecycle integration and Android Linking plus
-  SecureStore integration are not yet complete. Current staging OAuth
-  readiness is intentionally disabled because no provider credentials were
-  injected. Android device evidence is also pending; the local `adb devices`
-  check found no attached emulator or physical device.
+- Current staging OAuth readiness is intentionally disabled because no provider
+  credentials were injected. Android device evidence remains QA-only; the
+  production App Link still requires the externally verified domain and release
+  certificate inputs documented by the mobile build gate.
 
 ## Staging client default and Public Default fail-closed coverage — 2026-08-31
 
