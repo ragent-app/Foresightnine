@@ -1,0 +1,1 @@
+{"customSchemeFilters": [], "httpsFilters": [{"action": "VIEW", "autoVerify": true, "category": ["BROWSABLE", "DEFAULT"], "data": [{"host": "staging.foresightnine.com", "pathPrefix": "/oauth/mobile-callback", "scheme": "https"}]}], "package": "com.foresightnine.mobile", "scheme": null}

@@ -1,0 +1,8 @@
+246cd8ce64236aa5e648fc6df4a3c895a7b7a2451c931e4b1c1c5a1a81352d4f  /tmp/f9-rollback-test.DWQoVD/src/apps/web/.env.production.local
+246cd8ce64236aa5e648fc6df4a3c895a7b7a2451c931e4b1c1c5a1a81352d4f  /home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/baseline/apps/web/.env.production.local
+d14f003cff4502ae99925d41311a509bdf1673a01fd0c8ac5cb3a3a719276ad0  /tmp/f9-rollback-test.DWQoVD/src/apps/web/vite.config.ts
+d14f003cff4502ae99925d41311a509bdf1673a01fd0c8ac5cb3a3a719276ad0  /home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/baseline/apps/web/vite.config.ts
+9f5fe2b0450153919f3cb649971617c44d587bc8dd1367c11950c97ddffcf227  /tmp/f9-rollback-test.DWQoVD/src/apps/api/app/oauth_identity.py
+9f5fe2b0450153919f3cb649971617c44d587bc8dd1367c11950c97ddffcf227  /home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/baseline/apps/api/app/oauth_identity.py
+7575e505bda1b183f8e7eb5ca2a705f9c6a7e0bdff40c633ae94e48e80532f2e  /tmp/f9-rollback-test.DWQoVD/cloudflared/foresightnine-api-staging.yml
+7575e505bda1b183f8e7eb5ca2a705f9c6a7e0bdff40c633ae94e48e80532f2e  /home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/baseline/cloudflared/foresightnine-api-staging.yml

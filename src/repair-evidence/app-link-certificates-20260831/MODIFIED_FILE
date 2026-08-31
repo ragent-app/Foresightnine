@@ -1,0 +1,35 @@
+ForesightNine App Link certificate organization and staging deployment
+
+Changed branch/field:
+- Android App Link certificate inventory and canonical archive location.
+- `VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS`.
+- `FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS`.
+- QA Android HTTPS intent filter for `staging.foresightnine.com/oauth/mobile-callback`.
+
+Organized files:
+- /home/lxx/Foresightnine/src/apps/mobile/certificates/source/certificates.zip
+- /home/lxx/Foresightnine/src/apps/mobile/certificates/public/deployment_cert.der
+- /home/lxx/Foresightnine/src/apps/mobile/certificates/public/hybrid_classical_cert.der
+- /home/lxx/Foresightnine/src/apps/mobile/certificates/public/hybrid_pqc_cert.der
+- /home/lxx/Foresightnine/src/apps/mobile/certificates/CERTIFICATE_REPORT.md
+
+Code/config files changed or added:
+- /home/lxx/Foresightnine/src/apps/web/vite.config.ts
+- /home/lxx/Foresightnine/src/apps/web/.env.production.local
+- /home/lxx/Foresightnine/src/infra/docker/staging.env
+- /home/lxx/Foresightnine/src/apps/mobile/.env.qa.local
+- /home/lxx/Foresightnine/src/apps/mobile/android/app/src/main/AndroidManifest.xml
+- /home/lxx/Foresightnine/src/apps/mobile/tests/app-link-certificates.test.mjs
+
+Deployment state observed:
+- Web build completed; web service restarted.
+- API image rebuilt and container healthy.
+- Cloudflared service active; no Cloudflare change was required.
+- app.foresightnine.com and staging.foresightnine.com assetlinks.json returned HTTP 200 and contained package `com.foresightnine.mobile` plus 3 expected fingerprints.
+- OAuth start endpoints returned provider redirects (HTTP 307). No authorization_code was generated or persisted.
+
+Evidence and rollback:
+- /home/lxx/Foresightnine/src/repair-evidence/app-link-certificates-20260831/MODIFIED_FILE
+- /home/lxx/Foresightnine/src/repair-evidence/app-link-certificates-20260831/app-link-certificates.diff
+- /home/lxx/Foresightnine/src/repair-evidence/app-link-certificates-20260831/VERIFICATION.txt
+- /home/lxx/Foresightnine/src/repair-evidence/app-link-certificates-20260831/ROLLBACK.sh (mode 700)

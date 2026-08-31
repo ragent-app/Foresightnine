@@ -1,0 +1,147 @@
+# ForesightNine App Link certificate/config change diff
+Changed field: FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS / VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS and the QA HTTPS App Link intent filter.
+Secrets are intentionally excluded from this diff.
+
+--- baseline/apps/web/vite.config.ts
++++ modified/apps/web/vite.config.ts
+@@ -8,19 +8,24 @@
+ function assetLinksPlugin(environment: Record<string, string>): Plugin {
+   const production = (environment.FORESIGHTNINE_ENV || process.env.FORESIGHTNINE_ENV)?.trim().toLowerCase() === "production";
+   const packageName = environment.VITE_FORESIGHTNINE_ANDROID_APP_LINK_PACKAGE?.trim() || ANDROID_PACKAGE;
+-  const fingerprint = environment.VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT?.trim() || "";
++  const fingerprints = (environment.VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS
++    || environment.VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT
++    || "")
++    .split(",")
++    .map((value) => value.trim().toUpperCase())
++    .filter((value, index, values) => value && values.indexOf(value) === index);
+ 
+-  if (production && (packageName !== ANDROID_PACKAGE || !SHA256_CERTIFICATE_PATTERN.test(fingerprint))) {
++  if (production && (packageName !== ANDROID_PACKAGE || fingerprints.length === 0 || fingerprints.some((value) => !SHA256_CERTIFICATE_PATTERN.test(value)))) {
+     throw new Error("Production Web build requires the actual Android release App Link package and SHA-256 certificate fingerprint.");
+   }
+ 
+-  const statements = fingerprint && SHA256_CERTIFICATE_PATTERN.test(fingerprint)
++  const statements = fingerprints.length > 0 && fingerprints.every((value) => SHA256_CERTIFICATE_PATTERN.test(value))
+     ? [{
+         relation: ["delegate_permission/common.handle_all_urls"],
+         target: {
+           namespace: "android_app",
+           package_name: packageName,
+-          sha256_cert_fingerprints: [fingerprint.toUpperCase()],
++          sha256_cert_fingerprints: fingerprints,
+         },
+       }]
+     : [];
+--- baseline/apps/mobile/android/app/src/main/AndroidManifest.xml
++++ modified/apps/mobile/android/app/src/main/AndroidManifest.xml
+@@ -21,6 +21,12 @@
+         <action android:name="android.intent.action.MAIN"/>
+         <category android:name="android.intent.category.LAUNCHER"/>
+       </intent-filter>
++      <intent-filter android:autoVerify="true" data-generated="true">
++        <action android:name="android.intent.action.VIEW"/>
++        <category android:name="android.intent.category.DEFAULT"/>
++        <category android:name="android.intent.category.BROWSABLE"/>
++        <data android:scheme="https" android:host="staging.foresightnine.com" android:pathPrefix="/oauth/mobile-callback"/>
++      </intent-filter>
+       <intent-filter>
+         <action android:name="android.intent.action.VIEW"/>
+         <category android:name="android.intent.category.DEFAULT"/>
+@@ -35,4 +41,4 @@
+       </intent-filter>
+     </activity>
+   </application>
+-</manifest>+</manifest>
+--- baseline/apps/mobile/.env.qa.local
++++ modified/apps/mobile/.env.qa.local
+@@ -0,0 +1,7 @@
++# Public QA build inputs only; no OAuth/API secrets.
++EXPO_PUBLIC_FORESIGHTNINE_API_BASE_URL=https://api-staging.foresightnine.com
++EXPO_PUBLIC_FORESIGHTNINE_OAUTH_RETURN_URI=https://staging.foresightnine.com/oauth/mobile-callback
++EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_HOST=staging.foresightnine.com
++EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_PACKAGE=com.foresightnine.mobile
++EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_SHA256_CERT_FINGERPRINT=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C
++EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_VERIFIED=true
+--- baseline/apps/mobile/tests/app-link-certificates.test.mjs
++++ modified/apps/mobile/tests/app-link-certificates.test.mjs
+@@ -0,0 +1,23 @@
++import { readFileSync } from "node:fs";
++import { join } from "node:path";
++import { describe, expect, it } from "vitest";
++
++const root = new URL("..", import.meta.url).pathname;
++const env = readFileSync(join(root, ".env.qa.local"), "utf8");
++const certificates = readFileSync(join(root, "certificates", "CERTIFICATE_REPORT.md"), "utf8");
++
++describe("QA App Link certificate inputs", () => {
++  it("binds the staging callback to the mobile package and actual QA signer", () => {
++    expect(env).toContain("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_RETURN_URI=https://staging.foresightnine.com/oauth/mobile-callback");
++    expect(env).toContain("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_PACKAGE=com.foresightnine.mobile");
++    expect(env).toContain("EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_VERIFIED=true");
++    expect(env).toContain("FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C");
++  });
++
++  it("keeps the public certificate inventory explicit", () => {
++    expect(certificates).toContain("deployment_cert.der");
++    expect(certificates).toContain("hybrid_classical_cert.der");
++    expect(certificates).toContain("hybrid_pqc_cert.der");
++    expect(certificates).toContain("No private key is present");
++  });
++});
+--- baseline/apps/mobile/certificates/CERTIFICATE_REPORT.md
++++ modified/apps/mobile/certificates/CERTIFICATE_REPORT.md
+@@ -0,0 +1,22 @@
++# ForesightNine Android certificate inventory
++
++Source archive: `source/certificates.zip`
++
++The archive contains public `.der` certificates only. No private key is present or processed.
++
++## Classification
++
++- `deployment_cert.der`: Play App Signing/deployment candidate, selected because the supplied filename explicitly identifies it as the deployment certificate. SHA-256 is recorded in the QA evidence.
++- `hybrid_classical_cert.der`: alternate/unknown certificate; not added to App Links because its role as an APK signing certificate is not established by the archive.
++- `hybrid_pqc_cert.der`: alternate/unknown certificate; not added to App Links because its role as an APK signing certificate is not established by the archive.
++
++The current QA APK signer is recorded separately from `deployment_cert.der` and is included for staging verification. The production Play signing certificate and QA certificate are both represented in generated staging assetlinks; the upload certificate is not used.
++
++## Fingerprint inventory
++
++| Input | SHA-256 fingerprint | App Link use |
++|---|---|---|
++| `deployment_cert.der` | `33:4B:79:0C:E2:40:5F:11:87:B9:3D:FB:64:2D:50:7C:48:A8:87:2F:9E:5E:10:E8:E4:9B:EC:30:A5:84:45:A9` | included as deployment candidate |
++| `hybrid_classical_cert.der` | `CD:2B:E8:0A:81:BF:94:FE:6E:15:EC:5D:68:50:03:6D:0F:49:37:02:43:17:73:5A:A3:E6:E1:ED:99:82:BC:50` | retained; role unresolved |
++| `hybrid_pqc_cert.der` | `83:91:43:0F:12:45:BE:4A:B2:90:79:FC:AE:17:51:42:DA:F7:06:B4:E2:4B:6F:36:3C:DE:5D:97:51:5B:65:6C` | retained; role unresolved |
++| QA debug APK signer | `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C` | included for staging verification |
+
+--- selected public environment changes (secret lines excluded) ---
+--- apps/web/.env.production.local (selected keys) ---
+baseline:
+VITE_FORESIGHTNINE_API_BASE_URL=https://api-staging.foresightnine.com
+VITE_FORESIGHTNINE_OAUTH_RETURN_URI=https://app.foresightnine.com/oauth/complete
+VITE_FORESIGHTNINE_ANDROID_APP_LINK_PACKAGE=com.foresightnine.mobile
+modified:
+VITE_FORESIGHTNINE_API_BASE_URL=https://api-staging.foresightnine.com
+VITE_FORESIGHTNINE_OAUTH_RETURN_URI=https://app.foresightnine.com/oauth/complete
+VITE_FORESIGHTNINE_ANDROID_APP_LINK_PACKAGE=com.foresightnine.mobile
+VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS=33:4B:79:0C:E2:40:5F:11:87:B9:3D:FB:64:2D:50:7C:48:A8:87:2F:9E:5E:10:E8:E4:9B:EC:30:A5:84:45:A9,FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C,E3:E2:88:10:87:6A:A5:2E:18:61:9B:A2:25:47:6C:0C:CF:0D:FC:33:40:20:76:37:78:0A:B3:DE:4F:F4:A7:AC
+--- infra/docker/staging.env (selected keys) ---
+baseline:
+FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL=https://app.foresightnine.com/api/auth/callback
+FORESIGHTNINE_OAUTH_GOOGLE_CALLBACK_URL=https://app.foresightnine.com/api/auth/callback/google
+FORESIGHTNINE_OAUTH_GITHUB_CALLBACK_URL=https://app.foresightnine.com/api/auth/callback/github
+FORESIGHTNINE_ANDROID_APP_LINK_PACKAGE=com.foresightnine.mobile
+FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS=E3:E2:88:10:87:6A:A5:2E:18:61:9B:A2:25:47:6C:0C:CF:0D:FC:33:40:20:76:37:78:0A:B3:DE:4F:F4:A7:AC
+modified:
+FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL=https://app.foresightnine.com/api/auth/callback
+FORESIGHTNINE_OAUTH_GOOGLE_CALLBACK_URL=https://app.foresightnine.com/api/auth/callback/google
+FORESIGHTNINE_OAUTH_GITHUB_CALLBACK_URL=https://app.foresightnine.com/api/auth/callback/github
+FORESIGHTNINE_ANDROID_APP_LINK_PACKAGE=com.foresightnine.mobile
+FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS=33:4B:79:0C:E2:40:5F:11:87:B9:3D:FB:64:2D:50:7C:48:A8:87:2F:9E:5E:10:E8:E4:9B:EC:30:A5:84:45:A9,FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C,E3:E2:88:10:87:6A:A5:2E:18:61:9B:A2:25:47:6C:0C:CF:0D:FC:33:40:20:76:37:78:0A:B3:DE:4F:F4:A7:AC
+
+--- binary/source inventory ---
+apps/mobile/certificates/source/certificates.zip: SHA-256 388df10b950e162840eee89f43ab9fecffea975bb1c05fbff391835f717a505d (same as original archive)
+apps/mobile/certificates/public/deployment_cert.der: SHA-256 334b790ce2405f1187b93dfb642d507c48a8872f9e5e10e8e49bec30a58445a9
+apps/mobile/certificates/public/hybrid_classical_cert.der: SHA-256 cd2be80a81bf94fe6e15ec5d6850036d0f4937024317735aa3e6e1ed9982bc50
+apps/mobile/certificates/public/hybrid_pqc_cert.der: SHA-256 8391430f1245be4ab29079fcae175142daf706b4e24b6f363cde5d97515b656c

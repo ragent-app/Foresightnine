@@ -1,0 +1,17 @@
+$ vitest run --passWithNoTests -- --runInBand
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/mobile
+
+ ✓ tests/share-config-plugin.test.mjs (2 tests) 9ms
+ ✓ tests/app-link-certificates.test.mjs (2 tests) 7ms
+ ✓ tests/oauth-client.test.ts (7 tests) 32ms
+ ✓ tests/market-data.test.ts (1 test) 16ms
+ ✓ tests/freshness.test.ts (7 tests) 54ms
+ ✓ tests/archive-resume.test.ts (16 tests) 154ms
+ ✓ tests/mobile-domain.test.ts (25 tests) 108ms
+
+ Test Files  7 passed (7)
+      Tests  60 passed (60)
+   Start at  15:55:44
+   Duration  1.34s (transform 954ms, setup 0ms, collect 2.10s, tests 382ms, environment 3ms, prepare 1.47s)
+

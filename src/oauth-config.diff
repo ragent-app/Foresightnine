@@ -1,0 +1,15 @@
+CHANGED_BRANCH_OR_FIELD: formal Web OAuth callback/return configuration
+
+API ENV: /home/lxx/Foresightnine/src/infra/docker/staging.env
+BASELINE_SHA256: 8c0774261ba96d98129144a8b2bfb9e57aab3918244a4fa1ac19c52e5c99e82e
++FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL=https://app.foresightnine.com/api/auth/callback
+~FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST=existing staging callbacks + foresightnine://oauth/complete + https://app.foresightnine.com/oauth/complete
+
+WEB BUILD ENV: /home/lxx/Foresightnine/src/apps/web/.env.production.local
++VITE_FORESIGHTNINE_API_BASE_URL=https://app.foresightnine.com
++VITE_FORESIGHTNINE_OAUTH_RETURN_URI=https://app.foresightnine.com/oauth/complete
++VITE_FORESIGHTNINE_MARKET_DATA_MODE=public
++VITE_FORESIGHTNINE_MARKET_DATA_BASE_URL=https://api-staging.foresightnine.com
+
+OAUTH_CLIENT_IDS_SECRETS: unchanged and not printed
+CLOUDFLARED_DNS_WAF_ACCESS_TUNNEL: unchanged

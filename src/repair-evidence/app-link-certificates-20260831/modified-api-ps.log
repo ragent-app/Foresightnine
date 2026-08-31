@@ -1,0 +1,2 @@
+NAME           IMAGE        COMMAND                  SERVICE   CREATED         STATUS                                     PORTS
+docker-api-1   docker-api   "uv run --project /a…"   api       2 seconds ago   Up Less than a second (health: starting)   127.0.0.1:8000->8000/tcp

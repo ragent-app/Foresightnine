@@ -1,0 +1,2 @@
+Origin=https://staging.foresightnine.com ALLOW=https://staging.foresightnine.com
+Origin=https://untrusted.example.test ALLOW=<none>

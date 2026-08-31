@@ -1,0 +1,29 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_oauth_identity_hydrates_serialized_postgres_datetimes __________
+
+    def test_oauth_identity_hydrates_serialized_postgres_datetimes() -> None:
+        created = "2026-08-31T03:25:08.505491Z"
+>       identity = OAuthIdentity.model_validate(
+            {
+                "schema_version": "v1",
+                "identity_id": "oauth_identity_test1234",
+                "provider": "github",
+                "subject": "provider-subject",
+                "account_id": "account_test1234",
+                "email": "user@example.test",
+                "created_at": created,
+                "updated_at": created,
+            }
+        )
+E       pydantic_core._pydantic_core.ValidationError: 2 validation errors for OAuthIdentity
+E       created_at
+E         Input should be a valid datetime [type=datetime_type, input_value='2026-08-31T03:25:08.505491Z', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/datetime_type
+E       updated_at
+E         Input should be a valid datetime [type=datetime_type, input_value='2026-08-31T03:25:08.505491Z', input_type=str]
+E           For further information visit https://errors.pydantic.dev/2.13/v/datetime_type
+
+tests/test_oauth_persistence.py:10: ValidationError
+=========================== short test summary info ============================
+FAILED tests/test_oauth_persistence.py::test_oauth_identity_hydrates_serialized_postgres_datetimes

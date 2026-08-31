@@ -1,0 +1,65 @@
+
+URL https://app.foresightnine.com/.well-known/assetlinks.json
+HTTP 200
+Content-Type application/json
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.foresightnine.mobile",
+      "sha256_cert_fingerprints": [
+        "33:4B:79:0C:E2:40:5F:11:87:B9:3D:FB:64:2D:50:7C:48:A8:87:2F:9E:5E:10:E8:E4:9B:EC:30:A5:84:45:A9",
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C",
+        "E3:E2:88:10:87:6A:A5:2E:18:61:9B:A2:25:47:6C:0C:CF:0D:FC:33:40:20:76:37:78:0A:B3:DE:4F:F4:A7:AC"
+      ]
+    }
+  }
+]
+
+URL https://staging.foresightnine.com/.well-known/assetlinks.json
+HTTP 200
+Content-Type application/json
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.foresightnine.mobile",
+      "sha256_cert_fingerprints": [
+        "33:4B:79:0C:E2:40:5F:11:87:B9:3D:FB:64:2D:50:7C:48:A8:87:2F:9E:5E:10:E8:E4:9B:EC:30:A5:84:45:A9",
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C",
+        "E3:E2:88:10:87:6A:A5:2E:18:61:9B:A2:25:47:6C:0C:CF:0D:FC:33:40:20:76:37:78:0A:B3:DE:4F:F4:A7:AC"
+      ]
+    }
+  }
+]
+
+URL https://app.foresightnine.com/oauth/complete
+HTTP 200
+Content-Type text/html
+<!doctype html> <html lang="zh-CN">   <head>     <meta charset="UTF-8" />     <meta name="viewport" content="width=device-width, initial-scale=1.0" />     <meta
+
+URL https://staging.foresightnine.com/oauth/mobile-callback
+HTTP 200
+Content-Type text/html
+<!doctype html> <html lang="zh-CN">   <head>     <meta charset="UTF-8" />     <meta name="viewport" content="width=device-width, initial-scale=1.0" />     <meta
+
+URL https://api-staging.foresightnine.com/health
+HTTP 200
+Content-Type application/json
+{"status":"ok","provider":"deterministic_mock","search_provider":"client-evidence-bundle","project_search_available":false,"schema_version":"v1","clock":"2026-0
+
+URL https://api-staging.foresightnine.com/readyz
+HTTP 200
+Content-Type application/json
+{"status":"ready"}
+
+URL https://api-staging.foresightnine.com/v1/auth/providers
+HTTP 200
+Content-Type application/json
+{"providers": [{"enabled": true, "provider": "google"}, {"enabled": true, "provider": "github"}]}

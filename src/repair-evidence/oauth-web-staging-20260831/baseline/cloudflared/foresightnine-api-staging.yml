@@ -1,0 +1,31 @@
+tunnel: b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4
+credentials-file: /home/lxx/.cloudflared/b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4.json
+protocol: http2
+
+ingress:
+  # Metrics are for a local supervisor/Prometheus only, never a public route.
+  - hostname: app.foresightnine.com
+    path: ^/metrics$
+    service: http_status:404
+  - hostname: app.foresightnine.com
+    path: '^/(api|oauth|v1)(/.*)?$'
+    service: http://127.0.0.1:8000
+  - hostname: app.foresightnine.com
+    path: '^/(health|docs|openapi\.json)(/.*)?$'
+    service: http://127.0.0.1:8000
+  - hostname: app.foresightnine.com
+    service: http://127.0.0.1:4173
+    originRequest:
+      httpHostHeader: 127.0.0.1:4173
+  - hostname: api-staging.foresightnine.com
+    path: ^/metrics$
+    service: http_status:404
+  - hostname: api-staging.foresightnine.com
+    service: http://127.0.0.1:8000
+  - hostname: staging.foresightnine.com
+    service: http://127.0.0.1:4173
+  - service: http_status:404
+
+originRequest:
+  connectTimeout: 10s
+  noTLSVerify: false

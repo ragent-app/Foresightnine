@@ -1,0 +1,2 @@
+{"fingerprint_count": 3, "fingerprints_match_expected": true, "host": "app.foresightnine.com", "http": 200, "package": "com.foresightnine.mobile"}
+{"fingerprint_count": 3, "fingerprints_match_expected": true, "host": "staging.foresightnine.com", "http": 200, "package": "com.foresightnine.mobile"}

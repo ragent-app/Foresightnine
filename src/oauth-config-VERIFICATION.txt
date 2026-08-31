@@ -1,0 +1,68 @@
+CHANGED_BRANCH_OR_FIELD: formal Web OAuth configuration (API callback base/return allowlist + public Web build runtime)
+
+ARTIFACTS:
+MODIFIED_FILE: /home/lxx/Foresightnine/src/infra/docker/staging.env
+DIFF_FILE: /home/lxx/Foresightnine/src/oauth-config.diff
+VERIFICATION.txt: /home/lxx/Foresightnine/src/oauth-config-VERIFICATION.txt
+ROLLBACK.sh: /home/lxx/Foresightnine/src/oauth-config-ROLLBACK.sh
+ADDITIONAL_MODIFIED_CONFIG: /home/lxx/Foresightnine/src/apps/web/.env.production.local
+ADDITIONAL_MODIFIED_BUILD: /home/lxx/Foresightnine/src/apps/web/dist
+BASELINE_COPY_ROOT: /home/lxx/.codex/oauth-config-baseline
+
+RECOMMENDATION_ASSESSMENT:
+The embedded recommendation correctly separates provider callback URLs from post-login return URLs and correctly requires exact allowlist entries. The current implementation has provider-specific callback settings, server-held state, PKCE S256, and one-time exchange tickets. The Cloudflare Tunnel was already healthy; no cloudflared/DNS/WAF/Access change was needed in this OAuth round. Cloudflare documents per-route httpHostHeader and local ingress validation; the previously applied cloudflared setting remains unchanged. The current OAuth blocker was application environment/build configuration, not Cloudflare.
+
+BASELINE:
+COMMAND: curl -sS --max-time 20 -A 'Mozilla/5.0' 'https://app.foresightnine.com/oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete'
+INPUT: production Web return URI absent from server allowlist
+LITERAL_OUTPUT/RESULT: HTTP 400; OAuth authorization request is unavailable.
+EXIT_STATUS: 0 (curl transport success; application response was HTTP 400)
+CONFIG_BASELINE_SHA256: 8c0774261ba96d98129144a8b2bfb9e57aab3918244a4fa1ac19c52e5c99e82e
+WEB_BASELINE_RESULT: https://app.foresightnine.com/oauth/complete=MISSING; https://api-staging.foresightnine.com=PRESENT
+
+MODIFIED:
+COMMAND: docker compose --env-file staging.env up -d --no-build api; systemctl --user restart foresightnine-web.service; corepack pnpm --filter @foresightnine/web build
+INPUT: exact production callback/return configuration; existing Client ID/Secret values retained unchanged
+LITERAL_OUTPUT/RESULT: containers recreated/started; Vite build completed; web tests 5 files and 64 tests passed; web service active.
+EXIT_STATUS: 0
+CONFIG_MODIFIED_SHA256: 58a8d1071fcbb860e09fa26154b7b46830309af736c9ddcb5a560afac8ab3991
+MODIFIED_KEYS:
+FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL=https://app.foresightnine.com/api/auth/callback
+FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST=existing staging web/mobile returns + foresightnine://oauth/complete + https://app.foresightnine.com/oauth/complete
+FORESIGHTNINE_OAUTH_GOOGLE_CALLBACK_URL=https://app.foresightnine.com/api/auth/callback/google
+FORESIGHTNINE_OAUTH_GITHUB_CALLBACK_URL=https://app.foresightnine.com/api/auth/callback/github
+VITE_FORESIGHTNINE_API_BASE_URL=https://app.foresightnine.com
+VITE_FORESIGHTNINE_OAUTH_RETURN_URI=https://app.foresightnine.com/oauth/complete
+PUBLIC_CLIENT_ID_SECRET_STATUS: client IDs unchanged; both client secret values unchanged; no secret printed.
+
+GOOGLE:
+START_COMMAND: curl -sS -A 'Mozilla/5.0' -D headers -o /dev/null 'https://app.foresightnine.com/oauth/google/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete'
+LITERAL_OUTPUT/RESULT: HTTP 307; provider URL accounts.google.com/o/oauth2/v2/auth; redirect_uri=https://app.foresightnine.com/api/auth/callback/google; response_type=code; scope=openid email profile; state=PRESENT; code_challenge_method=S256.
+EXIT_STATUS: 0
+AUTHORIZATION_URL: https://accounts.google.com/o/oauth2/v2/auth?client_id=466781895399-utj8lbgtdriiv3hvrlct0b9m3lidn837.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fapp.foresightnine.com%2Fapi%2Fauth%2Fcallback%2Fgoogle&response_type=code&scope=openid+email+profile&state=Fz9gKyr2FRbGqN37VNw7-3sckedS6-3qWIMPgSlKmOE&code_challenge=oeeA4xLCIOvkMeMRIWMtohjzGN9Dxk_Ck2369uleUXY&code_challenge_method=S256&nonce=EI7HmZpPzvsUBjxwB2WS30UKqsfLxMu3uBReZ8BGTEs&access_type=online&prompt=select_account
+
+GITHUB:
+START_COMMAND: curl -sS -A 'Mozilla/5.0' -D headers -o /dev/null 'https://app.foresightnine.com/oauth/github/start?return_uri=https%3A%2F%2Fapp.foresightnine.com%2Foauth%2Fcomplete'
+LITERAL_OUTPUT/RESULT: HTTP 307; provider URL github.com/login/oauth/authorize; redirect_uri=https://app.foresightnine.com/api/auth/callback/github; response_type=code; scope=read:user user:email; state=PRESENT; code_challenge_method=S256.
+EXIT_STATUS: 0
+AUTHORIZATION_URL: https://github.com/login/oauth/authorize?client_id=Ov23li1YO6ts1BGOCYSf&redirect_uri=https%3A%2F%2Fapp.foresightnine.com%2Fapi%2Fauth%2Fcallback%2Fgithub&response_type=code&scope=read%3Auser+user%3Aemail&state=H2MBVJbE200gL29dE5M6wA23r9oftpq8U3FUu41h9-s&code_challenge=KALep4lnzOzCcxjSZc_bhX9h63-eLRJuLRhIcyEczGY&code_challenge_method=S256
+
+PUBLIC_TEST:
+COMMAND: curl -sS --max-time 20 -A 'Mozilla/5.0' https://app.foresightnine.com/; curl .../health; curl .../v1/auth/providers
+LITERAL_OUTPUT/RESULT: / HTTP 200 text/html; /health HTTP 200 application/json; /v1/auth/providers HTTP 200 with google/github enabled.
+EXIT_STATUS: 0
+
+CLOUDFLARED:
+COMMAND: cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate; systemctl --user is-active foresightnine-cloudflared.service
+LITERAL_OUTPUT/RESULT: Validating rules ... OK; active.
+EXIT_STATUS: 0
+CONFIG_STATUS: cloudflared config hash unchanged at 7575e505bda1b183f8e7eb5ca2a705f9c6a7e0bdff40c633ae94e48e80532f2e.
+
+ROLLBACK:
+COMMAND: /home/lxx/Foresightnine/src/oauth-config-ROLLBACK.sh <test-root> <test-baseline-root>; compare restored API env and Web dist against baseline
+INPUT: another copy of modified API/Web configuration and generated build
+LITERAL_OUTPUT/RESULT: restored_oauth_config_and_web_build=/tmp/oauth-config-rollback-test-r2fz39al; api_env_cmp=identical; web_env_restored=absent; dist_cmp=identical.
+EXIT_STATUS: 0
+
+RESTORED_BEHAVIOR_STATUS:
+Rollback was tested on another copy only. The active API/Web configuration remains modified. No authorization_code was generated, saved, or sent to a token endpoint. The server-issued state transactions are short-lived and provider authorization is now waiting on the user's browser.

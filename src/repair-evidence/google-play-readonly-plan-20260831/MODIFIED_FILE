@@ -1,0 +1,11 @@
+Google Play Developer API read-only verification plan
+
+Modified file:
+- /home/lxx/Foresightnine/src/docs/release/google-play-developer-api-readonly-test-plan.md
+
+Changed branch/field:
+- Added a deferred, read-only identity and permission verification plan for com.foresightnine.mobile.
+- Execution status is explicitly deferred; no API, fastlane, Publisher write, release, billing, payment, refund, bank/tax, or paid-service operation was run.
+
+Credential handling:
+- The plan records only the local credential path; credential values and signing private-key material are excluded.

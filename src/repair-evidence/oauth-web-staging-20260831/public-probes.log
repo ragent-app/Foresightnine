@@ -1,0 +1,6 @@
+https://staging.foresightnine.com/ => HTTP=200 TYPE=text/html EXPECTED=200/text/html
+https://staging.foresightnine.com/.well-known/assetlinks.json => HTTP=200 TYPE=application/json EXPECTED=200/application/json
+https://app.foresightnine.com/oauth/complete => HTTP=200 TYPE=text/html EXPECTED=200/text/html
+https://app.foresightnine.com/oauth/complete?error=oauth_callback_failed => HTTP=200 TYPE=text/html EXPECTED=200/text/html
+https://app.foresightnine.com/health => HTTP=200 TYPE=application/json EXPECTED=200/application/json
+https://app.foresightnine.com/v1/auth/providers => HTTP=200 TYPE=application/json EXPECTED=200/application/json

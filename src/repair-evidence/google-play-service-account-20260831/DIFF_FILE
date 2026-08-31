@@ -1,0 +1,15 @@
+Google Play service-account copy diff manifest
+
+Changed path:
+- /home/lxx/.config/google-play/service-account.json
+
+Unchanged source path:
+- /home/lxx/.config/foresightnine-play-automation-461c858d8001.json
+
+Content verification:
+- source SHA-256: 4e5b08bfca199bf52f408f3311001bbb9c1f7bd24732f410ab8dd8ba9aac9f33
+- target SHA-256: 4e5b08bfca199bf52f408f3311001bbb9c1f7bd24732f410ab8dd8ba9aac9f33
+- byte-for-byte result: identical
+- target mode: 600
+
+Credential values and private key material are intentionally not included.

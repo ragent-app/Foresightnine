@@ -1,0 +1,17 @@
+ForesightNine staging repair — modified-file manifest
+
+Modified files:
+1. /home/lxx/Foresightnine/src/apps/web/.env.production.local
+   - Web API base: https://api-staging.foresightnine.com
+   - staging App Link package/fingerprint injected from existing staging QA configuration.
+2. /home/lxx/Foresightnine/src/apps/web/vite.config.ts
+   - loadEnv() feeds App Link values into the Vite build.
+3. /home/lxx/Foresightnine/src/apps/api/app/oauth_identity.py
+   - strict OAuthIdentity model hydrates ISO strings from PostgreSQL before validation.
+4. /home/lxx/Foresightnine/src/apps/api/tests/test_oauth_persistence.py
+   - regression test for serialized PostgreSQL datetimes.
+5. /home/lxx/.cloudflared/foresightnine-api-staging.yml
+   - exact /oauth/complete Web route added before the API /oauth catch-all.
+
+Original hashes are preserved under:
+/home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/baseline/

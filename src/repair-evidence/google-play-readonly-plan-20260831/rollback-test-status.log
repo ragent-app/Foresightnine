@@ -1,0 +1,2 @@
+ROLLBACK_TEST_EXIT=0
+restored_behavior=planned_file_removed_on_test_copy

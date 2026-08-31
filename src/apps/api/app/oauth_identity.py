@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 OAuthIdentityProvider = Literal["google", "github"]
@@ -27,6 +27,15 @@ class OAuthIdentity(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def _hydrate_serialized_datetime(cls, value: object) -> object:
+        # PostgreSQL JSONB returns persisted ISO datetimes as strings. Convert
+        # only that storage representation before strict model validation.
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return value
 
 
 class OAuthSessionResponse(BaseModel):

@@ -1,0 +1,12 @@
+Google Play service-account credential copy
+
+Changed file:
+- /home/lxx/.config/google-play/service-account.json
+
+Source preserved:
+- /home/lxx/.config/foresightnine-play-automation-461c858d8001.json
+
+Result:
+- JSON structurally valid; credential values omitted from this record.
+- Source and target SHA-256: 4e5b08bfca199bf52f408f3311001bbb9c1f7bd24732f410ab8dd8ba9aac9f33
+- Target permission mode: 600

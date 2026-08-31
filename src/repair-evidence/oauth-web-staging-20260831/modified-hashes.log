@@ -1,0 +1,5 @@
+eb3b2f010900d21d7cf14a4cb69a6460e746786b709d2d48d6de8b5112525fda  /home/lxx/Foresightnine/src/apps/web/.env.production.local
+416073b72c9e547e632dbbcca4df77d643abf868c298809b0dc58bccfb1b4bca  /home/lxx/Foresightnine/src/apps/web/vite.config.ts
+0f988897aa5c03fd5b28abe05ecb6008ef42ab62a3b8f3361a850bbf720ab467  /home/lxx/Foresightnine/src/apps/api/app/oauth_identity.py
+96ca3150c55f2a8f7c14af16a4d34c36d40423ead435724f2251f1e90bd91541  /home/lxx/Foresightnine/src/apps/api/tests/test_oauth_persistence.py
+4867d48d94d8a3817f9b6491315655c8b64c31c5371c8ba6b0c1a5740be0ecf2  /home/lxx/.cloudflared/foresightnine-api-staging.yml

@@ -1,0 +1,44 @@
+--- baseline/<absent>
++++ /home/lxx/Foresightnine/src/docs/release/google-play-developer-api-readonly-test-plan.md
+@@ -0,0 +1,41 @@
++# Google Play Developer API 只读身份与权限验证计划
++
++## 状态
++
++- 状态：后续测试计划，当前不执行。
++- 前置条件：Google Play Developer API 已启用；Service Account 已获授权访问 `com.foresightnine.mobile`。
++- credential 位置：`/home/lxx/.config/google-play/service-account.json`。
++- 本计划不包含 credential 内容、签名私钥或任何凭据输出。
++
++## 已确认的 Console 授权范围
++
++- View app information
++- Release apps to testing tracks
++- Manage testing tracks and edit tester lists
++- Manage store presence
++
++## 后续只读验证步骤
++
++1. 读取 Service Account 身份，确认认证主体与目标 Google Cloud project 可用。
++2. 只读调用 Android Publisher API，确认 `com.foresightnine.mobile` 可访问。
++3. 读取应用基本信息与可见测试轨道，核对返回的 package name 与目标应用一致。
++4. 读取测试轨道、版本、tester 列表和 store presence 的最小必要信息，记录 HTTP 状态、API 错误和权限结果；不打印响应中的凭据或个人敏感信息。
++5. 将身份验证、应用访问和各授权项结果记录为可复现的 QA evidence。
++6. 只有上述只读验证全部通过后，才进入 fastlane / Android Publisher API 的配置评估；配置阶段仍不执行生产发布。
++
++## 明确禁止项
++
++本计划执行前及执行中均不进行以下操作：
++
++- Production 发布或改变生产轨道；
++- 创建真实收费订阅；
++- 修改付款资料；
++- 退款；
++- 修改银行或税务信息；
++- 增加任何付费 Google Cloud 服务；
++- 修改应用商店信息、测试轨道配置或 tester 列表；
++- 将 Service Account credential 写入仓库、日志或文档。
++
++## 通过标准
++
++身份认证成功、目标 package name 精确匹配、只读 API 请求成功，并且授权结果覆盖 Console 中已授予的四类权限。未达到标准时保持当前配置，不配置 fastlane，不进行写操作。

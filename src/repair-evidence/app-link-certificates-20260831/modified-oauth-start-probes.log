@@ -1,0 +1,34 @@
+--- OAuth start google ---
+HTTP/2 307 
+date: Mon, 31 Aug 2026 07:56:50 GMT
+content-length: 0
+location: https://accounts.google.com/o/oauth2/v2/auth?client_id=466781895399-utj8lbgtdriiv3hvrlct0b9m3lidn837.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fapp.foresightnine.com%2Fapi%2Fauth%2Fcallback%2Fgoogle&response_type=code&scope=openid+email+profile&state=r5kBz_MpFWlyvf06zQUJ7NY8hYYeUPbrPc64kdylpyU&code_challenge=UkGdUM7vbMs4QA0xXv_C__PsATEZQyVbJFNx6MaAU10&code_challenge_method=S256&nonce=Vw3HNjxWyFHidji9Ry3dO1Wn9qcMVwdDSOmSXhrkcLY&access_type=online&prompt=select_account
+cache-control: no-store
+content-security-policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'
+permissions-policy: camera=(), microphone=(), geolocation=()
+referrer-policy: no-referrer
+server: cloudflare
+x-content-type-options: nosniff
+x-frame-options: DENY
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+cf-cache-status: DYNAMIC
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=lBLfBq3362hGfXu9GCy7vSE%2FpgKd4RQTlWlKBm%2BcxnkIvG9%2BNbdiaI6Ep99k8S6kV%2BzxIuOeWJVxsvHYjKgqL9UCNMNGojLmh9M5lsycTG7tTN8yWpIM9Q%2FFgqcArrVP%2B3XncB10Jskw28Gt3FTfUw%3D%3D"}]}
+cf-ray: a33a7b1bba91b6a6-SIN
+alt-svc: h3=":443"; ma=86400
+--- OAuth start github ---
+HTTP/2 307 
+date: Mon, 31 Aug 2026 07:56:52 GMT
+content-length: 0
+location: https://github.com/login/oauth/authorize?client_id=Ov23li1YO6ts1BGOCYSf&redirect_uri=https%3A%2F%2Fapp.foresightnine.com%2Fapi%2Fauth%2Fcallback%2Fgithub&response_type=code&scope=read%3Auser+user%3Aemail&state=LdQMyRyB8Xzqnb-gygCtCZPcYAePBNzkl6KyW4Zkg0U&code_challenge=TS_WDUBt14bcjWOoBSicMBn9j9yI8sm61lR6KfwRx94&code_challenge_method=S256
+cache-control: no-store
+content-security-policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'
+permissions-policy: camera=(), microphone=(), geolocation=()
+referrer-policy: no-referrer
+server: cloudflare
+x-content-type-options: nosniff
+x-frame-options: DENY
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+cf-cache-status: DYNAMIC
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=4TR181EOQteuC2DL2r%2B6TMG7PjkxfWf1DgL8Ovq4u%2FLLxKO1XCTV%2BapBkfHRicXWiDPfr2XugJhD8AKkbN74zC40pkYxaYfWTbaCdIXH0envStKRGA7wHPsE5zeZrbyQwlw0aCBSkPHffyYInYJhiw%3D%3D"}]}
+cf-ray: a33a7b230bba5cec-SIN
+alt-svc: h3=":443"; ma=86400

@@ -1,0 +1,125 @@
+ForesightNine staging repair verification
+Date: 2026-08-31
+
+MODIFIED_FILE:
+- /home/lxx/Foresightnine/src/apps/web/.env.production.local
+- /home/lxx/Foresightnine/src/apps/web/vite.config.ts
+- /home/lxx/Foresightnine/src/apps/api/app/oauth_identity.py
+- /home/lxx/Foresightnine/src/apps/api/tests/test_oauth_persistence.py
+- /home/lxx/.cloudflared/foresightnine-api-staging.yml
+
+DIFF_FILE:
+- /home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/oauth-web-staging.diff
+
+ROLLBACK_FILE:
+- /home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/ROLLBACK.sh
+- executable mode verified: 700
+
+BASELINE:
+Command:
+(cd /home/lxx/Foresightnine/src/apps/api && uv run pytest -q tests/test_oauth_persistence.py)
+Input:
+OAuthIdentity model with PostgreSQL JSONB-style ISO strings in created_at and updated_at.
+Literal result:
+1 failed; Pydantic strict datetime validation rejected both serialized strings.
+Exit status: 1
+
+MODIFIED:
+Command:
+(cd /home/lxx/Foresightnine/src/apps/api && uv run pytest -q tests/test_oauth_persistence.py tests/test_oauth_ticket_flow.py tests/test_local_auth.py)
+Literal result:
+8 passed.
+Exit status: 0
+
+Command:
+(cd /home/lxx/Foresightnine/src/apps/api && uv run pytest -q)
+Literal result:
+Full API suite completed: all collected tests passed, 1 skipped.
+Exit status: 0
+
+Command:
+(corepack pnpm --filter @foresightnine/web typecheck)
+Literal result:
+TypeScript completed with no errors.
+Exit status: 0
+
+Command:
+(corepack pnpm --filter @foresightnine/web test)
+Literal result:
+Test Files 5 passed (5); Tests 64 passed (64).
+Exit status: 0
+
+Command:
+(corepack pnpm --filter @foresightnine/web build)
+Literal result:
+Vite build completed; generated dist/.well-known/assetlinks.json and index bundle.
+Exit status: 0
+
+Command:
+cloudflared tunnel --config /home/lxx/.cloudflared/foresightnine-api-staging.yml ingress validate
+Literal result:
+Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+Exit status: 0
+
+Command:
+docker compose --env-file ./staging.env -f ./compose.yaml up -d --build api
+Literal result:
+Image docker-api Built; Container docker-api-1 Recreated and Started.
+Exit status: 0
+
+DEPLOYED VERIFICATION:
+Command:
+docker exec -w /app/apps/api docker-api-1 uv run --project /app/apps/api python -c 'from datetime import datetime; from app.main import OAUTH_IDENTITIES; rows=list(OAUTH_IDENTITIES.items()); print("OAUTH_IDENTITY_ROWS", len(rows)); print("DATETIME_FIELDS", all(isinstance(i.created_at, datetime) and isinstance(i.updated_at, datetime) for _, i in rows))'
+Literal result:
+OAUTH_IDENTITY_ROWS 1
+DATETIME_FIELDS True
+Exit status: 0
+
+Command:
+Temporary register -> DELETE /v1/auth/local/account -> login with same temporary credentials.
+Literal result:
+ACCOUNT_DELETE_RESULT={"deleted":true}
+POST_DELETE_LOGIN_HTTP=401
+Exit status: 0
+
+Command:
+Public HTTP probes for staging root, staging assetlinks, app oauth completion, app health, and app providers.
+Literal result:
+All expected routes returned HTTP 200 with expected content types; /oauth/complete now returns Web HTML instead of API 404.
+Exit status: 0
+
+Command:
+OAuth start probes for Google and GitHub on app.foresightnine.com.
+Literal result:
+google 307
+github 307
+Exit status: 0
+
+Command:
+CORS probes against https://api-staging.foresightnine.com/v1/auth/providers.
+Input:
+Origin https://staging.foresightnine.com and Origin https://untrusted.example.test.
+Literal result:
+Allowed origin returned https://staging.foresightnine.com; untrusted origin returned no allow header.
+Exit status: 0
+
+Command:
+Runtime status and recent API error scan.
+Literal result:
+API_HEALTH=healthy; WEB_SERVICE=active; CF_SERVICE=active; RECENT_API_ERROR_LINES=0.
+Exit status: 0
+
+ROLLBACK:
+Command:
+TARGET_ROOT=<temporary modified copy> TARGET_CLOUDFLARED=<temporary modified config> SKIP_BUILD=1 SKIP_RESTART=1 /home/lxx/Foresightnine/src/repair-evidence/oauth-web-staging-20260831/ROLLBACK.sh
+Input:
+Temporary copy populated with every modified file and the added regression test.
+Literal result:
+rollback restored baseline files (service restart skipped)
+ROLLBACK_COPY_RESULT=PASS
+All restored hashes matched baseline; added test file was removed.
+Exit status: 0
+
+RESTORED BEHAVIOR/STATUS:
+Rollback was tested only on a separate temporary copy. The live staging files remain on the modified branch. Live API is healthy, Web and Cloudflared are active, App Link JSON is non-empty for the current staging QA fingerprint, and OAuth start endpoints return provider redirects. A formal Play release certificate fingerprint is still a separate release input and is not fabricated here.

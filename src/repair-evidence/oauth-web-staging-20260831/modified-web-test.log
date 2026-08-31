@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/oauth-client.test.ts (5 tests) 22ms
+ ✓ src/market-data.test.ts (1 test) 34ms
+ ✓ src/freshness.test.ts (9 tests) 74ms
+ ✓ src/search-client.test.ts (6 tests) 23ms
+ ✓ src/app.test.ts (43 tests) 185ms
+
+ Test Files  5 passed (5)
+      Tests  64 passed (64)
+   Start at  12:17:25
+   Duration  1.64s (transform 1.11s, setup 0ms, collect 2.59s, tests 338ms, environment 3ms, prepare 904ms)
+

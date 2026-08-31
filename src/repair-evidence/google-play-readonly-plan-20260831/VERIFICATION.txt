@@ -1,0 +1,20 @@
+Google Play Developer API read-only plan verification
+
+BASELINE
+- Command: test whether the planned document existed before the change.
+- Literal result: absent before creation.
+- Exit: 0.
+
+MODIFIED
+- Command: apply the project documentation change at /home/lxx/Foresightnine/src/docs/release/google-play-developer-api-readonly-test-plan.md.
+- Result: file created; no API or fastlane command executed.
+- Command: sha256sum /home/lxx/Foresightnine/src/docs/release/google-play-developer-api-readonly-test-plan.md
+- Literal result: 0f7c77bca432e2d4872c32a25c1487631fe910a25636c0f3b24ac2723098c838  /home/lxx/Foresightnine/src/docs/release/google-play-developer-api-readonly-test-plan.md
+- Command: stat -c 'mode=%a size=%s' /home/lxx/Foresightnine/src/docs/release/google-play-developer-api-readonly-test-plan.md
+- Literal result: mode=664 size=1956
+- Content check: status is deferred; four Console permissions are listed; prohibited operations are listed; no credential values or private key content is present.
+- Exit: 0.
+
+ROLLBACK
+- Executable: /home/lxx/Foresightnine/src/repair-evidence/google-play-readonly-plan-20260831/ROLLBACK.sh mode 700.
+- The rollback script removes only the plan file when run against a target path.

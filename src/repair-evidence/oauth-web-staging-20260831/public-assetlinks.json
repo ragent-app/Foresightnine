@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.foresightnine.mobile",
+      "sha256_cert_fingerprints": [
+        "E3:E2:88:10:87:6A:A5:2E:18:61:9B:A2:25:47:6C:0C:CF:0D:FC:33:40:20:76:37:78:0A:B3:DE:4F:F4:A7:AC"
+      ]
+    }
+  }
+]

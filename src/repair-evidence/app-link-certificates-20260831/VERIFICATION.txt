@@ -1,0 +1,78 @@
+ForesightNine Android App Link certificate verification
+Date: 2026-08-31
+
+Changed branch/field
+====================
+`FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` and the corresponding Vite plural field now publish the deployment candidate, the actual QA APK signer, and the previously configured staging signer. The QA manifest now declares an autoVerify HTTPS filter for `staging.foresightnine.com/oauth/mobile-callback`.
+
+BASELINE
+========
+1. Command: `sha256sum /home/lxx/Foresightnine/src/apps/mobile/certificates.zip`
+   Input/result: original archive before organization.
+   Literal output: `388df10b950e162840eee89f43ab9fecffea975bb1c05fbff391835f717a505d  /home/lxx/Foresightnine/src/apps/mobile/certificates.zip`
+   Exit: 0.
+2. Command: `node - <<'NODE' ... require('.../baseline/apps/mobile/app.config.cjs') ... NODE` (baseline config object, App Link variables unset).
+   Literal output: `{"package":"com.foresightnine.mobile","httpsFilters":[]}`
+   Exit: 0.
+3. Command: `apksigner verify --print-certs` on the pre-change QA APK, filtered to signer identity.
+   Literal output: `Signer #1 certificate SHA-256 digest: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`
+   Exit: 0.
+4. Command: `aapt dump xmltree <baseline APK> AndroidManifest.xml` filtered for App Link attributes.
+   Literal output contained HTTPS only under `<queries>`, and the activity had no HTTPS `autoVerify` filter.
+   Exit: 0.
+
+MODIFIED
+========
+1. Command: `unzip -Z1 /home/lxx/Foresightnine/src/apps/mobile/certificates/source/certificates.zip`
+   Literal output:
+   `deployment_cert.der`
+   `hybrid_classical_cert.der`
+   `hybrid_pqc_cert.der`
+   Exit: 0.
+2. Command: `sha256sum /home/lxx/Foresightnine/src/apps/mobile/certificates/source/certificates.zip`
+   Literal output: `388df10b950e162840eee89f43ab9fecffea975bb1c05fbff391835f717a505d  /home/lxx/Foresightnine/src/apps/mobile/certificates/source/certificates.zip`
+   Exit: 0.
+3. Command: certificate inspection with `openssl x509 -inform DER -noout -fingerprint -sha256` on each public DER file.
+   Literal result: deployment candidate `33:4B:79:0C:E2:40:5F:11:87:B9:3D:FB:64:2D:50:7C:48:A8:87:2F:9E:5E:10:E8:E4:9B:EC:30:A5:84:45:A9`; hybrid classical `CD:2B:E8:0A:81:BF:94:FE:6E:15:EC:5D:68:50:03:6D:0F:49:37:02:43:17:73:5A:A3:E6:E1:ED:99:82:BC:50`; hybrid PQC `83:91:43:0F:12:45:BE:4A:B2:90:79:FC:AE:17:51:42:DA:F7:06:B4:E2:4B:6F:36:3C:DE:5D:97:51:5B:65:6C`.
+   Exit: 0.
+4. Command: `corepack pnpm --filter @foresightnine/mobile typecheck`
+   Literal output: `$ tsc --noEmit`
+   Exit: 0.
+5. Command: `corepack pnpm --filter @foresightnine/mobile test -- --runInBand`
+   Literal output: `Test Files 7 passed (7); Tests 60 passed (60)`
+   Exit: 0.
+6. Command: `corepack pnpm exec expo config --json` with `.env.qa.local` loaded.
+   Literal result: package `com.foresightnine.mobile`; HTTPS filter `VIEW`, `autoVerify: true`, host `staging.foresightnine.com`, path `/oauth/mobile-callback`; exit 0.
+7. Command: `FORESIGHTNINE_ENV=production corepack pnpm exec expo config --json` with the same exact HTTPS App Link inputs.
+   Literal result: `{"customSchemeFilters":[],"httpsFilters":[{"action":"VIEW","autoVerify":true,"category":["BROWSABLE","DEFAULT"],"data":[{"host":"staging.foresightnine.com","pathPrefix":"/oauth/mobile-callback","scheme":"https"}]}],"package":"com.foresightnine.mobile","scheme":null}`
+   Exit: 0.
+8. Command: `./gradlew :app:assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon` with JDK 17 and Android SDK.
+   Literal output: `BUILD SUCCESSFUL in 2m 41s`; `318 actionable tasks: 100 executed, 218 up-to-date`.
+   Exit: 0.
+9. Command: `apksigner verify --verbose --print-certs /home/lxx/Foresightnine/src/apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+   Literal result: v2 verified true; signer SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`; APK SHA-256 `7b1c4db634f1e399fab97f911686c4fc4e6d23b2120623ad52957a21928cab68`.
+   Exit: 0.
+10. Command: `aapt dump xmltree app-debug.apk AndroidManifest.xml` filtered for App Link attributes.
+    Literal result: `android:autoVerify=true`, `android:scheme=https`, `android:host=staging.foresightnine.com`, `android:pathPrefix=/oauth/mobile-callback`.
+    Exit: 0.
+11. Command: `corepack pnpm --filter @foresightnine/web build`
+    Literal output: `dist/.well-known/assetlinks.json 0.56 kB`; `built in 1.88s`; exit 0.
+12. Command: `docker compose --env-file ./staging.env -f ./compose.yaml up -d --build api`
+    Literal result: `Image docker-api Built`; `Container docker-api-1 Started`; exit 0.
+13. Command: `systemctl --user restart foresightnine-web.service`
+    Literal result: `active`; exit 0.
+14. Command: public assetlinks validation for `https://app.foresightnine.com/.well-known/assetlinks.json` and `https://staging.foresightnine.com/.well-known/assetlinks.json`.
+    Literal output: both `HTTP 200`, package `com.foresightnine.mobile`, fingerprint_count `3`, `fingerprints_match_expected: true`; exit 0.
+15. Command: OAuth start probe `curl -D - https://api-staging.foresightnine.com/oauth/{google,github}/start?...`.
+    Literal output: `google: HTTP 307, redirect=google`; `github: HTTP 307, redirect=github`. No authorization_code was generated or persisted.
+16. Command: `/home/lxx/Android/Sdk/platform-tools/adb devices`
+    Literal output: `List of devices attached` with no device rows. Device-level App Link verification was not run.
+17. Command: `find apps/mobile/certificates -type f -printf '%P\n'`
+    Literal output: `CERTIFICATE_REPORT.md`, `public/deployment_cert.der`, `public/hybrid_classical_cert.der`, `public/hybrid_pqc_cert.der`, `source/certificates.zip`. No private key file exists.
+
+ROLLBACK
+========
+Command: `TARGET_ROOT=<temporary fixture> EVID_ROOT=/home/lxx/Foresightnine/src/repair-evidence/app-link-certificates-20260831 SKIP_SERVICES=1 /home/lxx/Foresightnine/src/repair-evidence/app-link-certificates-20260831/ROLLBACK.sh`
+Literal output: `ROLLBACK_EXIT=0`; each baseline config file restored; original `apps/mobile/certificates.zip` restored; `.env.qa.local`, organized `certificates/`, and App Link test removed; `ROLLBACK_COMPARE_EXIT=0`.
+Exit: 0.
+The rollback was executed only on another temporary copy. The live modified branch remains deployed and unchanged.

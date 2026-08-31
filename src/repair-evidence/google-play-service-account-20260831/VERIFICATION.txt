@@ -1,0 +1,21 @@
+Google Play service-account credential verification
+
+BASELINE
+- Command: `stat -c 'mode=%a size=%s' /home/lxx/.config/foresightnine-play-automation-461c858d8001.json`
+- Literal result: source mode was 664; source size was 2437 bytes.
+- Command: `sha256sum /home/lxx/.config/foresightnine-play-automation-461c858d8001.json`
+- Literal result: `4e5b08bfca199bf52f408f3311001bbb9c1f7bd24732f410ab8dd8ba9aac9f33  /home/lxx/.config/foresightnine-play-automation-461c858d8001.json`
+- Exit: 0.
+
+MODIFIED
+- Command: `install -m 600 /home/lxx/.config/foresightnine-play-automation-461c858d8001.json /home/lxx/.config/google-play/service-account.json`
+- Result: target created/updated; exit 0.
+- Command: `sha256sum /home/lxx/.config/google-play/service-account.json`
+- Literal result: `4e5b08bfca199bf52f408f3311001bbb9c1f7bd24732f410ab8dd8ba9aac9f33  /home/lxx/.config/google-play/service-account.json`
+- Command: `stat -c 'mode=%a size=%s' /home/lxx/.config/google-play/service-account.json`
+- Literal result: `mode=600 size=2437`
+- JSON parse: valid; values omitted. Exit: 0.
+
+ROLLBACK
+- Executable: `/home/lxx/Foresightnine/src/repair-evidence/google-play-service-account-20260831/ROLLBACK.sh` mode 700.
+- Rollback is tested only on a separate temporary copy; the requested target remains present.

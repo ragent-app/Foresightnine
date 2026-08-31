@@ -1,0 +1,3 @@
+rollback restored baseline files (service restart skipped)
+ROLLBACK_COPY_ROOT=/tmp/f9-rollback-test.DWQoVD
+ROLLBACK_COPY_RESULT=PASS
