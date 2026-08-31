@@ -2,7 +2,7 @@
 
 ## Current implementation correction status — 2026-08-31
 
-- The current repository HEAD is `305f69a` and is aligned with `origin/master`.
+- The current repository HEAD is `a990ee7` and is aligned with `origin/master`.
   The Android release artifacts were revalidated from the merged HEAD after
   the build-time production App Link checks were merged; they remain QA-only
   because signing, App Links and physical-device gates are still open.

@@ -334,7 +334,7 @@ repository or runtime.
   API-client/domain/asset-registry, market-data, web and mobile tests.
 - OpenAPI export drift check passed with 25 paths; generated TypeScript and
   asset-registry fingerprints matched their checked-in artifacts.
-- Secret scan passed over 1,115 unique Git-history blobs.
+- Secret scan passed over 1,112 unique Git-history blobs.
 - The worldline fixture audit remains unavailable on this Linux checkout
   because its configured source is the Windows-only path
   `D:/WL-data-final/wordline-md/wordline1.md`; no substitute data was guessed.
