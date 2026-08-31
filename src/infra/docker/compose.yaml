@@ -3,10 +3,11 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      # Development-only credentials. Replace with secret-manager wiring for any real deployment.
+      # Database credentials are deployment-owned and loaded with --env-file;
+      # no password is committed in this Compose file.
       POSTGRES_DB: foresightnine
       POSTGRES_USER: foresightnine
-      POSTGRES_PASSWORD: foresightnine_dev_only
+      POSTGRES_PASSWORD: ${FORESIGHTNINE_POSTGRES_PASSWORD:?FORESIGHTNINE_POSTGRES_PASSWORD must be supplied by the deployment secret file}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U foresightnine -d foresightnine"]
       interval: 5s
@@ -50,11 +51,15 @@ services:
         limits:
           cpus: "1.0"
           memory: 512M
+    env_file:
+      # Deployment-owned secrets (OAuth clients, GLM key, App Link fingerprint,
+      # licensed provider keys). Never commit the real file; only the .example.
+      - ./staging.env
     environment:
       # This Compose file is development-only and intentionally secret-free.
       FORESIGHTNINE_ENV: development
       FORESIGHTNINE_STORAGE_MODE: postgres
-      FORESIGHTNINE_POSTGRES_URL: postgresql://foresightnine:foresightnine_dev_only@postgres:5432/foresightnine
+      FORESIGHTNINE_POSTGRES_URL: ${FORESIGHTNINE_POSTGRES_URL:?FORESIGHTNINE_POSTGRES_URL must be supplied by the deployment secret file}
       FORESIGHTNINE_LLM_PROVIDER: mock
       # Staging Web origin for the Cloudflare API Tunnel.
       FORESIGHTNINE_CORS_ORIGINS: https://staging.foresightnine.com
@@ -65,6 +70,9 @@ services:
       # manifest for their distinct factor/FX contracts; this route remains
       # price-only until those fields are wired to the client contract.
       FORESIGHTNINE_MARKET_PROVIDER_MODE: public_evaluation
+      # Default to the fastest admitted priority source; set to `all` for
+      # explicit multi-vendor comparison/majority evaluation.
+      FORESIGHTNINE_MARKET_CONSENSUS_MODE: priority
       # Staging-only account lifecycle for local QA. Real OAuth is disabled
       # until provider credentials, callback URIs and deletion policy are approved.
       FORESIGHTNINE_LOCAL_AUTH_MODE: mock
@@ -76,6 +84,7 @@ services:
       # Redis and deployment-owned configuration.
       FORESIGHTNINE_ABUSE_MODE: redis
       FORESIGHTNINE_REDIS_URL: redis://redis:6379/0
+      FORESIGHTNINE_MARKET_CACHE_TTL_SECONDS: "900"
     depends_on:
       postgres:
         condition: service_healthy

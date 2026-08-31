@@ -15,6 +15,7 @@ import {
   redactedMarketSnapshotBundleJson,
   resolveSnapshotAnchors,
   validateMarketSnapshotBundle,
+  computeAnchorFactorMetrics,
 } from "../dist/index.js";
 
 const request = {
@@ -223,4 +224,35 @@ test("latest completed-session prices map for both Web and Android asset key sha
   const androidAssets = [{ id: "AAA", price: 1, quoteCurrency: "USD", asOf: "2020-01-01", freshness: "historical_only" }];
   assert.equal(applyLatestCompletedSessionPrices(webAssets, snapshotBundle)[0].price, 102);
   assert.equal(applyLatestCompletedSessionPrices(androidAssets, snapshotBundle)[0].price, 102);
+});
+
+test("computeAnchorFactorMetrics derives IC/ICIR from the three anchors", () => {
+  const sixAssetRequest = { ...request, assetIds: ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"] };
+  const liveBundle = createMockMarketSnapshotBundle(sixAssetRequest);
+  const factors = [
+    { id: 10, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "momentum" } },
+    { id: 20, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "quality" } },
+    { id: 30, icMean: 0, icir: 0, admitted: true, expression: { op: "rank", input: { op: "field", name: "momentum" } } },
+    { id: 40, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "vendor_score" } },
+  ];
+  const metrics = computeAnchorFactorMetrics(liveBundle, factors);
+  assert.equal(metrics.length, 4);
+  for (const metric of metrics.slice(0, 3)) {
+    assert.equal(metric.sufficient, true, `factor ${metric.factorId} must be sufficient`);
+    assert.equal(metric.observations.length, 2, "three anchors yield exactly two IC points");
+    assert.ok(metric.icMean >= -1 && metric.icMean <= 1);
+    assert.ok(Number.isFinite(metric.icir));
+    assert.ok(metric.observations.every((observation) => observation.assets === 6));
+  }
+  const unknownField = metrics[3];
+  assert.equal(unknownField.sufficient, false);
+  assert.equal(unknownField.error, "unknown_field");
+});
+
+test("computeAnchorFactorMetrics fails closed below five assets", () => {
+  const twoAssetBundle = createMockMarketSnapshotBundle(request);
+  const factors = [{ id: 10, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "momentum" } }];
+  const metrics = computeAnchorFactorMetrics(twoAssetBundle, factors);
+  assert.equal(metrics[0].sufficient, false);
+  assert.equal(metrics[0].error, "insufficient_assets");
 });

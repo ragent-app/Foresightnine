@@ -243,6 +243,41 @@ exchange, or production Cloudflare mutation was performed.
   Yahoo fallback or unauthorized factor/FX value was made because the current
   manifest enables no provider. `/readyz` remained HTTP 200.
 
+### Current 2026-08-31 server-data amendment
+
+The bullets above describe the retired pre-credential state. The current
+working tree and staging image now use a server-only, credential-injected
+provider chain:
+
+- `market_data`, `alpha_vantage`, `twelve_data`, `finnhub`, `yahoo` are the
+  admitted staging price candidates in manifest priority order. Stooq remains
+  disabled because its anti-automation response is not bypassed.
+- API adapters accept only the fixed asset/symbol manifest and bounded dates;
+  they call the vendor from Linux, normalize close rows, reject redirects and
+  future sessions, and return only the shared three-anchor response. The Web
+  and Android staging configurations post to `https://api-staging.foresightnine.com/snapshots`;
+  no provider URL or key is present in client configuration.
+- Redis stores normalized price rows and the ECB reference object under the
+  `foresightnine:market:v2:*` namespace. Raw vendor bodies and credentials are
+  never cached. `redis-cli --scan --pattern 'foresightnine:market:v2:*' | wc -l`
+  returned `16` after the API restart and live probe; `aof_enabled=1` and
+  `aof_last_write_status=ok` were observed.
+- The live public probe for one canonical ETF returned HTTP 200 with three
+  `ok` rows, four price-derived feature keys (`momentum`, `momentum_month`,
+  `rsi14`, `sma_ratio`) and FX present. A repeat probe reused the server cache
+  and returned HTTP 200. A six-asset probe returned 15 `ok` and 3 `missing`
+  rows, then repeated from cache. Market Data and Twelve Data returned parseable
+  historical series; Alpha Vantage's full request was rate-limited after its
+  response shape was validated, and Finnhub returned 403, so those failures
+  remain typed fallback conditions rather than fabricated values.
+- Provider conflicts are merged by the manifest priority function; equal-rank
+  observations use strict majority and unresolved ties are omitted. A missing
+  provider, factor input or FX reference remains `missing`/`limited_data`, and
+  Public Default remains fail-closed.
+- The real provider keys are present only in the ignored mode-600
+  `src/infra/docker/staging.env`; the checked-in
+  `src/infra/docker/staging.env.example` contains names/placeholders only.
+
 ## Module 7 — auth/session contract boundary
 
 - Existing typed server boundary exposes redacted provider readiness for exactly
@@ -265,12 +300,15 @@ exchange, or production Cloudflare mutation was performed.
   a second `OAuthFoundation` instance consumed the persisted state and ticket,
   both replays were rejected, and the consumed tombstones were removed.
 - Generated OpenAPI drift check passed with 25 paths.
-- The callback implementation is not enabled in staging because all six OAuth
-  environment inputs are absent. The live Google/GitHub exchange remains
-  unverified until owner-supplied client credentials, exact callback URLs,
-  confirmed web/deep-link return URIs, provider consent, and the production
-  session/deletion policy exist. Without those inputs, the public callback and
-  browser start routes return a typed 400 without contacting a provider.
+- Staging currently reports both Google and GitHub as enabled. The live
+  server-generated callback URIs are
+  `https://app.foresightnine.com/api/auth/callback/google` and
+  `https://app.foresightnine.com/api/auth/callback/github`; the configured
+  return URI used for staging tests is
+  `https://staging.foresightnine.com/oauth/mobile-callback`. The start response
+  reports `S256`, and a missing-state callback returns the generic HTTP 400
+  response. A real provider-consent exchange and Android-device return remain
+  unverified because no interactive browser/device assertion was completed.
 
 The safe state is a production-capable, feature-gated callback plus local
 staging auth; no OAuth provider was contacted and no credential was added to the

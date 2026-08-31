@@ -5,6 +5,7 @@ from copy import deepcopy
 from collections.abc import Mapping
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
+import json
 import os
 import secrets
 from typing import Annotated, Any
@@ -704,6 +705,46 @@ def metrics(request: Request) -> Response:
     )
 
 
+ANDROID_CERT_FINGERPRINT_PATTERN = __import__("re").compile(r"^(?:[0-9a-f]{2}:){31}[0-9a-f]{2}$", __import__("re").IGNORECASE)
+
+
+@app.get("/.well-known/assetlinks.json", include_in_schema=False, response_model=None)
+def android_asset_links() -> Response:
+    """Serve the Android App Link declaration from deployment-owned values.
+
+    An empty list is served when no release fingerprint is configured so a
+    SPA fallback cannot masquerade as an App Link declaration; production
+    values are injected only through the process environment.
+    """
+    import re as _re
+
+    package = os.getenv("FORESIGHTNINE_ANDROID_APP_LINK_PACKAGE", "").strip()
+    fingerprints = [
+        value.strip().upper()
+        for value in os.getenv("FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS", "").split(",")
+        if value.strip() and _re.fullmatch(r"(?:[0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2}", value.strip())
+    ]
+    statements = (
+        [
+            {
+                "relation": ["delegate_permission/common.handle_all_urls"],
+                "target": {
+                    "namespace": "android_app",
+                    "package_name": package,
+                    "sha256_cert_fingerprints": fingerprints,
+                },
+            }
+        ]
+        if package and fingerprints
+        else []
+    )
+    return Response(
+        content=json.dumps(statements, indent=2) + "\n",
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 @app.post("/snapshots", include_in_schema=False)
 def market_snapshots(request: MarketSnapshotRequest) -> JSONResponse:
     """Serve the bounded client market runtime without exposing a vendor API."""
@@ -875,11 +916,30 @@ def _oauth_account(identity: Any) -> LocalAccount:
             )
         return account
 
-    if any(account.email == identity.email and account.deleted_at is None for _, account in ACCOUNTS.items()):
-        # Do not silently link an OAuth identity to a password account.  An
-        # authenticated account-linking flow can be added later with explicit
-        # user intent and a separate audit record.
-        raise OAuthProviderError("An account with this email already exists")
+    password_account = next(
+        (
+            account
+            for _, account in ACCOUNTS.items()
+            if account.email == identity.email and account.deleted_at is None
+        ),
+        None
+    )
+    if password_account is not None:
+        # The provider has already verified control of this email address, so
+        # the OAuth identity joins the existing password account instead of
+        # creating a duplicate.  The link is recorded as its own identity row
+        # and both credentials continue to authenticate the same account.
+        record = OAuthIdentity(
+            identity_id=identity_key,
+            provider=identity.provider,
+            subject=identity.subject,
+            account_id=password_account.account_id,
+            email=identity.email,
+            created_at=now,
+            updated_at=now,
+        )
+        OAUTH_IDENTITIES.put(identity_key, record)
+        return password_account
 
     account = LocalAccount(
         account_id=f"account_{uuid4().hex}",
@@ -931,6 +991,8 @@ def browser_oauth_start(
 
 
 @app.get("/oauth/callback", include_in_schema=False, response_model=None)
+@app.get("/api/auth/callback/google", include_in_schema=False, response_model=None)
+@app.get("/api/auth/callback/github", include_in_schema=False, response_model=None)
 def browser_oauth_callback(
     code: Annotated[str | None, Query(max_length=4096)] = None,
     state: Annotated[str | None, Query(max_length=512)] = None,

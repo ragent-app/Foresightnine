@@ -119,3 +119,32 @@ def test_start_request_is_strict_and_does_not_accept_client_credentials(monkeypa
     assert response.status_code == 422
     assert_contract(response.json(), "ErrorResponse")
     assert TEST_SECRET not in response.text
+
+
+def test_per_provider_callback_urls_override_the_shared_callback_base(monkeypatch: Any) -> None:
+    environment = oauth_environment()
+    environment["FORESIGHTNINE_OAUTH_GOOGLE_CALLBACK_URL"] = "https://app.example.test/api/auth/callback/google"
+    environment["FORESIGHTNINE_OAUTH_GITHUB_CALLBACK_URL"] = "https://app.example.test/api/auth/callback/github"
+    monkeypatch.setattr(main_module, "oauth_foundation", OAuthFoundation.from_environment(environ=environment, clock=lambda: 1000.0))
+
+    google = CLIENT.post("/v1/auth/google/start", json={"return_uri": "https://app.example.test/oauth/complete"})
+    github = CLIENT.post("/v1/auth/github/start", json={"return_uri": "https://app.example.test/oauth/complete"})
+
+    assert google.status_code == 200, google.text
+    assert github.status_code == 200, github.text
+    assert google.json()["redirect_uri"] == "https://app.example.test/api/auth/callback/google"
+    assert github.json()["redirect_uri"] == "https://app.example.test/api/auth/callback/github"
+    assert TEST_SECRET not in google.text and TEST_SECRET not in github.text
+
+
+def test_per_provider_callback_alias_routes_serve_the_same_callback_contract(monkeypatch: Any) -> None:
+    environment = oauth_environment()
+    environment["FORESIGHTNINE_OAUTH_GOOGLE_CALLBACK_URL"] = "https://app.example.test/api/auth/callback/google"
+    monkeypatch.setattr(main_module, "oauth_foundation", OAuthFoundation.from_environment(environ=environment, clock=lambda: 1000.0))
+
+    for path in ("/oauth/callback", "/api/auth/callback/google", "/api/auth/callback/github"):
+        response = CLIENT.get(f"{path}?state=unknown-state&code=x")
+        assert response.status_code == 400, response.text
+        assert_contract(response.json(), "ErrorResponse")
+        assert response.json()["message"] == "OAuth callback is unavailable."
+        assert TEST_SECRET not in response.text

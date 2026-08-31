@@ -150,3 +150,36 @@ def test_callback_state_replay_is_not_redirected_and_account_lifecycle_remains_s
     logged_out = CLIENT.post("/v1/auth/logout", json={}, headers={"Authorization": f"Bearer {token}"})
     assert logged_out.status_code == 200
     assert CLIENT.delete("/v1/auth/account", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
+def test_verified_oauth_identity_joins_existing_password_account(monkeypatch) -> None:
+    """Provider-verified email links into the existing password account."""
+    from app.local_auth import LocalAccount
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
+    monkeypatch.delenv("FORESIGHTNINE_STORAGE_MODE", raising=False)
+    registered = CLIENT.post(
+        "/v1/auth/local/register",
+        json={"email": "ticket@example.test", "password": "local-password-123"},
+    )
+    assert registered.status_code == 201, registered.text
+    password_account_id = registered.json()["account"]["account_id"]
+
+    foundation = configured_foundation()
+    monkeypatch.setattr(main_module, "oauth_foundation", foundation)
+    monkeypatch.setattr(main_module, "oauth_provider_client", google_client())
+
+    state = start_callback()
+    callback = CLIENT.get("/oauth/callback", params={"state": state, "code": "authorization-code"}, follow_redirects=False)
+    ticket = parse_qs(urlsplit(callback.headers["location"]).query)["ticket"][0]
+    exchanged = CLIENT.post("/v1/auth/oauth/exchange", json={"ticket": ticket})
+
+    assert exchanged.status_code == 200, exchanged.text
+    assert exchanged.json()["account"]["account_id"] == password_account_id
+    assert exchanged.json()["auth_mode"] == "oauth"
+    from app.main import _oauth_identity_key
+
+    identity_key = _oauth_identity_key("google", "ticket-subject")
+    linked = main_module.OAUTH_IDENTITIES.get(identity_key)
+    assert linked is not None and linked.account_id == password_account_id

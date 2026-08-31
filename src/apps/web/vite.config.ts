@@ -1,11 +1,11 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 const ASSET_LINKS_PATH = ".well-known/assetlinks.json";
 const ANDROID_PACKAGE = "com.foresightnine.mobile";
 const SHA256_CERTIFICATE_PATTERN = /^(?:[0-9a-f]{2}:){31}[0-9a-f]{2}$/i;
 
-function assetLinksPlugin() {
+function assetLinksPlugin(): Plugin {
   const production = process.env.FORESIGHTNINE_ENV?.trim().toLowerCase() === "production";
   const packageName = process.env.VITE_FORESIGHTNINE_ANDROID_APP_LINK_PACKAGE?.trim() || ANDROID_PACKAGE;
   const fingerprint = process.env.VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT?.trim() || "";

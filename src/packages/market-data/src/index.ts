@@ -1,4 +1,4 @@
-import { canonicalJson, sha256Hex, type ComputeFmInput, type FactorAst, type FactorExpression } from "@foresightnine/fm-engine";
+import { canonicalJson, sha256Hex, evaluateFactorAst, FactorAstError, type ComputeFmInput, type FactorAst, type FactorExpression } from "@foresightnine/fm-engine";
 
 export type SnapshotAnchor = "year_start" | "latest_month_start" | "latest_completed_session";
 export const SNAPSHOT_ANCHORS: readonly SnapshotAnchor[] = ["year_start", "latest_month_start", "latest_completed_session"];
@@ -699,4 +699,141 @@ export function applyLatestCompletedSessionPrices<T extends AssetWithId>(assets:
     if (!row || row.status !== "ok" || price === null || price === undefined || !Number.isFinite(price) || price <= 0) throw new MarketDataValidationError("invalid_price", `No valid latest completed-session price for ${assetId}.`);
     return { ...asset, price, quoteCurrency: row.currency, asOf: row.asOf ?? bundle.cutoff.slice(0, 10), freshness: "current" };
   });
+}
+
+export interface AnchorFactorMetricObservation {
+  /** Cross-sectional Spearman IC of the factor at this anchor against the forward return to the next anchor. */
+  readonly ic: number;
+  readonly asOf: string;
+  readonly forwardAsOf: string;
+  readonly assets: number;
+}
+
+export interface AnchorFactorMetric {
+  readonly factorId: number;
+  readonly icMean: number;
+  readonly icir: number;
+  readonly observations: readonly AnchorFactorMetricObservation[];
+  /** True only when at least two valid anchor-to-anchor IC points exist. */
+  readonly sufficient: boolean;
+  readonly error?: "unknown_field" | "invalid_data" | "insufficient_assets" | "insufficient_anchors";
+}
+
+/**
+ * Compute IC/ICIR for each factor from the three price anchors themselves.
+ *
+ * The factor is evaluated at each anchor, the forward return is the close
+ * change to the next anchor, and the IC is the cross-sectional Spearman
+ * correlation between the two. With three anchors this yields at most two IC
+ * points, so the metrics carry explicit low-power warnings upstream instead
+ * of masquerading as a backtest. Mock bundles keep their library metadata;
+ * this function is for live licensed bundles.
+ */
+export function computeAnchorFactorMetrics(bundle: MarketSnapshotBundle, factorExpressions: readonly FactorExpression[]): readonly AnchorFactorMetric[] {
+  const request: MarketDataRequest = { assetIds: bundle.assets, cutoff: bundle.cutoff, timezone: bundle.timezone, requestedAt: bundle.requestedAt };
+  const validated = validateMarketSnapshotBundle(bundle, request);
+  const snapshotsByKey = new Map(validated.snapshots.map((snapshot) => [`${snapshot.assetId}\u0000${snapshot.anchor}`, snapshot]));
+  const anchorObservations = [...SNAPSHOT_ANCHORS].map((anchor) => {
+    const rows = validated.assets.map((assetId) => snapshotsByKey.get(`${assetId}\u0000${anchor}`)!);
+    const featureFields = [...new Set(rows.flatMap((row) => Object.keys(row.features ?? {})))].sort();
+    return {
+      asOf: rows.find((row) => row.asOf !== null)?.asOf ?? validated.cutoff.slice(0, 10),
+      fields: {
+        close: rows.map((row) => row.close ?? row.price),
+        ...Object.fromEntries(featureFields.map((field) => [field, rows.map((row) => row.features?.[field] ?? null)])),
+      } as Record<string, readonly (number | null)[]>,
+    };
+  }).sort((left, right) => left.asOf.localeCompare(right.asOf));
+  if (anchorObservations.length < 2) {
+    return factorExpressions.map((factor): AnchorFactorMetric => ({ factorId: factor.id, icMean: 0, icir: 0, observations: [], sufficient: false, error: "insufficient_anchors" }));
+  }
+  const legs = anchorObservations.slice(0, -1).map((observation, index) => {
+    const next = anchorObservations[index + 1]!;
+    const closeSeries = observation.fields.close ?? [];
+    const forwardReturns = closeSeries.map((close, asset) => {
+      const nextClose = (next.fields.close ?? [])[asset];
+      return typeof close === "number" && typeof nextClose === "number" && close > 0 && nextClose > 0 ? nextClose / close - 1 : null;
+    });
+    return { asOf: observation.asOf, forwardAsOf: next.asOf, forwardReturns, signals: observation.fields };
+  });
+  return factorExpressions.map((factor): AnchorFactorMetric => {
+    let signalsByAsset: readonly Float64Array[];
+    try {
+      signalsByAsset = legs.map((leg) => evaluateFactorAst(factor.expression, [{ asOf: leg.asOf, fields: leg.signals }])[0]!);
+    } catch (error) {
+      const code = error instanceof FactorAstError && error.code === "unknown_field" ? "unknown_field" : "invalid_data";
+      return { factorId: factor.id, icMean: 0, icir: 0, observations: [], sufficient: false, error: code };
+    }
+    const legIcs: number[] = [];
+    const observations: AnchorFactorMetricObservation[] = [];
+    let insufficientAssets = false;
+    legs.forEach((leg, index) => {
+      const signalValues = signalsByAsset[index]!;
+      const signalSeries: number[] = [];
+      const returnSeries: number[] = [];
+      signalValues.forEach((signal, asset) => {
+        const forward = leg.forwardReturns[asset];
+        if (Number.isFinite(signal) && typeof forward === "number" && Number.isFinite(forward)) {
+          signalSeries.push(signal);
+          returnSeries.push(forward);
+        }
+      });
+      if (signalSeries.length < 5) {
+        insufficientAssets = true;
+        return;
+      }
+      const ic = spearman(signalSeries, returnSeries);
+      if (!Number.isFinite(ic)) return;
+      legIcs.push(ic);
+      observations.push({ ic, asOf: leg.asOf, forwardAsOf: leg.forwardAsOf, assets: signalSeries.length });
+    });
+    if (legIcs.length < 2) {
+      return { factorId: factor.id, icMean: legIcs.length === 0 ? 0 : meanOf(legIcs), icir: 0, observations, sufficient: false, error: legIcs.length === 0 && insufficientAssets ? "insufficient_assets" : "insufficient_anchors" };
+    }
+    const icMeanValue = meanOf(legIcs);
+    const sampleStd = Math.sqrt(legIcs.reduce((total, value) => total + (value - icMeanValue) ** 2, 0) / (legIcs.length - 1));
+    return {
+      factorId: factor.id,
+      icMean: icMeanValue,
+      icir: sampleStd < 1e-12 ? 0 : icMeanValue / sampleStd,
+      observations,
+      sufficient: true,
+    };
+  });
+}
+
+function meanOf(values: readonly number[]): number {
+  return values.length === 0 ? 0 : values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function rankAverage(values: readonly number[]): number[] {
+  const indexed = values.map((value, index) => ({ value, index })).sort((left, right) => left.value - right.value);
+  const ranks = new Array<number>(values.length).fill(0);
+  let position = 0;
+  while (position < indexed.length) {
+    let end = position;
+    while (end + 1 < indexed.length && indexed[end + 1]!.value === indexed[position]!.value) end += 1;
+    const average = (position + end) / 2 + 1;
+    for (let slot = position; slot <= end; slot += 1) ranks[indexed[slot]!.index] = average;
+    position = end + 1;
+  }
+  return ranks;
+}
+
+function spearman(x: readonly number[], y: readonly number[]): number {
+  const rx = rankAverage(x);
+  const ry = rankAverage(y);
+  const ax = meanOf(rx);
+  const ay = meanOf(ry);
+  let numerator = 0;
+  let left = 0;
+  let right = 0;
+  for (let index = 0; index < x.length; index += 1) {
+    const dx = rx[index]! - ax;
+    const dy = ry[index]! - ay;
+    numerator += dx * dy;
+    left += dx * dx;
+    right += dy * dy;
+  }
+  return Math.sqrt(left * right) < 1e-12 ? 0 : numerator / Math.sqrt(left * right);
 }

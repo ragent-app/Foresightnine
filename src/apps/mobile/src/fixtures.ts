@@ -1,6 +1,6 @@
 import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
 import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessDecision, type FreshnessPolicy, type ProviderFreshnessStatus } from "@foresightnine/domain";
-import { applyLatestCompletedSessionPrices, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
+import { applyLatestCompletedSessionPrices, computeAnchorFactorMetrics, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
 import type { AssetFixture, Branch, BranchKind, EvidenceBundle, FreshnessOptions, Language, ProbabilityInterval, RubricItem, TranscriptTurn } from "./types";
 
 export const MARKET_DATA_AS_OF = "2026-08-09";
@@ -181,8 +181,27 @@ export function assetsForMarketBundle(bundle: MarketSnapshotBundle): readonly As
   return applyLatestCompletedSessionPrices(ASSETS, bundle);
 }
 
+/** Live licensed bundles derive IC/ICIR from the three price anchors; vendor momentum/RSI/SMA-derived features drive the FM factors. */
+export const LIVE_FM_FACTOR_TEMPLATES: readonly FactorExpression[] = [
+  { id: 10, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "momentum" } },
+  { id: 11, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "momentum_month" } },
+  { id: 12, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "rsi14" } },
+  { id: 13, icMean: 0, icir: 0, admitted: true, expression: { op: "field", name: "sma_ratio" } },
+  { id: 30, icMean: 0, icir: 0, admitted: true, expression: { op: "rank", input: { op: "field", name: "momentum" } } },
+];
+
+export function fmFactorsForBundle(bundle: MarketSnapshotBundle): readonly FactorExpression[] {
+  if (bundle.provider.mode === "mock") return FM_FACTORS;
+  const metrics = computeAnchorFactorMetrics(bundle, LIVE_FM_FACTOR_TEMPLATES);
+  return LIVE_FM_FACTOR_TEMPLATES.map((template) => {
+    const metric = metrics.find((entry) => entry.factorId === template.id);
+    if (metric === undefined || !metric.sufficient) return { ...template, admitted: false };
+    return { ...template, icMean: metric.icMean, icir: metric.icir, admitted: true };
+  });
+}
+
 export function fmInput(bundle: MarketSnapshotBundle = MARKET_SNAPSHOT_BUNDLE): ComputeFmInput {
-  const converted = marketSnapshotBundleToFmInput(bundle, FM_FACTORS, { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
+  const converted = marketSnapshotBundleToFmInput(bundle, fmFactorsForBundle(bundle), { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
   if (converted.status !== "ready") throw new Error("The deterministic market snapshot bundle is limited and cannot drive the FM fixture.");
   return converted.input;
 }

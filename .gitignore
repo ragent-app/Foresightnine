@@ -1,0 +1,4 @@
+
+# Real OAuth client credentials must never enter Git (deployment secret store only).
+src/docs/userauth/client_secret_*
+src/docs/userauth/secret.md

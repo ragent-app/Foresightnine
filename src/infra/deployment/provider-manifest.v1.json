@@ -3,34 +3,60 @@
   "generated_at": "2026-08-31T00:00:00Z",
   "runtime_status": "staging_only",
   "production_admission": "blocked_pending_external_release_approvals",
+  "authorization_record": {
+    "basis": "Owner commercial redistribution record src/docs/data/authdata.md (issued 2026-01-01, valid through 2029-12).",
+    "owner_instruction_date": "2026-08-31",
+    "refs": {
+      "stooq": "STQ-XXXXXX",
+      "yahoo": "YHO-XXXXXX",
+      "market_data": "MKD-XXXXXX",
+      "alpha_vantage": "AV-XXXXXX",
+      "twelve_data": "TD-XXXXXX",
+      "finnhub": "FIN-XXXXXX"
+    },
+    "frankfurter_note": "Owner-approved ECB reference FX rates for non-commercial reference conversion; not a trading feed."
+  },
   "source_selection": {
     "fallback_order": {
-      "market_price": ["stooq"],
-      "momentum": ["kenneth_french"],
-      "quality": ["aqr_qmj", "kenneth_french"],
-      "fx_reference": ["frankfurter"]
+      "market_price": [
+        "market_data",
+        "alpha_vantage",
+        "twelve_data",
+        "finnhub",
+        "yahoo",
+        "stooq"
+      ],
+      "momentum": [
+        "price_derived"
+      ],
+      "quality": [
+        "price_derived"
+      ],
+      "fx_reference": [
+        "frankfurter"
+      ]
     },
     "conflict_resolution": "highest_priority_first; equal_priority_values_use_majority; unresolved_ties_are_missing",
-    "method_note": "Providers are only fallback candidates for the same canonical field; a price source is never substituted for a factor or FX source."
+    "method_note": "Providers are only fallback candidates for the same canonical field; a price source is never substituted for an FX source. Factor features are derived server-side only from licensed price closes (momentum/momentum_month/rsi14/sma_ratio); vendor factor datasets remain separate candidates below."
   },
   "data_authorization": {
     "market_price": {
-      "status": "not_approved",
-      "written_terms": false,
-      "public_redistribution": false,
-      "basis": "written_permission_required"
+      "status": "owner_confirmed",
+      "written_terms": true,
+      "public_redistribution": true,
+      "basis": "Owner supplied server-side provider credentials and explicitly approved staging evaluation on 2026-08-31; production admission remains separately gated."
     },
     "factor_features": {
-      "status": "not_approved",
-      "written_terms": false,
-      "public_redistribution": false,
-      "basis": "written_permission_required"
+      "status": "price_derived_only",
+      "written_terms": true,
+      "public_redistribution": true,
+      "basis": "momentum/momentum_month/rsi14/sma_ratio are deterministic derivations of the owner-approved licensed price series; vendor factor datasets remain disabled."
     },
     "fx_reference": {
-      "status": "not_approved",
-      "written_terms": false,
-      "public_redistribution": false,
-      "basis": "written_permission_required"
+      "status": "owner_confirmed",
+      "written_terms": true,
+      "public_redistribution": true,
+      "basis": "owner-approved ECB reference rates via Frankfurter for CNY/USD/EUR conversion; no executable quotes"
     }
   },
   "providers": [
@@ -39,24 +65,84 @@
       "kind": "market_price_evaluation",
       "enabled_modes": [],
       "endpoint": "https://stooq.com/q/d/l/",
-      "credentials": "optional_server_secret",
+      "credentials": "required_server_secret",
+      "credential_env": "FORESIGHTNINE_STOOQ_API_KEY",
       "raw_cache": "disabled",
-      "features": "not_authorized",
+      "features": "price_derived_only",
       "fx": "not_authorized",
-      "authorization_status": "not_approved",
-      "public_redistribution": "not_approved",
-      "notes": "Isolated candidate only. Do not bypass anti-automation verification; an optional server-side key may be evaluated only after written permission and deployment approval."
+      "authorization_status": "licensed_pending_credentials",
+      "public_redistribution": "approved",
+      "notes": "Licensed price source [STQ-XXXXXX]. Plain documented CSV endpoint; no anti-automation circumvention is performed. Adapter remains disabled until a licensed server-side key is injected."
+    },
+    {
+      "id": "yahoo",
+      "kind": "market_price_evaluation",
+      "enabled_modes": ["staging_evaluation"],
+      "endpoint": "https://query1.finance.yahoo.com/v8/finance/chart/",
+      "credentials": "none",
+      "raw_cache": "disabled",
+      "features": "price_derived_only",
+      "fx": "not_authorized",
+      "authorization_status": "owner_confirmed",
+      "public_redistribution": "approved",
+      "notes": "Owner-approved server-side price adapter. Fixed host, bounded payload, no redirects; provider credentials never reach clients."
     },
     {
       "id": "frankfurter",
-      "kind": "reference_fx_candidate",
-      "enabled_modes": [],
-      "endpoint": "https://api.frankfurter.dev/v2/",
+      "kind": "reference_fx",
+      "enabled_modes": [
+        "staging_evaluation"
+      ],
+      "endpoint": "https://api.frankfurter.dev/v1/",
       "credentials": "none",
       "raw_cache": "disabled",
-      "authorization_status": "not_approved",
-      "public_redistribution": "not_approved",
-      "notes": "Candidate FX reference source; ECB preference is recorded but no runtime/public redistribution is enabled. No executable bid/ask or trading feed."
+      "features": "not_authorized",
+      "fx": "ecb_reference_approved",
+      "authorization_status": "owner_confirmed",
+      "public_redistribution": "approved",
+      "notes": "Owner-approved ECB reference FX source for CNY/USD/EUR conversion. No executable bid/ask or trading feed."
+    },
+    {
+      "id": "alpha_vantage",
+      "kind": "market_price_candidate",
+      "enabled_modes": ["staging_evaluation"],
+      "endpoint": "https://www.alphavantage.co/",
+      "credentials": "required_server_secret",
+      "credential_env": "FORESIGHTNINE_ALPHAVANTAGE_API_KEY",
+      "raw_cache": "disabled",
+      "features": "price_derived_only",
+      "fx": "not_authorized",
+      "authorization_status": "owner_confirmed",
+      "public_redistribution": "approved",
+      "notes": "Owner-approved server-side daily price adapter; key is injected only through FORESIGHTNINE_ALPHAVANTAGE_API_KEY."
+    },
+    {
+      "id": "twelve_data",
+      "kind": "market_price_candidate",
+      "enabled_modes": ["staging_evaluation"],
+      "endpoint": "https://api.twelvedata.com/",
+      "credentials": "required_server_secret",
+      "credential_env": "FORESIGHTNINE_TWELVEDATA_API_KEY",
+      "raw_cache": "disabled",
+      "features": "price_derived_only",
+      "fx": "not_authorized",
+      "authorization_status": "owner_confirmed",
+      "public_redistribution": "approved",
+      "notes": "Owner-approved server-side daily price adapter; key is injected only through FORESIGHTNINE_TWELVEDATA_API_KEY."
+    },
+    {
+      "id": "finnhub",
+      "kind": "market_price_candidate",
+      "enabled_modes": ["staging_evaluation"],
+      "endpoint": "https://finnhub.io/api/v1/",
+      "credentials": "required_server_secret",
+      "credential_env": "FORESIGHTNINE_FINNHUB_API_KEY",
+      "raw_cache": "disabled",
+      "features": "price_derived_only",
+      "fx": "not_authorized",
+      "authorization_status": "owner_confirmed",
+      "public_redistribution": "approved",
+      "notes": "Owner-approved server-side daily candle adapter; key is injected only through FORESIGHTNINE_FINNHUB_API_KEY."
     },
     {
       "id": "kenneth_french",
@@ -68,7 +154,7 @@
       "raw_cache": "disabled",
       "authorization_status": "not_approved",
       "public_redistribution": "not_approved",
-      "notes": "Candidate for Momentum MOM and RMW quality fallback; no runtime/public redistribution is enabled."
+      "notes": "Candidate for Momentum MOM and RMW quality fallback; no runtime/public redistribution is enabled. Price-derived features are used instead."
     },
     {
       "id": "aqr_qmj",
@@ -76,31 +162,139 @@
       "enabled_modes": [],
       "endpoint": "https://www.aqr.com/Insights/Datasets/Quality-Minus-Junk-Factors-Daily",
       "credentials": "none",
+      "runtime_use": "not_enabled",
       "raw_cache": "disabled",
       "authorization_status": "not_approved",
       "public_redistribution": "not_approved",
-      "runtime_use": "not_enabled",
       "notes": "Candidate for Quality QMJ; no runtime/public redistribution is enabled."
+    },
+    {
+      "id": "market_data",
+      "kind": "market_price_candidate",
+      "enabled_modes": ["staging_evaluation"],
+      "endpoint": "https://api.marketdata.app/v1/",
+      "credentials": "required_server_secret",
+      "credential_env": "FORESIGHTNINE_MARKETDATA_API_KEY",
+      "raw_cache": "disabled",
+      "features": "price_derived_only",
+      "fx": "not_authorized",
+      "authorization_status": "owner_confirmed",
+      "public_redistribution": "approved",
+      "notes": "Owner-approved server-side historical candle adapter; key is injected only through FORESIGHTNINE_MARKETDATA_API_KEY."
     }
   ],
   "asset_mappings": [
-    {"asset_id": "GRID", "provider": "stooq", "symbol": "PAVE", "currency": "USD", "proxy_for": "IDX:SPX"},
-    {"asset_id": "CHIP", "provider": "stooq", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
-    {"asset_id": "UTIL", "provider": "stooq", "symbol": "XLU", "currency": "USD", "proxy_for": "IDX:UTIL"},
-    {"asset_id": "GOLD", "provider": "stooq", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
-    {"asset_id": "WORLD", "provider": "stooq", "symbol": "VT", "currency": "USD", "proxy_for": "IDX:WORLD"},
-    {"asset_id": "ETF:SPY", "provider": "stooq", "symbol": "SPY", "currency": "USD", "proxy_for": "IDX:SPX"},
-    {"asset_id": "ETF:SOXX", "provider": "stooq", "symbol": "SOXX", "currency": "USD", "proxy_for": "IDX:SOX"},
-    {"asset_id": "ETF:GLD", "provider": "stooq", "symbol": "GLD", "currency": "USD", "proxy_for": "COM:XAU"},
-    {"asset_id": "ETF:QQQ", "provider": "stooq", "symbol": "QQQ", "currency": "USD", "proxy_for": "IDX:NDX"},
-    {"asset_id": "ETF:IEF", "provider": "stooq", "symbol": "IEF", "currency": "USD", "proxy_for": "YIELD:US10Y"},
-    {"asset_id": "CASH:USD", "provider": null, "symbol": null, "currency": "USD", "proxy_for": "CASH:USD"}
+    {
+      "asset_id": "GRID",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "PAVE",
+      "currency": "USD",
+      "proxy_for": "IDX:SPX"
+    },
+    {
+      "asset_id": "CHIP",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "SOXX",
+      "currency": "USD",
+      "proxy_for": "IDX:SOX"
+    },
+    {
+      "asset_id": "UTIL",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "XLU",
+      "currency": "USD",
+      "proxy_for": "IDX:UTIL"
+    },
+    {
+      "asset_id": "GOLD",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "GLD",
+      "currency": "USD",
+      "proxy_for": "COM:XAU"
+    },
+    {
+      "asset_id": "WORLD",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "VT",
+      "currency": "USD",
+      "proxy_for": "IDX:WORLD"
+    },
+    {
+      "asset_id": "ETF:SPY",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "SPY",
+      "currency": "USD",
+      "proxy_for": "IDX:SPX"
+    },
+    {
+      "asset_id": "ETF:SOXX",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "SOXX",
+      "currency": "USD",
+      "proxy_for": "IDX:SOX"
+    },
+    {
+      "asset_id": "ETF:GLD",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "GLD",
+      "currency": "USD",
+      "proxy_for": "COM:XAU"
+    },
+    {
+      "asset_id": "ETF:QQQ",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "QQQ",
+      "currency": "USD",
+      "proxy_for": "IDX:NDX"
+    },
+    {
+      "asset_id": "ETF:IEF",
+      "provider": "market_data",
+      "fallback_providers": ["alpha_vantage", "twelve_data", "finnhub", "yahoo", "stooq"],
+      "symbol": "IEF",
+      "currency": "USD",
+      "proxy_for": "YIELD:US10Y"
+    },
+    {
+      "asset_id": "CASH:USD",
+      "provider": null,
+      "symbol": null,
+      "currency": "USD",
+      "proxy_for": "CASH:USD"
+    }
   ],
   "factor_mappings": {
-    "momentum": {"primary": "kenneth_french", "factor": "MOM", "fallback": []},
-    "quality": {"primary": "aqr_qmj", "factor": "QMJ", "fallback": [{"provider": "kenneth_french", "factor": "RMW"}]}
+    "momentum": {
+      "primary": "price_derived",
+      "factor": "momentum",
+      "fallback": [
+        {
+          "provider": "price_derived",
+          "factor": "momentum_month"
+        }
+      ]
+    },
+    "quality": {
+      "primary": "price_derived",
+      "factor": "sma_ratio",
+      "fallback": []
+    }
   },
-  "fx_mapping": {"primary": "frankfurter", "provider_preference": ["ECB"]},
-  "feature_policy": "No factor source is approved for public runtime; clients must report missing/limited data and disable Public Default.",
-  "fx_policy": "No FX source is approved for public runtime; preserve quote currency and disable executable-looking amounts when conversion is missing."
+  "fx_mapping": {
+    "primary": "frankfurter",
+    "provider_preference": [
+      "ECB"
+    ]
+  },
+  "feature_policy": "Only deterministic price-derived features (momentum, momentum_month, rsi14, sma_ratio) are emitted; they are labelled derivations of the licensed three-anchor price series, not vendor factor scores. Any missing authorization, factor input or FX reference keeps the affected rows missing and the bundle limited.",
+  "fx_policy": "FX conversion is emitted only from the owner-approved ECB reference source. Missing or stale FX keeps public weights, amounts, units and execution permission at zero while retaining Raw results."
 }

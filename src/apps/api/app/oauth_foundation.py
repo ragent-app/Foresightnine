@@ -35,6 +35,13 @@ SUPPORTED_PROVIDERS: tuple[OAuthProvider, ...] = ("google", "github")
 
 ENV_CALLBACK_BASE_URL = "FORESIGHTNINE_OAUTH_CALLBACK_BASE_URL"
 ENV_RETURN_URI_ALLOWLIST = "FORESIGHTNINE_OAUTH_RETURN_URI_ALLOWLIST"
+# Optional per-provider redirect URIs for consoles that register a distinct
+# callback path per provider (for example app.example.com/api/auth/callback/google).
+# When unset, the shared ENV_CALLBACK_BASE_URL is used for that provider.
+ENV_PROVIDER_CALLBACK_URL = {
+    "google": "FORESIGHTNINE_OAUTH_GOOGLE_CALLBACK_URL",
+    "github": "FORESIGHTNINE_OAUTH_GITHUB_CALLBACK_URL",
+}
 ENV_CLIENT_ID = {
     "google": "FORESIGHTNINE_OAUTH_GOOGLE_CLIENT_ID",
     "github": "FORESIGHTNINE_OAUTH_GITHUB_CLIENT_ID",
@@ -307,6 +314,7 @@ class OAuthProviderConfig:
     provider: OAuthProvider
     client_id: str
     client_secret: str = ""
+    callback_url: str | None = None
 
     def __post_init__(self) -> None:
         if self.provider not in SUPPORTED_PROVIDERS:
@@ -315,9 +323,15 @@ class OAuthProviderConfig:
             raise OAuthConfigurationError("OAuth client ID is missing")
         if not isinstance(self.client_secret, str) or not self.client_secret:
             raise OAuthConfigurationError("OAuth client secret is missing")
+        if self.callback_url is not None:
+            _validate_callback_base_url(self.callback_url)
 
     def __repr__(self) -> str:
-        return f"OAuthProviderConfig(provider={self.provider!r}, client_id=<configured>, client_secret=<redacted>)"
+        return (
+            "OAuthProviderConfig("
+            f"provider={self.provider!r}, client_id=<configured>, "
+            "client_secret=<redacted>, callback_url=<configured>)"
+        )
 
 
 @dataclass(frozen=True, repr=False)
@@ -355,6 +369,12 @@ class OAuthConfiguration:
         if configured is None:
             raise OAuthConfigurationError("OAuth provider is not configured")
         return configured
+
+    def callback_url_for(self, provider: str) -> str:
+        """The exact redirect URI registered in this provider's console."""
+
+        configured = self.provider_config(provider)
+        return configured.callback_url or self.callback_base_url
 
     def __repr__(self) -> str:
         providers = tuple(sorted(self.providers))
@@ -488,10 +508,12 @@ def _environment_configuration(environ: Mapping[str, str]) -> OAuthConfiguration
             continue
         if client_id is None or client_secret is None:
             raise OAuthConfigurationError("OAuth provider configuration is incomplete")
+        provider_callback = environ.get(ENV_PROVIDER_CALLBACK_URL[provider])
         providers[provider] = OAuthProviderConfig(
             provider=provider,
             client_id=client_id,
             client_secret=client_secret,
+            **({"callback_url": provider_callback.strip()} if provider_callback and provider_callback.strip() else {}),
         )
 
     return OAuthConfiguration(
@@ -717,10 +739,11 @@ class OAuthFoundation:
         nonce = secrets.token_urlsafe(32)
         code_verifier = secrets.token_urlsafe(64)
         code_challenge = pkce_s256_challenge(code_verifier)
+        redirect_uri = self._configuration.callback_url_for(provider)
         transaction = _StoredTransaction(
             provider=provider_config.provider,
             client_id=provider_config.client_id,
-            redirect_uri=self._configuration.callback_base_url,
+            redirect_uri=redirect_uri,
             return_uri=return_uri,
             state=state,
             nonce=nonce,
@@ -740,7 +763,7 @@ class OAuthFoundation:
         return OAuthAuthorizationRequest(
             provider=provider_config.provider,
             client_id=provider_config.client_id,
-            redirect_uri=self._configuration.callback_base_url,
+            redirect_uri=redirect_uri,
             return_uri=return_uri,
             state=state,
             code_challenge=code_challenge,
