@@ -101,6 +101,8 @@ certificate-rotation evidence.
   user service `foresightnine-web.service` with `Restart=on-failure`; its Vite
   preview responses now include CSP, COOP, Permissions-Policy, Referrer-Policy,
   `nosniff` and `DENY` frame protection.
+- A controlled Web service cgroup fault increased `NRestarts` from 0 to 1; the
+  unit returned active and the public Web route returned HTTP 200.
 - API healthcheck became `healthy`; `/health` and `/openapi.json` returned
   success, reporting `deterministic_mock` and `client-evidence-bundle`.
 - Persistent startup now probes PostgreSQL repositories and Redis before the
@@ -349,7 +351,7 @@ the starting checkout; later module commits are the auditable checkpoints:
 The Cloudflare staging synchronization commit is `25d7f90`; the follow-up
 Compose CORS wiring is `e797bb4`. The historical Linux provider/auth/observability
 implementation checkpoint is `595a71c`; the current unapproved-provider and
-Web-hardening checkpoint is `11cfb1c`; external provider authorization input
+Web-hardening checkpoint is `ad4d8ae`; external provider authorization input
 handling is in `a70413e`, OAuth callback, provider mapping, redirect hardening
 and runtime CORS hardening are in `3eaf5dc`, `ea8f12c` and `a0fb7b3`. This
 evidence follow-up records the final test/artifact details. These commits contain only the redacted
