@@ -1,0 +1,277 @@
+BRANCH=master
+CHANGED_FIELDS=console.market_data_config,methodsExport.download
+
+--- a/src/apps/web/src/App.tsx
++++ b/src/apps/web/src/App.tsx
+@@ -9,6 +9,7 @@
+ import { PortfolioPanel } from "./components/PortfolioPanel";
+ import { NavPanel } from "./components/NavPanel";
+ import { ConsolePanel } from "./components/MethodsPanel";
++import { buildMethodsGuide, methodsGuideFilename } from "./methods-guide";
+ import { SocialLoginPanel, type OAuthProviderAvailability, type OAuthReadinessStatus } from "./components/SocialLoginPanel";
+ import { ASSET_FIXTURES, assetsForMarketBundle, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, MARKET_DATA_AS_OF } from "./fixtures";
+ import { allocationRows, canEnterStage, canStartFm, initialState, reducer, safeStageFor } from "./state";
+@@ -318,7 +319,7 @@
+   const exportJson = useCallback(() => { downloadText("foresightnine-research.json", JSON.stringify(researchExport(state, viewpointBranches, rows, marketDataAsOf), null, 2), "application/json;charset=utf-8"); dispatch({ type: "export_notice", notice: "JSON 已导出；当前观点、挑战回复和证据均保留。" }); }, [marketDataAsOf, rows, state, viewpointBranches]);
+   const exportCsv = useCallback(() => { downloadText("foresightnine-allocation.csv", csvExport(rows), "text/csv;charset=utf-8"); dispatch({ type: "export_notice", notice: "CSV 已导出；这是 allocation-only 快照，完整审计字段请使用 JSON。" }); }, [rows]);
+   const exportPath = useCallback(() => { downloadText("foresightnine-worldline-nav.json", JSON.stringify(navExport(state, viewpointBranches, marketDataAsOf), null, 2), "application/json;charset=utf-8"); dispatch({ type: "export_notice", notice: "路径数据已导出，并标记了当前 premise、完整 NAV 数组与历史 / 模拟边界。" }); }, [marketDataAsOf, state, viewpointBranches]);
+-  const methodsExport = useCallback(() => { downloadText("foresightnine-methods.txt", state.language === "en" ? "ForesightNine methodology\n\nProbabilities are revisable judgments, not facts.\nScenario simulation is not a forecast or return promise.\n" : "ForesightNine 方法说明\n\n概率是可修订判断，不是事实。\n情景模拟，不是预测或收益承诺。\n", "text/plain;charset=utf-8"); dispatch({ type: "export_notice", notice: "方法说明已导出。" }); }, [state.language]);
++  const methodsExport = useCallback(() => { downloadText(methodsGuideFilename(state.language), buildMethodsGuide(state.language), "text/plain;charset=utf-8"); dispatch({ type: "export_notice", notice: state.language === "en" ? "Complete user guide exported." : "完整使用说明已导出。" }); }, [state.language]);
+ 
+   const visibleStage = safeStageFor(state);
+   const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset }, oauthReadiness, { session: oauthSession, onStart: oauthReturnUri ? startOAuth : undefined, onLogout: logoutOAuth, onDelete: deleteOAuth, billingSummary, apiBaseUrl });
+
+--- a/src/apps/web/src/components/MarketDataConfigPanel.tsx
++++ b/src/apps/web/src/components/MarketDataConfigPanel.tsx
+@@ -18,6 +18,14 @@
+ }
+ 
+ type TestState = Readonly<Record<string, "testing" | "ready" | "unavailable">>;
++
++const KEY_HELP: Readonly<Record<MarketProviderId, readonly [string, string]>> = {
++  market_data: ["在 Market Data 供应商账户中创建并复制 API Token。", "Create and copy an API token from your Market Data provider account."],
++  alpha_vantage: ["填写 Alpha Vantage API Key；可在其账户或申请页面获取。", "Enter the Alpha Vantage API key from its account or key-request page."],
++  twelve_data: ["填写 Twelve Data Dashboard 中显示的 API Key。", "Enter the API key shown in the Twelve Data dashboard."],
++  finnhub: ["填写 Finnhub Dashboard 中显示的 API Token。", "Enter the API token shown in the Finnhub dashboard."],
++  yahoo: ["该来源不需要用户密钥，可直接参与 fallback。", "No personal key is required; this source can participate directly in fallback."],
++};
+ 
+ export function MarketDataConfigPanel({ apiBaseUrl, session, onSaved }: Props) {
+   const { language } = useLanguage();
+@@ -85,11 +93,16 @@
+     setDragged(null);
+   };
+ 
+-  if (!session) return <section className="market-config-panel"><div><p className="eyebrow">{language === "en" ? "Market data sources" : "金融数据源"}</p><h2>{language === "en" ? "Sign in to use your API keys" : "登录后配置你的 API Key"}</h2><p>{language === "en" ? "The platform fallback remains available without saving browser credentials." : "平台 fallback 仍可使用；浏览器不会保存或回显你的密钥。"}</p></div></section>;
++  if (!session) return <section className="market-config-panel"><div><p className="eyebrow">{language === "en" ? "API / financial data configuration" : "API / 金融数据配置"}</p><h2>{language === "en" ? "Sign in to enter your provider keys" : "登录后自行填写金融数据 API Key"}</h2><p>{language === "en" ? "After sign-in, this area provides key inputs, provider enable switches, fallback ordering, save, replace, remove, and connection testing. The platform fallback remains available without browser-stored credentials." : "登录后，此处会显示 API Key 输入框、数据源启停、fallback 排序、保存、替换、移除和连接测试。未填写个人 Key 时仍可使用平台 fallback；浏览器不会保存或回显密钥。"}</p></div></section>;
+   if (status === "loading" || !config) return <section className="market-config-panel" aria-busy="true"><StatusDot /> {language === "en" ? "Loading market data settings…" : "正在读取金融数据源配置…"}</section>;
+ 
+   return <section className="market-config-panel" aria-labelledby="market-config-title">
+-    <div className="market-config-heading"><div><p className="eyebrow">{language === "en" ? "Market data sources" : "金融数据源"}</p><h2 id="market-config-title">{language === "en" ? "Personal fallback chain" : "个人数据源 fallback"}</h2><p>{language === "en" ? "Your encrypted key overrides the matching platform credential. Drag or use the arrow buttons to set priority." : "个人 Key 会优先替代同一数据源的平台凭据；拖动或使用箭头调整优先级。"}</p></div><Button variant="primary" type="button" disabled={status === "saving"} onClick={save}>{status === "saving" ? (language === "en" ? "Saving…" : "保存中…") : (language === "en" ? "Save sources" : "保存数据源")}</Button></div>
++    <div className="market-config-heading"><div><p className="eyebrow">{language === "en" ? "API / financial data configuration" : "API / 金融数据配置"}</p><h2 id="market-config-title">{language === "en" ? "Your market-data fallback chain" : "你的金融数据 fallback 链路"}</h2><p>{language === "en" ? "Enter keys obtained from your provider accounts. Your encrypted key overrides only the matching platform credential; drag or use arrows to set priority." : "填写你从金融数据供应商账户取得的 API Key。个人 Key 只覆盖同一数据源的平台凭据；拖动或使用箭头调整优先级。"}</p></div><Button variant="primary" type="button" disabled={status === "saving"} onClick={save}>{status === "saving" ? (language === "en" ? "Saving…" : "保存中…") : (language === "en" ? "Save API / sources" : "保存 API / 数据源")}</Button></div>
++    <div className="market-config-steps" aria-label={language === "en" ? "Configuration steps" : "配置步骤"}>
++      <div><strong>1</strong><span>{language === "en" ? "Get a key from the provider" : "从供应商获取 Key"}</span></div>
++      <div><strong>2</strong><span>{language === "en" ? "Enter, enable, and order" : "填写、启用并排序"}</span></div>
++      <div><strong>3</strong><span>{language === "en" ? "Save and test" : "保存并测试连接"}</span></div>
++    </div>
+     <ol className="provider-order">
+       {order.map((providerId, index) => {
+         const provider = byId.get(providerId); if (!provider) return null;
+@@ -98,7 +111,7 @@
+           <div className="provider-rank" aria-hidden="true">{index + 1}</div>
+           <div className="provider-main"><div className="provider-title"><strong>{provider.display_name}</strong><span>{provider.personal_key_configured && !clearKeys[providerId] ? provider.key_hint : provider.platform_available ? (language === "en" ? "Platform fallback" : "平台 fallback") : (language === "en" ? "Key required" : "需要 Key")}</span></div>
+             <label className="provider-toggle"><input type="checkbox" checked={enabled[providerId] ?? true} onChange={(event) => setEnabled((current) => ({ ...current, [providerId]: event.target.checked }))} /> {language === "en" ? "Enabled" : "启用"}</label>
+-            {provider.requires_key ? <div className="provider-key-row"><Input type="password" autoComplete="off" value={keys[providerId] ?? ""} onChange={(event) => { setKeys((current) => ({ ...current, [providerId]: event.target.value })); setClearKeys((current) => ({ ...current, [providerId]: false })); }} placeholder={provider.personal_key_configured ? (language === "en" ? "Leave blank to keep saved key" : "留空则保留已保存 Key") : (language === "en" ? "Paste provider API key" : "填写数据源 API Key")} aria-label={`${provider.display_name} API key`} />{provider.personal_key_configured ? <Button variant="quiet" type="button" onClick={() => { setKeys((current) => ({ ...current, [providerId]: "" })); setClearKeys((current) => ({ ...current, [providerId]: true })); }}>{language === "en" ? "Remove key" : "移除 Key"}</Button> : null}</div> : null}
++            {provider.requires_key ? <><div className="provider-key-row"><Input type="password" autoComplete="off" spellCheck={false} name={`market-provider-${providerId}-api-key`} value={keys[providerId] ?? ""} onChange={(event) => { setKeys((current) => ({ ...current, [providerId]: event.target.value })); setClearKeys((current) => ({ ...current, [providerId]: false })); }} placeholder={provider.personal_key_configured ? (language === "en" ? "Leave blank to keep saved key" : "留空则保留已保存 Key") : (language === "en" ? "Enter your provider API key" : "填写你自己的数据源 API Key")} aria-label={`${provider.display_name} API key`} />{provider.personal_key_configured ? <Button variant="quiet" type="button" onClick={() => { setKeys((current) => ({ ...current, [providerId]: "" })); setClearKeys((current) => ({ ...current, [providerId]: true })); }}>{language === "en" ? "Remove key" : "移除 Key"}</Button> : null}</div><small className="provider-key-help">{KEY_HELP[providerId][language === "en" ? 1 : 0]}</small></> : <small className="provider-key-help">{KEY_HELP[providerId][language === "en" ? 1 : 0]}</small>}
+           </div>
+           <div className="provider-actions"><Button variant="quiet" type="button" disabled={index === 0} onClick={() => move(providerId, -1)} aria-label={`${provider.display_name} ${language === "en" ? "move up" : "上移"}`}>↑</Button><Button variant="quiet" type="button" disabled={index === order.length - 1} onClick={() => move(providerId, 1)} aria-label={`${provider.display_name} ${language === "en" ? "move down" : "下移"}`}>↓</Button><Button variant="secondary" type="button" disabled={status === "saving" || !(enabled[providerId] ?? true)} onClick={() => test(providerId)}>{testState === "testing" ? (language === "en" ? "Testing…" : "测试中…") : (language === "en" ? "Save & test" : "保存并测试")}</Button>{testState && testState !== "testing" ? <span className={`provider-test provider-test-${testState}`}><StatusDot tone={testState === "ready" ? "sage" : "warning"} />{testState === "ready" ? (language === "en" ? "Ready" : "可用") : (language === "en" ? "Unavailable" : "暂不可用")}</span> : null}</div>
+         </li>;
+
+--- a/src/apps/web/src/components/MethodsPanel.tsx
++++ b/src/apps/web/src/components/MethodsPanel.tsx
+@@ -27,5 +27,5 @@
+   const { language } = useLanguage();
+   const billingStatus = billingSummary?.plan === "max" ? "Max" : billingSummary?.plan === "pro" ? "Pro" : "Free";
+   const billingCopy = billingSummary ? `${billingStatus} · ${billingSummary.quota_remaining.toLocaleString()} / ${billingSummary.quota_limit.toLocaleString()} tokens · ${billingSummary.provider_model}` : t(language, "Google Play 月度订阅已配置：Pro 每月 3000 万 token，Max 每月 5 亿 token。商品需在 Play Console 激活后才可购买；会员权益由服务端验证。");
+-  return <section className="content-column methods-view"><Header eyebrow={t(language, "可选账户登录")} title={t(language, "研究控制台")} action={<Button variant="secondary" onClick={onExport}>↓ {t(language, "下载方法说明")}</Button>} /><p className="lead">{t(language, "账户状态、模型路由和产品边界都在这里明确呈现；未配置项不会模拟为可用服务。")}</p><SocialLoginPanel className="console-login" providers={providers} readinessStatus={readinessStatus} onStart={onOAuthStart} session={oauthSession} onLogout={onOAuthLogout} onDelete={onOAuthDelete} billingSummary={billingSummary} /><MarketDataConfigPanel apiBaseUrl={apiBaseUrl} session={oauthSession ?? null} /><section className="console-grid" aria-label={t(language, "控制台状态")}><article><p className="eyebrow">{t(language, "模型提供方路由")}</p><h2>{t(language, "服务端 OpenAI-compatible · 本机 Cline pool")}</h2><span className="console-status">{billingSummary?.provider_model ?? t(language, "已配置")}</span><p>{t(language, "研究请求通过服务端 OpenAI-compatible 适配器路由到本机 Cline pool；模型密钥不会下发到设备。")}</p></article><article><p className="eyebrow">{t(language, "金融数据处理")}</p><h2>{t(language, "多源 fallback · 三时点")}</h2><span className="console-status">{t(language, "服务端校验")}</span><p>{t(language, "平台数据源与个人加密 Key 共用同一标准化、缓存、新鲜度和缺失数据校验；不会把失败数据伪装为当前值。")}</p></article><article><p className="eyebrow">{t(language, "订阅与账单")}</p><h2>Google Play</h2><span className="console-status">{billingSummary ? billingStatus : t(language, "已配置")}</span><p>{billingCopy}</p></article></section><nav className="method-nav" aria-label={t(language, "研究方法导航")}><a href="#evidence">1 {t(language, "观点审查")}</a><a href="#evidence">2 {t(language, "证据等级")}</a><a href="#probability">3 {t(language, "世界线概率")}</a><a href="#fm-method">4 {t(language, "FM 因子模型")}</a><a href="#public">5 {t(language, "公开版安全层")}</a><a href="#risk">6 {t(language, "风险与限制")}</a></nav><section id="evidence" className="method-section"><h2>2 {t(language, "证据等级")}</h2><p>{t(language, "所有证据在使用前被分级；级别不代表正确性，仅表示来源与可核验性。")}</p><div className="evidence-scale">{evidenceGrades.map(([grade, title, desc]) => <div key={grade}><span className={`grade grade-${grade}`}>{grade}</span><strong>{t(language, title)}</strong><small>{t(language, desc)}</small></div>)}</div><p className="method-note">{t(language, "等级表示来源与可核验性，不代表结论正确；D/E 不得表述为公开事实。")}</p></section><section id="probability" className="method-section split-section"><div><h2>3 {t(language, "世界线概率")}</h2><p><i>P(H)</i> {t(language, "是前提成立的先验概率；")}<i>P(W | H)</i> {t(language, "是在假设成立条件下世界线发生的条件概率；")}<i>P(H∩W)</i> {t(language, "用于排序与组合。")}</p><Tag tone="accent">{t(language, "区间优先")} · model_estimate_unvalidated</Tag></div><div className="equation">P(H ∩ W) = P(H) × P(W | H)<br /><small>{t(language, "联合区间按配置精度重新计算")}</small></div></section><section id="fm-method" className="method-section split-section"><div><h2>4 {t(language, "组合双层输出")}</h2><h3>FM Raw（{t(language, "实验层")}）</h3><p>{t(language, "保留原始因子、假设、参数与结果，不做迎合性或可读性改写。")}</p></div><div id="public"><h3 className="accent-heading">Public Default（{t(language, "公开层")})</h3><p>{t(language, "在不覆盖 Raw 的前提下，叠加集中度、流动性、可实施性与冲击约束，显示每项调整理由。")}</p></div></section><section id="risk" className="risk-box"><span aria-hidden="true">♢</span><div><h2>{t(language, "风险与限制")}</h2><p>{t(language, "本产品用于情景研究与教育，不构成投资建议；不连接券商、不下单、不托管资金。")}</p><p>{t(language, "所有结果基于公开信息、用户输入与模型推断，存在重大不确定性与误差风险。")}</p></div></section><Disclosure /></section>;
++  return <section className="content-column methods-view"><Header eyebrow={t(language, "可选账户登录")} title={t(language, "研究控制台")} action={<Button variant="secondary" onClick={onExport}>↓ {language === "en" ? "Download complete guide" : "下载完整使用说明"}</Button>} /><p className="lead">{t(language, "账户状态、模型路由和产品边界都在这里明确呈现；未配置项不会模拟为可用服务。")}</p><SocialLoginPanel className="console-login" providers={providers} readinessStatus={readinessStatus} onStart={onOAuthStart} session={oauthSession} onLogout={onOAuthLogout} onDelete={onOAuthDelete} billingSummary={billingSummary} /><MarketDataConfigPanel apiBaseUrl={apiBaseUrl} session={oauthSession ?? null} /><section className="console-grid" aria-label={t(language, "控制台状态")}><article><p className="eyebrow">{t(language, "模型提供方路由")}</p><h2>{t(language, "服务端 OpenAI-compatible · 本机 Cline pool")}</h2><span className="console-status">{billingSummary?.provider_model ?? t(language, "已配置")}</span><p>{t(language, "研究请求通过服务端 OpenAI-compatible 适配器路由到本机 Cline pool；模型密钥不会下发到设备。")}</p></article><article><p className="eyebrow">{t(language, "金融数据处理")}</p><h2>{t(language, "多源 fallback · 三时点")}</h2><span className="console-status">{t(language, "服务端校验")}</span><p>{t(language, "平台数据源与个人加密 Key 共用同一标准化、缓存、新鲜度和缺失数据校验；不会把失败数据伪装为当前值。")}</p></article><article><p className="eyebrow">{t(language, "订阅与账单")}</p><h2>Google Play</h2><span className="console-status">{billingSummary ? billingStatus : t(language, "已配置")}</span><p>{billingCopy}</p></article></section><nav className="method-nav" aria-label={t(language, "研究方法导航")}><a href="#evidence">1 {t(language, "观点审查")}</a><a href="#evidence">2 {t(language, "证据等级")}</a><a href="#probability">3 {t(language, "世界线概率")}</a><a href="#fm-method">4 {t(language, "FM 因子模型")}</a><a href="#public">5 {t(language, "公开版安全层")}</a><a href="#risk">6 {t(language, "风险与限制")}</a></nav><section id="evidence" className="method-section"><h2>2 {t(language, "证据等级")}</h2><p>{t(language, "所有证据在使用前被分级；级别不代表正确性，仅表示来源与可核验性。")}</p><div className="evidence-scale">{evidenceGrades.map(([grade, title, desc]) => <div key={grade}><span className={`grade grade-${grade}`}>{grade}</span><strong>{t(language, title)}</strong><small>{t(language, desc)}</small></div>)}</div><p className="method-note">{t(language, "等级表示来源与可核验性，不代表结论正确；D/E 不得表述为公开事实。")}</p></section><section id="probability" className="method-section split-section"><div><h2>3 {t(language, "世界线概率")}</h2><p><i>P(H)</i> {t(language, "是前提成立的先验概率；")}<i>P(W | H)</i> {t(language, "是在假设成立条件下世界线发生的条件概率；")}<i>P(H∩W)</i> {t(language, "用于排序与组合。")}</p><Tag tone="accent">{t(language, "区间优先")} · model_estimate_unvalidated</Tag></div><div className="equation">P(H ∩ W) = P(H) × P(W | H)<br /><small>{t(language, "联合区间按配置精度重新计算")}</small></div></section><section id="fm-method" className="method-section split-section"><div><h2>4 {t(language, "组合双层输出")}</h2><h3>FM Raw（{t(language, "实验层")}）</h3><p>{t(language, "保留原始因子、假设、参数与结果，不做迎合性或可读性改写。")}</p></div><div id="public"><h3 className="accent-heading">Public Default（{t(language, "公开层")})</h3><p>{t(language, "在不覆盖 Raw 的前提下，叠加集中度、流动性、可实施性与冲击约束，显示每项调整理由。")}</p></div></section><section id="risk" className="risk-box"><span aria-hidden="true">♢</span><div><h2>{t(language, "风险与限制")}</h2><p>{t(language, "本产品用于情景研究与教育，不构成投资建议；不连接券商、不下单、不托管资金。")}</p><p>{t(language, "所有结果基于公开信息、用户输入与模型推断，存在重大不确定性与误差风险。")}</p></div></section><Disclosure /></section>;
+ }
+
+--- a/src/apps/web/src/styles.css
++++ b/src/apps/web/src/styles.css
+@@ -82,6 +82,9 @@
+ .market-config-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 18px; }
+ .market-config-heading h2 { margin: 0 0 8px; font: 500 25px/1.25 "Noto Serif SC", Georgia, serif; }
+ .market-config-heading p:last-child { max-width: 680px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
++.market-config-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 18px; }
++.market-config-steps div { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px solid var(--border); background: rgb(255 255 255 / .42); color: var(--muted); font-size: 12px; }
++.market-config-steps strong { display: grid; flex: 0 0 auto; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
+ .provider-order { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+ .provider-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
+ .provider-card[draggable="true"] { cursor: grab; }
+@@ -93,6 +96,7 @@
+ .provider-toggle { color: var(--muted); font-size: 12px; }
+ .provider-key-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+ .provider-key-row .text-input { min-height: 40px; padding: 8px 10px; }
++.provider-key-help { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+ .provider-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: wrap; max-width: 260px; }
+ .provider-actions .button { min-height: 36px; padding-block: 6px; }
+ .provider-test { display: inline-flex; align-items: center; white-space: nowrap; color: var(--muted); font-size: 11px; }
+@@ -102,6 +106,7 @@
+ @media (max-width: 760px) {
+   .market-config-panel { padding: 17px; }
+   .market-config-heading { display: grid; }
++  .market-config-steps { grid-template-columns: 1fr; }
+   .provider-card { grid-template-columns: 34px minmax(0, 1fr); }
+   .provider-actions { grid-column: 2; justify-content: flex-start; max-width: none; }
+   .provider-key-row { align-items: stretch; flex-direction: column; }
+
+--- a/src/apps/web/src/methods-guide.ts
++++ b/src/apps/web/src/methods-guide.ts
+@@ -0,0 +1,125 @@
++import type { Language } from "./types";
++
++export const METHODS_GUIDE_VERSION = "2026-09-13";
++
++const ZH_GUIDE = [
++  "ForesightNine 网页版完整使用与运行流程说明",
++  `版本：${METHODS_GUIDE_VERSION}`,
++  "",
++  "一、项目用途与边界",
++  "ForesightNine 用于把投资观点整理成可复核的研究流程：先明确观点与时间边界，再进行反方审查、证据登记、世界线构建、概率评估、因子计算与配置方案比较。系统不连接券商、不下单、不托管资金，也不把情景结果表述为收益承诺或投资建议。",
++  "",
++  "二、进入系统与账户",
++  "1. 打开 https://app.foresightnine.com。foresightnine.com 与 www.foresightnine.com 会保留路径和查询参数后跳转到该正式应用入口。",
++  "2. 匿名状态可以填写观点和查看公开方法；浏览器会在本机保存未提交草稿。",
++  "3. 使用 Google 或 GitHub 登录后，服务端写入会话，页面会重新读取账户、会员、额度与个人金融数据源配置。刷新页面后会话仍由服务端校验；退出登录后账户接口不再可用。",
++  "4. OAuth 完成页只负责交换一次性登录 ticket，不长期保存 provider authorization code。",
++  "",
++  "三、API / 金融数据源配置",
++  "1. 进入左侧“控制台”，找到“API / 金融数据配置”。该区域只有登录后才显示可编辑表单。",
++  "2. 当前支持 Market Data、Alpha Vantage、Twelve Data、Finnhub 与 Yahoo Finance。前四项可以填写用户从对应供应商账户取得的 API Key；Yahoo Finance 不需要用户 Key。",
++  "3. 勾选“启用”决定该来源是否参与请求；拖动卡片或使用上下箭头调整 fallback 优先级。默认顺序为 Market Data → Alpha Vantage → Twelve Data → Finnhub → Yahoo Finance。",
++  "4. 填写新 Key 后选择“保存并测试”，系统先保存配置，再用该来源读取一个受限测试资产。显示“可用”表示标准化后的测试数据通过；显示“暂不可用”时不会伪造成功结果。",
++  "5. 输入框留空会保留已经保存的 Key；选择“移除 Key”并保存才会清除。密钥提示只显示末四位，页面无法读取密钥原文。",
++  "6. 个人 Key 会优先覆盖同一 provider 的平台凭据；该 provider 失败后，系统按用户排序继续 fallback。使用个人 Key 不会把密钥发送给其他 provider。",
++  "7. 所有来源使用固定服务端适配器和固定 HTTPS 端点。用户不能填写任意 URL，从而降低内网访问、重定向和云 metadata 请求风险。",
++  "8. 点击页面顶部“保存 API / 数据源”可一次保存启停状态、排序和新增 Key。保存失败时原配置保持不变。",
++  "",
++  "四、一次研究的完整流程",
++  "1. 新建推演：填写观点、可投资资金和基础货币。观点应包含前提、时间范围、可观察触发条件以及预计的资产传导路径。",
++  "2. 反方审查：提交观点后，服务端生成结构化质疑、待补证据、问题清单和评分项。请求过程中可以取消；失败后可以重试或恢复已有结果，避免重复调用。",
++  "3. 证据确认：登记来源标题、发布者、链接、时间、摘要和用户备注，并标记证据等级及支持/反对方向。系统保留来源与内容哈希，模型推断不得冒充外部事实。",
++  "4. 世界线：确认观点后生成弱、中、强三条分支。每条分支包含事件节点、揭示日期、资产影响和失效条件。",
++  "5. 概率：P(H) 表示前提成立概率，P(W|H) 表示前提成立时世界线发生概率，联合概率按 P(H∩W)=P(H)×P(W|H) 计算。概率是可修订判断，不是客观事实。",
++  "6. 配置方案：金融数据通过校验后进入本地 FM 计算。系统同时保留 FM Raw 实验层和叠加集中度、流动性、冲击及可实施性约束的 Public Default 层。",
++  "7. 组合路径：查看不同世界线下的配置与 NAV 路径。历史数据、模型推断与模拟区间保持不同标记。",
++  "",
++  "五、金融数据请求如何运行",
++  "1. 网页向同源 /snapshots 提交资产列表、截止时间、时区和三个锚点：年初、最近月初、最近已完成交易日。",
++  "2. 服务端读取当前账户的启停状态、fallback 顺序和加密凭据，然后逐个调用已准入 provider。成功来源会终止该资产本轮优先链；失败、限流或缺失会进入下一来源。",
++  "3. 返回行必须经过资产映射、日期边界、正价格、future/stale/missing、币种和响应结构校验。缺失数据保留为 missing，不使用 fixture 冒充实时数据。",
++  "4. 合格结果进入带命名空间的 Redis 缓存；个人凭据的缓存命名空间使用不可逆摘要分区，不包含 Key 原文。",
++  "5. 页面验证 market-snapshot-bundle/v1 完整性后，才更新最新价格并计算 momentum、momentum_month、rsi14、sma_ratio 等可用字段。数据不足时保持 limited_data，相关公开配置不会假装完整。",
++  "",
++  "六、证据与搜索",
++  "证据搜索和资产行情搜索是两条独立链路。搜索结果只是待核验证据；用户应打开来源、核对发布日期和原文后再引用。搜索不可用时可以手工添加证据，系统不会生成虚假的替代搜索结果。A/B 级通常要求可公开复核的原始或可靠二手来源；D/E 级必须保持私有经验或模型推断标签。",
++  "",
++  "七、导出文件",
++  "1. 研究 JSON：包含观点、挑战、证据、世界线、概率、配置及审计字段，是最完整的可复核记录。",
++  "2. 配置 CSV：仅包含 allocation 快照，适合表格查看，不替代完整研究记录。",
++  "3. 世界线路径 JSON：包含 premise、节点、NAV 数组与历史/模拟边界。",
++  "4. 本说明文件：用于离线查看项目操作步骤；文件不包含账户 token、Cookie、API Key 或 provider 原始凭据。",
++  "",
++  "八、会员、额度与用户自有 Key",
++  "账户区域显示服务端确认的会员来源、有效期和额度。平台模型调用按服务端记录的实际 token 用量结算；重复请求应使用幂等标识避免重复计费。金融数据 provider Key 与模型 token 额度是不同配置：填写金融数据 Key 不会改变平台模型会员状态。",
++  "",
++  "九、常见状态与处理",
++  "1. “正在确认服务端登录状态”：等待 readiness 和 session 检查完成后再操作。",
++  "2. “配置请求失败”：保留原设置，检查登录是否过期、网络是否可用，然后重新读取或保存。",
++  "3. provider“暂不可用”：检查 Key 是否有效、套餐权限、调用频率和目标资产覆盖；其余已启用来源仍会参与 fallback。",
++  "4. 数据显示 missing/limited：检查截止日期、交易日、资产映射、FX 和 provider 覆盖；不要把缺失值手工改成当前值。",
++  "5. 研究请求超时或取消：优先恢复已有 challenge/session，再决定是否重试，避免重复模型调用。",
++  "6. 页面刷新：观点草稿从当前设备恢复；账户配置和会员状态从服务端重新获取。",
++  "",
++  "十、安全与隐私",
++  "金融数据 Key 通过 TLS 发送到 ForesightNine 服务端，并以账户绑定的 AES-GCM 认证加密形式保存。读取接口只返回是否已配置和末四位提示；密钥不写入 localStorage、研究导出、客户端 bundle、Git 或正常日志。账户删除会同步删除相关金融数据配置。请不要把 API Key 写进观点、证据、截图或导出文件。",
++  "",
++  "十一、完成前检查",
++  "确认登录状态正确；确认数据来源启停和顺序已保存；逐个测试新增 Key；确认三个锚点及 FX 状态；核对每条证据原文；阅读世界线失效条件；区分 FM Raw 与 Public Default；导出完整 JSON 留档；把所有结果视为研究材料而不是交易指令。",
++  "",
++  "正式入口：https://app.foresightnine.com",
++  "隐私政策：https://app.foresightnine.com/privacy.html",
++].join("\n");
++
++const EN_GUIDE = [
++  "ForesightNine Web — Complete User and Runtime Guide",
++  `Version: ${METHODS_GUIDE_VERSION}`,
++  "",
++  "1. Purpose and boundary",
++  "ForesightNine turns an investment thesis into a reviewable workflow: define the premise and time boundary, run an adversarial review, register evidence, build worldlines, assess probabilities, run factor calculations, and compare allocation paths. It does not connect to a broker, place orders, custody funds, or promise investment returns.",
++  "",
++  "2. Entry and account",
++  "Open https://app.foresightnine.com. The apex and www hosts preserve the path and query before redirecting to this canonical app. Anonymous users can draft a thesis and read the public methodology. Google or GitHub sign-in creates a server-validated session and reloads account, entitlement, quota, and personal market-source settings. The OAuth completion page exchanges a one-time ticket and does not persist provider authorization codes.",
++  "",
++  "3. API / financial data configuration",
++  "Open Console and find API / Financial data configuration. Editable controls appear after sign-in. Supported sources are Market Data, Alpha Vantage, Twelve Data, Finnhub, and Yahoo Finance. The first four accept a key obtained from the corresponding provider account; Yahoo Finance requires no personal key.",
++  "Enable or disable each source and drag cards, or use arrow buttons, to set priority. The default chain is Market Data → Alpha Vantage → Twelve Data → Finnhub → Yahoo Finance. Save & test first stores the current settings and then performs one bounded test-asset read. Ready means the normalized result passed validation; Unavailable remains fail-closed.",
++  "Leaving a key input blank preserves the saved value. Remove key is the explicit deletion action. The page can only display a last-four hint. A personal key overrides the matching platform credential and never travels to another provider. Fixed server adapters and fixed HTTPS endpoints are used; arbitrary URLs are not accepted.",
++  "",
++  "4. End-to-end research workflow",
++  "New research: enter a thesis, investable amount, and base currency. Include a premise, horizon, observable triggers, and expected asset transmission. Adversarial review: the server returns structured objections, missing evidence, questions, and rubric scores; requests can be cancelled, retried, or recovered without pretending failure is success. Evidence: record title, publisher, URL, dates, excerpt, note, grade, and support/challenge direction. Worldlines: confirm the thesis to create weak, middle, and strong branches with event nodes, reveal dates, impacts, and invalidation conditions.",
++  "Probability uses P(H) for premise probability, P(W|H) for the conditional worldline probability, and P(H∩W)=P(H)×P(W|H) for joint ordering. These values are revisable judgments. Configuration runs local FM calculations only after market data passes validation. FM Raw preserves experimental output; Public Default adds concentration, liquidity, impact, and implementability constraints. Portfolio path shows allocation and NAV paths with historical, inferred, and simulated intervals separately labelled.",
++  "",
++  "5. Market-data runtime",
++  "The browser posts assets, cutoff, timezone, and exactly three anchors—year start, latest month start, and latest completed session—to same-origin /snapshots. The server loads the account's enabled providers, priority, and encrypted credentials, then follows the fallback chain. A successful source ends that asset's priority pass; failure, rate limit, or missing data moves to the next enabled source.",
++  "Every row is checked for asset mapping, bounded date, positive price, future/stale/missing state, currency, and response shape. Missing data stays missing and is not replaced with a live-looking fixture. Qualified responses use a namespaced Redis cache; personal-key cache partitions use a one-way digest, not plaintext credentials. The browser validates market-snapshot-bundle/v1 before updating prices or deriving available momentum, momentum_month, rsi14, and sma_ratio fields. Incomplete inputs remain limited_data.",
++  "",
++  "6. Evidence and search",
++  "Evidence search and financial-asset lookup are separate paths. Search candidates are unverified until the user opens and checks the source, publication date, and original text. Manual evidence remains available when search is unavailable. The system does not invent replacement search results. Private experience and model inference must retain their D/E labels.",
++  "",
++  "7. Exports",
++  "Research JSON is the complete reviewable record. Allocation CSV is an allocation-only snapshot. Worldline JSON contains the premise, event nodes, NAV arrays, and historical/simulated boundaries. This guide contains no access token, cookie, API key, or provider credential.",
++  "",
++  "8. Entitlements and quota",
++  "The account panel displays server-confirmed entitlement source, expiry, and quota. Platform model calls are settled from server-recorded token usage and should use idempotency identifiers. Financial-provider keys are separate from model-token quota and do not change the membership tier.",
++  "",
++  "9. Troubleshooting",
++  "Wait for login readiness before using account controls. A settings error keeps the previous configuration. For an unavailable provider, check key validity, plan permissions, rate limits, and asset coverage; other enabled providers still participate in fallback. For missing or limited data, inspect cutoff, trading day, mapping, FX, and provider coverage. After timeout or cancellation, recover an existing challenge/session before issuing a duplicate model request. Refresh restores the local thesis draft while reloading account state from the server.",
++  "",
++  "10. Security and privacy",
++  "Market keys travel over TLS and are stored as account-bound AES-GCM authenticated ciphertext. Read APIs return only configured state and a last-four hint. Keys are excluded from localStorage, research exports, client bundles, Git, and normal logs. Account deletion also removes the related market configuration. Never paste credentials into a thesis, evidence note, screenshot, or export.",
++  "",
++  "11. Final checklist",
++  "Verify sign-in, provider enablement and order, test every newly added key, confirm three-anchor and FX state, inspect each evidence source, read worldline invalidation conditions, distinguish FM Raw from Public Default, export the complete JSON record, and treat every output as research material rather than a trading instruction.",
++  "",
++  "Canonical app: https://app.foresightnine.com",
++  "Privacy policy: https://app.foresightnine.com/privacy.html",
++].join("\n");
++
++export function buildMethodsGuide(language: Language): string {
++  return language === "en" ? EN_GUIDE : ZH_GUIDE;
++}
++
++export function methodsGuideFilename(language: Language): string {
++  return language === "en" ? "foresightnine-user-guide-en.txt" : "foresightnine-user-guide-zh-CN.txt";
++}
+
+--- a/src/apps/web/src/methods-guide.test.ts
++++ b/src/apps/web/src/methods-guide.test.ts
+@@ -0,0 +1,36 @@
++import { describe, expect, it } from "vitest";
++import { buildMethodsGuide, methodsGuideFilename } from "./methods-guide";
++
++describe("downloadable project guide", () => {
++  it("documents the complete Chinese runtime and user flow", () => {
++    const guide = buildMethodsGuide("zh");
++    expect(guide.length).toBeGreaterThan(3_000);
++    expect(guide).toContain("API / 金融数据源配置");
++    expect(guide).toContain("Market Data → Alpha Vantage → Twelve Data → Finnhub → Yahoo Finance");
++    expect(guide).toContain("新建推演");
++    expect(guide).toContain("反方审查");
++    expect(guide).toContain("世界线");
++    expect(guide).toContain("FM Raw");
++    expect(guide).toContain("常见状态与处理");
++    expect(methodsGuideFilename("zh")).toBe("foresightnine-user-guide-zh-CN.txt");
++  });
++
++  it("provides the same operational sections in English", () => {
++    const guide = buildMethodsGuide("en");
++    expect(guide.length).toBeGreaterThan(3_500);
++    expect(guide).toContain("API / financial data configuration");
++    expect(guide).toContain("End-to-end research workflow");
++    expect(guide).toContain("Market-data runtime");
++    expect(guide).toContain("Security and privacy");
++    expect(methodsGuideFilename("en")).toBe("foresightnine-user-guide-en.txt");
++  });
++
++  it("does not embed credential-like fields", () => {
++    for (const language of ["zh", "en"] as const) {
++      const guide = buildMethodsGuide(language).toLowerCase();
++      expect(guide).not.toContain("access_token=");
++      expect(guide).not.toContain("private_key");
++      expect(guide).not.toContain("client_secret");
++    }
++  });
++});
+

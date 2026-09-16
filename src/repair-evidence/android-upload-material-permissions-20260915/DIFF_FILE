@@ -1,0 +1,12 @@
+CHANGE_BRANCH: android_upload_material.filesystem_permissions
+
+Files:
+- foresightnine-upload.jks
+- foresightnine-upload-2026-08-31.jks
+- foresightnine-upload-2026-08-31.keystore-password.dpapi
+- foresightnine-upload-2026-08-31.key-password.dpapi
+
+- mode 0664
++ mode 0600
+
+File bytes and SHA-256 hashes are unchanged.

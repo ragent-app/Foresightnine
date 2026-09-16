@@ -453,6 +453,9 @@ class StooqEvaluationAdapter:
 
     endpoint = "https://stooq.com/q/d/l/"
 
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key
+
     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
             raise ValueError("symbol is outside the fixed provider allowlist")
@@ -466,7 +469,7 @@ class StooqEvaluationAdapter:
         # Stooq permits deployments with no key as well as deployments issued
         # a server-side key.  Never accept this value from a client request or
         # expose it in a bundle/log; it is injected only by the process env.
-        api_key = os.getenv("FORESIGHTNINE_STOOQ_API_KEY", "").strip()
+        api_key = self._api_key if self._api_key is not None else os.getenv("FORESIGHTNINE_STOOQ_API_KEY", "").strip()
         if api_key:
             query_params["apikey"] = api_key
         query = urlencode(query_params)
@@ -608,10 +611,13 @@ class AlphaVantageEvaluationAdapter:
 
     endpoint = "https://www.alphavantage.co/query"
 
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key
+
     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
             raise ValueError("symbol is outside the fixed provider allowlist")
-        keys = _provider_keys("FORESIGHTNINE_ALPHAVANTAGE_API_KEY")
+        keys = (self._api_key,) if self._api_key is not None else _provider_keys("FORESIGHTNINE_ALPHAVANTAGE_API_KEY")
         key = keys[int(sha256(symbol.encode("utf-8")).hexdigest(), 16) % len(keys)]
         query = urlencode({"function": "TIME_SERIES_DAILY", "symbol": symbol, "outputsize": "full", "apikey": key})
         return _reject_future_rows(_safe_alpha_vantage_rows(_bounded_get(f"{self.endpoint}?{query}", "application/json", 8)), cutoff)
@@ -622,10 +628,13 @@ class MarketDataEvaluationAdapter:
 
     endpoint = "https://api.marketdata.app/v1/stocks/candles/D/"
 
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key
+
     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
             raise ValueError("symbol is outside the fixed provider allowlist")
-        key = _required_provider_key("FORESIGHTNINE_MARKETDATA_API_KEY")
+        key = self._api_key if self._api_key is not None else _required_provider_key("FORESIGHTNINE_MARKETDATA_API_KEY")
         start = _fetch_start(anchors, cutoff)
         query = urlencode({"from": start.isoformat(), "to": cutoff.isoformat(), "adjustdividends": "false"})
         payload = _bounded_get(
@@ -642,10 +651,13 @@ class TwelveDataEvaluationAdapter:
 
     endpoint = "https://api.twelvedata.com/time_series"
 
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key
+
     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
             raise ValueError("symbol is outside the fixed provider allowlist")
-        key = _required_provider_key("FORESIGHTNINE_TWELVEDATA_API_KEY")
+        key = self._api_key if self._api_key is not None else _required_provider_key("FORESIGHTNINE_TWELVEDATA_API_KEY")
         start = _fetch_start(anchors, cutoff)
         query = urlencode({"symbol": symbol, "interval": "1day", "start_date": start.isoformat(), "end_date": cutoff.isoformat(), "order": "ASC", "timezone": "UTC"})
         payload = _bounded_get(
@@ -662,10 +674,13 @@ class FinnhubEvaluationAdapter:
 
     endpoint = "https://finnhub.io/api/v1/stock/candle"
 
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key
+
     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
             raise ValueError("symbol is outside the fixed provider allowlist")
-        key = _required_provider_key("FORESIGHTNINE_FINNHUB_API_KEY")
+        key = self._api_key if self._api_key is not None else _required_provider_key("FORESIGHTNINE_FINNHUB_API_KEY")
         start = _fetch_start(anchors, cutoff)
         start_ts = int(datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc).timestamp())
         end_ts = int(datetime.combine(cutoff + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc).timestamp())
@@ -759,14 +774,14 @@ def _derived_features(rows: Mapping[date, float], session: date) -> dict[str, fl
     return features
 
 
-def _adapter_for(provider_id: str) -> Any:
+def _adapter_for(provider_id: str, api_key: str | None = None) -> Any:
     adapters: dict[str, Any] = {
-        "market_data": MarketDataEvaluationAdapter(),
-        "alpha_vantage": AlphaVantageEvaluationAdapter(),
-        "twelve_data": TwelveDataEvaluationAdapter(),
-        "finnhub": FinnhubEvaluationAdapter(),
+        "market_data": MarketDataEvaluationAdapter(api_key),
+        "alpha_vantage": AlphaVantageEvaluationAdapter(api_key),
+        "twelve_data": TwelveDataEvaluationAdapter(api_key),
+        "finnhub": FinnhubEvaluationAdapter(api_key),
         "yahoo": YahooEvaluationAdapter(),
-        "stooq": StooqEvaluationAdapter(),
+        "stooq": StooqEvaluationAdapter(api_key),
     }
     try:
         return adapters[provider_id]
@@ -839,7 +854,12 @@ def _merge_provider_rows(
     return merged
 
 
-def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
+def build_snapshot_response(
+    request: MarketSnapshotRequest,
+    *,
+    provider_order: Sequence[str] | None = None,
+    provider_credentials: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     """Return a client-compatible bundle fragment with explicit limitations."""
 
     mode = os.getenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "unavailable").strip().lower()
@@ -853,8 +873,19 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
         and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
         and _fx_manifest_allows("frankfurter")
     )
-    provider_ids = _admitted_price_providers() if evaluation_enabled else ()
-    adapters = tuple((provider_id, _adapter_for(provider_id)) for provider_id in provider_ids)
+    admitted_provider_ids = _admitted_price_providers() if evaluation_enabled else ()
+    provider_ids = admitted_provider_ids if provider_order is None else tuple(
+        provider_id for provider_id in provider_order if provider_id in admitted_provider_ids
+    )
+    credential_overrides = provider_credentials or {}
+    adapters = tuple(
+        (
+            provider_id,
+            _adapter_for(provider_id, credential_overrides.get(provider_id)),
+            provider_id if provider_id not in credential_overrides else f"{provider_id}:account:{sha256(credential_overrides[provider_id].encode()).hexdigest()[:16]}",
+        )
+        for provider_id in provider_ids
+    )
     provider_priority = {provider_id: index for index, provider_id in enumerate(provider_ids)}
     consensus_mode = os.getenv("FORESIGHTNINE_MARKET_CONSENSUS_MODE", "priority").strip().lower()
     if consensus_mode not in {"priority", "all"}:
@@ -876,10 +907,10 @@ def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
         if adapters and symbol is not None:
             failed_providers: list[str] = []
             candidate_rows: dict[str, dict[date, float]] = {}
-            for provider_id, adapter in adapters:
+            for provider_id, adapter, cache_provider_id in adapters:
                 try:
                     provider_result = _cached_provider_rows(
-                        provider_id,
+                        cache_provider_id,
                         adapter,
                         symbol,
                         tuple(request.anchors[anchor] for anchor in ANCHORS),

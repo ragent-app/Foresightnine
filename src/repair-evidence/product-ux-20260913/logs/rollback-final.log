@@ -1,0 +1,6 @@
+ROLLBACK_RESULT=PASS
+ROLLBACK_HASH_MATCH=PASS restored=35 removed=8
+TARGET_ROOT=/tmp/foresightnine-product-ux-rollback-final16.z5o9xC
+RESTORED_BEHAVIOR=pre-product-UX challenge, evidence-hash/export, provider-network, provider-fallback, market-config, model-config, guide, ownership/account-switch, challenge-mutation concurrency, operation-transaction, and billing-reservation behavior
+ROLLBACK_COMMAND_EXIT=0
+LIVE_MODIFIED_STATE=PASS main_changed=True operations_changed=True model_panel_present=True evidence_hash_changed=True provider_network_changed=True fallback_changed=True market_account_gate_changed=True challenge_concurrency_changed=True

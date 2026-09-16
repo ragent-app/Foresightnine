@@ -1,0 +1,16 @@
+--- /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/cloudflared-before.yml	2026-08-31 19:48:11.662719303 +0800
++++ /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/MODIFIED_FILE	2026-08-31 22:49:14.477852352 +0800
+@@ -32,6 +32,13 @@
+     service: http_status:404
+   - hostname: api-staging.foresightnine.com
+     service: http://127.0.0.1:8000
++  # staging is Web-only; API-shaped paths must not become HTML 200s.
++  - hostname: staging.foresightnine.com
++    path: '^/(api|v1)(/.*)?$'
++    service: http_status:404
++  - hostname: staging.foresightnine.com
++    path: '^/(health|readyz|metrics)$'
++    service: http_status:404
+   - hostname: staging.foresightnine.com
+     service: http://127.0.0.1:4173
+   - service: http_status:404

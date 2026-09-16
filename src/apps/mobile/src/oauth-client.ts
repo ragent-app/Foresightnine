@@ -125,7 +125,7 @@ export function clearOAuthSession(store: SecureSessionStore = secureSessionStore
 
 async function authenticatedMutation(apiBaseUrl: string, path: string, accessToken: string, method: "POST" | "DELETE", fetcher: typeof fetch): Promise<void> {
   if (!safeApiBaseUrl(apiBaseUrl) || !/^\S{32,256}$/.test(accessToken)) throw new Error("OAuth session is invalid.");
-  const response = await fetcher(new URL(path.replace(/^\/+/, ""), `${apiBaseUrl.replace(/\/+$/, "")}/`), { method, headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` }, credentials: "omit" });
+  const response = await fetcher(new URL(path.replace(/^\/+/, ""), `${apiBaseUrl.replace(/\/+$/, "")}/`), { method, headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) }, ...(method === "POST" ? { body: JSON.stringify({}) } : {}), credentials: "omit" });
   if (!response.ok) throw new Error("OAuth account operation failed.");
 }
 

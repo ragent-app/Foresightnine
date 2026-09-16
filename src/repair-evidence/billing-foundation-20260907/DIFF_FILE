@@ -1,0 +1,171 @@
+diff --git a/src/apps/api/app/main.py b/src/apps/api/app/main.py
+index a1474c3..ef311a7 100644
+--- a/src/apps/api/app/main.py
++++ b/src/apps/api/app/main.py
+@@ -110,6 +110,16 @@ from .local_auth import (
+     register as register_local,
+     issue_session as issue_local_session,
+ )
++from .billing import (
++    BillingError,
++    BillingLedger,
++    GooglePlaySubscriptionVerifier,
++    GooglePlayVerifyRequest,
++    PurchaseRecord,
++    PurchaseTokenCipher,
++    BillingState,
++    UsageLedgerEntry,
++)
+ 
+ IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
+ 
+@@ -210,6 +220,9 @@ def _build_entity_repositories(
+     JsonDocumentRepository[LocalAccount],
+     JsonDocumentRepository[LocalSession],
+     JsonDocumentRepository[OAuthIdentity],
++    JsonDocumentRepository[BillingState],
++    JsonDocumentRepository[PurchaseRecord],
++    JsonDocumentRepository[UsageLedgerEntry],
+ ]:
+     """Build every API entity map with its canonical typed document loader."""
+     return (
+@@ -224,6 +237,9 @@ def _build_entity_repositories(
+         build_repository(config, "accounts", value_loader=LocalAccount.model_validate),
+         build_repository(config, "auth_sessions", value_loader=LocalSession.model_validate),
+         build_repository(config, "oauth_identities", value_loader=OAuthIdentity.model_validate),
++        build_repository(config, "billing_states", value_loader=BillingState.model_validate),
++        build_repository(config, "billing_purchases", value_loader=PurchaseRecord.model_validate),
++        build_repository(config, "usage_ledger", value_loader=UsageLedgerEntry.model_validate),
+     )
+ 
+ 
+@@ -240,9 +256,18 @@ storage_config = _storage_config()
+     ACCOUNTS,
+     AUTH_SESSIONS,
+     OAUTH_IDENTITIES,
++    BILLING_STATES,
++    BILLING_PURCHASES,
++    USAGE_LEDGER,
+ ) = _build_entity_repositories(storage_config)
+ operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
+ OPERATION_SESSIONS: dict[str, str] = {}
++billing_ledger = BillingLedger(
++    BILLING_STATES,
++    BILLING_PURCHASES,
++    USAGE_LEDGER,
++    cipher=PurchaseTokenCipher.from_environment(),
++)
+ 
+ 
+ def _assert_runtime_ready() -> None:
+@@ -287,6 +312,9 @@ def reset_state() -> None:
+     ACCOUNTS.clear()
+     AUTH_SESSIONS.clear()
+     OAUTH_IDENTITIES.clear()
++    BILLING_STATES.clear()
++    BILLING_PURCHASES.clear()
++    USAGE_LEDGER.clear()
+     OPERATION_SESSIONS.clear()
+ 
+ 
+@@ -1101,6 +1129,86 @@ def exchange_oauth_ticket(request: OAuthTicketExchangeRequest, response: Respons
+         raise ApiProblem(400, "bad_request", "OAuth exchange is unavailable.") from exception
+ 
+ 
++def _authenticated_account(authorization: str | None) -> LocalAccount:
++    try:
++        account, _session = authenticate_local(
++            ACCOUNTS,
++            AUTH_SESSIONS,
++            authorization,
++            now=lifecycle_clock.now(),
++        )
++        return account
++    except LocalAuthError as error:
++        raise _local_auth_problem(error) from error
++
++
++@app.get("/v1/account", include_in_schema=False)
++def account_summary(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
++    """Return server-authoritative plan and token quota state for the session."""
++
++    account = _authenticated_account(authorization)
++    return JSONResponse(
++        {"account": {"account_id": account.account_id, "email": account.email}, **billing_ledger.snapshot(account.account_id, now=lifecycle_clock.now())},
++        headers={"Cache-Control": "no-store"},
++    )
++
++
++@app.post("/v1/billing/google-play/verify", include_in_schema=False)
++def verify_google_play_subscription(
++    request: GooglePlayVerifyRequest,
++    authorization: str | None = Header(default=None, alias="Authorization"),
++) -> JSONResponse:
++    """Verify a Play purchase server-side before granting subscription access."""
++
++    account = _authenticated_account(authorization)
++    credentials_path = os.getenv(
++        "FORESIGHTNINE_GOOGLE_PLAY_CREDENTIALS",
++        "/home/lxx/.config/google-play/service-account.json",
++    ).strip()
++    verifier = GooglePlaySubscriptionVerifier(credentials_path)
++    try:
++        verified = verifier.fetch(
++            request.purchase_token,
++            expected_product_id=request.product_id,
++            expected_base_plan_id=request.base_plan_id,
++        )
++        if verified.subscription_state in {"pending", "on_hold", "canceled", "expired"}:
++            return JSONResponse(
++                {"verified": True, "purchase_state": verified.subscription_state, **billing_ledger.snapshot(account.account_id, now=lifecycle_clock.now())},
++                headers={"Cache-Control": "no-store"},
++            )
++        verifier.acknowledge(request.purchase_token, verified.product_id)
++        snapshot = billing_ledger.apply_google_purchase(
++            account.account_id,
++            request.purchase_token,
++            verified,
++            now=lifecycle_clock.now(),
++        )
++    except BillingError as error:
++        response = JSONResponse(
++            {"schema_version": "v1", "error_code": error.code, "message": error.message, "retryable": error.status_code in {502, 503}},
++            status_code=error.status_code,
++            headers={"Cache-Control": "no-store"},
++        )
++        if error.retry_after is not None:
++            response.headers["Retry-After"] = str(error.retry_after)
++        return response
++    return JSONResponse(
++        {"verified": True, **snapshot},
++        headers={"Cache-Control": "no-store"},
++    )
++
++
++@app.post("/v1/billing/google-play/restore", include_in_schema=False)
++def restore_google_play_subscription(
++    request: GooglePlayVerifyRequest,
++    authorization: str | None = Header(default=None, alias="Authorization"),
++) -> JSONResponse:
++    """Use the same idempotent server verification path when restoring access."""
++
++    return verify_google_play_subscription(request, authorization)
++
++
+ @app.get("/v1/search/candidates", response_model=SearchCandidatesResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="searchEvidenceCandidates")
+ def search_evidence_candidates(
+     http_request: Request,
+diff --git a/src/apps/api/pyproject.toml b/src/apps/api/pyproject.toml
+index e38d291..d159884 100644
+--- a/src/apps/api/pyproject.toml
++++ b/src/apps/api/pyproject.toml
+@@ -9,6 +9,9 @@ dependencies = [
+   "pydantic>=2.10,<3.0",
+   "psycopg[binary]>=3.2,<4.0",
+   "redis>=6.4,<7.0",
++  "google-auth>=2.40,<3.0",
++  "requests>=2.32,<3.0",
++  "cryptography>=43,<47",
+   "uvicorn[standard]>=0.34,<1.0"
+ ]
+ 

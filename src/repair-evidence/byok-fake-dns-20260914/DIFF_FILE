@@ -1,0 +1,149 @@
+--- a/apps/api/app/openai_compatible.py
++++ b/apps/api/app/openai_compatible.py
+@@ -19,7 +19,7 @@
+ import ssl
+ from time import sleep
+ from typing import Callable, Mapping, Protocol
+-from urllib.parse import urlsplit
++from urllib.parse import urlencode, urlsplit
+ 
+ from .phase3 import (
+     ChallengeInput,
+@@ -53,6 +53,13 @@
+ _GLM_CODING_DEFAULT_MODEL = "glm-5.3-flash"
+ _GLM_CODING_DEFAULT_OUTPUT_TOKENS = 4_000
+ _MAX_RESPONSE_BYTES = 256 * 1024
++_MAX_DOH_RESPONSE_BYTES = 64 * 1024
++_PUBLIC_DOH_HOST = "cloudflare-dns.com"
++_PUBLIC_DOH_PATH = "/dns-query"
++_FAKE_DNS_PROXY_NETWORKS = (
++    ipaddress.ip_network("198.18.0.0/15"),
++    ipaddress.ip_network("fdfe:dcba:9876::/48"),
++)
+ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+ _STRUCTURED_OUTPUT_KEYS = frozenset({
+     "claims", "objections", "missing_evidence", "questions", "rubric_scores",
+@@ -390,7 +397,10 @@
+             allowlist=normalized_host,
+             allow_private_network=False,
+         )
+-        _require_public_dns(normalized_host, 443)
++        try:
++            _require_public_dns(normalized_host, 443)
++        except _TransportFailure as error:
++            raise ProviderFailure("provider_configuration_invalid", "LLM base URL DNS validation failed.", retryable=False) from error
+         return settings
+ 
+     @classmethod
+@@ -467,6 +477,48 @@
+     return f"{base_url}/chat/completions"
+ 
+ 
++def _public_doh_addresses(hostname: str) -> tuple[str, ...]:
++    """Resolve through a fixed public DoH service when local DNS uses fake IPs."""
++    normalized = _normalize_hostname(hostname)
++    addresses: set[str] = set()
++    for record_type in ("A", "AAAA"):
++        connection = HTTPSConnection(_PUBLIC_DOH_HOST, 443, timeout=5.0, context=ssl.create_default_context())
++        try:
++            query = urlencode({"name": normalized, "type": record_type})
++            connection.request("GET", f"{_PUBLIC_DOH_PATH}?{query}", headers={"Accept": "application/dns-json"})
++            response = connection.getresponse()
++            content = response.read(_MAX_DOH_RESPONSE_BYTES + 1)
++            if response.status != 200 or len(content) > _MAX_DOH_RESPONSE_BYTES:
++                raise _TransportFailure()
++            payload = json.loads(content.decode("utf-8"))
++            if not isinstance(payload, dict) or payload.get("Status") != 0:
++                raise _TransportFailure()
++            answers = payload.get("Answer", [])
++            if not isinstance(answers, list):
++                raise _TransportFailure()
++            for answer in answers:
++                if not isinstance(answer, dict) or answer.get("type") not in {1, 28}:
++                    continue
++                value = answer.get("data")
++                if not isinstance(value, str):
++                    raise _TransportFailure()
++                try:
++                    addresses.add(str(ipaddress.ip_address(value)))
++                except ValueError as error:
++                    raise _TransportFailure() from error
++        except (_TransportFailure, OSError, HTTPException, UnicodeError, ValueError, json.JSONDecodeError) as error:
++            raise _TransportFailure() from error
++        finally:
++            connection.close()
++    if not addresses:
++        raise _TransportFailure()
++    return tuple(sorted(addresses))
++
++
++def _is_fake_dns_proxy_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
++    return any(address.version == network.version and address in network for network in _FAKE_DNS_PROXY_NETWORKS)
++
++
+ def _validated_addresses(hostname: str, port: int, *, allow_private: bool = False) -> tuple[str, ...]:
+     """Return only addresses admitted for the exact connection that follows."""
+     try:
+@@ -478,9 +530,14 @@
+         raise _TransportFailure()
+     try:
+         parsed_addresses = tuple(sorted(addresses))
++        parsed_ips = tuple(ipaddress.ip_address(address) for address in parsed_addresses)
+         local_gateway = allow_private and hostname.rstrip(".").lower() in _LOCAL_GATEWAY_HOSTS
+-        if not local_gateway and any(not ipaddress.ip_address(address).is_global for address in parsed_addresses):
+-            raise _TransportFailure()
++        if not local_gateway and any(not address.is_global for address in parsed_ips):
++            if not all(_is_fake_dns_proxy_address(address) for address in parsed_ips):
++                raise _TransportFailure()
++            public_addresses = tuple(ipaddress.ip_address(address) for address in _public_doh_addresses(hostname))
++            if not public_addresses or any(not address.is_global for address in public_addresses):
++                raise _TransportFailure()
+     except ValueError as error:
+         raise _TransportFailure() from error
+     return parsed_addresses
+--- a/apps/api/tests/test_openai_compatible_provider.py
++++ b/apps/api/tests/test_openai_compatible_provider.py
+@@ -286,6 +286,23 @@
+         openai_compatible._require_public_dns("llm.example.test", 443)
+ 
+ 
++def test_fake_dns_proxy_addresses_require_public_doh_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
++    fake_records = [
++        (2, 1, 6, "", ("198.18.0.180", 443)),
++        (10, 1, 6, "", ("fdfe:dcba:9876::ae", 443, 0, 0)),
++    ]
++    monkeypatch.setattr(openai_compatible.socket, "getaddrinfo", lambda *_args, **_kwargs: fake_records)
++    monkeypatch.setattr(openai_compatible, "_public_doh_addresses", lambda _hostname: ("104.18.1.2", "2606:4700::6812:102"))
++
++    assert openai_compatible._validated_addresses("models.example.test", 443) == (
++        "198.18.0.180", "fdfe:dcba:9876::ae",
++    )
++
++    monkeypatch.setattr(openai_compatible, "_public_doh_addresses", lambda _hostname: ("127.0.0.1",))
++    with pytest.raises(openai_compatible._TransportFailure):
++        openai_compatible._validated_addresses("models.example.test", 443)
++
++
+ def test_personal_provider_never_inherits_platform_private_network_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+     monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK", "true")
+     monkeypatch.setattr(
+--- a/apps/api/tests/test_model_credentials.py
++++ b/apps/api/tests/test_model_credentials.py
+@@ -76,6 +76,17 @@
+         ModelConfigUpdate.model_validate({"mode": "platform", "api_key": "must-not-" + "be-accepted"})
+ 
+ 
++def test_personal_configuration_converts_dns_transport_failure_to_validation_error(monkeypatch) -> None:
++    monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: (_ for _ in ()).throw(compatible._TransportFailure()))
++    service = AccountModelSettings(InMemoryDocumentRepository(), ModelCredentialCipher(b"d" * 32))
++
++    with pytest.raises(ModelCredentialError) as error:
++        service.update("account_123456", _personal_request())
++
++    assert error.value.status_code == 422
++    assert error.value.code == "validation_error"
++
++
+ def test_non_alphanumeric_secret_suffix_is_never_reflected_in_hint(monkeypatch) -> None:
+     monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
+     service = AccountModelSettings(InMemoryDocumentRepository(), ModelCredentialCipher(b"h" * 32))

@@ -1,0 +1,4 @@
+$ curl -fsS https://app.foresightnine.com/
+HTTP_INDEX_ASSET=assets/index-CKBfedGm.js
+ASSET_HTTP=200
+PUBLIC_HEALTH_HTTP=200

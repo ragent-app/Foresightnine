@@ -1,0 +1,3 @@
+ROLLBACK_RESULT=PASS
+TARGET_ROOT=/home/lxx/Foresightnine/.rollback-fixture-product-ux.SICozI
+RESTORED_BEHAVIOR=pre-product-UX challenge, provider-error, and market-config behavior

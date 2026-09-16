@@ -1,0 +1,62 @@
+ARTIFACT=ForesightNine Privacy Policy web page and in-app links
+CHANGED_BRANCH_OR_FIELD=web public privacy URL /privacy.html; Web AppShell footer link; Android Console privacy link; bilingual privacy labels
+TARGETS=
+/home/lxx/Foresightnine/src/apps/web/public/privacy.html
+/home/lxx/Foresightnine/src/apps/web/src/components/AppShell.tsx
+/home/lxx/Foresightnine/src/apps/web/src/i18n.tsx
+/home/lxx/Foresightnine/src/apps/web/src/styles.css
+/home/lxx/Foresightnine/src/apps/mobile/app/console.tsx
+/home/lxx/Foresightnine/src/apps/mobile/src/i18n.ts
+
+BASELINE
+Command: corepack pnpm --filter @foresightnine/web test
+Input: pre-change Web source tree
+Literal output: Test Files 5 passed (5); Tests 64 passed (64)
+Result: BASELINE_WEB_EXIT_STATUS=0
+Command: corepack pnpm --filter @foresightnine/mobile test
+Input: baseline copies restored from BASELINE_* artifacts
+Literal output: Test Files 7 passed (7); Tests 60 passed (60)
+Result: BASELINE_MOBILE_EXIT_STATUS=0
+
+MODIFIED
+Command: corepack pnpm --filter @foresightnine/web test
+Input: changed Web source tree with /privacy.html link
+Literal output: Test Files 5 passed (5); Tests 64 passed (64)
+Result: WEB_MODIFIED_TEST_EXIT_STATUS=0
+Command: corepack pnpm --filter @foresightnine/web typecheck
+Input: changed Web TypeScript source
+Literal output: $ tsc --noEmit
+Result: WEB_MODIFIED_TYPECHECK_EXIT_STATUS=0
+Command: corepack pnpm --filter @foresightnine/web build
+Input: changed Web source and public/privacy.html
+Literal output: ✓ built in 1.78s; DIST_PRIVACY_PRESENT=1; DIST_PRIVACY_LINK_TEXT_COUNT=2
+Result: WEB_MODIFIED_BUILD_EXIT_STATUS=0
+Command: corepack pnpm --filter @foresightnine/mobile test
+Input: changed Mobile Console with privacy link
+Literal output: Test Files 7 passed (7); Tests 60 passed (60)
+Result: MODIFIED_MOBILE_EXIT_STATUS=0
+Command: python3 -m http.server 4174 --bind 127.0.0.1 --directory dist; curl http://127.0.0.1:4174/privacy.html
+Input: /home/lxx/Foresightnine/src/apps/web/dist/privacy.html
+Literal output: HTTP/1.0 200 OK; LOCAL_PRIVACY_HTTP_STATUS=200; LOCAL_PRIVACY_TITLE_COUNT=1
+Result: LOCAL_STATIC_SERVE_EXIT_STATUS=0
+Command: curl https://app.foresightnine.com/privacy.html
+Input: current public app hostname
+Literal output: PUBLIC_PRIVACY_HTTP_STATUS=530
+Result: PUBLIC_DEPLOYMENT_STATUS=530; source page is built, public Tunnel is not currently serving it.
+
+ROLLBACK
+Command: /home/lxx/Foresightnine/src/repair-evidence/privacy-policy-20260906/ROLLBACK.sh ROLLBACK_TEST_ROOT BASELINE_ARTIFACT_DIR
+Input: separate rollback test root containing all modified copies; baseline artifact directory
+Literal output:
+ROLLBACK_RESULT=RESTORED
+ROLLBACK_SCRIPT_EXIT_STATUS=0
+ROLLBACK_RESTORED_BEHAVIOR=PRIVACY_PAGE_ABSENT_AND_APP_LINKS_BASELINE
+ROLLBACK_TEST_COMPARE_COMMAND=cmp -s BASELINE_AppShell.tsx ROLLBACK_TEST_ROOT/src/apps/web/src/components/AppShell.tsx
+ROLLBACK_TEST_COMPARE_EXIT_STATUS=0
+ROLLBACK_PRIVACY_ABSENT_COMMAND=test ! -e ROLLBACK_TEST_ROOT/src/apps/web/public/privacy.html
+ROLLBACK_PRIVACY_ABSENT_EXIT_STATUS=0
+Result: rollback restored the separate test root; production source target remained changed.
+
+SECURITY
+No credential JSON, private key, OAuth code, access token, Cookie, or API key was added to the page or printed.
+No Play write, purchase, refund, or production release was executed.

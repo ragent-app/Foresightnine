@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { assertProbabilityAssessment, assertWorldlineDates } from "@foresightnine/domain";
 import { computeFm, mountFmWorker, type FmWorkerPort, type FmWorkerResponse } from "@foresightnine/fm-engine";
-import { ASSET_FIXTURES, FX_SNAPSHOT, MARKET_DATA_AS_OF, PUBLIC_CONSTRAINTS, branches, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, privateEvidenceFixture, searchEvidenceFixture, sourceMaterialHash } from "./fixtures";
+import { ASSET_FIXTURES, FX_SNAPSHOT, MARKET_DATA_AS_OF, MARKET_SNAPSHOT_BUNDLE, PUBLIC_CONSTRAINTS, assetsForMarketBundle, branches, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, privateEvidenceFixture, searchEvidenceFixture, sourceMaterialHash } from "./fixtures";
 import { allocationRows, canConfirmNormally, canConfirmReserved, canEnterStage, canSubmitReply, initialState, publicWeights, reducer, rubricDefaults, rubricDefaultsEn, safeStageFor, totalRubricScore } from "./state";
-import { createGenerationGuard } from "./App";
+import { authoritativeChallengeFetchOptions, cancelAcceptedPendingReceipt, createGenerationGuard, operationReplayCursor, recoveryActionFor, replayPendingReceipt } from "./App";
 import { CSV_HEADER, csvExport, navExport, researchExport } from "./exports";
 import { isSafeEvidenceUrl, validateSearchEvidence, validateThesis } from "./validation";
 import { createElement } from "react";
@@ -16,8 +16,16 @@ import { ThesisInput } from "./components/ThesisInput";
 import { LanguageProvider, t } from "./i18n";
 import { SocialLoginPanel } from "./components/SocialLoginPanel";
 import { historical } from "./nav-data";
+import { computeMarketSnapshotIntegrityHash, type MarketSnapshotBundle } from "@foresightnine/market-data";
 
 const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
+
+describe("authoritative challenge result fetch", () => {
+  it("binds the SSE context operation id to the complete-result request", () => {
+    const signal = new AbortController().signal;
+    expect(authoritativeChallengeFetchOptions({ operation_id: "operation/current" }, signal)).toEqual({ operationId: "operation/current", signal });
+  });
+});
 
 describe("Web thesis validation", () => {
   it("rejects empty, overlong, and non-positive inputs", () => {
@@ -119,6 +127,16 @@ describe("challenge recovery state", () => {
 
     const markup = renderToStaticMarkup(createElement(ChallengePanel, { status: "idle", turns: [], replyDraft: "forged reply", evidence: [], rubric: initialState.rubric, unresolvedIssuesAcknowledged: false, reservationNote: "", onStart: () => undefined, onCancel: () => undefined, onRetry: () => undefined, onRecover: () => undefined, onReplyDraft: () => undefined, onSubmitReply: () => undefined, onEvidence: () => undefined, onUnresolvedIssuesAcknowledged: () => undefined, onReservationNote: () => undefined, onConfirm: () => undefined }));
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>提交回复<\/button>/);
+  });
+
+  it("allows one reply after an authoritative model operation completes, then exposes confirmation", () => {
+    const initialTurns = [
+      { id: "user-1", author: "user" as const, time: "now", body: "Initial thesis" },
+      { id: "challenger-1", author: "challenger" as const, time: "now", body: "Counterargument" },
+    ];
+    expect(canSubmitReply("complete", initialTurns)).toBe(true);
+    const repliedTurns = [...initialTurns, { id: "user-2", author: "user" as const, time: "now", body: "Evidence-based answer" }];
+    expect(canSubmitReply("complete", repliedTurns)).toBe(false);
   });
 
   it("fully resets a completed and confirmed workflow when the viewpoint changes", () => {
@@ -251,6 +269,65 @@ describe("challenge recovery state", () => {
     expect(state.confirmation).toBe("reserved");
   });
 
+  it("keeps terminal recovery state intact while selecting a replacement operation instead of workflow reset", () => {
+    const started = reducer({ ...initialState, viewpoint: "终态恢复不能抹去研究状态" }, { type: "start_challenge" });
+    const withDraft = reducer(reducer(started, { type: "set_reply_draft", draft: "保留的答复草稿" }), { type: "add_evidence", evidence: searchEvidenceFixture });
+    const cancelled = reducer(withDraft, { type: "challenge_cancel" });
+    const recovered = reducer(cancelled, { type: "challenge_recover" });
+    expect(recovered).toMatchObject({ viewpoint: withDraft.viewpoint, replyDraft: "保留的答复草稿", evidence: [searchEvidenceFixture], rubric: withDraft.rubric, challengeTurns: cancelled.challengeTurns });
+    expect(recoveryActionFor("running")).toBe("resume");
+    expect(recoveryActionFor("cancelled")).toBe("restart");
+    expect(recoveryActionFor("failed")).toBe("restart");
+    expect(recoveryActionFor("completed")).toBe("replay");
+  });
+
+  it("compensates a cancel requested before the async operation receipt arrives", async () => {
+    const cancelOperation = vi.fn(async () => ({ operation: { status: "cancelled" } }));
+    const pending = { cancelRequested: true, cancelIdempotencyKey: "cancel-idempotency-delayed", submissionIdempotencyKey: "submission-idempotency-delayed" };
+    const receipt = { operation: { operation_id: "operation:delayed", cancel_token: "cancel-token-delayed" } };
+
+    await expect(cancelAcceptedPendingReceipt({ cancelOperation } as never, pending, receipt as never)).resolves.toMatchObject({ status: "cancelled" });
+    expect(cancelOperation).toHaveBeenCalledWith(
+      "operation:delayed", "cancel-token-delayed", { idempotencyKey: "cancel-idempotency-delayed" },
+    );
+
+    pending.cancelRequested = false;
+    await expect(cancelAcceptedPendingReceipt({ cancelOperation } as never, pending, receipt as never)).resolves.toBeNull();
+    expect(cancelOperation).toHaveBeenCalledTimes(1);
+
+    pending.cancelRequested = true;
+    const nonTerminalCancel = vi.fn(async () => ({ operation: { status: "running" } }));
+    await expect(cancelAcceptedPendingReceipt({ cancelOperation: nonTerminalCancel } as never, pending, receipt as never)).rejects.toThrow("terminal operation state");
+  });
+
+  it("replays a lost async receipt with the original submission idempotency key", async () => {
+    const pending = { submissionIdempotencyKey: "submission-idempotency-lost-receipt" };
+    const receipt = { operation: { operation_id: "operation:replayed" } };
+    const submit = vi.fn()
+      .mockRejectedValueOnce(new Error("response lost after acceptance"))
+      .mockResolvedValueOnce(receipt);
+
+    await expect(replayPendingReceipt(pending, submit)).rejects.toThrow("response lost after acceptance");
+    await expect(replayPendingReceipt(pending, submit)).resolves.toBe(receipt);
+    expect(submit).toHaveBeenNthCalledWith(1, "submission-idempotency-lost-receipt");
+    expect(submit).toHaveBeenNthCalledWith(2, "submission-idempotency-lost-receipt");
+  });
+
+  it("rewinds a terminal replay receipt so the terminal SSE frame is observed", () => {
+    expect(operationReplayCursor({ operation_id: "operation:done", last_event_id: "operation:done:2", status: "completed" })).toBe("operation:done:0");
+    expect(operationReplayCursor({ operation_id: "operation:failed", last_event_id: "operation:failed:2", status: "failed" })).toBe("operation:failed:0");
+    expect(operationReplayCursor({ operation_id: "operation:live", last_event_id: "operation:live:1", status: "running" })).toBe("operation:live:1");
+  });
+
+  it("moves a failed recovery into an explicit retryable failed state", () => {
+    const started = reducer({ ...initialState, viewpoint: "恢复失败必须如实显示" }, { type: "start_challenge" });
+    const recovering = reducer(reducer(started, { type: "challenge_cancel" }), { type: "challenge_recover" });
+    const failed = reducer(recovering, { type: "api_error", notice: "模型供应商暂时不可用。" });
+    expect(failed.challengeStatus).toBe("failed");
+    expect(failed.apiError).toBe("模型供应商暂时不可用。");
+    expect(failed.challengeTurns).toEqual(recovering.challengeTurns);
+  });
+
   it("uses the current viewpoint, retains an editable reply, and keeps evidence fields", () => {
     const viewpoint = "欧洲电网储能投资会因可再生能源并网而加速";
     let state = reducer({ ...initialState, viewpoint }, { type: "start_challenge" });
@@ -293,9 +370,21 @@ describe("SearchEvidenceBundle validation and premise rendering", () => {
 
   it("keeps the API source-material hash separate and canonical", () => {
     const material = { url: "https://example.com/evidence", title: "Client search excerpt", published_at: "2026-08-01T00:00:00Z", retrieved_at: "2026-08-10T00:00:00Z", excerpt: "A client-submitted excerpt.", user_note: "Search fallback." };
-    expect(sourceMaterialHash(material)).toBe("cd3d44755bda8101435b8d21841f2297c1a14bc9ce1427a71b3a60269869f317");
+    expect(sourceMaterialHash(material)).toBe("7f334c646f625da01253b95ec362f62384cace4820d8697a324183aceec36e7e");
+    expect(sourceMaterialHash({ ...material, published_at: "2026-08-01T00:00:00.000Z", retrieved_at: "2026-08-10T00:00:00.000000Z" })).toBe(sourceMaterialHash(material));
     expect(sourceMaterialHash({ ...material, url: "", published_at: null })).toBe(sourceMaterialHash({ ...material, url: null, published_at: null }));
+    expect(sourceMaterialHash({ ...material, search_provider: "provider-a", search_result_hash: "a".repeat(64) })).not.toBe(sourceMaterialHash(material));
     expect(evidenceHash({ evidence_id: "e1", challenge_id: "c1", source_type: "primary", url: material.url, title: material.title, publisher: "Example", published_at: material.published_at, retrieved_at: material.retrieved_at, excerpt: material.excerpt, user_note: material.user_note, grade: "A", supports_or_challenges: "supports", independently_reviewable: true })).not.toBe(sourceMaterialHash(material));
+  });
+
+  it("exports the API source-material hash with search provenance intact", () => {
+    const item = { ...searchEvidenceFixture, search_provider: "provider-a", search_result_hash: "a".repeat(64) };
+    const exported = (researchExport({ ...initialState, evidence: [item] }, branches, []) as { evidence: Array<Record<string, unknown>> }).evidence[0];
+    expect(exported?.challenge_id).toBe(item.challenge_id);
+    expect(exported?.source_material_hash).toBe(sourceMaterialHash({
+      url: item.url, title: item.title, published_at: item.published_at, retrieved_at: item.retrieved_at,
+      excerpt: item.excerpt, user_note: item.user_note, search_provider: item.search_provider, search_result_hash: item.search_result_hash,
+    }));
   });
 
   it("marks D/E and private/model evidence as not independently reviewable", () => {
@@ -340,6 +429,39 @@ describe("SearchEvidenceBundle validation and premise rendering", () => {
 });
 
 describe("FM worker and public delta", () => {
+  it("computes the raw FM slice when cash is missing, latest prices are stale, and one declared factor is unavailable", () => {
+    const snapshots = MARKET_SNAPSHOT_BUNDLE.snapshots.map((row, index) => row.assetId === "CASH"
+      ? { ...row, asOf: null, price: null, close: null, features: {}, status: "missing" as const }
+      : {
+        ...row,
+        status: row.anchor === "latest_completed_session" ? "stale" as const : "ok" as const,
+        features: {
+          momentum: null,
+          momentum_month: (row.features?.momentum ?? index + 1) * 0.8,
+          rsi14: 40 + index,
+          sma_ratio: 0.9 + index / 100,
+        },
+      });
+    const unhashed = {
+      ...MARKET_SNAPSHOT_BUNDLE,
+      provider: { id: "public-live", mode: "public" as const },
+      snapshots,
+      warnings: ["Cash is an explicit missing provider row."],
+    };
+    const liveBundle: MarketSnapshotBundle = { ...unhashed, integrityHash: computeMarketSnapshotIntegrityHash(unhashed) };
+
+    const assets = assetsForMarketBundle(liveBundle);
+    const input = fmInput(liveBundle);
+    const result = computeFm(input);
+
+    expect(assets.filter((asset) => asset.assetId !== "CASH").every((asset) => asset.freshness === "stale")).toBe(true);
+    expect(input.observations[0]?.fields.close).toHaveLength(5);
+    expect(input.observations[0]?.fields.momentum).toBeUndefined();
+    expect(input.observations[0]?.fields.momentum_month).toHaveLength(5);
+    expect(input.currentValues).toHaveLength(5);
+    expect(result.weights.weights).toHaveLength(5);
+  });
+
   it("keeps the completed FM audit state visible before portfolio navigation", () => {
     const readyRubric = rubricDefaults.map((item) => ({ ...item, score: 3 }));
     let state = reducer({ ...initialState, stage: "worldline", viewpoint: "一个通过确认门槛的测试观点", challengeStatus: "complete", challengeTurns: [{ id: "system-1", author: "system", time: "现在", body: "挑战已启动" }, { id: "challenger-1", author: "challenger", time: "现在", body: "反方问题" }, { id: "user-1", author: "user", time: "现在", body: "用户回复" }], rubric: readyRubric, evidence: [searchEvidenceFixture], confirmation: "confirmed" }, { type: "fm_start" });
@@ -425,6 +547,40 @@ describe("FM worker and public delta", () => {
     expect(safeStageFor({ ...state, stage: "portfolio", fmStatus: "idle", fmResult: null })).toBe("worldline");
     expect(canEnterStage(state, "fm")).toBe(true);
     expect(reducer(state, { type: "fm_start" }).stage).toBe("fm");
+  });
+
+  it("keeps failed and cancelled FM states visible so computation can be retried", () => {
+    const readyRubric = rubricDefaults.map((item) => ({ ...item, score: 3 }));
+    const readyState = {
+      ...initialState,
+      stage: "worldline" as const,
+      viewpoint: "一个通过确认门槛并进入因子计算的测试观点",
+      challengeStatus: "complete" as const,
+      challengeTurns: [
+        { id: "system-1", author: "system" as const, time: "现在", body: "挑战已启动" },
+        { id: "challenger-1", author: "challenger" as const, time: "现在", body: "反方问题" },
+        { id: "user-1", author: "user" as const, time: "现在", body: "用户回复" },
+      ],
+      rubric: readyRubric,
+      evidence: [searchEvidenceFixture],
+      confirmation: "confirmed" as const,
+    };
+
+    let failed = reducer(readyState, { type: "fm_start" });
+    failed = reducer(failed, { type: "fm_fail" });
+    expect(failed.stage).toBe("fm");
+    expect(failed.fmStatus).toBe("failed");
+    expect(canEnterStage(failed, "fm")).toBe(true);
+    expect(safeStageFor(failed)).toBe("fm");
+    expect(reducer(failed, { type: "fm_start" }).fmStatus).toBe("computing");
+
+    let cancelled = reducer(readyState, { type: "fm_start" });
+    cancelled = reducer(cancelled, { type: "fm_cancel" });
+    expect(cancelled.stage).toBe("fm");
+    expect(cancelled.fmStatus).toBe("cancelled");
+    expect(canEnterStage(cancelled, "fm")).toBe(true);
+    expect(safeStageFor(cancelled)).toBe("fm");
+    expect(reducer(cancelled, { type: "fm_start" }).fmStatus).toBe("computing");
   });
 
   it("invalidates stale timer or worker results with a generation token", () => {

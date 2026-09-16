@@ -1,0 +1,69 @@
+ForesightNine Android Billing compile-fix verification
+Date: 2026-09-10 Asia/Shanghai
+Changed branch/field: Android Billing Library dependency and BillingClient 9.1.0 API usage.
+- billing-ktx -> billing to avoid incompatible Kotlin metadata from the KTX artifact.
+- BillingClientStateListener imported as the public top-level interface.
+- queryProductDetailsAsync reads QueryProductDetailsResult.productDetailsList.
+- Activity is read from reactContext.currentActivity.
+
+Changed files:
+- /home/lxx/Foresightnine/src/apps/mobile/android/app/build.gradle
+- /home/lxx/Foresightnine/src/apps/mobile/android/app/src/main/java/com/foresightnine/mobile/ForesightNineBillingModule.kt
+
+Required artifacts:
+- /home/lxx/Foresightnine/src/repair-evidence/android-billing-compile-fix-20260910/MODIFIED_FILE
+- /home/lxx/Foresightnine/src/repair-evidence/android-billing-compile-fix-20260910/DIFF_FILE
+- /home/lxx/Foresightnine/src/repair-evidence/android-billing-compile-fix-20260910/VERIFICATION.txt
+- /home/lxx/Foresightnine/src/repair-evidence/android-billing-compile-fix-20260910/ROLLBACK.sh
+
+BASELINE:
+Command: ANDROID_HOME=/home/lxx/Android/Sdk ANDROID_SDK_ROOT=/home/lxx/Android/Sdk ./gradlew --no-daemon :app:compileDebugKotlin (with the two baseline snapshots restored in a temporary copy of the working files)
+Literal key output:
+... Module was compiled with an incompatible version of Kotlin. The binary version is 2.3.0, expected version is 2.1.0.
+... Unresolved reference 'BillingClientStateListener'.
+... Unresolved reference 'subscriptionOfferDetails'.
+... Unresolved reference 'currentActivity'.
+BUILD FAILED in 33s
+Result: exit status 1.
+
+MODIFIED:
+Command: ANDROID_HOME=/home/lxx/Android/Sdk ANDROID_SDK_ROOT=/home/lxx/Android/Sdk FORESIGHTNINE_ENV=development NODE_ENV=development GRADLE_OPTS='-Djava.net.preferIPv4Stack=true -Dhttps.protocols=TLSv1.2' ./gradlew --no-daemon :app:compileDebugKotlin
+Literal output:
+> Task :app:compileDebugKotlin UP-TO-DATE
+[Incubating] Problems report is available at: file:///home/lxx/Foresightnine/src/apps/mobile/android/build/reports/problems/problems-report.html
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+BUILD SUCCESSFUL in 28s
+204 actionable tasks: 9 executed, 195 up-to-date
+Result: exit status 0.
+
+Command: same environment ./gradlew --no-daemon :app:assembleDebug
+Literal output:
+> Task :app:assembleDebug
+BUILD SUCCESSFUL in 5m 16s
+354 actionable tasks: 80 executed, 274 up-to-date
+Result: exit status 0.
+Artifact: /home/lxx/Foresightnine/src/apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk; package com.foresightnine.mobile; versionCode 1; versionName 0.1.0.
+
+JS TESTS:
+Command: corepack pnpm --filter @foresightnine/mobile test (from /home/lxx/Foresightnine/src)
+Literal output:
+Test Files 8 passed (8)
+Tests 63 passed (63)
+Result: exit status 0.
+Command: corepack pnpm --filter @foresightnine/mobile typecheck (from /home/lxx/Foresightnine/src)
+Literal output:
+$ tsc --noEmit
+TYPECHECK_EXIT=0
+Result: exit status 0.
+
+ROLLBACK:
+Command: /home/lxx/Foresightnine/src/repair-evidence/android-billing-compile-fix-20260910/ROLLBACK.sh <temporary copy>
+Literal output:
+ROLLBACK_RESULT=RESTORED_COPY
+ROLLBACK_COPY_VERIFY=PASS
+Result: exit status 0. Live modified files remain changed.
+
+DEVICE/SIGNING:
+- adb devices -l returned no device rows.
+- Debug APK signer verification completed with the SDK apksigner and exit status 0; release signing material is not present in this Linux checkout.
+- No Play upload, track update, purchase, refund, or production mutation was performed.

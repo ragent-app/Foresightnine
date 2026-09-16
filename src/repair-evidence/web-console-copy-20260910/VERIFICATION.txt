@@ -1,0 +1,35 @@
+ForesightNine Web console copy verification
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=Web Console provider route and Google Play subscription status copy
+CHANGE_DETAILS=replace stale GLM Coding/Not configured/reserved-only copy with the deployed server OpenAI-compatible local Cline pool route and configured Pro/Max monthly quota copy; no billing or provider configuration was changed
+
+LIVE_FILES=/home/lxx/Foresightnine/src/apps/web/src/i18n.tsx;/home/lxx/Foresightnine/src/apps/web/src/components/MethodsPanel.tsx
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-console-copy-20260910/MODIFIED_i18n.tsx
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-console-copy-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-console-copy-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-console-copy-20260910/ROLLBACK.sh
+EXTRA_MODIFIED_COPIES=/home/lxx/Foresightnine/src/repair-evidence/web-console-copy-20260910/MODIFIED_MethodsPanel.tsx
+BASELINE_HASHES=see /home/lxx/Foresightnine/src/repair-evidence/web-console-copy-20260910/baseline.sha256
+
+BASELINE_COMMAND=cd /home/lxx/Foresightnine/src/apps/web && npm test -- --run; npm run typecheck
+BASELINE_INPUT=live checkout before the Web Console copy change (OAuth content-type fix already present)
+BASELINE_LITERAL_OUTPUT=Test Files 5 passed (5); Tests 66 passed (66); WEB_TEST_EXIT=0; WEB_TYPECHECK_EXIT=0
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=cd /home/lxx/Foresightnine/src/apps/web && npm test -- --run; npm run typecheck; corepack pnpm build
+MODIFIED_INPUT=live checkout with Web Console provider and subscription copy updated
+MODIFIED_LITERAL_OUTPUT=Test Files 5 passed (5); Tests 66 passed (66); WEB_TEST_EXIT=0; WEB_TYPECHECK_EXIT=0; 63 modules transformed; WEB_BUILD_EXIT=0
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/web-console-copy-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy containing modified i18n.tsx and MethodsPanel.tsx
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY; ROLLBACK_COPY_VERIFY=PASS; LIVE_I18N_STILL_MODIFIED=PASS; LIVE_METHODS_STILL_MODIFIED=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy matched both baseline snapshots; live checkout remains modified
+
+DEPLOY_COMMAND=systemctl --user restart foresightnine-web.service
+DEPLOY_RESULT=service active; app /health HTTP 200; app /oauth/complete HTTP 200; staging root HTTP 200; deployed bundle contains the server OpenAI-compatible/local Cline pool and Google Play monthly subscription copy
+SECURITY=No credential JSON, private key, OAuth code, access token, cookie, or secret value is included.

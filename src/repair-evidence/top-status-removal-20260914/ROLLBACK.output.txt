@@ -1,0 +1,6 @@
+ROLLBACK_RESULT=restored
+ROLLBACK_TARGET=/home/lxx/Foresightnine/src/repair-evidence/top-status-removal-20260914/rollback-test/run1
+ROLLBACK_SCRIPT_EXIT=0
+apps/web/src/App.tsx: OK
+RESTORED_HASH_CHECK_EXIT=0
+RESTORED_BEHAVIOR_STATUS=baseline top-status metadata restored on isolated copy; live modified file retained

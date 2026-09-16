@@ -1,0 +1,2 @@
+POSTGRES_TERMINAL_UOW_ROLLBACK document=True association=True operation_running=True
+POSTGRES_TERMINAL_UOW_ROLLBACK_EXIT=0

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f2e9">
+  <title>ForesightNine · 隐私政策 / Privacy Policy</title>
+  <style>
+    :root { color-scheme: light; --ink:#272522; --muted:#6e675f; --paper:#fffaf5; --accent:#a94325; --line:#ded5ca; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f2e9; color:var(--ink); font:16px/1.75 system-ui,-apple-system,"Segoe UI","Noto Sans SC",sans-serif; }
+    main { max-width:860px; margin:0 auto; padding:56px 24px 80px; }
+    article { background:var(--paper); border:1px solid var(--line); padding:clamp(28px,6vw,64px); box-shadow:0 12px 40px rgba(67,48,35,.06); }
+    h1,h2 { font-family:Georgia,"Noto Serif SC",serif; font-weight:500; line-height:1.25; }
+    h1 { margin:0 0 8px; font-size:clamp(32px,6vw,52px); color:var(--accent); }
+    h2 { margin:36px 0 10px; font-size:25px; border-top:1px solid var(--line); padding-top:22px; }
+    p,ul { margin:10px 0; }
+    li { margin:6px 0; }
+    .meta { color:var(--muted); margin:0 0 30px; }
+    .notice { border-left:3px solid var(--accent); padding:10px 16px; background:#fbefe8; }
+    a { color:var(--accent); }
+    footer { color:var(--muted); font-size:14px; margin-top:24px; }
+  </style>
+</head>
+<body>
+<main>
+  <article>
+    <h1>隐私政策</h1>
+    <p class="meta">ForesightNine · Privacy Policy<br>生效日期 / Effective date: 2026-09-06</p>
+
+    <p>ForesightNine（“我们”）提供情景研究、世界线分析和组合模拟工具。本政策说明我们收集、使用、保存和共享信息的方式。使用账户、研究或订阅功能即表示你已阅读本政策。</p>
+    <p lang="en">ForesightNine provides scenario research, worldline analysis, and portfolio simulation tools. This policy explains how we collect, use, retain, and share information.</p>
+
+    <h2>1. 我们处理的信息</h2>
+    <ul>
+      <li><strong>账户与登录：</strong>当你选择 Google 或 GitHub 登录时，我们接收提供方返回的账户标识和电子邮件地址，并创建内部账户、身份绑定和会话记录。</li>
+      <li><strong>你主动提交的内容：</strong>观点、资金金额、币种、证据、研究设置以及你主动发送给服务端的研究请求。匿名模式下的草稿默认保存在设备本地。</li>
+      <li><strong>服务运行信息：</strong>请求时间、请求 ID、应用版本、错误诊断信息、网络地址和用于安全防滥用的请求元数据。</li>
+      <li><strong>本地数据：</strong>Web 草稿保存在浏览器本地存储；Android 本地研究档案可使用设备安全存储和应用文件目录保存。除非你主动发起同步或提交请求，这些本地数据不会自动上传。</li>
+      <li><strong>订阅信息：</strong>如果你使用 Google Play 订阅功能，我们处理商品、购买状态、到期时间和用于服务端验真的购买凭据摘要。支付卡、银行账户等支付信息由 Google Play 处理，我们不接触完整支付凭据。</li>
+    </ul>
+
+    <h2>2. 信息用途</h2>
+    <ul>
+      <li>创建和维护账户、完成 OAuth 登录、保存会话并提供退出登录及账户删除功能；</li>
+      <li>处理研究请求、生成反方审查和情景分析，并返回研究结果；</li>
+      <li>验证订阅权益、计算服务使用量、执行额度限制和恢复购买；</li>
+      <li>维护安全性、限流、防止滥用、排查故障和改进可靠性；</li>
+      <li>履行法律、会计和争议处理要求。</li>
+    </ul>
+
+    <h2>3. 信息共享</h2>
+    <p>我们仅在提供服务所需的范围内共享信息：</p>
+    <ul>
+      <li><strong>Google 和 GitHub：</strong>用于你主动选择的身份认证；</li>
+      <li><strong>Google Play：</strong>用于应用分发和订阅购买处理；</li>
+      <li><strong>模型、托管和基础设施服务商：</strong>仅在你发起服务端研究请求时处理必要的请求内容和运行数据；</li>
+      <li><strong>法律或安全要求：</strong>在法律要求、保护用户和服务安全或处理欺诈时披露必要信息。</li>
+    </ul>
+    <p class="notice">我们不出售个人信息，不使用广告 SDK，也不将研究内容用于广告画像。ForesightNine 不连接券商、不代客下单、不托管资金。</p>
+
+    <h2>4. 数据保存与删除</h2>
+    <p>账户和服务数据在提供功能所需期间保存。会话会按生命周期失效。你可以在应用内发起账户删除；删除后我们会撤销相关会话和登录绑定。为处理安全、财务或法律义务而必须保留的最小记录，会在必要期限结束后删除或匿名化。</p>
+
+    <h2>5. 安全</h2>
+    <p>我们使用 HTTPS、服务端访问控制、最小化日志和受保护的设备本地存储等措施保护信息。没有任何网络或存储系统能够保证绝对安全；请勿在研究文本中提交不必要的密码、支付凭据或其他高敏感信息。</p>
+
+    <h2>6. 儿童隐私</h2>
+    <p>ForesightNine 不面向儿童，也不在明知的情况下收集儿童个人信息。如果你认为儿童向我们提交了个人信息，请通过下方联系方式通知我们。</p>
+
+    <h2>7. 你的选择与请求</h2>
+    <p>你可以选择不登录、清除本地草稿、退出账户、删除账户，或通过下方联系方式请求访问、更正或删除与你有关的信息。Google 和 GitHub 登录也受相应提供方隐私设置约束。</p>
+
+    <h2>8. 政策更新</h2>
+    <p>当数据处理方式或法律要求发生变化时，我们会更新本页面并修改生效日期。重大变化会通过应用或其他适当方式提示。</p>
+
+    <h2>9. 联系方式</h2>
+    <p>隐私问题、删除请求和数据请求请联系：<a href="mailto:privacy@foresightnine.com">privacy@foresightnine.com</a></p>
+
+    <footer>© 2026 ForesightNine. This page is provided for privacy transparency and is not investment advice.</footer>
+  </article>
+</main>
+</body>
+</html>

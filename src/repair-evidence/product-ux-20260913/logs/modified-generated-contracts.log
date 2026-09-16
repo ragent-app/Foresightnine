@@ -1,0 +1,5 @@
+$ node scripts/verify/generated-contracts.mjs
+PASS generated TypeScript 564894e81b5857ce7f881d6c3b06d0a2d555ffde9d91c7b931d83ab3dfc6e071
+PASS generated asset registry ecf1bc03c7ad54500eb9f728fcc3d9d8b88a18c2a987e419e11ba7891a424a28
+PASS OpenAPI 25 paths
+PASS generated contracts, registry and OpenAPI are drift-free.

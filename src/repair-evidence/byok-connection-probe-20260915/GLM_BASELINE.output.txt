@@ -1,0 +1,33 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_account_glm_coding_endpoint_uses_its_required_generation_profile _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a38ddcb9ba0>
+
+    def test_account_glm_coding_endpoint_uses_its_required_generation_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
+        monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
+        settings = OpenAICompatibleSettings.from_account_values(
+            base_url="https://open.bigmodel.cn/api/coding/paas/v4",
+            model="glm-5.3-flash",
+            api_key=_SECRET,
+        )
+        captured: list[bytes] = []
+    
+        def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+            captured.append(body)
+            return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
+    
+        built = OpenAICompatibleLlmProvider(settings, transport=transport)
+        built.generate_challenge(request())
+        payload = json.loads(captured[0])
+    
+        assert built.policy.timeout_seconds == 120
+>       assert built.policy.max_output_tokens == 4000
+E       AssertionError: assert 1500 == 4000
+E        +  where 1500 = ProviderPolicy(max_rounds=6, max_input_tokens=3000, max_output_tokens=1500, max_cost_usd=0.05, timeout_seconds=120.0, max_attempts=3, retry_base_seconds=0.05).max_output_tokens
+E        +    where ProviderPolicy(max_rounds=6, max_input_tokens=3000, max_output_tokens=1500, max_cost_usd=0.05, timeout_seconds=120.0, max_attempts=3, retry_base_seconds=0.05) = OpenAICompatibleLlmProvider(model='glm-5.3-flash', configured=True).policy
+
+apps/api/tests/test_openai_compatible_provider.py:218: AssertionError
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_account_glm_coding_endpoint_uses_its_required_generation_profile

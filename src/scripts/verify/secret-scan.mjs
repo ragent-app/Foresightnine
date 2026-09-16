@@ -1,13 +1,16 @@
 import { readdir, readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { dirname, extname, resolve } from "node:path";
+import { dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "../../..");
 // Dependency stores and Android/Gradle outputs are generated and may embed source
 // maps. Tracked source and the complete Git history are still scanned below.
-const skippedDirectories = new Set([".git", ".venv", "node_modules", "nm", "dist", "build", ".gradle", ".cxx", ".pytest_cache", "__pycache__"]);
+const skippedDirectories = new Set([".git", ".venv", "node_modules", "nm", "dist", "build", ".gradle", ".cxx", ".pytest_cache", "__pycache__", "repair-evidence"]);
+// This is a deployment-owned, ignored secret file. Its contents are mounted
+// at runtime and must never enter the repository or this scan's output.
+const skippedFiles = new Set(["src/infra/docker/staging.env"]);
 const binaryExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".pyc", ".zip", ".gz"]);
 const patterns = [
   { name: "provider-style secret", value: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
@@ -33,6 +36,7 @@ async function walk(directory) {
       await walk(path);
       continue;
     }
+    if (skippedFiles.has(relative(projectRoot, path))) continue;
     if (!entry.isFile() || binaryExtensions.has(extname(entry.name).toLowerCase())) continue;
     const info = await readFile(path);
     if (info.includes(0)) continue;

@@ -1,0 +1,10 @@
+{
+  "head": "a30481162bfd783d9a3806db9f99cf4e8b2deddf",
+  "hashes": {
+    "src/apps/web/src/components/ChallengePanel.tsx": "31fce0d6fda738dfe83919d4f382a0b25bef16435f0c9fc06f289bc4207f21fa",
+    "src/apps/web/src/styles.css": "642371dc9536dabec57c1787ceb5d0682a50bf52e2fce0cb432e86bbe5c7f6ad",
+    "src/apps/web/src/types.ts": "41bddb8ddd9b406946783e00521366d6d4294ebb7318ab6118d1e7f118076ec8",
+    "src/apps/web/src/state.ts": "9331d5081059429a7c0ceaa19877a2b79253b044db7be28b8c0a9311d8e5eb62",
+    "src/apps/web/src/app.test.ts": "25bc3c14eb7832f7ef2ef2d1b4deb3f4d46f8183fe3cf38b982432d4f5528ce2"
+  }
+}

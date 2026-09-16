@@ -1,0 +1,7 @@
+CHANGE_BRANCH=android_upload_material.filesystem_permissions
+CHANGED_FIELD=POSIX file mode
+TARGET_COUNT=4
+MODE_BEFORE=664
+MODE_AFTER=600
+CONTENT_HASHES_UNCHANGED=True
+LIVE_STATE=owner_read_write_only

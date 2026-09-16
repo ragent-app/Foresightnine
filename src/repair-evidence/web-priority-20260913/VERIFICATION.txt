@@ -1,0 +1,88 @@
+BRANCH=master
+HEAD=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_BRANCH_OR_FIELDS=market_data_configs,fallback_order,provider_credentials,canonical_host_redirect,runtime_api_base,seo_metadata
+RESULT=The existing server-side financial-provider fallback remains active; signed-in users can now enable, order, save, replace, remove, and test account-scoped provider credentials without browser persistence or plaintext API responses. The first app.foresightnine.com Web release is live with same-origin API routing, basic SEO files, and apex/www canonical redirects.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-priority-20260913/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-priority-20260913/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/web-priority-20260913/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/web-priority-20260913/ROLLBACK.sh
+
+ORIGINAL STATE
+COMMAND=cd /home/lxx/Foresightnine/src && corepack pnpm --filter web test
+INPUT=none
+LITERAL_RESULT=Test Files 5 passed (5); Tests 66 passed (66)
+EXIT_STATUS=0
+ORIGINAL_HASHES=/home/lxx/Foresightnine/src/repair-evidence/web-priority-20260913/baseline-hashes.json (88 SHA-256 entries)
+
+BASELINE API
+COMMAND=cd /home/lxx/Foresightnine/src && uv run --project apps/api pytest apps/api/tests/test_billing.py -q
+INPUT=none
+LITERAL_RESULT=12 passed
+EXIT_STATUS=0
+
+MODIFIED API
+COMMAND=cd /home/lxx/Foresightnine && uv run --project src/apps/api pytest src/apps/api/tests/test_market_credentials.py src/apps/api/tests/test_market_provider.py src/apps/api/tests/test_billing.py -q
+INPUT=none
+LITERAL_OUTPUT=...................................... [100%]
+LITERAL_RESULT=38 passed; 1 StarletteDeprecationWarning
+EXIT_STATUS=0
+
+MODIFIED WEB
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web test
+INPUT=none
+LITERAL_RESULT=Test Files 6 passed (6); Tests 69 passed (69)
+EXIT_STATUS=0
+
+MODIFIED TYPECHECK
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web typecheck
+INPUT=none
+LITERAL_OUTPUT=$ tsc --noEmit
+EXIT_STATUS=0
+
+MODIFIED BUILD
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web build
+INPUT=FORESIGHTNINE_ENV and VITE_FORESIGHTNINE_* from the deployment-owned production environment; no values printed
+LITERAL_RESULT=65 modules transformed; dist/index.html 1.49 kB; dist/assets/index-5RL3pTxb.js 348.84 kB; built in 1.67s
+EXIT_STATUS=0
+
+FULL WORKSPACE REGRESSION
+COMMAND=cd /home/lxx/Foresightnine/src && corepack pnpm typecheck && corepack pnpm test
+INPUT=none
+LITERAL_RESULT=all 9 typecheck workspaces passed; API 271 passed and 1 skipped; Web 69 passed; Mobile 63 passed; remaining package test suites passed
+EXIT_STATUS=0
+
+SECRET SCAN
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src scan:secrets
+INPUT=repository working tree and Git history
+LITERAL_OUTPUT=PASS inspected 1332 unique Git-history blobs; PASS secret scan /home/lxx/Foresightnine
+EXIT_STATUS=0
+
+DEPLOYMENT AND PUBLIC INPUT/RESULT
+COMMAND=cloudflared tunnel --config /home/lxx/.cloudflared/foresightnine-api-staging.yml ingress validate
+INPUT=/home/lxx/.cloudflared/foresightnine-api-staging.yml
+LITERAL_OUTPUT=Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml; OK
+EXIT_STATUS=0
+
+COMMAND=curl -H 'content-type: application/json' -d '{"assetIds":["GRID"],"anchors":{"year_start":"2026-01-01","latest_month_start":"2026-09-01","latest_completed_session":"2026-09-11"},"cutoff":"2026-09-13T00:00:00Z","timezone":"UTC","requestedAt":"2026-09-13T00:00:00Z"}' https://app.foresightnine.com/snapshots
+INPUT=one admitted asset and the exact three bounded anchors
+LITERAL_RESULT=HTTP=200 ROWS=3 OK=3 STATUSES=['ok']
+EXIT_STATUS=0
+
+COMMAND=curl https://app.foresightnine.com/{,robots.txt,sitemap.xml} and unauthenticated GET /v1/account/market-data-config
+INPUT=no credentials
+LITERAL_RESULT=homepage 200; robots.txt 200; sitemap.xml 200; account market-data config 401
+EXIT_STATUS=0
+
+COMMAND=curl --noproxy '*' --resolve HOST:443:104.21.3.93 https://HOST/research?source=launch
+INPUT=HOST in {foresightnine.com,www.foresightnine.com}
+LITERAL_RESULT=both HTTP/2 308; Location https://app.foresightnine.com/research?source=launch
+EXIT_STATUS=0
+
+ROLLBACK TEST
+COMMAND=TARGET_ROOT=/tmp/foresightnine-web-rollback-final.6oE3VK/Foresightnine TARGET_HOME=/tmp/foresightnine-web-rollback-final.6oE3VK/home RESTART_SERVICES=0 /tmp/foresightnine-web-rollback-final.6oE3VK/Foresightnine/src/repair-evidence/web-priority-20260913/ROLLBACK.sh
+INPUT=a separate copy containing the modified files and copied baseline; live checkout and services untouched
+LITERAL_OUTPUT=ROLLBACK_RESULT=PASS ROOT=/tmp/foresightnine-web-rollback-final.6oE3VK/Foresightnine; ROLLBACK_VERIFY=PASS
+EXIT_STATUS=0
+RESTORED_BEHAVIOR_STATUS=Baseline files byte-match the preserved copies; new market-credential/API/UI/SEO files are absent; staging API URL, staging CSP/host allowlist, pre-change Tunnel API pattern, and pre-Web-first progress document are restored in the rollback copy. The live MODIFIED_FILE remains changed and deployed.

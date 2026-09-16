@@ -1,0 +1,5 @@
+RESTORED apps/api/app/openai_compatible.py SHA256=10c5884055c4efbc65c6e32957f706b0c156750b964515fc2a117b0e1e359d7f
+RESTORED apps/api/tests/test_openai_compatible_provider.py SHA256=5a6d4813d994ed6683a692cc3f5633c14a9d9823d1b9a21b39b2abf4d21b4f5a
+ROLLBACK_STATUS=restored_original_files
+ROLLBACK_EXIT=0
+ROLLBACK_HASH_MATCH=true

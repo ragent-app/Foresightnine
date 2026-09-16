@@ -1,0 +1,47 @@
+$ vitest run --passWithNoTests -- challenge-panel.interaction.test.ts
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/market-config-client.test.ts (7 tests) 25ms
+ ✓ src/oauth-client.test.ts (7 tests) 33ms
+ ✓ src/methods-guide.test.ts (3 tests) 9ms
+ ✓ src/model-config-client.test.ts (10 tests) 32ms
+ ✓ src/api-runtime.error.test.ts (7 tests) 20ms
+ ✓ src/market-data.test.ts (1 test) 24ms
+ ✓ src/search-client.test.ts (6 tests) 20ms
+ ✓ src/freshness.test.ts (9 tests) 88ms
+ ❯ src/challenge-panel.interaction.test.ts (16 tests | 1 failed) 124ms
+   × ChallengePanel information architecture > prevents evidence submission while a reviewer operation is still running 18ms
+     → 提交 SearchEvidenceBundle: expected false to be true // Object.is equality
+ ✓ src/app.test.ts (52 tests) 150ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/challenge-panel.interaction.test.ts > ChallengePanel information architecture > prevents evidence submission while a reviewer operation is still running
+AssertionError: 提交 SearchEvidenceBundle: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ expectButtonState src/challenge-panel.interaction.test.ts:83:51
+     81|   const match = markup.match(new RegExp(`<button\\b[^>]*>${escapedRegE…
+     82|   if (match === null) throw new Error(`button not found: ${label}`);
+     83|   expect(match[0].includes('disabled=""'), label).toBe(disabled);
+       |                                                   ^
+     84| }
+     85| 
+ ❯ src/challenge-panel.interaction.test.ts:198:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 9 passed (10)
+      Tests  1 failed | 117 passed (118)
+   Start at  23:51:38
+   Duration  1.68s (transform 1.92s, setup 0ms, collect 4.69s, tests 526ms, environment 4ms, prepare 1.97s)
+
+/home/lxx/Foresightnine/src/apps/web:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @foresightnine/web@0.1.0 test: `vitest run --passWithNoTests -- challenge-panel.interaction.test.ts`
+Exit status 1

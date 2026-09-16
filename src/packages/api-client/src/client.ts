@@ -19,6 +19,7 @@ import { parseSseBody, parseSseText, type SseReplayEvent } from "./sse.js";
 import { ContractValidationError, validateErrorResponse, validateResponse } from "./validation.js";
 
 export interface ApiRequestOptions { readonly signal?: AbortSignal; readonly idempotencyKey?: string; }
+export interface GetChallengeOptions extends ApiRequestOptions { readonly operationId?: string; }
 export interface ApiClientOptions { readonly baseUrl: string; readonly fetcher?: typeof fetch; readonly idempotencyKeyFactory?: () => string; }
 export interface SseOptions extends ApiRequestOptions { readonly lastEventId?: string; }
 
@@ -35,7 +36,7 @@ export function apiModeFor(baseUrl: unknown): "api" | "offline-mock" {
   return normalizeApiBaseUrl(baseUrl) ? "api" : "offline-mock";
 }
 
-function newIdempotencyKey(): string {
+export function createIdempotencyKey(): string {
   const cryptoApi = globalThis.crypto;
   try {
     if (cryptoApi && typeof cryptoApi.randomUUID === "function") return cryptoApi.randomUUID();
@@ -114,7 +115,7 @@ export class ApiClient {
     // from Window. Keep injected test/deployment fetchers untouched, but bind
     // the native global so the client behaves the same in Browser and Node.
     this.fetcher = options.fetcher ?? fetch.bind(globalThis);
-    this.idempotencyKeyFactory = options.idempotencyKeyFactory ?? newIdempotencyKey;
+    this.idempotencyKeyFactory = options.idempotencyKeyFactory ?? createIdempotencyKey;
   }
 
   private url(path: string): string { return new URL(path.replace(/^\//u, ""), `${this.baseUrl}/`).toString(); }
@@ -163,6 +164,20 @@ export class ApiClient {
 
   public createChallenge(request: CreateChallengeRequest, options?: ApiRequestOptions): Promise<ChallengeOperationResponse> {
     return this.post("v1/challenges", request, "ChallengeOperationResponse", options);
+  }
+
+  public startChallenge(request: CreateChallengeRequest, options?: ApiRequestOptions): Promise<OperationResponse> {
+    return this.post("v1/challenges/async", request, "OperationResponse", options);
+  }
+
+  public getChallenge(challengeId: string, options: GetChallengeOptions = {}): Promise<ChallengeOperationResponse> {
+    const path = `v1/challenges/${encodeURIComponent(challengeId)}${options.operationId === undefined ? "" : `?operation_id=${encodeURIComponent(options.operationId)}`}`;
+    return this.request<ChallengeOperationResponse>(path, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "omit",
+      ...(options.signal ? { signal: options.signal } : {}),
+    }, "ChallengeOperationResponse");
   }
 
   public submitChallengeReply(challengeId: string, request: ChallengeMessageRequest, options?: ApiRequestOptions): Promise<ChallengeOperationResponse> {

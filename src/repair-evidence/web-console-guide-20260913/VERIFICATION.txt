@@ -1,0 +1,66 @@
+BRANCH=master
+HEAD=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_FIELDS=console.market_data_config,methodsExport.download
+RESULT=The production console clearly exposes the signed-in financial API-key workflow and the download action now generates a detailed bilingual project user/runtime guide.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-console-guide-20260913/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/web-console-guide-20260913/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/web-console-guide-20260913/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/web-console-guide-20260913/ROLLBACK.sh
+
+BASELINE
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web test
+INPUT=pre-change Web checkout
+LITERAL_RESULT=Test Files 6 passed (6); Tests 69 passed (69)
+EXIT_STATUS=0
+ORIGINAL_HASHES=/home/lxx/Foresightnine/src/repair-evidence/web-console-guide-20260913/baseline-hashes.json
+
+MODIFIED TYPECHECK
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web typecheck
+INPUT=modified Web checkout
+LITERAL_OUTPUT=$ tsc --noEmit
+EXIT_STATUS=0
+
+MODIFIED TEST
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web test
+INPUT=modified Web checkout, including methods-guide.test.ts
+LITERAL_RESULT=Test Files 7 passed (7); Tests 72 passed (72)
+EXIT_STATUS=0
+
+MODIFIED BUILD
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web build
+INPUT=deployment-owned production environment; no secret values printed
+LITERAL_RESULT=66 modules transformed; index-BQf0L-lp.js 365.13 kB; built in 1.66s
+EXIT_STATUS=0
+
+DEPLOYMENT
+COMMAND=systemctl --user restart foresightnine-web.service && curl https://app.foresightnine.com/
+INPUT=production Web service and canonical app URL
+LITERAL_RESULT=service active; HTML references index-BQf0L-lp.js; production bundle contains 下载完整使用说明
+EXIT_STATUS=0
+
+BROWSER QA
+COMMAND=reload https://app.foresightnine.com/ -> click 控制台 -> click 下载完整使用说明
+INPUT=anonymous production browser session; no account or credential data entered
+LITERAL_RESULT=页面显示“API / 金融数据配置”“登录后自行填写金融数据 API Key”；按钮显示“下载完整使用说明”；点击后页面显示“完整使用说明已导出。”
+EXIT_STATUS=0
+
+GUIDE CONTENT
+COMMAND=methods-guide.test.ts validates buildMethodsGuide('zh') and buildMethodsGuide('en')
+INPUT=static downloadable guide builders
+LITERAL_RESULT=Chinese guide exceeds 3000 characters; English guide exceeds 3500 characters; both cover configuration, complete research flow, market runtime, exports, troubleshooting, and security; credential-like fields absent
+EXIT_STATUS=0
+
+SECRET SCAN
+COMMAND=cd /home/lxx/Foresightnine && corepack pnpm --dir src scan:secrets
+INPUT=repository working tree and Git history after artifact creation
+LITERAL_OUTPUT=PASS inspected 1332 unique Git-history blobs; PASS secret scan /home/lxx/Foresightnine
+EXIT_STATUS=0
+
+ROLLBACK
+COMMAND=TARGET_ROOT=/tmp/foresightnine-console-guide-rollback.5rySr3/Foresightnine RESTART_SERVICES=0 /tmp/foresightnine-console-guide-rollback.5rySr3/Foresightnine/src/repair-evidence/web-console-guide-20260913/ROLLBACK.sh
+INPUT=separate modified copy with preserved baseline; live checkout untouched
+LITERAL_OUTPUT=ROLLBACK_RESULT=PASS ROOT=/tmp/foresightnine-console-guide-rollback.5rySr3/Foresightnine; ROLLBACK_VERIFY=PASS
+EXIT_STATUS=0
+RESTORED_BEHAVIOR_STATUS=Four edited Web files byte-match their original SHA-256 baseline, both newly added guide files are absent, and the live MODIFIED_FILE remains changed and deployed.

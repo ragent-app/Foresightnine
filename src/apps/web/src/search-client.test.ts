@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createMarketRuntimeController } from "@foresightnine/market-data";
 import { selectedCandidateDraft } from "./components/ChallengePanel";
 import { evidenceHash } from "./fixtures";
-import { configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment, configuredMarketDataRuntimeConfigFromEnvironment, STAGING_API_BASE_URL } from "./runtime-config";
+import { APP_API_BASE_URL, configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment, configuredMarketDataRuntimeConfigFromEnvironment } from "./runtime-config";
 import { clientBundleFallback, searchEvidenceCandidates } from "./search-client";
 import type { EvidenceDraft, SearchCandidate } from "./types";
 
@@ -22,7 +22,7 @@ const emptyDraft: EvidenceDraft = { url: "", title: "", publisher: "", published
 
 describe("project search candidate boundary", () => {
   it("keeps the staging default out of deterministic test mode while allowing explicit overrides", () => {
-    expect(STAGING_API_BASE_URL).toBe("https://api-staging.foresightnine.com");
+    expect(APP_API_BASE_URL).toBe("https://app.foresightnine.com");
     expect(configuredApiBaseUrl()).toBeNull();
     expect(configuredApiBaseUrlFromEnvironment({ canonical: "http://127.0.0.1:8000", legacy: undefined })).toBe("http://127.0.0.1:8000");
   });

@@ -1,0 +1,6 @@
+$ node scripts/verify/boundaries.mjs
+PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md
+PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md
+PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md
+PASS implementation root /home/lxx/Foresightnine/src
+Governance boundary baseline is unchanged.

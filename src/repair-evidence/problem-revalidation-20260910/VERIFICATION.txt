@@ -1,0 +1,33 @@
+ForesightNine problem.md current-state revalidation
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=problem.md current findings/status reconciliation
+CHANGE_DETAILS=preserve the 2026-08-31 audit as historical baseline and add an authoritative 2026-09-10 revalidation section; mark PLAY-01, CF-02 and AUTH-03 with current evidence, and record BILL-01/BILL-02/PLAY-02/AND-01 as their actual remaining states.
+
+LIVE_FILE=/home/lxx/Foresightnine/src/docs/problem.md
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-revalidation-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-revalidation-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-revalidation-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-revalidation-20260910/ROLLBACK.sh
+BASELINE_HASH=511858094edfb9c3ed80092ac0a7fff86a5b6a25ff64067f093e081ae8d5aa89
+
+BASELINE_COMMAND=sha256sum /home/lxx/Foresightnine/src/docs/problem.md
+BASELINE_INPUT=historical report before current-state revalidation section
+BASELINE_LITERAL_OUTPUT=511858094edfb9c3ed80092ac0a7fff86a5b6a25ff64067f093e081ae8d5aa89  src/docs/problem.md
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=test -s /home/lxx/Foresightnine/src/docs/problem.md; test "$(grep -Ec '^## [1-5]\\. ' /home/lxx/Foresightnine/src/docs/problem.md)" -eq 5; grep -E 'PLAY-01|BILL-01|BILL-02|AUTH-03|CF-02' /home/lxx/Foresightnine/src/docs/problem.md >/dev/null
+MODIFIED_INPUT=current report after status reconciliation
+MODIFIED_LITERAL_OUTPUT=REPORT_NONEMPTY=PASS; FIVE_SECTIONS=5; CURRENT_FINDINGS=10; exit status 0
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/problem-revalidation-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy containing the modified problem.md
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY; ROLLBACK_COPY_VERIFY=PASS; LIVE_REPORT_STILL_MODIFIED=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy matched the baseline report; live report remains modified
+
+CURRENT_EVIDENCE=Play internal track HTTP 200 release 0.1.0/versionCode 1; Pro/Max product reads HTTP 200 with monthly DRAFT; public health/readiness HTTP 200; JSON logout HTTP 200 followed by session HTTP 401; Secret Scan PASS; root tests 266 passed/1 skipped.
+SECURITY=No credential JSON, private key, OAuth code, access token, cookie, or sensitive response body is included.

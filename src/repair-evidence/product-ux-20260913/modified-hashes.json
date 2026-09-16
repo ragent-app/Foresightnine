@@ -1,0 +1,64 @@
+{
+  "files": [
+    {
+      "path": "apps/web/src/App.tsx",
+      "sha256": "0909666a2b91169f9e21b017dcf3cbf0d93207e93569fec50add219ff6ddd335"
+    },
+    {
+      "path": "apps/web/src/components/ChallengePanel.tsx",
+      "sha256": "93b5db00442e53c7d32772b2bfd79bd5bffa9bdb92802b07fd4a29db851ef732"
+    },
+    {
+      "path": "apps/web/src/styles.css",
+      "sha256": "1607fbad7efabe0e2b9e1baadeb6b3aada8d56075eb0bf55114b3d0c3f716501"
+    },
+    {
+      "path": "apps/web/src/types.ts",
+      "sha256": "42ee30b4ea1242368f330ed09db99404b0334f8a817470285367c1c88a5e9334"
+    },
+    {
+      "path": "apps/web/src/state.ts",
+      "sha256": "d05ddcc4026111d21ea79a22b5400ee2796a05ad72c9fb608dcfff73984cdffc"
+    },
+    {
+      "path": "apps/web/src/challenge-panel.interaction.test.ts",
+      "sha256": "ec22e3a73df6409a74476423a47fecbedf65cf953f36fdba4f886fcea8722f00"
+    },
+    {
+      "path": "apps/web/src/api-runtime.ts",
+      "sha256": "4d06aa95eca79efcc28b31fcbd48256315223c56068b16bcfe51b39a75368b7c"
+    },
+    {
+      "path": "apps/web/src/api-runtime.error.test.ts",
+      "sha256": "ca18c1c94c010ccd0dd07e76d037e8d8ca214eee17ee8a99be2e11152c402641"
+    },
+    {
+      "path": "apps/web/src/market-config-client.ts",
+      "sha256": "e44c0f9c7a3b5053bd210ebba99eb2facd6fab418f06d0fcf3555e991a8328db"
+    },
+    {
+      "path": "apps/web/src/market-config-client.test.ts",
+      "sha256": "b71c84640bbf5e7acde2e98de6fdddaed4fac8d46d2aecd3bcb2899dd577ffba"
+    },
+    {
+      "path": "apps/web/src/components/MarketDataConfigPanel.tsx",
+      "sha256": "279b09ad3f41cfe5f79a5773c50272e8cfd15d5491656d3ed6bd11fa933f1d6f"
+    },
+    {
+      "path": "apps/api/app/main.py",
+      "sha256": "dd28e9836cd9b5584c808f86b113fde27c1d696064fecbb73242e8d555ba9576"
+    },
+    {
+      "path": "apps/api/app/operations.py",
+      "sha256": "1cffe668493da45cece6bd6f9c1256a82405a57734afebc7346da4bcfb899682"
+    },
+    {
+      "path": "apps/api/tests/test_billing.py",
+      "sha256": "80625038baf98d45d431a6c7746590d1efd68342cdde4f974778f325aeaed095"
+    },
+    {
+      "path": "apps/api/tests/test_provider_failure_http.py",
+      "sha256": "91771ffdcb9a6dbddabee720817caf6c0ba7215ecc7cdbcacc4cf17a28706986"
+    }
+  ]
+}

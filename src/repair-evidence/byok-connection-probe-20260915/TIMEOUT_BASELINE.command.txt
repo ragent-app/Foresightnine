@@ -1,0 +1,1 @@
+uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py::test_account_settings_inherit_the_bounded_deployment_timeout

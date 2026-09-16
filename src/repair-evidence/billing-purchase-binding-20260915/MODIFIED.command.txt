@@ -1,0 +1,1 @@
+uv run --project apps/api pytest -q --tb=no apps/api/tests/test_billing.py::test_google_subscription_payload_binds_product_and_base_plan apps/api/tests/test_billing.py::test_google_play_acknowledgement_uses_the_documented_token_path apps/api/tests/test_billing.py::test_google_play_verify_route_grants_only_verified_active_purchase

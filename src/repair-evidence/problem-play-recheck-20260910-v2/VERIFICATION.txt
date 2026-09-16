@@ -1,0 +1,30 @@
+ForesightNine problem.md Play track recheck
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=PLAY-01 current Play track permission status
+CHANGE_DETAILS=replace stale current HTTP 200 track evidence with the latest three HTTP 403 PERMISSION_DENIED observations while retaining historical evidence.
+LIVE_FILE=/home/lxx/Foresightnine/src/docs/problem.md
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-recheck-20260910-v2/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-recheck-20260910-v2/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-recheck-20260910-v2/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-recheck-20260910-v2/ROLLBACK.sh
+BASELINE_HASH=fa13c7bd80f4dbcc28ed99695f16eb9739947f4a45d22798058a6f18e97ca831
+
+BASELINE_COMMAND=grep -q 'Internal track 读取 HTTP 200' src/docs/problem.md
+BASELINE_INPUT=current report before latest Play track recheck
+BASELINE_LITERAL_OUTPUT=stale assertion present
+BASELINE_RESULT=EXPECTED_STALE_STATUS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=test -s src/docs/problem.md && grep -q 'PENDING_EXTERNAL_PERMISSION_RECHECK' src/docs/problem.md && grep -q '最新连续 3 次 Internal track releases GET 均 HTTP 403' src/docs/problem.md
+MODIFIED_INPUT=current report after latest Play track recheck
+MODIFIED_LITERAL_OUTPUT=REPORT_RECHECK=PASS
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/ForesightNine/src/repair-evidence/problem-play-recheck-20260910-v2/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy initialized with MODIFIED_FILE
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY;ROLLBACK_COPY_VERIFY=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored the pre-recheck report; live report remains updated and verified=PASS
+SECURITY=no credential JSON, private key, OAuth code, access token, cookie, or sensitive response body included

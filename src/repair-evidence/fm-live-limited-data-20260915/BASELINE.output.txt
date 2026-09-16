@@ -1,0 +1,48 @@
+
+ RUN  v2.1.9 /home/lxx/.config/foresightnine/baseline-run/fm-live-limited-data-20260915-v2/apps/web
+
+ ❯ src/freshness.test.ts (9 tests | 1 failed) 108ms
+   × Web freshness policy integration > rejects missing prices but retains stale provider prices as explicitly stale Raw inputs 30ms
+     → expected [Function] to throw error including 'No usable latest completed-session pr…' but got 'No valid latest completed-session pri…'
+ ❯ src/app.test.ts (53 tests | 1 failed) 236ms
+   × FM worker and public delta > computes the raw FM slice when cash is missing, latest prices are stale, and one declared factor is unavailable 27ms
+     → No valid latest completed-session price for GRID.
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/app.test.ts > FM worker and public delta > computes the raw FM slice when cash is missing, latest prices are stale, and one declared factor is unavailable
+MarketDataValidationError: No valid latest completed-session price for GRID.
+ ❯ ../../packages/market-data/src/index.ts:699:126
+ ❯ Module.applyLatestCompletedSessionPrices ../../packages/market-data/src/index.ts:694:17
+ ❯ Module.assetsForMarketBundle src/fixtures.ts:197:10
+    195| 
+    196| export function assetsForMarketBundle(bundle: MarketSnapshotBundle): r…
+    197|   return applyLatestCompletedSessionPrices(ASSET_FIXTURES, bundle);
+       |          ^
+    198| }
+    199| 
+ ❯ src/app.test.ts:453:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/freshness.test.ts > Web freshness policy integration > rejects missing prices but retains stale provider prices as explicitly stale Raw inputs
+AssertionError: expected [Function] to throw error including 'No usable latest completed-session pr…' but got 'No valid latest completed-session pri…'
+
+Expected: "No usable latest completed-session price for GRID."
+Received: "No valid latest completed-session price for GRID."
+
+ ❯ src/freshness.test.ts:67:50
+     65|     const missing = bundleWithExplicitRowStatus("missing");
+     66|     expect(marketDataStatus(missing)).toBe("limited_data");
+     67|     expect(() => assetsForMarketBundle(missing)).toThrow("No usable la…
+       |                                                  ^
+     68| 
+     69|     const stale = bundleWithExplicitRowStatus("stale");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 60 passed (62)
+   Start at  01:22:16
+   Duration  1.94s (transform 1.07s, setup 0ms, collect 1.81s, tests 344ms, environment 1ms, prepare 277ms)
+

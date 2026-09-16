@@ -1,0 +1,14 @@
+foresightnine_pro_HTTP=200
+foresightnine_pro_BASE_PLAN=monthly
+foresightnine_pro_STATE=ACTIVE
+foresightnine_pro_PERIOD=P1M
+foresightnine_pro_US_PRICE_MATCH=True
+foresightnine_max_HTTP=200
+foresightnine_max_BASE_PLAN=monthly
+foresightnine_max_STATE=ACTIVE
+foresightnine_max_PERIOD=P1M
+foresightnine_max_US_PRICE_MATCH=True
+INTERNAL_HTTP=200
+INTERNAL_RELEASES=1
+INTERNAL_PUBLISHED=True
+MODIFIED_RESULT=PASS_ACTIVE_INTERNAL_ONLY

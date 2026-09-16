@@ -1,0 +1,135 @@
+--- a/scripts/release/sign-android-aab-windows.ps1
++++ b/scripts/release/sign-android-aab-windows.ps1
+@@ -0,0 +1,132 @@
++[CmdletBinding()]
++param(
++    [Parameter(Mandatory = $true)]
++    [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
++    [string]$InputAab,
++
++    [Parameter(Mandatory = $true)]
++    [string]$OutputAab,
++
++    [Parameter(Mandatory = $true)]
++    [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
++    [string]$Keystore,
++
++    [Parameter(Mandatory = $true)]
++    [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
++    [string]$StorePasswordDpapi,
++
++    [Parameter(Mandatory = $true)]
++    [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })]
++    [string]$KeyPasswordDpapi,
++
++    [string]$JavaBin
++)
++
++$ErrorActionPreference = 'Stop'
++Set-StrictMode -Version Latest
++
++$ExpectedAlias = 'foresightnine-upload'
++
++function Resolve-JavaTool {
++    param([Parameter(Mandatory = $true)][string]$Tool)
++    if ($JavaBin) {
++        $candidate = Join-Path $JavaBin "$Tool.exe"
++        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
++            return (Resolve-Path -LiteralPath $candidate).Path
++        }
++        throw "Java tool not found in -JavaBin: $Tool.exe"
++    }
++    if ($env:JAVA_HOME) {
++        $candidate = Join-Path $env:JAVA_HOME "bin\$Tool.exe"
++        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
++            return (Resolve-Path -LiteralPath $candidate).Path
++        }
++    }
++    $command = Get-Command "$Tool.exe" -ErrorAction Stop
++    return $command.Source
++}
++
++function Unprotect-DpapiSecureString {
++    param([Parameter(Mandatory = $true)][string]$Path)
++    $encrypted = (Get-Content -LiteralPath $Path -Raw).Trim()
++    if ($encrypted -notmatch '^[0-9a-fA-F]+$') {
++        throw "DPAPI file is not a PowerShell SecureString payload: $Path"
++    }
++    $secure = ConvertTo-SecureString -String $encrypted
++    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
++    try {
++        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
++    }
++    finally {
++        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
++        $secure.Dispose()
++    }
++}
++
++$inputPath = (Resolve-Path -LiteralPath $InputAab).Path
++$keystorePath = (Resolve-Path -LiteralPath $Keystore).Path
++$storeDpapiPath = (Resolve-Path -LiteralPath $StorePasswordDpapi).Path
++$keyDpapiPath = (Resolve-Path -LiteralPath $KeyPasswordDpapi).Path
++$outputPath = [IO.Path]::GetFullPath($OutputAab)
++
++if ([IO.Path]::GetExtension($inputPath) -ne '.aab' -or [IO.Path]::GetExtension($outputPath) -ne '.aab') {
++    throw 'Input and output must both use the .aab extension.'
++}
++if ($inputPath -eq $outputPath) {
++    throw 'OutputAab must be a separate copy; the unsigned input is preserved.'
++}
++
++$jarsigner = Resolve-JavaTool -Tool 'jarsigner'
++$keytool = Resolve-JavaTool -Tool 'keytool'
++$storePassword = $null
++$keyPassword = $null
++
++try {
++    $storePassword = Unprotect-DpapiSecureString -Path $storeDpapiPath
++    $keyPassword = Unprotect-DpapiSecureString -Path $keyDpapiPath
++
++    # Verify that this is the expected registered upload-key alias. Passwords
++    # travel over stdin and are never passed on the process command line.
++    $aliasCheck = $storePassword | & $keytool -list -keystore $keystorePath -alias $ExpectedAlias 2>&1
++    if ($LASTEXITCODE -ne 0) {
++        throw "Expected upload-key alias is not readable from the supplied keystore."
++    }
++
++    $outputDirectory = Split-Path -Parent $outputPath
++    if ($outputDirectory) {
++        New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
++    }
++    Copy-Item -LiteralPath $inputPath -Destination $outputPath -Force
++
++    $signingInput = @($storePassword, $keyPassword)
++    $signingOutput = $signingInput | & $jarsigner `
++        -keystore $keystorePath `
++        -sigalg SHA256withRSA `
++        -digestalg SHA-256 `
++        $outputPath `
++        $ExpectedAlias 2>&1
++    if ($LASTEXITCODE -ne 0) {
++        throw "jarsigner returned exit code $LASTEXITCODE."
++    }
++
++    $verificationOutput = & $jarsigner -verify -strict $outputPath 2>&1
++    $verificationText = ($verificationOutput | Out-String).ToLowerInvariant()
++    if ($verificationText -notmatch 'jar verified' -or $verificationText -match 'jar is unsigned') {
++        throw 'Signed AAB verification did not report an intact archive signature.'
++    }
++
++    $hash = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash.ToLowerInvariant()
++    $size = (Get-Item -LiteralPath $outputPath).Length
++    Write-Output 'PACKAGE=com.foresightnine.mobile'
++    Write-Output 'TRACK=internal'
++    Write-Output "SIGNED_AAB=$outputPath"
++    Write-Output "SIGNED_AAB_SHA256=$hash"
++    Write-Output "SIGNED_AAB_BYTES=$size"
++    Write-Output 'SIGNATURE=VERIFIED'
++    Write-Output 'RESULT=READY_FOR_INTERNAL_UPLOAD'
++}
++finally {
++    $storePassword = $null
++    $keyPassword = $null
++    [GC]::Collect()
++}

@@ -296,6 +296,51 @@ def test_price_fallback_uses_the_next_admitted_provider(monkeypatch, tmp_path) -
     assert rows[-1]["price"] == 90.0
 
 
+def test_account_order_and_matching_personal_keys_drive_the_full_fallback(monkeypatch) -> None:
+    order = ("market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo")
+    credentials = {"alpha_vantage": "account-alpha", "finnhub": "account-finnhub"}
+    bindings: list[tuple[str, str | None]] = []
+    calls: list[str] = []
+
+    class Adapter:
+        def __init__(self, provider_id: str) -> None:
+            self.provider_id = provider_id
+
+        def fetch(self, *_args):
+            calls.append(self.provider_id)
+            if self.provider_id != "yahoo":
+                raise ValueError("unavailable")
+            return {date(2026, 8, 28): 101.0}
+
+    def adapter_for(provider_id: str, api_key: str | None = None):
+        bindings.append((provider_id, api_key))
+        return Adapter(provider_id)
+
+    monkeypatch.setattr(market_provider, "_admitted_price_providers", lambda: order)
+    monkeypatch.setattr(market_provider, "_fx_manifest_allows", lambda _provider: False)
+    monkeypatch.setattr(market_provider, "_adapter_for", adapter_for)
+    monkeypatch.setattr(market_provider, "build_market_cache", lambda: RedisMarketCache(_FakeRedis()))
+    monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")
+    monkeypatch.setenv("FORESIGHTNINE_ENV", "development")
+
+    response = build_snapshot_response(
+        MarketSnapshotRequest.model_validate({**REQUEST, "assetIds": ["GRID"]}),
+        provider_order=order,
+        provider_credentials=credentials,
+    )
+
+    assert bindings == [
+        ("market_data", None),
+        ("alpha_vantage", "account-alpha"),
+        ("twelve_data", None),
+        ("finnhub", "account-finnhub"),
+        ("yahoo", None),
+    ]
+    assert calls == list(order)
+    assert response["snapshots"][-1]["status"] == "ok"
+    assert response["snapshots"][-1]["price"] == 101.0
+
+
 def test_evaluation_adapter_marks_rows_before_the_requested_anchor_stale(monkeypatch, tmp_path) -> None:
     _enable_isolated_yahoo(monkeypatch, tmp_path)
     monkeypatch.setenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "public_evaluation")

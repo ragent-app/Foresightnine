@@ -19,7 +19,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
-from .storage import StorageConfig, StorageConfigurationError, StorageMode, StorageRuntimeError
+from .storage import StorageConfig, StorageConfigurationError, StorageMode, StorageRuntimeError, current_postgres_unit_of_work, postgres_unit_of_work
 
 
 OPERATION_STATE_TABLE = "operation_state"
@@ -116,6 +116,7 @@ class OperationStore(Protocol):
         event: dict[str, Any],
         response: dict[str, Any] | None,
         error: dict[str, Any] | None,
+        admission: Callable[[], None] | None = None,
     ) -> tuple[bool, dict[str, Any]]: ...
 
     def cancel(
@@ -150,6 +151,8 @@ class OperationStore(Protocol):
     def active_operation_ids(self) -> set[str]: ...
 
     def session_ids(self) -> dict[str, str]: ...
+
+    def associate_session(self, operation_id: str, session_id: str) -> None: ...
 
     def prune(
         self,
@@ -295,13 +298,15 @@ class InMemoryOperationStore:
             return operation_id in self._cancelled
 
     def finish(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any] | None,
-               error: dict[str, Any] | None) -> tuple[bool, dict[str, Any]]:
+               error: dict[str, Any] | None, admission: Callable[[], None] | None = None) -> tuple[bool, dict[str, Any]]:
         with self._condition:
             current = self._operations.get(operation_id)
             if current is None:
                 raise OperationStoreNotFound("Operation not found.")
             if current.get("status") not in {"pending", "running"}:
                 return False, deepcopy(current)
+            if admission is not None:
+                admission()
             self._events[operation_id].append(deepcopy(event))
             self._operations[operation_id] = deepcopy(operation)
             self._update_claim_for_operation(
@@ -410,6 +415,16 @@ class InMemoryOperationStore:
     def session_ids(self) -> dict[str, str]:
         with self._lock:
             return dict(self._sessions)
+
+    def associate_session(self, operation_id: str, session_id: str) -> None:
+        with self._condition:
+            if operation_id not in self._operations:
+                raise OperationStoreNotFound("Operation not found.")
+            existing = self._sessions.get(operation_id)
+            if existing is not None and existing != session_id:
+                raise OperationStoreConflict("Operation is already associated with another session.")
+            self._sessions[operation_id] = session_id
+            self._condition.notify_all()
 
     def prune(self, *, now: datetime, max_terminal_operations: int, max_idempotency_entries: int,
               max_terminal_sse_events: int, terminal_ttl_seconds: float | None) -> dict[str, int]:
@@ -530,9 +545,13 @@ class PostgresOperationStore:
 
     def _run(self, operation: Callable[[Any], Any]) -> Any:
         try:
+            ambient = current_postgres_unit_of_work(self._dsn)
+            if ambient is not None:
+                return operation(ambient)
             with self._connection() as connection:
                 with connection.cursor() as cursor:
-                    return operation((connection, cursor))
+                    with postgres_unit_of_work(self._dsn, connection, cursor):
+                        return operation((connection, cursor))
         except OperationStorePassThrough:
             raise
         except (OperationStoreUnavailable, StorageRuntimeError):
@@ -676,11 +695,12 @@ class PostgresOperationStore:
             return bool(row and row[0])
         return self._run(action)
 
-    def finish(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any] | None, error: dict[str, Any] | None) -> tuple[bool, dict[str, Any]]:
-        return self._transition(operation_id=operation_id, operation=operation, event=event, response=response, error=error, cancel=False)
+    def finish(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any] | None, error: dict[str, Any] | None,
+               admission: Callable[[], None] | None = None) -> tuple[bool, dict[str, Any]]:
+        return self._transition(operation_id=operation_id, operation=operation, event=event, response=response, error=error, cancel=False, admission=admission)
 
     def cancel(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any], error: dict[str, Any] | None) -> tuple[bool, dict[str, Any]]:
-        return self._transition(operation_id=operation_id, operation=operation, event=event, response=response, error=error, cancel=True)
+        return self._transition(operation_id=operation_id, operation=operation, event=event, response=response, error=error, cancel=True, admission=None)
 
     def start(self, *, operation: dict[str, Any], events: list[dict[str, Any]], session_id: str | None,
               lease_owner: str, lease_expires_at: datetime) -> None:
@@ -693,7 +713,8 @@ class PostgresOperationStore:
                 cursor.execute(f"INSERT INTO {OPERATION_SESSIONS_TABLE} (operation_id, session_id) VALUES (%s, %s) ON CONFLICT (operation_id) DO NOTHING", (operation_id, session_id))
         self._run(action)
 
-    def _transition(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any] | None, error: dict[str, Any] | None, cancel: bool) -> tuple[bool, dict[str, Any]]:
+    def _transition(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any] | None, error: dict[str, Any] | None, cancel: bool,
+                    admission: Callable[[], None] | None) -> tuple[bool, dict[str, Any]]:
         operation_doc = _json_document(operation); event_doc = _json_document(event)
         def action(ctx: tuple[Any, Any]) -> tuple[bool, dict[str, Any]]:
             _connection, cursor = ctx
@@ -704,6 +725,8 @@ class PostgresOperationStore:
             current = _as_dict(row[0]) or {}
             if _row_value(row, "status", 1) not in {"pending", "running"}:
                 return False, current
+            if admission is not None:
+                admission()
             cursor.execute(f"SELECT COALESCE(MAX(sequence), 0) FROM {OPERATION_EVENTS_TABLE} WHERE operation_id = %s", (operation_id,))
             sequence = int(cursor.fetchone()[0]) + 1
             event_doc["sequence"] = sequence
@@ -752,6 +775,17 @@ class PostgresOperationStore:
         def action(ctx: tuple[Any, Any]) -> dict[str, str]:
             _connection, cursor = ctx; cursor.execute(f"SELECT operation_id, session_id FROM {OPERATION_SESSIONS_TABLE}"); return {row[0]: row[1] for row in cursor.fetchall()}
         return self._run(action)
+
+    def associate_session(self, operation_id: str, session_id: str) -> None:
+        def action(ctx: tuple[Any, Any]) -> None:
+            _connection, cursor = ctx
+            cursor.execute(
+                f"INSERT INTO {OPERATION_SESSIONS_TABLE} (operation_id, session_id) VALUES (%s, %s) ON CONFLICT (operation_id) DO UPDATE SET session_id = EXCLUDED.session_id WHERE {OPERATION_SESSIONS_TABLE}.session_id = EXCLUDED.session_id RETURNING operation_id",
+                (operation_id, session_id),
+            )
+            if cursor.fetchone() is None:
+                raise OperationStoreConflict("Operation is already associated with another session.")
+        self._run(action)
 
     def prune(self, *, now: datetime, max_terminal_operations: int, max_idempotency_entries: int, max_terminal_sse_events: int, terminal_ttl_seconds: float | None) -> dict[str, int]:
         def action(ctx: tuple[Any, Any]) -> dict[str, int]:

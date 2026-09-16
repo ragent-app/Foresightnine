@@ -1,0 +1,8 @@
+--- /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/BASELINE_FILE	2026-08-31 23:40:11.555940885 +0800
++++ /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/MODIFIED_FILE	2026-08-31 23:40:11.564706710 +0800
+@@ -2,4 +2,4 @@
+ CANONICAL_TARGET=/home/lxx/.config/google-play/foresightnine-play-publisher.json
+ DIRECTORY_MODE=700
+ CANONICAL_MODE=600
+-CONFIGURATION_STATE=old_canonical
++CONFIGURATION_STATE=new_candidate_verified

@@ -1,0 +1,1 @@
+/home/lxx/Foresightnine/src/repair-evidence/billing-purchase-binding-20260915/ROLLBACK.sh /home/lxx/.config/foresightnine/rollback-test/billing-purchase-binding-20260915/work-20260915T2200

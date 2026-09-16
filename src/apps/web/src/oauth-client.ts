@@ -17,6 +17,20 @@ export interface OAuthCallbackResult {
   readonly error?: "oauth_callback_failed";
 }
 
+export interface AccountBillingSummary {
+  readonly account: { readonly account_id: string; readonly email: string };
+  readonly plan: "free" | "pro" | "max";
+  readonly entitlement_status: "active" | "pending" | "grace_period" | "on_hold" | "canceled" | "expired";
+  readonly product_id: string | null;
+  readonly base_plan_id: string | null;
+  readonly quota_limit: number;
+  readonly quota_consumed: number;
+  readonly quota_reserved: number;
+  readonly quota_remaining: number;
+  readonly quota_resets_at: string | null;
+  readonly provider_model: string;
+}
+
 const TICKET_PATTERN = /^[A-Za-z0-9_-]{43,256}$/;
 
 function isSafeHttpsUrl(value: string): boolean {
@@ -108,6 +122,47 @@ export async function exchangeOAuthTicket(apiBaseUrl: string, ticket: string, fe
   return parseSession(await response.json());
 }
 
+function parseAccountBillingSummary(payload: unknown): AccountBillingSummary {
+  if (!payload || typeof payload !== "object") throw new Error("Account summary response is invalid.");
+  const value = payload as Record<string, unknown>;
+  const expectedKeys = ["account", "base_plan_id", "entitlement_status", "plan", "product_id", "provider_model", "quota_consumed", "quota_limit", "quota_remaining", "quota_resets_at", "quota_reserved"].sort().join(",");
+  if (Object.keys(value).sort().join(",") !== expectedKeys) throw new Error("Account summary response is invalid.");
+  const account = value.account;
+  if (!account || typeof account !== "object") throw new Error("Account summary response is invalid.");
+  const accountValue = account as Record<string, unknown>;
+  if (Object.keys(accountValue).sort().join(",") !== "account_id,email" || typeof accountValue.account_id !== "string" || !accountValue.account_id || typeof accountValue.email !== "string" || !accountValue.email) throw new Error("Account summary response is invalid.");
+  if (value.plan !== "free" && value.plan !== "pro" && value.plan !== "max") throw new Error("Account summary response is invalid.");
+  const statuses = ["active", "pending", "grace_period", "on_hold", "canceled", "expired"] as const;
+  const entitlementStatus = statuses.find((status) => value.entitlement_status === status);
+  if (!entitlementStatus) throw new Error("Account summary response is invalid.");
+  const quota = {} as Record<string, number>;
+  for (const field of ["quota_limit", "quota_consumed", "quota_reserved", "quota_remaining"]) {
+    if (typeof value[field] !== "number" || !Number.isSafeInteger(value[field]) || value[field] < 0) throw new Error("Account summary response is invalid.");
+    quota[field] = value[field] as number;
+  }
+  if (typeof value.provider_model !== "string" || !value.provider_model || (value.product_id !== null && typeof value.product_id !== "string") || (value.base_plan_id !== null && typeof value.base_plan_id !== "string") || (value.quota_resets_at !== null && typeof value.quota_resets_at !== "string")) throw new Error("Account summary response is invalid.");
+  return {
+    account: { account_id: accountValue.account_id, email: accountValue.email },
+    plan: value.plan,
+    entitlement_status: entitlementStatus,
+    product_id: value.product_id,
+    base_plan_id: value.base_plan_id,
+    quota_limit: quota.quota_limit!,
+    quota_consumed: quota.quota_consumed!,
+    quota_reserved: quota.quota_reserved!,
+    quota_remaining: quota.quota_remaining!,
+    quota_resets_at: value.quota_resets_at,
+    provider_model: value.provider_model,
+  };
+}
+
+export async function fetchAccountBillingSummary(apiBaseUrl: string, accessToken: string, fetcher: typeof fetch = fetch, signal?: AbortSignal): Promise<AccountBillingSummary> {
+  if (!isSafeApiBaseUrl(apiBaseUrl) || !/^\S{32,256}$/.test(accessToken)) throw new Error("OAuth session is invalid.");
+  const response = await fetcher(new URL("/v1/account", `${apiBaseUrl.replace(/\/+$/, "")}/`), { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` }, credentials: "omit", ...(signal ? { signal } : {}) });
+  if (!response.ok) throw new Error("Account summary request failed.");
+  return parseAccountBillingSummary(await response.json());
+}
+
 export function readOAuthSession(storage: Storage = sessionStorage): OAuthSession | null {
   const raw = storage.getItem(WEB_OAUTH_SESSION_KEY);
   if (!raw) return null;
@@ -119,7 +174,8 @@ export function clearOAuthSession(storage: Storage = sessionStorage): void { sto
 
 async function authenticatedMutation(path: string, accessToken: string, fetcher: typeof fetch): Promise<void> {
   if (!isSafeApiBaseUrl(new URL(path).origin) || !/^\S{32,256}$/.test(accessToken)) throw new Error("OAuth session is invalid.");
-  const response = await fetcher(path, { method: path.endsWith("/account") ? "DELETE" : "POST", headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` }, credentials: "omit" });
+  const method = path.endsWith("/account") ? "DELETE" : "POST";
+  const response = await fetcher(path, { method, headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) }, ...(method === "POST" ? { body: JSON.stringify({}) } : {}), credentials: "omit" });
   if (!response.ok) throw new Error("OAuth account operation failed.");
 }
 

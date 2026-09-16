@@ -17,6 +17,7 @@ from app.storage import (
     StorageMode,
     StorageRuntimeError,
     build_repository,
+    postgres_unit_of_work,
     pydantic_json_dumper,
 )
 
@@ -78,6 +79,27 @@ def test_postgres_repository_preserves_decoded_jsonb_scalar_strings() -> None:
     )
 
     assert repository["worldline:one"] == "challenge:one"
+
+
+def test_postgres_repository_reuses_ambient_unit_of_work_for_atomic_lock_and_put() -> None:
+    dsn = "postgresql://db.example.test/app"
+    connection = FakeConnection((1,))
+    factory_calls = 0
+
+    def unexpected_factory(_dsn: str) -> Any:
+        nonlocal factory_calls
+        factory_calls += 1
+        raise AssertionError("ambient unit of work must reuse the operation connection")
+
+    repository = PostgresDocumentRepository(dsn, "sessions", connection_factory=unexpected_factory)
+    cursor = connection.cursor()
+    with postgres_unit_of_work(dsn, connection, cursor):
+        version = repository.with_advisory_lock("billing-account:test", lambda: repository.put("session-1", {"status": "DRAFT"}))
+
+    assert version == 1
+    assert factory_calls == 0
+    assert "pg_advisory_xact_lock" in connection.calls[0][0]
+    assert connection.calls[1][0].lstrip().upper().startswith("INSERT")
 
 
 def test_pydantic_json_dumper_retains_present_optional_url() -> None:

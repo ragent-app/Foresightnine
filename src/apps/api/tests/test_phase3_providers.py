@@ -4,7 +4,7 @@ from datetime import date, datetime
 import json
 from pathlib import Path
 import subprocess
-from threading import Event, Thread
+from threading import Barrier, Event, Thread
 from types import SimpleNamespace
 
 import pytest
@@ -57,6 +57,109 @@ def test_mock_path_is_deterministic_no_search_and_schema_shaped() -> None:
     assert draft.missing_evidence and draft.unresolved_issues
 
 
+def test_provider_review_items_are_normalized_into_bounded_complete_points() -> None:
+    value = payload()
+    value["objections"] = [
+        "1. 调整后EPS",
+        "没有定义跨公司可比的非GAAP调整项。",
+        "2. 5个百分点的领先幅度会随大盘基准变动。",
+        "3. ROIC持续低于资本成本",
+        "缺乏对“持续”的季度窗口定义。",
+        "4. 宏观资本开支与微观项目回报的传导权重不清楚。",
+        "5. 估值与基本面信号冲突时没有决策优先级。",
+    ]
+
+    draft = _draft_from_payload(value, request())
+
+    assert draft.objections == (
+        "调整后EPS：没有定义跨公司可比的非GAAP调整项。",
+        "5个百分点的领先幅度会随大盘基准变动。",
+        "ROIC持续低于资本成本：缺乏对“持续”的季度窗口定义。",
+        "宏观资本开支与微观项目回报的传导权重不清楚。",
+        "估值与基本面信号冲突时没有决策优先级。",
+    )
+
+
+def test_concurrent_messages_from_one_snapshot_commit_only_one_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    created = create_challenge(key="phase3-concurrent-message")
+    challenge_id = created["challenge"]["challenge_id"]
+    delegate = DeterministicMockLlmProvider()
+    provider_calls = Barrier(2)
+
+    class ConcurrentProvider:
+        name = delegate.name
+        supports_native_search = delegate.supports_native_search
+
+        def generate_challenge(self, provider_request: ChallengeInput):
+            provider_calls.wait(timeout=3)
+            return delegate.generate_challenge(provider_request)
+
+    monkeypatch.setattr(app_main, "challenge_provider", ConcurrentProvider())
+    responses: list[object] = []
+
+    def send(label: str) -> None:
+        responses.append(CLIENT.post(
+            f"/v1/challenges/{challenge_id}/messages",
+            json={"message": f"Concurrent evidence request {label}."},
+            headers=idem(f"phase3-concurrent-message-{label}"),
+        ))
+
+    workers = [Thread(target=send, args=(label,)) for label in ("alpha", "beta")]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(5)
+        assert not worker.is_alive()
+
+    statuses = sorted(response.status_code for response in responses)
+    assert statuses == [200, 409]
+    winner = next(response for response in responses if response.status_code == 200)
+    loser = next(response for response in responses if response.status_code == 409)
+    assert loser.json()["error_code"] == "lifecycle_conflict"
+    assert app_main.CHALLENGE_TURNS[challenge_id] == 2
+    assert app_main.CHALLENGES[challenge_id].content_hash == winner.json()["challenge"]["content_hash"]
+    assert len(tuple(item for item in app_main.CHALLENGE_OPERATION_RESULTS.values() if item.challenge_id == challenge_id)) == 2
+
+
+def test_concurrent_async_messages_preserve_lifecycle_conflict_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    created = create_challenge(key="phase3-concurrent-async-message")
+    challenge_id = created["challenge"]["challenge_id"]
+    delegate = DeterministicMockLlmProvider()
+    provider_calls = Barrier(2)
+
+    class ConcurrentProvider:
+        name = delegate.name
+        supports_native_search = delegate.supports_native_search
+
+        def generate_challenge(self, provider_request: ChallengeInput):
+            provider_calls.wait(timeout=3)
+            return delegate.generate_challenge(provider_request)
+
+    monkeypatch.setattr(app_main, "challenge_provider", ConcurrentProvider())
+    receipts = [
+        CLIENT.post(
+            f"/v1/challenges/{challenge_id}/messages/async",
+            json={"message": f"Concurrent async evidence request {label}."},
+            headers=idem(f"phase3-concurrent-async-message-{label}"),
+        )
+        for label in ("alpha", "beta")
+    ]
+    assert [receipt.status_code for receipt in receipts] == [202, 202]
+    operation_ids = [receipt.json()["operation"]["operation_id"] for receipt in receipts]
+    for _ in range(200):
+        statuses = [app_main.operations.operations[operation_id].status for operation_id in operation_ids]
+        if all(status in {"completed", "failed"} for status in statuses):
+            break
+        Event().wait(0.01)
+
+    assert sorted(statuses) == ["completed", "failed"]
+    failed_id = next(operation_id for operation_id in operation_ids if app_main.operations.operations[operation_id].status == "failed")
+    terminal_event = app_main.operations.events[failed_id][-1]
+    assert terminal_event.event == "operation.error"
+    assert terminal_event.error.error_code == "lifecycle_conflict"
+    assert app_main.CHALLENGE_TURNS[challenge_id] == 2
+
+
 def test_opencode_native_search_provenance_requires_successful_tool_use_telemetry() -> None:
     calls: list[tuple[list[str], str]] = []
 
@@ -70,6 +173,7 @@ def test_opencode_native_search_provenance_requires_successful_tool_use_telemetr
     assert draft.native_search_used is True
     assert calls[0][0] == ["opencode", "run", "--format", "json", "-m", "opencode-go/deepseek-v4-flash"]
     assert "prompt_version" in calls[0][1] and "max_output_tokens" in calls[0][1]
+    assert "same natural language as input.claim" in calls[0][1]
 
     no_search = OpenCodeDeepSeekFlashProvider(
         ProviderPolicy(max_cost_usd=0.01, retry_base_seconds=0),

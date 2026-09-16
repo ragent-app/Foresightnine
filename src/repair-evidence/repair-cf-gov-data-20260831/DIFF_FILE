@@ -1,0 +1,372 @@
+BASE_SHA=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+--- git diff --no-ext-diff ---
+diff --git a/src/apps/api/tests/test_api.py b/src/apps/api/tests/test_api.py
+index f5b7574..fbc1b72 100644
+--- a/src/apps/api/tests/test_api.py
++++ b/src/apps/api/tests/test_api.py
+@@ -228,6 +228,9 @@ def test_market_factor_registry_and_client_attestation_contracts() -> None:
+     assert_contract(factor_shard.json(), "FactorLibraryShard")
+     assert factor_shard.json()["factors"][0]["expression_tokens"][0]["kind"] == "field"
+ 
++    unversioned_factor_manifest = CLIENT.get("/v1/factor-libraries/manifest")
++    assert unversioned_factor_manifest.status_code == 404
++
+     operation_id = session["operation"]["operation_id"]
+     attestation = CLIENT.post(
+         "/v1/client-computations/computation:test/attest",
+diff --git a/src/docs/api/README.md b/src/docs/api/README.md
+index b930181..99b05d5 100644
+--- a/src/docs/api/README.md
++++ b/src/docs/api/README.md
+@@ -29,6 +29,18 @@
+ 
+ Every operation has an explicit `operationId`. Every route documents the canonical `ErrorResponse` for 400, 403, 404, 409, 422 and 500. Request and response objects reject unknown properties; nested entities do too.
+ 
++### Factor library route version
++
++The currently deployed factor library version is `v1.0.0`. The complete read
++routes are therefore:
++
++- `GET /v1/factor-libraries/v1.0.0/manifest`
++- `GET /v1/factor-libraries/v1.0.0/shards?shard_id=<manifest shard id>`
++
++The version segment is required. `GET /v1/factor-libraries/manifest` is not a
++compatibility alias and must return `404`; clients and monitoring probes must
++use the explicit version and verify the manifest/shard integrity fields.
++
+ ## Idempotency and operation control
+ 
+ Every POST requires `Idempotency-Key` (8–128 characters). Its scope is endpoint plus key.
+diff --git a/src/docs/problem.md b/src/docs/problem.md
+index c11d387..9da0ad1 100644
+--- a/src/docs/problem.md
++++ b/src/docs/problem.md
+@@ -1,10 +1,10 @@
+ # ForesightNine 五维只读审计报告（含修复后复测）
+ 
+-- 审计时间：2026-08-31T19:35:49+08:00
++- 审计时间：2026-08-31T22:57:50+08:00
+ - 审计对象：当前 checkout、staging 公网链路、Cloudflare Tunnel、Google Play 只读 API、Android QA 构建
+-- commit：uploaded revision; verify with `git rev-parse HEAD`
++- 基线 commit：`a30481162bfd783d9a3806db9f99cf4e8b2deddf`；本轮修复尚未提交
+ - 环境：Linux 7.0.0-28-generic x86_64；Node v22.23.2；pnpm 11.21.0；Python 3.14.4；uv 0.11.29；Docker 29.7.1；cloudflared 2026.8.2
+-- 工作区：审计前仅有未跟踪的空 `docs/problem.md`；随后只修改了 API Compose 配置、Cloudflare Tunnel ingress 和 Web preview 安全响应头，未修改 API 业务逻辑、数据模型、认证逻辑或 Android 产物。修复后重新部署了 API 和 Web preview，并重启了用户级 Tunnel/Web 服务。
++- 工作区：本轮在既有修复基础上更新了 Cloudflare Tunnel staging 路由、Linux 治理校验器、factor library 路由文档/回归断言和本报告；未修改 API 业务逻辑、数据模型、认证逻辑或 Android 产物。Tunnel 重启后重新执行了公网只读路由探测。
+ - 审计原则：真实 staging 公网只读探测；Google Play 只读；没有生产发布、付费/订阅/退款/付款资料变更、Cloudflare 付费操作、OAuth authorization code 生成或持久化。
+ - 脱敏：本报告不包含任何凭据值、令牌值、授权码、Cookie 或敏感响应正文。
+ 
+@@ -15,8 +15,7 @@
+ 修复后，CORS、app `/readyz`、staging provider 注入和 Web HSTS 已复测通过；上线/端到端验收仍被以下问题阻断：
+ 
+ 1. **P1：Google Play access token 和 androidpublisher scope 验证成功，但 `com.foresightnine.mobile` 的 internal/closed/open release list 全部 404；没有取得有效 release 读取实证。** 未调用任何写接口。
+-2. **P1：app 与 staging 的 HTTP 请求未重定向到 HTTPS，返回 200 HTML。** Tunnel ingress 本身不能设置 Cloudflare 边缘 redirect，仍需边缘策略完成。
+-3. **P1：`verify:boundaries` 在 Linux 因治理脚本硬编码 Windows 路径失败。** 这是可移植性/治理失败，不修改基线绕过。
++2. **P1：app 与 staging 的 HTTP 请求仍未重定向到 HTTPS。** 当前 Cloudflare key 的 Token 校验为 active，但 Zone 设置/Redirect Rules API 返回 HTTP 403 Authentication error，边缘策略尚未写入。
+ 
+ P0：本轮未发现已由只读证据确认的 P0；生产 preflight 仍失败，因此不能把当前 checkout 判定为生产可发布。
+ 
+@@ -28,6 +27,9 @@ P0：本轮未发现已由只读证据确认的 P0；生产 preflight 仍失败
+ 2. `/home/lxx/.cloudflared/foresightnine-api-staging.yml`：新增 app 精确 `/readyz`→API 8000 路由，配置验证和用户级 Tunnel 重启均成功。
+ 3. `apps/web/vite.config.ts`：Web preview 增加 HSTS；重新 build、重启 Web preview 成功。
+ 4. `apps/api/app/oauth_provider.py`：Google token exchange 增加 `grant_type=authorization_code`；加入请求体回归断言，重新构建并重启 API。
++5. `/home/lxx/.cloudflared/foresightnine-api-staging.yml`：staging Web host 对 `/api/*`、`/v1/*`、`/health`、`/readyz`、`/metrics` 增加明确 404 ingress，保留 `/oauth/mobile-callback` Web handoff；Tunnel 重启后注册两个 HTTP/2 edge connections。
++6. `scripts/verify/boundaries.mjs` 与 `scripts/verify/release-candidate.mjs`：移除 Linux 不可用的 Windows 根目录假设，按实际 Git root 解析 Windows 记录路径并保留原始 hash 基线。
++7. `docs/api/README.md` 与 `apps/api/tests/test_api.py`：明确 `v1.0.0` factor route，并加入无版本路由 404 回归断言。
+ 
+ 修复后实测：app CORS HTTP 200 且返回 app ACAO；app `/readyz` HTTP 200、`application/json`、`status=ready`；运行 provider=`glm_coding`，公网 health provider=`openai-compatible`；Web HTTPS 响应返回 HSTS；Google callback HTTP 303、OAuth exchange HTTP 200，Google identity 和 auth session 已持久化。API/Web focused tests、Compose config、Tunnel validate 均 exit 0；全量测试仍为 API 249 passed/1 skipped、Web 64 passed、Mobile 60 passed。
+ 
+@@ -40,13 +42,13 @@ P0：本轮未发现已由只读证据确认的 P0；生产 preflight 仍失败
+ | DATA-01 | P1 | 数据 | `docker inspect docker-api-1 ...`（仅比较配置键状态）；`curl -sS https://api-staging.foresightnine.com/health` | 修复后运行值为 `glm_coding`，公网 provider 为 `openai-compatible`，status=ok | 部署声明、运行注入和 health 语义一致 | 原配置漂移已解除；实际 provider 可用性仍需业务 smoke | Compose 改为读取 deployment env 的非 secret provider 选择值；secret 仍仅在服务端环境 | RESOLVED_2026-08-31 |
+ | PLAY-01 | P1 | Google Play | 只读内存 JWT probe；`GET .../applications/com.foresightnine.mobile/tracks/{internal,closed,open}/releases` | credential JSON 有效、权限模式 600、token exchange 200、tokeninfo 200 且含 androidpublisher scope；三个 release list 均 HTTP 404 | 授权账号应能读到目标包及其测试轨道，或明确包尚未创建/尚未传播 | Play 自动化的读取前提未闭合 | 在 Play Console 核对包归属、轨道存在性和授权账号；确认后重跑同样的 GET；不做 edits/upload/commit | PENDING_EXTERNAL_INPUT |
+ | AUTH-02 | P1 | 认证 | `docker logs --since 2h docker-api-1 2>&1 | grep -E 'oauth_callback_(failed|ticket_issued)|/v1/auth/oauth/exchange|/api/auth/callback'`；数据库 auth identity/session 只读计数 | Google 真实 callback HTTP 303；`POST /v1/auth/oauth/exchange` HTTP 200；Google identity 1、auth_sessions 8；GitHub 登录此前已有 callback/exchange 200；修复前 token exchange 阶段报 `OAuthProviderError`，修复为 Google `grant_type=authorization_code` | 真实授权后 callback 完成 code→token→identity→session | Google/GitHub 登录闭环已解除；公网 refresh/logout 未在本轮重复操作，本地相关测试已覆盖 | 保留 callback/exchange/session 日志的脱敏观测；下一轮单独复核 refresh/logout，不记录 code/token | RESOLVED_LOGIN_2026-08-31 |
+-| CF-02 | P1 | CF | `curl -sS -D - -o /dev/null http://{app,staging}.foresightnine.com/` | app/staging 均 HTTP 200，无 Location 重定向 | HTTP 请求应 301/308 到对应 HTTPS（若正式策略为强制 HTTPS） | 明文入口未统一收敛 | 在 Cloudflare edge 或源站启用 HTTPS redirect，再验证 HSTS/缓存语义 | OPEN_DEPLOYMENT |
+-| GOV-01 | P1 | 其余 | `corepack pnpm verify:boundaries` | exit 1；脚本寻找 `D:\Foresightnine\plan.md`、`agent.md`、`GOAL_PROMPT.md` 并报告 Linux root 不符合 | 治理检查应使用可移植路径并在目标 checkout 正常运行 | CI/审计在 Linux 不能判定边界 | 修复治理脚本的路径发现和工作区契约；不要通过改报告或基线绕过 | OPEN_GOVERNANCE |
++| CF-02 | P1 | CF | `curl -sS -D - -o /dev/null http://{app,staging}.foresightnine.com/`；Cloudflare Zone settings/Rulesets GET | Tunnel 重启后 app/staging HTTP 仍 200，无 Location；Token verify HTTP 200/status=active；Zone settings 与 Redirect Rules 写入口 HTTP 403 `Authentication error` | HTTP 请求应 301/308 到对应 HTTPS | 明文入口未统一收敛 | 使用具备目标 Zone Read + Dynamic URL Redirects Write 的最小 Token，在 Cloudflare edge 建立 308 redirect；不改 DNS/计费 | PENDING_CF_ZONE_PERMISSION |
++| GOV-01 | P1 | 其余 | `corepack pnpm verify:boundaries`；`node --test scripts/verify/boundaries.test.mjs` | 两者均 exit 0；三份 Windows 记录路径解析到 Linux checkout，hash 和 size 全部匹配 | 治理检查应使用可移植路径并在目标 checkout 正常运行 | Linux CI/审计已恢复可判定性 | 保留平台无关路径解析和实际 Git root 检查；不修改基线 | RESOLVED_2026-08-31 |
+ | PLAY-02 | P2 | Google Play | `command -v gcloud fastlane bundle` | 三者均未安装 | 后续 fastlane/Publisher 自动化应有明确、可复现工具链 | 后续自动化尚未具备运行前置 | 将安装固定到后续配置任务；本轮不安装、不配置、不发布 | TOOLCHAIN_GAP |
+ | AND-01 | P2 | 其余/Android | `apksigner verify --verbose --print-certs app-debug.apk`；`adb devices` | APK 包名 `com.foresightnine.mobile`；v2 签名 true，签名 DN 为 Android Debug；assetlinks 三域均 200、包名匹配、3 fingerprints，当前 APK fingerprint 匹配；adb 无设备 | release/QA signing 边界及真实设备 domain verification 应分别验证 | 无设备时无法取得 Android 系统级 App Link 解析实证；当前文件是 debug APK | 接入测试设备并安装目标 release/QA APK 后执行 domain verification；正式发布只使用 release 签名 | PENDING_ENVIRONMENT |
+ | CF-03 | P2 | CF | 选定安全响应头 probe | 修复后包含 `Strict-Transport-Security: max-age=31536000; includeSubDomains`，其他安全头仍在 | HTTPS 正式域按安全基线返回 HSTS | 原缺口已解除 | 已加入 Web preview response headers；HTTP→HTTPS 边缘 redirect 仍单独待处理 | RESOLVED_2026-08-31 |
+-| CF-04 | P2 | CF/文档 | `curl https://staging.foresightnine.com/{health,readyz,v1/auth/providers,metrics}` | 均 HTTP 200 HTML；staging 是 Web catch-all；`/metrics` 未暴露为指标 | Web-only 域的非 Web 路径应有明确 404/路由语义 | 运维/QA 容易误把 HTML 200 当 API/metrics 成功 | 在监控和文档中明确 staging Web-only；必要时 edge 返回 404，而不是 SPA fallback | DOCUMENTATION/TOPOLOGY |
+-| DATA-02 | P2 | 数据 | `curl https://api-staging.foresightnine.com/v1/factor-libraries/v1.0.0/manifest` 及 shard | manifest/shard 均 HTTP 200；包含版本、asOf/integrity/source refs，factor count 1；错误版本 `/v1/` 为 HTTP 404 | 客户端使用文档声明的版本并能验证 integrity | 版本路径不一致会被误报为数据缺失 | 统一文档、客户端和监控中的 factor library version | OPEN_DOCUMENTATION |
++| CF-04 | P2 | CF/文档 | `curl https://staging.foresightnine.com/{health,readyz,v1/auth/providers,metrics}` | Tunnel 重启后四个路径均 HTTP 404；`/oauth/mobile-callback` 仍 HTTP 200 HTML；staging 明确为 Web-only | Web-only 域的非 Web 路径应有明确 404/路由语义 | 运维/QA 不再把 HTML 200 当 API/metrics 成功 | 保留 staging Web-only ingress 负路由，并同步监控/文档 | RESOLVED_2026-08-31 |
++| DATA-02 | P2 | 数据 | `curl https://api-staging.foresightnine.com/v1/factor-libraries/v1.0.0/manifest`；`curl https://api-staging.foresightnine.com/v1/factor-libraries/manifest` | canonical manifest HTTP 200、`library_version=v1.0.0`；无版本路由 HTTP 404；API 测试新增 404 断言 | 客户端使用文档声明的版本并能验证 integrity | 版本路径不一致不会再被误报为数据缺失 | 文档、客户端和监控统一使用显式 `v1.0.0` 路径 | RESOLVED_2026-08-31 |
+ 
+ ## 1. 数据侧
+ 
+@@ -66,16 +68,19 @@ P0：本轮未发现已由只读证据确认的 P0；生产 preflight 仍失败
+ - `/v1/factor-libraries/v1.0.0/manifest` 和对应 core shard：均 HTTP 200；结构含 library version、asOf、integrity、source refs；factor count 为 1。
+ - `/v1/methodology`：HTTP 200，含 client computation、disclosure、probability display 和 methodology version。
+ - 三个域的 `/.well-known/assetlinks.json`：均 HTTP 200、JSON、包名匹配、3 个证书指纹；当前 APK 指纹匹配。
+-- API `/metrics`：HTTP 404；app `/metrics`：HTTP 404；staging Web `/metrics`：HTML 200，属于 catch-all 语义而非指标暴露。
++- API `/metrics`：HTTP 404；app `/metrics`：HTTP 404；staging Web `/metrics`：本轮 Tunnel 负路由后 HTTP 404，指标仍未暴露。
+ 
+ ### 契约、矩阵和新鲜度
+ 
+ - `corepack pnpm verify:generated-contracts`：exit 0；generated TypeScript、asset registry 和 OpenAPI drift-free，OpenAPI 25 paths。
++- `corepack pnpm verify:boundaries`：本轮修复后 exit 0；`node --test scripts/verify/boundaries.test.mjs` 为 2 passed。
++- `corepack pnpm verify:reference-hashes`：exit 1；其 manifest 仍引用当前 Linux checkout 不可访问的外部 Windows `D:\FM acceleration-deepseek` 文件，本轮未修改外部研究资料基线。
+ - `uv run --project apps/api pytest apps/api/tests/test_market_provider.py apps/api/tests/test_contracts.py`：28 passed、1 warning、exit 0。覆盖资产契约、三锚点/缺失/新鲜度等本地行为；本轮没有对公网发送会创建快照或写数据的 POST。
+ - 全量测试：API 249 passed、1 skipped、1 warning；Web 64 passed；Mobile 60 passed；总命令 exit 0。
+ - 既有验收证据显示三资产×三锚点共 9 行、FX 对象和 momentum、momentum_month、rsi14、sma_ratio 可用，缺失数据保持 missing 而非 fixture 替代；本轮通过只读 GET 和现有测试复核，没有重复写入型探测。
+ - Redis/缓存 TTL 900 秒的实现和配置在代码/部署证据中存在，但公网响应没有 cache-hit 字段，Cloudflare 标记为 dynamic，因此不能独立证明某一次具体命中。
+ - 修复后 health 暴露 `openai-compatible`；市场数据仍按 staging 的 mock/public-evaluation 证据解释，不能把 staging 表述为生产实时市场 provider。
++- factor library canonical route `v1.0.0` HTTP 200；无版本 `/v1/factor-libraries/manifest` HTTP 404，API 回归断言已补齐。
+ 
+ ## 2. 认证侧
+ 
+@@ -101,7 +106,8 @@ P0：本轮未发现已由只读证据确认的 P0；生产 preflight 仍失败
+ - TLS 三域均取得 Google Trust Services WE1 证书且当前日期在有效期内。
+ - 已观察到 CSP、X-Frame-Options: DENY、X-Content-Type-Options: nosniff、Referrer-Policy、Permissions-Policy 和 HSTS；HTTP→HTTPS redirect 仍是边缘策略待办。
+ - 修复后 CORS 对 app 和 staging 两个 HTTPS Origin 均返回对应允许头；恶意 Origin 仍未获允许。
+-- 修复后 app `/readyz` 精确命中 API；staging 的 API 风格 URL 仍命中 Web catch-all，须在文档和监控中区分。
++- 修复后 app `/readyz` 精确命中 API；staging 的 API 风格 URL 已由 Tunnel 负路由返回 404，不再命中 Web catch-all。
++- Tunnel 重启后 `cloudflared tunnel info` 显示两个活动 HTTP/2 edge connections；app/staging/api-staging HTTPS 公网请求恢复正常。HTTP root 仍为 200，因当前 Cloudflare Token 对 Zone settings/Redirect Rules API 返回 403，CF-02 尚未完成。
+ 
+ ## 4. Google Play 侧
+ 
+@@ -119,6 +125,7 @@ P0：本轮未发现已由只读证据确认的 P0；生产 preflight 仍失败
+ - `corepack pnpm test`：exit 0，API 249 passed/1 skipped，Web 64 passed，Mobile 60 passed，1 个 StarletteDeprecationWarning。
+ - `node scripts/verify/production-preflight.mjs`：exit 1；生产环境变量、live provider/credentials、TLS Postgres/Redis、abuse/CAPTCHA、OAuth、licensed market admission、metrics、数据授权、外部 release artifact 和 approval manifest 等门禁失败；这证明当前不具备生产发布条件，而不是本轮去修复它。
+ - `node --test scripts/verify/production-preflight.test.mjs`：13 passed，exit 0，说明 preflight 规则测试本身通过。
++- `corepack pnpm verify:release-candidate`：exit 0；实际 Git root 检查和 Linux 路径兼容性已通过。
+ - `docker compose -f infra/docker/compose.yaml config --quiet`：exit 0；直接无 deployment secret file 执行 compose ps 会因必需变量缺失而不能插值，本轮改用只读 `docker ps`，三容器均 healthy。
+ - `pnpm audit --json`：0 info/low/moderate/high/critical，600 dependencies，exit 0。
+ - Android QA APK 静态检查：包名 `com.foresightnine.mobile`；v2 签名 true；manifest 有 `autoVerify`、`staging.foresightnine.com` 和 `/oauth/mobile-callback`；assetlinks 已匹配当前 APK；`adb devices` 无设备，因此系统级 domain verification 未执行。
+@@ -138,16 +145,15 @@ P0：本轮未发现已由只读证据确认的 P0；生产 preflight 仍失败
+ - AUTH-02：Google/GitHub 真实登录 callback、token exchange 和 session 已复测；Google token 请求已补齐 `grant_type=authorization_code`。
+ 
+ ### 待处理的 P1
+-- PLAY-01：Play token 有效但目标包测试轨道 GET 全部 404。
+-- CF-02：app/staging HTTP 未重定向 HTTPS。
+-- GOV-01：Linux 下治理路径硬编码导致 boundary check 失败。
++- PLAY-01：Play token 有效但目标包测试轨道 GET 全部 404，等待 Play Console 核对。
++- CF-02：app/staging HTTP 未重定向 HTTPS，等待具有 Zone 权限的 Cloudflare Token 或控制台操作。
+ 
+ ### P2
+ 
+ - PLAY-02：后续自动化工具未安装。
+ - AND-01：无 adb 设备，且现有 APK 为 debug signing。
+ - CF-03：HSTS 已补齐；HTTP→HTTPS redirect 仍待 Cloudflare 边缘设置。
+-- CF-04/DATA-02：Web catch-all 与 factor version 语义需要文档/监控统一。
++- CF-04/DATA-02：Web catch-all 与 factor version 语义已统一并复测通过。
+ 
+ ## 已通过、未执行和外部依赖
+ 
+@@ -168,4 +174,7 @@ HTTP→HTTPS redirect 仍需要 Cloudflare 边缘策略；Google/GitHub 真实
+ 完整命令输出和退出码保存在：
+ `/home/lxx/Foresightnine/src/repair-evidence/five-dimensional-audit-20260831/`
+ 
++本轮 CF/GOV/DATA 修复证据保存在：
++`/home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/`
++
+ 本报告包含修复后状态；该目录同时保存只读审计日志、配置变更复测日志、原始空报告基线、差异和回滚验证，不包含任何凭据值、令牌值、授权码或 Cookie。
+diff --git a/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example b/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example
+index 70a3ed6..a79ce98 100644
+--- a/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example
++++ b/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example
+@@ -5,12 +5,43 @@ credentials-file: /etc/cloudflared/b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4.json
+ protocol: http2
+ 
+ ingress:
++  # The unified app host serves Web plus API callback/API paths.
++  - hostname: app.foresightnine.com
++    path: ^/metrics$
++    service: http_status:404
++  - hostname: app.foresightnine.com
++    path: ^/readyz$
++    service: http://127.0.0.1:8000
++  - hostname: app.foresightnine.com
++    path: '^/oauth/complete(/.*)?$'
++    service: http://127.0.0.1:4173
++    originRequest:
++      httpHostHeader: 127.0.0.1:4173
++  - hostname: app.foresightnine.com
++    path: '^/(api|oauth|v1)(/.*)?$'
++    service: http://127.0.0.1:8000
++  - hostname: app.foresightnine.com
++    path: '^/(health|docs|openapi\.json)(/.*)?$'
++    service: http://127.0.0.1:8000
++  - hostname: app.foresightnine.com
++    service: http://127.0.0.1:4173
++    originRequest:
++      httpHostHeader: 127.0.0.1:4173
++
+   # Metrics are for a local supervisor/Prometheus only, never a public route.
+   - hostname: api-staging.foresightnine.com
+     path: ^/metrics$
+     service: http_status:404
+   - hostname: api-staging.foresightnine.com
+     service: http://127.0.0.1:8000
++
++  # staging is Web-only; API-shaped paths must not become HTML 200s.
++  - hostname: staging.foresightnine.com
++    path: '^/(api|v1)(/.*)?$'
++    service: http_status:404
++  - hostname: staging.foresightnine.com
++    path: '^/(health|readyz|metrics)$'
++    service: http_status:404
+   - hostname: staging.foresightnine.com
+     service: http://127.0.0.1:4173
+   - service: http_status:404
+diff --git a/src/scripts/verify/boundaries.mjs b/src/scripts/verify/boundaries.mjs
+index 0da04ad..d6f9e61 100644
+--- a/src/scripts/verify/boundaries.mjs
++++ b/src/scripts/verify/boundaries.mjs
+@@ -1,29 +1,58 @@
+ import { createHash } from "node:crypto";
++import { execFileSync } from "node:child_process";
+ import { readFile, stat } from "node:fs/promises";
+-import { dirname, resolve } from "node:path";
++import { basename, dirname, isAbsolute, resolve } from "node:path";
+ import { fileURLToPath } from "node:url";
+ 
+ const here = dirname(fileURLToPath(import.meta.url));
++const srcRoot = resolve(here, "../..");
++const projectRoot = resolve(srcRoot, "..");
+ const baselinePath = resolve(here, "../../docs/verification/governance-baseline.json");
+ const baseline = JSON.parse(await readFile(baselinePath, "utf8"));
+ 
++/** Resolve paths captured on the original Windows checkout without changing the manifest. */
++export function resolveBaselinePath(recordedPath, root = projectRoot) {
++  const isWindowsAbsolute = /^[A-Za-z]:[\\\\/]/u.test(recordedPath);
++  if (!isAbsolute(recordedPath) && !isWindowsAbsolute) return resolve(root, recordedPath);
++  if (process.platform === "win32") return recordedPath;
++
++  const projectName = basename(root);
++  const normalizedPath = recordedPath.replaceAll("\\", "/");
++  const windowsPath = /^[A-Za-z]:\/([^/]+)\/(.+)$/u.exec(normalizedPath);
++  if (windowsPath && windowsPath[1].toLowerCase() === projectName.toLowerCase()) {
++    return resolve(root, windowsPath[2]);
++  }
++  return recordedPath;
++}
++
+ let failed = false;
+ for (const entry of baseline.files) {
++  const resolvedPath = resolveBaselinePath(entry.path);
+   try {
+-    const [info, bytes] = await Promise.all([stat(entry.path), readFile(entry.path)]);
++    const [info, bytes] = await Promise.all([stat(resolvedPath), readFile(resolvedPath)]);
+     const digest = createHash("sha256").update(bytes).digest("hex");
+     const valid = info.size === entry.size && digest === entry.sha256;
+-    console.log(`${valid ? "PASS" : "FAIL"} governance ${entry.path}`);
++    console.log(`${valid ? "PASS" : "FAIL"} governance ${entry.path} -> ${resolvedPath}`);
+     failed ||= !valid;
+   } catch (error) {
+-    console.error(`FAIL governance ${entry.path}: ${error.message}`);
++    console.error(`FAIL governance ${entry.path} -> ${resolvedPath}: ${error.message}`);
+     failed = true;
+   }
+ }
+ 
+-const srcRoot = resolve(here, "../..");
+-if (!srcRoot.toLowerCase().endsWith(`${String.raw`\foresightnine\src`}`)) {
+-  console.error(`FAIL unexpected implementation root: ${srcRoot}`);
++let gitRoot = "";
++try {
++  gitRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
++    cwd: projectRoot,
++    encoding: "utf8",
++    stdio: ["ignore", "pipe", "ignore"],
++  }).trim();
++} catch {
++  // The root check below reports the failure without exposing a platform-specific stack trace.
++}
++
++if (resolve(gitRoot) !== projectRoot || resolve(srcRoot) !== resolve(projectRoot, "src")) {
++  console.error(`FAIL unexpected implementation root: ${srcRoot} (git root: ${gitRoot || "unavailable"})`);
+   failed = true;
+ } else {
+   console.log(`PASS implementation root ${srcRoot}`);
+diff --git a/src/scripts/verify/release-candidate.mjs b/src/scripts/verify/release-candidate.mjs
+index 3c1d2a4..d592546 100644
+--- a/src/scripts/verify/release-candidate.mjs
++++ b/src/scripts/verify/release-candidate.mjs
+@@ -68,7 +68,7 @@ async function collectFiles(directory) {
+ let head;
+ try {
+   const root = resolve(gitOutput(["rev-parse", "--show-toplevel"]));
+-  if (root.toLowerCase() !== projectRoot.toLowerCase()) fail("Git root is not D:\\Foresightnine");
++  if (root.toLowerCase() !== projectRoot.toLowerCase()) fail(`Git root is not the project root ${projectRoot}`);
+   head = gitOutput(["rev-parse", "--verify", "HEAD^{commit}"]);
+   if (!/^[0-9a-f]{40}$/i.test(head)) fail("git HEAD is not a commit hash");
+   else pass(`git HEAD ${head}`);
+--- untracked added files ---
+diff --git a/home/lxx/Foresightnine/src/scripts/verify/boundaries.test.mjs b/home/lxx/Foresightnine/src/scripts/verify/boundaries.test.mjs
+new file mode 100644
+index 0000000..7302a97
+--- /dev/null
++++ b/home/lxx/Foresightnine/src/scripts/verify/boundaries.test.mjs
+@@ -0,0 +1,15 @@
++import assert from "node:assert/strict";
++import test from "node:test";
++
++import { resolveBaselinePath } from "./boundaries.mjs";
++
++test("resolves a Windows governance path against the Linux project root", () => {
++  assert.equal(
++    resolveBaselinePath("D:\\Foresightnine\\nested\\plan.md", "/tmp/Foresightnine"),
++    "/tmp/Foresightnine/nested/plan.md",
++  );
++});
++
++test("resolves relative baseline paths against the project root", () => {
++  assert.equal(resolveBaselinePath("plan.md", "/tmp/Foresightnine"), "/tmp/Foresightnine/plan.md");
++});
+diff --git a/home/lxx/Foresightnine/src/docs/release/cloudflare-routing.md b/home/lxx/Foresightnine/src/docs/release/cloudflare-routing.md
+new file mode 100644
+index 0000000..0b08c80
+--- /dev/null
++++ b/home/lxx/Foresightnine/src/docs/release/cloudflare-routing.md
+@@ -0,0 +1,34 @@
++# Cloudflare staging route contract
++
++The current Tunnel is `foresightnine-api-staging`. The host topology is
++deliberately split so that a Web catch-all cannot make an API or metrics probe
++look successful.
++
++| Host | Route | Destination/contract |
++| --- | --- | --- |
++| `app.foresightnine.com` | `/api/*`, `/oauth/*`, `/v1/*`, `/health`, `/readyz`, `/docs`, `/openapi.json` | API on loopback port 8000 |
++| `app.foresightnine.com` | `/oauth/complete` and Web catch-all | Web on loopback port 4173 |
++| `app.foresightnine.com` | `/metrics` | 404; metrics remain local-only |
++| `api-staging.foresightnine.com` | all except `/metrics` | API on loopback port 8000 |
++| `api-staging.foresightnine.com` | `/metrics` | 404; metrics remain local-only |
++| `staging.foresightnine.com` | `/oauth/mobile-callback` and Web routes | Web on loopback port 4173 |
++| `staging.foresightnine.com` | `/api/*`, `/v1/*`, `/health`, `/readyz`, `/metrics` | 404; use `api-staging` for API calls |
++
++The current factor library API uses the explicit versioned paths:
++
++```text
++GET /v1/factor-libraries/v1.0.0/manifest
++GET /v1/factor-libraries/v1.0.0/shards?shard_id=<manifest shard id>
++```
++
++`/v1/factor-libraries/manifest` is intentionally not an alias and returns
++404.
++
++HTTP-to-HTTPS is an edge concern, separate from Tunnel ingress. The required
++policy is a 308 redirect for `app.foresightnine.com` and
++`staging.foresightnine.com`, preserving path and query string. It must be
++configured with a Zone-scoped Cloudflare token that can read the Zone and
++write Dynamic URL Redirects; no DNS, billing, or paid resource change is
++needed. The supplied host key is active, but the current token returns HTTP
++403 `Authentication error` for the Zone settings/redirect API, so this edge
++redirect remains pending the appropriate Zone permission.
+--- external cloudflared diff ---
+--- /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/cloudflared-before.yml	2026-08-31 19:48:11.662719303 +0800
++++ /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/MODIFIED_FILE	2026-08-31 22:49:14.477852352 +0800
+@@ -32,6 +32,13 @@
+     service: http_status:404
+   - hostname: api-staging.foresightnine.com
+     service: http://127.0.0.1:8000
++  # staging is Web-only; API-shaped paths must not become HTML 200s.
++  - hostname: staging.foresightnine.com
++    path: '^/(api|v1)(/.*)?$'
++    service: http_status:404
++  - hostname: staging.foresightnine.com
++    path: '^/(health|readyz|metrics)$'
++    service: http_status:404
+   - hostname: staging.foresightnine.com
+     service: http://127.0.0.1:4173
+   - service: http_status:404

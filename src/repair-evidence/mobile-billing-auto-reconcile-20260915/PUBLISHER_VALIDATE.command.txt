@@ -1,0 +1,1 @@
+uv run --project apps/api python apps/api/scripts/google_play_internal_release.py --aab apps/mobile/android/app/build/outputs/bundle/release/app-release.aab

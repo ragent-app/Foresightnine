@@ -40,6 +40,17 @@ services:
       dockerfile: infra/docker/Dockerfile.api
     ports:
       - "127.0.0.1:8000:8000"
+    extra_hosts:
+      # The staging API uses the host-local Cline OpenAI-compatible gateway;
+      # this name is confined to the Docker bridge and is not a public route.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Deployment-owned secrets are mounted read-only; their contents never
+      # enter the image, repository, logs, or client bundle.
+      - /home/lxx/.config/google-play/service-account.json:/run/secrets/google-play-service-account.json:ro
+      - /home/lxx/.config/foresightnine/purchase-token-encryption.key:/run/secrets/foresightnine-purchase-token-encryption.key:ro
+      - /home/lxx/.config/foresightnine/market-credential-encryption.key:/run/secrets/foresightnine-market-credential-encryption.key:ro
+      - /home/lxx/.config/foresightnine/model-credential-encryption.key:/run/secrets/foresightnine-model-credential-encryption.key:ro
     healthcheck:
       test: ["CMD-SHELL", "uv run --project /app/apps/api python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)\" > /dev/null"]
       interval: 10s
@@ -87,6 +98,10 @@ services:
       FORESIGHTNINE_ABUSE_MODE: redis
       FORESIGHTNINE_REDIS_URL: redis://redis:6379/0
       FORESIGHTNINE_MARKET_CACHE_TTL_SECONDS: "900"
+      FORESIGHTNINE_GOOGLE_PLAY_CREDENTIALS: /run/secrets/google-play-service-account.json
+      FORESIGHTNINE_PURCHASE_TOKEN_ENCRYPTION_KEY_FILE: /run/secrets/foresightnine-purchase-token-encryption.key
+      FORESIGHTNINE_MARKET_CREDENTIAL_ENCRYPTION_KEY_FILE: /run/secrets/foresightnine-market-credential-encryption.key
+      FORESIGHTNINE_MODEL_CREDENTIAL_ENCRYPTION_KEY_FILE: /run/secrets/foresightnine-model-credential-encryption.key
     depends_on:
       postgres:
         condition: service_healthy

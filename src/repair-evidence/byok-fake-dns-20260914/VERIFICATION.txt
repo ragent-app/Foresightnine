@@ -1,0 +1,187 @@
+ForesightNine BYOK fake-DNS compatibility repair verification
+AUDIT_TIME=2026-09-14 Asia/Shanghai
+BRANCH=master
+COMMIT_BEFORE_WORKTREE=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_FIELD=OpenAI-compatible personal model DNS admission and validation-error mapping
+ROOT_CAUSE=The Linux host's Mihomo/Sakurai fake-DNS mode returns 198.18.0.0/15 and fdfe:dcba:9876::/48 proxy addresses. The SSRF guard treated those non-global transport addresses as a private destination, so PUT /v1/account/model-config failed with HTTP 500 before persistence even when base URL, model and key were valid.
+FIX=For only the two recognized fake-DNS proxy ranges, verify the hostname independently through the fixed Cloudflare DNS-over-HTTPS endpoint and require every returned A/AAAA address to be globally routable. Continue rejecting loopback, private, link-local, metadata and every other non-global address. Convert DNS transport validation failures into typed HTTP 422 provider-configuration errors instead of generic HTTP 500.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/byok-fake-dns-20260914/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/byok-fake-dns-20260914/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/byok-fake-dns-20260914/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/byok-fake-dns-20260914/ROLLBACK.sh
+
+ORIGINAL_HASHES
+73ebfa2a8d215d4c3815251a4c100b14e7fc702a8e5d181841d30d04efb8f744  apps/api/app/openai_compatible.py
+c97972a25b1e78d9387b2731c7f88c5515258581acc992c85d113338b3fdd537  apps/api/app/model_credentials.py
+221a526dd58d5bb4f95f27335ef79ed95a3cbf24cc62fe59ecfcccb9bbc4d0e1  apps/api/tests/test_openai_compatible_provider.py
+4aeab9affcbecb01971baff811e76881e577dbd97a30f9735e742cf8f93321c2  apps/api/tests/test_model_credentials.py
+87492c208dfd4ab75d3bd4f46d27fdf8b28258832d52dc0d2fffe4c7ab2db1da  infra/docker/compose.yaml
+
+MODIFIED_HASHES
+76f5542e2233abb59ad1e8bf81f8e0e6b6a2d734defdc117318b9c21cb1c7823  apps/api/app/openai_compatible.py
+c97972a25b1e78d9387b2731c7f88c5515258581acc992c85d113338b3fdd537  apps/api/app/model_credentials.py
+9282491f26a6383c8b21ca7441007290d4cb243d9538e1c4c627161bee9c6677  apps/api/tests/test_openai_compatible_provider.py
+6dee5ece3e7627ee08f8956ff07c0e1495a3f29f3c69e50b5d5cb13d206bb736  apps/api/tests/test_model_credentials.py
+87492c208dfd4ab75d3bd4f46d27fdf8b28258832d52dc0d2fffe4c7ab2db1da  infra/docker/compose.yaml
+
+BASELINE
+COMMAND=uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py::test_fake_dns_proxy_addresses_require_public_doh_confirmation apps/api/tests/test_model_credentials.py::test_personal_configuration_converts_dns_transport_failure_to_validation_error
+INPUT=Two regression cases: local DNS returns 198.18.0.180 and fdfe:dcba:9876::ae while public DoH returns globally routable A/AAAA; account DNS validation raises _TransportFailure.
+LITERAL_OUTPUT_BEGIN
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+________ test_fake_dns_proxy_addresses_require_public_doh_confirmation _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ab918105ba0>
+
+    def test_fake_dns_proxy_addresses_require_public_doh_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+        fake_records = [
+            (2, 1, 6, "", ("198.18.0.180", 443)),
+            (10, 1, 6, "", ("fdfe:dcba:9876::ae", 443, 0, 0)),
+        ]
+        monkeypatch.setattr(openai_compatible.socket, "getaddrinfo", lambda *_args, **_kwargs: fake_records)
+>       monkeypatch.setattr(openai_compatible, "_public_doh_addresses", lambda _hostname: ("104.18.1.2", "2606:4700::6812:102"))
+E       AttributeError: <module 'app.openai_compatible' from '/home/lxx/Foresightnine/src/apps/api/app/openai_compatible.py'> has no attribute '_public_doh_addresses'
+
+apps/api/tests/test_openai_compatible_provider.py:295: AttributeError
+_ test_personal_configuration_converts_dns_transport_failure_to_validation_error _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ab917d97360>
+
+    def test_personal_configuration_converts_dns_transport_failure_to_validation_error(monkeypatch) -> None:
+        monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: (_ for _ in ()).throw(compatible._TransportFailure()))
+        service = AccountModelSettings(InMemoryDocumentRepository(), ModelCredentialCipher(b"d" * 32))
+    
+        with pytest.raises(ModelCredentialError) as error:
+>           service.update("account_123456", _personal_request())
+
+apps/api/tests/test_model_credentials.py:84: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+apps/api/app/model_credentials.py:205: in update
+    return locker(f"model-config:{account_id}", operation) if callable(locker) else operation()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+apps/api/app/storage.py:293: in with_advisory_lock
+    return operation()
+           ^^^^^^^^^^^
+apps/api/app/model_credentials.py:192: in operation
+    _validate_personal_values(base_url, model, api_key)
+apps/api/app/model_credentials.py:133: in _validate_personal_values
+    return OpenAICompatibleSettings.from_account_values(base_url=base_url, model=model, api_key=api_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+apps/api/app/openai_compatible.py:393: in from_account_values
+    _require_public_dns(normalized_host, 443)
+apps/api/tests/test_model_credentials.py:80: in <lambda>
+    monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: (_ for _ in ()).throw(compatible._TransportFailure()))
+                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <tuple_iterator object at 0x7ab9188f1210>
+
+>   monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: (_ for _ in ()).throw(compatible._TransportFailure()))
+E   app.openai_compatible._TransportFailure
+
+apps/api/tests/test_model_credentials.py:80: _TransportFailure
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_fake_dns_proxy_addresses_require_public_doh_confirmation
+FAILED apps/api/tests/test_model_credentials.py::test_personal_configuration_converts_dns_transport_failure_to_validation_error
+LITERAL_OUTPUT_END
+EXIT_STATUS=1
+RESULT=FAIL as expected on the preserved original source: fake-DNS public confirmation did not exist and raw transport failure escaped.
+
+MODIFIED
+COMMAND=uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py::test_fake_dns_proxy_addresses_require_public_doh_confirmation apps/api/tests/test_model_credentials.py::test_personal_configuration_converts_dns_transport_failure_to_validation_error
+INPUT=The same two regression cases and values used by BASELINE.
+LITERAL_OUTPUT_BEGIN
+..                                                                       [100%]
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: both new regression tests pass.
+
+FULL_VALIDATION
+COMMAND_1=uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py apps/api/tests/test_model_credentials.py
+COMMAND_2=uv run --project apps/api pytest -q apps/api/tests
+LITERAL_OUTPUT_BEGIN
+$ uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py apps/api/tests/test_model_credentials.py
+...............................................                          [100%]
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+$ uv run --project apps/api pytest -q apps/api/tests
+........................................................................ [ 23%]
+........................................................................ [ 47%]
+........................................................................ [ 70%]
+...............................................................s........ [ 94%]
+..................                                                       [100%]
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: targeted provider/credential suite and complete API suite passed; one existing test was skipped.
+
+DEPLOYMENT
+COMMAND=docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml up -d --build api
+RESULT=Image docker-api built; docker-api-1 recreated and healthy; PostgreSQL and Redis healthy.
+HEALTH_INPUT=https://app.foresightnine.com/health and https://app.foresightnine.com/readyz
+LITERAL_RESULT=health HTTP 200 with status ok; readyz HTTP 200 with status ready.
+EXIT_STATUS=0
+ROLLBACK_IMAGE=foresightnine-api:byok-fake-dns-rollback-20260914
+
+LIVE_E2E
+COMMAND=docker compose --env-file infra/docker/staging.env -f infra/docker/compose.yaml exec -T -e PYTHONPATH=/app/apps/api api uv run --project /app/apps/api python /tmp/byok_live_e2e.py
+INPUT=A temporary synthetic local account plus the server's existing OpenAI-compatible base URL/model/key loaded only in process memory. No credential value was printed or written to evidence.
+LITERAL_OUTPUT_BEGIN
+REGISTER_HTTP=201
+SOURCE_SETTINGS_COMPLETE=True
+SAVE_HTTP=200
+TEST_HTTP=200
+TEST_STATUS=ready
+CONFIG_HTTP=200
+CONFIG_MODE=personal
+KEY_HINT_PRESENT=True
+DELETE_HTTP=200
+POST_DELETE_CONFIG_HTTP=401
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: save succeeded, provider connection returned ready, masked configuration was readable, the temporary account was deleted, and its bearer token was rejected afterward. Access logs contain no HTTP 500 for this flow.
+
+ROLLBACK
+COMMAND=/home/lxx/Foresightnine/src/repair-evidence/byok-fake-dns-20260914/ROLLBACK.sh /home/lxx/Foresightnine/src/repair-evidence/byok-fake-dns-20260914/rollback-test/work
+INPUT=An isolated copy containing the five current transaction files under /home/lxx/Foresightnine/src/repair-evidence/byok-fake-dns-20260914/rollback-test/work; live source and deployed service were not rolled back.
+LITERAL_OUTPUT_BEGIN
+RESTORED apps/api/app/openai_compatible.py SHA256=73ebfa2a8d215d4c3815251a4c100b14e7fc702a8e5d181841d30d04efb8f744
+RESTORED apps/api/app/model_credentials.py SHA256=c97972a25b1e78d9387b2731c7f88c5515258581acc992c85d113338b3fdd537
+RESTORED apps/api/tests/test_openai_compatible_provider.py SHA256=221a526dd58d5bb4f95f27335ef79ed95a3cbf24cc62fe59ecfcccb9bbc4d0e1
+RESTORED apps/api/tests/test_model_credentials.py SHA256=4aeab9affcbecb01971baff811e76881e577dbd97a30f9735e742cf8f93321c2
+RESTORED infra/docker/compose.yaml SHA256=87492c208dfd4ab75d3bd4f46d27fdf8b28258832d52dc0d2fffe4c7ab2db1da
+ROLLBACK_STATUS=restored_original_files
+ROLLBACK_EXIT=0
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESTORED_BEHAVIOR_STATUS=PASS: every isolated-copy file exactly matched its preserved original SHA-256 after rollback. The live working tree remains on the modified behavior and the deployed API remains healthy.
+
+SECURITY
+USER_API_KEY_READ_OR_PRINTED=NO
+SERVER_PROVIDER_KEY_PRINTED_OR_PERSISTED_TO_EVIDENCE=NO
+TEMPORARY_ACCOUNT_RETAINED=NO
+OAUTH_OR_PRODUCTION_MUTATION=NO

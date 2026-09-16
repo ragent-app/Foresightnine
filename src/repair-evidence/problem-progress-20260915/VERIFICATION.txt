@@ -1,0 +1,36 @@
+CHANGE_BRANCH=docs.problem.current_release_snapshot
+CHANGED_FIELD=authoritative current status dated 2026-09-15
+
+ARTIFACT_MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-progress-20260915/MODIFIED_FILE
+ARTIFACT_DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-progress-20260915/DIFF_FILE
+ARTIFACT_VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/problem-progress-20260915/VERIFICATION.txt
+ARTIFACT_ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/problem-progress-20260915/ROLLBACK.sh
+
+BASELINE_COMMAND=Read the top snapshot date and first PLAY-01/BILL-01 rows from docs/problem.md.
+BASELINE_INPUT=/home/lxx/Foresightnine/src/docs/problem.md
+BASELINE_LITERAL_OUTPUT:
+TOP_SNAPSHOT_DATE=2026-09-10
+PLAY_01_CURRENT=`PENDING_EXTERNAL_PERMISSION_RECHECK`
+BILL_01_CURRENT=`PENDING_EXTERNAL`
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=Read the top snapshot date and the new authoritative PLAY-01, BILL-01, BILL-02 states; assert both release helpers are documented and docs/problem.md is nonempty.
+MODIFIED_INPUT=/home/lxx/Foresightnine/src/docs/problem.md
+MODIFIED_LITERAL_OUTPUT:
+TOP_SNAPSHOT_DATE=2026-09-15
+PLAY_01_STATUS=RESOLVED_CURRENT
+BILL_01_STATUS=RESOLVED_2026-09-15
+ANDROID_V2_STATUS=READY_FOR_SIGNING_AND_DEVICE_TEST
+INTERNAL_PUBLISHER_DOCUMENTED=True
+WINDOWS_SIGNING_HELPER_DOCUMENTED=True
+REPORT_NONEMPTY=True
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/problem-progress-20260915/ROLLBACK.sh --local /home/lxx/.config/foresightnine/rollback-tests/problem-progress-20260915/problem.md
+ROLLBACK_INPUT=secure pre-change docs/problem.md copy
+ROLLBACK_LITERAL_OUTPUT:
+RESTORED_SHA256=d2b6fd73b921b093e7a2396982d8da384c2c880a3ce1b043133f9fdd1680bc95
+ROLLBACK_STATUS=restored_2026_09_10_authoritative_snapshot
+ROLLBACK_EXIT=0
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=the 2026-09-10 snapshot is authoritative only in the isolated rollback copy; live docs/problem.md retains the 2026-09-15 current snapshot.

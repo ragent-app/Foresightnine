@@ -1,0 +1,1 @@
+cd /home/lxx/Foresightnine/src/apps/web && ./node_modules/.bin/vitest run src/app.test.ts src/freshness.test.ts

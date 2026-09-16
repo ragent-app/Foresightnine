@@ -25,13 +25,7 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="https" android:host="staging.foresightnine.com" android:pathPrefix="/oauth/mobile-callback"/>
-      </intent-filter>
-      <intent-filter>
-        <action android:name="android.intent.action.VIEW"/>
-        <category android:name="android.intent.category.DEFAULT"/>
-        <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="foresightnine"/>
+        <data android:scheme="https" android:host="app.foresightnine.com" android:pathPrefix="/oauth/complete"/>
       </intent-filter>
       <intent-filter android:autoVerify="false" expo-sharing-intent-filters="true">
         <action android:name="android.intent.action.SEND"/>

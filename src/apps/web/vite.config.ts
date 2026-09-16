@@ -43,7 +43,7 @@ function assetLinksPlugin(environment: Record<string, string>): Plugin {
 }
 
 const stagingSecurityHeaders = {
-  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api-staging.foresightnine.com; worker-src 'self'; object-src 'none'",
+  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'",
   "Cross-Origin-Opener-Policy": "same-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Referrer-Policy": "no-referrer",
@@ -65,7 +65,7 @@ export default defineConfig(({ mode }) => {
     // keep Vite's host allowlist closed to arbitrary forwarded Host headers.
     preview: {
       host: "127.0.0.1",
-      allowedHosts: ["staging.foresightnine.com"],
+      allowedHosts: ["app.foresightnine.com", "foresightnine.com", "www.foresightnine.com", "staging.foresightnine.com"],
       headers: stagingSecurityHeaders,
     },
   };

@@ -1,0 +1,13 @@
+CHANGE_BRANCH: android_app_link.production_play_signing_certificate
+
+apps/web/.env.production.local
+- VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS=<3 existing fingerprints>
++ VITE_FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS=<3 existing fingerprints>,<Play app-signing fingerprint>
+
+infra/docker/staging.env
+- FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS=<3 existing fingerprints>
++ FORESIGHTNINE_ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS=<3 existing fingerprints>,<Play app-signing fingerprint>
+
+Generated/deployed behavior
+- assetlinks.json did not contain the certificate used by Play-installed APKs.
++ dist, local Web, local API, and public assetlinks.json contain that certificate and package com.foresightnine.mobile.

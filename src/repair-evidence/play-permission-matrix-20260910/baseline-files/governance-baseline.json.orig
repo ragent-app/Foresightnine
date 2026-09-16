@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-08-10T00:00:00+08:00",
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "D:\\Foresightnine\\plan.md",
+      "size": 44536,
+      "sha256": "dbb07b1f0176c65eb7e0051fc82b720ca86e962882a2fc9e6c83a7ce46572e31"
+    },
+    {
+      "path": "D:\\Foresightnine\\agent.md",
+      "size": 4651,
+      "sha256": "d7a508aea73c7e8c8ba6352f00718c530fe32656e771900d7c2de9944c3112d4"
+    },
+    {
+      "path": "D:\\Foresightnine\\GOAL_PROMPT.md",
+      "size": 4985,
+      "sha256": "8753aa28b788f334e2807062aa6b89209ac1c19dc49c7d8fa3e0fbc5fc5658d0"
+    }
+  ]
+}

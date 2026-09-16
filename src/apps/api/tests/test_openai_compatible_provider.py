@@ -77,7 +77,65 @@ def test_success_posts_chat_completion_and_returns_validated_draft(monkeypatch: 
     assert draft.claims == ("The dated scenario is recorded as a hypothesis.",)
     assert draft.native_search_used is False
     assert calls[0][0:2] == ("POST", "https://llm.example.test/v1/chat/completions")
-    assert json.loads(calls[0][3])["model"] == "test-model"
+    request_body = json.loads(calls[0][3])
+    assert request_body["model"] == "test-model"
+    prompt = json.loads(request_body["messages"][1]["content"])
+    assert "same natural language as input.claim" in prompt["language"]
+    constraints = prompt["response_constraints"]
+    assert constraints["claims_count"] == "Return one to three concise claims."
+    assert constraints["objections_count"] == "Return three to five distinct objections."
+    assert constraints["missing_evidence_count"] == "Return two to five concrete evidence gaps."
+    assert constraints["rubric_rationale_length"] == "Each rationale must be one concise sentence of at most 120 characters."
+    assert constraints["readability"] == "Do not combine numbered items into prose; keep every item self-contained and non-repetitive."
+
+
+def test_connection_probe_falls_back_to_minimal_chat_when_models_listing_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, dict[str, str], bytes, float]] = []
+
+    def transport(method: str, url: str, headers: dict[str, str], body: bytes, timeout: float) -> HttpResponse:
+        calls.append((method, url, headers, body, timeout))
+        if method == "GET":
+            return HttpResponse(404, "")
+        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": "OK"}}]}))
+
+    value = provider(monkeypatch, transport)
+
+    assert value.connection_ready() is True
+    assert [(method, url) for method, url, *_rest in calls] == [
+        ("GET", "https://llm.example.test/v1/models"),
+        ("POST", "https://llm.example.test/v1/chat/completions"),
+    ]
+    probe = json.loads(calls[1][3])
+    assert probe == {
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Reply with OK."}],
+        "max_tokens": 1,
+        "stream": False,
+    }
+    assert calls[1][2]["Authorization"] == f"Bearer {_SECRET}"
+
+
+def test_connection_probe_stays_unavailable_when_models_and_chat_are_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+
+    def transport(*_args: object) -> HttpResponse:
+        nonlocal calls
+        calls += 1
+        return HttpResponse(401, "")
+
+    assert provider(monkeypatch, transport).connection_ready() is False
+    assert calls == 2
+
+
+def test_cline_transport_type_metadata_is_removed_before_strict_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = valid_payload()
+    payload["type"] = "object"
+    value = provider(
+        monkeypatch,
+        lambda *_args: HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(payload)}}]})),
+    )
+    draft = value.generate_challenge(request())
+    assert draft.claims == ("The dated scenario is recorded as a hypothesis.",)
 
 
 def test_generic_profile_success_excludes_glm_generation_fields(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -118,6 +176,63 @@ def test_opt_in_selector_builds_server_provider_but_missing_secret_stays_offline
     built = build_llm_provider()
     assert isinstance(built, OpenAICompatibleLlmProvider)
     with pytest.raises(ProviderFailure, match="secret"):
+        built.generate_challenge(request())
+
+
+def test_environment_timeout_supports_slow_openai_compatible_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
+    built = OpenAICompatibleLlmProvider.from_environment(
+        transport=lambda *_args: HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]})),
+    )
+    assert built.policy.timeout_seconds == 120
+    built.generate_challenge(request())
+
+
+def test_account_settings_inherit_the_bounded_deployment_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
+    settings = OpenAICompatibleSettings(
+        base_url="https://llm.example.test/v1",
+        model="test-model",
+        allowed_hosts=frozenset({("llm.example.test", 443)}),
+        api_key=_SECRET,
+    )
+
+    built = OpenAICompatibleLlmProvider(settings, transport=lambda *_args: HttpResponse(200, "{}"))
+
+    assert built.policy.timeout_seconds == 120
+
+
+def test_account_glm_coding_endpoint_uses_its_required_generation_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
+    settings = OpenAICompatibleSettings.from_account_values(
+        base_url="https://open.bigmodel.cn/api/coding/paas/v4",
+        model="glm-5.3-flash",
+        api_key=_SECRET,
+    )
+    captured: list[bytes] = []
+
+    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
+        captured.append(body)
+        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
+
+    built = OpenAICompatibleLlmProvider(settings, transport=transport)
+    built.generate_challenge(request())
+    payload = json.loads(captured[0])
+
+    assert built.policy.timeout_seconds == 120
+    assert built.policy.max_output_tokens == 4000
+    assert payload["thinking"] == {"type": "enabled"}
+    assert payload["reasoning_effort"] == "low"
+    assert payload["do_sample"] is False
+
+
+def test_environment_timeout_rejects_unbounded_or_invalid_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "181")
+    built = OpenAICompatibleLlmProvider.from_environment()
+    with pytest.raises(ProviderFailure, match="configuration"):
         built.generate_challenge(request())
 
 
@@ -227,6 +342,26 @@ def test_https_allowlist_and_secret_non_leakage(monkeypatch: pytest.MonkeyPatch)
         OpenAICompatibleLlmProvider.from_environment().generate_challenge(request())
 
 
+def test_explicit_local_gateway_profile_allows_http_and_private_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_LLM_BASE_URL", "http://host.docker.internal:10910/v1")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deepseek/deepseek-v4-flash")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOWED_HOSTS", "host.docker.internal:10910")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_API_KEY", _SECRET)
+    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK", "true")
+
+    settings = OpenAICompatibleSettings.from_environment()
+    assert settings.base_url == "http://host.docker.internal:10910/v1"
+    assert settings.model == "deepseek/deepseek-v4-flash"
+    assert settings.allow_private_network is True
+
+
+def test_local_gateway_http_remains_rejected_without_explicit_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch, base_url="http://host.docker.internal:10910/v1")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOWED_HOSTS", "host.docker.internal:10910")
+    with pytest.raises(ProviderFailure, match="HTTPS"):
+        OpenAICompatibleSettings.from_environment()
+
+
 def test_default_transport_rejects_allowlisted_hostname_resolving_to_private_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         openai_compatible.socket,
@@ -235,6 +370,65 @@ def test_default_transport_rejects_allowlisted_hostname_resolving_to_private_net
     )
     with pytest.raises(openai_compatible._TransportFailure):
         openai_compatible._require_public_dns("llm.example.test", 443)
+
+
+def test_fake_dns_proxy_addresses_require_public_doh_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_records = [
+        (2, 1, 6, "", ("198.18.0.180", 443)),
+        (10, 1, 6, "", ("fdfe:dcba:9876::ae", 443, 0, 0)),
+    ]
+    monkeypatch.setattr(openai_compatible.socket, "getaddrinfo", lambda *_args, **_kwargs: fake_records)
+    monkeypatch.setattr(openai_compatible, "_public_doh_addresses", lambda _hostname: ("104.18.1.2", "2606:4700::6812:102"))
+
+    assert openai_compatible._validated_addresses("models.example.test", 443) == (
+        "198.18.0.180", "fdfe:dcba:9876::ae",
+    )
+
+    monkeypatch.setattr(openai_compatible, "_public_doh_addresses", lambda _hostname: ("127.0.0.1",))
+    with pytest.raises(openai_compatible._TransportFailure):
+        openai_compatible._validated_addresses("models.example.test", 443)
+
+
+def test_personal_provider_never_inherits_platform_private_network_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK", "true")
+    monkeypatch.setattr(
+        openai_compatible.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [(2, 1, 6, "", ("127.0.0.1", 443))],
+    )
+    settings = OpenAICompatibleSettings(
+        base_url="https://models.example.test/v1",
+        model="account-model",
+        allowed_hosts=frozenset({("models.example.test", 443)}),
+        api_key=_SECRET,
+        allow_private_network=False,
+    )
+    provider = OpenAICompatibleLlmProvider(settings, policy=ProviderPolicy(max_attempts=1))
+    with pytest.raises(ProviderFailure) as error:
+        provider.generate_challenge(request())
+    assert error.value.code == "provider_transport_error"
+
+
+def test_pinned_https_connection_uses_validated_ip_and_original_tls_hostname(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[object] = []
+
+    class Socket:
+        def close(self) -> None:
+            calls.append("closed")
+
+    class Context:
+        def wrap_socket(self, raw_socket: object, *, server_hostname: str):
+            calls.append(("tls", raw_socket, server_hostname))
+            return "tls-socket"
+
+    monkeypatch.setattr(openai_compatible.socket, "create_connection", lambda address, timeout, source: calls.append(("tcp", address, timeout, source)) or Socket())
+    monkeypatch.setattr(openai_compatible.ssl, "create_default_context", lambda: Context())
+    connection = openai_compatible._PinnedHTTPSConnection("models.example.test", 443, "203.0.113.9", 4.5)
+    connection.connect()
+    assert calls[0] == ("tcp", ("203.0.113.9", 443), 4.5, None)
+    assert calls[1][0] == "tls"
+    assert calls[1][2] == "models.example.test"
+    assert connection.sock == "tls-socket"
 
 
 def test_glm_coding_profile_pins_official_endpoint_and_keeps_secret_server_side(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -252,7 +446,7 @@ def test_glm_coding_profile_pins_official_endpoint_and_keeps_secret_server_side(
     value.generate_challenge(request())
 
     assert captured[0][0:2] == ("POST", "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions")
-    assert json.loads(captured[0][3])["model"] == "glm-5.3"
+    assert json.loads(captured[0][3])["model"] == "glm-5.3-flash"
     assert _SECRET not in captured[0][3].decode("utf-8")
     assert _SECRET not in repr(value)
 
@@ -281,12 +475,26 @@ def test_glm_coding_profile_sends_deterministic_generation_defaults(monkeypatch:
         "response_format",
     }
     assert body["thinking"] == {"type": "enabled"}
-    assert body["reasoning_effort"] == "high"
+    assert body["reasoning_effort"] == "low"
     assert body["do_sample"] is False
     assert "temperature" not in body
     assert "top_p" not in body
     assert body["max_tokens"] == 1500
     assert body["response_format"] == {"type": "json_object"}
+
+
+def test_glm_coding_account_profile_inherits_low_reasoning_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
+    monkeypatch.delenv("FORESIGHTNINE_GLM_CODING_REASONING_EFFORT", raising=False)
+
+    settings = OpenAICompatibleSettings.from_account_values(
+        base_url="https://open.bigmodel.cn/api/coding/paas/v4",
+        model="glm-5.3-flash",
+        api_key=_SECRET,
+    )
+
+    assert settings.glm_generation is not None
+    assert settings.glm_generation.reasoning_effort == "low"
 
 
 def test_glm_coding_profile_default_budget_allows_thinking_and_full_rubric(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -347,7 +555,7 @@ def test_glm_coding_profile_rejects_disabled_direct_generation_before_transport(
 
     settings = OpenAICompatibleSettings(
         base_url="https://llm.example.test/v1",
-        model="glm-5.3",
+        model="glm-5.3-flash",
         allowed_hosts=frozenset({("llm.example.test", 443)}),
         api_key=_SECRET,
         glm_generation=GlmCodingGenerationSettings(thinking_enabled=False),
@@ -362,7 +570,7 @@ def test_glm_coding_profile_rejects_disabled_direct_generation_before_transport(
 
 
 def test_glm_coding_profile_from_values_rejects_model_override_when_generation_is_present() -> None:
-    with pytest.raises(ProviderFailure, match="fixed to glm-5.3") as error:
+    with pytest.raises(ProviderFailure, match="fixed to glm-5.3-flash") as error:
         OpenAICompatibleSettings.from_values(
             base_url="https://llm.example.test/v1",
             model="glm-tenant-approved",
@@ -391,7 +599,7 @@ def test_glm_coding_profile_rejects_direct_settings_model_override_before_transp
     )
     value = OpenAICompatibleLlmProvider(settings, policy=ProviderPolicy(max_attempts=1), transport=transport)
 
-    with pytest.raises(ProviderFailure, match="fixed to glm-5.3") as error:
+    with pytest.raises(ProviderFailure, match="fixed to glm-5.3-flash") as error:
         value.generate_challenge(request())
     assert error.value.code == "provider_configuration_invalid"
     assert error.value.retryable is False
@@ -411,7 +619,7 @@ def test_glm_coding_profile_rejects_model_override_before_transport(monkeypatch:
     monkeypatch.setenv("FORESIGHTNINE_LLM_BASE_URL", "https://untrusted.example.test/v1")
     value = OpenAICompatibleLlmProvider.from_glm_coding_environment(transport=transport)
 
-    with pytest.raises(ProviderFailure, match="fixed to glm-5.3") as error:
+    with pytest.raises(ProviderFailure, match="fixed to glm-5.3-flash") as error:
         value.generate_challenge(request())
     assert error.value.code == "provider_configuration_invalid"
     assert error.value.retryable is False

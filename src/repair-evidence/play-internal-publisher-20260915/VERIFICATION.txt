@@ -1,0 +1,50 @@
+CHANGE_BRANCH=google_play.internal_release_automation
+CHANGED_FIELD=signed-AAB validation, internal-only edit/upload/track/commit transaction, and compensating edit discard
+
+ARTIFACT_MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-internal-publisher-20260915/MODIFIED_FILE
+ARTIFACT_DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-internal-publisher-20260915/DIFF_FILE
+ARTIFACT_VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/play-internal-publisher-20260915/VERIFICATION.txt
+ARTIFACT_ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/play-internal-publisher-20260915/ROLLBACK.sh
+
+BASELINE_COMMAND=test -f apps/api/scripts/google_play_internal_release.py
+BASELINE_INPUT=/home/lxx/Foresightnine/src/apps/api/scripts/google_play_internal_release.py
+BASELINE_LITERAL_OUTPUT:
+SCRIPT=MISSING
+BASELINE_RESULT=MISSING_INTERNAL_RELEASE_AUTOMATION
+BASELINE_EXIT_STATUS=1
+
+MODIFIED_COMMAND=uv run --project apps/api pytest -q apps/api/tests/test_google_play_internal_release.py
+MODIFIED_INPUT=six synthetic cases: unsigned artifact; signed internal transaction; failed track update; Pro/Max readiness; jarsigner unsigned output; jarsigner verified self-signed upload-key output
+MODIFIED_LITERAL_OUTPUT:
+......                                                                   [100%]
+MODIFIED_RESULT=PASS_6_TESTS
+MODIFIED_EXIT_STATUS=0
+
+FULL_VALIDATION_COMMAND=uv run --project apps/api python -m py_compile apps/api/scripts/google_play_internal_release.py apps/api/tests/test_google_play_internal_release.py; uv run --project apps/api pytest -q apps/api/tests/test_google_play_internal_release.py apps/api/tests/test_billing.py
+FULL_VALIDATION_INPUT=current publisher and Billing verification source
+FULL_VALIDATION_LITERAL_OUTPUT:
+..........................                                               [100%]
+FULL_VALIDATION_RESULT=PASS_26_TESTS
+FULL_VALIDATION_EXIT_STATUS=0
+
+LIVE_VALIDATE_COMMAND=uv run --project apps/api python apps/api/scripts/google_play_internal_release.py --aab apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+LIVE_VALIDATE_INPUT=current versionCode 2 AAB, SHA-256 3d0a2741097d67d843dd37342164ecb68e532ad83c68aee1407577531799007e
+LIVE_VALIDATE_LITERAL_OUTPUT:
+PACKAGE=com.foresightnine.mobile
+TRACK=internal
+AAB_SHA256=3d0a2741097d67d843dd37342164ecb68e532ad83c68aee1407577531799007e
+AAB_BYTES=69252255
+AAB_SIGNATURE=UNSIGNED
+RESULT=STOPPED_BEFORE_NETWORK_MUTATION_UNSIGNED_AAB
+LIVE_VALIDATE_EXIT_STATUS=2
+LIVE_MUTATION_RESULT=NO_EDIT_NO_UPLOAD_NO_TRACK_CHANGE_NO_COMMIT
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/play-internal-publisher-20260915/ROLLBACK.sh --local /home/lxx/.config/foresightnine/rollback-tests/play-internal-publisher-20260915
+ROLLBACK_INPUT=isolated copies of the new source and test files
+ROLLBACK_LITERAL_OUTPUT:
+RESTORED_apps/api/scripts/google_play_internal_release.py=MISSING
+RESTORED_apps/api/tests/test_google_play_internal_release.py=MISSING
+ROLLBACK_STATUS=restored_pre_tool_absence
+ROLLBACK_EXIT=0
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=the pre-change absence of the publisher and tests is reproduced only in the isolated rollback directory; live source retains the fail-closed internal publisher.

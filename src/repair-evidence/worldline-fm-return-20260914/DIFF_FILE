@@ -1,0 +1,81 @@
+--- baseline/apps/web/src/state.ts
++++ modified/apps/web/src/state.ts
+@@ -235,8 +235,12 @@
+       return state.viewpoint.trim().length > 0 && parseCapital(state.capital) > 0;
+     case "worldline":
+       return canEnterWorldline(state);
+-    case "fm":
+-      return canEnterWorldline(state) && ((state.fmStatus === "complete" && state.fmResult !== null) || (state.stage === "worldline" && state.fmStatus !== "complete") || (state.stage === "fm" && (state.fmStatus === "computing" || state.fmStatus === "complete")));
++    case "fm": {
++      if (!canEnterWorldline(state)) return false;
++      if (state.fmStatus === "complete") return state.fmResult !== null;
++      if (state.stage === "worldline") return true;
++      return state.stage === "fm" && (state.fmStatus === "computing" || state.fmStatus === "failed" || state.fmStatus === "cancelled");
++    }
+     case "portfolio":
+     case "nav":
+       return state.fmStatus === "complete" && state.fmResult !== null && canEnterWorldline(state);
+--- baseline/apps/web/src/app.test.ts
++++ modified/apps/web/src/app.test.ts
+@@ -515,6 +515,40 @@
+     expect(reducer(state, { type: "fm_start" }).stage).toBe("fm");
+   });
+ 
++  it("keeps failed and cancelled FM states visible so computation can be retried", () => {
++    const readyRubric = rubricDefaults.map((item) => ({ ...item, score: 3 }));
++    const readyState = {
++      ...initialState,
++      stage: "worldline" as const,
++      viewpoint: "一个通过确认门槛并进入因子计算的测试观点",
++      challengeStatus: "complete" as const,
++      challengeTurns: [
++        { id: "system-1", author: "system" as const, time: "现在", body: "挑战已启动" },
++        { id: "challenger-1", author: "challenger" as const, time: "现在", body: "反方问题" },
++        { id: "user-1", author: "user" as const, time: "现在", body: "用户回复" },
++      ],
++      rubric: readyRubric,
++      evidence: [searchEvidenceFixture],
++      confirmation: "confirmed" as const,
++    };
++
++    let failed = reducer(readyState, { type: "fm_start" });
++    failed = reducer(failed, { type: "fm_fail" });
++    expect(failed.stage).toBe("fm");
++    expect(failed.fmStatus).toBe("failed");
++    expect(canEnterStage(failed, "fm")).toBe(true);
++    expect(safeStageFor(failed)).toBe("fm");
++    expect(reducer(failed, { type: "fm_start" }).fmStatus).toBe("computing");
++
++    let cancelled = reducer(readyState, { type: "fm_start" });
++    cancelled = reducer(cancelled, { type: "fm_cancel" });
++    expect(cancelled.stage).toBe("fm");
++    expect(cancelled.fmStatus).toBe("cancelled");
++    expect(canEnterStage(cancelled, "fm")).toBe(true);
++    expect(safeStageFor(cancelled)).toBe("fm");
++    expect(reducer(cancelled, { type: "fm_start" }).fmStatus).toBe("computing");
++  });
++
+   it("invalidates stale timer or worker results with a generation token", () => {
+     const guard = createGenerationGuard();
+     const first = guard.current();
+--- baseline/apps/web/src/components/FmPanel.tsx
++++ modified/apps/web/src/components/FmPanel.tsx
+@@ -14,6 +14,6 @@
+     <div className="fm-grid"><ol className="trace-list">{steps.map((item, index) => <li className={`${progress >= (index + 1) * 20 ? "is-done" : progress > index * 20 ? "is-active" : ""}`} key={item}><span>{progress >= (index + 1) * 20 ? "✓" : index + 1}</span><div><strong>{t(language, item)}</strong><small>{progress >= (index + 1) * 20 ? t(language, "已完成") : progress > index * 20 ? t(language, step) : t(language, "等待当前步骤完成")}</small></div></li>)}</ol><div className="factor-table-wrap"><table className="factor-table"><caption>{t(language, "因子质量与录取状态")}</caption><thead><tr><th>{t(language, "因子")}</th><th>IC</th><th>ICIR</th><th>{t(language, "质量权重")}</th><th>{t(language, "状态")}</th></tr></thead><tbody>{[["盈利修正", "0.072", "0.64", "0.046", "已接受"], ["质量", "0.051", "0.58", "0.030", "已接受"], ["中期动量", "−0.044", "−0.52", "0.023", "已接受"], ["低波动", "0.028", "0.31", "0.009", "已拒绝"], ["估值", "−0.018", "−0.21", "0.004", "已拒绝"]].map((row) => <tr key={row[0]}>{row.map((cell, index) => <td key={`${row[0]}-${index}`}>{index === 4 ? <><StatusDot tone={cell === "已接受" ? "sage" : "danger"} /> {t(language, cell)}</> : t(language, cell)}</td>)}</tr>)}</tbody></table><p className="formula-note">{t(language, "质量权重 q")}<sub>f</sub> = max(|IC<sub>f</sub>|, 1e−6) × max(|ICIR<sub>f</sub>|, 1e−6)。{t(language, "负 IC 只改变贡献方向，不改变质量权重。")}</p></div></div>
+     <div className="fm-explanation"><div><Tag tone="accent">FM-v1</Tag><h2>{t(language, "合成与标准化信号")}</h2><p>rank_pct(signal) − 0.5 → {t(language, "按 IC 方向调整")} → {t(language, "按有效支持加权")} → {t(language, "截面 z-score")} → clip / re-normalise。</p></div><div className="fm-controls">{status === "computing" ? <Button variant="danger" onClick={onCancel}>{t(language, "暂停 / 取消计算")}</Button> : resultReady ? <Button variant="primary" onClick={onPortfolio}>{t(language, "查看配置方案")}</Button> : <Button variant="primary" onClick={onCompute}>{t(language, "开始本地计算")}</Button>}{resultReady ? <span className="intermediate-note">{t(language, "中间值已包含在 JSON 审计导出中")}</span> : <span className="intermediate-note">{t(language, "完成计算后可在 JSON 审计导出中查看")}</span>}</div></div>
+     {status === "cancelled" ? <div className="notice notice-warning" role="status">{t(language, "本地计算已取消；中间结果未上传。")} <Button variant="quiet" onClick={onCompute}>{t(language, "继续计算")}</Button></div> : null}
+-    {status === "failed" ? <div className="notice notice-warning" role="alert">{t(language, "设备内存不足，已停止计算并保留研究状态。")} <Button variant="quiet" onClick={onCompute}>{t(language, "重试")}</Button></div> : null}
++    {status === "failed" ? <div className="notice notice-warning" role="alert">{t(language, "因子计算或金融数据获取失败，已保留研究状态。")} <Button variant="quiet" onClick={onCompute}>{t(language, "重试")}</Button></div> : null}
+   </section>;
+ }
+--- baseline/apps/web/src/i18n.tsx
++++ modified/apps/web/src/i18n.tsx
+@@ -28,7 +28,7 @@
+   "基准率 · 中性起点": "Base rate · neutral starting point", "支持证据 · 向上": "Supporting evidence · upward", "反对证据 · 向下": "Contrary evidence · downward", "专家约束 · 排除不可能路径": "Expert constraints · rule out impossible paths", "模型不确定性 · 区间加宽": "Model uncertainty · widen intervals", "可复现性": "Reproducibility", "决策时点 2026-08-09": "Decision time 2026-08-09", "Python golden parity": "Python golden parity", "无未来数据": "No future data", "Web Worker": "Web Worker", "数据快照": "Data snapshot", "签名哈希由本地计算生成，原始市场分片不会上传。": "The signed hash is generated locally; raw market shards are not uploaded.",
+   "配置说明": "Allocation note", "当前组合基于 FM 方法论，在世界线框架下平衡收益贡献与风险暴露。": "The current portfolio follows FM methodology and balances return contribution with risk exposure in the worldline framework.", "当前选择：": "Current selection: ", "残余现金：": "Residual cash: ", "FM 尚未计算；暂无配置权重、金额、单位或残余现金结果。": "FM has not run; no allocation weights, amounts, units or residual cash results are available.", "路径假设": "Path assumptions", "世界线版本 WL-v1": "Worldline version WL-v1", "波动率窗口 252 日": "Volatility window 252 days", "噪声种子 已固定": "Noise seed fixed", "价格口径 复权收盘": "Price basis adjusted close",
+   "前提清晰度": "Premise clarity", "时间边界": "Time boundary", "触发可观察性": "Observable triggers", "因果链": "Causal chain", "反事实与替代解释": "Counterfactuals & alternatives", "证据质量": "Evidence quality", "资产传导": "Asset transmission", "市场已定价程度": "Priced-in assessment", "可证伪性": "Falsifiability", "用户确认": "User confirmation", "观点已提交，但仍需确认关键假设。": "The thesis is submitted, but key assumptions still need confirmation.", "基线与 24 个月窗口明确。": "The baseline and 24-month window are explicit.", "已提出可观察的需求、投资或订单信号。": "Observable demand, investment or order signals are specified.", "触发事件与资产影响已连接。": "The trigger event and asset impact are connected.", "需要补充融资条件恶化或需求不及预期的替代路径。": "Add alternative paths for tightening finance or weaker-than-expected demand.", "尚未附上可独立复核的公开证据。": "No independently reviewable public evidence has been attached yet.", "资产方向已提出，但传导强度仍需证据支持。": "The asset direction is stated, but transmission strength still needs evidence.", "尚未证明市场是否已经反映该观点。": "It is not yet shown whether the market has already priced in this thesis.", "已有可观察指标，公开证据仍需补强。": "Observable indicators exist; public evidence still needs strengthening.", "等待用户回复反方问题并选择确认方式。": "Awaiting an answer to the challenge and a confirmation mode.", "用户已回答反方问题，仍需选择确认方式。": "The user answered the challenge; a confirmation mode is still required.", "已附上证据；来源等级与可复核状态仍保留。": "Evidence is attached; provenance grade and reviewability remain explicit.", "证据已用于检验替代解释，仍需持续复核。": "Evidence has been used to test alternatives and still needs ongoing review.", "证据已进入已定价程度审查，仍不是事实判断。": "Evidence entered the priced-in review; it is not a factual determination.",
+-  "反方审查完成": "Challenge complete", "正在验证签名数据快照…": "Validating signed data snapshot…", "本地计算完成，原始结果已保留": "Local computation complete; raw results retained", "计算失败。研究状态仍已保存，可重试。": "Computation failed. Research state remains saved; retry is available.", "设备内存不足，已停止计算并保留研究状态。": "Device memory is insufficient. Computation stopped and research state was retained.", "正在用户设备上计算": "Computing on this device", "固定模拟路径": "Fixed simulated paths", "模拟路径由固定的世界线冲击、波动率拟合与可复现噪声生成；不是预测或收益承诺。历史段仅表示 historical_only 数据。": "Simulated paths use fixed worldline shocks, volatility fitting and reproducible noise; they are not forecasts or return promises. The historical segment represents historical_only data only.", "历史回撤与三条固定模拟路径同时显示；选中路径加粗，线型与直接标签保留。": "Historical drawdown and three fixed simulated paths are shown together; the selected path is bold, with line styles and direct labels preserved.", "历史 NAV，仅使用 historical_only 数据": "Historical NAV using historical_only data only", "历史观测与弱、主、强三条世界线模拟；今日边界在历史与模拟之间": "Historical observations and weak, main and strong worldline simulations; today separates history from simulation.", "下方路径保留三种情景供比较。": "The paths below retain all three scenarios for comparison.", "回撤图已隐藏；点击“显示回撤”恢复。": "Drawdown is hidden; select \"Show drawdown\" to restore it.",
++  "反方审查完成": "Challenge complete", "正在验证签名数据快照…": "Validating signed data snapshot…", "本地计算完成，原始结果已保留": "Local computation complete; raw results retained", "计算失败。研究状态仍已保存，可重试。": "Computation failed. Research state remains saved; retry is available.", "因子计算或金融数据获取失败，已保留研究状态。": "Factor computation or market-data retrieval failed. Research state was retained.", "正在用户设备上计算": "Computing on this device", "固定模拟路径": "Fixed simulated paths", "模拟路径由固定的世界线冲击、波动率拟合与可复现噪声生成；不是预测或收益承诺。历史段仅表示 historical_only 数据。": "Simulated paths use fixed worldline shocks, volatility fitting and reproducible noise; they are not forecasts or return promises. The historical segment represents historical_only data only.", "历史回撤与三条固定模拟路径同时显示；选中路径加粗，线型与直接标签保留。": "Historical drawdown and three fixed simulated paths are shown together; the selected path is bold, with line styles and direct labels preserved.", "历史 NAV，仅使用 historical_only 数据": "Historical NAV using historical_only data only", "历史观测与弱、主、强三条世界线模拟；今日边界在历史与模拟之间": "Historical observations and weak, main and strong worldline simulations; today separates history from simulation.", "下方路径保留三种情景供比较。": "The paths below retain all three scenarios for comparison.", "回撤图已隐藏；点击“显示回撤”恢复。": "Drawdown is hidden; select \"Show drawdown\" to restore it.",
+   "保留研究的原始因子权重、假设、参数与结果。": "Retains the research's raw factor weights, assumptions, parameters and results.", "在不覆盖 Raw 的前提下，加入集中度、流动性、可实施性与冲击约束。": "Adds concentration, liquidity, implementability and shock constraints without overwriting Raw.", "FM 尚未计算；当前不显示任何 Raw 或 Public 配置行。": "FM has not run; no Raw or Public allocation rows are shown.", "Public Default 不会重写 FM Raw；单证券上限": "Public Default does not rewrite FM Raw; single-security cap", "高波动资产类别上限": "high-volatility asset-class cap", "释放权重按原始权重确定性再分配。": "Released weight is deterministically redistributed by the original weights.", "组合冲击区间": "Portfolio shock interval", "FM 尚未计算；配置金额和单位暂不可用。": "FM has not run; allocation amounts and units are unavailable.", "金额过小，部分资产无法满足最小交易单位。": "Capital is too small for some assets to meet the minimum trading unit.", "金额仅用于模拟。": "Amounts are for simulation only.", "未触发": "Not triggered", "电网基础设施": "Grid infrastructure", "半导体基础设施": "Semiconductor infrastructure", "公用事业": "Utilities", "黄金对冲": "Gold hedge", "全球股票": "Global equities", "现金等价物": "Cash equivalents",
+   "回答反方问题，说明证据、条件或保留意见……": "Answer the challenge with evidence, conditions or reservations…", "搜索不可用时，提交客户端证据 bundle；不会把标题按钮当作导入。": "When search is unavailable, submit a client evidence bundle; title buttons are not treated as imports.", "SearchEvidenceBundle：A–C 必须填写安全 URL；D/E 可留空并标记为不可独立复核。标题、发布者、摘录和用户说明仍会校验；离线 fixture 也使用同一字段结构。": "SearchEvidenceBundle: A–C require a safe URL; D/E may omit it and are marked not independently reviewable. Title, publisher, excerpt and user note are still validated; offline fixtures use the same fields.", "https://…（D/E 可留空）": "https://… (optional for D/E)", "A–E 表示来源与可核验性，不代表结论正确。": "A–E represents provenance and reviewability, not correctness.", "将保存未解决问题、AI 异议与私有证据声明。用户身份或业内经验不是公开证据；可作为私有前提单独标记。": "Unresolved issues, AI objections and private-evidence declarations will be retained. Identity or industry experience is not public evidence; it can be marked as a private premise.",
+   "弱情景 W−": "Weak W−", "主情景 W₀": "Main W₀", "强情景 W+": "Strong W+", "条件概率 P(W | H)": "Conditional probability P(W | H)", "个月": "months", "世界线版本 WL-v1 · 数据截止 2026-08-09 · 噪声种子已固定 · 当前路径为 simulated fixture": "Worldline version WL-v1 · data as of 2026-08-09 · noise seed fixed · current path is a simulated fixture", "历史观测": "Historical observations", "世界线模拟": "Worldline simulation", "组合回撤": "Portfolio drawdown", "组合 NAV": "Portfolio NAV", "组合回撤：历史与三条模拟路径": "Portfolio drawdown: history and three simulated paths", "组合 NAV：历史、主情景中位数、弱情景、强情景与 10–90% 区间": "Portfolio NAV: history, main median, weak, strong and 10–90% interval",

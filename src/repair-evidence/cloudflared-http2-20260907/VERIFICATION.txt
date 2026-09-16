@@ -1,0 +1,31 @@
+CHANGE_BRANCH_FIELD=cloudflared tunnel transport protocol auto -> http2
+TARGET=/home/lxx/.cloudflared/foresightnine-api-staging.yml
+BASELINE_SHA256=2b98d43ce1db2d3ff32ba4f9f45648e5f2f9121448c1a218e2f02501d66c22b1
+MODIFIED_SHA256=63515e0ece7a417ca4bccab4ffd6024b310284044d930e29cfa10a13b7bfa5a2
+
+BASELINE_COMMAND=/usr/local/bin/cloudflared tunnel --config /home/lxx/.cloudflared/foresightnine-api-staging.yml ingress validate
+BASELINE_INPUT=live config before change
+BASELINE_LITERAL_OUTPUT=Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=systemctl --user restart cloudflared-foresightnine.service; /usr/local/bin/cloudflared tunnel --config /home/lxx/.cloudflared/foresightnine-api-staging.yml ingress validate; public HTTPS probes
+MODIFIED_INPUT=protocol: http2 and existing ingress/origins
+MODIFIED_LITERAL_OUTPUT=Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+APP_HEALTH_HTTP=200
+API_HEALTH_HTTP=200
+PRIVACY_HTTP=200
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0, public probes exit 0
+
+ROLLBACK_COMMAND=ROLLBACK_TARGET=/home/lxx/Foresightnine/src/repair-evidence/cloudflared-http2-20260907/ROLLBACK_TEST_FILE ROLLBACK_SOURCE=/home/lxx/Foresightnine/src/repair-evidence/cloudflared-http2-20260907/BASELINE_FILE /home/lxx/Foresightnine/src/repair-evidence/cloudflared-http2-20260907/ROLLBACK.sh
+ROLLBACK_INPUT=modified copy at ROLLBACK_TEST_FILE
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED
+ROLLBACK_COMPARE_EXIT_STATUS=0
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=baseline config restored on separate copy; live config intentionally remains modified with http2
+SERVICE_STATUS=active
+TUNNEL_CONNECTION_EVIDENCE=TUNNEL_INFO_ACTIVE=PASS

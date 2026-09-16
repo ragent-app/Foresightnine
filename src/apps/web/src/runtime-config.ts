@@ -1,7 +1,7 @@
 import { normalizeApiBaseUrl } from "@foresightnine/api-client";
 import { normalizeMarketProviderUrl, type MarketRuntimeConfig } from "@foresightnine/market-data";
 
-export const STAGING_API_BASE_URL = "https://api-staging.foresightnine.com";
+export const APP_API_BASE_URL = "https://app.foresightnine.com";
 
 export function configuredApiBaseUrlFromEnvironment(environment: { readonly canonical?: unknown; readonly legacy?: unknown }): string | null {
   const configured = typeof environment.canonical === "string" && environment.canonical.trim().length > 0
@@ -25,7 +25,7 @@ export function configuredApiBaseUrl(): string | null {
   if (configured !== null || hasExplicitApiBaseUrl(environment)) return configured;
   // Vitest must remain deterministic/offline; deployed builds use staging only
   // when neither supported API override is present.
-  return import.meta.env.MODE === "test" ? null : STAGING_API_BASE_URL;
+  return import.meta.env.MODE === "test" ? null : APP_API_BASE_URL;
 }
 
 export function configuredMarketDataRuntimeConfigFromEnvironment(environment: { readonly mode?: unknown; readonly baseUrl?: unknown }): MarketRuntimeConfig {

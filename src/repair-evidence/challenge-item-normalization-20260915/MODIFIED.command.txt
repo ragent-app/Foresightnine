@@ -1,0 +1,1 @@
+uv run --project apps/api pytest -q --tb=no apps/api/tests/test_phase3_providers.py::test_provider_review_items_are_normalized_into_bounded_complete_points

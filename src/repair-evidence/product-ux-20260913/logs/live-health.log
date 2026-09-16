@@ -1,0 +1,6 @@
+https://app.foresightnine.com/ HTTP=200
+https://app.foresightnine.com/health HTTP=200
+https://app.foresightnine.com/readyz HTTP=200
+LIVE_WEB_BUNDLE=assets/index-wyrJnGTJ.js
+API_CONTAINER_HEALTH=healthy
+LIVE_HEALTH_EXIT=0

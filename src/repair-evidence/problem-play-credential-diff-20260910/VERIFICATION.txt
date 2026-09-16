@@ -1,0 +1,30 @@
+ForesightNine problem.md Play credential comparison
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=Google Play credential relationship and track-permission evidence
+CHANGE_DETAILS=record that OLD and NEW credentials independently exchange tokens and read subscription products, while both receive track-read HTTP 403; retain no credential fields.
+LIVE_FILE=/home/lxx/Foresightnine/src/docs/problem.md
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-credential-diff-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-credential-diff-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-credential-diff-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/problem-play-credential-diff-20260910/ROLLBACK.sh
+BASELINE_HASH=0a6a24c6aa05722e45e1cb10edc16a575ff494cd7d3e92fbcee072216270fc51
+
+BASELINE_COMMAND=grep -q 'SAME_SERVICE_ACCOUNT_DIFFERENT_KEY' src/docs/problem.md
+BASELINE_INPUT=report before credential comparison evidence insertion
+BASELINE_LITERAL_OUTPUT=relationship assertion absent
+BASELINE_RESULT=EXPECTED_NOT_YET_RECORDED
+BASELINE_EXIT_STATUS=1
+
+MODIFIED_COMMAND=test -s src/docs/problem.md && grep -q 'SAME_SERVICE_ACCOUNT_DIFFERENT_KEY' src/docs/problem.md
+MODIFIED_INPUT=report after independent OLD/NEW read comparison
+MODIFIED_LITERAL_OUTPUT=PLAY_CREDENTIAL_COMPARISON=PASS
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/problem-play-credential-diff-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy initialized with MODIFIED_FILE
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY;ROLLBACK_COPY_VERIFY=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored the pre-comparison report; live report remains updated and verified=PASS
+SECURITY=No credential JSON, private key, client email, OAuth code, access token, cookie, or sensitive response body included.

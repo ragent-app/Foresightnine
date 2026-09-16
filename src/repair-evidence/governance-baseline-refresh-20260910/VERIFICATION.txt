@@ -1,0 +1,30 @@
+ForesightNine governance baseline refresh
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=governance baseline plan.md size/sha256 record
+CHANGE_DETAILS=refresh the intentional governance baseline after the user-requested plan.md update; path resolution remains portable and no implementation logic is changed.
+LIVE_FILE=/home/lxx/Foresightnine/src/docs/verification/governance-baseline.json
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/governance-baseline-refresh-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/governance-baseline-refresh-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/governance-baseline-refresh-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/governance-baseline-refresh-20260910/ROLLBACK.sh
+BASELINE_HASH=73876e2433136f386c0940d3b83b3f24019120f1302c6e20df6322714a0e82df
+
+BASELINE_COMMAND=corepack pnpm --dir src verify:boundaries
+BASELINE_INPUT=current checkout before governance baseline refresh
+BASELINE_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;FAIL governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;[ELIFECYCLE] Command failed with exit code 1.;
+BASELINE_RESULT=EXPECTED_FAIL_STALE_PLAN_HASH
+BASELINE_EXIT_STATUS=1
+
+MODIFIED_COMMAND=corepack pnpm --dir src verify:boundaries
+MODIFIED_INPUT=current checkout after updating governance-baseline.json plan.md record
+MODIFIED_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;Governance boundary baseline is unchanged.;
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/governance-baseline-refresh-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy initialized with MODIFIED_FILE
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY;ROLLBACK_COPY_VERIFY=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored to the pre-refresh governance baseline; live target remains modified and verified=PASS
+SECURITY=no credentials or sensitive values involved

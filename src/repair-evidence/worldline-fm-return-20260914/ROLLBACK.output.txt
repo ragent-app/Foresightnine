@@ -1,0 +1,9 @@
+ROLLBACK_RESULT=restored
+ROLLBACK_TARGET=/home/lxx/Foresightnine/src/repair-evidence/worldline-fm-return-20260914/rollback-test/run1
+ROLLBACK_SCRIPT_EXIT=0
+apps/web/src/state.ts: OK
+apps/web/src/app.test.ts: OK
+apps/web/src/components/FmPanel.tsx: OK
+apps/web/src/i18n.tsx: OK
+RESTORED_HASH_CHECK_EXIT=0
+RESTORED_BEHAVIOR_STATUS=baseline files restored on isolated copy; live modified files retained

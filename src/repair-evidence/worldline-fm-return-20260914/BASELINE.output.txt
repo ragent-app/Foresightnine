@@ -1,0 +1,36 @@
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ❯ src/app.test.ts (52 tests | 1 failed | 51 skipped) 33ms
+   × FM worker and public delta > keeps failed and cancelled FM states visible so computation can be retried 29ms
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/app.test.ts > FM worker and public delta > keeps failed and cancelled FM states visible so computation can be retried
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/app.test.ts:539:41
+    537|     expect(failed.stage).toBe("fm");
+    538|     expect(failed.fmStatus).toBe("failed");
+    539|     expect(canEnterStage(failed, "fm")).toBe(true);
+       |                                         ^
+    540|     expect(safeStageFor(failed)).toBe("fm");
+    541|     expect(reducer(failed, { type: "fm_start" }).fmStatus).toBe("compu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 51 skipped (52)
+   Start at  15:31:14
+   Duration  1.84s (transform 990ms, setup 0ms, collect 1.30s, tests 33ms, environment 0ms, prepare 180ms)
+
+undefined
+/home/lxx/Foresightnine/src/apps/web:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: vitest run src/app.test.ts -t 'keeps failed and cancelled FM states visible so computation can be retried'

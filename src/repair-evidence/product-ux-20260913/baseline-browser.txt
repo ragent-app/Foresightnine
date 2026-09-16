@@ -1,0 +1,7 @@
+URL=https://app.foresightnine.com/oauth/complete
+VIEWPORT=desktop Chrome
+FLOW=New research -> enter thesis -> start adversarial review -> first provider response
+OBSERVED_STATUS=审查中 · 正在接收回复 after challenger response arrived
+OBSERVED_LAYOUT=full manual evidence form expanded beside transcript; reply composer and evidence form compete for attention; decision requirements are below the fold
+OBSERVED_CONTENT=challenger objections, missing evidence, and questions collapse into one long paragraph
+OBSERVED_GATE=disabled worldline actions have no nearby unmet-requirement summary

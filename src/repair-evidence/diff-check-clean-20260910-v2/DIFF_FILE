@@ -1,0 +1,9 @@
+diff --git a/src/repair-evidence/diff-check-clean-20260910-v2/baseline-files/dataprovider.md.orig "b/src/docs/data/dataprovider\346\214\207\345\257\274.md"
+index cd13e4c..733d78d 100644
+--- a/src/repair-evidence/diff-check-clean-20260910-v2/baseline-files/dataprovider.md.orig
++++ "b/src/docs/data/dataprovider\346\214\207\345\257\274.md"
+@@ -676,4 +676,3 @@ FX
+ [12]: https://www.alphavantage.co/premium/?utm_source=chatgpt.com "Premium API Key | Alpha Vantage"
+ [13]: https://github.com/OpenBB-finance/OpenBB/blob/develop/openbb_platform/README.md?utm_source=chatgpt.com "OpenBB/openbb_platform/README.md at develop · OpenBB-finance/OpenBB · GitHub"
+ [14]: https://github.com/OpenBB-finance/OpenBB?utm_source=chatgpt.com "GitHub - OpenBB-finance/OpenBB: Financial data platform for analysts, quants and AI agents. · GitHub"
+-

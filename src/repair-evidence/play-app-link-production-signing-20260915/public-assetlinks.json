@@ -1,0 +1,17 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.foresightnine.mobile",
+      "sha256_cert_fingerprints": [
+        "33:4B:79:0C:E2:40:5F:11:87:B9:3D:FB:64:2D:50:7C:48:A8:87:2F:9E:5E:10:E8:E4:9B:EC:30:A5:84:45:A9",
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C",
+        "E3:E2:88:10:87:6A:A5:2E:18:61:9B:A2:25:47:6C:0C:CF:0D:FC:33:40:20:76:37:78:0A:B3:DE:4F:F4:A7:AC",
+        "8D:B0:2A:AD:2E:C0:39:F7:5A:0D:57:75:F1:C9:7E:DB:78:73:BA:AC:34:A5:D4:6A:91:65:EC:2A:8D:AA:9A:C9"
+      ]
+    }
+  }
+]

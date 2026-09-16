@@ -15,11 +15,14 @@ import {
   type OAuthProvider,
   type OAuthSession,
 } from "./oauth-client";
+import { fetchAccountBillingSummary, verifyGooglePlayPurchase, type AccountBillingSummary } from "./billing-api";
+import type { BillingProductId } from "./billing-catalog";
 
 export type OAuthSessionStatus = "loading" | "signed_out" | "signed_in" | "error";
 
 export interface OAuthSessionContextValue {
   readonly session: OAuthSession | null;
+  readonly billingSummary: AccountBillingSummary | null;
   readonly status: OAuthSessionStatus;
   readonly errorNotice: string;
   readonly canStart: boolean;
@@ -27,6 +30,8 @@ export interface OAuthSessionContextValue {
   readonly logout: () => Promise<void>;
   readonly deleteAccount: () => Promise<void>;
   readonly dismissError: () => void;
+  readonly refreshBilling: () => Promise<void>;
+  readonly verifyPurchase: (purchaseToken: string, productId: BillingProductId) => Promise<void>;
 }
 
 const OAuthContext = createContext<OAuthSessionContextValue | null>(null);
@@ -39,10 +44,25 @@ export function OAuthSessionProvider({ children }: PropsWithChildren): React.JSX
   const apiBaseUrl = configuredApiBaseUrl();
   const returnUri = configuredOAuthReturnUri();
   const [session, setSession] = useState<OAuthSession | null>(null);
+  const [billingSummary, setBillingSummary] = useState<AccountBillingSummary | null>(null);
   const [status, setStatus] = useState<OAuthSessionStatus>("loading");
   const [errorNotice, setErrorNotice] = useState("");
   const exchangedTickets = useRef(new Set<string>());
   const canStart = Boolean(apiBaseUrl && isSafeOAuthApiBaseUrl(apiBaseUrl) && returnUri);
+
+  const refreshBilling = useCallback(async () => {
+    if (!apiBaseUrl || !session) {
+      setBillingSummary(null);
+      return;
+    }
+    setBillingSummary(await fetchAccountBillingSummary(apiBaseUrl, session.access_token));
+  }, [apiBaseUrl, session]);
+
+  const verifyPurchase = useCallback(async (purchaseToken: string, productId: BillingProductId) => {
+    if (!apiBaseUrl || !session) throw new Error("An account is required for purchase verification.");
+    const result = await verifyGooglePlayPurchase(apiBaseUrl, session.access_token, purchaseToken, productId);
+    setBillingSummary(result.summary);
+  }, [apiBaseUrl, session]);
 
   const processCallback = useCallback(async (rawUrl: string) => {
     if (!returnUri || !apiBaseUrl) return;
@@ -67,6 +87,7 @@ export function OAuthSessionProvider({ children }: PropsWithChildren): React.JSX
       const next = await exchangeOAuthTicket(apiBaseUrl, ticket);
       await saveOAuthSession(next);
       setSession(next);
+      setBillingSummary(null);
       setErrorNotice("");
       setStatus("signed_in");
     } catch {
@@ -88,6 +109,7 @@ export function OAuthSessionProvider({ children }: PropsWithChildren): React.JSX
         const stored = await readOAuthSession();
         if (!active) return;
         setSession(stored);
+        setBillingSummary(null);
         setStatus(stored ? "signed_in" : "signed_out");
       } catch {
         if (!active) return;
@@ -102,6 +124,16 @@ export function OAuthSessionProvider({ children }: PropsWithChildren): React.JSX
     return () => { active = false; subscription.remove(); };
   }, [processCallback]);
 
+  useEffect(() => {
+    if (!session) {
+      setBillingSummary(null);
+      return;
+    }
+    let active = true;
+    void refreshBilling().catch(() => { if (active) setBillingSummary(null); });
+    return () => { active = false; };
+  }, [refreshBilling, session]);
+
   const startLogin = useCallback(async (provider: OAuthProvider) => {
     if (!apiBaseUrl || !returnUri) throw new Error("OAuth is not configured safely.");
     await Linking.openURL(oauthStartUrl(apiBaseUrl, provider, returnUri));
@@ -110,6 +142,7 @@ export function OAuthSessionProvider({ children }: PropsWithChildren): React.JSX
   const logout = useCallback(async () => {
     const current = session;
     setSession(null);
+    setBillingSummary(null);
     setStatus("signed_out");
     try {
       if (current && apiBaseUrl) await logoutOAuthSession(apiBaseUrl, current.access_token);
@@ -121,6 +154,7 @@ export function OAuthSessionProvider({ children }: PropsWithChildren): React.JSX
   const deleteAccount = useCallback(async () => {
     const current = session;
     setSession(null);
+    setBillingSummary(null);
     setStatus("signed_out");
     try {
       if (current && apiBaseUrl) await deleteOAuthAccount(apiBaseUrl, current.access_token);
@@ -129,7 +163,7 @@ export function OAuthSessionProvider({ children }: PropsWithChildren): React.JSX
     }
   }, [apiBaseUrl, session]);
 
-  const value = useMemo<OAuthSessionContextValue>(() => ({ session, status, errorNotice, canStart, startLogin, logout, deleteAccount, dismissError: () => { setErrorNotice(""); setStatus(session ? "signed_in" : "signed_out"); } }), [canStart, deleteAccount, errorNotice, logout, session, startLogin, status]);
+  const value = useMemo<OAuthSessionContextValue>(() => ({ session, billingSummary, status, errorNotice, canStart, startLogin, logout, deleteAccount, refreshBilling, verifyPurchase, dismissError: () => { setErrorNotice(""); setStatus(session ? "signed_in" : "signed_out"); } }), [billingSummary, canStart, deleteAccount, errorNotice, logout, refreshBilling, session, startLogin, status, verifyPurchase]);
   return <OAuthContext.Provider value={value}>{children}</OAuthContext.Provider>;
 }
 

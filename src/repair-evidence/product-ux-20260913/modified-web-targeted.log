@@ -1,0 +1,19 @@
+$ vitest run --passWithNoTests -- --run src/api-runtime.error.test.ts src/app.test.ts
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/methods-guide.test.ts (3 tests) 9ms
+ ✓ src/oauth-client.test.ts (7 tests) 33ms
+ ✓ src/market-config-client.test.ts (5 tests) 25ms
+ ✓ src/api-runtime.error.test.ts (5 tests) 11ms
+ ✓ src/market-data.test.ts (1 test) 32ms
+ ✓ src/search-client.test.ts (6 tests) 19ms
+ ✓ src/freshness.test.ts (9 tests) 87ms
+ ✓ src/challenge-panel.interaction.test.ts (13 tests) 85ms
+ ✓ src/app.test.ts (45 tests) 170ms
+
+ Test Files  9 passed (9)
+      Tests  94 passed (94)
+   Start at  13:35:36
+   Duration  1.65s (transform 1.80s, setup 0ms, collect 4.28s, tests 471ms, environment 4ms, prepare 1.80s)
+

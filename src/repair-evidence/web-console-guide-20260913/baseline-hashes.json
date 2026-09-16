@@ -1,0 +1,6 @@
+{
+  "src/apps/web/src/App.tsx": "3c902e1930c56b9236b37c8c797cac85589db109c34de19b3fc495a681545769",
+  "src/apps/web/src/components/MarketDataConfigPanel.tsx": "0b4a0b36dee7d6ef56e3cda9dad6b353184bb8e38c8cf1ef50d8e96e7d575fac",
+  "src/apps/web/src/components/MethodsPanel.tsx": "70438538e8638dcef357b4549636ed66726167efc814a303bd81f7e8d0edd9b6",
+  "src/apps/web/src/styles.css": "cbc01e4e4afd9fd1aab0c74b2124e91570fe9490831df01b77dd60e015865b9a"
+}

@@ -1,0 +1,31 @@
+ForesightNine plan and Play track evidence reconciliation
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=plan.md current Play track read evidence and governance-baseline plan hash
+CHANGE_DETAILS=replace stale current internal-track HTTP 200 wording with the latest three HTTP 403 PERMISSION_DENIED reads and refresh only the plan.md governance hash; historical evidence remains in problem.md.
+LIVE_FILE=/home/lxx/Foresightnine/plan.md
+LIVE_GOVERNANCE_FILE=/home/lxx/Foresightnine/src/docs/verification/governance-baseline.json
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/plan-play-recheck-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/plan-play-recheck-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/plan-play-recheck-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/plan-play-recheck-20260910/ROLLBACK.sh
+BASELINE_HASHES=0eb5ebe03bf8b6282c88f742ce0df25e80ea01d4694ebd21164460c0214e66d4  plan.md;3bfd85273897012066f75762c99e17ce21e881ba6b45e9ab383f46551289da45  src/docs/verification/governance-baseline.json;
+
+BASELINE_COMMAND=corepack pnpm --dir src verify:boundaries
+BASELINE_INPUT=current checkout before plan evidence reconciliation
+BASELINE_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;Governance boundary baseline is unchanged.;
+BASELINE_RESULT=PASS_BEFORE_CHANGE
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=corepack pnpm --dir src verify:boundaries
+MODIFIED_INPUT=current checkout after plan and governance hash refresh
+MODIFIED_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;Governance boundary baseline is unchanged.;
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/plan-play-recheck-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy initialized with modified plan and governance baseline
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY;ROLLBACK_COPY_VERIFY=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored both pre-change files; live plan remains updated and verified=PASS
+SECURITY=no credential JSON, private key, OAuth code, access token, cookie, or sensitive response body included

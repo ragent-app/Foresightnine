@@ -1,5 +1,19 @@
 # Progress
 
+## Web-first v1 — 2026-09-13
+
+- 正式网页以 `https://app.foresightnine.com` 为唯一应用入口；根域与 `www` 通过 Tunnel 进入 API 后以 308 保留路径和查询参数跳转到应用域名。
+- 生产网页改用 `app.foresightnine.com` 同源 API；`/snapshots` 已加入 Tunnel API ingress，旧 `staging.foresightnine.com` 不再作为正式网页运行地址。
+- 研究控制台新增账户级金融数据源设置，可配置 Market Data、Alpha Vantage、Twelve Data、Finnhub，并对 Yahoo fallback 统一启停、排序和连通性测试。
+- 用户 Key 使用独立 AES-GCM 密钥按账户和 provider 绑定加密；响应只返回末四位提示，浏览器存储、导出、日志及 Git 均不包含密钥原文。账户删除同步清理配置。
+- 原有 provider admission、三时点、Redis 缓存、future/stale/missing 校验和价格派生因子链路保持不变；个人 Key 只覆盖对应 adapter，不接受任意 URL。
+- SEO 第一版补充 canonical、description、Open Graph、robots 和 sitemap；OAuth 与 API 路径禁止索引。
+
+### Verification
+
+- API 全量测试、Web 69 项测试、TypeScript typecheck 和 Vite production build 通过。
+- 公网 `app` 首页、robots、sitemap、同源 `/snapshots` 与配置鉴权通过；临时账户完成配置保存、掩码读取和删除闭环。
+
 ## Current implementation correction status — 2026-08-31
 
 - The current repository HEAD is `a990ee7` and is aligned with `origin/master`.

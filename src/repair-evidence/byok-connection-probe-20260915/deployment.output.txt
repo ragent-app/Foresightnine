@@ -1,0 +1,131 @@
+ Image docker-api Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 509B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile.api
+#2 transferring dockerfile: 34B
+#2 transferring dockerfile: 718B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+#3 DONE 2.3s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/9] FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca
+#5 resolve ghcr.io/astral-sh/uv:python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca 0.1s done
+#5 DONE 0.1s
+
+#6 [internal] load build context
+#6 transferring context: 96.39kB 0.0s done
+#6 DONE 0.0s
+
+#7 [2/9] WORKDIR /app
+#7 CACHED
+
+#8 [3/9] COPY apps/api/pyproject.toml apps/api/README.md apps/api/uv.lock /app/apps/api/
+#8 CACHED
+
+#9 [4/9] COPY apps/api/app /app/apps/api/app
+#9 DONE 0.1s
+
+#10 [5/9] COPY packages/contracts/schemas /app/packages/contracts/schemas
+#10 DONE 0.1s
+
+#11 [6/9] COPY packages/asset-registry /app/packages/asset-registry
+#11 DONE 0.1s
+
+#12 [7/9] COPY infra/migrations /app/infra/migrations
+#12 DONE 0.1s
+
+#13 [8/9] COPY infra/deployment/provider-manifest.v1.json /app/infra/deployment/provider-manifest.v1.json
+#13 DONE 0.1s
+
+#14 [9/9] RUN uv sync --project /app/apps/api --frozen --no-dev --no-install-project
+#14 0.681 Using CPython 3.13.11 interpreter at: /usr/local/bin/python3
+#14 0.681 Creating virtual environment at: apps/api/.venv
+#14 2.512 Downloading psycopg-binary (4.9MiB)
+#14 2.512 Downloading uvloop (4.2MiB)
+#14 2.513 Downloading pydantic-core (2.0MiB)
+#14 2.519 Downloading cryptography (4.3MiB)
+#14 7.418  Downloaded pydantic-core
+#14 10.38  Downloaded psycopg-binary
+#14 10.38  Downloaded uvloop
+#14 10.40  Downloaded cryptography
+#14 10.40 Prepared 37 packages in 9.70s
+#14 10.44 Installed 37 packages in 38ms
+#14 10.44  + annotated-doc==0.0.5
+#14 10.44  + annotated-types==0.8.0
+#14 10.44  + anyio==4.14.2
+#14 10.44  + attrs==26.1.0
+#14 10.44  + certifi==2026.7.22
+#14 10.44  + cffi==2.1.1
+#14 10.44  + charset-normalizer==3.5.1
+#14 10.44  + click==8.4.2
+#14 10.44  + cryptography==46.0.7
+#14 10.44  + fastapi==0.141.1
+#14 10.44  + google-auth==2.57.1
+#14 10.44  + h11==0.16.0
+#14 10.44  + httptools==0.8.0
+#14 10.44  + idna==3.18
+#14 10.44  + jsonschema==4.26.0
+#14 10.44  + jsonschema-specifications==2025.9.1
+#14 10.44  + psycopg==3.3.4
+#14 10.44  + psycopg-binary==3.3.4
+#14 10.44  + pyasn1==0.6.4
+#14 10.44  + pyasn1-modules==0.4.2
+#14 10.44  + pycparser==3.0
+#14 10.44  + pydantic==2.13.4
+#14 10.44  + pydantic-core==2.46.4
+#14 10.44  + python-dotenv==1.2.2
+#14 10.44  + pyyaml==6.0.3
+#14 10.44  + redis==6.4.0
+#14 10.44  + referencing==0.37.0
+#14 10.44  + requests==2.34.2
+#14 10.44  + rpds-py==2026.6.3
+#14 10.44  + starlette==1.6.0
+#14 10.44  + typing-extensions==4.16.0
+#14 10.44  + typing-inspection==0.4.2
+#14 10.44  + urllib3==2.7.0
+#14 10.44  + uvicorn==0.52.1
+#14 10.44  + uvloop==0.22.1
+#14 10.44  + watchfiles==1.2.0
+#14 10.44  + websockets==17.0.1
+#14 DONE 11.0s
+
+#15 exporting to image
+#15 exporting layers
+#15 exporting layers 8.4s done
+#15 exporting manifest sha256:218a4f2867009d87553a688ac6805167f9c3954d9c9dc7d1641c27c69b2424e9 0.0s done
+#15 exporting config sha256:fbf5566c7af1499f8d5acb8256cebfca55835eefba275a324afd0bd697ea4a34 0.0s done
+#15 exporting attestation manifest sha256:612535502cf5734c89b6fa81fd2b6710db74f5dabc2177b61f48bfcbc2ef3cb4
+#15 exporting attestation manifest sha256:612535502cf5734c89b6fa81fd2b6710db74f5dabc2177b61f48bfcbc2ef3cb4 0.0s done
+#15 exporting manifest list sha256:7f8b79a10068c89c7198cc1b65c4f96c632df904c12eb1dfbf394e5e8cce2e2b 0.0s done
+#15 naming to docker.io/library/docker-api:latest done
+#15 unpacking to docker.io/library/docker-api:latest
+#15 unpacking to docker.io/library/docker-api:latest 2.1s done
+#15 DONE 10.8s
+
+#16 resolving provenance for metadata file
+#16 DONE 0.0s
+ Image docker-api Built 
+ Container docker-redis-1 Running 
+ Container docker-postgres-1 Running 
+ Container docker-api-1 Recreate 
+ Container docker-api-1 Recreated 
+ Container docker-redis-1 Waiting 
+ Container docker-postgres-1 Waiting 
+ Container docker-postgres-1 Healthy 
+ Container docker-redis-1 Healthy 
+ Container docker-api-1 Starting 
+ Container docker-api-1 Started 
+API_CONTAINER_HEALTH=healthy
+https://app.foresightnine.com/health HTTP=200
+https://app.foresightnine.com/readyz HTTP=200
+https://app.foresightnine.com/ HTTP=200
+WEB_ASSET=assets/index-EiMJ9o8x.js
+WEB_PROBE_DISCLOSURE_PRESENT=true
+API_IMAGE=sha256:7f8b79a10068c89c7198cc1b65c4f96c632df904c12eb1dfbf394e5e8cce2e2b

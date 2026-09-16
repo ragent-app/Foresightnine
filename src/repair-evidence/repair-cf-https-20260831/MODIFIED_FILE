@@ -1,0 +1,5 @@
+zone=foresightnine.com
+setting=always_use_https
+value=on
+scope=zone-global
+hosts=app.foresightnine.com,staging.foresightnine.com,api-staging.foresightnine.com

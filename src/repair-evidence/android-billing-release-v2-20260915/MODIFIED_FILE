@@ -1,0 +1,15 @@
+CHANGE_BRANCH=android_release_candidate.v2_billing_and_production_app_link
+CHANGED_FIELD_VERSION_CODE=2
+CHANGED_FIELD_VERSION_NAME=0.2.0
+CHANGED_FIELD_APP_LINK_HOST=app.foresightnine.com
+CHANGED_FIELD_APP_LINK_PATH=/oauth/complete
+CHANGED_FIELD_CUSTOM_SCHEME_PRESENT=NO
+BILLING_PERMISSION=YES
+BILLING_MODULE_DEX_COUNT=14
+MARKET_RUNTIME=public
+API_BASE=https://api-staging.foresightnine.com
+AAB_PATH=/home/lxx/Foresightnine/src/apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+AAB_SHA256=3d0a2741097d67d843dd37342164ecb68e532ad83c68aee1407577531799007e
+AAB_BYTES=69252255
+AAB_SIGNATURE_STATUS=UNSIGNED
+LIVE_STATE=source_v2_and_unsigned_release_candidate_built

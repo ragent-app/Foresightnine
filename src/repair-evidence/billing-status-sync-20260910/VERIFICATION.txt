@@ -1,0 +1,35 @@
+CHANGE_BRANCH_FIELD=billing status synchronization and expiry fail-closed behavior
+CHANGE_DETAILS=server-selected provider model propagation; optional purchase-token key-file loading; advisory-lock hooks for reservation/settlement/release/purchase; active/grace-period entitlement handling; expired-period quota zeroing; same-period status refresh preserving consumed tokens
+LIVE_MODIFIED_FILE=/home/lxx/Foresightnine/src/apps/api/app/billing.py
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/ROLLBACK.sh
+BASELINE_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/billing.py.orig
+
+BASELINE_COMMAND=PYTHONPATH=/tmp/fn-billing-baseline.4gSpGH uv run --project src/apps/api python /tmp/fn-billing-baseline.4gSpGH/smoke.py
+BASELINE_INPUT=billing.py.orig copied into a separate app package; free-state snapshot, reservation, and zero-token settlement smoke
+BASELINE_LITERAL_OUTPUT=BASELINE_SMOKE=PASS
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=uv run --project src/apps/api pytest -q
+MODIFIED_INPUT=live checkout with current billing.py and current test suite
+MODIFIED_LITERAL_OUTPUT=262 passed, 1 skipped, 1 warning in 10.78s
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/ROLLBACK.sh /tmp/fn-billing-rollback.beUNkE
+ROLLBACK_INPUT=separate copy containing a sentinel billing.py; rollback script restored billing.py.orig
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+ROLLBACK_COMPARE_LITERAL_OUTPUT=ROLLBACK_COMPARE_EXIT_STATUS=0
+ROLLBACK_COMPARE_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy matched billing.py.orig after rollback; live checkout remains modified
+
+BASELINE_HASH=1e58d46c6ac48303852766c017d3e6da2d523ad2ca4850e40d9badd6dac7b466
+MODIFIED_HASH=2a36f94276af2d2a36355efe902f269e6a98fa1f4c14ae8c42fcecc5a4cb3e31
+DIFF_CHECK=git diff --no-index --stat billing.py.orig MODIFIED_FILE; 198 lines, 164 insertions(+), 34 deletions(-)
+ARTIFACT_MODES=MODIFIED_FILE=664 DIFF_FILE=664 VERIFICATION.txt=600 ROLLBACK.sh=700
+SECURITY=No credential JSON, private key, OAuth code, access token, cookie, or secret value is included in this evidence.

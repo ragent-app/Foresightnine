@@ -1,0 +1,98 @@
+ForesightNine personal OpenAI-compatible model request repair
+AUDIT_TIME=2026-09-15 Asia/Shanghai
+BRANCH=master
+COMMIT_BEFORE_WORKTREE=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_FIELD=Account-scoped OpenAI-compatible connection probe, deployment timeout inheritance, exact GLM Coding generation profile, and user-facing probe disclosure.
+ROOT_CAUSE_1=The connection test treated GET /models as the only proof of compatibility, so gateways that support chat/completions but omit model discovery were reported unavailable.
+ROOT_CAUSE_2=Account-scoped providers were constructed with ProviderPolicy's 20-second default instead of the deployment's bounded 120-second timeout. A real saved personal configuration returned TEST_STATUS=ready, but the first full request returned HTTP 503.
+ROOT_CAUSE_3=The exact official GLM Coding endpoint/model pair was treated as a generic compatible provider, omitting its required thinking/reasoning/do_sample profile and 4000-token output budget. After timeout inheritance alone, the same real full request returned HTTP 500; direct diagnosis returned invalid_provider_output. Exact endpoint/model profiling made the full request pass.
+FIX=Keep GET /models as the cheap first probe, fall back to a fixed one-token chat/completions request with no research content, inherit the deployment-bounded timeout for saved account settings, apply GLM-specific generation controls only for the exact official GLM Coding URL plus glm-5.3-flash model, and disclose the possible minimal provider usage in the UI.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/byok-connection-probe-20260915/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/byok-connection-probe-20260915/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/byok-connection-probe-20260915/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/byok-connection-probe-20260915/ROLLBACK.sh
+
+ORIGINAL_HASHES
+3e7bfef4cbdb2bc72ce0c1a80e3287a5c92fbae83955a2c7caeea93311a538e3  apps/api/app/openai_compatible.py
+982b55919ddedc86491d3a03e7bcba9f04e6582739ed7ecefe494b226ac377e5  apps/api/tests/test_openai_compatible_provider.py
+89b7e668733042dc30afcf523150b68cff240566406eb2377d4b79f50ffc6b74  apps/web/src/components/ModelConfigPanel.tsx
+
+MODIFIED_HASHES
+10c5884055c4efbc65c6e32957f706b0c156750b964515fc2a117b0e1e359d7f  apps/api/app/openai_compatible.py
+5a6d4813d994ed6683a692cc3f5633c14a9d9823d1b9a21b39b2abf4d21b4f5a  apps/api/tests/test_openai_compatible_provider.py
+857e30999728444979f4e3608e1d7d0ec8a69b89028d35fc4993d180172a9f5e  apps/web/src/components/ModelConfigPanel.tsx
+
+BASELINE
+COMMAND=cd /home/lxx/.config/foresightnine/baseline-run/byok-connection-probe-20260915 && PYTHONPATH=/home/lxx/.config/foresightnine/baseline-run/byok-connection-probe-20260915/apps/api /home/lxx/Foresightnine/src/apps/api/.venv/bin/pytest -q --tb=no apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_falls_back_to_minimal_chat_when_models_listing_is_unavailable apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_stays_unavailable_when_models_and_chat_are_rejected apps/api/tests/test_openai_compatible_provider.py::test_account_settings_inherit_the_bounded_deployment_timeout apps/api/tests/test_openai_compatible_provider.py::test_account_glm_coding_endpoint_uses_its_required_generation_profile
+INPUT=Four synthetic regression cases executed against the preserved original provider: missing /models with working chat; both probes rejected; saved account settings with a 120-second deployment timeout; and the exact official GLM Coding endpoint/model requiring its generation profile.
+LITERAL_OUTPUT_BEGIN
+FFFF                                                                     [100%]
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_falls_back_to_minimal_chat_when_models_listing_is_unavailable
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_stays_unavailable_when_models_and_chat_are_rejected
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_account_settings_inherit_the_bounded_deployment_timeout
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_account_glm_coding_endpoint_uses_its_required_generation_profile
+4 failed in 0.24s
+LITERAL_OUTPUT_END
+EXIT_STATUS=1
+RESULT=FAIL as expected: the original implementation had all four defects.
+
+MODIFIED
+COMMAND=uv run --project apps/api pytest -q --tb=no apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_falls_back_to_minimal_chat_when_models_listing_is_unavailable apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_stays_unavailable_when_models_and_chat_are_rejected apps/api/tests/test_openai_compatible_provider.py::test_account_settings_inherit_the_bounded_deployment_timeout apps/api/tests/test_openai_compatible_provider.py::test_account_glm_coding_endpoint_uses_its_required_generation_profile
+INPUT=The same four synthetic regression cases and values used by BASELINE, executed against the changed source.
+LITERAL_OUTPUT_BEGIN
+....                                                                     [100%]
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: all four regression cases pass.
+
+FULL_VALIDATION
+COMMANDS=uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py apps/api/tests/test_model_credentials.py; corepack pnpm --filter @foresightnine/web typecheck; corepack pnpm --filter @foresightnine/web test; corepack pnpm --filter @foresightnine/web build
+LITERAL_RESULT=API 51 tests passed; Web typecheck passed; Web 10 files / 118 tests passed; Vite production build passed.
+EXIT_STATUS=0
+
+LIVE_BEFORE_FIX
+INPUT=A temporary synthetic local account saved the server's existing GLM-compatible URL/model/key only in process memory and invoked the public account model-config/test plus full challenge route; no credential value was printed or written to evidence.
+LITERAL_RESULT_1=REGISTER_HTTP=201; SAVE_HTTP=200; TEST_HTTP=200; TEST_STATUS=ready; SESSION_HTTP=201; CHALLENGE_HTTP=503; DELETE_SYNTHETIC_ACCOUNT_HTTP=200; EXIT_STATUS=1.
+LITERAL_RESULT_2=After timeout inheritance alone: REGISTER_HTTP=201; SAVE_HTTP=200; TEST_HTTP=200; TEST_STATUS=ready; SESSION_HTTP=201; CHALLENGE_HTTP=500; DELETE_SYNTHETIC_ACCOUNT_HTTP=200; EXIT_STATUS=1. Direct diagnostic returned FAILURE_CODE=invalid_provider_output.
+
+LIVE_AFTER_FIX
+INPUT=The same bounded synthetic full-flow shape using the deployed API and exact GLM Coding account profile; the account and encrypted saved configuration were deleted in finally.
+LITERAL_OUTPUT_BEGIN
+REGISTER_HTTP=201
+SAVE_HTTP=200
+TEST_HTTP=200
+TEST_STATUS=ready
+SESSION_HTTP=201
+CHALLENGE_HTTP=201
+PERSONAL_PROVIDER_SOURCE=True
+STRUCTURED_OBJECTIONS=True
+DELETE_SYNTHETIC_ACCOUNT_HTTP=200
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: save, connection test, real personal-provider challenge, structured result, and cleanup all succeeded; provider source was account-scoped.
+DEPLOYMENT=API container healthy; https://app.foresightnine.com/health HTTP 200; /readyz HTTP 200; Web HTTP 200; public bundle contains the minimal-usage disclosure.
+
+ROLLBACK
+COMMAND=/home/lxx/Foresightnine/src/repair-evidence/byok-connection-probe-20260915/ROLLBACK.sh /home/lxx/.config/foresightnine/rollback-test/byok-connection-probe-20260915/work
+INPUT=An isolated copy of the three changed files under /home/lxx/.config/foresightnine/rollback-test/byok-connection-probe-20260915/work; the live source and deployed service were not rolled back.
+LITERAL_OUTPUT_BEGIN
+RESTORED apps/api/app/openai_compatible.py SHA256=3e7bfef4cbdb2bc72ce0c1a80e3287a5c92fbae83955a2c7caeea93311a538e3
+RESTORED apps/api/tests/test_openai_compatible_provider.py SHA256=982b55919ddedc86491d3a03e7bcba9f04e6582739ed7ecefe494b226ac377e5
+RESTORED apps/web/src/components/ModelConfigPanel.tsx SHA256=89b7e668733042dc30afcf523150b68cff240566406eb2377d4b79f50ffc6b74
+ROLLBACK_STATUS=restored_original_files
+ROLLBACK_EXIT=0
+ROLLBACK_HASH_MATCH=true
+ROLLBACK_EXIT=0
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: isolated rollback restored all three original SHA-256 values.
+RESTORED_BEHAVIOR_STATUS=PASS: the isolated copy again has the original models-only probe, 20-second account default, generic GLM behavior, and previous UI copy. The live working tree remains changed, the deployed API remains healthy, and the fixed full BYOK request remains active.
+
+SECURITY
+USER_API_KEY_READ_OR_PRINTED=NO
+SERVER_PROVIDER_KEY_PRINTED_OR_PERSISTED_TO_EVIDENCE=NO
+TEMPORARY_ACCOUNT_RETAINED=NO
+CREDENTIAL_OR_PRODUCTION_MUTATION=NO

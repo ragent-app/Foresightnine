@@ -8,12 +8,15 @@ available.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, ItemsView, Mapping, MutableMapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 import json
 import os
 import re
+from threading import RLock
 from typing import Any, Generic, Protocol, TypeVar
 
 
@@ -23,6 +26,31 @@ ValueDumper = Callable[[ValueT], Any]
 
 DOCUMENT_TABLE = "research_state_documents"
 _COLLECTION_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
+_POSTGRES_UNIT_OF_WORK: ContextVar[tuple[str, Any, Any] | None] = ContextVar("foresightnine_postgres_uow", default=None)
+
+
+@contextmanager
+def postgres_unit_of_work(dsn: str, connection: Any, cursor: Any) -> Iterator[None]:
+    """Expose one operation-store transaction to entity repositories.
+
+    Operation admission callbacks run while the operation/idempotency rows are
+    locked. Repositories with the same DSN reuse this connection, so business
+    documents, usage ledger, and operation terminal state commit or roll back
+    together instead of opening split transactions.
+    """
+    token = _POSTGRES_UNIT_OF_WORK.set((dsn.strip(), connection, cursor))
+    try:
+        yield
+    finally:
+        _POSTGRES_UNIT_OF_WORK.reset(token)
+
+
+def current_postgres_unit_of_work(dsn: str) -> tuple[Any, Any] | None:
+    """Return the ambient connection/cursor only for the matching database."""
+    current = _POSTGRES_UNIT_OF_WORK.get()
+    if current is None or current[0] != dsn.strip():
+        return None
+    return current[1], current[2]
 
 
 class StorageMode(StrEnum):
@@ -187,6 +215,8 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         self._values: dict[str, ValueT] = {}
         self._versions: dict[str, int] = {}
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._advisory_locks: dict[str, RLock] = {}
+        self._advisory_locks_guard = RLock()
 
     def _current_time(self) -> datetime:
         current = self._clock()
@@ -248,6 +278,19 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
     def clear(self) -> None:
         self._values.clear()
         self._versions.clear()
+
+    def with_advisory_lock(self, key: str, operation: Callable[[], ValueT]) -> ValueT:
+        """Serialize the same logical mutation boundary as PostgreSQL.
+
+        A per-key lock keeps concurrent development/test requests honest: two
+        different idempotency keys may run provider work concurrently, but
+        they cannot both commit from the same stale aggregate snapshot.
+        """
+        _validate_key(key)
+        with self._advisory_locks_guard:
+            lock = self._advisory_locks.setdefault(key, RLock())
+        with lock:
+            return operation()
 
     def items_for_retention(self) -> ItemsView[str, ValueT]:
         """Enumerate all stored documents for retention, including expired values."""
@@ -346,6 +389,10 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         except Exception as error:
             raise StorageRuntimeError("PostgreSQL storage is unavailable.") from error
 
+    def _ambient_cursor(self) -> Any | None:
+        current = _POSTGRES_UNIT_OF_WORK.get()
+        return current[2] if current is not None and current[0] == self._dsn else None
+
     def _jsonb_parameter(self, document: Any) -> Any:
         if self._uses_injected_connection:
             return document
@@ -372,10 +419,15 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
     def __getitem__(self, key: str) -> ValueT:
         _validate_key(key)
         try:
-            with self._connection() as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(_GET_SQL, (self.collection, key))
-                    row = cursor.fetchone()
+            cursor = self._ambient_cursor()
+            if cursor is not None:
+                cursor.execute(_GET_SQL, (self.collection, key))
+                row = cursor.fetchone()
+            else:
+                with self._connection() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(_GET_SQL, (self.collection, key))
+                        row = cursor.fetchone()
         except KeyError:
             raise
         except StorageRuntimeError:
@@ -447,10 +499,15 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             statement = _UPDATE_SQL
             parameters = (self._jsonb_parameter(document), expires_at, self.collection, key, expected_version)
         try:
-            with self._connection() as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(statement, parameters)
-                    row = cursor.fetchone()
+            cursor = self._ambient_cursor()
+            if cursor is not None:
+                cursor.execute(statement, parameters)
+                row = cursor.fetchone()
+            else:
+                with self._connection() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(statement, parameters)
+                        row = cursor.fetchone()
         except StorageConflictError:
             raise
         except StorageRuntimeError:
@@ -460,6 +517,29 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         if row is None:
             raise StorageConflictError("Storage document version conflict.")
         return int(row[0] if not isinstance(row, Mapping) else row["version"])
+
+    def with_advisory_lock(self, key: str, operation: Callable[[], ValueT]) -> ValueT:
+        """Run a callback while holding a cross-process account lock.
+
+        Outside an ambient operation transaction, the callback receives a
+        short-lived unit of work.  Inside one, a transaction-level PostgreSQL
+        advisory lock serializes billing while every document mutation reuses
+        the operation transaction.
+        """
+        try:
+            ambient = self._ambient_cursor()
+            if ambient is not None:
+                ambient.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
+                return operation()
+            with self._connection() as connection:
+                with connection.cursor() as cursor:
+                    with postgres_unit_of_work(self._dsn, connection, cursor):
+                        cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (key,))
+                        return operation()
+        except StorageRuntimeError:
+            raise
+        except Exception as error:
+            raise StorageRuntimeError("PostgreSQL billing lock operation failed.") from error
 
     def version(self, key: str) -> int | None:
         _validate_key(key)
@@ -554,5 +634,7 @@ __all__ = [
     "StorageMode",
     "StorageRuntimeError",
     "build_repository",
+    "postgres_unit_of_work",
+    "current_postgres_unit_of_work",
     "pydantic_json_dumper",
 ]

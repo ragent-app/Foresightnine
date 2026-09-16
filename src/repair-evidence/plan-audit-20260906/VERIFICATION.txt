@@ -1,0 +1,45 @@
+ARTIFACT=ForesightNine plan update
+CHANGED_BRANCH_OR_FIELD=plan.md / appended section "2026-09-06 双平台流水线复核与下一步实施计划"
+TARGET=/home/lxx/Foresightnine/plan.md
+BASELINE_HASH=2740da112354f25408c60416b7b880e73431e4d7fea57e208494fd2d09ceef3c
+MODIFIED_HASH=aa5efab0011109a1ecf6ef5e5727e11c89adb7c39f5b1307745331bbd14d804e
+
+BASELINE
+Command:
+count=$(grep -c "^# 2026-09-06 双平台流水线复核与下一步实施计划$" BASELINE_FILE || true); printf "baseline_section_count=%s\n" "$count"; test "$count" -eq 0
+Input:
+/home/lxx/Foresightnine/src/repair-evidence/plan-audit-20260906/BASELINE_FILE (HEAD:plan.md snapshot)
+Literal output:
+baseline_section_count=0
+Result:
+BASELINE_EXIT_STATUS=0; original section absent; original hash preserved in BASELINE_FILE.
+
+MODIFIED
+Command:
+count=$(grep -c "^# 2026-09-06 双平台流水线复核与下一步实施计划$" /home/lxx/Foresightnine/plan.md || true); printf "modified_section_count=%s\n" "$count"; test "$count" -eq 1
+Input:
+/home/lxx/Foresightnine/plan.md
+Literal output:
+modified_section_count=1
+Result:
+MODIFIED_EXIT_STATUS=0; appended plan section present; target remains changed.
+
+ROLLBACK
+Command:
+/home/lxx/Foresightnine/src/repair-evidence/plan-audit-20260906/ROLLBACK.sh ROLLBACK_TEST_FILE BASELINE_FILE
+Input:
+ROLLBACK_TEST_FILE was a copy of the changed plan; BASELINE_FILE was the original HEAD snapshot.
+Literal output:
+ROLLBACK_RESULT=RESTORED
+ROLLBACK_SCRIPT_EXIT_STATUS=0
+ROLLBACK_RESTORED_BEHAVIOR=BASELINE_MATCH
+ROLLBACK_TEST_EXIT_STATUS=0
+ROLLBACK_COMPARE_COMMAND=cmp -s BASELINE_FILE ROLLBACK_TEST_FILE
+ROLLBACK_COMPARE_EXIT_STATUS=0
+Result:
+rollback restored the separate test copy; /home/lxx/Foresightnine/plan.md was left changed.
+
+SECURITY_CHECKS
+Credential JSON was not read into this report, printed, committed, or copied.
+OAuth code, access token, Cookie, private key, and private_key_id were not printed.
+Production/Play purchase mutations were not executed.

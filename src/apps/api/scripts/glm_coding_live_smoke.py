@@ -37,7 +37,7 @@ from app.phase3 import (  # noqa: E402
 
 
 API_KEY_ENV = "FORESIGHTNINE_GLM_CODING_API_KEY"
-MODEL = "glm-5.3"
+MODEL = "glm-5.3-flash"
 EXIT_OK = 0
 EXIT_PROVIDER_FAILURE = 1
 EXIT_BLOCKED = 2

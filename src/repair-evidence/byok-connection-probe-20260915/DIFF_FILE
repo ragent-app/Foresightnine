@@ -1,0 +1,210 @@
+--- a/apps/api/app/openai_compatible.py
++++ b/apps/api/app/openai_compatible.py
+@@ -390,12 +390,21 @@
+         normalized_host = _normalize_hostname(hostname)
+         if normalized_host in {"metadata.google.internal", "metadata.azure.internal"}:
+             raise ProviderFailure("provider_configuration_invalid", "LLM base URL host is not permitted.", retryable=False)
++        # The official GLM Coding endpoint requires the same profile used by
++        # the server-owned route.  Exact URL + model matching prevents these
++        # vendor-specific fields from leaking into unrelated compatible APIs.
++        glm_generation = (
++            GlmCodingGenerationSettings()
++            if base_url.rstrip("/") == _GLM_CODING_BASE_URL and model == _GLM_CODING_DEFAULT_MODEL
++            else None
++        )
+         settings = cls.from_values(
+             base_url=base_url,
+             model=model,
+             api_key=api_key,
+             allowlist=normalized_host,
+             allow_private_network=False,
++            glm_generation=glm_generation,
+         )
+         try:
+             _require_public_dns(normalized_host, 443)
+@@ -563,7 +572,18 @@
+         configuration_error: ProviderFailure | None = None,
+     ) -> None:
+         self.settings = settings
+-        self.policy = policy or ProviderPolicy()
++        # Account-scoped BYOK providers are constructed directly from saved
++        # settings.  They must inherit the same bounded deployment timeout as
++        # environment-built providers; otherwise the default 20-second policy
++        # can fail a valid slow model while the connection probe still passes.
++        self.policy = policy or (
++            ProviderPolicy(
++                timeout_seconds=_llm_timeout_from_environment(),
++                max_output_tokens=_GLM_CODING_DEFAULT_OUTPUT_TOKENS if settings.glm_generation is not None else ProviderPolicy().max_output_tokens,
++            )
++            if settings is not None
++            else ProviderPolicy()
++        )
+         if transport is not None:
+             self.transport = transport
+         else:
+@@ -635,21 +655,51 @@
+             raise ValueError("OpenAI-compatible output budget must be between 1 and 4000 tokens.")
+ 
+     def connection_ready(self) -> bool:
+-        """Perform a bounded authenticated capability probe without generation."""
++        """Perform a bounded authenticated capability probe.
++
++        Some otherwise compatible gateways intentionally omit ``GET /models``.
++        Treat that endpoint as the cheap first probe, then fall back to one
++        fixed, one-token chat request that contains no research or account
++        content.  A successful fallback proves the configured model can accept
++        the same chat-completions transport used by the application.
++        """
+         if self.configuration_error is not None or self.settings is None or not self.settings.api_key:
+             return False
+         base = self.settings.base_url.rstrip("/")
+         if urlsplit(base).path.rstrip("/").endswith("/chat/completions"):
+             base = base[: -len("/chat/completions")]
++        headers = {"Accept": "application/json", "Authorization": f"Bearer {self.settings.api_key}"}
+         try:
+             response = self.transport(
+                 "GET",
+                 f"{base}/models",
+-                {"Accept": "application/json", "Authorization": f"Bearer {self.settings.api_key}"},
++                headers,
+                 b"",
+                 self.policy.timeout_seconds,
+             )
+         except (_TransportFailure, _TransportTimeout, TimeoutError, socket.timeout):
++            response = None
++        if response is not None and 200 <= response.status_code < 300:
++            return True
++
++        probe_body = json.dumps(
++            {
++                "model": self.settings.model,
++                "messages": [{"role": "user", "content": "Reply with OK."}],
++                "max_tokens": 1,
++                "stream": False,
++            },
++            separators=(",", ":"),
++        ).encode("utf-8")
++        try:
++            response = self.transport(
++                "POST",
++                _endpoint(self.settings.base_url),
++                {**headers, "Content-Type": "application/json"},
++                probe_body,
++                self.policy.timeout_seconds,
++            )
++        except (_TransportFailure, _TransportTimeout, TimeoutError, socket.timeout):
+             return False
+         return 200 <= response.status_code < 300
+ 
+--- a/apps/api/tests/test_openai_compatible_provider.py
++++ b/apps/api/tests/test_openai_compatible_provider.py
+@@ -82,6 +82,44 @@
+     assert "same natural language as input.claim" in request_body["messages"][1]["content"]
+ 
+ 
++def test_connection_probe_falls_back_to_minimal_chat_when_models_listing_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
++    calls: list[tuple[str, str, dict[str, str], bytes, float]] = []
++
++    def transport(method: str, url: str, headers: dict[str, str], body: bytes, timeout: float) -> HttpResponse:
++        calls.append((method, url, headers, body, timeout))
++        if method == "GET":
++            return HttpResponse(404, "")
++        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": "OK"}}]}))
++
++    value = provider(monkeypatch, transport)
++
++    assert value.connection_ready() is True
++    assert [(method, url) for method, url, *_rest in calls] == [
++        ("GET", "https://llm.example.test/v1/models"),
++        ("POST", "https://llm.example.test/v1/chat/completions"),
++    ]
++    probe = json.loads(calls[1][3])
++    assert probe == {
++        "model": "test-model",
++        "messages": [{"role": "user", "content": "Reply with OK."}],
++        "max_tokens": 1,
++        "stream": False,
++    }
++    assert calls[1][2]["Authorization"] == f"Bearer {_SECRET}"
++
++
++def test_connection_probe_stays_unavailable_when_models_and_chat_are_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
++    calls = 0
++
++    def transport(*_args: object) -> HttpResponse:
++        nonlocal calls
++        calls += 1
++        return HttpResponse(401, "")
++
++    assert provider(monkeypatch, transport).connection_ready() is False
++    assert calls == 2
++
++
+ def test_cline_transport_type_metadata_is_removed_before_strict_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+     payload = valid_payload()
+     payload["type"] = "object"
+@@ -144,6 +182,45 @@
+     built.generate_challenge(request())
+ 
+ 
++def test_account_settings_inherit_the_bounded_deployment_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
++    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
++    settings = OpenAICompatibleSettings(
++        base_url="https://llm.example.test/v1",
++        model="test-model",
++        allowed_hosts=frozenset({("llm.example.test", 443)}),
++        api_key=_SECRET,
++    )
++
++    built = OpenAICompatibleLlmProvider(settings, transport=lambda *_args: HttpResponse(200, "{}"))
++
++    assert built.policy.timeout_seconds == 120
++
++
++def test_account_glm_coding_endpoint_uses_its_required_generation_profile(monkeypatch: pytest.MonkeyPatch) -> None:
++    monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
++    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
++    settings = OpenAICompatibleSettings.from_account_values(
++        base_url="https://open.bigmodel.cn/api/coding/paas/v4",
++        model="glm-5.3-flash",
++        api_key=_SECRET,
++    )
++    captured: list[bytes] = []
++
++    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
++        captured.append(body)
++        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
++
++    built = OpenAICompatibleLlmProvider(settings, transport=transport)
++    built.generate_challenge(request())
++    payload = json.loads(captured[0])
++
++    assert built.policy.timeout_seconds == 120
++    assert built.policy.max_output_tokens == 4000
++    assert payload["thinking"] == {"type": "enabled"}
++    assert payload["reasoning_effort"] == "high"
++    assert payload["do_sample"] is False
++
++
+ def test_environment_timeout_rejects_unbounded_or_invalid_values(monkeypatch: pytest.MonkeyPatch) -> None:
+     configure(monkeypatch)
+     monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "181")
+--- a/apps/web/src/components/ModelConfigPanel.tsx
++++ b/apps/web/src/components/ModelConfigPanel.tsx
+@@ -40,7 +40,7 @@
+     case "saved": return copy(language, "模型配置已保存；新的研究请求会使用当前选择。", "Model settings saved. New research requests will use this selection.");
+     case "deleted": return copy(language, "个人模型配置已删除；研究请求已切回平台模型。", "Personal model settings deleted. Research requests now use the platform model.");
+     case "tested-ready": return copy(language, "模型配置已保存，连接测试通过。", "Model settings saved and the connection test passed.");
+-    case "tested-unavailable": return copy(language, "模型配置已保存，但个人模型连接暂不可用；不会回退到平台模型。", "Model settings were saved, but the personal model is unavailable. The request will not fall back to the platform model.");
++    case "tested-unavailable": return copy(language, "模型配置已保存，但供应商同时拒绝了模型列表和最短聊天探测。请确认 Base URL 包含兼容 API 根路径、模型已授权且供应商账户有可用额度；不会回退到平台模型。", "Model settings were saved, but the provider rejected both model discovery and the minimal chat probe. Confirm that the Base URL includes the compatible API root, the model is authorized, and the provider account has available quota. The request will not fall back to the platform model.");
+     case "test-error": return copy(language, "模型配置已保存，但连接测试请求失败；不会回退到平台模型。", "Model settings were saved, but the connection test request failed. The request will not fall back to the platform model.");
+     case "error": return copy(language, "模型配置请求失败；服务端已有配置保持不变。", "The model settings request failed. Existing server settings were kept.");
+     default: return "";
+@@ -244,6 +244,6 @@
+       </div>
+     </form>
+     {notice ? <p className={`model-config-notice ${isErrorNotice ? "is-error" : ""}`} role={isErrorNotice ? "alert" : "status"} aria-live="polite">{notice}</p> : null}
+-    <p className="model-config-privacy">{copy(language, "Key 只发送到当前账户 API，由服务端加密保存；本页面不读取密钥原文，也不会把它带入研究记录。", "The Key is sent only to the current account API and encrypted server-side. This page never reads it back or puts it into research records.")}</p>
++    <p className="model-config-privacy">{copy(language, "Key 只发送到当前账户 API，由服务端加密保存；本页面不读取密钥原文，也不会把它带入研究记录。连接测试先读取模型列表；若供应商未提供该接口，会发送不含研究内容的一 token 最短聊天探测，可能产生极少量供应商用量。", "The Key is sent only to the current account API and encrypted server-side. This page never reads it back or puts it into research records. The connection test checks model discovery first; if the provider omits that endpoint, it sends a one-token chat probe with no research content, which may incur a minimal amount of provider usage.")}</p>
+   </section>;
+ }

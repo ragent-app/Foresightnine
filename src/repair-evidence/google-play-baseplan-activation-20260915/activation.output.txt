@@ -1,0 +1,7 @@
+foresightnine_pro_PRECHECK_HTTP=200
+foresightnine_pro_PRECHECK_STATE=DRAFT
+foresightnine_max_PRECHECK_HTTP=200
+foresightnine_max_PRECHECK_STATE=DRAFT
+foresightnine_pro_ACTIVATE_HTTP=200
+foresightnine_max_ACTIVATE_HTTP=200
+ACTIVATION_TRANSACTION=COMMITTED

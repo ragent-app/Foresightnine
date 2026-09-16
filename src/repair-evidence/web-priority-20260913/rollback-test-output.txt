@@ -1,0 +1,3 @@
+ROLLBACK_RESULT=PASS ROOT=/tmp/foresightnine-web-rollback.2hIn3q/Foresightnine
+ROLLBACK_EXIT=0
+ROLLBACK_VERIFY=PASS

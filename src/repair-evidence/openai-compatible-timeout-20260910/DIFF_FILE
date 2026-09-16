@@ -1,0 +1,105 @@
+--- /home/lxx/Foresightnine/src/repair-evidence/openai-compatible-timeout-20260910/openai_compatible.py.orig	2026-09-10 01:29:57.581481810 +0800
++++ /home/lxx/Foresightnine/src/repair-evidence/openai-compatible-timeout-20260910/MODIFIED_FILE	2026-09-10 01:36:41.682814038 +0800
+@@ -11,6 +11,7 @@
+ from dataclasses import dataclass, field
+ import ipaddress
+ import json
++import math
+ import os
+ import re
+ import socket
+@@ -38,6 +39,7 @@
+ _API_KEY_ENV = "FORESIGHTNINE_LLM_API_KEY"
+ _ALLOWED_HOSTS_ENV = "FORESIGHTNINE_LLM_ALLOWED_HOSTS"
+ _ALLOW_PRIVATE_NETWORK_ENV = "FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK"
++_TIMEOUT_ENV = "FORESIGHTNINE_LLM_TIMEOUT_SECONDS"
+ _LOCAL_GATEWAY_HOSTS = frozenset({"host.docker.internal", "host.containers.internal"})
+ _GLM_CODING_API_KEY_ENV = "FORESIGHTNINE_GLM_CODING_API_KEY"
+ _GLM_CODING_MODEL_ENV = "FORESIGHTNINE_GLM_CODING_MODEL"
+@@ -52,6 +54,10 @@
+ _GLM_CODING_DEFAULT_OUTPUT_TOKENS = 4_000
+ _MAX_RESPONSE_BYTES = 256 * 1024
+ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
++_STRUCTURED_OUTPUT_KEYS = frozenset({
++    "claims", "objections", "missing_evidence", "questions", "rubric_scores",
++    "unresolved_issues", "citation_ids", "public_fact_citation_ids", "native_search_used",
++})
+ # The general GLM API exposes more reasoning labels, but the Coding Plan
+ # mapping is limited to these three wire values for this profile.
+ _GLM_CODING_REASONING_EFFORTS = frozenset({"low", "medium", "high"})
+@@ -222,6 +228,20 @@
+     return (raw or "").strip().lower() in {"1", "true", "yes", "on"}
+ 
+ 
++def _llm_timeout_from_environment() -> float:
++    """Read a bounded server-side timeout for slow OpenAI-compatible gateways."""
++    raw = os.environ.get(_TIMEOUT_ENV, "").strip()
++    if not raw:
++        return 20.0
++    try:
++        timeout = float(raw)
++    except ValueError:
++        raise ProviderFailure("provider_configuration_invalid", "LLM timeout configuration is invalid.", retryable=False) from None
++    if not math.isfinite(timeout) or not 0 < timeout <= 180:
++        raise ProviderFailure("provider_configuration_invalid", "LLM timeout configuration is invalid.", retryable=False)
++    return timeout
++
++
+ @dataclass(frozen=True)
+ class OpenAICompatibleSettings:
+     base_url: str
+@@ -424,9 +444,10 @@
+     ) -> "OpenAICompatibleLlmProvider":
+         try:
+             settings = OpenAICompatibleSettings.from_environment()
++            effective_policy = policy or ProviderPolicy(timeout_seconds=_llm_timeout_from_environment())
+         except ProviderFailure as error:
+             return cls(policy=policy, transport=transport, sleeper=sleeper, configuration_error=error)
+-        return cls(settings, policy=policy, transport=transport, sleeper=sleeper)
++        return cls(settings, policy=effective_policy, transport=transport, sleeper=sleeper)
+ 
+     @classmethod
+     def from_glm_coding_environment(
+@@ -438,13 +459,16 @@
+     ) -> "OpenAICompatibleLlmProvider":
+         try:
+             settings = OpenAICompatibleSettings.from_glm_coding_environment()
++            effective_policy = policy or ProviderPolicy(
++                timeout_seconds=_llm_timeout_from_environment(),
++                max_output_tokens=_GLM_CODING_DEFAULT_OUTPUT_TOKENS,
++            )
+         except ProviderFailure as error:
+             return cls(policy=policy, transport=transport, sleeper=sleeper, configuration_error=error)
+         # Thinking-enabled GLM responses spend part of the output budget on
+         # reasoning before the strict JSON object. Keep the generic provider's
+         # conservative budget unchanged, but give this fixed Coding profile
+         # enough room for all ten rubric items and the final structured answer.
+-        effective_policy = policy or ProviderPolicy(max_output_tokens=_GLM_CODING_DEFAULT_OUTPUT_TOKENS)
+         return cls(settings, policy=effective_policy, transport=transport, sleeper=sleeper)
+ 
+     def __repr__(self) -> str:
+@@ -457,8 +481,8 @@
+         return False
+ 
+     def _validate_policy(self) -> None:
+-        if not 0 < self.policy.timeout_seconds <= 30:
+-            raise ValueError("OpenAI-compatible timeout must be between 0 and 30 seconds.")
++        if not 0 < self.policy.timeout_seconds <= 180:
++            raise ValueError("OpenAI-compatible timeout must be between 0 and 180 seconds.")
+         if not 1 <= self.policy.max_attempts <= 3:
+             raise ValueError("OpenAI-compatible attempts must be between 1 and 3.")
+         if not 0 <= self.policy.retry_base_seconds <= 2:
+@@ -569,6 +593,12 @@
+             raise ProviderFailure("invalid_provider_output", "Provider message content is not valid JSON.", retryable=False) from None
+         if not isinstance(payload, dict):
+             raise ProviderFailure("invalid_provider_output", "Provider message content is not a JSON object.", retryable=False)
++        # Cline's OpenAI-compatible surface may add a transport-level ``type``
++        # marker to an otherwise exact structured response.  Strip only this
++        # known metadata key; every other unexpected key remains fail-closed at
++        # the canonical draft validator.
++        if set(payload) - _STRUCTURED_OUTPUT_KEYS == {"type"}:
++            payload = {key: value for key, value in payload.items() if key != "type"}
+         return payload
+ 
+     @staticmethod
+LIVE_CONFIG_CHANGE=src/infra/docker/staging.env:FORESIGHTNINE_LLM_TIMEOUT_SECONDS=120

@@ -1,0 +1,1 @@
+COPY_HARNESS_NOTE=The isolated hard-link copy loaded duplicate React instances; this harness result is retained separately and is not the baseline run.

@@ -1,0 +1,83 @@
+$ tsc -b --pretty false && node --test test/*.test.mjs
+TAP version 13
+# Subtest: normalizes API configuration and labels absent configuration offline/mock
+ok 1 - normalizes API configuration and labels absent configuration offline/mock
+  ---
+  duration_ms: 2.312436
+  type: 'test'
+  ...
+# Subtest: POST sends generated Idempotency-Key and JSON request body
+ok 2 - POST sends generated Idempotency-Key and JSON request body
+  ---
+  duration_ms: 42.925848
+  type: 'test'
+  ...
+# Subtest: default fetch is called with the global receiver for browser brand checks
+ok 3 - default fetch is called with the global receiver for browser brand checks
+  ---
+  duration_ms: 1.266965
+  type: 'test'
+  ...
+# Subtest: runtime response validation rejects malformed generated-contract payloads
+ok 4 - runtime response validation rejects malformed generated-contract payloads
+  ---
+  duration_ms: 2.746558
+  type: 'test'
+  ...
+# Subtest: runtime validation rejects unknown fields and coerced rubric values
+ok 5 - runtime validation rejects unknown fields and coerced rubric values
+  ---
+  duration_ms: 2.216514
+  type: 'test'
+  ...
+# Subtest: SSE validation applies unknown-field checks to each union variant
+ok 6 - SSE validation applies unknown-field checks to each union variant
+  ---
+  duration_ms: 0.770223
+  type: 'test'
+  ...
+# Subtest: typed ApiError preserves status, error code, retryability, retry-after, and safe diagnostics
+ok 7 - typed ApiError preserves status, error code, retryability, retry-after, and safe diagnostics
+  ---
+  duration_ms: 1.953055
+  type: 'test'
+  ...
+# Subtest: AbortSignal cancellation is passed through without exposing transport details
+ok 8 - AbortSignal cancellation is passed through without exposing transport details
+  ---
+  duration_ms: 1.165658
+  type: 'test'
+  ...
+# Subtest: fails closed when no secure idempotency-key source exists
+ok 9 - fails closed when no secure idempotency-key source exists
+  ---
+  duration_ms: 0.686322
+  type: 'test'
+  ...
+# Subtest: path parameters are URL encoded before transport
+ok 10 - path parameters are URL encoded before transport
+  ---
+  duration_ms: 1.855303
+  type: 'test'
+  ...
+# Subtest: SSE text helper validates replay frames and stream helper sends Last-Event-ID
+ok 11 - SSE text helper validates replay frames and stream helper sends Last-Event-ID
+  ---
+  duration_ms: 4.762339
+  type: 'test'
+  ...
+# Subtest: SSE text fallback checks AbortSignal before and after reading the body
+ok 12 - SSE text fallback checks AbortSignal before and after reading the body
+  ---
+  duration_ms: 0.642652
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 194.956368

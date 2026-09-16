@@ -1,0 +1,5 @@
+FFF                                                                      [100%]
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_success_posts_chat_completion_and_returns_validated_draft
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_profile_sends_deterministic_generation_defaults
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_account_profile_inherits_low_reasoning_default

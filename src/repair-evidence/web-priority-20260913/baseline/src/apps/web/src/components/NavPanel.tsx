@@ -1,0 +1,42 @@
+import { useMemo } from "react";
+import { Button, Select } from "./Controls";
+import { Header } from "./AppShell";
+import { t, useLanguage } from "../i18n";
+import type { BranchView, StressScenario } from "../types";
+import { drawdownPaths, fullPaths, historical, type BranchKind, type PathMap } from "../nav-data";
+
+interface NavProps { readonly branches: readonly BranchView[]; readonly selected: BranchView["kind"]; readonly onSelect: (kind: BranchView["kind"]) => void; readonly stress: StressScenario; readonly onExport: () => void; readonly drawdownVisible?: boolean; readonly onToggleDrawdown?: () => void; }
+
+export function NavPanel({ branches, selected, onSelect, stress, onExport, drawdownVisible = true, onToggleDrawdown = () => undefined }: NavProps) {
+  const { language } = useLanguage();
+  const active = branches.find((branch) => branch.kind === selected) ?? branches[1]!;
+  const paths = useMemo(() => fullPaths(), []);
+  const drawdowns = useMemo(() => drawdownPaths(paths), [paths]);
+  return <section className="content-column nav-view">
+    <Header title={t(language, "主世界线下的组合路径")} action={<Select value={selected} onChange={(event) => onSelect(event.target.value as BranchView["kind"])} aria-label={t(language, "选择世界线")}><option value="weak">{t(language, "弱情景 W−")} · 20–35%</option><option value="main">{t(language, "主情景 W₀")} · 45–62%</option><option value="strong">{t(language, "强情景 W+")} · 12–25%</option></Select>} />
+    <div className="chart-frame"><div className="chart-title"><div><h2>{t(language, "组合 NAV（归一化）")}</h2><p>{t(language, "历史观测 + 世界线情景模拟")}</p></div><span className="today-badge">{t(language, "今天 / 模拟起点")}</span></div><NavChart paths={paths} selected={selected} language={language} /><div className="chart-legend"><span className="legend-history">{t(language, "历史 NAV")}</span><span className="legend-main">{t(language, "主情景中位数")}</span><span className="legend-interval">{t(language, "10–90% 区间")}</span><span className="legend-weak">{t(language, "弱情景 W−")}</span><span className="legend-strong">{t(language, "强情景 W+")}</span></div><p className="chart-note">{t(language, "模拟路径由固定的世界线冲击、波动率拟合与可复现噪声生成；不是预测或收益承诺。历史段仅表示 historical_only 数据。")}</p><p className="nav-stress-note" role="status">{t(language, "当前压力测试情景：")}{t(language, stress === "weak" ? "弱情景 W−" : stress === "strong" ? "强情景 W+" : "主情景 W₀")}；{t(language, "下方路径保留三种情景供比较。")}</p></div>
+    <div className="drawdown-frame"><div className="drawdown-heading"><h2>{t(language, "回撤")}</h2><Button variant="secondary" onClick={onToggleDrawdown}>{t(language, drawdownVisible ? "隐藏回撤" : "显示回撤")}</Button></div>{drawdownVisible ? <><NavChart paths={drawdowns} selected={selected} drawdown language={language} /><p className="drawdown-note">{t(language, "历史回撤与三条固定模拟路径同时显示；选中路径加粗，线型与直接标签保留。")}</p></> : <p className="drawdown-note" role="status">{t(language, "回撤图已隐藏；点击“显示回撤”恢复。")}</p>}</div>
+    <div className="nav-bottom"><div><strong>{t(language, active.title)}</strong><p>{t(language, "世界线版本 WL-v1 · 数据截止 2026-08-09 · 噪声种子已固定 · 当前路径为 simulated fixture")}</p></div><Button variant="secondary" onClick={onExport}>↓ {t(language, "导出路径数据")}</Button></div>
+    <div className="data-table"><details><summary>{t(language, "查看数据表（历史 + 三条模拟路径）")}</summary><table><caption>{t(language, "组合 NAV 数据表")}</caption><thead><tr><th>{t(language, "区段")}</th><th>{t(language, "索引")}</th><th>{t(language, "历史")}</th><th>{t(language, "主情景")}</th><th>{t(language, "弱情景")}</th><th>{t(language, "强情景")}</th><th>10–90%</th></tr></thead><tbody>{tableRows(paths).map((row) => <tr key={row.index}><td>{t(language, row.index < historical.length ? "历史观测" : "世界线模拟")}</td><td>{row.index + 1}</td><td>{row.history}</td><td>{row.main}</td><td>{row.weak}</td><td>{row.strong}</td><td>{row.interval}</td></tr>)}</tbody></table></details></div>
+  </section>;
+}
+
+function tableRows(paths: PathMap): readonly { index: number; history: string; main: string; weak: string; strong: string; interval: string }[] {
+  return paths.main.map((_value, index) => {
+    const low = Math.min(paths.weak[index]!, paths.main[index]!, paths.strong[index]!);
+    const high = Math.max(paths.weak[index]!, paths.main[index]!, paths.strong[index]!);
+    return { index, history: index < historical.length ? paths.main[index]!.toFixed(3) : "—", main: paths.main[index]!.toFixed(3), weak: paths.weak[index]!.toFixed(3), strong: paths.strong[index]!.toFixed(3), interval: `${low.toFixed(3)}–${high.toFixed(3)}` };
+  });
+}
+
+function NavChart({ paths, selected, drawdown = false, language }: { readonly paths: PathMap; readonly selected: BranchKind; readonly drawdown?: boolean; readonly language: "zh" | "en" }) {
+  const width = 920; const height = drawdown ? 150 : 360; const pad = { left: 42, right: 18, top: 18, bottom: 28 }; const min = drawdown ? -0.3 : 0.8; const max = drawdown ? 0 : 1.45; const x = (index: number) => pad.left + index * (width - pad.left - pad.right) / Math.max(1, paths.main.length - 1); const y = (value: number) => pad.top + (max - value) * (height - pad.top - pad.bottom) / (max - min); const todayX = x(historical.length - 1);
+  const intervalLow = paths.weak.map((value, index) => Math.min(value, paths.main[index]!, paths.strong[index]!));
+  const intervalHigh = paths.strong.map((value, index) => Math.max(value, paths.main[index]!, paths.weak[index]!));
+  const intervalPoints = [...intervalHigh.map((value, index) => `${x(index)},${y(value)}`), ...intervalLow.map((_value, index) => intervalLow.length - 1 - index).map((index) => `${x(index)},${y(intervalLow[index]!)}`)].join(" ");
+  const line = (kind: BranchKind): string => paths[kind].map((value, index) => `${x(index)},${y(value)}`).join(" ");
+  const historyPoints = paths.main.slice(0, historical.length).map((value, index) => `${x(index)},${y(value)}`).join(" ");
+  const endLabelY = { weak: y(paths.weak.at(-1)!), main: y(paths.main.at(-1)!), strong: y(paths.strong.at(-1)!) };
+  const branchLabel = (kind: BranchKind): string => t(language, kind === "weak" ? "弱情景 W−" : kind === "main" ? "主情景 W₀" : "强情景 W+");
+  return <svg className="nav-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${t(language, drawdown ? "组合回撤" : "组合 NAV")}：${t(language, "历史观测与弱、主、强三条世界线模拟；今日边界在历史与模拟之间")}`}><title>{t(language, drawdown ? "组合回撤：历史与三条模拟路径" : "组合 NAV：历史、主情景中位数、弱情景、强情景与 10–90% 区间")}</title><g className="chart-grid" aria-hidden="true">{[0.8, 0.95, 1.1, 1.25, 1.45].map((tick) => <line key={tick} x1={pad.left} x2={width - pad.right} y1={y(drawdown ? 0 : tick)} y2={y(drawdown ? 0 : tick)} />)}</g>{!drawdown ? <g className="interval-group" role="img" aria-label={t(language, "10–90% 区间")}><polygon className="interval-band" points={intervalPoints} /><polyline className="interval-boundary interval-high" points={intervalHigh.map((value, index) => `${x(index)},${y(value)}`).join(" ")} /><polyline className="interval-boundary interval-low" points={intervalLow.map((value, index) => `${x(index)},${y(value)}`).join(" ")} /></g> : null}<line className="today-line" x1={todayX} x2={todayX} y1={pad.top} y2={height - pad.bottom} /><g className="series-group series-history" role="img" aria-label={t(language, "历史 NAV，仅使用 historical_only 数据")}><polyline className="series-history" points={historyPoints} /></g>{(["weak", "main", "strong"] as const).map((kind) => <g className={`series-group series-group-${kind} ${selected === kind ? "is-emphasized" : "is-context"}`} role="img" aria-label={`${branchLabel(kind)}，${t(language, "固定模拟路径")}`} key={kind}><polyline className={`series-${kind}`} points={line(kind)} /><text className={`end-label label-${kind}`} x={x(paths[kind].length - 1) - 80} y={endLabelY[kind] - (kind === "weak" ? -15 : kind === "strong" ? 17 : 2)}>{branchLabel(kind)}</text></g>)}<text className="today-label" x={todayX - 18} y={height - 5}>{t(language, "今天")}</text><text className="axis-label axis-start" x={pad.left} y={height - 5}>{drawdown ? t(language, "历史") : "2024-08"}</text><text className="axis-label axis-end" x={width - 72} y={height - 5}>+24 {t(language, "个月")}</text>{!drawdown ? <><text className="axis-value" x={6} y={y(1.45) + 4}>1.45</text><text className="axis-value" x={6} y={y(1.1) + 4}>1.10</text><text className="axis-value" x={6} y={y(0.8) + 4}>0.80</text></> : <><text className="axis-value" x={6} y={y(0) + 4}>0%</text><text className="axis-value" x={6} y={y(-0.15) + 4}>−15%</text><text className="axis-value" x={6} y={y(-0.3) + 4}>−30%</text></>}</svg>;
+}

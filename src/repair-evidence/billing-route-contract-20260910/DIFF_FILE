@@ -1,0 +1,101 @@
+--- src/repair-evidence/billing-route-contract-20260910/main.py.orig	2026-09-10 01:48:39.837938889 +0800
++++ src/repair-evidence/billing-route-contract-20260910/MODIFIED_FILE	2026-09-10 02:04:20.052817028 +0800
+@@ -14,6 +14,7 @@
+ from uuid import uuid4
+ 
+ from fastapi import FastAPI, Header, Query, Request, Response
++from fastapi.encoders import jsonable_encoder
+ from fastapi.exceptions import RequestValidationError
+ from fastapi.openapi.utils import get_openapi
+ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+@@ -1231,7 +1232,7 @@
+             response.headers["Retry-After"] = str(error.retry_after)
+         return response
+     return JSONResponse(
+-        {"verified": True, "purchase_state": verified.subscription_state, **snapshot},
++        jsonable_encoder({"verified": True, "purchase_state": verified.subscription_state, **snapshot}),
+         headers={"Cache-Control": "no-store"},
+     )
+ 
+--- src/repair-evidence/billing-route-contract-20260910/test_billing.py.orig	2026-09-10 01:48:39.835628081 +0800
++++ src/repair-evidence/billing-route-contract-20260910/MODIFIED_test_billing.py	2026-09-10 02:04:20.055617513 +0800
+@@ -220,3 +220,79 @@
+     finally:
+         main_module.challenge_provider = previous_provider
+         reset_state()
++
++
++def test_google_play_verify_route_grants_only_verified_active_purchase(monkeypatch) -> None:
++    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
++    reset_state()
++    encryption_key = base64.urlsafe_b64encode(b"0123456789abcdef0123456789abcdef").decode()
++    cipher = PurchaseTokenCipher.from_environment({"FORESIGHTNINE_PURCHASE_TOKEN_ENCRYPTION_KEY": encryption_key})
++    assert cipher is not None
++    ledger = BillingLedger(InMemoryDocumentRepository(), InMemoryDocumentRepository(), InMemoryDocumentRepository(), cipher=cipher)
++    active = VerifiedGooglePurchase(
++        product_id="foresightnine_pro",
++        base_plan_id="monthly",
++        subscription_state="active",
++        period_start=datetime(2026, 9, 1, tzinfo=timezone.utc),
++        period_end=datetime(2026, 10, 1, tzinfo=timezone.utc),
++        raw_state="SUBSCRIPTION_STATE_ACTIVE",
++    )
++    pending = active.model_copy(update={
++        "product_id": "foresightnine_max",
++        "subscription_state": "pending",
++        "raw_state": "SUBSCRIPTION_STATE_PENDING",
++    })
++
++    class FakeVerifier:
++        verified = active
++        acknowledgements: list[tuple[str, str]] = []
++
++        def __init__(self, _credentials_path: str) -> None:
++            pass
++
++        def fetch(self, _purchase_token: str, *, expected_product_id: str, expected_base_plan_id: str):
++            assert self.verified.product_id == expected_product_id
++            assert self.verified.base_plan_id == expected_base_plan_id
++            return self.verified
++
++        def acknowledge(self, purchase_token: str, product_id: str) -> None:
++            self.acknowledgements.append((purchase_token, product_id))
++
++    previous_ledger = main_module.billing_ledger
++    previous_verifier = main_module.GooglePlaySubscriptionVerifier
++    main_module.billing_ledger = ledger
++    main_module.GooglePlaySubscriptionVerifier = FakeVerifier
++    try:
++        client = TestClient(app)
++        registered = client.post(
++            "/v1/auth/local/register",
++            json={"email": "billing-route@example.test", "password": "correct horse battery staple!"},
++        )
++        assert registered.status_code == 201
++        token = registered.json()["access_token"]
++        headers = {"Authorization": f"Bearer {token}"}
++        active_response = client.post(
++            "/v1/billing/google-play/verify",
++            headers=headers,
++            json={"purchase_token": "active-purchase-token-1234567890", "product_id": "foresightnine_pro", "base_plan_id": "monthly"},
++        )
++        assert active_response.status_code == 200
++        assert active_response.json()["plan"] == "pro"
++        assert active_response.json()["quota_limit"] == 30_000_000
++        assert FakeVerifier.acknowledgements == [("active-purchase-token-1234567890", "foresightnine_pro")]
++
++        FakeVerifier.verified = pending
++        pending_response = client.post(
++            "/v1/billing/google-play/verify",
++            headers=headers,
++            json={"purchase_token": "pending-purchase-token-1234567890", "product_id": "foresightnine_max", "base_plan_id": "monthly"},
++        )
++        assert pending_response.status_code == 200
++        assert pending_response.json()["purchase_state"] == "pending"
++        assert pending_response.json()["entitlement_status"] == "pending"
++        assert pending_response.json()["quota_limit"] == 0
++        assert FakeVerifier.acknowledgements == [("active-purchase-token-1234567890", "foresightnine_pro")]
++    finally:
++        main_module.billing_ledger = previous_ledger
++        main_module.GooglePlaySubscriptionVerifier = previous_verifier
++        reset_state()

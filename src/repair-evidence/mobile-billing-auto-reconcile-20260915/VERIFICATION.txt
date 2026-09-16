@@ -1,0 +1,158 @@
+ForesightNine Android automatic subscription reconciliation
+AUDIT_TIME=2026-09-15 Asia/Shanghai
+BRANCH=master
+COMMIT_BEFORE_WORKTREE=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_FIELD=Session-scoped Play purchase reconciliation, automatic restore/verify/account refresh after login, pending/failure UX, versionCode 2 release bundle, and current problem report.
+ROOT_CAUSE=The Android console queried catalog products but synchronized existing Play purchases only after a manual Restore action. Automatic renewals and reinstalls could therefore leave the server entitlement stale until the user found and pressed Restore. The in-memory duplicate guard was also token-only rather than authenticated-session scoped.
+FIX=Automatically query active Play purchases once per authenticated session, verify each unique PURCHASED token through the server, keep pending payments non-entitled, retain failed tokens for retry, scope successful deduplication to the session, refresh the server-authoritative quota state, and retain the manual retry action.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-auto-reconcile-20260915/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-auto-reconcile-20260915/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-auto-reconcile-20260915/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-auto-reconcile-20260915/ROLLBACK.sh
+
+ORIGINAL_HASHES
+057e8a83be6bff0d1dc06d1ea4a02257c05b7aeb00c227f2d41fb9b983df28fb  apps/mobile/app/console.tsx
+MISSING  apps/mobile/src/billing-reconciliation.ts
+MISSING  apps/mobile/tests/billing-reconciliation.test.ts
+dc1aa5d97f6c3e7a2f24810caefa6f6ae82f0b999eaad37a60f4062e3d6116f0  docs/problem.md
+3d0a2741097d67d843dd37342164ecb68e532ad83c68aee1407577531799007e  apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+
+MODIFIED_HASHES
+773a050bebeaae08d47e90d731844cfb32dda447839a099baa20adfd1996ac04  apps/mobile/app/console.tsx
+4383be99622a65b8413ad77f9237d69612fd2f262eed28e552fbb48b8caf6a67  apps/mobile/src/billing-reconciliation.ts
+c778b9ff37221f7ef96828180f09ba085f98838fd6dfbfe7e58c8e425ae69281  apps/mobile/tests/billing-reconciliation.test.ts
+8f57f5002b6ca36b90e50674ad0076d0c14148f4a22b6b78012e8cdbcabb2c05  docs/problem.md
+8c447c8b81242496d955b231e888225e6af806e26bba8355780ca4e19a98c60d  apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+
+BASELINE
+COMMAND=node -e 'const fs=require("fs"); const s=fs.readFileSync("/home/lxx/.config/foresightnine/baseline-run/mobile-billing-auto-reconcile-20260915/apps/mobile/app/console.tsx","utf8"); for (const marker of ["reconcileBillingPurchases","autoRestoredSession","Google Play 订阅权益已自动同步"]) if (!s.includes(marker)) throw new Error(`missing:${marker}`); console.log("AUTO_RECONCILE_STATIC=PASS")'
+INPUT=The preserved pre-change Android console source checked for the automatic reconciliation import, one-per-session guard, and automatic synchronization result state.
+LITERAL_OUTPUT_BEGIN
+[eval]:1
+const fs=require("fs"); const s=fs.readFileSync("/home/lxx/.config/foresightnine/baseline-run/mobile-billing-auto-reconcile-20260915/apps/mobile/app/console.tsx","utf8"); for (const marker of ["reconcileBillingPurchases","autoRestoredSession","Google Play 订阅权益已自动同步"]) if (!s.includes(marker)) throw new Error(`missing:${marker}`); console.log("AUTO_RECONCILE_STATIC=PASS")
+                                                                                                                                                                                                                                                                                                      ^
+
+Error: missing:reconcileBillingPurchases
+    at [eval]:1:301
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+    at node:internal/main/eval_string:74:3
+
+Node.js v22.23.2
+LITERAL_OUTPUT_END
+EXIT_STATUS=1
+RESULT=FAIL as expected: the original console had no automatic Play purchase reconciliation.
+
+MODIFIED
+COMMAND=node -e 'const fs=require("fs"); const s=fs.readFileSync("apps/mobile/app/console.tsx","utf8"); for (const marker of ["reconcileBillingPurchases","autoRestoredSession","Google Play 订阅权益已自动同步"]) if (!s.includes(marker)) throw new Error(`missing:${marker}`); console.log("AUTO_RECONCILE_STATIC=PASS")'; corepack pnpm --filter @foresightnine/mobile exec vitest run tests/billing-reconciliation.test.ts; corepack pnpm --filter @foresightnine/mobile typecheck
+INPUT=The same source markers plus two deterministic reconciliation cases: unique/pending/unknown purchase handling and failed-token retry with session-scoped successful deduplication; followed by TypeScript typecheck.
+LITERAL_OUTPUT_BEGIN
+AUTO_RECONCILE_STATIC=PASS
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/mobile
+
+ ✓ tests/billing-reconciliation.test.ts (2 tests) 8ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  02:58:40
+   Duration  687ms (transform 84ms, setup 0ms, collect 56ms, tests 8ms, environment 0ms, prepare 185ms)
+
+$ tsc --noEmit
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: automatic reconciliation is wired, both behavioral cases pass, and the mobile TypeScript project typechecks.
+
+FULL_VALIDATION
+COMMAND=corepack pnpm --filter @foresightnine/mobile test
+LITERAL_OUTPUT_BEGIN
+$ vitest run --passWithNoTests
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/mobile
+
+ ✓ tests/app-link-certificates.test.mjs (2 tests) 4ms
+ ✓ tests/billing-reconciliation.test.ts (2 tests) 8ms
+ ✓ tests/billing-api.test.ts (3 tests) 23ms
+ ✓ tests/oauth-client.test.ts (7 tests) 37ms
+ ✓ tests/share-config-plugin.test.mjs (2 tests) 7ms
+ ✓ tests/market-data.test.ts (1 test) 19ms
+ ✓ tests/freshness.test.ts (7 tests) 50ms
+ ✓ tests/archive-resume.test.ts (16 tests) 134ms
+ ✓ tests/mobile-domain.test.ts (25 tests) 87ms
+
+ Test Files  9 passed (9)
+      Tests  65 passed (65)
+   Start at  02:58:47
+   Duration  1.26s (transform 1.19s, setup 0ms, collect 2.45s, tests 369ms, environment 3ms, prepare 1.65s)
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: 9 mobile test files and 65 tests passed.
+
+ANDROID_BUILD
+COMMAND=ANDROID_HOME=/home/lxx/Android/Sdk ANDROID_SDK_ROOT=/home/lxx/Android/Sdk NODE_ENV=production FORESIGHTNINE_ENV=production EXPO_PUBLIC_FORESIGHTNINE_API_BASE_URL=https://api-staging.foresightnine.com EXPO_PUBLIC_FORESIGHTNINE_MARKET_DATA_MODE=public EXPO_PUBLIC_FORESIGHTNINE_MARKET_DATA_BASE_URL=https://api-staging.foresightnine.com EXPO_PUBLIC_FORESIGHTNINE_OAUTH_RETURN_URI=https://app.foresightnine.com/oauth/complete EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_HOST=app.foresightnine.com EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_PACKAGE=com.foresightnine.mobile EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_SHA256_CERT_FINGERPRINT=<Play-App-Signing-SHA256> EXPO_PUBLIC_FORESIGHTNINE_OAUTH_APP_LINK_VERIFIED=true ./gradlew --no-daemon :app:bundleRelease
+INPUT=Production configuration; staging API/market data service; production OAuth App Link; Play App Signing SHA-256 derived from the existing Play-generated v1 APK without printing the value.
+LITERAL_OUTPUT_BEGIN
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 2s
+532 actionable tasks: 63 executed, 469 up-to-date
+8c447c8b81242496d955b231e888225e6af806e26bba8355780ca4e19a98c60d  /home/lxx/Foresightnine/src/apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+AAB_AFTER_BYTES=69253880
+BUNDLE_PHRASE[Automatic purchase synchronization failed]=PRESENT
+BUNDLE_PHRASE[Google Play subscription synchronized]=PRESENT
+BUNDLE_PHRASE[Some Play purchases could not be synchronized]=PRESENT
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: versionCode 2 production release AAB rebuilt with the automatic reconciliation code.
+
+PUBLISHER_VALIDATE
+COMMAND=uv run --project apps/api python apps/api/scripts/google_play_internal_release.py --aab apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+INPUT=The rebuilt versionCode 2 AAB; validation mode only, with no --publish flag.
+LITERAL_OUTPUT_BEGIN
+PACKAGE=com.foresightnine.mobile
+TRACK=internal
+AAB_SHA256=8c447c8b81242496d955b231e888225e6af806e26bba8355780ca4e19a98c60d
+AAB_BYTES=69253880
+AAB_SIGNATURE=UNSIGNED
+RESULT=STOPPED_BEFORE_NETWORK_MUTATION_UNSIGNED_AAB
+LITERAL_OUTPUT_END
+EXIT_STATUS=2
+RESULT=EXPECTED STOP: the rebuilt bundle is unsigned and the publisher stopped before every Play network mutation.
+
+ROLLBACK
+COMMAND=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-auto-reconcile-20260915/ROLLBACK.sh /home/lxx/.config/foresightnine/rollback-test/mobile-billing-auto-reconcile-20260915/work-20260915T2300
+INPUT=An isolated copy of the changed console, documentation, new helper/test, and rebuilt AAB; live source and live AAB were not rolled back.
+LITERAL_OUTPUT_BEGIN
+RESTORED apps/mobile/app/console.tsx SHA256=057e8a83be6bff0d1dc06d1ea4a02257c05b7aeb00c227f2d41fb9b983df28fb
+RESTORED docs/problem.md SHA256=dc1aa5d97f6c3e7a2f24810caefa6f6ae82f0b999eaad37a60f4062e3d6116f0
+RESTORED apps/mobile/android/app/build/outputs/bundle/release/app-release.aab SHA256=3d0a2741097d67d843dd37342164ecb68e532ad83c68aee1407577531799007e
+RESTORED apps/mobile/src/billing-reconciliation.ts=MISSING
+RESTORED apps/mobile/tests/billing-reconciliation.test.ts=MISSING
+ROLLBACK_STATUS=restored_pre_change_state
+ROLLBACK_EXIT=0
+ROLLBACK_CONSOLE_HASH_MATCH=true
+ROLLBACK_DOC_HASH_MATCH=true
+ROLLBACK_AAB_HASH_MATCH=true
+ROLLBACK_NEW_FILES_MISSING=true
+LIVE_AAB_HASH=8c447c8b81242496d955b231e888225e6af806e26bba8355780ca4e19a98c60d
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: original console/doc/AAB hashes were restored, new files became missing, and the live AAB retained the new hash.
+RESTORED_BEHAVIOR_STATUS=The isolated copy again requires manual Restore and contains the prior AAB; live source keeps automatic synchronization and the rebuilt unsigned AAB remains ready for Windows DPAPI signing.
+
+SECURITY
+PURCHASE_TOKEN_PRINTED=NO
+PLAY_API_WRITE=NO
+PRODUCTION_TRACK_MUTATION=NO
+AAB_SIGNING_KEY_READ=NO
+SECRET_SCAN=PASS inspected 1332 unique Git-history blobs; PASS secret scan /home/lxx/Foresightnine

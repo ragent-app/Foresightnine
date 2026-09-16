@@ -1,0 +1,6 @@
+ROLLBACK_RESULT=PASS
+ROLLBACK_HASH_MATCH=PASS restored=25 removed=8
+TARGET_ROOT=/tmp/foresightnine-product-ux-rollback-final2.Ow8Wi1
+RESTORED_BEHAVIOR=pre-product-UX challenge, provider-error, market-config, model-config, and guide behavior
+EXIT_STATUS=0
+LIVE_MODIFIED_STATE=PASS

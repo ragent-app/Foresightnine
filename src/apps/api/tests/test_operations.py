@@ -11,6 +11,7 @@ from app.models import Operation
 from app.operation_store import InMemoryOperationStore
 from app.phase3 import ProviderFailure
 from app.providers import FixedClock
+from app.services import content_hash
 
 
 def test_running_operation_cancel_resume_preserves_terminal_checkpoint_without_synthetic_complete() -> None:
@@ -326,3 +327,121 @@ def test_async_submit_unknown_worker_exception_fails_closed_and_replays_terminal
         build_result=lambda operation_id: (_ for _ in ()).throw(AssertionError("replay must not run worker")),
     )
     assert replayed is True and replay.operation.status == "failed"
+
+
+def test_cross_manager_cancel_waits_for_atomic_commit_and_observes_completed_winner() -> None:
+    store = InMemoryOperationStore()
+    worker_manager = OperationManager(FixedClock(), store=store)
+    cancelling_manager = OperationManager(FixedClock(), store=store)
+    payload_type = create_model("CrossManagerCommitPayload", content_hash=(str, ...))
+    commit_entered = Event()
+    release_commit = Event()
+    committed: list[str] = []
+    rolled_back: list[str] = []
+
+    def build(_operation_id: str) -> tuple[BaseModel, str]:
+        return payload_type(content_hash="f" * 64), "result:cross-manager"
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        committed.append(operation_id)
+        commit_entered.set()
+        assert release_commit.wait(1)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        rolled_back.append(operation_id)
+
+    receipt, replayed = worker_manager.submit_async(
+        endpoint="/v1/challenges/async", idempotency_key="cross-manager-cancel",
+        request_payload={"message": "same"}, result_field="challenge", build_result=build,
+        commit_result=commit, rollback_result=rollback,
+    )
+    assert replayed is False and commit_entered.wait(1)
+    cancellation_result: list[object] = []
+    cancellation = Thread(target=lambda: cancellation_result.append(cancelling_manager.cancel(
+        receipt.operation.operation_id, receipt.operation.cancel_token, "cross-manager-cancel-command",
+    )))
+    cancellation.start()
+    sleep(0.05)
+    assert cancellation.is_alive()
+    release_commit.set()
+    cancellation.join(1)
+    assert not cancellation.is_alive()
+    for _ in range(100):
+        if receipt.operation.operation_id not in worker_manager._pending_provider_executions:
+            break
+        sleep(0.01)
+    assert committed == [receipt.operation.operation_id]
+    assert rolled_back == []
+    cancelled, _ = cancellation_result[0]
+    assert cancelled.operation.status == "completed"
+    assert worker_manager._cache_operation(receipt.operation.operation_id).status == "completed"
+
+
+def test_manager_compensates_a_successful_commit_callback_when_terminal_storage_fails() -> None:
+    class AdmissionThenFailStore(InMemoryOperationStore):
+        failed = False
+
+        def finish(self, **kwargs):
+            if not self.failed and kwargs.get("admission") is not None:
+                self.failed = True
+                kwargs["admission"]()
+                raise RuntimeError("injected terminal persistence failure")
+            return super().finish(**kwargs)
+
+    store = AdmissionThenFailStore()
+    manager = OperationManager(FixedClock(), store=store)
+    payload_type = create_model("CompensatedPayload", content_hash=(str, ...))
+    committed: list[str] = []
+    rolled_back: list[str] = []
+
+    with pytest.raises(ApiProblem) as error:
+        manager.execute(
+            endpoint="/v1/compensated",
+            idempotency_key="compensated-terminal",
+            request_payload={"value": "same"},
+            response_model=create_model("CompensatedResponse", operation=(Operation, ...), value=(payload_type, ...)),
+            result_field="value",
+            build_result=lambda operation_id: (payload_type(content_hash="a" * 64), "result:compensated"),
+            commit_result=lambda operation_id, _result: committed.append(operation_id),
+            rollback_result=lambda operation_id, _result: rolled_back.append(operation_id),
+        )
+
+    assert error.value.status_code == 500
+    assert committed == rolled_back
+    operation_id = committed[0]
+    assert manager._cache_operation(operation_id).status == "failed"
+
+
+def test_manager_compensates_a_raising_commit_callback_and_fails_the_claim() -> None:
+    store = InMemoryOperationStore()
+    manager = OperationManager(FixedClock(), store=store)
+    payload_type = create_model("RaisingCommitPayload", content_hash=(str, ...))
+    response_type = create_model("RaisingCommitResponse", operation=(Operation, ...), value=(payload_type, ...))
+    endpoint = "/v1/raising-commit"
+    idempotency_key = "raising-commit-terminal"
+    request_payload = {"value": "same"}
+    committed: list[str] = []
+    rolled_back: list[str] = []
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        committed.append(operation_id)
+        raise RuntimeError("injected commit callback failure")
+
+    with pytest.raises(ApiProblem) as error:
+        manager.execute(
+            endpoint=endpoint,
+            idempotency_key=idempotency_key,
+            request_payload=request_payload,
+            response_model=response_type,
+            result_field="value",
+            build_result=lambda operation_id: (payload_type(content_hash="b" * 64), "result:raising-commit"),
+            commit_result=commit,
+            rollback_result=lambda operation_id, _result: rolled_back.append(operation_id),
+        )
+
+    assert error.value.status_code == 500
+    assert committed == rolled_back
+    operation_id = committed[0]
+    assert manager._cache_operation(operation_id).status == "failed"
+    claim = store.get_claim(endpoint, manager._key_hash(idempotency_key), content_hash(request_payload))
+    assert claim is not None and claim.error is not None and claim.response is None

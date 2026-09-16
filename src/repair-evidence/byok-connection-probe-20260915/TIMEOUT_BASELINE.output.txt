@@ -1,0 +1,25 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_account_settings_inherit_the_bounded_deployment_timeout _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x756872eb5ba0>
+
+    def test_account_settings_inherit_the_bounded_deployment_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
+        settings = OpenAICompatibleSettings(
+            base_url="https://llm.example.test/v1",
+            model="test-model",
+            allowed_hosts=frozenset({("llm.example.test", 443)}),
+            api_key=_SECRET,
+        )
+    
+        built = OpenAICompatibleLlmProvider(settings, transport=lambda *_args: HttpResponse(200, "{}"))
+    
+>       assert built.policy.timeout_seconds == 120
+E       AssertionError: assert 20.0 == 120
+E        +  where 20.0 = ProviderPolicy(max_rounds=6, max_input_tokens=3000, max_output_tokens=1500, max_cost_usd=0.05, timeout_seconds=20.0, max_attempts=3, retry_base_seconds=0.05).timeout_seconds
+E        +    where ProviderPolicy(max_rounds=6, max_input_tokens=3000, max_output_tokens=1500, max_cost_usd=0.05, timeout_seconds=20.0, max_attempts=3, retry_base_seconds=0.05) = OpenAICompatibleLlmProvider(model='test-model', configured=True).policy
+
+apps/api/tests/test_openai_compatible_provider.py:196: AssertionError
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_account_settings_inherit_the_bounded_deployment_timeout

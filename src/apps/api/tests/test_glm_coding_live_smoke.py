@@ -52,7 +52,7 @@ def test_missing_secret_is_blocked_without_transport(monkeypatch: pytest.MonkeyP
     assert main((), transport=no_transport) != 0  # type: ignore[arg-type]
     output = json.loads(capsys.readouterr().out)
     assert output == {
-        "model": "glm-5.3",
+        "model": "glm-5.3-flash",
         "no_network_attempted": True,
         "status": "blocked",
         "validation_summary": {"challenge_draft": False, "result": "secret_missing"},
@@ -74,7 +74,7 @@ def test_success_fake_transport_is_redacted_and_uses_fixed_profile(
     output_text = capsys.readouterr().out
     output = json.loads(output_text)
     assert output == {
-        "model": "glm-5.3",
+        "model": "glm-5.3-flash",
         "request_id": "req-smoke-123",
         "status": "passed",
         "validation_summary": {
@@ -91,7 +91,7 @@ def test_success_fake_transport_is_redacted_and_uses_fixed_profile(
     assert len(calls) == 1
     assert calls[0][0:2] == ("POST", "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions")
     request_body = json.loads(calls[0][3])
-    assert request_body["model"] == "glm-5.3"
+    assert request_body["model"] == "glm-5.3-flash"
     assert "temperature" not in request_body
     assert "top_p" not in request_body
 

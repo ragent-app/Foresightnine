@@ -1,0 +1,12 @@
+AUTO_RECONCILE_STATIC=PASS
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/mobile
+
+ ✓ tests/billing-reconciliation.test.ts (2 tests) 8ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  02:58:40
+   Duration  687ms (transform 84ms, setup 0ms, collect 56ms, tests 8ms, environment 0ms, prepare 185ms)
+
+$ tsc --noEmit

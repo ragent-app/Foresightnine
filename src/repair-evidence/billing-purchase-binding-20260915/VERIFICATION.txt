@@ -1,0 +1,107 @@
+ForesightNine Google Play purchase binding and acknowledgement repair
+AUDIT_TIME=2026-09-15 Asia/Shanghai
+BRANCH=master
+COMMIT_BEFORE_WORKTREE=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_FIELD=SubscriptionsV2 account binding, provider start time and acknowledgement state parsing; documented acknowledgement URL; verify/grant/acknowledge ordering; current problem report.
+ROOT_CAUSE=The server built the acknowledgement request as /subscriptions/{product}:acknowledge with the purchase token in a query parameter. Google documents /subscriptions/{subscriptionId}/tokens/{token}:acknowledge. The server also did not bind Play's obfuscatedExternalAccountId to the signed-in ForesightNine account and acknowledged before persisting entitlement.
+FIX=Require subscriptionsv2.externalAccountIdentifiers.obfuscatedExternalAccountId to equal SHA-256(account_id), parse startTime and acknowledgementState, persist an eligible verified entitlement before acknowledging, skip acknowledgement when Play already reports acknowledged, and use the documented path with both product and URL-escaped purchase token.
+OFFICIAL_REFERENCE=https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.subscriptions/acknowledge
+DEPLOYMENT_IMAGE_BEFORE=sha256:73721fad59fc1a4cd1c62fe7a036998814ed7b18f7536be1731f30c50f89f348
+DEPLOYMENT_IMAGE_AFTER=sha256:a2a34e6ce43c1c7da5bcab384a7f15381fa3209897fb17bb5f047e0ab7622e66
+DEPLOYMENT_HEALTH=container healthy; local /health HTTP 200; local /readyz HTTP 200; public /health HTTP 200; public /readyz HTTP 200.
+DEPLOYED_RUNTIME=DEPLOYED_ACCOUNT_BINDING=True; DEPLOYED_ACK_STATE=pending; DEPLOYED_START_TIME=2026-09-01T00:00:00+00:00; DEPLOYED_ACK_TOKEN_PATH=True; DEPLOYED_ACK_QUERY_TOKEN=False.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-purchase-binding-20260915/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-purchase-binding-20260915/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/billing-purchase-binding-20260915/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/billing-purchase-binding-20260915/ROLLBACK.sh
+
+ORIGINAL_HASHES
+09b6c0b8fe6254307a2f6a60315e3f056317b958c99f91fe3dce96650ab626b3  apps/api/app/billing.py
+d2cabbc9cf9c2a2f1580dd4bb6b8dc0c8bb58e3e9749e83cae567766a33f693b  apps/api/app/main.py
+9d95907f0422445bff73c5005e46c84438abe3c6159c3c83e702b52688220e1b  apps/api/tests/test_billing.py
+7de549057b9d255f1cedb77949ec6de0ccbbf704dbd9b002a14e5457e9451676  docs/problem.md
+
+MODIFIED_HASHES
+a60f7f215b42df0020bb39ed93826c9fa1e635d884de74ea2b56a21d2eb18ee1  apps/api/app/billing.py
+feac8c6ac688d22723d3e93b1d9778f85c426130601662a90b5f8598641febcd  apps/api/app/main.py
+63a562b1c406db5878ee2046ac05ce98191775a951ddf29501e9a9f4124a89a3  apps/api/tests/test_billing.py
+dc1aa5d97f6c3e7a2f24810caefa6f6ae82f0b999eaad37a60f4062e3d6116f0  docs/problem.md
+
+BASELINE
+COMMAND=PYTHONPATH=/home/lxx/.config/foresightnine/baseline-run/billing-purchase-binding-20260915/apps/api /home/lxx/Foresightnine/src/apps/api/.venv/bin/pytest -q --tb=no /home/lxx/.config/foresightnine/baseline-run/billing-purchase-binding-20260915/apps/api/tests/test_billing.py::test_google_subscription_payload_binds_product_and_base_plan /home/lxx/.config/foresightnine/baseline-run/billing-purchase-binding-20260915/apps/api/tests/test_billing.py::test_google_play_acknowledgement_uses_the_documented_token_path /home/lxx/.config/foresightnine/baseline-run/billing-purchase-binding-20260915/apps/api/tests/test_billing.py::test_google_play_verify_route_grants_only_verified_active_purchase
+INPUT=Three deterministic regressions against the preserved original implementation: account-bound subscriptionsv2 parsing, the exact documented acknowledgement URL, and verify/grant/acknowledge route ordering with already-acknowledged suppression.
+LITERAL_OUTPUT_BEGIN
+FFF                                                                      [100%]
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../../.config/foresightnine/baseline-run/billing-purchase-binding-20260915/apps/api/tests/test_billing.py::test_google_subscription_payload_binds_product_and_base_plan
+FAILED ../../.config/foresightnine/baseline-run/billing-purchase-binding-20260915/apps/api/tests/test_billing.py::test_google_play_acknowledgement_uses_the_documented_token_path
+FAILED ../../.config/foresightnine/baseline-run/billing-purchase-binding-20260915/apps/api/tests/test_billing.py::test_google_play_verify_route_grants_only_verified_active_purchase
+3 failed, 1 warning in 0.65s
+LITERAL_OUTPUT_END
+EXIT_STATUS=1
+RESULT=FAIL as expected: all three defects are observable in the preserved original implementation.
+
+MODIFIED
+COMMAND=uv run --project apps/api pytest -q --tb=no apps/api/tests/test_billing.py::test_google_subscription_payload_binds_product_and_base_plan apps/api/tests/test_billing.py::test_google_play_acknowledgement_uses_the_documented_token_path apps/api/tests/test_billing.py::test_google_play_verify_route_grants_only_verified_active_purchase
+INPUT=The same three deterministic regression cases and values against the changed implementation.
+LITERAL_OUTPUT_BEGIN
+...                                                                      [100%]
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: account binding, exact acknowledgement path, grant-before-acknowledge, and already-acknowledged suppression pass.
+
+FULL_VALIDATION
+COMMAND=uv run --project apps/api pytest -q --tb=no apps/api/tests
+LITERAL_OUTPUT_BEGIN
+........................................................................ [ 22%]
+........................................................................ [ 45%]
+........................................................................ [ 67%]
+........................................................................ [ 90%]
+....s..........................                                          [100%]
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: complete API test suite passed with one intentional skip.
+
+ROLLBACK
+COMMAND=/home/lxx/Foresightnine/src/repair-evidence/billing-purchase-binding-20260915/ROLLBACK.sh /home/lxx/.config/foresightnine/rollback-test/billing-purchase-binding-20260915/work-20260915T2200
+INPUT=An isolated second copy of the four changed files; live source and deployed API were not rolled back.
+LITERAL_OUTPUT_BEGIN
+RESTORED apps/api/app/billing.py SHA256=09b6c0b8fe6254307a2f6a60315e3f056317b958c99f91fe3dce96650ab626b3
+RESTORED apps/api/app/main.py SHA256=d2cabbc9cf9c2a2f1580dd4bb6b8dc0c8bb58e3e9749e83cae567766a33f693b
+RESTORED apps/api/tests/test_billing.py SHA256=9d95907f0422445bff73c5005e46c84438abe3c6159c3c83e702b52688220e1b
+RESTORED docs/problem.md SHA256=7de549057b9d255f1cedb77949ec6de0ccbbf704dbd9b002a14e5457e9451676
+ROLLBACK_STATUS=restored_original_files
+ROLLBACK_EXIT=0
+ROLLBACK_HASH_MATCH=true
+LIVE_CHANGED=true
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: the isolated copy exactly restored every original SHA-256 while live source remained changed.
+RESTORED_BEHAVIOR_STATUS=The isolated copy again has the incorrect acknowledgement URL, no Play account binding, and acknowledgement-before-entitlement order. Live source retains the repair and the rebuilt API remains healthy.
+
+SECURITY
+PURCHASE_TOKEN_READ_OR_PRINTED=NO
+ACCESS_TOKEN_READ_OR_PRINTED=NO
+GOOGLE_PLAY_WRITE_CALL=NO
+REAL_PURCHASE_OR_ACKNOWLEDGEMENT=NO
+PRODUCTION_TRACK_MUTATION=NO

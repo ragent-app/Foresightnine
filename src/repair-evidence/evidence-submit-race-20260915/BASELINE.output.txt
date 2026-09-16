@@ -1,0 +1,40 @@
+$ vitest run --passWithNoTests -- challenge-panel.interaction.test.ts
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/oauth-client.test.ts (7 tests) 32ms
+ ✓ src/methods-guide.test.ts (3 tests) 15ms
+ ✓ src/market-config-client.test.ts (7 tests) 27ms
+ ✓ src/api-runtime.error.test.ts (7 tests) 16ms
+ ✓ src/model-config-client.test.ts (10 tests) 38ms
+ ✓ src/market-data.test.ts (1 test) 25ms
+ ✓ src/search-client.test.ts (6 tests) 26ms
+ ✓ src/freshness.test.ts (9 tests) 82ms
+ ❯ src/challenge-panel.interaction.test.ts (17 tests | 1 failed) 113ms
+   × ChallengePanel information architecture > shows and locks a distinct evidence-submission state 14ms
+     → button not found: 证据提交中…
+ ✓ src/app.test.ts (52 tests) 148ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/challenge-panel.interaction.test.ts > ChallengePanel information architecture > shows and locks a distinct evidence-submission state
+Error: button not found: 证据提交中…
+ ❯ expectButtonState src/challenge-panel.interaction.test.ts:82:29
+     80| function expectButtonState(markup: string, label: string, disabled: bo…
+     81|   const match = markup.match(new RegExp(`<button\\b[^>]*>${escapedRegE…
+     82|   if (match === null) throw new Error(`button not found: ${label}`);
+       |                             ^
+     83|   expect(match[0].includes('disabled=""'), label).toBe(disabled);
+     84| }
+ ❯ src/challenge-panel.interaction.test.ts:209:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 9 passed (10)
+      Tests  1 failed | 118 passed (119)
+   Start at  00:46:23
+   Duration  1.63s (transform 2.47s, setup 0ms, collect 5.12s, tests 522ms, environment 4ms, prepare 1.93s)
+
+/home/lxx/Foresightnine/src/apps/web:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @foresightnine/web@0.1.0 test: `vitest run --passWithNoTests -- challenge-panel.interaction.test.ts`
+Exit status 1

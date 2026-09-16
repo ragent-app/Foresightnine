@@ -1,0 +1,33 @@
+
+===== COMMAND: corepack pnpm scan:secrets =====
+$ node scripts/verify/secret-scan.mjs
+PASS inspected 1332 unique Git-history blobs
+PASS secret scan /home/lxx/Foresightnine
+EXIT_STATUS: 0
+
+===== COMMAND: git diff --check =====
+EXIT_STATUS: 0
+
+===== COMMAND: cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate =====
+Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+EXIT_STATUS: 0
+
+===== COMMAND: systemctl --user is-active foresightnine-cloudflared.service =====
+active
+EXIT_STATUS: 0
+
+===== COMMAND: Cloudflare API read-only permission probe =====
+endpoint=user/tokens/verify HTTP_STATUS=200 success=True status=active errors=
+endpoint=zones/5e79217ea213c033e4693b0f2b52d6ac/settings/always_use_https HTTP_STATUS=403 success=False status=None errors=10000:Authentication error
+endpoint=zones/5e79217ea213c033e4693b0f2b52d6ac/rulesets/phases/http_request_dynamic_redirect/entrypoint HTTP_STATUS=404 success=False status=None errors=10003:could not find entrypoint ruleset in the http_request_dynamic_redirect phase
+===== COMMAND: public status summary =====
+200 http://app.foresightnine.com/
+200 http://staging.foresightnine.com/
+200 https://app.foresightnine.com/
+404 https://staging.foresightnine.com/health
+200 https://staging.foresightnine.com/oauth/mobile-callback
+200 https://api-staging.foresightnine.com/v1/factor-libraries/v1.0.0/manifest
+404 https://api-staging.foresightnine.com/v1/factor-libraries/manifest
+
+final_checks_finished=2026-08-31T22:57:50+08:00

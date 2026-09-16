@@ -1,0 +1,13 @@
+BRANCH=master
+HEAD=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_FIELDS=console.market_data_config,methodsExport.download
+RESULT=The production console now explains and exposes the signed-in financial API-key workflow, and its download action generates a complete bilingual project runtime guide.
+ORIGINAL_HASH_INDEX=baseline-hashes.json
+
+SHA256 MODIFIED PATHS
+535dc44631f0c9d18fdf05af5aaf99da52a800a43fd5e6c8e7a50c42280687ab  src/apps/web/src/App.tsx
+149a1407f2c93c7d1f8c2c23e1d162f6af93292db872b5bc976d4ff5cf21da84  src/apps/web/src/components/MarketDataConfigPanel.tsx
+6a11293b1c36362c2c13833ad24379fd804622eb65b891d9edbc827df9313a80  src/apps/web/src/components/MethodsPanel.tsx
+642371dc9536dabec57c1787ceb5d0682a50bf52e2fce0cb432e86bbe5c7f6ad  src/apps/web/src/styles.css
+7db4f9717ec6b3ce667def98b60765f465d701236a001a0fddf502c7d2247a71  src/apps/web/src/methods-guide.ts
+aeed380f90d694e96bcee86076bbcaf4f6659f55f283a2945b266c4837a14c7f  src/apps/web/src/methods-guide.test.ts

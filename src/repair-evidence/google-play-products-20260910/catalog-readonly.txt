@@ -1,0 +1,16 @@
+Google Play subscription catalog readback (read-only)
+Date: 2026-09-10 Asia/Shanghai
+Package: com.foresightnine.mobile
+
+TOKEN_EXCHANGE=PASS
+SUBSCRIPTIONS_HTTP=200
+SUBSCRIPTIONS_COUNT=2
+foresightnine_pro: monthly, USD 20, state DRAFT, regional configs 173
+foresightnine_max: monthly, USD 200, state DRAFT, regional configs 173
+
+Internal track: HTTP 200, RELEASE_LIFECYCLE_STATE_PUBLISHED, releaseName 0.1.0, active artifact versionCode 1.
+Open track: HTTP 404 (not configured/readable as a track).
+Closed track: HTTP 404 (not configured/readable as a track).
+Production track: HTTP 204 (no release body returned).
+
+No credential fields, OAuth code, access token, purchase token, or JSON credential content is stored here.

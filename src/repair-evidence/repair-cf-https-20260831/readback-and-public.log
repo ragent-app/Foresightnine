@@ -1,0 +1,9 @@
+===== MODIFIED SETTING READBACK =====
+GET HTTP_STATUS:200 success=True value=on errors=
+URL: http://app.foresightnine.com/
+HTTP/1.1 301 Moved Permanently
+URL: http://staging.foresightnine.com/
+HTTP/1.1 301 Moved Permanently
+URL: http://api-staging.foresightnine.com/
+HTTP/1.1 301 Moved Permanently
+readback_finished=2026-08-31T23:26:34+08:00

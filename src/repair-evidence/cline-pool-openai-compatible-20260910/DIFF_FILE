@@ -1,0 +1,148 @@
+--- openai_compatible.py ---
+--- /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/openai_compatible.py.orig	2026-09-10 00:37:08.028552423 +0800
++++ src/apps/api/app/openai_compatible.py	2026-09-10 00:37:37.643332185 +0800
+@@ -11,6 +11,7 @@
+ from dataclasses import dataclass, field
+ import ipaddress
+ import json
++import os
+ import re
+ import socket
+ from time import sleep
+@@ -36,6 +37,8 @@
+ _MODEL_ENV = "FORESIGHTNINE_LLM_MODEL"
+ _API_KEY_ENV = "FORESIGHTNINE_LLM_API_KEY"
+ _ALLOWED_HOSTS_ENV = "FORESIGHTNINE_LLM_ALLOWED_HOSTS"
++_ALLOW_PRIVATE_NETWORK_ENV = "FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK"
++_LOCAL_GATEWAY_HOSTS = frozenset({"host.docker.internal", "host.containers.internal"})
+ _GLM_CODING_API_KEY_ENV = "FORESIGHTNINE_GLM_CODING_API_KEY"
+ _GLM_CODING_MODEL_ENV = "FORESIGHTNINE_GLM_CODING_MODEL"
+ _GLM_CODING_THINKING_ENV = "FORESIGHTNINE_GLM_CODING_THINKING"
+@@ -215,12 +218,17 @@
+     return frozenset(entries)
+ 
+ 
++def _parse_bool(raw: str | None) -> bool:
++    return (raw or "").strip().lower() in {"1", "true", "yes", "on"}
++
++
+ @dataclass(frozen=True)
+ class OpenAICompatibleSettings:
+     base_url: str
+     model: str
+     allowed_hosts: frozenset[tuple[str, int]]
+     api_key: str | None = field(default=None, repr=False)
++    allow_private_network: bool = False
+     glm_generation: GlmCodingGenerationSettings | None = None
+ 
+     @classmethod
+@@ -232,6 +240,7 @@
+             model=os.environ.get(_MODEL_ENV, ""),
+             api_key=os.environ.get(_API_KEY_ENV),
+             allowlist=os.environ.get(_ALLOWED_HOSTS_ENV, ""),
++            allow_private_network=_parse_bool(os.environ.get(_ALLOW_PRIVATE_NETWORK_ENV)),
+         )
+ 
+     @classmethod
+@@ -242,6 +251,7 @@
+         model: str | None,
+         api_key: str | None,
+         allowlist: str | None,
++        allow_private_network: bool = False,
+         glm_generation: GlmCodingGenerationSettings | None = None,
+     ) -> "OpenAICompatibleSettings":
+         base_url = (base_url or "").strip()
+@@ -258,8 +268,9 @@
+             port = parsed.port
+         except ValueError as error:
+             raise ProviderFailure("provider_configuration_invalid", "LLM base URL is invalid.", retryable=False) from error
++        local_gateway = allow_private_network and hostname in _LOCAL_GATEWAY_HOSTS
+         if (
+-            parsed.scheme.lower() != "https"
++            parsed.scheme.lower() not in ({"https", "http"} if local_gateway else {"https"})
+             or not hostname
+             or parsed.username is not None
+             or parsed.password is not None
+@@ -270,7 +281,7 @@
+         ):
+             raise ProviderFailure(
+                 "provider_configuration_invalid",
+-                "LLM base URL must be an HTTPS URL without credentials, query, or fragment.",
++                "LLM base URL must be HTTPS; only the explicitly enabled local gateway may use HTTP.",
+                 retryable=False,
+             )
+         if glm_generation is not None and model != _GLM_CODING_DEFAULT_MODEL:
+@@ -292,6 +303,7 @@
+             model=model,
+             allowed_hosts=allowed_hosts,
+             api_key=api_key,
++            allow_private_network=allow_private_network,
+             glm_generation=glm_generation,
+         )
+ 
+@@ -324,7 +336,8 @@
+     parsed = urlsplit(url)
+     if not parsed.hostname:
+         raise _TransportFailure()
+-    _require_public_dns(parsed.hostname, parsed.port or 443)
++    allow_private = _parse_bool(os.environ.get(_ALLOW_PRIVATE_NETWORK_ENV))
++    _require_public_dns(parsed.hostname, parsed.port or 443, allow_private=allow_private)
+     request = Request(url, data=body, headers=dict(headers), method=method)
+     opener = build_opener(_NoRedirectHandler())
+     try:
+@@ -362,8 +375,10 @@
+     return f"{base_url}/chat/completions"
+ 
+ 
+-def _require_public_dns(hostname: str, port: int) -> None:
++def _require_public_dns(hostname: str, port: int, *, allow_private: bool = False) -> None:
+     """Reject DNS answers that would turn an allowlisted host into an SSRF hop."""
++    if allow_private and hostname.rstrip(".").lower() in _LOCAL_GATEWAY_HOSTS:
++        return
+     try:
+         records = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+     except OSError as error:
+--- test_openai_compatible_provider.py ---
+--- /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/test_openai_compatible_provider.py.orig	2026-09-10 00:37:08.031045668 +0800
++++ src/apps/api/tests/test_openai_compatible_provider.py	2026-09-10 00:38:27.075343899 +0800
+@@ -227,6 +227,26 @@
+         OpenAICompatibleLlmProvider.from_environment().generate_challenge(request())
+ 
+ 
++def test_explicit_local_gateway_profile_allows_http_and_private_dns(monkeypatch: pytest.MonkeyPatch) -> None:
++    monkeypatch.setenv("FORESIGHTNINE_LLM_BASE_URL", "http://host.docker.internal:10910/v1")
++    monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deepseek/deepseek-v4-flash")
++    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOWED_HOSTS", "host.docker.internal:10910")
++    monkeypatch.setenv("FORESIGHTNINE_LLM_API_KEY", _SECRET)
++    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK", "true")
++
++    settings = OpenAICompatibleSettings.from_environment()
++    assert settings.base_url == "http://host.docker.internal:10910/v1"
++    assert settings.model == "deepseek/deepseek-v4-flash"
++    assert settings.allow_private_network is True
++
++
++def test_local_gateway_http_remains_rejected_without_explicit_flag(monkeypatch: pytest.MonkeyPatch) -> None:
++    configure(monkeypatch, base_url="http://host.docker.internal:10910/v1")
++    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOWED_HOSTS", "host.docker.internal:10910")
++    with pytest.raises(ProviderFailure, match="HTTPS"):
++        OpenAICompatibleSettings.from_environment()
++
++
+ def test_default_transport_rejects_allowlisted_hostname_resolving_to_private_network(monkeypatch: pytest.MonkeyPatch) -> None:
+     monkeypatch.setattr(
+         openai_compatible.socket,
+--- compose.yaml ---
+--- /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/compose.yaml.orig	2026-09-10 00:37:08.033845783 +0800
++++ src/infra/docker/compose.yaml	2026-09-10 00:37:32.566330982 +0800
+@@ -40,6 +40,10 @@
+       dockerfile: infra/docker/Dockerfile.api
+     ports:
+       - "127.0.0.1:8000:8000"
++    extra_hosts:
++      # The staging API uses the host-local Cline OpenAI-compatible gateway;
++      # this name is confined to the Docker bridge and is not a public route.
++      - "host.docker.internal:host-gateway"
+     volumes:
+       # Deployment-owned secrets are mounted read-only; their contents never
+       # enter the image, repository, logs, or client bundle.

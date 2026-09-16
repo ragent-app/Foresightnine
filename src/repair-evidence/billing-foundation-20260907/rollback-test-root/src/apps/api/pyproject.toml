@@ -1,0 +1,23 @@
+[project]
+name = "foresightnine-api"
+version = "0.1.0"
+description = "ForesightNine contract-first API skeleton"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "jsonschema>=4.23,<5.0",
+  "pydantic>=2.10,<3.0",
+  "psycopg[binary]>=3.2,<4.0",
+  "redis>=6.4,<7.0",
+  "uvicorn[standard]>=0.34,<1.0"
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1.0",
+  "pytest>=8.3,<10.0"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

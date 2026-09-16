@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from copy import deepcopy
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import json
@@ -14,6 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, Query, Request, Response
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
@@ -75,7 +76,8 @@ from .operations import ApiProblem, OperationManager, format_sse
 from .retention import RetentionPolicy, cleanup_research_state
 from .security import SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
 from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
-from .phase3 import ChallengeDraft, ChallengeInput, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
+from .phase3 import ChallengeDraft, ChallengeInput, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
+from .openai_compatible import OpenAICompatibleLlmProvider
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, RuntimeClock, build_attestation
 from .registry import ASSET_INDEX, get_asset as registry_get_asset, search_assets as registry_search_assets
@@ -88,7 +90,7 @@ from .services import (
     validate_probability_semantics,
     validate_worldline_bundle_semantics,
 )
-from .storage import JsonDocumentRepository, StorageConfig, StorageMode, build_repository
+from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -97,6 +99,25 @@ from .oauth_foundation import OAuthConfigurationError, OAuthExchangeTicketError,
 from .oauth_identity import OAuthIdentity, OAuthSessionResponse
 from .oauth_provider import OAuthProviderClient, OAuthProviderError
 from .market_provider import MarketSnapshotRequest, build_snapshot_response
+from .market_credentials import (
+    AccountMarketDataSettings,
+    MarketCredentialCipher,
+    MarketCredentialError,
+    MarketDataConfigResponse,
+    MarketDataConfigUpdate,
+    MarketProviderTestRequest,
+    MarketProviderTestResponse,
+    StoredMarketDataConfig,
+)
+from .model_credentials import (
+    AccountModelSettings,
+    ModelConfigResponse,
+    ModelConfigTestResponse,
+    ModelConfigUpdate,
+    ModelCredentialCipher,
+    ModelCredentialError,
+    StoredModelConfig,
+)
 from .local_auth import (
     LocalAccount,
     LocalAuthError,
@@ -109,6 +130,16 @@ from .local_auth import (
     purge_expired_sessions,
     register as register_local,
     issue_session as issue_local_session,
+)
+from .billing import (
+    BillingError,
+    BillingLedger,
+    GooglePlaySubscriptionVerifier,
+    GooglePlayVerifyRequest,
+    PurchaseRecord,
+    PurchaseTokenCipher,
+    BillingState,
+    UsageLedgerEntry,
 )
 
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=8, max_length=128)]
@@ -210,6 +241,12 @@ def _build_entity_repositories(
     JsonDocumentRepository[LocalAccount],
     JsonDocumentRepository[LocalSession],
     JsonDocumentRepository[OAuthIdentity],
+    JsonDocumentRepository[BillingState],
+    JsonDocumentRepository[PurchaseRecord],
+    JsonDocumentRepository[UsageLedgerEntry],
+    JsonDocumentRepository[StoredMarketDataConfig],
+    JsonDocumentRepository[StoredModelConfig],
+    JsonDocumentRepository[ChallengeRecord],
 ]:
     """Build every API entity map with its canonical typed document loader."""
     return (
@@ -224,6 +261,12 @@ def _build_entity_repositories(
         build_repository(config, "accounts", value_loader=LocalAccount.model_validate),
         build_repository(config, "auth_sessions", value_loader=LocalSession.model_validate),
         build_repository(config, "oauth_identities", value_loader=OAuthIdentity.model_validate),
+        build_repository(config, "billing_states", value_loader=BillingState.model_validate),
+        build_repository(config, "billing_purchases", value_loader=PurchaseRecord.model_validate),
+        build_repository(config, "usage_ledger", value_loader=UsageLedgerEntry.model_validate),
+        build_repository(config, "market_data_configs", value_loader=StoredMarketDataConfig.model_validate),
+        build_repository(config, "model_configs", value_loader=StoredModelConfig.model_validate),
+        build_repository(config, "challenge_operation_results", value_loader=ChallengeRecord.model_validate),
     )
 
 
@@ -240,9 +283,90 @@ storage_config = _storage_config()
     ACCOUNTS,
     AUTH_SESSIONS,
     OAUTH_IDENTITIES,
+    BILLING_STATES,
+    BILLING_PURCHASES,
+    USAGE_LEDGER,
+    MARKET_DATA_CONFIGS,
+    MODEL_CONFIGS,
+    CHALLENGE_OPERATION_RESULTS,
 ) = _build_entity_repositories(storage_config)
 operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
 OPERATION_SESSIONS: dict[str, str] = {}
+CHALLENGE_OPERATION_IDS: dict[str, str] = {}
+billing_ledger = BillingLedger(
+    BILLING_STATES,
+    BILLING_PURCHASES,
+    USAGE_LEDGER,
+    cipher=PurchaseTokenCipher.from_environment(),
+)
+
+
+def _release_terminal_reservation(operation_id: str, status: str) -> None:
+    if status not in {"failed", "cancelled"}:
+        return
+    try:
+        billing_ledger.release(f"model:{operation_id}", now=lifecycle_clock.now(), reverse_settled=True)
+    except Exception:
+        # The durable reconciliation pass below retries terminal reservations;
+        # an already committed operation transition must not be rolled back by
+        # a transient billing-store failure.
+        return
+
+
+operations.set_terminal_observer(_release_terminal_reservation)
+market_data_settings = AccountMarketDataSettings(
+    MARKET_DATA_CONFIGS,
+    MarketCredentialCipher.from_environment(),
+)
+model_settings = AccountModelSettings(
+    MODEL_CONFIGS,
+    ModelCredentialCipher.from_environment(),
+)
+
+
+def _store_challenge_operation_result(operation_id: str, challenge: ChallengeRecord) -> None:
+    """Persist the immutable challenge version named by one terminal receipt."""
+    CHALLENGE_OPERATION_RESULTS[operation_id] = challenge
+
+
+def _commit_challenge_mutation(
+    challenge_id: str,
+    *,
+    expected: ChallengeRecord,
+    expected_turn: int,
+    operation: Callable[[], None],
+) -> None:
+    """Commit one aggregate mutation only if its source snapshot is current.
+
+    Provider work intentionally runs outside this lock. The short terminal
+    section is serialized per challenge in memory and by a PostgreSQL
+    transaction advisory lock in deployed runtimes. A loser fails closed
+    rather than overwriting a sibling message, evidence, or confirmation.
+    """
+    def guarded() -> None:
+        current = CHALLENGES.get(challenge_id)
+        current_turn = CHALLENGE_TURNS.get(challenge_id)
+        if current is None or current.content_hash != expected.content_hash or current_turn != expected_turn:
+            # StorageConflictError crosses the repository callback boundary
+            # unchanged; translate it to the public API contract outside that
+            # boundary so PostgreSQL does not wrap it as a storage outage.
+            raise StorageConflictError("Challenge aggregate version conflict.")
+        operation()
+
+    try:
+        CHALLENGES.with_advisory_lock(f"challenge-mutation:{challenge_id}", guarded)
+    except StorageConflictError as error:
+        raise ApiProblem(
+            409,
+            "lifecycle_conflict",
+            "Challenge changed while this operation was running; reload the current challenge and retry.",
+        ) from error
+
+
+def _remove_challenge_operation_result(operation_id: str, challenge: ChallengeRecord) -> None:
+    stored = CHALLENGE_OPERATION_RESULTS.get(operation_id)
+    if stored is not None and stored.content_hash == challenge.content_hash:
+        CHALLENGE_OPERATION_RESULTS.delete(operation_id)
 
 
 def _assert_runtime_ready() -> None:
@@ -253,6 +377,9 @@ def _assert_runtime_ready() -> None:
             ACCOUNTS.check_ready()
             AUTH_SESSIONS.check_ready()
             OAUTH_IDENTITIES.check_ready()
+            MARKET_DATA_CONFIGS.check_ready()
+            MODEL_CONFIGS.check_ready()
+            CHALLENGE_OPERATION_RESULTS.check_ready()
             operations.store.check_ready()
         except Exception as error:
             raise RuntimeError("Persistent PostgreSQL state is not ready.") from error
@@ -287,7 +414,14 @@ def reset_state() -> None:
     ACCOUNTS.clear()
     AUTH_SESSIONS.clear()
     OAUTH_IDENTITIES.clear()
+    BILLING_STATES.clear()
+    BILLING_PURCHASES.clear()
+    USAGE_LEDGER.clear()
+    MARKET_DATA_CONFIGS.clear()
+    MODEL_CONFIGS.clear()
+    CHALLENGE_OPERATION_RESULTS.clear()
     OPERATION_SESSIONS.clear()
+    CHALLENGE_OPERATION_IDS.clear()
 
 
 def cleanup_expired_state() -> object:
@@ -305,10 +439,22 @@ def cleanup_expired_state() -> object:
         worldline_challenges=WORLDLINE_CHALLENGES, active_session_ids=active_session_ids,
         operations=operations, now=lifecycle_clock.now(), policy=retention_policy,
     )
+    # Reconcile both freshly recovered leases and terminal operations left by a
+    # prior process. Reservation IDs are deterministic and release is idempotent.
+    for reservation_id, entry in tuple(USAGE_LEDGER.items_for_retention()):
+        if not reservation_id.startswith("model:") or entry.status not in {"reserved", "settled"}:
+            continue
+        operation_id = reservation_id.removeprefix("model:")
+        operation_document = operations.store.get_operation(operation_id)
+        if operation_document is not None and operation_document.get("status") in {"failed", "cancelled"}:
+            billing_ledger.release(reservation_id, now=lifecycle_clock.now(), reverse_settled=True)
     active = operations.active_operation_ids()
     for operation_id in tuple(OPERATION_SESSIONS):
         if operation_id not in active:
             OPERATION_SESSIONS.pop(operation_id, None)
+    for operation_id, _challenge in tuple(CHALLENGE_OPERATION_RESULTS.items_for_retention()):
+        if operations.store.get_operation(operation_id) is None:
+            CHALLENGE_OPERATION_RESULTS.delete(operation_id)
     return report
 
 
@@ -324,6 +470,32 @@ def _model_subjects(request: Request, session_id: str | None = None) -> tuple[st
     return tuple(subjects)
 
 
+def _model_provider_for_request(request: Request) -> tuple[LlmProvider, bool]:
+    """Resolve an account-owned provider once, without mutating the global one."""
+    authorization = request.headers.get("Authorization")
+    if authorization is None:
+        request.state.model_account = None
+        request.state.personal_model = False
+        return challenge_provider, False
+    try:
+        account, _ = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+    except LocalAuthError as error:
+        # An explicitly supplied but invalid/expired credential must never turn
+        # into an anonymous platform-model request.
+        raise _local_auth_problem(error) from error
+    request.state.model_account = account
+    try:
+        settings = model_settings.runtime_settings(account.account_id)
+    except ModelCredentialError as error:
+        raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code == 503, retry_after=30) from error
+    if settings is None:
+        request.state.personal_model = False
+        return challenge_provider, False
+    request.state.personal_model = True
+    # This object and its decrypted key remain scoped to this request closure.
+    return OpenAICompatibleLlmProvider(settings), True
+
+
 def _reserve_model_call(request: Request, operation_id: str, *, session_id: str | None = None) -> None:
     decision = abuse_control.model.reserve(operation_id, _model_subjects(request, session_id))
     if not decision.available:
@@ -336,6 +508,56 @@ def _reserve_model_call(request: Request, operation_id: str, *, session_id: str 
             429, "quota_exceeded", "Model-call quota exceeded; retry later.",
             retryable=True, retry_after=decision.retry_after,
         )
+    # An authenticated account receives the same server-side token gate for
+    # every provider call.  Anonymous sessions retain the legacy abuse-control
+    # call quota and never create billing records.
+    account = getattr(request.state, "model_account", None)
+    if account is None:
+        authorization = request.headers.get("Authorization")
+        try:
+            account, _ = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        except LocalAuthError:
+            account = None
+    if account is not None and not getattr(request.state, "personal_model", False):
+        reservation_id = f"model:{operation_id}"
+        try:
+            billing_ledger.reserve(account.account_id, reservation_id, 4_500, now=lifecycle_clock.now())
+        except BillingError as error:
+            raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code in {502, 503}, retry_after=error.retry_after) from error
+        request.state.billing_account_id = account.account_id
+        request.state.billing_reservation_id = reservation_id
+
+
+def _settle_model_call(request: Request, operation_id: str, total_tokens: int | None) -> None:
+    account_id = getattr(request.state, "billing_account_id", None)
+    reservation_id = getattr(request.state, "billing_reservation_id", f"model:{operation_id}")
+    if not account_id:
+        return
+    try:
+        actual_tokens = 4_500 if total_tokens is None else max(0, int(total_tokens))
+        billing_ledger.settle(reservation_id, actual_tokens, now=lifecycle_clock.now())
+    except BillingError as error:
+        raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code in {502, 503}, retry_after=error.retry_after) from error
+
+
+def _release_model_call(request: Request) -> None:
+    reservation_id = getattr(request.state, "billing_reservation_id", None)
+    if reservation_id:
+        billing_ledger.release(reservation_id, now=lifecycle_clock.now(), reverse_settled=True)
+
+
+def _release_model_on_failure(
+    request: Request,
+    build_result: Callable[[str], tuple[BaseModel, str]],
+) -> Callable[[str], tuple[BaseModel, str]]:
+    """Release an accepted async reservation when its worker fails."""
+    def wrapped(operation_id: str) -> tuple[BaseModel, str]:
+        try:
+            return build_result(operation_id)
+        except BaseException:
+            _release_model_call(request)
+            raise
+    return wrapped
 
 
 def _reserve_search_call(request: Request) -> None:
@@ -375,7 +597,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(security_config.allowed_origins),
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
     max_age=600,
 )
@@ -387,6 +609,31 @@ app.add_middleware(
     resolver=trusted_proxy_resolver,
     cleanup=cleanup_expired_state,
 )
+
+
+@app.middleware("http")
+async def canonical_web_host(request: Request, call_next: Any) -> Response:
+    """Keep the public apex as a path-preserving entry to the canonical app host."""
+    host = request.headers.get("host", "").partition(":")[0].lower()
+    if host in {"foresightnine.com", "www.foresightnine.com"}:
+        target = urlunsplit(("https", "app.foresightnine.com", request.url.path, request.url.query, ""))
+        return RedirectResponse(target, status_code=308, headers={"Cache-Control": "public, max-age=3600"})
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def model_config_test_content_type(request: Request, call_next: Any) -> Response:
+    """Keep the no-body model probe compatible with the JSON-only boundary."""
+    if (
+        request.method == "POST"
+        and request.url.path == "/v1/account/model-config/test"
+        and "content-type" not in request.headers
+    ):
+        request.scope["headers"] = [
+            *[(key, value) for key, value in request.scope["headers"] if key.lower() != b"content-type"],
+            (b"content-type", b"application/json"),
+        ]
+    return await call_next(request)
 
 
 def _metadata(payload: dict[str, Any], ref_id: str, label: str, source_type: str = "model_inference") -> dict[str, Any]:
@@ -570,6 +817,8 @@ def _challenge_from_draft(
     turn: int,
     status: str,
     private_evidence_declared: bool,
+    provider: LlmProvider | None = None,
+    personal_provider: bool = False,
 ) -> ChallengeRecord:
     payload = {
         "turn_id": deterministic_id("turn", f"{challenge_id}:{turn}"),
@@ -589,8 +838,11 @@ def _challenge_from_draft(
         "private_evidence_declared": private_evidence_declared,
         "status": status,
     }
+    selected_provider = provider or challenge_provider
+    source_id = "provider:account-openai-compatible" if personal_provider else f"provider:{selected_provider.name}"
+    source_label = "Validated account-scoped OpenAI-compatible challenge draft" if personal_provider else "Validated adversarial challenge draft"
     result = ChallengeRecord(
-        **_metadata(payload, f"provider:{challenge_provider.name}", "Validated adversarial challenge draft"),
+        **_metadata(payload, source_id, source_label),
         **payload,
     )
     validate_payload(result, "ChallengeRecord")
@@ -630,6 +882,10 @@ def _error(status_code: int, error_code: str, message: str, request: Request, *,
 
 @app.exception_handler(ApiProblem)
 async def api_problem_handler(request: Request, error: ApiProblem) -> JSONResponse:
+    # Provider reservations are created before the operation layer converts a
+    # provider failure into ApiProblem. Releasing here is idempotent and avoids
+    # failed requests holding account quota indefinitely.
+    _release_model_call(request)
     return _error(
         error.status_code,
         error.error_code,
@@ -654,6 +910,7 @@ async def request_validation_handler(request: Request, error: RequestValidationE
 
 @app.exception_handler(ContractViolation)
 async def contract_violation_handler(request: Request, error: ContractViolation) -> JSONResponse:
+    _release_model_call(request)
     details = [ErrorDetail(location=error.contract, message=item) for item in error.errors]
     return _error(500, "contract_violation", "Generated response violated the canonical contract.", request, details=details)
 
@@ -661,17 +918,20 @@ async def contract_violation_handler(request: Request, error: ContractViolation)
 @app.exception_handler(ProviderFailure)
 async def provider_failure_handler(request: Request, error: ProviderFailure) -> JSONResponse:
     # Raw CLI/model diagnostics are intentionally not exposed or stored.
+    _release_model_call(request)
     return _error(
-        500 if error.retryable else 400,
+        503 if error.retryable else 400,
         "internal_error" if error.retryable else "bad_request",
         "Provider request could not produce an accepted result.",
         request,
         retryable=error.retryable,
+        retry_after=15 if error.retryable else None,
     )
 
 
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, error: Exception) -> JSONResponse:
+    _release_model_call(request)
     return _error(500, "internal_error", "Internal operation failed without exposing sensitive detail.", request, retryable=True)
 
 
@@ -750,9 +1010,24 @@ def android_asset_links() -> Response:
 
 
 @app.post("/snapshots", include_in_schema=False)
-def market_snapshots(request: MarketSnapshotRequest) -> JSONResponse:
+def market_snapshots(
+    request: MarketSnapshotRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> JSONResponse:
     """Serve the bounded client market runtime without exposing a vendor API."""
-    return JSONResponse(build_snapshot_response(request))
+    provider_order = None
+    provider_credentials: Mapping[str, str] = {}
+    if authorization:
+        account = _authenticated_account(authorization)
+        try:
+            provider_order, provider_credentials = market_data_settings.runtime(account.account_id)
+        except MarketCredentialError as error:
+            raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code == 503, retry_after=30) from error
+    return JSONResponse(build_snapshot_response(
+        request,
+        provider_order=provider_order,
+        provider_credentials=provider_credentials,
+    ))
 
 
 def _local_auth_available() -> bool:
@@ -832,6 +1107,8 @@ def local_delete_account(authorization: str | None = Header(default=None, alias=
     try:
         account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
         delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
+        market_data_settings.delete(account.account_id)
+        model_settings.delete(account.account_id)
     except LocalAuthError as error:
         raise _local_auth_problem(error) from error
     return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
@@ -844,6 +1121,8 @@ def delete_authenticated_account(authorization: str | None = Header(default=None
     try:
         account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
         delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
+        market_data_settings.delete(account.account_id)
+        model_settings.delete(account.account_id)
     except LocalAuthError as error:
         raise _local_auth_problem(error) from error
     return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
@@ -1101,6 +1380,252 @@ def exchange_oauth_ticket(request: OAuthTicketExchangeRequest, response: Respons
         raise ApiProblem(400, "bad_request", "OAuth exchange is unavailable.") from exception
 
 
+def _authenticated_account(authorization: str | None) -> LocalAccount:
+    try:
+        account, _session = authenticate_local(
+            ACCOUNTS,
+            AUTH_SESSIONS,
+            authorization,
+            now=lifecycle_clock.now(),
+        )
+        return account
+    except LocalAuthError as error:
+        raise _local_auth_problem(error) from error
+
+
+def _operation_owner_subject(request: Request) -> str:
+    """Return the non-secret subject used to namespace operation receipts."""
+    account = getattr(request.state, "model_account", None)
+    if account is None:
+        authorization = request.headers.get("Authorization")
+        if authorization:
+            account = _authenticated_account(authorization)
+    return f"account:{account.account_id}" if account is not None else "anonymous"
+
+
+def _require_operation_owner(request: Request, operation_id: str) -> str:
+    subject = _operation_owner_subject(request)
+    operations.require_owner(operation_id, subject)
+    return subject
+
+
+def _require_session_owner(request: Request, session_id: str) -> str:
+    subject = _operation_owner_subject(request)
+    if operations.owner_for_session(session_id) != subject:
+        raise ApiProblem(404, "not_found", "Session not found.")
+    return subject
+
+
+def _market_credential_problem(error: MarketCredentialError) -> ApiProblem:
+    return ApiProblem(
+        error.status_code,
+        error.code,
+        error.message,
+        retryable=error.status_code == 503,
+        retry_after=30 if error.status_code == 503 else None,
+    )
+
+
+@app.get("/v1/account/market-data-config", response_model=MarketDataConfigResponse, include_in_schema=False)
+def get_market_data_config(
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> MarketDataConfigResponse:
+    """Return account provider order and masked credential metadata only."""
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    return market_data_settings.snapshot(account.account_id)
+
+
+@app.put("/v1/account/market-data-config", response_model=MarketDataConfigResponse, include_in_schema=False)
+def update_market_data_config(
+    request: MarketDataConfigUpdate,
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> MarketDataConfigResponse:
+    """Encrypt account-owned provider keys and update the bounded fallback order."""
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return market_data_settings.update(account.account_id, request, now=lifecycle_clock.now())
+    except MarketCredentialError as error:
+        raise _market_credential_problem(error) from error
+
+
+@app.post("/v1/account/market-data-config/test", response_model=MarketProviderTestResponse, include_in_schema=False)
+def test_market_data_provider(
+    request: MarketProviderTestRequest,
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> MarketProviderTestResponse:
+    """Perform one bounded read through a saved provider without exposing diagnostics."""
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        _order, credentials = market_data_settings.runtime(account.account_id)
+    except MarketCredentialError as error:
+        raise _market_credential_problem(error) from error
+    cutoff = lifecycle_clock.now().date() - timedelta(days=1)
+    month_start = cutoff.replace(day=1)
+    year_start = cutoff.replace(month=1, day=1)
+    probe = MarketSnapshotRequest(
+        assetIds=["GRID"],
+        anchors={
+            "year_start": year_start.isoformat(),
+            "latest_month_start": month_start.isoformat(),
+            "latest_completed_session": cutoff.isoformat(),
+        },
+        cutoff=cutoff.isoformat(),
+        timezone="UTC",
+        requestedAt=lifecycle_clock.now().isoformat(),
+    )
+    payload = build_snapshot_response(
+        probe,
+        provider_order=(request.provider_id,),
+        provider_credentials={request.provider_id: credentials[request.provider_id]} if request.provider_id in credentials else {},
+    )
+    ready = any(item.get("status") in {"ok", "stale"} for item in payload.get("snapshots", []))
+    return MarketProviderTestResponse(provider_id=request.provider_id, status="ready" if ready else "unavailable")
+
+
+def _model_credential_problem(error: ModelCredentialError) -> ApiProblem:
+    return ApiProblem(
+        error.status_code,
+        error.code,
+        error.message,
+        retryable=error.status_code == 503,
+        retry_after=30 if error.status_code == 503 else None,
+    )
+
+
+@app.get("/v1/account/model-config", response_model=ModelConfigResponse, response_model_exclude_none=True, include_in_schema=False)
+def get_model_config(
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> ModelConfigResponse:
+    """Return account model mode and masked personal configuration only."""
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    return model_settings.snapshot(account.account_id)
+
+
+@app.put("/v1/account/model-config", response_model=ModelConfigResponse, response_model_exclude_none=True, include_in_schema=False)
+def update_model_config(
+    request: ModelConfigUpdate,
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> ModelConfigResponse:
+    """Encrypt and validate account-owned OpenAI-compatible credentials."""
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return model_settings.update(account.account_id, request, now=lifecycle_clock.now())
+    except ModelCredentialError as error:
+        raise _model_credential_problem(error) from error
+
+
+@app.delete("/v1/account/model-config", response_model=ModelConfigResponse, response_model_exclude_none=True, include_in_schema=False)
+def delete_model_config(
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> ModelConfigResponse:
+    """Delete every account-owned model configuration field and ciphertext."""
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    model_settings.delete(account.account_id)
+    return model_settings.snapshot(account.account_id)
+
+
+@app.post("/v1/account/model-config/test", response_model=ModelConfigTestResponse, include_in_schema=False)
+def test_model_config(
+    response: Response,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> ModelConfigTestResponse:
+    """Run one bounded, redirect-free capability probe against a saved personal endpoint."""
+    account = _authenticated_account(authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        settings = model_settings.runtime_settings(account.account_id)
+    except ModelCredentialError:
+        # A stale DNS answer, unavailable key file, or corrupted ciphertext is
+        # deliberately indistinguishable from an unavailable provider probe.
+        return ModelConfigTestResponse(status="unavailable")
+    if settings is None:
+        return ModelConfigTestResponse(status="unavailable")
+    return ModelConfigTestResponse(status="ready" if OpenAICompatibleLlmProvider(settings).connection_ready() else "unavailable")
+
+
+@app.get("/v1/account", include_in_schema=False)
+def account_summary(authorization: str | None = Header(default=None, alias="Authorization")) -> JSONResponse:
+    """Return server-authoritative plan and token quota state for the session."""
+
+    account = _authenticated_account(authorization)
+    return JSONResponse(
+        {"account": {"account_id": account.account_id, "email": account.email}, **billing_ledger.snapshot(account.account_id, now=lifecycle_clock.now())},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/v1/billing/google-play/verify", include_in_schema=False)
+def verify_google_play_subscription(
+    request: GooglePlayVerifyRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> JSONResponse:
+    """Verify a Play purchase server-side before granting subscription access."""
+
+    account = _authenticated_account(authorization)
+    credentials_path = os.getenv(
+        "FORESIGHTNINE_GOOGLE_PLAY_CREDENTIALS",
+        "/home/lxx/.config/google-play/service-account.json",
+    ).strip()
+    verifier = GooglePlaySubscriptionVerifier(credentials_path)
+    try:
+        expected_obfuscated_account_id = sha256(account.account_id.encode("utf-8")).hexdigest()
+        verified = verifier.fetch(
+            request.purchase_token,
+            expected_product_id=request.product_id,
+            expected_base_plan_id=request.base_plan_id,
+            expected_obfuscated_account_id=expected_obfuscated_account_id,
+        )
+        snapshot = billing_ledger.apply_google_purchase(
+            account.account_id,
+            request.purchase_token,
+            verified,
+            now=lifecycle_clock.now(),
+        )
+        # Grant the verified entitlement before acknowledgement. A retry is
+        # idempotent if the acknowledgement call transiently fails after the
+        # durable entitlement write.
+        if (
+            verified.subscription_state not in {"pending", "on_hold", "canceled", "expired"}
+            and verified.acknowledgement_state == "pending"
+        ):
+            verifier.acknowledge(request.purchase_token, verified.product_id)
+    except BillingError as error:
+        response = JSONResponse(
+            {"schema_version": "v1", "error_code": error.code, "message": error.message, "retryable": error.status_code in {502, 503}},
+            status_code=error.status_code,
+            headers={"Cache-Control": "no-store"},
+        )
+        if error.retry_after is not None:
+            response.headers["Retry-After"] = str(error.retry_after)
+        return response
+    return JSONResponse(
+        jsonable_encoder({"verified": True, "purchase_state": verified.subscription_state, **snapshot}),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/v1/billing/google-play/restore", include_in_schema=False)
+def restore_google_play_subscription(
+    request: GooglePlayVerifyRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> JSONResponse:
+    """Use the same idempotent server verification path when restoring access."""
+
+    return verify_google_play_subscription(request, authorization)
+
+
 @app.get("/v1/search/candidates", response_model=SearchCandidatesResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="searchEvidenceCandidates")
 def search_evidence_candidates(
     http_request: Request,
@@ -1117,8 +1642,9 @@ def search_evidence_candidates(
 
 
 @app.post("/v1/sessions", response_model=SessionOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createSession")
-def create_session(request: CreateSessionRequest, response: Response, idempotency_key: IdempotencyKey) -> SessionOperationResponse:
+def create_session(request: CreateSessionRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> SessionOperationResponse:
     _validate_request(request, "CreateSessionRequest")
+    prepared: dict[str, ResearchSession] = {}
 
     def build(operation_id: str) -> tuple[ResearchSession, str]:
         session_id = deterministic_id("session", operation_id)
@@ -1127,16 +1653,29 @@ def create_session(request: CreateSessionRequest, response: Response, idempotenc
         metadata["created_at"] = lifecycle_clock.now()
         session = ResearchSession(**metadata, **payload)
         validate_payload(session, "ResearchSession")
-        SESSIONS[session_id] = session
+        prepared[operation_id] = session
         return session, session_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        session = prepared[operation_id]
+        SESSIONS[session.session_id] = session
+        operations.associate_session(operation_id, session.session_id)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        session = prepared.get(operation_id)
+        if session is not None:
+            SESSIONS.pop(session.session_id, None)
 
     result, replayed = operations.execute(
         endpoint="/v1/sessions",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=SessionOperationResponse,
         result_field="session",
         build_result=build,
+        commit_result=commit,
+        rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
@@ -1145,8 +1684,11 @@ def create_session(request: CreateSessionRequest, response: Response, idempotenc
 @app.post("/v1/challenges", response_model=ChallengeOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createChallenge")
 def create_challenge(request: CreateChallengeRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "CreateChallengeRequest")
+    provider, personal_provider = _model_provider_for_request(http_request)
     if request.session_id not in SESSIONS:
         raise ApiProblem(404, "not_found", "Session not found.")
+    _require_session_owner(http_request, request.session_id)
+    prepared: dict[str, tuple[ThesisDocument, ChallengeRecord, int | None]] = {}
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
         _bind_operation_session(operation_id, request.session_id)
@@ -1160,7 +1702,7 @@ def create_challenge(request: CreateChallengeRequest, response: Response, idempo
             private_evidence=request.user_private_evidence_claims,
         )
         challenge_id = deterministic_id("challenge", operation_id)
-        draft = challenge_provider.generate_challenge(
+        draft = provider.generate_challenge(
             ChallengeInput(
                 operation_id=operation_id, challenge_id=challenge_id, thesis_id=thesis.thesis_id,
                 claim=request.thesis, turn=1, status="CHALLENGING",
@@ -1172,29 +1714,177 @@ def create_challenge(request: CreateChallengeRequest, response: Response, idempo
         challenge = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=thesis.thesis_id, challenge_id=challenge_id,
             turn=1, status="CHALLENGING", private_evidence_declared=request.user_private_evidence_claims,
+            provider=provider, personal_provider=personal_provider,
         )
-        THESES[thesis.thesis_id] = thesis
-        CHALLENGES[challenge_id] = challenge
-        CHALLENGE_TURNS[challenge_id] = 1
+        prepared[operation_id] = (thesis, challenge, draft.total_tokens)
         return challenge, challenge_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        thesis, challenge, total_tokens = prepared[operation_id]
+        THESES[thesis.thesis_id] = thesis
+        CHALLENGES[challenge.challenge_id] = challenge
+        CHALLENGE_TURNS[challenge.challenge_id] = 1
+        CHALLENGE_OPERATION_IDS[challenge.challenge_id] = operation_id
+        _store_challenge_operation_result(operation_id, challenge)
+        _settle_model_call(http_request, operation_id, total_tokens)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is not None:
+            thesis, challenge, _total_tokens = staged
+            _remove_challenge_operation_result(operation_id, challenge)
+            if CHALLENGE_OPERATION_IDS.get(challenge.challenge_id) == operation_id:
+                CHALLENGE_OPERATION_IDS.pop(challenge.challenge_id, None)
+                CHALLENGE_TURNS.pop(challenge.challenge_id, None)
+                CHALLENGES.pop(challenge.challenge_id, None)
+                THESES.pop(thesis.thesis_id, None)
+        _release_model_call(http_request)
 
     result, replayed = operations.execute(
         endpoint="/v1/challenges",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
         session_id=request.session_id,
+        commit_result=commit,
+        rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
 
 
+@app.post("/v1/challenges/async", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, responses=ERROR_RESPONSES, operation_id="startChallengeStream", include_in_schema=False)
+def start_challenge_stream(request: CreateChallengeRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
+    """Accept an initial challenge as a cancellable operation before provider work starts."""
+    _validate_request(request, "CreateChallengeRequest")
+    provider, personal_provider = _model_provider_for_request(http_request)
+    if request.session_id not in SESSIONS:
+        raise ApiProblem(404, "not_found", "Session not found.")
+    _require_session_owner(http_request, request.session_id)
+    prepared: dict[str, tuple[ThesisDocument, ChallengeRecord, int | None]] = {}
+
+    def before_accept(operation_id: str) -> None:
+        _bind_operation_session(operation_id, request.session_id)
+        _reserve_model_call(http_request, operation_id, session_id=request.session_id)
+
+    def build(operation_id: str) -> tuple[ChallengeRecord, str]:
+        _raise_if_operation_cancelled(operation_id)
+        thesis = research_provider.thesis(
+            operation_id=operation_id,
+            session_id=request.session_id,
+            raw_text=request.thesis,
+            capital=request.capital,
+            base_currency=request.base_currency,
+            private_evidence=request.user_private_evidence_claims,
+        )
+        _raise_if_operation_cancelled(operation_id)
+        challenge_id = deterministic_id("challenge", operation_id)
+        draft = provider.generate_challenge(
+            ChallengeInput(
+                operation_id=operation_id, challenge_id=challenge_id, thesis_id=thesis.thesis_id,
+                claim=request.thesis, turn=1, status="CHALLENGING",
+                private_evidence_declared=request.user_private_evidence_claims,
+                cancel_event=operations.cancel_event(operation_id),
+            )
+        )
+        _raise_if_operation_cancelled(operation_id)
+        challenge = _challenge_from_draft(
+            draft, operation_id=operation_id, thesis_id=thesis.thesis_id, challenge_id=challenge_id,
+            turn=1, status="CHALLENGING", private_evidence_declared=request.user_private_evidence_claims,
+            provider=provider, personal_provider=personal_provider,
+        )
+        prepared[operation_id] = (thesis, challenge, draft.total_tokens)
+        return challenge, challenge_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        thesis, challenge, total_tokens = prepared[operation_id]
+        THESES[thesis.thesis_id] = thesis
+        CHALLENGES[challenge.challenge_id] = challenge
+        CHALLENGE_TURNS[challenge.challenge_id] = 1
+        CHALLENGE_OPERATION_IDS[challenge.challenge_id] = operation_id
+        _store_challenge_operation_result(operation_id, challenge)
+        _settle_model_call(http_request, operation_id, total_tokens)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is not None:
+            thesis, challenge, _total_tokens = staged
+            _remove_challenge_operation_result(operation_id, challenge)
+            if CHALLENGE_OPERATION_IDS.get(challenge.challenge_id) == operation_id:
+                CHALLENGE_OPERATION_IDS.pop(challenge.challenge_id, None)
+                CHALLENGE_TURNS.pop(challenge.challenge_id, None)
+                CHALLENGES.pop(challenge.challenge_id, None)
+                THESES.pop(thesis.thesis_id, None)
+        _release_model_call(http_request)
+
+    result, replayed = operations.submit_async(
+        endpoint="/v1/challenges/async", idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
+        request_payload=_request_payload(request), result_field="challenge", build_result=_release_model_on_failure(http_request, build),
+        before_accept=before_accept, session_id=request.session_id,
+        commit_result=commit, rollback_result=rollback,
+    )
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.get("/v1/challenges/{challenge_id}", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getChallenge", include_in_schema=False)
+def get_challenge(
+    http_request: Request,
+    challenge_id: str,
+    operation_id: Annotated[str | None, Query(min_length=8, max_length=160)] = None,
+) -> ChallengeOperationResponse:
+    latest_challenge = CHALLENGES.get(challenge_id)
+    if not latest_challenge:
+        raise ApiProblem(404, "not_found", "Challenge not found.")
+    challenge = latest_challenge
+    if operation_id is not None:
+        # The explicit receipt route survives process restart: both the
+        # terminal status and the result reference are read from durable
+        # operation state, not the compatibility in-memory association.
+        _require_operation_owner(http_request, operation_id)
+        try:
+            operation = operations._cache_operation(operation_id)
+        except ApiProblem as error:
+            raise ApiProblem(409, "lifecycle_conflict", "Challenge result has no matching completed operation receipt.") from error
+        complete_events = [
+            event for event in operations.store.get_events(operation_id)
+            if event.get("event") == "operation.complete" and event.get("result_ref") == challenge_id
+        ]
+        if operation.status != "completed" or len(complete_events) != 1:
+            raise ApiProblem(409, "lifecycle_conflict", "Challenge result has no matching completed operation receipt.")
+        result_hash = complete_events[0].get("result_hash")
+        immutable_result = CHALLENGE_OPERATION_RESULTS.get(operation_id)
+        if immutable_result is None:
+            # Compatibility for receipts created before operation-bound result
+            # storage: only the still-current version may be returned.
+            immutable_result = latest_challenge if latest_challenge.content_hash == result_hash else None
+        if immutable_result is None or immutable_result.challenge_id != challenge_id or immutable_result.content_hash != result_hash:
+            raise ApiProblem(409, "lifecycle_conflict", "Challenge result version does not match its completed operation receipt.")
+        challenge = immutable_result
+    else:
+        # Preserve existing callers while new callers supply operation_id for
+        # restart-durable receipt lookup.
+        remembered_operation_id = CHALLENGE_OPERATION_IDS.get(challenge_id)
+        if remembered_operation_id:
+            _require_operation_owner(http_request, remembered_operation_id)
+        operation = operations.operations.get(remembered_operation_id) if remembered_operation_id else None
+    if operation is None:
+        raise ApiProblem(409, "lifecycle_conflict", "Challenge result has no retained operation receipt.")
+    return ChallengeOperationResponse(operation=operation, challenge=challenge)
+
+
 @app.post("/v1/challenges/{challenge_id}/messages", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeMessage")
 def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "ChallengeMessageRequest")
+    provider, personal_provider = _model_provider_for_request(http_request)
     session_id = _session_for_challenge(challenge_id)
+    if session_id is not None:
+        _require_session_owner(http_request, session_id)
+    prepared: dict[str, tuple[ChallengeRecord, ChallengeRecord, int, str | None, int | None]] = {}
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
         current = CHALLENGES.get(challenge_id)
@@ -1207,7 +1897,7 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
         _reserve_model_call(http_request, operation_id, session_id=session_id)
         turn = CHALLENGE_TURNS[challenge_id] + 1
         attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
-        draft = challenge_provider.generate_challenge(
+        draft = provider.generate_challenge(
             ChallengeInput(
                 operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
                 claim=request.message, turn=turn, status="EVIDENCE_REQUIRED",
@@ -1222,19 +1912,47 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
         updated = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
             turn=turn, status=_challenge_status(draft), private_evidence_declared=current.private_evidence_declared,
+            provider=provider, personal_provider=personal_provider,
         )
-        CHALLENGES[challenge_id] = updated
-        CHALLENGE_TURNS[challenge_id] = turn
+        prepared[operation_id] = (current, updated, CHALLENGE_TURNS[challenge_id], CHALLENGE_OPERATION_IDS.get(challenge_id), draft.total_tokens)
         return updated, challenge_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        previous, updated, previous_turn, _previous_operation_id, total_tokens = prepared[operation_id]
+
+        def apply() -> None:
+            CHALLENGES[challenge_id] = updated
+            CHALLENGE_TURNS[challenge_id] = previous_turn + 1
+            CHALLENGE_OPERATION_IDS[challenge_id] = operation_id
+            _store_challenge_operation_result(operation_id, updated)
+            _settle_model_call(http_request, operation_id, total_tokens)
+
+        _commit_challenge_mutation(challenge_id, expected=previous, expected_turn=previous_turn, operation=apply)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is not None and CHALLENGE_OPERATION_IDS.get(challenge_id) == operation_id:
+            previous, _updated, previous_turn, previous_operation_id, _total_tokens = staged
+            _remove_challenge_operation_result(operation_id, _updated)
+            CHALLENGES[challenge_id] = previous
+            CHALLENGE_TURNS[challenge_id] = previous_turn
+            if previous_operation_id is None:
+                CHALLENGE_OPERATION_IDS.pop(challenge_id, None)
+            else:
+                CHALLENGE_OPERATION_IDS[challenge_id] = previous_operation_id
+        _release_model_call(http_request)
 
     result, replayed = operations.execute(
         endpoint=f"/v1/challenges/{challenge_id}/messages",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
         session_id=session_id,
+        commit_result=commit,
+        rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
@@ -1244,7 +1962,11 @@ def add_challenge_message(challenge_id: str, request: ChallengeMessageRequest, r
 def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     """Start a Phase 3 message without waiting for its provider runner."""
     _validate_request(request, "ChallengeMessageRequest")
+    provider, personal_provider = _model_provider_for_request(http_request)
     session_id = _session_for_challenge(challenge_id)
+    if session_id is not None:
+        _require_session_owner(http_request, session_id)
+    prepared: dict[str, tuple[ChallengeRecord, ChallengeRecord, int, str | None, int | None]] = {}
 
     def before_accept(operation_id: str) -> None:
         current = CHALLENGES.get(challenge_id)
@@ -1264,7 +1986,7 @@ def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageR
             raise ApiProblem(409, "invalid_state_transition", f"Message command cannot transition from {current.status}.")
         turn = CHALLENGE_TURNS[challenge_id] + 1
         attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
-        draft = challenge_provider.generate_challenge(ChallengeInput(
+        draft = provider.generate_challenge(ChallengeInput(
             operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
             claim=request.message, turn=turn, status=current.status,
             private_evidence_declared=current.private_evidence_declared,
@@ -1276,16 +1998,43 @@ def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageR
         updated = _challenge_from_draft(
             draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
             turn=turn, status=_challenge_status(draft), private_evidence_declared=current.private_evidence_declared,
+            provider=provider, personal_provider=personal_provider,
         )
-        CHALLENGES[challenge_id] = updated
-        CHALLENGE_TURNS[challenge_id] = turn
+        prepared[operation_id] = (current, updated, CHALLENGE_TURNS[challenge_id], CHALLENGE_OPERATION_IDS.get(challenge_id), draft.total_tokens)
         return updated, challenge_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        previous, updated, previous_turn, _previous_operation_id, total_tokens = prepared[operation_id]
+
+        def apply() -> None:
+            CHALLENGES[challenge_id] = updated
+            CHALLENGE_TURNS[challenge_id] = previous_turn + 1
+            CHALLENGE_OPERATION_IDS[challenge_id] = operation_id
+            _store_challenge_operation_result(operation_id, updated)
+            _settle_model_call(http_request, operation_id, total_tokens)
+
+        _commit_challenge_mutation(challenge_id, expected=previous, expected_turn=previous_turn, operation=apply)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is not None and CHALLENGE_OPERATION_IDS.get(challenge_id) == operation_id:
+            previous, _updated, previous_turn, previous_operation_id, _total_tokens = staged
+            _remove_challenge_operation_result(operation_id, _updated)
+            CHALLENGES[challenge_id] = previous
+            CHALLENGE_TURNS[challenge_id] = previous_turn
+            if previous_operation_id is None:
+                CHALLENGE_OPERATION_IDS.pop(challenge_id, None)
+            else:
+                CHALLENGE_OPERATION_IDS[challenge_id] = previous_operation_id
+        _release_model_call(http_request)
 
     result, replayed = operations.submit_async(
         endpoint=f"/v1/challenges/{challenge_id}/messages/async", idempotency_key=idempotency_key,
-        request_payload=_request_payload(request), result_field="challenge", build_result=build,
+        owner_subject=_operation_owner_subject(http_request),
+        request_payload=_request_payload(request), result_field="challenge", build_result=_release_model_on_failure(http_request, build),
         before_accept=before_accept,
         session_id=session_id,
+        commit_result=commit, rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
@@ -1294,7 +2043,10 @@ def start_challenge_message_stream(challenge_id: str, request: ChallengeMessageR
 @app.post("/v1/challenges/{challenge_id}/evidence", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="addChallengeEvidence")
 def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "EvidenceSubmissionRequest")
+    provider, personal_provider = _model_provider_for_request(http_request)
     session_id = _session_for_challenge(challenge_id)
+    if session_id is not None:
+        _require_session_owner(http_request, session_id)
     has_search_provider = request.search_provider is not None
     has_search_result_hash = request.search_result_hash is not None
     if has_search_provider != has_search_result_hash:
@@ -1310,6 +2062,7 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
         search_provider=request.search_provider,
         search_result_hash=request.search_result_hash,
     ))
+    prepared: dict[str, tuple[ChallengeRecord, ChallengeRecord, EvidenceItem, EvidenceItem | None, int, str | None, int | None]] = {}
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
         current = CHALLENGES.get(challenge_id)
@@ -1349,7 +2102,7 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
         turn = CHALLENGE_TURNS[challenge_id] + 1
         attached = tuple(item for item in EVIDENCE.values() if item.challenge_id == challenge_id)
         attached = (*attached, evidence)
-        draft = challenge_provider.generate_challenge(
+        draft = provider.generate_challenge(
             ChallengeInput(
                 operation_id=operation_id, challenge_id=challenge_id, thesis_id=current.thesis_id,
                 claim=current.claims[0], turn=turn, status="CHALLENGING",
@@ -1365,20 +2118,55 @@ def add_challenge_evidence(challenge_id: str, request: EvidenceSubmissionRequest
             draft, operation_id=operation_id, thesis_id=current.thesis_id, challenge_id=challenge_id,
             turn=turn, status=_challenge_status(draft),
             private_evidence_declared=current.private_evidence_declared or not independently_reviewable,
+            provider=provider, personal_provider=personal_provider,
         )
-        EVIDENCE[evidence_id] = evidence
-        CHALLENGES[challenge_id] = updated
-        CHALLENGE_TURNS[challenge_id] = turn
+        prepared[operation_id] = (
+            current, updated, evidence, EVIDENCE.get(evidence_id), CHALLENGE_TURNS[challenge_id],
+            CHALLENGE_OPERATION_IDS.get(challenge_id), draft.total_tokens,
+        )
         return updated, challenge_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        previous, updated, evidence, _previous_evidence, previous_turn, _previous_operation_id, total_tokens = prepared[operation_id]
+
+        def apply() -> None:
+            EVIDENCE[evidence.evidence_id] = evidence
+            CHALLENGES[challenge_id] = updated
+            CHALLENGE_TURNS[challenge_id] = previous_turn + 1
+            CHALLENGE_OPERATION_IDS[challenge_id] = operation_id
+            _store_challenge_operation_result(operation_id, updated)
+            _settle_model_call(http_request, operation_id, total_tokens)
+
+        _commit_challenge_mutation(challenge_id, expected=previous, expected_turn=previous_turn, operation=apply)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is not None and CHALLENGE_OPERATION_IDS.get(challenge_id) == operation_id:
+            previous, _updated, evidence, previous_evidence, previous_turn, previous_operation_id, _total_tokens = staged
+            _remove_challenge_operation_result(operation_id, _updated)
+            CHALLENGES[challenge_id] = previous
+            CHALLENGE_TURNS[challenge_id] = previous_turn
+            if previous_evidence is None:
+                EVIDENCE.pop(evidence.evidence_id, None)
+            else:
+                EVIDENCE[evidence.evidence_id] = previous_evidence
+            if previous_operation_id is None:
+                CHALLENGE_OPERATION_IDS.pop(challenge_id, None)
+            else:
+                CHALLENGE_OPERATION_IDS[challenge_id] = previous_operation_id
+        _release_model_call(http_request)
 
     result, replayed = operations.execute(
         endpoint=f"/v1/challenges/{challenge_id}/evidence",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
         session_id=session_id,
+        commit_result=commit,
+        rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
@@ -1470,10 +2258,13 @@ def _confirmed_challenge(
 
 
 @app.post("/v1/challenges/{challenge_id}/confirm", response_model=ChallengeOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="confirmChallenge")
-def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, response: Response, idempotency_key: IdempotencyKey) -> ChallengeOperationResponse:
+def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ChallengeOperationResponse:
     _validate_request(request, "ConfirmChallengeRequest")
     session_id = _session_for_challenge(challenge_id)
+    if session_id is not None:
+        _require_session_owner(http_request, session_id)
     reservation = request.command == "CONFIRM_WITH_RESERVATIONS"
+    prepared: dict[str, tuple[ChallengeRecord, ChallengeRecord, int, str | None]] = {}
 
     def build(operation_id: str) -> tuple[ChallengeRecord, str]:
         current = CHALLENGES.get(challenge_id)
@@ -1500,25 +2291,52 @@ def confirm_challenge(challenge_id: str, request: ConfirmChallengeRequest, respo
             confirmation="confirmed_with_reservations" if reservation else "confirmed",
             reservation_note=request.reservation_note if reservation else None,
         )
-        CHALLENGES[challenge_id] = updated
-        CHALLENGE_TURNS[challenge_id] = turn
+        prepared[operation_id] = (current, updated, CHALLENGE_TURNS[challenge_id], CHALLENGE_OPERATION_IDS.get(challenge_id))
         return updated, challenge_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        previous, updated, previous_turn, _previous_operation_id = prepared[operation_id]
+
+        def apply() -> None:
+            CHALLENGES[challenge_id] = updated
+            CHALLENGE_TURNS[challenge_id] = previous_turn + 1
+            CHALLENGE_OPERATION_IDS[challenge_id] = operation_id
+            _store_challenge_operation_result(operation_id, updated)
+
+        _commit_challenge_mutation(challenge_id, expected=previous, expected_turn=previous_turn, operation=apply)
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is not None:
+            previous, updated, previous_turn, previous_operation_id = staged
+            _remove_challenge_operation_result(operation_id, updated)
+            current = CHALLENGES.get(challenge_id)
+            if current is not None and current.content_hash == updated.content_hash:
+                CHALLENGES[challenge_id] = previous
+                CHALLENGE_TURNS[challenge_id] = previous_turn
+                if previous_operation_id is None:
+                    CHALLENGE_OPERATION_IDS.pop(challenge_id, None)
+                else:
+                    CHALLENGE_OPERATION_IDS[challenge_id] = previous_operation_id
 
     result, replayed = operations.execute(
         endpoint=f"/v1/challenges/{challenge_id}/confirm",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=ChallengeOperationResponse,
         result_field="challenge",
         build_result=build,
         session_id=session_id,
+        commit_result=commit,
+        rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
 
 
 @app.post("/v1/worldlines", response_model=WorldlineBundleOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createWorldlines")
-def create_worldlines(request: WorldlineRequest, response: Response, idempotency_key: IdempotencyKey) -> WorldlineBundleOperationResponse:
+def create_worldlines(request: WorldlineRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> WorldlineBundleOperationResponse:
     _validate_request(request, "WorldlineRequest")
     challenge = CHALLENGES.get(request.challenge_id)
     if not challenge:
@@ -1528,6 +2346,9 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
     if request.horizon_end < clock.today():
         raise ApiProblem(422, "validation_error", "Worldline horizon must not precede the baseline date.")
     session_id = _session_for_challenge(request.challenge_id)
+    if session_id is not None:
+        _require_session_owner(http_request, session_id)
+    prepared: dict[str, tuple[WorldlineBundle, dict[str, tuple[Worldline | None, str | None]]]] = {}
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
         thesis = THESES.get(challenge.thesis_id)
@@ -1545,34 +2366,65 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
             expected_baseline_date=clock.today(),
             expected_horizon_end=request.horizon_end,
         )
+        before = {worldline.worldline_id: (WORLDLINES.get(worldline.worldline_id), WORLDLINE_CHALLENGES.get(worldline.worldline_id)) for worldline in bundle.worldlines}
+        prepared[operation_id] = (bundle, before)
+        return bundle, bundle.bundle_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        bundle, _before = prepared[operation_id]
         for worldline in bundle.worldlines:
             WORLDLINES[worldline.worldline_id] = worldline
             WORLDLINE_CHALLENGES[worldline.worldline_id] = request.challenge_id
-        return bundle, bundle.bundle_id
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is None:
+            return
+        bundle, before = staged
+        for worldline in bundle.worldlines:
+            previous, previous_challenge = before[worldline.worldline_id]
+            current = WORLDLINES.get(worldline.worldline_id)
+            if current is None or current.content_hash != worldline.content_hash:
+                continue
+            if previous is None:
+                WORLDLINES.pop(worldline.worldline_id, None)
+            else:
+                WORLDLINES[worldline.worldline_id] = previous
+            if previous_challenge is None:
+                WORLDLINE_CHALLENGES.pop(worldline.worldline_id, None)
+            else:
+                WORLDLINE_CHALLENGES[worldline.worldline_id] = previous_challenge
 
     result, replayed = operations.execute(
         endpoint="/v1/worldlines",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=WorldlineBundleOperationResponse,
         result_field="bundle",
         build_result=build,
         session_id=session_id,
+        commit_result=commit,
+        rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
 
 
 @app.get("/v1/worldlines/{worldline_id}", response_model=Worldline, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getWorldline")
-def get_worldline(worldline_id: str) -> Worldline:
+def get_worldline(worldline_id: str, http_request: Request) -> Worldline:
     worldline = WORLDLINES.get(worldline_id)
     if not worldline:
         raise ApiProblem(404, "not_found", "Worldline not found.")
+    challenge_id = WORLDLINE_CHALLENGES.get(worldline_id)
+    session_id = _session_for_challenge(challenge_id) if challenge_id is not None else None
+    if session_id is not None:
+        _require_session_owner(http_request, session_id)
     return worldline
 
 
 @app.post("/v1/probabilities/assess", response_model=ProbabilityOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="assessProbability")
-def assess_probability(request: ProbabilityRequest, response: Response, idempotency_key: IdempotencyKey) -> ProbabilityOperationResponse:
+def assess_probability(request: ProbabilityRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ProbabilityOperationResponse:
     _validate_request(request, "ProbabilityRequest")
     if request.worldline_id not in WORLDLINES:
         raise ApiProblem(404, "not_found", "Worldline not found.")
@@ -1580,6 +2432,8 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
     challenge_id = WORLDLINE_CHALLENGES.get(request.worldline_id)
     if challenge_id is not None:
         session_id = _session_for_challenge(challenge_id)
+    if session_id is not None:
+        _require_session_owner(http_request, session_id)
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
         result = probability_assessor.assess(ProbabilityAssessmentInput(
@@ -1593,6 +2447,7 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
     result, replayed = operations.execute(
         endpoint="/v1/probabilities/assess",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=ProbabilityOperationResponse,
         result_field="probability",
@@ -1618,7 +2473,7 @@ def get_asset(asset_id: str) -> BaseModel:
 
 
 @app.post("/v1/market-data/manifests", response_model=MarketDataManifestOperationResponse, response_model_exclude_none=True, status_code=201, responses=ERROR_RESPONSES, operation_id="createMarketDataManifest")
-def create_market_manifest(request: MarketDataManifestRequest, response: Response, idempotency_key: IdempotencyKey) -> MarketDataManifestOperationResponse:
+def create_market_manifest(request: MarketDataManifestRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> MarketDataManifestOperationResponse:
     _validate_request(request, "MarketDataManifestRequest")
     unknown = [asset_id for asset_id in request.asset_ids if asset_id not in ASSET_INDEX]
     if unknown:
@@ -1626,6 +2481,7 @@ def create_market_manifest(request: MarketDataManifestRequest, response: Respons
     from_at = getattr(request, "from")
     if from_at > request.to:
         raise ApiProblem(422, "validation_error", "Market-data 'from' must not be after 'to'.")
+    prepared: dict[str, tuple[MarketDataManifest, MarketDataManifest | None]] = {}
 
     def build(operation_id: str) -> tuple[MarketDataManifest, str]:
         manifest = data_provider.manifest(
@@ -1640,23 +2496,43 @@ def create_market_manifest(request: MarketDataManifestRequest, response: Respons
         # ``created_at`` tracks storage age for retention.
         manifest = manifest.model_copy(update={"created_at": lifecycle_clock.now()})
         validate_payload(manifest, "MarketDataManifest")
-        MARKET_MANIFESTS[manifest.manifest_id] = manifest
+        prepared[operation_id] = (manifest, MARKET_MANIFESTS.get(manifest.manifest_id))
         return manifest, manifest.manifest_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        manifest, _previous = prepared[operation_id]
+        MARKET_MANIFESTS[manifest.manifest_id] = manifest
+
+    def rollback(operation_id: str, _result: BaseModel) -> None:
+        staged = prepared.get(operation_id)
+        if staged is None:
+            return
+        manifest, previous = staged
+        current = MARKET_MANIFESTS.get(manifest.manifest_id)
+        if current is None or current.content_hash != manifest.content_hash:
+            return
+        if previous is None:
+            MARKET_MANIFESTS.pop(manifest.manifest_id, None)
+        else:
+            MARKET_MANIFESTS[manifest.manifest_id] = previous
 
     result, replayed = operations.execute(
         endpoint="/v1/market-data/manifests",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=MarketDataManifestOperationResponse,
         result_field="manifest",
         build_result=build,
+        commit_result=commit,
+        rollback_result=rollback,
     )
     _mark_replay(response, replayed)
     return result
 
 
 @app.post("/v1/market-data/shards", response_model=MarketDataShardOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="getMarketDataShard")
-def get_market_shard(request: MarketDataShardRequest, response: Response, idempotency_key: IdempotencyKey) -> MarketDataShardOperationResponse:
+def get_market_shard(request: MarketDataShardRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> MarketDataShardOperationResponse:
     _validate_request(request, "MarketDataShardRequest")
     manifest = MARKET_MANIFESTS.get(request.manifest_id)
     if not manifest:
@@ -1675,6 +2551,7 @@ def get_market_shard(request: MarketDataShardRequest, response: Response, idempo
     result, replayed = operations.execute(
         endpoint="/v1/market-data/shards",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=MarketDataShardOperationResponse,
         result_field="shard",
@@ -1701,11 +2578,12 @@ def get_factor_shard(version: str, shard_id: Annotated[str, Query(min_length=1)]
 
 
 @app.post("/v1/client-computations/{computation_id}/attest", response_model=ClientAttestationOperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="attestClientComputation")
-def attest_client_computation(computation_id: str, request: ClientComputationAttestRequest, response: Response, idempotency_key: IdempotencyKey) -> ClientAttestationOperationResponse:
+def attest_client_computation(computation_id: str, request: ClientComputationAttestRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> ClientAttestationOperationResponse:
     _validate_request(request, "ClientComputationAttestRequest")
     if request.operation_id not in operations.operations:
         if operations.store.get_operation(request.operation_id) is None:
             raise ApiProblem(404, "not_found", "Referenced operation not found.")
+    _require_operation_owner(http_request, request.operation_id)
     session_id = operations.session_ids().get(request.operation_id)
 
     def build(operation_id: str) -> tuple[BaseModel, str]:
@@ -1715,6 +2593,7 @@ def attest_client_computation(computation_id: str, request: ClientComputationAtt
     result, replayed = operations.execute(
         endpoint=f"/v1/client-computations/{computation_id}/attest",
         idempotency_key=idempotency_key,
+        owner_subject=_operation_owner_subject(http_request),
         request_payload=_request_payload(request),
         response_model=ClientAttestationOperationResponse,
         result_field="attestation",
@@ -1726,17 +2605,19 @@ def attest_client_computation(computation_id: str, request: ClientComputationAtt
 
 
 @app.post("/v1/operations/{operation_id}/cancel", response_model=OperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="cancelOperation")
-def cancel_operation(operation_id: str, request: CancelOperationRequest, response: Response, idempotency_key: IdempotencyKey) -> OperationResponse:
+def cancel_operation(operation_id: str, request: CancelOperationRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     _validate_request(request, "CancelOperationRequest")
-    result, replayed = operations.cancel(operation_id, request.cancel_token, idempotency_key)
+    result, replayed = operations.cancel(operation_id, request.cancel_token, idempotency_key, owner_subject=_operation_owner_subject(http_request))
+    if result.operation.status == "cancelled":
+        billing_ledger.release(f"model:{operation_id}", now=lifecycle_clock.now(), reverse_settled=True)
     _mark_replay(response, replayed)
     return result
 
 
 @app.post("/v1/operations/{operation_id}/resume", response_model=OperationResponse, response_model_exclude_none=True, responses=ERROR_RESPONSES, operation_id="resumeOperation")
-def resume_operation(operation_id: str, request: ResumeOperationRequest, response: Response, idempotency_key: IdempotencyKey) -> OperationResponse:
+def resume_operation(operation_id: str, request: ResumeOperationRequest, response: Response, idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
     _validate_request(request, "ResumeOperationRequest")
-    result, replayed = operations.resume(operation_id, request.resume_token, idempotency_key)
+    result, replayed = operations.resume(operation_id, request.resume_token, idempotency_key, owner_subject=_operation_owner_subject(http_request))
     _mark_replay(response, replayed)
     return result
 
@@ -1753,9 +2634,10 @@ def resume_operation(operation_id: str, request: ResumeOperationRequest, respons
     },
     operation_id="streamOperationEvents",
 )
-def stream_operation_events(operation_id: str, last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None) -> StreamingResponse:
+def stream_operation_events(http_request: Request, operation_id: str, last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None) -> StreamingResponse:
     # Validate the replay cursor before response headers are committed; exceptions
     # raised only from a streaming iterator would otherwise surface as HTTP 200.
+    _require_operation_owner(http_request, operation_id)
     operations.events_after(operation_id, last_event_id)
     return StreamingResponse(
         operations.sse_events(operation_id, last_event_id),

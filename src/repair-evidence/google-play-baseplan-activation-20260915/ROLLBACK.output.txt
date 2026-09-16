@@ -1,0 +1,4 @@
+foresightnine_pro_ROLLBACK_STATE=INACTIVE
+foresightnine_max_ROLLBACK_STATE=INACTIVE
+ROLLBACK_STATUS=restored_nonpurchasable_behavior
+ROLLBACK_EXIT=0

@@ -1,0 +1,32 @@
+ForesightNine Play permission flap reconciliation
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=Play track read evidence in problem.md/plan.md and corresponding plan governance hash
+CHANGE_DETAILS=record latest stable 200 reads for both credentials while retaining the earlier 403 evidence as intermittent; no Play or Cloudflare writes performed.
+LIVE_FILE=/home/lxx/Foresightnine/src/docs/problem.md
+LIVE_PLAN=/home/lxx/Foresightnine/plan.md
+LIVE_GOVERNANCE_FILE=/home/lxx/Foresightnine/src/docs/verification/governance-baseline.json
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-flap-recheck-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-flap-recheck-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-flap-recheck-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-flap-recheck-20260910/ROLLBACK.sh
+BASELINE_HASHES=f35d867a34b2be9a505aca21b08ec3c677e3ea1defaf5874f33a1c1b1080229e  plan.md;002d57af5b139b301d43c5d54663054cd164d99b606e9c34271c20701f27cd72  src/docs/problem.md;f42561e7cf07332214a171568d86abb09091ef8255a8c20aea20e01db42415fb  src/docs/verification/governance-baseline.json;
+
+BASELINE_COMMAND=corepack pnpm --dir src verify:boundaries
+BASELINE_INPUT=current checkout before latest stable Play track recheck
+BASELINE_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;Governance boundary baseline is unchanged.;
+BASELINE_RESULT=PASS_BEFORE_CHANGE
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=corepack pnpm --dir src verify:boundaries
+MODIFIED_INPUT=current checkout after problem/plan evidence reconciliation and governance hash refresh
+MODIFIED_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;Governance boundary baseline is unchanged.;
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/play-permission-flap-recheck-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy initialized with modified problem, plan, and governance baseline
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY;ROLLBACK_COPY_VERIFY=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored all three pre-change files; live report and plan remain updated and verified=PASS
+SECURITY=no credential JSON, private key, OAuth code, access token, cookie, or sensitive response body included

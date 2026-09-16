@@ -1,0 +1,30 @@
+CHANGE_BRANCH_FIELD=Google Play verify/restore response serialization and verified subscription state contract
+CHANGE_DETAILS=JSON-encode datetime fields in the server response; add route-level tests proving active purchases grant the mapped quota, pending purchases grant zero quota, and pending purchases are not acknowledged
+LIVE_FILES=/home/lxx/Foresightnine/src/apps/api/app/main.py;/home/lxx/Foresightnine/src/apps/api/tests/test_billing.py
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-route-contract-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-route-contract-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-route-contract-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-route-contract-20260910/ROLLBACK.sh
+
+BASELINE_COMMAND=cd /tmp/fn-billing-route-baseline.zFZvRw && PYTHONPATH=/tmp/fn-billing-route-baseline.zFZvRw/src/apps/api uv run --project /home/lxx/Foresightnine/src/apps/api pytest -q src/apps/api/tests/test_billing.py
+BASELINE_INPUT=main.py and test_billing.py snapshots captured before the verify-route serialization fix and route-level tests
+BASELINE_LITERAL_OUTPUT=11 passed, 1 warning in 1.17s
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=uv run --project src/apps/api pytest -q
+MODIFIED_INPUT=live checkout with verify/restore response encoding and active/pending route tests
+MODIFIED_LITERAL_OUTPUT=267 passed, 1 skipped, 1 warning in 11.42s
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/billing-route-contract-20260910/ROLLBACK.sh /tmp/fn-billing-route-rollback.M2yVRP
+ROLLBACK_INPUT=separate copy containing modified main.py and test_billing.py
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY; MAIN_COMPARE_EXIT_STATUS=0; TEST_COMPARE_EXIT_STATUS=0
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy matched both baseline snapshots; live checkout remains modified
+
+ROUTE_TEST_RESULT=active verify HTTP 200 with pro quota 30000000; pending verify HTTP 200 with entitlement_status pending and quota_limit 0; pending acknowledgement count unchanged
+DEPLOY_RESULT=docker-api-1 healthy; app/health/api-health/readyz HTTP 200
+SECURITY=No credential JSON, private key, OAuth code, access token, cookie, or secret value is included in this evidence.

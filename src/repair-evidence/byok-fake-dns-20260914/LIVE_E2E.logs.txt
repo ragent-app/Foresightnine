@@ -1,0 +1,12 @@
+INFO:     127.0.0.1:43668 - "POST /v1/auth/local/register HTTP/1.1" 201 Created
+INFO:     127.0.0.1:43678 - "PUT /v1/account/model-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43692 - "POST /v1/account/model-config/test HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45454 - "GET /v1/account/model-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45464 - "DELETE /v1/auth/account HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45480 - "GET /v1/account/model-config HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53620 - "POST /v1/auth/local/register HTTP/1.1" 201 Created
+INFO:     127.0.0.1:48070 - "PUT /v1/account/model-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48084 - "POST /v1/account/model-config/test HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60368 - "GET /v1/account/model-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60370 - "DELETE /v1/auth/account HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60382 - "GET /v1/account/model-config HTTP/1.1" 401 Unauthorized

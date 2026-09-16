@@ -1,0 +1,20 @@
+{
+  "url": "https://app.foresightnine.com/oauth/complete",
+  "bundle": "https://app.foresightnine.com/assets/index-wyrJnGTJ.js",
+  "modelAccountTransitionLoadingGateVisible": true,
+  "marketAccountTransitionLoadingGateVisible": true,
+  "modelPanel": true,
+  "marketPanel": true,
+  "providerCount": 5,
+  "providersVisibleInOrder": [
+    "Market Data",
+    "Alpha Vantage",
+    "Twelve Data",
+    "Finnhub",
+    "Yahoo Finance"
+  ],
+  "serverEncryptionCopy": true,
+  "guideDownloadNotice": true,
+  "warningOrErrorCount": 0,
+  "credentialEnteredOrTransmitted": false
+}

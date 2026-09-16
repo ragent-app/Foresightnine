@@ -1,0 +1,6 @@
+foresightnine-upload.jks mode=664
+foresightnine-upload-2026-08-31.jks mode=664
+foresightnine-upload-2026-08-31.keystore-password.dpapi mode=664
+foresightnine-upload-2026-08-31.key-password.dpapi mode=664
+ROLLBACK_STATUS=restored_original_permissions
+ROLLBACK_EXIT=0

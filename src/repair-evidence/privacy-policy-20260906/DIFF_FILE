@@ -1,0 +1,150 @@
+=== AppShell.tsx ===
+--- BASELINE_AppShell.tsx
++++ MODIFIED_AppShell.tsx
+@@ -44,6 +44,7 @@
+         <div className="rail-rule" />
+         <span aria-hidden="true">♢</span>
+         <span>{t(language, "公开研究模式 · 不连接券商 · 不托管资金")}</span>
++        <a className="privacy-link" href="/privacy.html" target="_blank" rel="noreferrer">{t(language, "隐私政策")}</a>
+       </div>
+     </aside>
+     <main id="main-content" className="main-sheet">{children}</main>
+=== i18n.tsx ===
+--- BASELINE_i18n.tsx
++++ MODIFIED_i18n.tsx
+@@ -5,7 +5,7 @@
+ // not product copy.  They deliberately remain in their original language.
+ const english: Readonly<Record<string, string>> = {
+   "新建推演": "New research", "反方审查": "Challenge", "世界线": "Worldlines", "配置方案": "Allocation", "组合路径": "Portfolio path", "控制台": "Console", "研究控制台": "Research console",
+-  "公开研究模式 · 不连接券商 · 不托管资金": "Public research mode · no broker · no custody", "跳到主要内容": "Skip to main content", "研究导航": "Research navigation", "研究侧栏": "Research side panel",
++  "公开研究模式 · 不连接券商 · 不托管资金": "Public research mode · no broker · no custody", "隐私政策": "Privacy Policy", "跳到主要内容": "Skip to main content", "研究导航": "Research navigation", "研究侧栏": "Research side panel",
+   "可选账户登录": "Optional account sign-in", "匿名研究中": "Anonymous research", "登录服务尚未配置；你可以继续匿名研究，本地草稿不会因该状态上传。": "Account sign-in is not configured. You can continue anonymously; this state does not upload local drafts.", "使用账户提供方登录": "Sign in with account provider", "尚未配置": "Not configured", "可用": "Available",
+   "账户状态、模型路由和产品边界都在这里明确呈现；未配置项不会模拟为可用服务。": "Account state, model routing and product boundaries are explicit here; unconfigured items are never simulated as available services.", "控制台状态": "Console status", "模型提供方路由": "Model provider routing", "仅服务端环境变量可启用实时提供方。客户端不会收集、保存或显示 API key；实时启用前还需红脱敏日志与独立验收。": "Only server environment configuration can enable a live provider. The client never collects, stores or displays an API key; redacted logs and independent acceptance are also required before live enablement.", "个人 OpenAI 兼容提供方": "Personal OpenAI-compatible provider", "预留接口": "Reserved interface", "未来版本可通过加密的服务端凭据仓配置兼容端点和模型选择；本构建没有 BYOK 输入、持久化或网络调用。": "A future version can configure a compatible endpoint and model choice through an encrypted server credential vault; this build has no BYOK input, persistence or network call.", "订阅与账单": "Subscription & billing", "仅预留订阅入口；尚未配置试用、购买、退款、权益或支付处理。": "The subscription entry is reserved only; trials, purchases, refunds, entitlements and payment processing are not configured.", "研究方法导航": "Research method navigation",
+   "情景模拟，不是预测或收益承诺。": "Scenario simulation, not a forecast or return promise.", "本产品用于情景研究与教育，不构成投资建议；不连接券商、不下单、不托管资金。": "For scenario research and education only; not investment advice. No broker, trading, or custody.",
+=== web styles.css ===
+=== mobile console.tsx ===
+--- BASELINE_mobile-console.tsx
++++ MODIFIED_mobile-console.tsx
+@@ -1,4 +1,4 @@
+-import { Text } from "react-native";
++import { Linking, Pressable, Text } from "react-native";
+ import { useMobileStore } from "../src/app-store";
+ import { t } from "../src/i18n";
+ import { BottomNav, Card, Header, Screen, SocialLoginPanel, Status, styles } from "../src/ui";
+@@ -11,6 +11,7 @@
+     <Card tone="soft"><Text style={styles.heading}>{t(state.language, "personalProvider")}</Text><Text style={styles.body}>{t(state.language, "personalProviderBody")}</Text></Card>
+     <Card><Text style={styles.heading}>{t(state.language, "clientFm")}</Text><Status tone={marketDataState.status === "error" ? "warning" : marketDataState.status === "ready" ? "good" : "neutral"}>{marketDataState.mode} · {marketDataState.status}</Status><Text style={styles.body}>{t(state.language, "cutoffFixture")}</Text></Card>
+     <Card tone="soft"><Text style={styles.heading}>{t(state.language, "subscription")}</Text><Text style={styles.body}>{t(state.language, "subscriptionBody")}</Text></Card>
++    <Card><Text style={styles.heading}>{t(state.language, "privacyPolicy")}</Text><Text style={styles.body}>{t(state.language, "privacyPolicyBody")}</Text><Pressable accessibilityRole="link" accessibilityLabel={t(state.language, "privacyPolicy")} onPress={() => { void Linking.openURL("https://app.foresightnine.com/privacy.html"); }}><Text style={styles.strong}>{t(state.language, "openPrivacyPolicy")}</Text></Pressable></Card>
+     <Card><Text style={styles.heading}>{t(state.language, "researchBasis")}</Text><Text style={styles.strong}>{t(state.language, "researchLoop")}</Text><Text style={styles.body}>{t(state.language, "researchLoopBody")}</Text><Text style={styles.strong}>{t(state.language, "clientFm")}</Text><Text style={styles.body}>{t(state.language, "clientFmBody")}</Text></Card>
+     <Card tone="warning"><Text style={styles.heading}>{t(state.language, "releaseGates")}</Text><Text style={styles.muted}>{t(state.language, "releaseGatesBody")}</Text></Card><BottomNav />
+   </Screen>;
+=== mobile i18n.ts ===
+--- BASELINE_mobile-i18n.ts
++++ MODIFIED_mobile-i18n.ts
+@@ -4,7 +4,7 @@
+   zh: {
+     brand: "ForesightNine", thesisTitle: "把观点变成世界线", thesisLead: "描述前提、时间段、关键事件，以及预期的资产影响。",
+     viewpoint: "你的观点", viewpointHint: "例如：未来两年数据中心电力需求上升，推动电网设备投资提速。", capital: "可投资资金", currencyHint: "货币", start: "开始反方审查",
+-    restored: "已恢复上次草稿；内容只保存在本机。", draftSaved: "草稿自动保存", mockNotice: "公开研究模式 · 仅模拟 · 不连接券商 · 不托管资金", new: "新建", archive: "档案", console: "控制台", optionalSignIn: "可选账户登录", anonymousResearch: "匿名研究中", signInUnavailable: "服务端 OAuth 尚未配置；可以继续匿名研究，内容不会因该状态上传。", signInGoogle: "使用 Google 登录", signInGithub: "使用 GitHub 登录", notConfigured: "尚未配置", consoleTitle: "账户与研究控制台", consoleLead: "账户、模型路由、订阅和研究方法状态都在此透明展示。", providerRouting: "模型提供方路由", glmServerOnly: "GLM Coding · 仅服务端环境变量", glmServerOnlyBody: "当前应用不会向设备保存或发送模型密钥。启用实时模型需要服务端安全注入、红脱敏日志和单独验收。", personalProvider: "个人 OpenAI 兼容提供方", personalProviderBody: "未来版本将通过加密的服务端凭据仓支持兼容端点与模型选择；当前不收集、不存储也不显示用户 API key。", subscription: "订阅与账单", subscriptionBody: "Google Play 订阅入口仅预留。尚未配置计费、试用、购买、退款或权益授予。", researchBasis: "研究方法与限制",
++    restored: "已恢复上次草稿；内容只保存在本机。", draftSaved: "草稿自动保存", mockNotice: "公开研究模式 · 仅模拟 · 不连接券商 · 不托管资金", new: "新建", archive: "档案", console: "控制台", optionalSignIn: "可选账户登录", anonymousResearch: "匿名研究中", signInUnavailable: "服务端 OAuth 尚未配置；可以继续匿名研究，内容不会因该状态上传。", signInGoogle: "使用 Google 登录", signInGithub: "使用 GitHub 登录", notConfigured: "尚未配置", consoleTitle: "账户与研究控制台", consoleLead: "账户、模型路由、订阅和研究方法状态都在此透明展示。", providerRouting: "模型提供方路由", glmServerOnly: "GLM Coding · 仅服务端环境变量", glmServerOnlyBody: "当前应用不会向设备保存或发送模型密钥。启用实时模型需要服务端安全注入、红脱敏日志和单独验收。", personalProvider: "个人 OpenAI 兼容提供方", personalProviderBody: "未来版本将通过加密的服务端凭据仓支持兼容端点与模型选择；当前不收集、不存储也不显示用户 API key。", subscription: "订阅与账单", privacyPolicy: "隐私政策", privacyPolicyBody: "查看 ForesightNine 如何处理账户、研究、设备与订阅信息。", openPrivacyPolicy: "打开隐私政策", subscriptionBody: "Google Play 订阅入口仅预留。尚未配置计费、试用、购买、退款或权益授予。", researchBasis: "研究方法与限制",
+     challenge: "反方审查", evidence: "证据工作台", worldline: "世界线与概率", portfolio: "配置方案", export: "导出研究", mock: "模拟 / 未校准", back: "返回", continue: "继续", cancel: "取消", retry: "立即重试", reserved: "带保留意见确认", confirm: "确认用于模拟并计算",
+     structuredChallenge: "结构化反方审查 · 模拟提供方", streaming: "反方审查正在流式输出确定性模拟内容", challenged: "审查范围", challengedBody: "反例、因果跳跃、已定价的假设，以及缺少独立可复核的证据。", noLiveProvider: "本构建不会调用实时 GLM/DeepSeek。", challenger: "反方审查器", rubric: "可见评分量表", critical: "关键项", challengeResponse: "审查回应", challengePlaceholder: "补充可观察证据、证伪条件或保留意见…", submitResponse: "提交回应", timeout: "模拟超时", invalidOutput: "模拟输出无效", recoveryState: "模拟恢复状态", recover: "恢复模拟操作", standardConfirmation: "常规确认要求完成审查并提供证据；保留确认会保存尚未解决的问题。", reservationRequirements: "保留确认要求", acknowledgeUnresolvedIssues: "我确认仍存在未解决问题，并同意保存这些保留事项。", acknowledgeUnresolvedIssuesHint: "必须明确确认未解决问题会随研究档案保存。", reservationNote: "保留意见说明", reservationNoteHint: "请写下尚未解决的问题或使用边界。",
+     localOnlyEvidence: "证据保存在本机；绝不自动抓取链接。", ownSearch: "项目搜索与客户端证据", ownSearchBody: "优先请求已配置的 ForesightNine 项目搜索。移动端不会直连 GLM 或持有密钥；搜索不可用时请导入浏览器分享或粘贴 SearchEvidenceBundle。", noFetch: "候选和来源网址都不会由设备自动打开或抓取。", addLocalBundle: "添加本地 SearchEvidenceBundle", apiSearch: "搜索项目来源候选", searchQuery: "搜索问题", searchCandidates: "项目来源候选", searchPrompt: "输入简短搜索问题；候选不会自动变成证据。", searchLoading: "正在向项目 API 请求候选…", searchEmpty: "项目搜索没有返回可安全使用的候选。", searchCandidate: "选择候选并在本机创建 bundle", candidateSelected: "已选择候选；它仍未经验证，请检查来源后再作为证据使用。", apiUnavailable: "项目搜索未配置或当前不可用——请改用浏览器分享或粘贴证据 bundle。", apiFailed: "项目搜索暂时失败；没有生成任何候选或证据。请使用客户端证据 fallback。", pasteShare: "粘贴浏览器分享的 http(s) 链接…", importShare: "导入本地分享文本", duplicateEvidence: "重复证据未添加。", evidenceAdded: "证据已仅在本机添加。", incomingRejected: "收到的分享内容已拒绝", importRejected: "导入已拒绝", ledger: "证据台账", noEvidence: "尚未添加证据。", noPublicUrl: "没有公开链接", notReviewable: "不可独立复核；不能成为公开事实。",
+@@ -18,7 +18,7 @@
+   en: {
+     brand: "ForesightNine", thesisTitle: "Turn a thesis into worldlines", thesisLead: "Describe the premise, horizon, trigger events, and expected asset impact.",
+     viewpoint: "Your thesis", viewpointHint: "Example: data-center power demand rises and accelerates grid investment.", capital: "Investable capital", currencyHint: "Currency", start: "Start the challenge",
+-    restored: "Your previous draft was restored locally.", draftSaved: "Draft autosaves locally", mockNotice: "Public research mode · simulation only · no broker · no custody", new: "New", archive: "Archive", console: "Console", optionalSignIn: "Optional account sign-in", anonymousResearch: "Anonymous research", signInUnavailable: "Server OAuth is not configured. You can continue anonymously; this state does not upload your content.", signInGoogle: "Sign in with Google", signInGithub: "Sign in with GitHub", notConfigured: "Not configured", consoleTitle: "Account & research console", consoleLead: "Account, model routing, subscription and research-method status are shown here transparently.", providerRouting: "Model provider routing", glmServerOnly: "GLM Coding · server environment only", glmServerOnlyBody: "This app never stores or sends model keys from the device. A live model needs secure server injection, redacted logging and separate acceptance.", personalProvider: "Personal OpenAI-compatible provider", personalProviderBody: "A future version can support compatible endpoint and model choices through an encrypted server credential vault; this build does not collect, store or display user API keys.", subscription: "Subscription & billing", subscriptionBody: "A Google Play subscription entry is reserved only. Billing, trials, purchase, refunds and entitlement grants are not configured.", researchBasis: "Research method & limits",
++    restored: "Your previous draft was restored locally.", draftSaved: "Draft autosaves locally", mockNotice: "Public research mode · simulation only · no broker · no custody", new: "New", archive: "Archive", console: "Console", optionalSignIn: "Optional account sign-in", anonymousResearch: "Anonymous research", signInUnavailable: "Server OAuth is not configured. You can continue anonymously; this state does not upload your content.", signInGoogle: "Sign in with Google", signInGithub: "Sign in with GitHub", notConfigured: "Not configured", consoleTitle: "Account & research console", consoleLead: "Account, model routing, subscription and research-method status are shown here transparently.", providerRouting: "Model provider routing", glmServerOnly: "GLM Coding · server environment only", glmServerOnlyBody: "This app never stores or sends model keys from the device. A live model needs secure server injection, redacted logging and separate acceptance.", personalProvider: "Personal OpenAI-compatible provider", personalProviderBody: "A future version can support compatible endpoint and model choices through an encrypted server credential vault; this build does not collect, store or display user API keys.", subscription: "Subscription & billing", privacyPolicy: "Privacy Policy", privacyPolicyBody: "See how ForesightNine handles account, research, device, and subscription information.", openPrivacyPolicy: "Open privacy policy", subscriptionBody: "A Google Play subscription entry is reserved only. Billing, trials, purchase, refunds and entitlement grants are not configured.", researchBasis: "Research method & limits",
+     challenge: "Challenge", evidence: "Evidence workspace", worldline: "Worldlines & probability", portfolio: "Allocation", export: "Export research", mock: "mock / unvalidated", back: "Back", continue: "Continue", cancel: "Cancel", retry: "Retry now", reserved: "Confirm with reservations", confirm: "Confirm for simulation",
+     structuredChallenge: "Structured counterargument · mock provider", streaming: "Challenge is streaming deterministic mock output", challenged: "What is challenged", challengedBody: "Counterexamples, causal gaps, priced-in assumptions, and missing independently reviewable evidence.", noLiveProvider: "No live GLM/DeepSeek call is made in this build.", challenger: "Challenger", rubric: "Visible rubric", critical: "critical", challengeResponse: "Challenge response", challengePlaceholder: "Add observable evidence, an invalidation condition, or a reservation…", submitResponse: "Submit response", timeout: "Mock timeout", invalidOutput: "Invalid mock output", recoveryState: "Mock recovery state", recover: "Recover mock operation", standardConfirmation: "Standard confirmation requires a completed challenge and evidence. Reservation requires acknowledging unresolved issues and adding a non-empty note.", reservationRequirements: "Reservation confirmation requirements", acknowledgeUnresolvedIssues: "I acknowledge the unresolved issues and agree to preserve them in this research archive.", acknowledgeUnresolvedIssuesHint: "You must explicitly acknowledge that unresolved issues will be saved with the research archive.", reservationNote: "Reservation note", reservationNoteHint: "Describe the unresolved issue or usage boundary.",
+     localOnlyEvidence: "Evidence stays local; URLs are never fetched automatically.", ownSearch: "Project search & client evidence", ownSearchBody: "The app first asks a configured ForesightNine project search. Android never connects to GLM directly or holds a key; when search is unavailable, import a browser share or paste a SearchEvidenceBundle.", noFetch: "Neither candidates nor source URLs are opened or fetched automatically on the device.", addLocalBundle: "Add local SearchEvidenceBundle", apiSearch: "Search project source candidates", searchQuery: "Search query", searchCandidates: "Project source candidates", searchPrompt: "Enter a concise query. Candidates never become evidence automatically.", searchLoading: "Requesting candidates from the project API…", searchEmpty: "Project search returned no safely usable candidates.", searchCandidate: "Select candidate and create local bundle", candidateSelected: "Candidate selected. It remains unverified; inspect the source before treating it as evidence.", apiUnavailable: "Project search is not configured or is unavailable — use a browser share or paste an evidence bundle.", apiFailed: "Project search temporarily failed; no candidate or evidence was created. Use the client-evidence fallback.", pasteShare: "Paste a browser-shared http(s) link…", importShare: "Import local share text", duplicateEvidence: "Duplicate evidence was not added.", evidenceAdded: "Evidence added locally.", incomingRejected: "Incoming shared content rejected", importRejected: "Import rejected", ledger: "Evidence ledger", noEvidence: "No evidence added yet.", noPublicUrl: "No public URL", notReviewable: "Not independently reviewable; cannot become a public fact.",
+=== public/privacy.html ===
+--- BASELINE_public/privacy.html
++++ MODIFIED_public/privacy.html
+@@ -0,0 +1,84 @@
++<!doctype html>
++<html lang="zh-CN">
++<head>
++  <meta charset="utf-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <meta name="theme-color" content="#f7f2e9">
++  <title>ForesightNine · 隐私政策 / Privacy Policy</title>
++  <style>
++    :root { color-scheme: light; --ink:#272522; --muted:#6e675f; --paper:#fffaf5; --accent:#a94325; --line:#ded5ca; }
++    * { box-sizing:border-box; }
++    body { margin:0; background:#f7f2e9; color:var(--ink); font:16px/1.75 system-ui,-apple-system,"Segoe UI","Noto Sans SC",sans-serif; }
++    main { max-width:860px; margin:0 auto; padding:56px 24px 80px; }
++    article { background:var(--paper); border:1px solid var(--line); padding:clamp(28px,6vw,64px); box-shadow:0 12px 40px rgba(67,48,35,.06); }
++    h1,h2 { font-family:Georgia,"Noto Serif SC",serif; font-weight:500; line-height:1.25; }
++    h1 { margin:0 0 8px; font-size:clamp(32px,6vw,52px); color:var(--accent); }
++    h2 { margin:36px 0 10px; font-size:25px; border-top:1px solid var(--line); padding-top:22px; }
++    p,ul { margin:10px 0; }
++    li { margin:6px 0; }
++    .meta { color:var(--muted); margin:0 0 30px; }
++    .notice { border-left:3px solid var(--accent); padding:10px 16px; background:#fbefe8; }
++    a { color:var(--accent); }
++    footer { color:var(--muted); font-size:14px; margin-top:24px; }
++  </style>
++</head>
++<body>
++<main>
++  <article>
++    <h1>隐私政策</h1>
++    <p class="meta">ForesightNine · Privacy Policy<br>生效日期 / Effective date: 2026-09-06</p>
++
++    <p>ForesightNine（“我们”）提供情景研究、世界线分析和组合模拟工具。本政策说明我们收集、使用、保存和共享信息的方式。使用账户、研究或订阅功能即表示你已阅读本政策。</p>
++    <p lang="en">ForesightNine provides scenario research, worldline analysis, and portfolio simulation tools. This policy explains how we collect, use, retain, and share information.</p>
++
++    <h2>1. 我们处理的信息</h2>
++    <ul>
++      <li><strong>账户与登录：</strong>当你选择 Google 或 GitHub 登录时，我们接收提供方返回的账户标识和电子邮件地址，并创建内部账户、身份绑定和会话记录。</li>
++      <li><strong>你主动提交的内容：</strong>观点、资金金额、币种、证据、研究设置以及你主动发送给服务端的研究请求。匿名模式下的草稿默认保存在设备本地。</li>
++      <li><strong>服务运行信息：</strong>请求时间、请求 ID、应用版本、错误诊断信息、网络地址和用于安全防滥用的请求元数据。</li>
++      <li><strong>本地数据：</strong>Web 草稿保存在浏览器本地存储；Android 本地研究档案可使用设备安全存储和应用文件目录保存。除非你主动发起同步或提交请求，这些本地数据不会自动上传。</li>
++      <li><strong>订阅信息：</strong>如果你使用 Google Play 订阅功能，我们处理商品、购买状态、到期时间和用于服务端验真的购买凭据摘要。支付卡、银行账户等支付信息由 Google Play 处理，我们不接触完整支付凭据。</li>
++    </ul>
++
++    <h2>2. 信息用途</h2>
++    <ul>
++      <li>创建和维护账户、完成 OAuth 登录、保存会话并提供退出登录及账户删除功能；</li>
++      <li>处理研究请求、生成反方审查和情景分析，并返回研究结果；</li>
++      <li>验证订阅权益、计算服务使用量、执行额度限制和恢复购买；</li>
++      <li>维护安全性、限流、防止滥用、排查故障和改进可靠性；</li>
++      <li>履行法律、会计和争议处理要求。</li>
++    </ul>
++
++    <h2>3. 信息共享</h2>
++    <p>我们仅在提供服务所需的范围内共享信息：</p>
++    <ul>
++      <li><strong>Google 和 GitHub：</strong>用于你主动选择的身份认证；</li>
++      <li><strong>Google Play：</strong>用于应用分发和订阅购买处理；</li>
++      <li><strong>模型、托管和基础设施服务商：</strong>仅在你发起服务端研究请求时处理必要的请求内容和运行数据；</li>
++      <li><strong>法律或安全要求：</strong>在法律要求、保护用户和服务安全或处理欺诈时披露必要信息。</li>
++    </ul>
++    <p class="notice">我们不出售个人信息，不使用广告 SDK，也不将研究内容用于广告画像。ForesightNine 不连接券商、不代客下单、不托管资金。</p>
++
++    <h2>4. 数据保存与删除</h2>
++    <p>账户和服务数据在提供功能所需期间保存。会话会按生命周期失效。你可以在应用内发起账户删除；删除后我们会撤销相关会话和登录绑定。为处理安全、财务或法律义务而必须保留的最小记录，会在必要期限结束后删除或匿名化。</p>
++
++    <h2>5. 安全</h2>
++    <p>我们使用 HTTPS、服务端访问控制、最小化日志和受保护的设备本地存储等措施保护信息。没有任何网络或存储系统能够保证绝对安全；请勿在研究文本中提交不必要的密码、支付凭据或其他高敏感信息。</p>
++
++    <h2>6. 儿童隐私</h2>
++    <p>ForesightNine 不面向儿童，也不在明知的情况下收集儿童个人信息。如果你认为儿童向我们提交了个人信息，请通过下方联系方式通知我们。</p>
++
++    <h2>7. 你的选择与请求</h2>
++    <p>你可以选择不登录、清除本地草稿、退出账户、删除账户，或通过下方联系方式请求访问、更正或删除与你有关的信息。Google 和 GitHub 登录也受相应提供方隐私设置约束。</p>
++
++    <h2>8. 政策更新</h2>
++    <p>当数据处理方式或法律要求发生变化时，我们会更新本页面并修改生效日期。重大变化会通过应用或其他适当方式提示。</p>
++
++    <h2>9. 联系方式</h2>
++    <p>隐私问题、删除请求和数据请求请联系：<a href="mailto:privacy@foresightnine.com">privacy@foresightnine.com</a></p>
++
++    <footer>© 2026 ForesightNine. This page is provided for privacy transparency and is not investment advice.</footer>
++  </article>
++</main>
++</body>
++</html>

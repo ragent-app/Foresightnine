@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { clearOAuthSession, configuredOAuthReturnUriFromEnvironment, deleteOAuthAccount, exchangeOAuthTicket, logoutOAuthSession, oauthStartUrl, parseOAuthCallbackUrl, readOAuthSession, saveOAuthSession, WEB_OAUTH_SESSION_KEY, type OAuthSession } from "./oauth-client";
+import { clearOAuthSession, configuredOAuthReturnUriFromEnvironment, deleteOAuthAccount, exchangeOAuthTicket, fetchAccountBillingSummary, logoutOAuthSession, oauthStartUrl, parseOAuthCallbackUrl, readOAuthSession, saveOAuthSession, WEB_OAUTH_SESSION_KEY, type OAuthSession } from "./oauth-client";
 
 const session: OAuthSession = { account: { account_id: "account_12345678", email: "user@example.test", created_at: "2026-08-31T00:00:00Z" }, session_id: "session_12345678", access_token: "token_abcdefghijklmnopqrstuvwxyz0123456789", expires_at: "2026-09-30T00:00:00Z", auth_mode: "oauth", provider: "google" };
 
@@ -48,11 +48,38 @@ describe("web OAuth client boundary", () => {
     const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
     await logoutOAuthSession("https://api.example.test", session.access_token, fetcher);
     const logoutCall = fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit];
-    expect(logoutCall[1]).toMatchObject({ method: "POST", headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}` }) });
+    expect(logoutCall[1]).toMatchObject({ method: "POST", body: JSON.stringify({}), headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }) });
     clearOAuthSession(fakeStorage);
     await deleteOAuthAccount("https://api.example.test", session.access_token, fetcher);
     const deleteCall = fetcher.mock.calls[1] as unknown as [RequestInfo | URL, RequestInit];
     expect(deleteCall[1]).toMatchObject({ method: "DELETE" });
     expect(fakeStorage.getItem(WEB_OAUTH_SESSION_KEY)).toBeNull();
+  });
+
+  it("reads only the server-authoritative account quota with the bearer header", async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      account: { account_id: "account_12345678", email: "user@example.test" },
+      plan: "pro",
+      entitlement_status: "active",
+      product_id: "foresightnine_pro",
+      base_plan_id: "monthly",
+      quota_limit: 30000000,
+      quota_consumed: 1200,
+      quota_reserved: 4500,
+      quota_remaining: 29994300,
+      quota_resets_at: "2026-10-01T00:00:00Z",
+      provider_model: "glm-5.3-flash",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const result = await fetchAccountBillingSummary("https://api.example.test", session.access_token, fetcher);
+    expect(result).toMatchObject({ plan: "pro", quota_remaining: 29994300, provider_model: "glm-5.3-flash" });
+    const call = fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit];
+    expect(String(call[0])).toContain("/v1/account");
+    expect(call[1]).toMatchObject({ method: "GET", credentials: "omit", headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}` }) });
+    expect(JSON.stringify(call)).not.toContain("foresightnine_pro");
+  });
+
+  it("rejects an account quota response with extra fields", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ account: {}, extra: true }), { status: 200 }));
+    await expect(fetchAccountBillingSummary("https://api.example.test", session.access_token, fetcher)).rejects.toThrow("Account summary response is invalid.");
   });
 });

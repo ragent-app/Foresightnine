@@ -61,12 +61,14 @@ describe("Web freshness policy integration", () => {
     expect(invalid.allowCurrentPublicDefault).toBe(false);
   });
 
-  it("rejects explicit missing/stale market rows instead of silently substituting mock prices", () => {
-    for (const status of ["missing", "stale"] as const) {
-      const bundle = bundleWithExplicitRowStatus(status);
-      expect(marketDataStatus(bundle)).toBe("limited_data");
-      expect(() => assetsForMarketBundle(bundle)).toThrow("No valid latest completed-session price for GRID.");
-    }
+  it("rejects missing prices but retains stale provider prices as explicitly stale Raw inputs", () => {
+    const missing = bundleWithExplicitRowStatus("missing");
+    expect(marketDataStatus(missing)).toBe("limited_data");
+    expect(() => assetsForMarketBundle(missing)).toThrow("No usable latest completed-session price for GRID.");
+
+    const stale = bundleWithExplicitRowStatus("stale");
+    expect(marketDataStatus(stale)).toBe("limited_data");
+    expect(assetsForMarketBundle(stale).find((asset) => asset.assetId === "GRID")?.freshness).toBe("stale");
   });
 
   it("never enables Public Default for a missing row or stale provider result while retaining Raw", () => {

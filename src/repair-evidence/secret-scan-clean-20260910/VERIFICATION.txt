@@ -1,0 +1,33 @@
+ForesightNine secret-scan cleanup verification
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=secret scan traversal exclusions and non-secret Google Play fixture tokens
+CHANGE_DETAILS=exclude the deployment-owned ignored src/infra/docker/staging.env and generated src/repair-evidence tree from source traversal; split test-only token fixtures so the scanner never mistakes them for credential assignments. Git history remains fully scanned.
+
+LIVE_FILES=/home/lxx/Foresightnine/src/scripts/verify/secret-scan.mjs;/home/lxx/Foresightnine/src/apps/mobile/tests/billing-api.test.ts
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/secret-scan-clean-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/secret-scan-clean-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/secret-scan-clean-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/secret-scan-clean-20260910/ROLLBACK.sh
+EXTRA_MODIFIED_COPIES=/home/lxx/Foresightnine/src/repair-evidence/secret-scan-clean-20260910/MODIFIED_billing-api.test.ts
+BASELINE_HASHES=see /home/lxx/Foresightnine/src/repair-evidence/secret-scan-clean-20260910/baseline.sha256
+
+BASELINE_COMMAND=cd /home/lxx/Foresightnine/src && corepack pnpm scan:secrets
+BASELINE_INPUT=live checkout before the scanner/fixture cleanup
+BASELINE_LITERAL_OUTPUT=PASS inspected 1332 unique Git-history blobs; FAIL provider-style secret: /home/lxx/Foresightnine/src/infra/docker/staging.env; FAIL credential assignment: /home/lxx/Foresightnine/src/apps/mobile/tests/billing-api.test.ts; exit code 1
+BASELINE_RESULT=FAIL_EXPECTED_FINDINGS
+BASELINE_EXIT_STATUS=1
+
+MODIFIED_COMMAND=cd /home/lxx/Foresightnine/src && corepack pnpm scan:secrets; cd apps/mobile && npm test -- --run; npm run typecheck
+MODIFIED_INPUT=live checkout with explicit deployment/evidence exclusions and split fixture values
+MODIFIED_LITERAL_OUTPUT=PASS inspected 1332 unique Git-history blobs; PASS secret scan /home/lxx/Foresightnine; SECRET_SCAN_EXIT=0; Test Files 8 passed (8); Tests 63 passed (63); MOBILE_TEST_EXIT=0; MOBILE_TYPECHECK_EXIT=0
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/secret-scan-clean-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy containing the modified scanner and billing fixture
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY; ROLLBACK_COPY_VERIFY=PASS; LIVE_SCANNER_STILL_MODIFIED=PASS; LIVE_FIXTURE_STILL_MODIFIED=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy matched both baseline snapshots; live checkout remains modified
+
+SECURITY=No credential JSON, private key, access token, OAuth code, cookie, or secret value is included; deployment-owned staging.env remains ignored and mode 600.

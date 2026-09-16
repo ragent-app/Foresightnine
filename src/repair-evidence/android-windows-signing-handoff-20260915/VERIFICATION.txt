@@ -1,0 +1,47 @@
+CHANGE_BRANCH=android_release.windows_dpapi_signing_handoff
+CHANGED_FIELD=DPAPI password unprotection, stdin-only jarsigner input, fixed upload alias, signed-copy verification
+
+ARTIFACT_MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/android-windows-signing-handoff-20260915/MODIFIED_FILE
+ARTIFACT_DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/android-windows-signing-handoff-20260915/DIFF_FILE
+ARTIFACT_VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/android-windows-signing-handoff-20260915/VERIFICATION.txt
+ARTIFACT_ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/android-windows-signing-handoff-20260915/ROLLBACK.sh
+
+BASELINE_COMMAND=test -f scripts/release/sign-android-aab-windows.ps1
+BASELINE_INPUT=/home/lxx/Foresightnine/src/scripts/release/sign-android-aab-windows.ps1
+BASELINE_LITERAL_OUTPUT:
+SCRIPT=MISSING
+BASELINE_RESULT=MISSING_WINDOWS_DPAPI_SIGNING_HANDOFF
+BASELINE_EXIT_STATUS=1
+
+MODIFIED_COMMAND=Static fail-closed inspection of scripts/release/sign-android-aab-windows.ps1
+MODIFIED_INPUT=the Windows signing helper source
+MODIFIED_LITERAL_OUTPUT:
+SCRIPT_EXISTS=True
+DPAPI_UNPROTECT=True
+PASSWORD_NOT_COMMAND_LINE=True
+PASSWORDS_OVER_STDIN=True
+INPUT_PRESERVED=True
+FIXED_PACKAGE=True
+FIXED_TRACK=True
+FIXED_ALIAS=True
+VERIFY_SIGNED_OUTPUT=True
+STATIC_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+FULL_VALIDATION_COMMAND=Create a synthetic JKS with different store/key passwords; stream both passwords over stdin to jarsigner; verify the signed synthetic AAB with jarsigner -verify -strict.
+FULL_VALIDATION_INPUT=synthetic local key and synthetic AAB only; no ForesightNine credential or password was read
+FULL_VALIDATION_LITERAL_OUTPUT:
+SYNTHETIC_SIGN_EXIT=0
+SYNTHETIC_VERIFY_EXIT=4
+SYNTHETIC_SIGNATURE_VERIFIED=True
+PASSWORD_ARGUMENTS_PRESENT=NO
+FULL_VALIDATION_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/android-windows-signing-handoff-20260915/ROLLBACK.sh --local /home/lxx/.config/foresightnine/rollback-tests/android-windows-signing-handoff-20260915
+ROLLBACK_INPUT=isolated copy of the new PowerShell helper
+ROLLBACK_LITERAL_OUTPUT:
+RESTORED_scripts/release/sign-android-aab-windows.ps1=MISSING
+ROLLBACK_STATUS=restored_pre_helper_absence
+ROLLBACK_EXIT=0
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=the pre-change absence of a Windows signing helper is reproduced only in the isolated rollback directory; live source retains the DPAPI signing handoff.

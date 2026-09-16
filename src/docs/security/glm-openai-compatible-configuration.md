@@ -13,15 +13,15 @@
 - 固定 base URL：`https://open.bigmodel.cn/api/coding/paas/v4`
 - 固定 host allowlist：`open.bigmodel.cn:443`
 - server-only secret：`FORESIGHTNINE_GLM_CODING_API_KEY`（已由 Linux 部署侧注入 gitignored 的 infra/docker/staging.env，勿写入任何被跟踪文件）
-- 固定 model：`glm-5.3`
+- 固定 model：`glm-5.3-flash`
 
-预设不会读取通用 `FORESIGHTNINE_LLM_BASE_URL`，因此部署环境不能把 GLM 路径重定向到任意地址。该产品切片只允许请求 `glm-5.3`：`FORESIGHTNINE_GLM_CODING_MODEL` 已废弃，任何非空值都会在发起请求前 fail closed；未设置或显式为空时使用代码内固定值。上线前必须用拥有该模型访问权的安全注入环境进行一次小规模 challenge 验收，不能静默降级到其他模型。
+预设不会读取通用 `FORESIGHTNINE_LLM_BASE_URL`，因此部署环境不能把 GLM 路径重定向到任意地址。该产品切片只允许请求 `glm-5.3-flash`：`FORESIGHTNINE_GLM_CODING_MODEL` 已废弃，任何非空值都会在发起请求前 fail closed；未设置或显式为空时使用代码内固定值。上线前必须用拥有该模型访问权的安全注入环境进行一次小规模 challenge 验收，不能静默降级到其他模型。
 
 ### 服务端确定性参数
 
 以下变量只能由 API 服务进程读取；请求体中没有对应的客户端配置入口，也不会从 challenge JSON 复制这些值：
 
-- `FORESIGHTNINE_GLM_CODING_THINKING`：仅接受 `enabled`/`true`，默认 `enabled`，发送为 `thinking.type`；`glm-5.3` 不支持 `disabled`，因此 `disabled`/`false` 会 fail closed。
+- `FORESIGHTNINE_GLM_CODING_THINKING`：仅接受 `enabled`/`true`，默认 `enabled`，发送为 `thinking.type`；`glm-5.3-flash` 不支持 `disabled`，因此 `disabled`/`false` 会 fail closed。
 - `FORESIGHTNINE_GLM_CODING_REASONING_EFFORT`：Coding Plan 映射允许 `low`、`medium`、`high`，默认 `high`。
 - `FORESIGHTNINE_GLM_CODING_DO_SAMPLE`：严格的 `true`/`false`，默认 `false`。
 

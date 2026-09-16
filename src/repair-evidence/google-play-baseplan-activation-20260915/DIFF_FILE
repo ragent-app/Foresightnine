@@ -1,0 +1,6 @@
+Google Play Android Publisher state diff
+PACKAGE=com.foresightnine.mobile
+foresightnine_pro/monthly: DRAFT -> ACTIVE; billing period P1M retained; US base price USD 20 retained.
+foresightnine_max/monthly: DRAFT -> ACTIVE; billing period P1M retained; US base price USD 200 retained.
+Internal track: one RELEASE_LIFECYCLE_STATE_PUBLISHED release retained.
+Closed/open/production releases were not created or modified.

@@ -1,0 +1,62 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+________ test_fake_dns_proxy_addresses_require_public_doh_confirmation _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ab918105ba0>
+
+    def test_fake_dns_proxy_addresses_require_public_doh_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+        fake_records = [
+            (2, 1, 6, "", ("198.18.0.180", 443)),
+            (10, 1, 6, "", ("fdfe:dcba:9876::ae", 443, 0, 0)),
+        ]
+        monkeypatch.setattr(openai_compatible.socket, "getaddrinfo", lambda *_args, **_kwargs: fake_records)
+>       monkeypatch.setattr(openai_compatible, "_public_doh_addresses", lambda _hostname: ("104.18.1.2", "2606:4700::6812:102"))
+E       AttributeError: <module 'app.openai_compatible' from '/home/lxx/Foresightnine/src/apps/api/app/openai_compatible.py'> has no attribute '_public_doh_addresses'
+
+apps/api/tests/test_openai_compatible_provider.py:295: AttributeError
+_ test_personal_configuration_converts_dns_transport_failure_to_validation_error _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ab917d97360>
+
+    def test_personal_configuration_converts_dns_transport_failure_to_validation_error(monkeypatch) -> None:
+        monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: (_ for _ in ()).throw(compatible._TransportFailure()))
+        service = AccountModelSettings(InMemoryDocumentRepository(), ModelCredentialCipher(b"d" * 32))
+    
+        with pytest.raises(ModelCredentialError) as error:
+>           service.update("account_123456", _personal_request())
+
+apps/api/tests/test_model_credentials.py:84: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+apps/api/app/model_credentials.py:205: in update
+    return locker(f"model-config:{account_id}", operation) if callable(locker) else operation()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+apps/api/app/storage.py:293: in with_advisory_lock
+    return operation()
+           ^^^^^^^^^^^
+apps/api/app/model_credentials.py:192: in operation
+    _validate_personal_values(base_url, model, api_key)
+apps/api/app/model_credentials.py:133: in _validate_personal_values
+    return OpenAICompatibleSettings.from_account_values(base_url=base_url, model=model, api_key=api_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+apps/api/app/openai_compatible.py:393: in from_account_values
+    _require_public_dns(normalized_host, 443)
+apps/api/tests/test_model_credentials.py:80: in <lambda>
+    monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: (_ for _ in ()).throw(compatible._TransportFailure()))
+                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <tuple_iterator object at 0x7ab9188f1210>
+
+>   monkeypatch.setattr(compatible, "_require_public_dns", lambda *_args, **_kwargs: (_ for _ in ()).throw(compatible._TransportFailure()))
+E   app.openai_compatible._TransportFailure
+
+apps/api/tests/test_model_credentials.py:80: _TransportFailure
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_fake_dns_proxy_addresses_require_public_doh_confirmation
+FAILED apps/api/tests/test_model_credentials.py::test_personal_configuration_converts_dns_transport_failure_to_validation_error

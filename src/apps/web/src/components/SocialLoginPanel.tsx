@@ -1,5 +1,5 @@
 import { t, useLanguage } from "../i18n";
-import type { OAuthSession } from "../oauth-client";
+import type { AccountBillingSummary, OAuthSession } from "../oauth-client";
 
 export type OAuthProvider = "google" | "github";
 
@@ -22,6 +22,7 @@ interface SocialLoginPanelProps {
   readonly session?: OAuthSession | null | undefined;
   readonly onLogout?: (() => void) | undefined;
   readonly onDelete?: (() => void) | undefined;
+  readonly billingSummary?: AccountBillingSummary | null | undefined;
   /** Used only to place the same truthful status panel at a responsive location. */
   readonly className?: string;
 }
@@ -31,16 +32,21 @@ const unavailableProviders: readonly OAuthProviderAvailability[] = [
   { provider: "github", enabled: false },
 ];
 
-export function SocialLoginPanel({ providers = unavailableProviders, readinessStatus = "unavailable", onStart, session = null, onLogout, onDelete, className = "" }: SocialLoginPanelProps) {
+export function SocialLoginPanel({ providers = unavailableProviders, readinessStatus = "unavailable", onStart, session = null, onLogout, onDelete, billingSummary = null, className = "" }: SocialLoginPanelProps) {
   const { language } = useLanguage();
   const anyEnabled = providers.some(({ enabled }) => enabled);
   const statusCopy = session
     ? `${session.provider === "google" ? "Google" : "GitHub"} · ${session.account.email}`
     : readinessStatus === "loading"
     ? (language === "en" ? "Checking server OAuth readiness…" : "正在确认服务端登录状态…")
-    : readinessStatus === "ready" && anyEnabled
-      ? (language === "en" ? "Server sign-in is ready when this build has an explicit callback destination." : "服务端登录已就绪；此版本还需要显式配置回调地址。")
+    : readinessStatus === "ready" && anyEnabled && onStart
+      ? (language === "en" ? "Google and GitHub sign-in are ready." : "Google 和 GitHub 登录已就绪。")
+      : readinessStatus === "ready" && anyEnabled
+        ? (language === "en" ? "Server sign-in is ready; this build needs a callback destination." : "服务端登录已就绪；此版本需要配置回调地址。")
       : t(language, "登录服务尚未配置；你可以继续匿名研究，本地草稿不会因该状态上传。");
+  const planName = billingSummary?.plan === "max" ? "Max" : billingSummary?.plan === "pro" ? "Pro" : "Free";
+  const quotaLabel = billingSummary ? `${billingSummary.quota_remaining.toLocaleString()} / ${billingSummary.quota_limit.toLocaleString()} tokens` : "";
+  const statusLabel = billingSummary?.entitlement_status === "active" ? (language === "en" ? "Active" : "生效中") : billingSummary?.entitlement_status ?? "";
   return <section className={`social-login ${className}`.trim()} aria-labelledby="social-login-title">
     <div className="social-login-copy">
       <p className="eyebrow">{t(language, "可选账户登录")}</p>
@@ -70,5 +76,9 @@ export function SocialLoginPanel({ providers = unavailableProviders, readinessSt
         </button>;
       })}
     </div>}
+    {session && billingSummary ? <div className="account-billing" aria-label={language === "en" ? "Account quota" : "账户额度"}>
+      <div><span className="eyebrow">{language === "en" ? "Plan" : "方案"}</span><strong>{planName}</strong><small>{statusLabel}</small></div>
+      <div><span className="eyebrow">{language === "en" ? "Remaining this period" : "本周期剩余"}</span><strong>{quotaLabel}</strong><small>{billingSummary.provider_model}</small></div>
+    </div> : null}
   </section>;
 }

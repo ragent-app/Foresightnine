@@ -1,0 +1,142 @@
+ForesightNine product UX verification
+DATE=2026-09-13
+WORKTREE=/home/lxx/Foresightnine/src
+HEAD=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+
+CHANGED_BRANCHES_AND_FIELDS
+1. Web challenge lifecycle: ChallengeStatus.submitting_reply, AppAction.begin_reply_submit, authoritative operation_id result reads, Last-Event-ID replay, explicit normal-SSE-EOF failure, cancel/retry/transcript retention, evidence tabs, and confirmation gates.
+2. Confirmation/receipt branch: authoritative CHALLENGING/EVIDENCE_REQUIRED records mark the completed model operation ready for the next user action; transcript/evidence/rubric gates still protect confirmation; canSubmitReply targets the latest challenger turn; operationReplayCursor rewinds terminal replay receipts to sequence zero so completed/error frames cannot be skipped. PendingChallengeReceipt.submissionIdempotencyKey/cancelIdempotencyKey/cancelRequested/recover, replayPendingReceipt, and cancelAcceptedPendingReceipt reuse stable idempotency keys, recover an accepted start whose HTTP receipt was lost, and require compensating cancel to reach cancelled/completed.
+3. Immutable receipt/atomic operation/billing branch: CHALLENGE_OPERATION_RESULTS binds each operation_id to its immutable ChallengeRecord and validates the terminal event result_hash before an authoritative fetch; later replies cannot replace an earlier receipt result.  session, confirmation, worldline, market-manifest, challenge, reply, and evidence business mutations are staged and supplied through commit_result/rollback_result; postgres_unit_of_work ContextVar, PostgresOperationStore._run, PostgresDocumentRepository._ambient_cursor/put/get/with_advisory_lock, and OperationStore.finish/admission bind operation CAS, business documents, account quota, and usage ledger to one PostgreSQL transaction. Terminal observers and reconciliation release failed/cancelled reservations; settle cannot revive released usage.
+4. Financial-data branch: fallback_order plus provider enabled/api_key/clear_api_key fields drive Market Data -> Alpha Vantage -> Twelve Data -> Finnhub -> Yahoo Finance. A personal key overrides only its matching adapter; platform credentials remain fallback; exhaustion yields explicit missing rows without mock/current substitution. An end-to-end adapter probe proves all five providers are attempted in the configured order and only Alpha Vantage/Finnhub receive their matching account keys.
+5. Account model branch: mode/base_url/model/api_key/clear_api_key/key_hint/updated_at, account model-config CRUD/test endpoints, and per-account OpenAI-compatible routing. Personal endpoints must use public HTTPS port 443 with save-time and per-connection DNS checks and pinned TCP while TLS verifies the hostname; the default transport binds allow_private_network from each provider settings object, so a platform-local exception cannot leak into account routes. BYOK consumes no platform quota and never silently falls back.
+6. Ownership/account-switch branch: owner_subject namespaces authenticated idempotency; operation-session associations protect session/SSE/control/result/worldline routes; ModelConfigPanel and MarketDataConfigPanel clear prior-account fields, render owner-bound loading gates, and abort/discard stale responses.
+7. Evidence-submission branch: EvidenceSubmissionRequest.content_hash and exported source_material_hash use the API-compatible sourceMaterialHash over url/title/published_at/retrieved_at/excerpt/user_note/search_provider/search_result_hash while EvidenceView.content_hash remains the fuller local audit hash; zero microseconds normalize exactly like Python, authenticated local evidence binds the authoritative API challenge_id, and the submitEvidence response reconciles challenge transcript/rubric/status without inventing a user reply.
+8. Console/guide branch: Console exposes the account model API and five financial-data providers with key, enable, order, save, and connection-test controls. The downloadable guide explains sign-in/session restoration, full research lifecycle, provider key acquisition, fallback/three-anchor/freshness/missing semantics, recovery, exports, and credential boundaries.
+9. Account-transition branch: MarketDataConfigPanel.loadedSessionKey, marketConfigSessionKey, and isLoadedMarketConfigOwner clear account-bound drafts on transition, render a loading gate, discard stale fetches, and reject save/test until the newly rendered OAuth account owns the loaded configuration.
+10. Challenge-concurrency branch: _commit_challenge_mutation serializes message/evidence/confirmation terminal sections with a per-challenge in-memory lock or PostgreSQL advisory transaction lock, compares content_hash plus CHALLENGE_TURNS, and returns lifecycle_conflict instead of allowing a stale sibling operation to overwrite the winning turn.
+
+ORIGINAL_STATE
+35 existing files are preserved under /home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/baseline.
+Original SHA-256 manifest: /home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/logs/original-hashes-final.txt (35 entries).
+Modified SHA-256 manifest: /home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/logs/modified-hashes-final.txt (43 entries).
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/ROLLBACK.sh
+
+BASELINE WEB
+COMMAND: cd /home/lxx/Foresightnine && corepack pnpm --dir src --filter web test
+INPUT: saved pre-change Web implementation
+LITERAL OUTPUT: Test Files  7 passed (7); Tests  72 passed (72); Duration  1.57s
+EXIT STATUS: 0
+RESULT: baseline Web tests passed.
+
+BASELINE API
+COMMAND: cd /tmp/foresightnine-product-ux-full-rollback.t2Ve7N && uv run --project apps/api pytest apps/api/tests -q -ra
+INPUT: separate full workspace copy restored from the saved originals; BASELINE_API_TESTS_COLLECTED=272
+LITERAL OUTPUT: "........................................................................ [ 26%]"; "........................................................................ [ 52%]"; "........................................................................ [ 79%]"; "..............................s.........................                 [100%]"; one StarletteDeprecationWarning
+EXIT STATUS: 0
+RESULT: 271 baseline API tests passed; 1 explicitly opted-out Redis integration test skipped.
+
+MODIFIED TYPECHECK
+COMMAND: cd /home/lxx/Foresightnine/src && corepack pnpm -r typecheck
+INPUT: live modified workspace
+LITERAL OUTPUT: packages/contracts typecheck: Done; packages/fm-engine typecheck: Done; packages/design-system typecheck: Done; packages/asset-registry typecheck: Done; packages/api-client typecheck: Done; packages/domain typecheck: Done; packages/market-data typecheck: Done; apps/mobile typecheck: Done; apps/web typecheck: Done
+EXIT STATUS: 0
+RESULT: all workspace typechecks passed.
+
+MODIFIED JAVASCRIPT TESTS
+COMMAND: cd /home/lxx/Foresightnine/src && corepack pnpm -r test
+INPUT: live modified workspace
+LITERAL OUTPUT: apps/mobile Test Files  8 passed (8); Tests  63 passed (63); apps/web Test Files  10 passed (10); Tests  113 passed (113)
+EXIT STATUS: 0
+RESULT: all JavaScript/TypeScript workspace tests passed, including model/market account-transition mutation and render blocking, API confirmation unlock, terminal-receipt cursor rewind, latest-turn reply gating, stable-key lost-receipt replay, delayed-receipt compensating cancel, canonical evidence/export hash parity (including search provenance and zero-microsecond timestamps), authoritative challenge IDs, authoritative evidence-response reconciliation, and account/provider private-network isolation.
+
+MODIFIED API TESTS
+COMMAND: cd /home/lxx/Foresightnine/src && uv run --project apps/api pytest apps/api/tests -q -ra
+INPUT: live modified API workspace; API_TESTS_COLLECTED=304
+LITERAL OUTPUT: "........................................................................ [ 23%]"; "........................................................................ [ 47%]"; "........................................................................ [ 71%]"; ".............................................................s.......... [ 94%]"; "................                                                         [100%]"; SKIPPED [1] test_redis_abuse.py: Redis integration opt-in is unset
+EXIT STATUS: 0
+RESULT: 303 API tests passed; 1 Redis integration test skipped. Tests cover immutable operation-bound challenge replay across later mutations, terminal-CAS serialization, ambient/reentrant PostgreSQL UOW reuse, confirmation/worldline failure compensation, cross-manager cancel, settled-usage reversal, lease release, and prior-process reconciliation, both successful-callback/store-failure and raising-callback manager compensation, private-network isolation, full five-provider account fallback ordering, concurrent same-snapshot challenge mutations admitting exactly one winning turn, and async conflicts preserving lifecycle_conflict rather than becoming internal_error.
+
+POSTGRES ATOMIC ROLLBACK
+COMMAND: sudo -n docker exec -i -w /app/apps/api docker-api-1 uv run python - < /tmp/product-ux-atomic-probe.py
+INPUT: unique temporary operation/idempotency/document identifiers; admission writes one document then raises a deliberate exception
+LITERAL OUTPUT: POSTGRES_ATOMIC_ROLLBACK document=True claim=True operation=True; POSTGRES_ATOMIC_ROLLBACK_EXIT=0
+EXIT STATUS: 0
+RESULT: the business document, idempotency claim, and operation row all rolled back in the same real PostgreSQL transaction.
+
+POSTGRES TERMINAL UOW ROLLBACK
+COMMAND: sudo -n docker exec -i -w /app/apps/api docker-api-1 uv run python - < /tmp/product-ux-terminal-atomic-probe.py
+INPUT: one running operation; terminal admission writes a document and operation-session association, then raises deliberately; probe removes its initial running rows after verification
+LITERAL OUTPUT: POSTGRES_TERMINAL_UOW_ROLLBACK document=True association=True operation_running=True; POSTGRES_TERMINAL_UOW_ROLLBACK_EXIT=0
+EXIT STATUS: 0
+RESULT: terminal business and association writes rolled back together while the pre-existing operation remained running, proving nested operation-store calls reuse the same PostgreSQL UOW.
+
+POSTGRES MANAGER CALLBACK ROLLBACK
+COMMAND: sudo -n docker exec -i -w /app/apps/api docker-api-1 uv run python - < /tmp/product-ux-manager-pg-probe.py
+INPUT: one unique OperationManager execution whose commit_result writes a PostgreSQL document and then raises deliberately; rollback_result observes post-rollback state; scoped probe rows are removed afterward
+LITERAL OUTPUT: POSTGRES_MANAGER_CALLBACK_ROLLBACK callback_observed=True document_absent=True operation_failed=True claim_failed=True; POSTGRES_MANAGER_CALLBACK_ROLLBACK_RESULT=PASS; POSTGRES_MANAGER_CALLBACK_ROLLBACK_EXIT=0
+EXIT STATUS: 0
+RESULT: the real manager callback path rolled back its business document, executed compensation after unwind, and durably finalized the operation/idempotency claim as failed.
+
+MODIFIED FALLBACK TESTS
+COMMAND: cd /home/lxx/Foresightnine/src && uv run --project apps/api pytest apps/api/tests/test_market_credentials.py apps/api/tests/test_market_provider.py -q -ra
+INPUT: account credential service plus live-provider fallback adapters
+LITERAL OUTPUT: "............................                                             [100%]"; FALLBACK_TEST_EXIT=0
+EXIT STATUS: 0
+RESULT: 28 tests passed. Ordered providers, encrypted account keys, matching personal-key override, platform-key fallback, partial/missing rows, and no mock substitution are verified.
+
+MODIFIED BUILD
+COMMAND: cd /home/lxx/Foresightnine/src && corepack pnpm --filter @foresightnine/web build
+INPUT: live modified Web workspace
+LITERAL OUTPUT: 68 modules transformed; dist/assets/index-wyrJnGTJ.js 410.34 kB; built in 2.05s
+EXIT STATUS: 0
+RESULT: production Web build passed.
+
+MODIFIED GOVERNANCE
+COMMAND: cd /home/lxx/Foresightnine/src && corepack pnpm verify:generated-contracts && corepack pnpm verify:boundaries && corepack pnpm scan:secrets
+INPUT: live modified repository
+LITERAL OUTPUT: PASS OpenAPI 25 paths; Governance boundary baseline is unchanged.; PASS inspected 1332 unique Git-history blobs; PASS secret scan /home/lxx/Foresightnine
+EXIT STATUS: 0
+RESULT: generated contracts, Linux boundary governance, and secret scan passed.
+
+MODIFIED DEPLOYMENT
+COMMAND: cd /home/lxx/Foresightnine/src && sudo -n docker compose -f infra/docker/compose.yaml --env-file infra/docker/staging.env up -d --build api
+INPUT: modified API image and configured server-side environment
+LITERAL OUTPUT: Image docker-api Built; Container docker-api-1 Recreated; Container docker-api-1 Started; API_CONTAINER_HEALTH=healthy attempt=7
+EXIT STATUS: 0
+RESULT: modified API container started and became healthy.
+
+ROLLBACK
+COMMAND: /home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/ROLLBACK.sh /tmp/foresightnine-product-ux-rollback-final16.z5o9xC
+INPUT: separate fixture containing 35 modified existing files and 8 newly added files
+LITERAL OUTPUT: ROLLBACK_RESULT=PASS; ROLLBACK_HASH_MATCH=PASS restored=35 removed=8; TARGET_ROOT=/tmp/foresightnine-product-ux-rollback-final16.z5o9xC; RESTORED_BEHAVIOR=pre-product-UX challenge, evidence-hash/export, provider-network, provider-fallback, market-config, model-config, guide, ownership/account-switch, challenge-mutation concurrency, operation-transaction, and billing-reservation behavior; ROLLBACK_COMMAND_EXIT=0; LIVE_MODIFIED_STATE=PASS main_changed=True operations_changed=True model_panel_present=True evidence_hash_changed=True provider_network_changed=True fallback_changed=True market_account_gate_changed=True challenge_concurrency_changed=True
+EXIT STATUS: 0
+RESTORED BEHAVIOR/STATUS: fixture hashes exactly match all 35 saved originals; all 8 new files are absent; the live workspace remains changed.
+
+LIVE BROWSER
+COMMAND: Chrome UI inspection at https://app.foresightnine.com/oauth/complete
+INPUT: existing authenticated session; reload; open Console; inspect model/market controls; activate complete-guide export
+LITERAL OUTPUT/RESULT: LIVE_WEB_BUNDLE=assets/index-wyrJnGTJ.js; modelAccountTransitionLoadingGateVisible=true; marketAccountTransitionLoadingGateVisible=true; modelPanelVisible=true; marketPanelVisible=true; providerCount=5; providersVisibleInOrder=[Market Data, Alpha Vantage, Twelve Data, Finnhub, Yahoo Finance]; detailedGuideControlVisible=true; guideExportAcknowledged=true; serverEncryptionCopyVisible=true; warningOrErrorCount=0; credentialEnteredOrTransmitted=false
+EXIT STATUS: PASS
+
+LIVE SERVICE
+COMMAND: for u in https://app.foresightnine.com/ https://app.foresightnine.com/health https://app.foresightnine.com/readyz; do curl -sS -o /dev/null -w "$u HTTP=%{http_code}\\n" "$u"; done; sudo -n docker inspect --format='{{.State.Health.Status}}' docker-api-1
+INPUT: public app origin and local API container
+LITERAL OUTPUT: https://app.foresightnine.com/ HTTP=200; https://app.foresightnine.com/health HTTP=200; https://app.foresightnine.com/readyz HTTP=200; API_CONTAINER_HEALTH=healthy; LIVE_HEALTH_EXIT=0
+EXIT STATUS: 0
+RESULT: modified Web and API are live and healthy.
+
+ARTIFACT HASHES
+MODIFIED_FILE_SHA256=bf8ac8667e925a27c0e8ede21a89cc790327005fcbf07e1f833d82b0b5a7466e
+DIFF_FILE_SHA256=8c2868db8eb0196266621cc88b296acaeb2cc0b764e9a167749e263226a41316
+ROLLBACK_SH_SHA256=9a04089ca4aa3635f410608218b36429af54212d8e8b82068136aa66075a286e
+
+SECURITY
+Credential plaintext printed=NO
+Credential committed to Git=NO
+OAuth authorization code persisted=NO
+Production billing or publishing mutation=NO

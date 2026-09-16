@@ -1,0 +1,3 @@
+ed54d2af90348e0f857fbad5d1b9fbb1ebb24ce38865006041d5464d478577be  src/repair-evidence/cline-pool-openai-compatible-20260910/compose.yaml.orig
+cfffda042021064a6a7c69b4bd1d390f95f08f3bce2233e4a7a092fd5bf3be38  src/repair-evidence/cline-pool-openai-compatible-20260910/openai_compatible.py.orig
+5d9f73c76def34f4e7f9cb03576c3d2981d808e074c32098491e7336d6304555  src/repair-evidence/cline-pool-openai-compatible-20260910/test_openai_compatible_provider.py.orig

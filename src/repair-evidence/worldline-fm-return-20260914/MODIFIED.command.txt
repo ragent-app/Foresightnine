@@ -1,0 +1,1 @@
+corepack pnpm --filter @foresightnine/web exec vitest run src/app.test.ts -t "keeps failed and cancelled FM states visible so computation can be retried"

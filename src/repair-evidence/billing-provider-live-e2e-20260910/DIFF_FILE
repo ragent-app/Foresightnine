@@ -1,0 +1,206 @@
+--- main.py ---
+--- src/repair-evidence/billing-provider-live-e2e-20260910/main.py.orig	2026-09-10 01:41:07.792096775 +0800
++++ src/repair-evidence/billing-provider-live-e2e-20260910/MODIFIED_FILE	2026-09-10 01:44:04.181395586 +0800
+@@ -692,6 +692,10 @@
+ 
+ @app.exception_handler(ApiProblem)
+ async def api_problem_handler(request: Request, error: ApiProblem) -> JSONResponse:
++    # Provider reservations are created before the operation layer converts a
++    # provider failure into ApiProblem. Releasing here is idempotent and avoids
++    # failed requests holding account quota indefinitely.
++    _release_model_call(request)
+     return _error(
+         error.status_code,
+         error.error_code,
+@@ -716,6 +720,7 @@
+ 
+ @app.exception_handler(ContractViolation)
+ async def contract_violation_handler(request: Request, error: ContractViolation) -> JSONResponse:
++    _release_model_call(request)
+     details = [ErrorDetail(location=error.contract, message=item) for item in error.errors]
+     return _error(500, "contract_violation", "Generated response violated the canonical contract.", request, details=details)
+ 
+@@ -735,6 +740,7 @@
+ 
+ @app.exception_handler(Exception)
+ async def unhandled_error_handler(request: Request, error: Exception) -> JSONResponse:
++    _release_model_call(request)
+     return _error(500, "internal_error", "Internal operation failed without exposing sensitive detail.", request, retryable=True)
+ 
+ 
+--- openai_compatible.py ---
+--- src/repair-evidence/billing-provider-live-e2e-20260910/openai_compatible.py.orig	2026-09-10 01:46:09.148698104 +0800
++++ src/repair-evidence/billing-provider-live-e2e-20260910/MODIFIED_openai_compatible.py	2026-09-10 01:44:04.183331558 +0800
+@@ -11,6 +11,7 @@
+ from dataclasses import dataclass, field
+ import ipaddress
+ import json
++import math
+ import os
+ import re
+ import socket
+@@ -38,6 +39,7 @@
+ _API_KEY_ENV = "FORESIGHTNINE_LLM_API_KEY"
+ _ALLOWED_HOSTS_ENV = "FORESIGHTNINE_LLM_ALLOWED_HOSTS"
+ _ALLOW_PRIVATE_NETWORK_ENV = "FORESIGHTNINE_LLM_ALLOW_PRIVATE_NETWORK"
++_TIMEOUT_ENV = "FORESIGHTNINE_LLM_TIMEOUT_SECONDS"
+ _LOCAL_GATEWAY_HOSTS = frozenset({"host.docker.internal", "host.containers.internal"})
+ _GLM_CODING_API_KEY_ENV = "FORESIGHTNINE_GLM_CODING_API_KEY"
+ _GLM_CODING_MODEL_ENV = "FORESIGHTNINE_GLM_CODING_MODEL"
+@@ -52,6 +54,10 @@
+ _GLM_CODING_DEFAULT_OUTPUT_TOKENS = 4_000
+ _MAX_RESPONSE_BYTES = 256 * 1024
+ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
++_STRUCTURED_OUTPUT_KEYS = frozenset({
++    "claims", "objections", "missing_evidence", "questions", "rubric_scores",
++    "unresolved_issues", "citation_ids", "public_fact_citation_ids", "native_search_used",
++})
+ # The general GLM API exposes more reasoning labels, but the Coding Plan
+ # mapping is limited to these three wire values for this profile.
+ _GLM_CODING_REASONING_EFFORTS = frozenset({"low", "medium", "high"})
+@@ -222,6 +228,20 @@
+     return (raw or "").strip().lower() in {"1", "true", "yes", "on"}
+ 
+ 
++def _llm_timeout_from_environment() -> float:
++    """Read a bounded server-side timeout for slow OpenAI-compatible gateways."""
++    raw = os.environ.get(_TIMEOUT_ENV, "").strip()
++    if not raw:
++        return 20.0
++    try:
++        timeout = float(raw)
++    except ValueError:
++        raise ProviderFailure("provider_configuration_invalid", "LLM timeout configuration is invalid.", retryable=False) from None
++    if not math.isfinite(timeout) or not 0 < timeout <= 180:
++        raise ProviderFailure("provider_configuration_invalid", "LLM timeout configuration is invalid.", retryable=False)
++    return timeout
++
++
+ @dataclass(frozen=True)
+ class OpenAICompatibleSettings:
+     base_url: str
+@@ -424,9 +444,10 @@
+     ) -> "OpenAICompatibleLlmProvider":
+         try:
+             settings = OpenAICompatibleSettings.from_environment()
++            effective_policy = policy or ProviderPolicy(timeout_seconds=_llm_timeout_from_environment())
+         except ProviderFailure as error:
+             return cls(policy=policy, transport=transport, sleeper=sleeper, configuration_error=error)
+-        return cls(settings, policy=policy, transport=transport, sleeper=sleeper)
++        return cls(settings, policy=effective_policy, transport=transport, sleeper=sleeper)
+ 
+     @classmethod
+     def from_glm_coding_environment(
+@@ -438,13 +459,16 @@
+     ) -> "OpenAICompatibleLlmProvider":
+         try:
+             settings = OpenAICompatibleSettings.from_glm_coding_environment()
++            effective_policy = policy or ProviderPolicy(
++                timeout_seconds=_llm_timeout_from_environment(),
++                max_output_tokens=_GLM_CODING_DEFAULT_OUTPUT_TOKENS,
++            )
+         except ProviderFailure as error:
+             return cls(policy=policy, transport=transport, sleeper=sleeper, configuration_error=error)
+         # Thinking-enabled GLM responses spend part of the output budget on
+         # reasoning before the strict JSON object. Keep the generic provider's
+         # conservative budget unchanged, but give this fixed Coding profile
+         # enough room for all ten rubric items and the final structured answer.
+-        effective_policy = policy or ProviderPolicy(max_output_tokens=_GLM_CODING_DEFAULT_OUTPUT_TOKENS)
+         return cls(settings, policy=effective_policy, transport=transport, sleeper=sleeper)
+ 
+     def __repr__(self) -> str:
+@@ -457,8 +481,8 @@
+         return False
+ 
+     def _validate_policy(self) -> None:
+-        if not 0 < self.policy.timeout_seconds <= 30:
+-            raise ValueError("OpenAI-compatible timeout must be between 0 and 30 seconds.")
++        if not 0 < self.policy.timeout_seconds <= 180:
++            raise ValueError("OpenAI-compatible timeout must be between 0 and 180 seconds.")
+         if not 1 <= self.policy.max_attempts <= 3:
+             raise ValueError("OpenAI-compatible attempts must be between 1 and 3.")
+         if not 0 <= self.policy.retry_base_seconds <= 2:
+@@ -482,6 +506,7 @@
+                     ],
+                     "questions_count": "Return one to three high-value questions.",
+                     "rubric_criteria_exact_order": list(RUBRIC_CRITERIA),
++                    "citation_policy": "citation_ids and public_fact_citation_ids must be exact subsets of input evidence_ids; when input evidence_ids is empty, return both as empty arrays; never invent evidence IDs.",
+                     "do_not_add_keys": True,
+                 },
+                 "limits": {"max_output_tokens": max_output_tokens},
+@@ -569,6 +594,12 @@
+             raise ProviderFailure("invalid_provider_output", "Provider message content is not valid JSON.", retryable=False) from None
+         if not isinstance(payload, dict):
+             raise ProviderFailure("invalid_provider_output", "Provider message content is not a JSON object.", retryable=False)
++        # Cline's OpenAI-compatible surface may add a transport-level ``type``
++        # marker to an otherwise exact structured response.  Strip only this
++        # known metadata key; every other unexpected key remains fail-closed at
++        # the canonical draft validator.
++        if set(payload) - _STRUCTURED_OUTPUT_KEYS == {"type"}:
++            payload = {key: value for key, value in payload.items() if key != "type"}
+         return payload
+ 
+     @staticmethod
+--- test_billing.py ---
+--- src/repair-evidence/billing-provider-live-e2e-20260910/test_billing.py.orig	2026-09-10 01:41:07.795808676 +0800
++++ src/repair-evidence/billing-provider-live-e2e-20260910/MODIFIED_test_billing.py	2026-09-10 01:44:04.185239939 +0800
+@@ -6,6 +6,7 @@
+ import pytest
+ from fastapi.testclient import TestClient
+ 
++import app.main as main_module
+ from app.billing import (
+     BillingError,
+     BillingLedger,
+@@ -171,3 +172,51 @@
+     assert restored_snapshot["entitlement_status"] == "active"
+     assert restored_snapshot["quota_consumed"] == 3_000
+     assert restored_snapshot["quota_limit"] == 30_000_000
++
++
++def test_failed_provider_call_releases_account_reservation(monkeypatch) -> None:
++    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
++    reset_state()
++
++    class FailingProvider:
++        name = "failing-provider"
++        supports_native_search = False
++
++        def generate_challenge(self, _request):
++            raise main_module.ProviderFailure("provider_timeout", "provider failed", retryable=True)
++
++    previous_provider = main_module.challenge_provider
++    main_module.challenge_provider = FailingProvider()
++    try:
++        client = TestClient(app)
++        registered = client.post(
++            "/v1/auth/local/register",
++            json={"email": "billing-release@example.test", "password": "correct horse battery staple!"},
++        )
++        assert registered.status_code == 201
++        token = registered.json()["access_token"]
++        session = client.post(
++            "/v1/sessions",
++            headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "billing-release-session"},
++            json={"client_locale": "en-US"},
++        )
++        assert session.status_code == 201
++        response = client.post(
++            "/v1/challenges",
++            headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "billing-release-challenge"},
++            json={
++                "session_id": session.json()["session"]["session_id"],
++                "thesis": "A failed provider call must release its token reservation.",
++                "capital": 100000,
++                "base_currency": "USD",
++                "user_private_evidence_claims": False,
++            },
++        )
++        assert response.status_code == 500
++        summary = client.get("/v1/account", headers={"Authorization": f"Bearer {token}"})
++        assert summary.status_code == 200
++        assert summary.json()["quota_reserved"] == 0
++        assert summary.json()["quota_remaining"] == 200_000
++    finally:
++        main_module.challenge_provider = previous_provider
++        reset_state()

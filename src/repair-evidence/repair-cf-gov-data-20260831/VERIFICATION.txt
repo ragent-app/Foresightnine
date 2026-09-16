@@ -1,0 +1,163 @@
+ForesightNine repair verification — CF-02/CF-04, GOV-01, DATA-02
+Date: 2026-08-31
+Base revision: a30481162bfd783d9a3806db9f99cf4e8b2deddf
+
+CHANGED_BRANCH_FIELD
+- Cloudflare branch: /home/lxx/.cloudflared/foresightnine-api-staging.yml; staging Web-only negative ingress for /api/*, /v1/*, /health, /readyz, /metrics.
+- Governance branch: scripts/verify/boundaries.mjs and scripts/verify/release-candidate.mjs; platform-neutral project-root/path resolution.
+- Data branch: docs/api/README.md and apps/api/tests/test_api.py; explicit factor library version v1.0.0 and unversioned 404 regression.
+- Documentation branch: docs/release/cloudflare-routing.md and docs/problem.md.
+- Cloudflare key mode changed from the observed 664 to 600; key contents were never read into output.
+
+ARTIFACTS
+- MODIFIED_FILE: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/MODIFIED_FILE
+- DIFF_FILE: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/DIFF_FILE
+- VERIFICATION.txt: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/VERIFICATION.txt
+- ROLLBACK.sh: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/ROLLBACK.sh
+
+CONFIG_HASHES
+- BASELINE cloudflared config: 9085fb8ffe86a5e10ceac1ab631cb69d7f7f8de268416f8550ff3ba56af09042
+- MODIFIED_FILE: 63515e0ece7a417ca4bccab4ffd6024b310284044d930e29cfa10a13b7bfa5a2
+- INSTALLED cloudflared config: 63515e0ece7a417ca4bccab4ffd6024b310284044d930e29cfa10a13b7bfa5a2
+
+BASELINE COMMANDS / INPUT / LITERAL RESULT / EXIT STATUS
+1. Command: corepack pnpm verify:boundaries
+   Input: current checkout before verifier change; governance manifest unchanged.
+   Literal result:
+   $ node scripts/verify/boundaries.mjs
+   FAIL governance D:\Foresightnine\plan.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\plan.md'
+   FAIL governance D:\Foresightnine\agent.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\agent.md'
+   FAIL governance D:\Foresightnine\GOAL_PROMPT.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\GOAL_PROMPT.md'
+   FAIL unexpected implementation root: /home/lxx/Foresightnine/src
+   [ELIFECYCLE] Command failed with exit code 1.
+   Exit status: 1
+
+2. Command: uv run --project apps/api pytest apps/api/tests/test_api.py -q
+   Input: existing API test suite, no network write.
+   Literal result: .......... [100%]; 1 StarletteDeprecationWarning.
+   Exit status: 0
+
+3. Command: cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate
+   Input: baseline external Tunnel config.
+   Literal result:
+   Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+   OK
+   Exit status: 0
+
+MODIFIED COMMANDS / INPUT / LITERAL RESULT / EXIT STATUS
+1. Command: cloudflared --config /home/lxx/Foresightnine/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example tunnel ingress validate
+   Input: checked-in redacted topology example.
+   Literal result:
+   Validating rules from /home/lxx/Foresightnine/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example
+   OK
+   Exit status: 0
+
+2. Command: corepack pnpm verify:boundaries
+   Input: Linux checkout with the unchanged governance-baseline.json.
+   Literal result:
+   $ node scripts/verify/boundaries.mjs
+   PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md
+   PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md
+   PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md
+   PASS implementation root /home/lxx/Foresightnine/src
+   Governance boundary baseline is unchanged.
+   Exit status: 0
+
+3. Command: node --test scripts/verify/boundaries.test.mjs
+   Input: Windows absolute and relative path resolver cases.
+   Literal result: 1..2; # tests 2; # pass 2; # fail 0.
+   Exit status: 0
+
+4. Command: corepack pnpm verify:release-candidate
+   Input: current checkout and existing QA artifacts.
+   Literal result: PASS git HEAD a30481162bfd783d9a3806db9f99cf4e8b2deddf; Release-candidate verification passed; QA artifacts are present and hashed.
+   Exit status: 0
+
+5. Command: corepack pnpm verify:generated-contracts
+   Input: generated contracts, registry and OpenAPI artifacts.
+   Literal result: PASS generated contracts, registry and OpenAPI are drift-free.
+   Exit status: 0
+
+6. Command: corepack pnpm typecheck
+   Input: 9 workspace projects.
+   Literal result: all workspace typecheck tasks Done.
+   Exit status: 0
+
+7. Command: uv run --project apps/api pytest apps/api/tests/test_api.py apps/api/tests/test_market_provider.py apps/api/tests/test_contracts.py -q
+   Input: API route/data/contract tests; no network write.
+   Literal result: 38 passed; 1 StarletteDeprecationWarning.
+   Exit status: 0
+
+8. Command: corepack pnpm test
+   Input: full workspace and API test suite.
+   Literal result: 249 passed, 1 skipped, 1 warning in 10.23s; Web 64 passed; Mobile 60 passed.
+   Exit status: 0
+
+9. Command: corepack pnpm scan:secrets
+   Input: repository Git history and current checkout.
+   Literal result: PASS inspected 1332 unique Git-history blobs; PASS secret scan /home/lxx/Foresightnine.
+   Exit status: 0
+
+10. Command: git diff --check
+    Input: current repository diff.
+    Literal result: no output.
+    Exit status: 0
+
+11. Command: systemctl --user restart foresightnine-cloudflared.service
+    Input: installed MODIFIED_FILE config.
+    Literal result: command completed successfully; service active after restart.
+    Exit status: 0
+
+12. Command: systemctl --user is-active foresightnine-cloudflared.service
+    Input: restarted user service.
+    Literal result: active
+    Exit status: 0
+
+13. Command: Cloudflare API read-only permission probe
+    Input: existing host key via Authorization header; no response body or credential content printed.
+    Literal result:
+    endpoint=user/tokens/verify HTTP_STATUS=200 success=True status=active errors=
+    endpoint=zones/5e79217ea213c033e4693b0f2b52d6ac/settings/always_use_https HTTP_STATUS=403 success=False status=None errors=10000:Authentication error
+    endpoint=zones/5e79217ea213c033e4693b0f2b52d6ac/rulesets/phases/http_request_dynamic_redirect/entrypoint HTTP_STATUS=404 success=False status=None errors=10003:could not find entrypoint ruleset in the http_request_dynamic_redirect phase
+    Exit status: 0 (read-only probe completed; endpoint statuses are the result).
+
+14. Command: public status summary with curl -A 'Mozilla/5.0 ForesightNine-readonly-probe'
+    Input: app/staging HTTP and HTTPS roots; staging reserved paths; canonical and unversioned factor routes.
+    Literal result:
+    200 http://app.foresightnine.com/
+    200 http://staging.foresightnine.com/
+    200 https://app.foresightnine.com/
+    404 https://staging.foresightnine.com/health
+    200 https://staging.foresightnine.com/oauth/mobile-callback
+    200 https://api-staging.foresightnine.com/v1/factor-libraries/v1.0.0/manifest
+    404 https://api-staging.foresightnine.com/v1/factor-libraries/manifest
+    Exit status: 0.
+
+STATUS AFTER MODIFICATION
+- CF-04: RESOLVED_2026-08-31. staging API-shaped paths return 404; mobile callback remains Web HTML 200.
+- GOV-01: RESOLVED_2026-08-31. Linux boundary and release-candidate checks pass without changing the baseline manifest.
+- DATA-02: RESOLVED_2026-08-31. v1.0.0 canonical route returns 200; unversioned route returns 404 and regression test passes.
+- CF-02: PENDING_CF_ZONE_PERMISSION. HTTP roots still return 200 because the supplied active token lacks Zone settings/Redirect Rules permission; no edge write was attempted.
+
+ROLLBACK COMMAND / INPUT / LITERAL RESULT / EXIT STATUS
+Command:
+/home/lxx/Foresightnine/src/repair-evidence/repair-cf-gov-data-20260831/ROLLBACK.sh /tmp/foresightnine-rollback-test /tmp/fn-rollback-config.yml /tmp/fn-rollback-key.txt
+Input: separate Git worktree at /tmp/foresightnine-rollback-test; modified config copy; non-secret test key copy.
+Literal result:
+rollback restored base revision a30481162bfd783d9a3806db9f99cf4e8b2deddf
+repo=/tmp/foresightnine-rollback-test
+config=/tmp/fn-rollback-config.yml
+repo_status=PASS
+config_restore=PASS
+key_mode_restore=PASS
+rollback_assertions=PASS
+worktree_removed=PASS
+Exit status: 0.
+
+RESTORED BEHAVIOR / CURRENT STATUS
+- The separate rollback worktree returned clean to the base revision.
+- The separate config copy matched the baseline hash after rollback.
+- The separate test key returned to mode 664; the real Cloudflare key remains hardened at mode 600.
+- The real installed config and MODIFIED_FILE remain changed at hash 63515e0ece7a417ca4bccab4ffd6024b310284044d930e29cfa10a13b7bfa5a2.
+- The Cloudflare Tunnel service remains active with two HTTP/2 edge connections.
+- No OAuth code, access token, credential body, private key, Cookie, or sensitive response body was written.

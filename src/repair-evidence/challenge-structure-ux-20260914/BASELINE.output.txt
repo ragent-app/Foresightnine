@@ -1,0 +1,143 @@
+$ vitest run --passWithNoTests -- api-runtime.error.test.ts challenge-panel.interaction.test.ts
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/methods-guide.test.ts (3 tests) 8ms
+ ✓ src/oauth-client.test.ts (7 tests) 35ms
+ ✓ src/market-config-client.test.ts (7 tests) 25ms
+ ✓ src/market-data.test.ts (1 test) 23ms
+ ❯ src/api-runtime.error.test.ts (7 tests | 1 failed) 37ms
+   × challengeToUi > preserves the provider's structured review sections instead of flattening them into one paragraph 19ms
+     → expected undefined to deeply equal { objections: [ 'Objection' ], …(2) }
+ ✓ src/model-config-client.test.ts (10 tests) 44ms
+ ✓ src/search-client.test.ts (6 tests) 34ms
+ ✓ src/freshness.test.ts (9 tests) 95ms
+ ❯ src/challenge-panel.interaction.test.ts (15 tests | 2 failed) 124ms
+   × ChallengePanel information architecture > renders objections, evidence gaps, and answerable questions as separate scannable lists 25ms
+     → expected '<section class="content-column challe…' to contain '关键反驳'
+   × ChallengePanel information architecture > keeps the ten-item rubric available without forcing it into the primary reading path 15ms
+     → expected '<section class="content-column challe…' to contain '<details class="rubric-disclosure">'
+ ✓ src/app.test.ts (52 tests) 188ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api-runtime.error.test.ts > challengeToUi > preserves the provider's structured review sections instead of flattening them into one paragraph
+AssertionError: expected undefined to deeply equal { objections: [ 'Objection' ], …(2) }
+
+- Expected: 
+Object {
+  "missingEvidence": Array [
+    "Evidence",
+  ],
+  "objections": Array [
+    "Objection",
+  ],
+  "questions": Array [
+    "Question",
+  ],
+}
+
++ Received: 
+undefined
+
+ ❯ src/api-runtime.error.test.ts:69:30
+     67|     const reviewer = update.turns.find((turn) => turn.author === "chal…
+     68| 
+     69|     expect(reviewer?.review).toEqual({
+       |                              ^
+     70|       objections: ["Objection"],
+     71|       missingEvidence: ["Evidence"],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/challenge-panel.interaction.test.ts > ChallengePanel information architecture > renders objections, evidence gaps, and answerable questions as separate scannable lists
+AssertionError: expected '<section class="content-column challe…' to contain '关键反驳'
+
+Expected: "关键反驳"
+Received: "<section class="content-column challenge-view"><header class="page-header"><div><h1>反方审查</h1></div><div class="header-action"><span class="operation-label"><span aria-hidden="true" class="status-dot status-sage"></span>等待你的答复</span></div></header><section class="challenge-overview" aria-labelledby="challenge-progress-heading" aria-label="审查进度"><div><p class="eyebrow" id="challenge-progress-heading">审查进度</p><ol class="challenge-steps" role="progressbar" aria-label="审查进度" aria-valuemin="0" aria-valuemax="4" aria-valuenow="1"><li class="is-complete"><span>1</span><strong>阅读</strong></li><li class=""><span>2</span><strong>答复</strong></li><li class=""><span>3</span><strong>证据</strong></li><li class=""><span>4</span><strong>决策</strong></li></ol></div><aside class="next-action-card" aria-label="下一步"><p class="eyebrow">下一步</p><h2>回答审查员</h2><p>请回答最新的审查员问题，再作出决策。</p><a href="#challenge-reply">回答审查员 ↓</a></aside></section><section class="review-status-card" aria-label="审查状态"><div><span aria-hidden="true" class="status-dot status-sage"></span><strong>等待你的答复</strong></div><div class="review-status-actions"></div></section><div class="challenge-layout"><div class="challenge-main"><section class="transcript" aria-labelledby="challenge-dialogue-heading" aria-label="审查对话"><div class="section-heading"><div><p class="eyebrow">01</p><h2 id="challenge-dialogue-heading">审查对话</h2></div><span>2 轮</span></div><div class="turn-list"><article class="turn turn-user"><div class="turn-meta"><strong>你（正方）</strong><span>现在</span></div><p>电网投资会随数据中心需求增长而加速。</p></article><article class="turn turn-challenger"><div class="turn-meta"><strong>反方（AI）</strong><span>现在</span></div><p>Flattened fallback must not be the primary presentation.</p></article></div></section><form class="composer" id="challenge-reply" aria-labelledby="challenge-reply-heading" aria-label="你的答复"><div class="composer-heading"><div><p class="eyebrow">02</p><h2 id="challenge-reply-heading">你的答复</h2></div><span class="availability is-available">现在可用</span></div><label class="field"><span class="field-label">你的回复</span><textarea class="text-input thesis-textarea" aria-label="回答挑战" maxLength="4000" placeholder="回答反方问题，说明证据、条件或保留意见……"></textarea></label><div class="composer-footer"><p>审查员提出问题后才能提交答复。草稿会保留在这里，直到你提交。</p><span>0/4000 个字符 · 4000 剩余</span><button class="button button-primary" type="submit" disabled="">提交回复</button></div></form></div><aside class="evidence-drawer" aria-labelledby="evidence-workspace-heading"><div class="drawer-heading"><div><p class="eyebrow">03</p><h2 id="evidence-workspace-heading">证据工作台</h2></div><span>0 条证据</span></div><div class="evidence-tabs" role="tablist" aria-label="证据工作台"><button class="" type="button" role="tab" aria-selected="false" aria-controls="evidence-search-panel">搜索候选来源</button><button class="is-active" type="button" role="tab" aria-selected="true" aria-controls="evidence-manual-panel">手动添加证据</button></div><form class="evidence-form" id="evidence-manual-panel" role="tabpanel" novalidate=""><p class="evidence-schema-note">SearchEvidenceBundle：A–C 必须填写安全 URL；D/E 可留空并标记为不可独立复核。标题、发布者、摘录和用户说明仍会校验；离线 fixture 也使用同一字段结构。</p><label class="field"><span class="field-label">URL（A–C 必填；D/E 可留空）</span><input class="text-input" placeholder="https://…（D/E 可留空）" aria-invalid="false" value=""/></label><label class="field"><span class="field-label">标题</span><input class="text-input" maxLength="240" aria-invalid="false" value=""/></label><label class="field"><span class="field-label">发布者</span><input class="text-input" maxLength="160" aria-invalid="false" value=""/></label><label class="field"><span class="field-label">发布日期（D/E 无 URL 可留空）</span><input class="text-input" type="date" aria-invalid="false" value="2026-08-09"/></label><label class="field"><span class="field-label">摘录</span><textarea class="text-input thesis-textarea" maxLength="4000" aria-invalid="false"></textarea></label><label class="field"><span class="field-label">用户说明</span><textarea class="text-input thesis-textarea" maxLength="1000" aria-invalid="false"></textarea></label><div class="evidence-form-row"><label class="field"><span class="field-label">方向</span><select class="text-input select-input"><option value="supports" selected="">支持</option><option value="challenges">反驳</option><option value="context">背景</option></select></label><label class="field"><span class="field-label">等级</span><select class="text-input select-input"><option>A</option><option selected="">B</option><option>C</option><option>D</option><option>E</option></select></label></div><button class="button button-secondary" type="submit">提交 SearchEvidenceBundle</button></form><div class="evidence-empty"><p>搜索不可用时，提交客户端证据 bundle；不会把标题按钮当作导入。</p></div><p class="evidence-note">来源等级表示来源与可核验性，不代表结论正确。</p></aside></div><section class="decision-panel" id="decision-thresholds" aria-labelledby="decision-thresholds-heading" aria-label="决策门槛"><div class="section-heading"><div><p class="eyebrow">04</p><h2 id="decision-thresholds-heading">决策门槛</h2></div><div class="rubric-total"><span>审查评分</span><strong>25</strong><span>/ 40</span></div></div><p class="decision-blocked" role="status">决策门槛未满足</p><p class="decision-intro">正常确认需要 30/40、核心准则均至少 3/4，以及一条安全且可独立复核的 A–C 级证据。</p><p class="threshold-guide">若评分低于门槛：将评分提高到 30/40。</p><div class="rubric-panel"><article class="rubric-cell"><span>前提清晰度</span><strong>3</strong><small>/ 4</small><p>观点已提交，但仍需确认关键假设。</p></article><article class="rubric-cell"><span>时间边界</span><strong>4</strong><small>/ 4</small><p>基线与 24 个月窗口明确。</p></article><article class="rubric-cell"><span>触发可观察性</span><strong>3</strong><small>/ 4</small><p>已提出可观察的需求、投资或订单信号。</p></article><article class="rubric-cell"><span>因果链</span><strong>3</strong><small>/ 4</small><p>触发事件与资产影响已连接。</p></article><article class="rubric-cell"><span>反事实与替代解释</span><strong>2</strong><small>/ 4</small><p>需要补充融资条件恶化或需求不及预期的替代路径。</p></article><article class="rubric-cell"><span>证据质量</span><strong>1</strong><small>/ 4</small><p>尚未附上可独立复核的公开证据。</p></article><article class="rubric-cell"><span>资产传导</span><strong>3</strong><small>/ 4</small><p>资产方向已提出，但传导强度仍需证据支持。</p></article><article class="rubric-cell"><span>市场已定价程度</span><strong>2</strong><small>/ 4</small><p>尚未证明市场是否已经反映该观点。</p></article><article class="rubric-cell"><span>可证伪性</span><strong>3</strong><small>/ 4</small><p>已有可观察指标，公开证据仍需补强。</p></article><article class="rubric-cell"><span>用户确认</span><strong>1</strong><small>/ 4</small><p>等待用户回复反方问题并选择确认方式。</p></article></div><div class="gate-grid"><article class="gate-card"><h3>正常继续</h3><p>正常确认需要 30/40、核心准则均至少 3/4，以及一条安全且可独立复核的 A–C 级证据。</p><div class="gate-unmet"><strong>仍需完成</strong><div class="gate-unmet-items"><p>将评分提高到 30/40。</p><p>添加一条安全、可独立复核的 A–C 级证据。</p></div></div></article><article class="gate-card"><h3>带保留意见确认</h3><p>带保留意见确认需要完成对话、有效证据、确认未解决问题和保留意见说明。</p><div class="gate-unmet"><strong>仍需完成</strong><div class="gate-unmet-items"><p>确认仍有未解决问题。</p><p>填写保留意见说明。</p></div></div></article></div><div class="reservation-controls"><label class="checkbox-field"><input type="checkbox"/><span>我确认仍存在未解决问题，并同意保存这些保留事项</span></label><label class="field"><span class="field-label">保留意见说明（必填）</span><textarea class="text-input thesis-textarea" maxLength="2000" placeholder="请写下尚未解决的问题或使用边界"></textarea></label></div><div class="challenge-actions"><div><button class="button button-primary" disabled="">继续生成世界线</button><p>将评分提高到 30/40。</p></div><div><button class="button button-caution" disabled="">带保留意见确认</button><p>确认仍有未解决问题。</p></div></div></section><p class="caution-copy">将保存未解决问题、AI 异议与私有证据声明。用户身份或业内经验不是公开证据；可作为私有前提单独标记。</p></section>"
+
+ ❯ src/challenge-panel.interaction.test.ts:165:20
+    163|     const markup = renderPanel({ status: "complete", turns: structured…
+    164| 
+    165|     expect(markup).toContain("关键反驳");
+       |                    ^
+    166|     expect(markup).toContain("需要你回答");
+    167|     expect(markup).toContain("待补证据");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/challenge-panel.interaction.test.ts > ChallengePanel information architecture > keeps the ten-item rubric available without forcing it into the primary reading path
+AssertionError: expected '<section class="content-column challe…' to contain '<details class="rubric-disclosure">'
+
+Expected: "<details class="rubric-disclosure">"
+Received: "<section class="content-column challenge-view"><header class="page-header"><div><h1>反方审查</h1></div><div class="header-action"><span class="operation-label"><span aria-hidden="true" class="status-dot status-sage"></span>审查完成 · 第 4 轮</span></div></header><section class="challenge-overview" aria-labelledby="challenge-progress-heading" aria-label="审查进度"><div><p class="eyebrow" id="challenge-progress-heading">审查进度</p><ol class="challenge-steps" role="progressbar" aria-label="审查进度" aria-valuemin="0" aria-valuemax="4" aria-valuenow="2"><li class="is-complete"><span>1</span><strong>阅读</strong></li><li class="is-complete"><span>2</span><strong>答复</strong></li><li class=""><span>3</span><strong>证据</strong></li><li class=""><span>4</span><strong>决策</strong></li></ol></div><aside class="next-action-card" aria-label="下一步"><p class="eyebrow">下一步</p><h2>带保留意见确认</h2><p>查看剩余门槛，然后确认并记录未解决问题。</p><a href="#decision-thresholds">带保留意见确认 ↓</a></aside></section><section class="review-status-card" aria-label="审查状态"><div><span aria-hidden="true" class="status-dot status-sage"></span><strong>审查完成 · 第 4 轮</strong></div><div class="review-status-actions"></div></section><div class="challenge-layout"><div class="challenge-main"><section class="transcript" aria-labelledby="challenge-dialogue-heading" aria-label="审查对话"><div class="section-heading"><div><p class="eyebrow">01</p><h2 id="challenge-dialogue-heading">审查对话</h2></div><span>3 轮</span></div><div class="turn-list"><article class="turn turn-user"><div class="turn-meta"><strong>你（正方）</strong><span>现在</span></div><p>电网投资会随数据中心需求增长而加速。</p></article><article class="turn turn-challenger"><div class="turn-meta"><strong>反方（AI）</strong><span>现在</span></div><p>哪些可观察证据会证明这条因果链正在发生？</p></article><article class="turn turn-user"><div class="turn-meta"><strong>你（正方）</strong><span>现在</span></div><p>我会用订单、并网和现金流数据验证。</p></article></div></section><form class="composer" id="challenge-reply" aria-labelledby="challenge-reply-heading" aria-label="你的答复"><div class="composer-heading"><div><p class="eyebrow">02</p><h2 id="challenge-reply-heading">你的答复</h2></div><span class="availability">暂不可用</span></div><label class="field"><span class="field-label">你的回复</span><textarea class="text-input thesis-textarea" aria-label="回答挑战" maxLength="4000" placeholder="回答反方问题，说明证据、条件或保留意见……" disabled=""></textarea></label><div class="composer-footer"><p>审查员提出问题后才能提交答复。草稿会保留在这里，直到你提交。</p><span>0/4000 个字符 · 4000 剩余</span><button class="button button-primary" type="submit" disabled="">提交回复</button></div></form></div><aside class="evidence-drawer" aria-labelledby="evidence-workspace-heading"><div class="drawer-heading"><div><p class="eyebrow">03</p><h2 id="evidence-workspace-heading">证据工作台</h2></div><span>0 条证据</span></div><div class="evidence-tabs" role="tablist" aria-label="证据工作台"><button class="" type="button" role="tab" aria-selected="false" aria-controls="evidence-search-panel">搜索候选来源</button><button class="is-active" type="button" role="tab" aria-selected="true" aria-controls="evidence-manual-panel">手动添加证据</button></div><form class="evidence-form" id="evidence-manual-panel" role="tabpanel" novalidate=""><p class="evidence-schema-note">SearchEvidenceBundle：A–C 必须填写安全 URL；D/E 可留空并标记为不可独立复核。标题、发布者、摘录和用户说明仍会校验；离线 fixture 也使用同一字段结构。</p><label class="field"><span class="field-label">URL（A–C 必填；D/E 可留空）</span><input class="text-input" placeholder="https://…（D/E 可留空）" aria-invalid="false" value=""/></label><label class="field"><span class="field-label">标题</span><input class="text-input" maxLength="240" aria-invalid="false" value=""/></label><label class="field"><span class="field-label">发布者</span><input class="text-input" maxLength="160" aria-invalid="false" value=""/></label><label class="field"><span class="field-label">发布日期（D/E 无 URL 可留空）</span><input class="text-input" type="date" aria-invalid="false" value="2026-08-09"/></label><label class="field"><span class="field-label">摘录</span><textarea class="text-input thesis-textarea" maxLength="4000" aria-invalid="false"></textarea></label><label class="field"><span class="field-label">用户说明</span><textarea class="text-input thesis-textarea" maxLength="1000" aria-invalid="false"></textarea></label><div class="evidence-form-row"><label class="field"><span class="field-label">方向</span><select class="text-input select-input"><option value="supports" selected="">支持</option><option value="challenges">反驳</option><option value="context">背景</option></select></label><label class="field"><span class="field-label">等级</span><select class="text-input select-input"><option>A</option><option selected="">B</option><option>C</option><option>D</option><option>E</option></select></label></div><button class="button button-secondary" type="submit">提交 SearchEvidenceBundle</button></form><div class="evidence-empty"><p>搜索不可用时，提交客户端证据 bundle；不会把标题按钮当作导入。</p></div><p class="evidence-note">来源等级表示来源与可核验性，不代表结论正确。</p></aside></div><section class="decision-panel" id="decision-thresholds" aria-labelledby="decision-thresholds-heading" aria-label="决策门槛"><div class="section-heading"><div><p class="eyebrow">04</p><h2 id="decision-thresholds-heading">决策门槛</h2></div><div class="rubric-total"><span>审查评分</span><strong>25</strong><span>/ 40</span></div></div><p class="decision-blocked" role="status">决策门槛未满足</p><p class="decision-intro">正常确认需要 30/40、核心准则均至少 3/4，以及一条安全且可独立复核的 A–C 级证据。</p><p class="threshold-guide">若评分低于门槛：将评分提高到 30/40。</p><div class="rubric-panel"><article class="rubric-cell"><span>前提清晰度</span><strong>3</strong><small>/ 4</small><p>观点已提交，但仍需确认关键假设。</p></article><article class="rubric-cell"><span>时间边界</span><strong>4</strong><small>/ 4</small><p>基线与 24 个月窗口明确。</p></article><article class="rubric-cell"><span>触发可观察性</span><strong>3</strong><small>/ 4</small><p>已提出可观察的需求、投资或订单信号。</p></article><article class="rubric-cell"><span>因果链</span><strong>3</strong><small>/ 4</small><p>触发事件与资产影响已连接。</p></article><article class="rubric-cell"><span>反事实与替代解释</span><strong>2</strong><small>/ 4</small><p>需要补充融资条件恶化或需求不及预期的替代路径。</p></article><article class="rubric-cell"><span>证据质量</span><strong>1</strong><small>/ 4</small><p>尚未附上可独立复核的公开证据。</p></article><article class="rubric-cell"><span>资产传导</span><strong>3</strong><small>/ 4</small><p>资产方向已提出，但传导强度仍需证据支持。</p></article><article class="rubric-cell"><span>市场已定价程度</span><strong>2</strong><small>/ 4</small><p>尚未证明市场是否已经反映该观点。</p></article><article class="rubric-cell"><span>可证伪性</span><strong>3</strong><small>/ 4</small><p>已有可观察指标，公开证据仍需补强。</p></article><article class="rubric-cell"><span>用户确认</span><strong>1</strong><small>/ 4</small><p>等待用户回复反方问题并选择确认方式。</p></article></div><div class="gate-grid"><article class="gate-card"><h3>正常继续</h3><p>正常确认需要 30/40、核心准则均至少 3/4，以及一条安全且可独立复核的 A–C 级证据。</p><div class="gate-unmet"><strong>仍需完成</strong><div class="gate-unmet-items"><p>将评分提高到 30/40。</p><p>添加一条安全、可独立复核的 A–C 级证据。</p></div></div></article><article class="gate-card"><h3>带保留意见确认</h3><p>带保留意见确认需要完成对话、有效证据、确认未解决问题和保留意见说明。</p><div class="gate-unmet"><strong>仍需完成</strong><div class="gate-unmet-items"><p>确认仍有未解决问题。</p><p>填写保留意见说明。</p></div></div></article></div><div class="reservation-controls"><label class="checkbox-field"><input type="checkbox"/><span>我确认仍存在未解决问题，并同意保存这些保留事项</span></label><label class="field"><span class="field-label">保留意见说明（必填）</span><textarea class="text-input thesis-textarea" maxLength="2000" placeholder="请写下尚未解决的问题或使用边界"></textarea></label></div><div class="challenge-actions"><div><button class="button button-primary" disabled="">继续生成世界线</button><p>将评分提高到 30/40。</p></div><div><button class="button button-caution" disabled="">带保留意见确认</button><p>确认仍有未解决问题。</p></div></div></section><p class="caution-copy">将保存未解决问题、AI 异议与私有证据声明。用户身份或业内经验不是公开证据；可作为私有前提单独标记。</p></section>"
+
+ ❯ src/challenge-panel.interaction.test.ts:175:20
+    173|     const markup = renderPanel({ status: "complete", turns: completedT…
+    174| 
+    175|     expect(markup).toContain('<details class="rubric-disclosure">');
+       |                    ^
+    176|     expect(markup).toContain("查看 10 项评分详情");
+    177|     expect(markup).not.toContain('<details class="rubric-disclosure" o…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  2 failed | 8 passed (10)
+      Tests  3 failed | 114 passed (117)
+   Start at  23:42:07
+   Duration  1.76s (transform 1.98s, setup 0ms, collect 4.97s, tests 613ms, environment 7ms, prepare 1.94s)
+
+/home/lxx/Foresightnine/src/apps/web:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @foresightnine/web@0.1.0 test: `vitest run --passWithNoTests -- api-runtime.error.test.ts challenge-panel.interaction.test.ts`
+Exit status 1
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+________ test_success_posts_chat_completion_and_returns_validated_draft ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7de035b02060>
+
+    def test_success_posts_chat_completion_and_returns_validated_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[tuple[str, str, dict[str, str], bytes, float]] = []
+    
+        def transport(method: str, url: str, headers: dict[str, str], body: bytes, timeout: float) -> HttpResponse:
+            calls.append((method, url, headers, body, timeout))
+            return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
+    
+        draft = provider(monkeypatch, transport).generate_challenge(request())
+        assert draft.claims == ("The dated scenario is recorded as a hypothesis.",)
+        assert draft.native_search_used is False
+        assert calls[0][0:2] == ("POST", "https://llm.example.test/v1/chat/completions")
+        request_body = json.loads(calls[0][3])
+        assert request_body["model"] == "test-model"
+>       assert "same natural language as input.claim" in request_body["messages"][1]["content"]
+E       assert 'same natural language as input.claim' in '{"prompt_version":"challenge-v1","task":"Return JSON only. Act as an adversarial reviewer, not a compliant assistant....ues":["string"],"citation_ids":["evidence id"],"public_fact_citation_ids":["evidence id"],"native_search_used":false}}'
+
+apps/api/tests/test_openai_compatible_provider.py:82: AssertionError
+_ test_opencode_native_search_provenance_requires_successful_tool_use_telemetry _
+
+    def test_opencode_native_search_provenance_requires_successful_tool_use_telemetry() -> None:
+        calls: list[tuple[list[str], str]] = []
+    
+        def runner(command: list[str], prompt: str, timeout: float, cancel: Event | None) -> subprocess.CompletedProcess[str]:
+            calls.append((command, prompt))
+            return completed({"output": payload(), "events": [{"type": "tool_use.part", "part": {"tool": "search", "state": {"status": "success"}}}], "usage": {"total_tokens": 120, "cost_usd": 0.001}})
+    
+        provider = OpenCodeDeepSeekFlashProvider(ProviderPolicy(max_cost_usd=0.01, retry_base_seconds=0), runner)
+        draft = provider.generate_challenge(request())
+        assert provider.supports_native_search is True
+        assert draft.native_search_used is True
+        assert calls[0][0] == ["opencode", "run", "--format", "json", "-m", "opencode-go/deepseek-v4-flash"]
+        assert "prompt_version" in calls[0][1] and "max_output_tokens" in calls[0][1]
+>       assert "same natural language as input.claim" in calls[0][1]
+E       assert 'same natural language as input.claim' in '{"prompt_version":"challenge-v1","task":"Return JSON only. Act as an adversarial reviewer, not a compliant assistant....ues":["string"],"citation_ids":["evidence id"],"public_fact_citation_ids":["evidence id"],"native_search_used":false}}'
+
+apps/api/tests/test_phase3_providers.py:153: AssertionError
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_success_posts_chat_completion_and_returns_validated_draft
+FAILED apps/api/tests/test_phase3_providers.py::test_opencode_native_search_provenance_requires_successful_tool_use_telemetry

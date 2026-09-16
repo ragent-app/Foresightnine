@@ -1,0 +1,9 @@
+foresightnine_pro_BASE_PLAN=monthly
+foresightnine_pro_STATE=DRAFT
+foresightnine_pro_PERIOD=P1M
+foresightnine_pro_US_PRICE_MATCH=True
+foresightnine_max_BASE_PLAN=monthly
+foresightnine_max_STATE=DRAFT
+foresightnine_max_PERIOD=P1M
+foresightnine_max_US_PRICE_MATCH=True
+BASELINE_RESULT=PASS_DRAFT_READY_FOR_ACTIVATION

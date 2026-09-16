@@ -1,0 +1,60 @@
+===== COMMAND: systemctl --user restart foresightnine-cloudflared.service =====
+EXIT_STATUS: 0
+===== COMMAND: systemctl --user is-active foresightnine-cloudflared.service =====
+active
+EXIT_STATUS: 0
+===== COMMAND: cloudflared tunnel info =====
+NAME:     [REDACTED]
+ID:       [REDACTED]
+CREATED:  2026-08-30 13:25:29.820071 +0000 UTC
+
+CONNECTOR ID                         CREATED              ARCHITECTURE VERSION  ORIGIN IP   EDGE             
+[REDACTED] 2026-08-31T14:49:59Z linux_amd64  2026.8.2 56.10.62.87 1xsin13, 1xsin17 
+2026-08-31T14:50:09Z WRN Your version 2026.8.2 is outdated. We recommend upgrading it to 2026.8.3
+EXIT_STATUS: 0
+===== COMMAND: public status probes =====
+URL: http://app.foresightnine.com/
+HTTP/1.1 200 OK
+Date: Mon, 31 Aug 2026 14:50:09 GMT
+Content-Type: text/html
+Transfer-Encoding: chunked
+Connection: keep-alive
+Cache-Control: no-cache
+content-security-policy: default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api-staging.foresightnine.com; worker-src 'self'; object-src 'none'
+cross-origin-opener-policy: same-origin
+URL: https://app.foresightnine.com/
+HTTP/2 200 
+date: Mon, 31 Aug 2026 14:50:10 GMT
+content-type: text/html
+cache-control: no-cache
+content-security-policy: default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api-staging.foresightnine.com; worker-src 'self'; object-src 'none'
+cross-origin-opener-policy: same-origin
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=a%2FMJUnhtmTJJffYB8jqpkTh7tAHWRFn3WUM9AKaPVDAT2uPjkb%2F9lJHwJoLWKPHfeU8oObBska6p5iL%2BIGR4dlAVBxOxquM4TgELuIksGETLSSUKy0svwn3fXzPWPn6a4WxRbA976Hc%3D"}]}
+permissions-policy: camera=(), microphone=(), geolocation=()
+URL: https://staging.foresightnine.com/
+HTTP/2 200 
+date: Mon, 31 Aug 2026 14:50:10 GMT
+content-type: text/html
+cache-control: no-cache
+content-security-policy: default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api-staging.foresightnine.com; worker-src 'self'; object-src 'none'
+cross-origin-opener-policy: same-origin
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=DxxZSWF1gm%2Bt9g%2FzA8xhi4w7GNztJw3Ex804Kh7GPTSz0tuw7R2zdi22evHKxnHqjUDIMsTctjYo1s3Rf3LVKlI8eXWoI3kfIS7%2BPyaHl9U7YNkqiFH2lspzISppSiZltY9%2BFRLiiDiIYkZc"}]}
+permissions-policy: camera=(), microphone=(), geolocation=()
+URL: https://staging.foresightnine.com/health
+HTTP/2 404 
+date: Mon, 31 Aug 2026 14:50:11 GMT
+cf-cache-status: DYNAMIC
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=ONs%2B5JMPh8AWK7McTZYpgzTsbOdE%2FwInw%2BuF0pUaXDYFUxGGXzJ7sxTfVird5KdWi9zUIOOXXZO%2BwtrMlR%2FHfdkCgDPi67uJ0WT3xco8gekJD5AgCyRP1zHADqnU8imyls1u0a6YtqjuejvK"}]}
+server: cloudflare
+cf-ray: a33cd89dc9b9aa7f-SIN
+alt-svc: h3=":443"; ma=86400
+URL: https://staging.foresightnine.com/v1/auth/providers
+HTTP/2 404 
+date: Mon, 31 Aug 2026 14:50:13 GMT
+cf-cache-status: DYNAMIC
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=%2BTPuCpPasdSwihas5QGUa9yfjirEkxx%2FYXuRG%2FpkbdrHov3hBucBtS4ba7SBi77vXCgQXLjK%2B5qhlNKYZpKB7HzvZh8a6uLbugw%2F1iLEGtm%2BLuKi2DZPjf8zRWV81YbnlzVbr8mrl5Eltkh%2B"}]}
+server: cloudflare
+cf-ray: a33cd8a98b425bbf-KIX
+alt-svc: h3=":443"; ma=86400

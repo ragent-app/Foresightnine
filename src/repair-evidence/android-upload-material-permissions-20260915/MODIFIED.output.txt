@@ -1,0 +1,6 @@
+foresightnine-upload.jks mode=600
+foresightnine-upload-2026-08-31.jks mode=600
+foresightnine-upload-2026-08-31.keystore-password.dpapi mode=600
+foresightnine-upload-2026-08-31.key-password.dpapi mode=600
+HASHES_UNCHANGED=True
+MODIFIED_RESULT=PASS_OWNER_ONLY

@@ -1,0 +1,19 @@
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/market-config-client.test.ts (7 tests) 20ms
+ ✓ src/methods-guide.test.ts (3 tests) 9ms
+ ✓ src/oauth-client.test.ts (7 tests) 24ms
+ ✓ src/api-runtime.error.test.ts (7 tests) 14ms
+ ✓ src/market-data.test.ts (1 test) 25ms
+ ✓ src/model-config-client.test.ts (10 tests) 32ms
+ ✓ src/search-client.test.ts (6 tests) 34ms
+ ✓ src/freshness.test.ts (9 tests) 82ms
+ ✓ src/challenge-panel.interaction.test.ts (16 tests) 115ms
+ ✓ src/app.test.ts (52 tests) 178ms
+
+ Test Files  10 passed (10)
+      Tests  118 passed (118)
+   Start at  23:52:10
+   Duration  1.68s (transform 1.89s, setup 0ms, collect 4.65s, tests 533ms, environment 3ms, prepare 1.94s)
+

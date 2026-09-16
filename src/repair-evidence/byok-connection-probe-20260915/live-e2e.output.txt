@@ -1,0 +1,13 @@
+REGISTER_HTTP=201
+SAVE_HTTP=200
+TEST_HTTP=200
+TEST_STATUS=ready
+SESSION_HTTP=201
+CHALLENGE_HTTP=503
+PERSONAL_REQUEST_RESULT=failed
+DELETE_SYNTHETIC_ACCOUNT_HTTP=200
+Traceback (most recent call last):
+  File "<stdin>", line 55, in <module>
+  File "/app/apps/api/.venv/lib/python3.13/site-packages/requests/models.py", line 1167, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 503 Server Error: Service Unavailable for url: http://127.0.0.1:8000/v1/challenges

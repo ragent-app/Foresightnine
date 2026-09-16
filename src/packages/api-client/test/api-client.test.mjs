@@ -162,6 +162,26 @@ test("path parameters are URL encoded before transport", async () => {
   assert.match(url, /v1\/operations\/op%2F1%20with%20space\/cancel$/u);
 });
 
+test("getChallenge forwards an encoded authoritative operation_id query", async () => {
+  let url = "";
+  const client = new ApiClient({ baseUrl: "https://api.example.test/base", fetcher: async (input) => {
+    url = String(input);
+    return jsonResponse(challengeResponse());
+  } });
+  await client.getChallenge("challenge/1 with space", { operationId: "operation/2 with space" });
+  assert.equal(url, "https://api.example.test/base/v1/challenges/challenge%2F1%20with%20space?operation_id=operation%2F2%20with%20space");
+});
+
+test("getChallenge omits operation_id when it is not supplied", async () => {
+  let url = "";
+  const client = new ApiClient({ baseUrl: "https://api.example.test", fetcher: async (input) => {
+    url = String(input);
+    return jsonResponse(challengeResponse());
+  } });
+  await client.getChallenge("challenge-1");
+  assert.equal(url, "https://api.example.test/v1/challenges/challenge-1");
+});
+
 test("SSE text helper validates replay frames and stream helper sends Last-Event-ID", async () => {
   const first = `id: op-1:1\nevent: operation.started\ndata: ${JSON.stringify(sseEvent(1))}\n\n`;
   const second = `id: op-1:2\nevent: operation.started\ndata: ${JSON.stringify(sseEvent(2))}\n\n`;

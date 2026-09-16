@@ -87,8 +87,8 @@ function challengeTurnsFor(viewpoint: string, language: AppState["language"]): r
 
 /** Replies are valid only after a started challenge has a usable transcript. */
 export function canSubmitReply(status: ChallengeStatus, turns: readonly TranscriptTurn[]): boolean {
-  if (!["streaming", "recovering"].includes(status) || !hasStartedChallenge(turns)) return false;
-  const challengerIndex = turns.findIndex((turn) => turn.author === "challenger");
+  if (!["streaming", "recovering", "complete"].includes(status) || !hasStartedChallenge(turns)) return false;
+  const challengerIndex = turns.reduce((latest, turn, index) => turn.author === "challenger" ? index : latest, -1);
   return challengerIndex >= 0 && !turns.slice(challengerIndex + 1).some((turn) => turn.author === "user");
 }
 
@@ -134,9 +134,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return { ...fresh, stage: "challenge", challengeStatus: "streaming", challengeTurns: action.server ? [{ id: "api-user-pending", author: "user", time: "现在", body: viewpoint }] : [...challengeTurnsFor(viewpoint, state.language)] };
     }
     case "set_reply_draft": return { ...state, replyDraft: action.draft };
+    case "begin_reply_submit": return action.body.trim().length === 0 || state.stage !== "challenge" || !canSubmitReply(state.challengeStatus, state.challengeTurns) ? state : { ...state, challengeStatus: "submitting_reply" };
     case "submit_reply": return action.body.trim().length === 0 || state.stage !== "challenge" || !canSubmitReply(state.challengeStatus, state.challengeTurns) ? state : { ...state, replyDraft: "", challengeStatus: "complete", fmStep: "反方审查完成", rubric: updateRubric(state.rubric, { [rubricLabel(state.language, "用户确认")]: { score: 3, rationale: state.language === "en" ? "The user answered the counterargument; a confirmation choice is still required." : "用户已回答反方问题，仍需选择确认方式。" } }), challengeTurns: [...state.challengeTurns, { id: `user-reply-${state.challengeTurns.length + 1}`, author: "user", time: "现在", body: action.body.trim() }] };
     case "challenge_complete": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasValidCompletedChallenge("complete", state.challengeTurns) ? { ...state, challengeStatus: "complete", fmStep: "反方审查完成" } : state;
-    case "challenge_cancel": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "cancelled", challengeTurns: [...state.challengeTurns, { id: `cancelled-${state.challengeTurns.length + 1}`, author: "system", time: "现在", body: "已取消生成；已接收内容和证据仍保留。" }] } : state;
+    case "challenge_cancel": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering" || state.challengeStatus === "submitting_reply") && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "cancelled", challengeTurns: [...state.challengeTurns, { id: `cancelled-${state.challengeTurns.length + 1}`, author: "system", time: "现在", body: "已取消生成；已接收内容和证据仍保留。" }] } : state;
     case "challenge_recover": return ["cancelled", "failed"].includes(state.challengeStatus) && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "recovering" } : state;
     case "challenge_fail": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "failed" } : state;
     case "add_evidence": return state.evidence.some((item) => item.evidence_id === action.evidence.evidence_id) ? state : { ...state, rubric: updateRubric(state.rubric, { [rubricLabel(state.language, "证据质量")]: { score: 3, rationale: state.language === "en" ? "Evidence is attached; source grade and reviewability remain explicit." : "已附上证据；来源等级与可复核状态仍保留。" }, [rubricLabel(state.language, "反事实与替代解释")]: { score: 3, rationale: state.language === "en" ? "Evidence is being used to test alternatives; continued review is required." : "证据已用于检验替代解释，仍需持续复核。" }, [rubricLabel(state.language, "市场已定价程度")]: { score: 3, rationale: state.language === "en" ? "Evidence is included in the priced-in review; it is not a fact judgment." : "证据已进入已定价程度审查，仍不是事实判断。" } }), evidence: [...state.evidence, action.evidence] };
@@ -160,7 +161,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "api_session_ready": return { ...state, apiSessionId: action.sessionId, apiError: "" };
     case "api_challenge_update": return { ...state, apiChallengeId: action.challengeId, challengeTurns: action.turns, rubric: action.rubric, challengeStatus: action.status, apiError: "", fmStep: action.status === "complete" ? "反方审查完成" : state.fmStep };
     case "api_worldlines_ready": return { ...state, serverBranches: action.branches, apiError: "" };
-    case "api_error": return { ...state, apiError: action.notice, ...(state.stage === "challenge" && state.challengeStatus === "streaming" ? { challengeStatus: "failed" as const } : {}) };
+    case "api_error": return { ...state, apiError: action.notice, ...(state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "submitting_reply" || state.challengeStatus === "recovering") ? { challengeStatus: "failed" as const } : {}) };
     case "api_cancel": return { ...state, challengeStatus: "cancelled", apiError: "" };
     case "reset": return { ...initialState, language: state.language, rubric: rubricFor(state.language) };
   }
@@ -234,8 +235,12 @@ export function canEnterStage(state: AppState, stage: AppState["stage"]): boolea
       return state.viewpoint.trim().length > 0 && parseCapital(state.capital) > 0;
     case "worldline":
       return canEnterWorldline(state);
-    case "fm":
-      return canEnterWorldline(state) && ((state.fmStatus === "complete" && state.fmResult !== null) || (state.stage === "worldline" && state.fmStatus !== "complete") || (state.stage === "fm" && (state.fmStatus === "computing" || state.fmStatus === "complete")));
+    case "fm": {
+      if (!canEnterWorldline(state)) return false;
+      if (state.fmStatus === "complete") return state.fmResult !== null;
+      if (state.stage === "worldline") return true;
+      return state.stage === "fm" && (state.fmStatus === "computing" || state.fmStatus === "failed" || state.fmStatus === "cancelled");
+    }
     case "portfolio":
     case "nav":
       return state.fmStatus === "complete" && state.fmResult !== null && canEnterWorldline(state);

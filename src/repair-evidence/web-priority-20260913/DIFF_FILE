@@ -1,0 +1,1351 @@
+BRANCH=master
+CHANGESET=account-scoped market provider credentials + same-origin production web + canonical host redirect + basic SEO
+
+--- a/src/apps/api/app/main.py
++++ b/src/apps/api/app/main.py
+@@ -98,6 +98,16 @@
+ from .oauth_identity import OAuthIdentity, OAuthSessionResponse
+ from .oauth_provider import OAuthProviderClient, OAuthProviderError
+ from .market_provider import MarketSnapshotRequest, build_snapshot_response
++from .market_credentials import (
++    AccountMarketDataSettings,
++    MarketCredentialCipher,
++    MarketCredentialError,
++    MarketDataConfigResponse,
++    MarketDataConfigUpdate,
++    MarketProviderTestRequest,
++    MarketProviderTestResponse,
++    StoredMarketDataConfig,
++)
+ from .local_auth import (
+     LocalAccount,
+     LocalAuthError,
+@@ -224,6 +234,7 @@
+     JsonDocumentRepository[BillingState],
+     JsonDocumentRepository[PurchaseRecord],
+     JsonDocumentRepository[UsageLedgerEntry],
++    JsonDocumentRepository[StoredMarketDataConfig],
+ ]:
+     """Build every API entity map with its canonical typed document loader."""
+     return (
+@@ -241,6 +252,7 @@
+         build_repository(config, "billing_states", value_loader=BillingState.model_validate),
+         build_repository(config, "billing_purchases", value_loader=PurchaseRecord.model_validate),
+         build_repository(config, "usage_ledger", value_loader=UsageLedgerEntry.model_validate),
++        build_repository(config, "market_data_configs", value_loader=StoredMarketDataConfig.model_validate),
+     )
+ 
+ 
+@@ -260,6 +272,7 @@
+     BILLING_STATES,
+     BILLING_PURCHASES,
+     USAGE_LEDGER,
++    MARKET_DATA_CONFIGS,
+ ) = _build_entity_repositories(storage_config)
+ operations = OperationManager(lifecycle_clock, store=build_operation_store(storage_config))
+ OPERATION_SESSIONS: dict[str, str] = {}
+@@ -269,6 +282,10 @@
+     USAGE_LEDGER,
+     cipher=PurchaseTokenCipher.from_environment(),
+ )
++market_data_settings = AccountMarketDataSettings(
++    MARKET_DATA_CONFIGS,
++    MarketCredentialCipher.from_environment(),
++)
+ 
+ 
+ def _assert_runtime_ready() -> None:
+@@ -279,6 +296,7 @@
+             ACCOUNTS.check_ready()
+             AUTH_SESSIONS.check_ready()
+             OAUTH_IDENTITIES.check_ready()
++            MARKET_DATA_CONFIGS.check_ready()
+             operations.store.check_ready()
+         except Exception as error:
+             raise RuntimeError("Persistent PostgreSQL state is not ready.") from error
+@@ -316,6 +334,7 @@
+     BILLING_STATES.clear()
+     BILLING_PURCHASES.clear()
+     USAGE_LEDGER.clear()
++    MARKET_DATA_CONFIGS.clear()
+     OPERATION_SESSIONS.clear()
+ 
+ 
+@@ -438,7 +457,7 @@
+     CORSMiddleware,
+     allow_origins=list(security_config.allowed_origins),
+     allow_credentials=False,
+-    allow_methods=["GET", "POST", "OPTIONS"],
++    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+     allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "Last-Event-ID", "X-Captcha-Token", "X-Session-ID"],
+     max_age=600,
+ )
+@@ -450,6 +469,16 @@
+     resolver=trusted_proxy_resolver,
+     cleanup=cleanup_expired_state,
+ )
++
++
++@app.middleware("http")
++async def canonical_web_host(request: Request, call_next: Any) -> Response:
++    """Keep the public apex as a path-preserving entry to the canonical app host."""
++    host = request.headers.get("host", "").partition(":")[0].lower()
++    if host in {"foresightnine.com", "www.foresightnine.com"}:
++        target = urlunsplit(("https", "app.foresightnine.com", request.url.path, request.url.query, ""))
++        return RedirectResponse(target, status_code=308, headers={"Cache-Control": "public, max-age=3600"})
++    return await call_next(request)
+ 
+ 
+ def _metadata(payload: dict[str, Any], ref_id: str, label: str, source_type: str = "model_inference") -> dict[str, Any]:
+@@ -820,9 +849,24 @@
+ 
+ 
+ @app.post("/snapshots", include_in_schema=False)
+-def market_snapshots(request: MarketSnapshotRequest) -> JSONResponse:
++def market_snapshots(
++    request: MarketSnapshotRequest,
++    authorization: str | None = Header(default=None, alias="Authorization"),
++) -> JSONResponse:
+     """Serve the bounded client market runtime without exposing a vendor API."""
+-    return JSONResponse(build_snapshot_response(request))
++    provider_order = None
++    provider_credentials: Mapping[str, str] = {}
++    if authorization:
++        account = _authenticated_account(authorization)
++        try:
++            provider_order, provider_credentials = market_data_settings.runtime(account.account_id)
++        except MarketCredentialError as error:
++            raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code == 503, retry_after=30) from error
++    return JSONResponse(build_snapshot_response(
++        request,
++        provider_order=provider_order,
++        provider_credentials=provider_credentials,
++    ))
+ 
+ 
+ def _local_auth_available() -> bool:
+@@ -902,6 +946,7 @@
+     try:
+         account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+         delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
++        market_data_settings.delete(account.account_id)
+     except LocalAuthError as error:
+         raise _local_auth_problem(error) from error
+     return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
+@@ -914,6 +959,7 @@
+     try:
+         account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+         delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
++        market_data_settings.delete(account.account_id)
+     except LocalAuthError as error:
+         raise _local_auth_problem(error) from error
+     return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
+@@ -1182,6 +1228,78 @@
+         return account
+     except LocalAuthError as error:
+         raise _local_auth_problem(error) from error
++
++
++def _market_credential_problem(error: MarketCredentialError) -> ApiProblem:
++    return ApiProblem(
++        error.status_code,
++        error.code,
++        error.message,
++        retryable=error.status_code == 503,
++        retry_after=30 if error.status_code == 503 else None,
++    )
++
++
++@app.get("/v1/account/market-data-config", response_model=MarketDataConfigResponse, include_in_schema=False)
++def get_market_data_config(
++    response: Response,
++    authorization: str | None = Header(default=None, alias="Authorization"),
++) -> MarketDataConfigResponse:
++    """Return account provider order and masked credential metadata only."""
++    account = _authenticated_account(authorization)
++    response.headers["Cache-Control"] = "no-store"
++    return market_data_settings.snapshot(account.account_id)
++
++
++@app.put("/v1/account/market-data-config", response_model=MarketDataConfigResponse, include_in_schema=False)
++def update_market_data_config(
++    request: MarketDataConfigUpdate,
++    response: Response,
++    authorization: str | None = Header(default=None, alias="Authorization"),
++) -> MarketDataConfigResponse:
++    """Encrypt account-owned provider keys and update the bounded fallback order."""
++    account = _authenticated_account(authorization)
++    response.headers["Cache-Control"] = "no-store"
++    try:
++        return market_data_settings.update(account.account_id, request, now=lifecycle_clock.now())
++    except MarketCredentialError as error:
++        raise _market_credential_problem(error) from error
++
++
++@app.post("/v1/account/market-data-config/test", response_model=MarketProviderTestResponse, include_in_schema=False)
++def test_market_data_provider(
++    request: MarketProviderTestRequest,
++    response: Response,
++    authorization: str | None = Header(default=None, alias="Authorization"),
++) -> MarketProviderTestResponse:
++    """Perform one bounded read through a saved provider without exposing diagnostics."""
++    account = _authenticated_account(authorization)
++    response.headers["Cache-Control"] = "no-store"
++    try:
++        _order, credentials = market_data_settings.runtime(account.account_id)
++    except MarketCredentialError as error:
++        raise _market_credential_problem(error) from error
++    cutoff = lifecycle_clock.now().date() - timedelta(days=1)
++    month_start = cutoff.replace(day=1)
++    year_start = cutoff.replace(month=1, day=1)
++    probe = MarketSnapshotRequest(
++        assetIds=["GRID"],
++        anchors={
++            "year_start": year_start.isoformat(),
++            "latest_month_start": month_start.isoformat(),
++            "latest_completed_session": cutoff.isoformat(),
++        },
++        cutoff=cutoff.isoformat(),
++        timezone="UTC",
++        requestedAt=lifecycle_clock.now().isoformat(),
++    )
++    payload = build_snapshot_response(
++        probe,
++        provider_order=(request.provider_id,),
++        provider_credentials={request.provider_id: credentials[request.provider_id]} if request.provider_id in credentials else {},
++    )
++    ready = any(item.get("status") in {"ok", "stale"} for item in payload.get("snapshots", []))
++    return MarketProviderTestResponse(provider_id=request.provider_id, status="ready" if ready else "unavailable")
+ 
+ 
+ @app.get("/v1/account", include_in_schema=False)
+
+--- a/src/apps/api/app/market_provider.py
++++ b/src/apps/api/app/market_provider.py
+@@ -453,6 +453,9 @@
+ 
+     endpoint = "https://stooq.com/q/d/l/"
+ 
++    def __init__(self, api_key: str | None = None) -> None:
++        self._api_key = api_key
++
+     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
+         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
+             raise ValueError("symbol is outside the fixed provider allowlist")
+@@ -466,7 +469,7 @@
+         # Stooq permits deployments with no key as well as deployments issued
+         # a server-side key.  Never accept this value from a client request or
+         # expose it in a bundle/log; it is injected only by the process env.
+-        api_key = os.getenv("FORESIGHTNINE_STOOQ_API_KEY", "").strip()
++        api_key = self._api_key if self._api_key is not None else os.getenv("FORESIGHTNINE_STOOQ_API_KEY", "").strip()
+         if api_key:
+             query_params["apikey"] = api_key
+         query = urlencode(query_params)
+@@ -608,10 +611,13 @@
+ 
+     endpoint = "https://www.alphavantage.co/query"
+ 
++    def __init__(self, api_key: str | None = None) -> None:
++        self._api_key = api_key
++
+     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
+         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
+             raise ValueError("symbol is outside the fixed provider allowlist")
+-        keys = _provider_keys("FORESIGHTNINE_ALPHAVANTAGE_API_KEY")
++        keys = (self._api_key,) if self._api_key is not None else _provider_keys("FORESIGHTNINE_ALPHAVANTAGE_API_KEY")
+         key = keys[int(sha256(symbol.encode("utf-8")).hexdigest(), 16) % len(keys)]
+         query = urlencode({"function": "TIME_SERIES_DAILY", "symbol": symbol, "outputsize": "full", "apikey": key})
+         return _reject_future_rows(_safe_alpha_vantage_rows(_bounded_get(f"{self.endpoint}?{query}", "application/json", 8)), cutoff)
+@@ -622,10 +628,13 @@
+ 
+     endpoint = "https://api.marketdata.app/v1/stocks/candles/D/"
+ 
++    def __init__(self, api_key: str | None = None) -> None:
++        self._api_key = api_key
++
+     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
+         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
+             raise ValueError("symbol is outside the fixed provider allowlist")
+-        key = _required_provider_key("FORESIGHTNINE_MARKETDATA_API_KEY")
++        key = self._api_key if self._api_key is not None else _required_provider_key("FORESIGHTNINE_MARKETDATA_API_KEY")
+         start = _fetch_start(anchors, cutoff)
+         query = urlencode({"from": start.isoformat(), "to": cutoff.isoformat(), "adjustdividends": "false"})
+         payload = _bounded_get(
+@@ -642,10 +651,13 @@
+ 
+     endpoint = "https://api.twelvedata.com/time_series"
+ 
++    def __init__(self, api_key: str | None = None) -> None:
++        self._api_key = api_key
++
+     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
+         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
+             raise ValueError("symbol is outside the fixed provider allowlist")
+-        key = _required_provider_key("FORESIGHTNINE_TWELVEDATA_API_KEY")
++        key = self._api_key if self._api_key is not None else _required_provider_key("FORESIGHTNINE_TWELVEDATA_API_KEY")
+         start = _fetch_start(anchors, cutoff)
+         query = urlencode({"symbol": symbol, "interval": "1day", "start_date": start.isoformat(), "end_date": cutoff.isoformat(), "order": "ASC", "timezone": "UTC"})
+         payload = _bounded_get(
+@@ -662,10 +674,13 @@
+ 
+     endpoint = "https://finnhub.io/api/v1/stock/candle"
+ 
++    def __init__(self, api_key: str | None = None) -> None:
++        self._api_key = api_key
++
+     def fetch(self, symbol: str, anchors: tuple[str, ...], cutoff: date) -> dict[date, float]:
+         if symbol not in ASSET_SYMBOLS.values() or not SYMBOL_PATTERN.fullmatch(symbol):
+             raise ValueError("symbol is outside the fixed provider allowlist")
+-        key = _required_provider_key("FORESIGHTNINE_FINNHUB_API_KEY")
++        key = self._api_key if self._api_key is not None else _required_provider_key("FORESIGHTNINE_FINNHUB_API_KEY")
+         start = _fetch_start(anchors, cutoff)
+         start_ts = int(datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc).timestamp())
+         end_ts = int(datetime.combine(cutoff + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc).timestamp())
+@@ -759,14 +774,14 @@
+     return features
+ 
+ 
+-def _adapter_for(provider_id: str) -> Any:
++def _adapter_for(provider_id: str, api_key: str | None = None) -> Any:
+     adapters: dict[str, Any] = {
+-        "market_data": MarketDataEvaluationAdapter(),
+-        "alpha_vantage": AlphaVantageEvaluationAdapter(),
+-        "twelve_data": TwelveDataEvaluationAdapter(),
+-        "finnhub": FinnhubEvaluationAdapter(),
++        "market_data": MarketDataEvaluationAdapter(api_key),
++        "alpha_vantage": AlphaVantageEvaluationAdapter(api_key),
++        "twelve_data": TwelveDataEvaluationAdapter(api_key),
++        "finnhub": FinnhubEvaluationAdapter(api_key),
+         "yahoo": YahooEvaluationAdapter(),
+-        "stooq": StooqEvaluationAdapter(),
++        "stooq": StooqEvaluationAdapter(api_key),
+     }
+     try:
+         return adapters[provider_id]
+@@ -839,7 +854,12 @@
+     return merged
+ 
+ 
+-def build_snapshot_response(request: MarketSnapshotRequest) -> dict[str, Any]:
++def build_snapshot_response(
++    request: MarketSnapshotRequest,
++    *,
++    provider_order: Sequence[str] | None = None,
++    provider_credentials: Mapping[str, str] | None = None,
++) -> dict[str, Any]:
+     """Return a client-compatible bundle fragment with explicit limitations."""
+ 
+     mode = os.getenv("FORESIGHTNINE_MARKET_PROVIDER_MODE", "unavailable").strip().lower()
+@@ -853,8 +873,19 @@
+         and os.getenv("FORESIGHTNINE_ENV", "development").strip().lower() != "production"
+         and _fx_manifest_allows("frankfurter")
+     )
+-    provider_ids = _admitted_price_providers() if evaluation_enabled else ()
+-    adapters = tuple((provider_id, _adapter_for(provider_id)) for provider_id in provider_ids)
++    admitted_provider_ids = _admitted_price_providers() if evaluation_enabled else ()
++    provider_ids = admitted_provider_ids if provider_order is None else tuple(
++        provider_id for provider_id in provider_order if provider_id in admitted_provider_ids
++    )
++    credential_overrides = provider_credentials or {}
++    adapters = tuple(
++        (
++            provider_id,
++            _adapter_for(provider_id, credential_overrides.get(provider_id)),
++            provider_id if provider_id not in credential_overrides else f"{provider_id}:account:{sha256(credential_overrides[provider_id].encode()).hexdigest()[:16]}",
++        )
++        for provider_id in provider_ids
++    )
+     provider_priority = {provider_id: index for index, provider_id in enumerate(provider_ids)}
+     consensus_mode = os.getenv("FORESIGHTNINE_MARKET_CONSENSUS_MODE", "priority").strip().lower()
+     if consensus_mode not in {"priority", "all"}:
+@@ -876,10 +907,10 @@
+         if adapters and symbol is not None:
+             failed_providers: list[str] = []
+             candidate_rows: dict[str, dict[date, float]] = {}
+-            for provider_id, adapter in adapters:
++            for provider_id, adapter, cache_provider_id in adapters:
+                 try:
+                     provider_result = _cached_provider_rows(
+-                        provider_id,
++                        cache_provider_id,
+                         adapter,
+                         symbol,
+                         tuple(request.anchors[anchor] for anchor in ANCHORS),
+
+--- a/src/apps/api/app/market_credentials.py
++++ b/src/apps/api/app/market_credentials.py
+@@ -0,0 +1,254 @@
++"""Account-scoped encrypted credentials for the admitted market-data chain."""
++from __future__ import annotations
++
++import base64
++from datetime import datetime, timezone
++import os
++from pathlib import Path
++from threading import RLock
++from typing import Any, Literal, Mapping
++
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
++
++MarketProviderId = Literal["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo"]
++MARKET_PROVIDER_ORDER: tuple[MarketProviderId, ...] = (
++    "market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo",
++)
++KEYED_MARKET_PROVIDERS = frozenset({"market_data", "alpha_vantage", "twelve_data", "finnhub"})
++PROVIDER_LABELS: Mapping[str, str] = {
++    "market_data": "Market Data",
++    "alpha_vantage": "Alpha Vantage",
++    "twelve_data": "Twelve Data",
++    "finnhub": "Finnhub",
++    "yahoo": "Yahoo Finance",
++}
++PROVIDER_ENV: Mapping[str, str] = {
++    "market_data": "FORESIGHTNINE_MARKETDATA_API_KEY",
++    "alpha_vantage": "FORESIGHTNINE_ALPHAVANTAGE_API_KEY",
++    "twelve_data": "FORESIGHTNINE_TWELVEDATA_API_KEY",
++    "finnhub": "FORESIGHTNINE_FINNHUB_API_KEY",
++}
++
++
++class MarketCredentialError(RuntimeError):
++    def __init__(self, status_code: int, code: str, message: str) -> None:
++        super().__init__(message)
++        self.status_code = status_code
++        self.code = code
++        self.message = message
++
++
++class StoredMarketProvider(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    provider_id: MarketProviderId
++    enabled: bool = True
++    encrypted_api_key: str | None = Field(default=None, min_length=32, max_length=4096)
++    key_hint: str | None = Field(default=None, min_length=4, max_length=12)
++
++
++class StoredMarketDataConfig(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    schema_version: Literal["v1"] = "v1"
++    account_id: str = Field(min_length=8, max_length=80)
++    fallback_order: list[MarketProviderId]
++    providers: list[StoredMarketProvider]
++    updated_at: datetime
++
++    @model_validator(mode="after")
++    def validate_provider_set(self) -> "StoredMarketDataConfig":
++        expected = set(MARKET_PROVIDER_ORDER)
++        if len(self.fallback_order) != len(expected) or set(self.fallback_order) != expected:
++            raise ValueError("fallback_order must contain every supported provider exactly once")
++        ids = [item.provider_id for item in self.providers]
++        if len(ids) != len(expected) or set(ids) != expected:
++            raise ValueError("providers must contain every supported provider exactly once")
++        return self
++
++
++class MarketProviderUpdate(BaseModel):
++    model_config = ConfigDict(extra="forbid", strict=True)
++    provider_id: MarketProviderId
++    enabled: bool
++    api_key: str | None = Field(default=None, min_length=1, max_length=512)
++    clear_api_key: bool = False
++
++    @model_validator(mode="after")
++    def validate_key_action(self) -> "MarketProviderUpdate":
++        if self.api_key is not None and self.clear_api_key:
++            raise ValueError("api_key and clear_api_key are mutually exclusive")
++        if self.provider_id not in KEYED_MARKET_PROVIDERS and (self.api_key is not None or self.clear_api_key):
++            raise ValueError("this provider does not accept an API key")
++        if self.api_key is not None and self.api_key != self.api_key.strip():
++            raise ValueError("api_key must not contain surrounding whitespace")
++        return self
++
++
++class MarketDataConfigUpdate(BaseModel):
++    model_config = ConfigDict(extra="forbid", strict=True)
++    fallback_order: list[MarketProviderId]
++    providers: list[MarketProviderUpdate]
++
++    @model_validator(mode="after")
++    def validate_provider_set(self) -> "MarketDataConfigUpdate":
++        expected = set(MARKET_PROVIDER_ORDER)
++        if len(self.fallback_order) != len(expected) or set(self.fallback_order) != expected:
++            raise ValueError("fallback_order must contain every supported provider exactly once")
++        ids = [item.provider_id for item in self.providers]
++        if len(ids) != len(expected) or set(ids) != expected:
++            raise ValueError("providers must contain every supported provider exactly once")
++        return self
++
++
++class MarketProviderSummary(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    provider_id: MarketProviderId
++    display_name: str
++    enabled: bool
++    requires_key: bool
++    personal_key_configured: bool
++    platform_available: bool
++    key_hint: str | None = None
++
++
++class MarketDataConfigResponse(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    schema_version: Literal["v1"] = "v1"
++    fallback_order: list[MarketProviderId]
++    providers: list[MarketProviderSummary]
++    updated_at: datetime | None = None
++
++
++class MarketProviderTestRequest(BaseModel):
++    model_config = ConfigDict(extra="forbid", strict=True)
++    provider_id: MarketProviderId
++
++
++class MarketProviderTestResponse(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    provider_id: MarketProviderId
++    status: Literal["ready", "unavailable"]
++
++
++class MarketCredentialCipher:
++    def __init__(self, key: bytes) -> None:
++        if len(key) not in {16, 24, 32}:
++            raise ValueError("market credential encryption key must be 16, 24, or 32 bytes")
++        self._key = key
++
++    @classmethod
++    def from_environment(cls) -> "MarketCredentialCipher | None":
++        path = os.getenv("FORESIGHTNINE_MARKET_CREDENTIAL_ENCRYPTION_KEY_FILE", "").strip()
++        if not path:
++            return None
++        try:
++            raw = Path(path).read_bytes().strip()
++            if len(raw) not in {16, 24, 32}:
++                raw = base64.urlsafe_b64decode(raw + b"=" * (-len(raw) % 4))
++            return cls(raw)
++        except (OSError, ValueError) as error:
++            raise MarketCredentialError(503, "market_credential_storage_unavailable", "Market credential storage is unavailable.") from error
++
++    def encrypt(self, account_id: str, provider_id: str, api_key: str) -> str:
++        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
++        nonce = os.urandom(12)
++        aad = f"{account_id}:{provider_id}:v1".encode()
++        encrypted = AESGCM(self._key).encrypt(nonce, api_key.encode(), aad)
++        return base64.urlsafe_b64encode(nonce + encrypted).decode()
++
++    def decrypt(self, account_id: str, provider_id: str, encrypted: str) -> str:
++        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
++        try:
++            payload = base64.urlsafe_b64decode(encrypted.encode())
++            aad = f"{account_id}:{provider_id}:v1".encode()
++            return AESGCM(self._key).decrypt(payload[:12], payload[12:], aad).decode()
++        except Exception as error:
++            raise MarketCredentialError(503, "market_credential_storage_unavailable", "Market credential storage is unavailable.") from error
++
++
++def _hint(api_key: str) -> str:
++    return f"••••{api_key[-4:]}"
++
++
++class AccountMarketDataSettings:
++    def __init__(self, repository: Any, cipher: MarketCredentialCipher | None) -> None:
++        self.repository = repository
++        self.cipher = cipher
++        self._lock = RLock()
++
++    def _stored(self, account_id: str) -> StoredMarketDataConfig | None:
++        value = self.repository.get(account_id)
++        return value if value is None or isinstance(value, StoredMarketDataConfig) else StoredMarketDataConfig.model_validate(value)
++
++    def snapshot(self, account_id: str) -> MarketDataConfigResponse:
++        stored = self._stored(account_id)
++        records = {item.provider_id: item for item in stored.providers} if stored else {}
++        providers = []
++        for provider_id in MARKET_PROVIDER_ORDER:
++            record = records.get(provider_id)
++            platform_available = provider_id == "yahoo" or bool(os.getenv(PROVIDER_ENV.get(provider_id, ""), "").strip())
++            providers.append(MarketProviderSummary(
++                provider_id=provider_id,
++                display_name=PROVIDER_LABELS[provider_id],
++                enabled=record.enabled if record else True,
++                requires_key=provider_id in KEYED_MARKET_PROVIDERS,
++                personal_key_configured=bool(record and record.encrypted_api_key),
++                platform_available=platform_available,
++                key_hint=record.key_hint if record else None,
++            ))
++        return MarketDataConfigResponse(
++            fallback_order=list(stored.fallback_order) if stored else list(MARKET_PROVIDER_ORDER),
++            providers=providers,
++            updated_at=stored.updated_at if stored else None,
++        )
++
++    def update(self, account_id: str, request: MarketDataConfigUpdate, *, now: datetime | None = None) -> MarketDataConfigResponse:
++        current_time = now or datetime.now(timezone.utc)
++        def operation() -> MarketDataConfigResponse:
++            with self._lock:
++                existing = self._stored(account_id)
++                existing_by_id = {item.provider_id: item for item in existing.providers} if existing else {}
++                records = []
++                for item in request.providers:
++                    previous = existing_by_id.get(item.provider_id)
++                    encrypted = previous.encrypted_api_key if previous else None
++                    hint = previous.key_hint if previous else None
++                    if item.clear_api_key:
++                        encrypted = None
++                        hint = None
++                    elif item.api_key is not None:
++                        if self.cipher is None:
++                            raise MarketCredentialError(503, "market_credential_storage_unavailable", "Market credential storage is unavailable.")
++                        encrypted = self.cipher.encrypt(account_id, item.provider_id, item.api_key)
++                        hint = _hint(item.api_key)
++                    records.append(StoredMarketProvider(provider_id=item.provider_id, enabled=item.enabled, encrypted_api_key=encrypted, key_hint=hint))
++                stored = StoredMarketDataConfig(account_id=account_id, fallback_order=request.fallback_order, providers=records, updated_at=current_time)
++                self.repository.put(account_id, stored)
++                return self.snapshot(account_id)
++        locker = getattr(self.repository, "with_advisory_lock", None)
++        return locker(f"market-config:{account_id}", operation) if callable(locker) else operation()
++
++    def runtime(self, account_id: str) -> tuple[tuple[str, ...] | None, dict[str, str]]:
++        stored = self._stored(account_id)
++        if stored is None:
++            return None, {}
++        records = {item.provider_id: item for item in stored.providers}
++        order = tuple(provider_id for provider_id in stored.fallback_order if records[provider_id].enabled)
++        credentials: dict[str, str] = {}
++        for provider_id in order:
++            encrypted = records[provider_id].encrypted_api_key
++            if encrypted:
++                if self.cipher is None:
++                    raise MarketCredentialError(503, "market_credential_storage_unavailable", "Market credential storage is unavailable.")
++                credentials[provider_id] = self.cipher.decrypt(account_id, provider_id, encrypted)
++        return order, credentials
++
++    def delete(self, account_id: str) -> None:
++        self.repository.delete(account_id)
++
++
++__all__ = [
++    "AccountMarketDataSettings", "MarketCredentialCipher", "MarketCredentialError",
++    "MarketDataConfigResponse", "MarketDataConfigUpdate", "MarketProviderTestRequest",
++    "MarketProviderTestResponse", "StoredMarketDataConfig",
++]
+
+--- a/src/apps/api/tests/test_market_credentials.py
++++ b/src/apps/api/tests/test_market_credentials.py
+@@ -0,0 +1,96 @@
++from __future__ import annotations
++
++from datetime import datetime, timezone
++
++import pytest
++from fastapi.testclient import TestClient
++
++from app.market_credentials import (
++    AccountMarketDataSettings,
++    MARKET_PROVIDER_ORDER,
++    MarketCredentialCipher,
++    MarketCredentialError,
++    MarketDataConfigUpdate,
++)
++from app.storage import InMemoryDocumentRepository
++from app.main import MARKET_DATA_CONFIGS, app, market_data_settings, reset_state
++
++
++def _request(*, key: str | None = "personal-secret-1234", clear: bool = False) -> MarketDataConfigUpdate:
++    providers = []
++    for provider_id in MARKET_PROVIDER_ORDER:
++        item = {"provider_id": provider_id, "enabled": provider_id != "finnhub"}
++        if provider_id == "alpha_vantage" and key is not None:
++            item["api_key"] = key
++        if provider_id == "alpha_vantage" and clear:
++            item["clear_api_key"] = True
++        providers.append(item)
++    return MarketDataConfigUpdate.model_validate({"fallback_order": list(reversed(MARKET_PROVIDER_ORDER)), "providers": providers})
++
++
++def test_account_market_credentials_are_encrypted_masked_and_ordered() -> None:
++    repository = InMemoryDocumentRepository()
++    service = AccountMarketDataSettings(repository, MarketCredentialCipher(b"x" * 32))
++    now = datetime(2026, 9, 13, tzinfo=timezone.utc)
++
++    response = service.update("account_123456", _request(), now=now)
++
++    assert response.fallback_order == list(reversed(MARKET_PROVIDER_ORDER))
++    alpha = next(item for item in response.providers if item.provider_id == "alpha_vantage")
++    assert alpha.personal_key_configured is True
++    assert alpha.key_hint == "••••1234"
++    stored = repository["account_123456"].model_dump_json()
++    assert "personal-secret-1234" not in stored
++    order, credentials = service.runtime("account_123456")
++    assert "finnhub" not in order
++    assert credentials == {"alpha_vantage": "personal-secret-1234"}
++
++
++def test_existing_key_is_preserved_then_can_be_removed() -> None:
++    repository = InMemoryDocumentRepository()
++    service = AccountMarketDataSettings(repository, MarketCredentialCipher(b"y" * 32))
++    service.update("account_123456", _request())
++    service.update("account_123456", _request(key=None))
++    assert service.runtime("account_123456")[1]["alpha_vantage"] == "personal-secret-1234"
++
++    service.update("account_123456", _request(key=None, clear=True))
++    assert "alpha_vantage" not in service.runtime("account_123456")[1]
++
++
++def test_cipher_binds_ciphertext_to_account_and_provider() -> None:
++    cipher = MarketCredentialCipher(b"z" * 32)
++    encrypted = cipher.encrypt("account_123456", "alpha_vantage", "secret")
++    assert cipher.decrypt("account_123456", "alpha_vantage", encrypted) == "secret"
++    with pytest.raises(MarketCredentialError):
++        cipher.decrypt("account_other", "alpha_vantage", encrypted)
++
++
++def test_writing_a_key_fails_closed_without_encryption_configuration() -> None:
++    service = AccountMarketDataSettings(InMemoryDocumentRepository(), None)
++    with pytest.raises(MarketCredentialError) as caught:
++        service.update("account_123456", _request())
++    assert caught.value.status_code == 503
++
++
++def test_authenticated_config_route_never_returns_key_and_delete_cleans_it(monkeypatch) -> None:
++    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
++    monkeypatch.setattr(market_data_settings, "cipher", MarketCredentialCipher(b"r" * 32))
++    reset_state()
++    client = TestClient(app)
++    registered = client.post("/v1/auth/local/register", json={"email": "market@example.test", "password": "correct horse battery staple!"})
++    assert registered.status_code == 201
++    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
++
++    initial = client.get("/v1/account/market-data-config", headers=headers)
++    assert initial.status_code == 200
++    body = _request().model_dump(mode="json", exclude_none=True)
++    saved = client.put("/v1/account/market-data-config", json=body, headers=headers)
++    assert saved.status_code == 200, saved.text
++    assert "personal-secret-1234" not in saved.text
++    assert next(item for item in saved.json()["providers"] if item["provider_id"] == "alpha_vantage")["key_hint"] == "••••1234"
++    account_id = registered.json()["account"]["account_id"]
++    assert "personal-secret-1234" not in MARKET_DATA_CONFIGS[account_id].model_dump_json()
++
++    deleted = client.delete("/v1/auth/account", headers=headers)
++    assert deleted.status_code == 200
++    assert MARKET_DATA_CONFIGS.get(account_id) is None
+
+--- a/src/apps/web/index.html
++++ b/src/apps/web/index.html
+@@ -4,8 +4,17 @@
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <meta name="theme-color" content="#f7f2e9" />
++    <meta name="description" content="ForesightNine 将投资观点、反方审查、证据、世界线和组合模拟整理为可复核的研究流程。" />
++    <meta name="robots" content="index,follow,max-image-preview:large" />
++    <link rel="canonical" href="https://app.foresightnine.com/" />
++    <meta property="og:type" content="website" />
++    <meta property="og:site_name" content="ForesightNine" />
++    <meta property="og:title" content="ForesightNine · 可复核的情景研究" />
++    <meta property="og:description" content="从观点、证据和世界线到组合模拟，保留完整研究路径。" />
++    <meta property="og:url" content="https://app.foresightnine.com/" />
++    <meta name="twitter:card" content="summary" />
+     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23a94325'/%3E%3Cpath d='M18 46V18h28v7H27v5h16v7H27v9z' fill='%23fffaf5'/%3E%3C/svg%3E" />
+-    <title>ForesightNine · 公开研究模式</title>
++    <title>ForesightNine · 可复核的情景研究与组合模拟</title>
+   </head>
+   <body>
+     <div id="root"></div>
+
+--- a/src/apps/web/vite.config.ts
++++ b/src/apps/web/vite.config.ts
+@@ -43,7 +43,7 @@
+ }
+ 
+ const stagingSecurityHeaders = {
+-  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api-staging.foresightnine.com; worker-src 'self'; object-src 'none'",
++  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'",
+   "Cross-Origin-Opener-Policy": "same-origin",
+   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+   "Referrer-Policy": "no-referrer",
+@@ -65,7 +65,7 @@
+     // keep Vite's host allowlist closed to arbitrary forwarded Host headers.
+     preview: {
+       host: "127.0.0.1",
+-      allowedHosts: ["staging.foresightnine.com"],
++      allowedHosts: ["app.foresightnine.com", "foresightnine.com", "www.foresightnine.com", "staging.foresightnine.com"],
+       headers: stagingSecurityHeaders,
+     },
+   };
+
+--- a/src/apps/web/src/App.tsx
++++ b/src/apps/web/src/App.tsx
+@@ -19,6 +19,7 @@
+ import { configuredMarketDataRuntimeConfig } from "./runtime-config";
+ import { createMarketRuntimeController } from "@foresightnine/market-data";
+ import { clearOAuthSession, configuredOAuthReturnUri, deleteOAuthAccount, exchangeOAuthTicket, fetchAccountBillingSummary, logoutOAuthSession, oauthStartUrl, parseOAuthCallbackUrl, readOAuthSession, saveOAuthSession, type AccountBillingSummary, type OAuthSession } from "./oauth-client";
++import { authenticatedMarketFetcher } from "./market-config-client";
+ import type { Currency, EvidenceDraft, EvidenceView, FreshnessContext, Language, Stage } from "./types";
+ 
+ const DRAFT_KEY = "foresightnine.web.draft.v1";
+@@ -63,13 +64,13 @@
+ export function App() {
+   const [state, dispatch] = useReducer(reducer, initialState);
+   const [draftHydrated, setDraftHydrated] = useState(false);
++  const apiBaseUrl = configuredApiBaseUrl();
+   const apiClient = useMemo(() => createWebApiClient(), []);
+-  const marketRuntime = useMemo(() => createMarketRuntimeController(), []);
++  const marketRuntime = useMemo(() => createMarketRuntimeController(apiBaseUrl ? { fetcher: authenticatedMarketFetcher(apiBaseUrl, readOAuthSession) } : {}), [apiBaseUrl]);
+   const marketConfig = useMemo(() => configuredMarketDataRuntimeConfig(), []);
+   const [marketDataState, setMarketDataState] = useState(marketRuntime.getState());
+   const [marketAssets, setMarketAssets] = useState(ASSET_FIXTURES);
+   const marketDataAsOf = marketDataState.bundle?.cutoff ?? MARKET_DATA_AS_OF;
+-  const apiBaseUrl = configuredApiBaseUrl();
+   const oauthReturnUri = configuredOAuthReturnUri();
+   const [oauthSession, setOAuthSession] = useState<OAuthSession | null>(null);
+   const [billingSummary, setBillingSummary] = useState<AccountBillingSummary | null>(null);
+@@ -320,7 +321,7 @@
+   const methodsExport = useCallback(() => { downloadText("foresightnine-methods.txt", state.language === "en" ? "ForesightNine methodology\n\nProbabilities are revisable judgments, not facts.\nScenario simulation is not a forecast or return promise.\n" : "ForesightNine 方法说明\n\n概率是可修订判断，不是事实。\n情景模拟，不是预测或收益承诺。\n", "text/plain;charset=utf-8"); dispatch({ type: "export_notice", notice: "方法说明已导出。" }); }, [state.language]);
+ 
+   const visibleStage = safeStageFor(state);
+-  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset }, oauthReadiness, { session: oauthSession, onStart: oauthReturnUri ? startOAuth : undefined, onLogout: logoutOAuth, onDelete: deleteOAuth, billingSummary });
++  const content = renderStage(visibleStage, state, dispatch, { startChallenge, cancelChallenge, retryChallenge, recoverChallenge, addEvidence, submitReply, confirm, computeFm, cancelFm, exportJson, exportCsv, exportPath, methodsExport, rows, viewpointBranches, setViewpoint, reset }, oauthReadiness, { session: oauthSession, onStart: oauthReturnUri ? startOAuth : undefined, onLogout: logoutOAuth, onDelete: deleteOAuth, billingSummary, apiBaseUrl });
+   const inspector = renderInspector(visibleStage, state, rows, () => dispatch({ type: "toggle_drawdown" }), state.language);
+   const marketStatusLabel = state.language === "en" ? `Data: ${marketDataState.mode}/${marketDataState.status} · three anchors` : `数据：${marketDataState.mode}/${marketDataState.status} · 三个时点锚点`;
+   return <LanguageProvider language={state.language} setLanguage={(language) => dispatch({ type: "set_language", language })}><AppShell stage={visibleStage} onStage={navigateTo} canNavigate={(stage) => canEnterStage(state, stage)} inspector={inspector} oauthProviders={oauthReadiness.providers} oauthReadinessStatus={oauthReadiness.status} onOAuthStart={oauthReturnUri ? startOAuth : undefined} oauthSession={oauthSession} onOAuthLogout={logoutOAuth} onOAuthDelete={deleteOAuth} billingSummary={billingSummary}><div className="top-status"><span><StatusDot tone={apiMode === "api" ? "blue" : "sage"} /> {t(state.language, apiMode === "api" ? "API 模式 · 服务端挑战" : "离线/模拟模式 · 无远程模型")}</span><span>{state.language === "en" ? `Data cutoff ${marketDataAsOf}` : `数据截止 ${marketDataAsOf}`}</span><span>{marketStatusLabel}</span>{oauthNotice ? <span className="export-notice" role="alert">{oauthNotice}</span> : null}{state.apiError ? <span className="export-notice" role="alert">{state.apiError}</span> : null}{state.exportNotice ? <span className="export-notice" role="status">{t(state.language, state.exportNotice)}</span> : null}</div>{content}{visibleStage === "thesis" ? <SocialLoginPanel className="mobile-social-login" providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} onStart={oauthReturnUri ? startOAuth : undefined} session={oauthSession} onLogout={logoutOAuth} onDelete={deleteOAuth} billingSummary={billingSummary} /> : null}</AppShell></LanguageProvider>;
+@@ -328,7 +329,7 @@
+ 
+ interface Handlers { readonly startChallenge: () => void; readonly cancelChallenge: () => void; readonly retryChallenge: () => void; readonly recoverChallenge: () => void; readonly addEvidence: (draft: EvidenceDraft) => void; readonly submitReply: (body: string) => void; readonly confirm: (confirmation: "confirmed" | "reserved") => void; readonly computeFm: () => void; readonly cancelFm: () => void; readonly exportJson: () => void; readonly exportCsv: () => void; readonly exportPath: () => void; readonly methodsExport: () => void; readonly rows: ReturnType<typeof allocationRows>; readonly viewpointBranches: ReturnType<typeof makeBranches>; readonly setViewpoint: (viewpoint: string) => void; readonly reset: () => void; }
+ 
+-interface OAuthHandlers { readonly session: OAuthSession | null; readonly onStart?: ((provider: "google" | "github") => void) | undefined; readonly onLogout: () => void; readonly onDelete: () => void; readonly billingSummary: AccountBillingSummary | null; }
++interface OAuthHandlers { readonly session: OAuthSession | null; readonly onStart?: ((provider: "google" | "github") => void) | undefined; readonly onLogout: () => void; readonly onDelete: () => void; readonly billingSummary: AccountBillingSummary | null; readonly apiBaseUrl: string | null; }
+ 
+ function renderStage(stage: Stage, state: ReturnType<typeof reducer>, dispatch: React.Dispatch<Parameters<typeof reducer>[1]>, handlers: Handlers, oauthReadiness: OAuthReadiness, oauth: OAuthHandlers) {
+   switch (stage) {
+@@ -338,7 +339,7 @@
+     case "fm": return <FmPanel status={state.fmStatus} progress={state.fmProgress} step={state.fmStep} resultReady={Boolean(state.fmResult)} onCompute={handlers.computeFm} onCancel={handlers.cancelFm} onPortfolio={() => dispatch({ type: "set_stage", stage: "portfolio" })} />;
+     case "portfolio": return <PortfolioPanel mode={state.portfolioMode} currency={state.currency} rows={handlers.rows} capital={parseCapital(state.capital)} selectedBranch={state.selectedBranch} branches={handlers.viewpointBranches} stress={state.stressScenario} onMode={(mode) => dispatch({ type: "set_mode", mode })} onStress={(scenario) => dispatch({ type: "set_stress", scenario })} onCompute={handlers.computeFm} onNav={() => dispatch({ type: "set_stage", stage: "nav" })} onExport={(kind) => kind === "json" ? handlers.exportJson() : handlers.exportCsv()} fmReady={Boolean(state.fmResult)} canCompute={canStartFm(state)} canNavigate={canEnterStage(state, "nav")} />;
+     case "nav": return <NavPanel branches={handlers.viewpointBranches} selected={state.selectedBranch} onSelect={(branch) => dispatch({ type: "select_branch", branch })} stress={state.stressScenario} onExport={handlers.exportPath} drawdownVisible={state.drawdownVisible} onToggleDrawdown={() => dispatch({ type: "toggle_drawdown" })} />;
+-    case "console": return <ConsolePanel onExport={handlers.methodsExport} providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} onOAuthStart={oauth.onStart} oauthSession={oauth.session} onOAuthLogout={oauth.onLogout} onOAuthDelete={oauth.onDelete} billingSummary={oauth.billingSummary} />;
++    case "console": return <ConsolePanel onExport={handlers.methodsExport} providers={oauthReadiness.providers} readinessStatus={oauthReadiness.status} onOAuthStart={oauth.onStart} oauthSession={oauth.session} onOAuthLogout={oauth.onLogout} onOAuthDelete={oauth.onDelete} billingSummary={oauth.billingSummary} apiBaseUrl={oauth.apiBaseUrl} />;
+   }
+ }
+ 
+
+--- a/src/apps/web/src/components/MethodsPanel.tsx
++++ b/src/apps/web/src/components/MethodsPanel.tsx
+@@ -3,6 +3,7 @@
+ import { SocialLoginPanel, type OAuthProviderAvailability, type OAuthReadinessStatus, type OAuthProvider } from "./SocialLoginPanel";
+ import { t, useLanguage } from "../i18n";
+ import type { AccountBillingSummary, OAuthSession } from "../oauth-client";
++import { MarketDataConfigPanel } from "./MarketDataConfigPanel";
+ 
+ interface ConsoleProps {
+   readonly onExport: () => void;
+@@ -13,6 +14,7 @@
+   readonly onOAuthLogout?: () => void;
+   readonly onOAuthDelete?: () => void;
+   readonly billingSummary?: AccountBillingSummary | null;
++  readonly apiBaseUrl?: string | null;
+ }
+ const evidenceGrades: readonly (readonly [string, string, string])[] = [
+   ["A", "原始数据、监管文件、公司公告", "来自政府、监管、央行、国际组织、主流学术不期明的公开材料"],
+@@ -21,9 +23,9 @@
+   ["D", "用户内部经验或不可外部验证信息", "可作为私有前提单独标记"],
+   ["E", "模型推断", "不直接来自可核验的外部来源"],
+ ];
+-export function ConsolePanel({ onExport, providers, readinessStatus, onOAuthStart, oauthSession, onOAuthLogout, onOAuthDelete, billingSummary }: ConsoleProps) {
++export function ConsolePanel({ onExport, providers, readinessStatus, onOAuthStart, oauthSession, onOAuthLogout, onOAuthDelete, billingSummary, apiBaseUrl = null }: ConsoleProps) {
+   const { language } = useLanguage();
+   const billingStatus = billingSummary?.plan === "max" ? "Max" : billingSummary?.plan === "pro" ? "Pro" : "Free";
+   const billingCopy = billingSummary ? `${billingStatus} · ${billingSummary.quota_remaining.toLocaleString()} / ${billingSummary.quota_limit.toLocaleString()} tokens · ${billingSummary.provider_model}` : t(language, "Google Play 月度订阅已配置：Pro 每月 3000 万 token，Max 每月 5 亿 token。商品需在 Play Console 激活后才可购买；会员权益由服务端验证。");
+-  return <section className="content-column methods-view"><Header eyebrow={t(language, "可选账户登录")} title={t(language, "研究控制台")} action={<Button variant="secondary" onClick={onExport}>↓ {t(language, "下载方法说明")}</Button>} /><p className="lead">{t(language, "账户状态、模型路由和产品边界都在这里明确呈现；未配置项不会模拟为可用服务。")}</p><SocialLoginPanel className="console-login" providers={providers} readinessStatus={readinessStatus} onStart={onOAuthStart} session={oauthSession} onLogout={onOAuthLogout} onDelete={onOAuthDelete} billingSummary={billingSummary} /><section className="console-grid" aria-label={t(language, "控制台状态")}><article><p className="eyebrow">{t(language, "模型提供方路由")}</p><h2>{t(language, "服务端 OpenAI-compatible · 本机 Cline pool")}</h2><span className="console-status">{billingSummary?.provider_model ?? t(language, "已配置")}</span><p>{t(language, "研究请求通过服务端 OpenAI-compatible 适配器路由到本机 Cline pool；模型密钥不会下发到设备。")}</p></article><article><p className="eyebrow">{t(language, "个人 OpenAI 兼容提供方")}</p><h2>{t(language, "预留接口")}</h2><span className="console-status">{t(language, "尚未配置")}</span><p>{t(language, "未来版本可通过加密的服务端凭据仓配置兼容端点和模型选择；本构建没有 BYOK 输入、持久化或网络调用。")}</p></article><article><p className="eyebrow">{t(language, "订阅与账单")}</p><h2>Google Play</h2><span className="console-status">{billingSummary ? billingStatus : t(language, "已配置")}</span><p>{billingCopy}</p></article></section><nav className="method-nav" aria-label={t(language, "研究方法导航")}><a href="#evidence">1 {t(language, "观点审查")}</a><a href="#evidence">2 {t(language, "证据等级")}</a><a href="#probability">3 {t(language, "世界线概率")}</a><a href="#fm-method">4 {t(language, "FM 因子模型")}</a><a href="#public">5 {t(language, "公开版安全层")}</a><a href="#risk">6 {t(language, "风险与限制")}</a></nav><section id="evidence" className="method-section"><h2>2 {t(language, "证据等级")}</h2><p>{t(language, "所有证据在使用前被分级；级别不代表正确性，仅表示来源与可核验性。")}</p><div className="evidence-scale">{evidenceGrades.map(([grade, title, desc]) => <div key={grade}><span className={`grade grade-${grade}`}>{grade}</span><strong>{t(language, title)}</strong><small>{t(language, desc)}</small></div>)}</div><p className="method-note">{t(language, "等级表示来源与可核验性，不代表结论正确；D/E 不得表述为公开事实。")}</p></section><section id="probability" className="method-section split-section"><div><h2>3 {t(language, "世界线概率")}</h2><p><i>P(H)</i> {t(language, "是前提成立的先验概率；")}<i>P(W | H)</i> {t(language, "是在假设成立条件下世界线发生的条件概率；")}<i>P(H∩W)</i> {t(language, "用于排序与组合。")}</p><Tag tone="accent">{t(language, "区间优先")} · model_estimate_unvalidated</Tag></div><div className="equation">P(H ∩ W) = P(H) × P(W | H)<br /><small>{t(language, "联合区间按配置精度重新计算")}</small></div></section><section id="fm-method" className="method-section split-section"><div><h2>4 {t(language, "组合双层输出")}</h2><h3>FM Raw（{t(language, "实验层")}）</h3><p>{t(language, "保留原始因子、假设、参数与结果，不做迎合性或可读性改写。")}</p></div><div id="public"><h3 className="accent-heading">Public Default（{t(language, "公开层")})</h3><p>{t(language, "在不覆盖 Raw 的前提下，叠加集中度、流动性、可实施性与冲击约束，显示每项调整理由。")}</p></div></section><section id="risk" className="risk-box"><span aria-hidden="true">♢</span><div><h2>{t(language, "风险与限制")}</h2><p>{t(language, "本产品用于情景研究与教育，不构成投资建议；不连接券商、不下单、不托管资金。")}</p><p>{t(language, "所有结果基于公开信息、用户输入与模型推断，存在重大不确定性与误差风险。")}</p></div></section><Disclosure /></section>;
++  return <section className="content-column methods-view"><Header eyebrow={t(language, "可选账户登录")} title={t(language, "研究控制台")} action={<Button variant="secondary" onClick={onExport}>↓ {t(language, "下载方法说明")}</Button>} /><p className="lead">{t(language, "账户状态、模型路由和产品边界都在这里明确呈现；未配置项不会模拟为可用服务。")}</p><SocialLoginPanel className="console-login" providers={providers} readinessStatus={readinessStatus} onStart={onOAuthStart} session={oauthSession} onLogout={onOAuthLogout} onDelete={onOAuthDelete} billingSummary={billingSummary} /><MarketDataConfigPanel apiBaseUrl={apiBaseUrl} session={oauthSession ?? null} /><section className="console-grid" aria-label={t(language, "控制台状态")}><article><p className="eyebrow">{t(language, "模型提供方路由")}</p><h2>{t(language, "服务端 OpenAI-compatible · 本机 Cline pool")}</h2><span className="console-status">{billingSummary?.provider_model ?? t(language, "已配置")}</span><p>{t(language, "研究请求通过服务端 OpenAI-compatible 适配器路由到本机 Cline pool；模型密钥不会下发到设备。")}</p></article><article><p className="eyebrow">{t(language, "金融数据处理")}</p><h2>{t(language, "多源 fallback · 三时点")}</h2><span className="console-status">{t(language, "服务端校验")}</span><p>{t(language, "平台数据源与个人加密 Key 共用同一标准化、缓存、新鲜度和缺失数据校验；不会把失败数据伪装为当前值。")}</p></article><article><p className="eyebrow">{t(language, "订阅与账单")}</p><h2>Google Play</h2><span className="console-status">{billingSummary ? billingStatus : t(language, "已配置")}</span><p>{billingCopy}</p></article></section><nav className="method-nav" aria-label={t(language, "研究方法导航")}><a href="#evidence">1 {t(language, "观点审查")}</a><a href="#evidence">2 {t(language, "证据等级")}</a><a href="#probability">3 {t(language, "世界线概率")}</a><a href="#fm-method">4 {t(language, "FM 因子模型")}</a><a href="#public">5 {t(language, "公开版安全层")}</a><a href="#risk">6 {t(language, "风险与限制")}</a></nav><section id="evidence" className="method-section"><h2>2 {t(language, "证据等级")}</h2><p>{t(language, "所有证据在使用前被分级；级别不代表正确性，仅表示来源与可核验性。")}</p><div className="evidence-scale">{evidenceGrades.map(([grade, title, desc]) => <div key={grade}><span className={`grade grade-${grade}`}>{grade}</span><strong>{t(language, title)}</strong><small>{t(language, desc)}</small></div>)}</div><p className="method-note">{t(language, "等级表示来源与可核验性，不代表结论正确；D/E 不得表述为公开事实。")}</p></section><section id="probability" className="method-section split-section"><div><h2>3 {t(language, "世界线概率")}</h2><p><i>P(H)</i> {t(language, "是前提成立的先验概率；")}<i>P(W | H)</i> {t(language, "是在假设成立条件下世界线发生的条件概率；")}<i>P(H∩W)</i> {t(language, "用于排序与组合。")}</p><Tag tone="accent">{t(language, "区间优先")} · model_estimate_unvalidated</Tag></div><div className="equation">P(H ∩ W) = P(H) × P(W | H)<br /><small>{t(language, "联合区间按配置精度重新计算")}</small></div></section><section id="fm-method" className="method-section split-section"><div><h2>4 {t(language, "组合双层输出")}</h2><h3>FM Raw（{t(language, "实验层")}）</h3><p>{t(language, "保留原始因子、假设、参数与结果，不做迎合性或可读性改写。")}</p></div><div id="public"><h3 className="accent-heading">Public Default（{t(language, "公开层")})</h3><p>{t(language, "在不覆盖 Raw 的前提下，叠加集中度、流动性、可实施性与冲击约束，显示每项调整理由。")}</p></div></section><section id="risk" className="risk-box"><span aria-hidden="true">♢</span><div><h2>{t(language, "风险与限制")}</h2><p>{t(language, "本产品用于情景研究与教育，不构成投资建议；不连接券商、不下单、不托管资金。")}</p><p>{t(language, "所有结果基于公开信息、用户输入与模型推断，存在重大不确定性与误差风险。")}</p></div></section><Disclosure /></section>;
+ }
+
+--- a/src/apps/web/src/components/SocialLoginPanel.tsx
++++ b/src/apps/web/src/components/SocialLoginPanel.tsx
+@@ -39,8 +39,10 @@
+     ? `${session.provider === "google" ? "Google" : "GitHub"} · ${session.account.email}`
+     : readinessStatus === "loading"
+     ? (language === "en" ? "Checking server OAuth readiness…" : "正在确认服务端登录状态…")
+-    : readinessStatus === "ready" && anyEnabled
+-      ? (language === "en" ? "Server sign-in is ready when this build has an explicit callback destination." : "服务端登录已就绪；此版本还需要显式配置回调地址。")
++    : readinessStatus === "ready" && anyEnabled && onStart
++      ? (language === "en" ? "Google and GitHub sign-in are ready." : "Google 和 GitHub 登录已就绪。")
++      : readinessStatus === "ready" && anyEnabled
++        ? (language === "en" ? "Server sign-in is ready; this build needs a callback destination." : "服务端登录已就绪；此版本需要配置回调地址。")
+       : t(language, "登录服务尚未配置；你可以继续匿名研究，本地草稿不会因该状态上传。");
+   const planName = billingSummary?.plan === "max" ? "Max" : billingSummary?.plan === "pro" ? "Pro" : "Free";
+   const quotaLabel = billingSummary ? `${billingSummary.quota_remaining.toLocaleString()} / ${billingSummary.quota_limit.toLocaleString()} tokens` : "";
+
+--- a/src/apps/web/src/components/MarketDataConfigPanel.tsx
++++ b/src/apps/web/src/components/MarketDataConfigPanel.tsx
+@@ -0,0 +1,109 @@
++import { useEffect, useMemo, useState } from "react";
++import { Button, Input, StatusDot } from "./Controls";
++import type { OAuthSession } from "../oauth-client";
++import {
++  fetchMarketDataConfig,
++  saveMarketDataConfig,
++  testMarketDataProvider,
++  type MarketDataConfig,
++  type MarketProviderDraft,
++  type MarketProviderId,
++} from "../market-config-client";
++import { useLanguage } from "../i18n";
++
++interface Props {
++  readonly apiBaseUrl: string | null;
++  readonly session: OAuthSession | null;
++  readonly onSaved?: () => void;
++}
++
++type TestState = Readonly<Record<string, "testing" | "ready" | "unavailable">>;
++
++export function MarketDataConfigPanel({ apiBaseUrl, session, onSaved }: Props) {
++  const { language } = useLanguage();
++  const [config, setConfig] = useState<MarketDataConfig | null>(null);
++  const [order, setOrder] = useState<readonly MarketProviderId[]>([]);
++  const [enabled, setEnabled] = useState<Readonly<Record<string, boolean>>>({});
++  const [keys, setKeys] = useState<Readonly<Record<string, string>>>({});
++  const [clearKeys, setClearKeys] = useState<Readonly<Record<string, boolean>>>({});
++  const [status, setStatus] = useState<"idle" | "loading" | "saving" | "saved" | "error">("idle");
++  const [tests, setTests] = useState<TestState>({});
++  const [dragged, setDragged] = useState<MarketProviderId | null>(null);
++
++  useEffect(() => {
++    if (!apiBaseUrl || !session) { setConfig(null); setOrder([]); setStatus("idle"); return; }
++    const controller = new AbortController();
++    setStatus("loading");
++    void fetchMarketDataConfig(apiBaseUrl, session, controller.signal).then((next) => {
++      if (controller.signal.aborted) return;
++      setConfig(next);
++      setOrder(next.fallback_order);
++      setEnabled(Object.fromEntries(next.providers.map((item) => [item.provider_id, item.enabled])));
++      setKeys({}); setClearKeys({}); setStatus("idle");
++    }).catch(() => { if (!controller.signal.aborted) setStatus("error"); });
++    return () => controller.abort();
++  }, [apiBaseUrl, session]);
++
++  const byId = useMemo(() => new Map(config?.providers.map((item) => [item.provider_id, item]) ?? []), [config]);
++  const drafts = (): readonly MarketProviderDraft[] => order.map((providerId) => ({
++    provider_id: providerId,
++    enabled: enabled[providerId] ?? true,
++    ...(keys[providerId]?.trim() ? { api_key: keys[providerId].trim() } : {}),
++    ...(clearKeys[providerId] ? { clear_api_key: true } : {}),
++  }));
++  const persist = async (): Promise<MarketDataConfig> => {
++    if (!apiBaseUrl || !session) throw new Error("Sign-in required");
++    const next = await saveMarketDataConfig(apiBaseUrl, session, order, drafts());
++    setConfig(next); setOrder(next.fallback_order);
++    setEnabled(Object.fromEntries(next.providers.map((item) => [item.provider_id, item.enabled])));
++    setKeys({}); setClearKeys({}); onSaved?.();
++    return next;
++  };
++  const save = (): void => {
++    setStatus("saving");
++    void persist().then(() => setStatus("saved")).catch(() => setStatus("error"));
++  };
++  const test = (providerId: MarketProviderId): void => {
++    if (!apiBaseUrl || !session) return;
++    setStatus("saving"); setTests((current) => ({ ...current, [providerId]: "testing" }));
++    void persist().then(() => testMarketDataProvider(apiBaseUrl, session, providerId)).then((result) => {
++      setStatus("saved"); setTests((current) => ({ ...current, [providerId]: result }));
++    }).catch(() => { setStatus("error"); setTests((current) => ({ ...current, [providerId]: "unavailable" })); });
++  };
++  const move = (providerId: MarketProviderId, direction: -1 | 1): void => {
++    setOrder((current) => {
++      const index = current.indexOf(providerId); const target = index + direction;
++      if (index < 0 || target < 0 || target >= current.length) return current;
++      const copy = [...current]; [copy[index], copy[target]] = [copy[target]!, copy[index]!]; return copy;
++    });
++  };
++  const dropBefore = (target: MarketProviderId): void => {
++    if (!dragged || dragged === target) return;
++    setOrder((current) => {
++      const copy = current.filter((item) => item !== dragged); copy.splice(copy.indexOf(target), 0, dragged); return copy;
++    });
++    setDragged(null);
++  };
++
++  if (!session) return <section className="market-config-panel"><div><p className="eyebrow">{language === "en" ? "Market data sources" : "金融数据源"}</p><h2>{language === "en" ? "Sign in to use your API keys" : "登录后配置你的 API Key"}</h2><p>{language === "en" ? "The platform fallback remains available without saving browser credentials." : "平台 fallback 仍可使用；浏览器不会保存或回显你的密钥。"}</p></div></section>;
++  if (status === "loading" || !config) return <section className="market-config-panel" aria-busy="true"><StatusDot /> {language === "en" ? "Loading market data settings…" : "正在读取金融数据源配置…"}</section>;
++
++  return <section className="market-config-panel" aria-labelledby="market-config-title">
++    <div className="market-config-heading"><div><p className="eyebrow">{language === "en" ? "Market data sources" : "金融数据源"}</p><h2 id="market-config-title">{language === "en" ? "Personal fallback chain" : "个人数据源 fallback"}</h2><p>{language === "en" ? "Your encrypted key overrides the matching platform credential. Drag or use the arrow buttons to set priority." : "个人 Key 会优先替代同一数据源的平台凭据；拖动或使用箭头调整优先级。"}</p></div><Button variant="primary" type="button" disabled={status === "saving"} onClick={save}>{status === "saving" ? (language === "en" ? "Saving…" : "保存中…") : (language === "en" ? "Save sources" : "保存数据源")}</Button></div>
++    <ol className="provider-order">
++      {order.map((providerId, index) => {
++        const provider = byId.get(providerId); if (!provider) return null;
++        const testState = tests[providerId];
++        return <li key={providerId} draggable onDragStart={() => setDragged(providerId)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropBefore(providerId)} className="provider-card">
++          <div className="provider-rank" aria-hidden="true">{index + 1}</div>
++          <div className="provider-main"><div className="provider-title"><strong>{provider.display_name}</strong><span>{provider.personal_key_configured && !clearKeys[providerId] ? provider.key_hint : provider.platform_available ? (language === "en" ? "Platform fallback" : "平台 fallback") : (language === "en" ? "Key required" : "需要 Key")}</span></div>
++            <label className="provider-toggle"><input type="checkbox" checked={enabled[providerId] ?? true} onChange={(event) => setEnabled((current) => ({ ...current, [providerId]: event.target.checked }))} /> {language === "en" ? "Enabled" : "启用"}</label>
++            {provider.requires_key ? <div className="provider-key-row"><Input type="password" autoComplete="off" value={keys[providerId] ?? ""} onChange={(event) => { setKeys((current) => ({ ...current, [providerId]: event.target.value })); setClearKeys((current) => ({ ...current, [providerId]: false })); }} placeholder={provider.personal_key_configured ? (language === "en" ? "Leave blank to keep saved key" : "留空则保留已保存 Key") : (language === "en" ? "Paste provider API key" : "填写数据源 API Key")} aria-label={`${provider.display_name} API key`} />{provider.personal_key_configured ? <Button variant="quiet" type="button" onClick={() => { setKeys((current) => ({ ...current, [providerId]: "" })); setClearKeys((current) => ({ ...current, [providerId]: true })); }}>{language === "en" ? "Remove key" : "移除 Key"}</Button> : null}</div> : null}
++          </div>
++          <div className="provider-actions"><Button variant="quiet" type="button" disabled={index === 0} onClick={() => move(providerId, -1)} aria-label={`${provider.display_name} ${language === "en" ? "move up" : "上移"}`}>↑</Button><Button variant="quiet" type="button" disabled={index === order.length - 1} onClick={() => move(providerId, 1)} aria-label={`${provider.display_name} ${language === "en" ? "move down" : "下移"}`}>↓</Button><Button variant="secondary" type="button" disabled={status === "saving" || !(enabled[providerId] ?? true)} onClick={() => test(providerId)}>{testState === "testing" ? (language === "en" ? "Testing…" : "测试中…") : (language === "en" ? "Save & test" : "保存并测试")}</Button>{testState && testState !== "testing" ? <span className={`provider-test provider-test-${testState}`}><StatusDot tone={testState === "ready" ? "sage" : "warning"} />{testState === "ready" ? (language === "en" ? "Ready" : "可用") : (language === "en" ? "Unavailable" : "暂不可用")}</span> : null}</div>
++        </li>;
++      })}
++    </ol>
++    <p className={`market-config-notice ${status === "error" ? "is-error" : ""}`} role="status">{status === "saved" ? (language === "en" ? "Saved. New research calculations will use this order." : "已保存；新的研究计算将按此顺序请求。") : status === "error" ? (language === "en" ? "The settings request failed. Existing settings were kept." : "配置请求失败；原有设置保持不变。") : (language === "en" ? "Keys are encrypted on the server and are never returned to this page." : "密钥由服务端加密保存，本页面不会读取密钥原文。")}</p>
++  </section>;
++}
+
+--- a/src/apps/web/src/runtime-config.ts
++++ b/src/apps/web/src/runtime-config.ts
+@@ -1,7 +1,7 @@
+ import { normalizeApiBaseUrl } from "@foresightnine/api-client";
+ import { normalizeMarketProviderUrl, type MarketRuntimeConfig } from "@foresightnine/market-data";
+ 
+-export const STAGING_API_BASE_URL = "https://api-staging.foresightnine.com";
++export const APP_API_BASE_URL = "https://app.foresightnine.com";
+ 
+ export function configuredApiBaseUrlFromEnvironment(environment: { readonly canonical?: unknown; readonly legacy?: unknown }): string | null {
+   const configured = typeof environment.canonical === "string" && environment.canonical.trim().length > 0
+@@ -25,7 +25,7 @@
+   if (configured !== null || hasExplicitApiBaseUrl(environment)) return configured;
+   // Vitest must remain deterministic/offline; deployed builds use staging only
+   // when neither supported API override is present.
+-  return import.meta.env.MODE === "test" ? null : STAGING_API_BASE_URL;
++  return import.meta.env.MODE === "test" ? null : APP_API_BASE_URL;
+ }
+ 
+ export function configuredMarketDataRuntimeConfigFromEnvironment(environment: { readonly mode?: unknown; readonly baseUrl?: unknown }): MarketRuntimeConfig {
+
+--- a/src/apps/web/src/search-client.test.ts
++++ b/src/apps/web/src/search-client.test.ts
+@@ -2,7 +2,7 @@
+ import { createMarketRuntimeController } from "@foresightnine/market-data";
+ import { selectedCandidateDraft } from "./components/ChallengePanel";
+ import { evidenceHash } from "./fixtures";
+-import { configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment, configuredMarketDataRuntimeConfigFromEnvironment, STAGING_API_BASE_URL } from "./runtime-config";
++import { APP_API_BASE_URL, configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment, configuredMarketDataRuntimeConfigFromEnvironment } from "./runtime-config";
+ import { clientBundleFallback, searchEvidenceCandidates } from "./search-client";
+ import type { EvidenceDraft, SearchCandidate } from "./types";
+ 
+@@ -22,7 +22,7 @@
+ 
+ describe("project search candidate boundary", () => {
+   it("keeps the staging default out of deterministic test mode while allowing explicit overrides", () => {
+-    expect(STAGING_API_BASE_URL).toBe("https://api-staging.foresightnine.com");
++    expect(APP_API_BASE_URL).toBe("https://app.foresightnine.com");
+     expect(configuredApiBaseUrl()).toBeNull();
+     expect(configuredApiBaseUrlFromEnvironment({ canonical: "http://127.0.0.1:8000", legacy: undefined })).toBe("http://127.0.0.1:8000");
+   });
+
+--- a/src/apps/web/src/styles.css
++++ b/src/apps/web/src/styles.css
+@@ -76,3 +76,33 @@
+ .data-table { overflow-x: auto; }
+ .data-table table { min-width: 780px; }
+ .rail-footer a { color: inherit; text-underline-offset: 3px; }
++
++/* Account-scoped market provider settings. */
++.market-config-panel { margin: 28px 0; padding: 24px; border: 1px solid var(--strong-border); border-radius: 6px; background: rgb(255 252 247 / .72); }
++.market-config-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 18px; }
++.market-config-heading h2 { margin: 0 0 8px; font: 500 25px/1.25 "Noto Serif SC", Georgia, serif; }
++.market-config-heading p:last-child { max-width: 680px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
++.provider-order { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
++.provider-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
++.provider-card[draggable="true"] { cursor: grab; }
++.provider-card[draggable="true"]:active { cursor: grabbing; }
++.provider-rank { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--strong-border); border-radius: 50%; color: var(--accent); font-weight: 700; }
++.provider-main { min-width: 0; }
++.provider-title { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
++.provider-title span { color: var(--muted); font-size: 11px; }
++.provider-toggle { color: var(--muted); font-size: 12px; }
++.provider-key-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
++.provider-key-row .text-input { min-height: 40px; padding: 8px 10px; }
++.provider-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: wrap; max-width: 260px; }
++.provider-actions .button { min-height: 36px; padding-block: 6px; }
++.provider-test { display: inline-flex; align-items: center; white-space: nowrap; color: var(--muted); font-size: 11px; }
++.provider-test-ready { color: var(--sage); }
++.provider-test-unavailable, .market-config-notice.is-error { color: #812b20; }
++.market-config-notice { margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
++@media (max-width: 760px) {
++  .market-config-panel { padding: 17px; }
++  .market-config-heading { display: grid; }
++  .provider-card { grid-template-columns: 34px minmax(0, 1fr); }
++  .provider-actions { grid-column: 2; justify-content: flex-start; max-width: none; }
++  .provider-key-row { align-items: stretch; flex-direction: column; }
++}
+
+--- a/src/apps/web/src/market-config-client.ts
++++ b/src/apps/web/src/market-config-client.ts
+@@ -0,0 +1,107 @@
++import type { OAuthSession } from "./oauth-client";
++
++export type MarketProviderId = "market_data" | "alpha_vantage" | "twelve_data" | "finnhub" | "yahoo";
++
++export interface MarketProviderSummary {
++  readonly provider_id: MarketProviderId;
++  readonly display_name: string;
++  readonly enabled: boolean;
++  readonly requires_key: boolean;
++  readonly personal_key_configured: boolean;
++  readonly platform_available: boolean;
++  readonly key_hint?: string;
++}
++
++export interface MarketDataConfig {
++  readonly schema_version: "v1";
++  readonly fallback_order: readonly MarketProviderId[];
++  readonly providers: readonly MarketProviderSummary[];
++  readonly updated_at?: string;
++}
++
++export interface MarketProviderDraft {
++  readonly provider_id: MarketProviderId;
++  readonly enabled: boolean;
++  readonly api_key?: string;
++  readonly clear_api_key?: boolean;
++}
++
++function endpoint(apiBaseUrl: string, suffix = ""): string {
++  return new URL(`v1/account/market-data-config${suffix}`, `${apiBaseUrl.replace(/\/+$/, "")}/`).toString();
++}
++
++async function checkedJson(response: Response): Promise<unknown> {
++  if (!response.ok) throw new Error(`market-data-config HTTP ${response.status}`);
++  return response.json() as Promise<unknown>;
++}
++
++function isProviderId(value: unknown): value is MarketProviderId {
++  return ["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo"].includes(value as MarketProviderId);
++}
++
++export function parseMarketDataConfig(value: unknown): MarketDataConfig {
++  if (!value || typeof value !== "object") throw new Error("Invalid market data configuration response.");
++  const record = value as Record<string, unknown>;
++  if (record.schema_version !== "v1" || !Array.isArray(record.fallback_order) || !Array.isArray(record.providers)) throw new Error("Invalid market data configuration response.");
++  const order = record.fallback_order;
++  if (order.length !== 5 || order.some((item) => !isProviderId(item)) || new Set(order).size !== order.length) throw new Error("Invalid market data provider order.");
++  const providers = record.providers.map((item): MarketProviderSummary => {
++    if (!item || typeof item !== "object") throw new Error("Invalid market data provider response.");
++    const provider = item as Record<string, unknown>;
++    if (!isProviderId(provider.provider_id) || typeof provider.display_name !== "string" || typeof provider.enabled !== "boolean" || typeof provider.requires_key !== "boolean" || typeof provider.personal_key_configured !== "boolean" || typeof provider.platform_available !== "boolean" || (provider.key_hint !== undefined && typeof provider.key_hint !== "string")) throw new Error("Invalid market data provider response.");
++    return {
++      provider_id: provider.provider_id,
++      display_name: provider.display_name,
++      enabled: provider.enabled,
++      requires_key: provider.requires_key,
++      personal_key_configured: provider.personal_key_configured,
++      platform_available: provider.platform_available,
++      ...(typeof provider.key_hint === "string" ? { key_hint: provider.key_hint } : {}),
++    };
++  });
++  if (providers.length !== 5 || new Set(providers.map((item) => item.provider_id)).size !== providers.length) throw new Error("Invalid market data provider response.");
++  return { schema_version: "v1", fallback_order: order as MarketProviderId[], providers, ...(typeof record.updated_at === "string" ? { updated_at: record.updated_at } : {}) };
++}
++
++function authorization(session: OAuthSession): HeadersInit {
++  return { Accept: "application/json", Authorization: `Bearer ${session.access_token}` };
++}
++
++export async function fetchMarketDataConfig(apiBaseUrl: string, session: OAuthSession, signal?: AbortSignal): Promise<MarketDataConfig> {
++  const response = await fetch(endpoint(apiBaseUrl), { method: "GET", headers: authorization(session), credentials: "omit", ...(signal ? { signal } : {}) });
++  return parseMarketDataConfig(await checkedJson(response));
++}
++
++export async function saveMarketDataConfig(apiBaseUrl: string, session: OAuthSession, fallbackOrder: readonly MarketProviderId[], providers: readonly MarketProviderDraft[]): Promise<MarketDataConfig> {
++  const response = await fetch(endpoint(apiBaseUrl), {
++    method: "PUT",
++    headers: { ...authorization(session), "Content-Type": "application/json" },
++    credentials: "omit",
++    body: JSON.stringify({ fallback_order: fallbackOrder, providers }),
++  });
++  return parseMarketDataConfig(await checkedJson(response));
++}
++
++export async function testMarketDataProvider(apiBaseUrl: string, session: OAuthSession, providerId: MarketProviderId): Promise<"ready" | "unavailable"> {
++  const response = await fetch(endpoint(apiBaseUrl, "/test"), {
++    method: "POST",
++    headers: { ...authorization(session), "Content-Type": "application/json" },
++    credentials: "omit",
++    body: JSON.stringify({ provider_id: providerId }),
++  });
++  const value = await checkedJson(response);
++  if (!value || typeof value !== "object" || (value as Record<string, unknown>).provider_id !== providerId || !["ready", "unavailable"].includes((value as Record<string, unknown>).status as string)) throw new Error("Invalid market data provider test response.");
++  return (value as { status: "ready" | "unavailable" }).status;
++}
++
++/** Add a bearer only to the configured ForesightNine API origin. */
++export function authenticatedMarketFetcher(apiBaseUrl: string, readSession: () => OAuthSession | null): typeof fetch {
++  const allowedOrigin = new URL(apiBaseUrl).origin;
++  return async (input, init) => {
++    const target = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
++    const headers = new Headers(init?.headers);
++    const session = readSession();
++    if (session && target.origin === allowedOrigin) headers.set("Authorization", `Bearer ${session.access_token}`);
++    return fetch(input, { ...init, headers, credentials: "omit", redirect: "error" });
++  };
++}
+
+--- a/src/apps/web/src/market-config-client.test.ts
++++ b/src/apps/web/src/market-config-client.test.ts
+@@ -0,0 +1,39 @@
++import { describe, expect, it, vi } from "vitest";
++import { authenticatedMarketFetcher, parseMarketDataConfig } from "./market-config-client";
++
++const response = {
++  schema_version: "v1",
++  fallback_order: ["market_data", "alpha_vantage", "twelve_data", "finnhub", "yahoo"],
++  providers: [
++    ["market_data", true], ["alpha_vantage", true], ["twelve_data", true], ["finnhub", true], ["yahoo", false],
++  ].map(([provider_id, requires_key]) => ({ provider_id, display_name: provider_id, enabled: true, requires_key, personal_key_configured: false, platform_available: true })),
++};
++
++describe("market data configuration client", () => {
++  it("accepts the complete typed provider set", () => {
++    expect(parseMarketDataConfig(response).fallback_order).toEqual(response.fallback_order);
++  });
++
++  it("rejects duplicate or incomplete provider order", () => {
++    expect(() => parseMarketDataConfig({ ...response, fallback_order: ["yahoo", "yahoo"] })).toThrow();
++  });
++
++  it("sends the bearer only to the configured API origin", async () => {
++    const original = globalThis.fetch;
++    const calls: RequestInit[] = [];
++    const mock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => { calls.push(init ?? {}); return new Response("{}", { status: 200 }); });
++    globalThis.fetch = mock as typeof fetch;
++    try {
++      const session = { access_token: "private-token" } as never;
++      const fetcher = authenticatedMarketFetcher("https://app.foresightnine.com", () => session);
++      await fetcher("https://app.foresightnine.com/snapshots", { headers: { Accept: "application/json" } });
++      await fetcher("https://example.com/snapshots", { headers: { Accept: "application/json" } });
++      const firstHeaders = new Headers(calls[0]?.headers);
++      const secondHeaders = new Headers(calls[1]?.headers);
++      expect(firstHeaders.get("Authorization")).toBe("Bearer private-token");
++      expect(secondHeaders.has("Authorization")).toBe(false);
++    } finally {
++      globalThis.fetch = original;
++    }
++  });
++});
+
+--- a/src/apps/web/public/robots.txt
++++ b/src/apps/web/public/robots.txt
+@@ -0,0 +1,7 @@
++User-agent: *
++Allow: /
++Disallow: /oauth/
++Disallow: /api/
++Disallow: /v1/
++
++Sitemap: https://app.foresightnine.com/sitemap.xml
+
+--- a/src/apps/web/public/sitemap.xml
++++ b/src/apps/web/public/sitemap.xml
+@@ -0,0 +1,13 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
++  <url>
++    <loc>https://app.foresightnine.com/</loc>
++    <changefreq>weekly</changefreq>
++    <priority>1.0</priority>
++  </url>
++  <url>
++    <loc>https://app.foresightnine.com/privacy.html</loc>
++    <changefreq>monthly</changefreq>
++    <priority>0.5</priority>
++  </url>
++</urlset>
+
+--- a/src/infra/docker/compose.yaml
++++ b/src/infra/docker/compose.yaml
+@@ -49,6 +49,7 @@
+       # enter the image, repository, logs, or client bundle.
+       - /home/lxx/.config/google-play/service-account.json:/run/secrets/google-play-service-account.json:ro
+       - /home/lxx/.config/foresightnine/purchase-token-encryption.key:/run/secrets/foresightnine-purchase-token-encryption.key:ro
++      - /home/lxx/.config/foresightnine/market-credential-encryption.key:/run/secrets/foresightnine-market-credential-encryption.key:ro
+     healthcheck:
+       test: ["CMD-SHELL", "uv run --project /app/apps/api python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)\" > /dev/null"]
+       interval: 10s
+@@ -98,6 +99,7 @@
+       FORESIGHTNINE_MARKET_CACHE_TTL_SECONDS: "900"
+       FORESIGHTNINE_GOOGLE_PLAY_CREDENTIALS: /run/secrets/google-play-service-account.json
+       FORESIGHTNINE_PURCHASE_TOKEN_ENCRYPTION_KEY_FILE: /run/secrets/foresightnine-purchase-token-encryption.key
++      FORESIGHTNINE_MARKET_CREDENTIAL_ENCRYPTION_KEY_FILE: /run/secrets/foresightnine-market-credential-encryption.key
+     depends_on:
+       postgres:
+         condition: service_healthy
+
+--- a/src/infra/docker/staging.env.example
++++ b/src/infra/docker/staging.env.example
+@@ -40,3 +40,5 @@
+ FORESIGHTNINE_ALPHAVANTAGE_API_KEYS=
+ FORESIGHTNINE_TWELVEDATA_API_KEY=
+ FORESIGHTNINE_FINNHUB_API_KEY=
++# Mounted file path only; the key material stays outside the repository.
++FORESIGHTNINE_MARKET_CREDENTIAL_ENCRYPTION_KEY_FILE=/run/secrets/foresightnine-market-credential-encryption.key
+
+--- a/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example
++++ b/src/infra/deployment/cloudflared/foresightnine-api-staging.yml.example
+@@ -5,6 +5,11 @@
+ protocol: http2
+ 
+ ingress:
++  # The public apex is a canonical redirect entry handled by the API host middleware.
++  - hostname: foresightnine.com
++    service: http://127.0.0.1:8000
++  - hostname: www.foresightnine.com
++    service: http://127.0.0.1:8000
+   # The unified app host serves Web plus API callback/API paths.
+   - hostname: app.foresightnine.com
+     path: ^/metrics$
+@@ -18,7 +23,7 @@
+     originRequest:
+       httpHostHeader: 127.0.0.1:4173
+   - hostname: app.foresightnine.com
+-    path: '^/(api|oauth|v1)(/.*)?$'
++    path: '^/(api|oauth|v1|snapshots)(/.*)?$'
+     service: http://127.0.0.1:8000
+   - hostname: app.foresightnine.com
+     path: '^/(health|docs|openapi\.json)(/.*)?$'
+
+--- a/src/docs/progress.md
++++ b/src/docs/progress.md
+@@ -1,4 +1,18 @@
+ # Progress
++
++## Web-first v1 — 2026-09-13
++
++- 正式网页以 `https://app.foresightnine.com` 为唯一应用入口；根域与 `www` 通过 Tunnel 进入 API 后以 308 保留路径和查询参数跳转到应用域名。
++- 生产网页改用 `app.foresightnine.com` 同源 API；`/snapshots` 已加入 Tunnel API ingress，旧 `staging.foresightnine.com` 不再作为正式网页运行地址。
++- 研究控制台新增账户级金融数据源设置，可配置 Market Data、Alpha Vantage、Twelve Data、Finnhub，并对 Yahoo fallback 统一启停、排序和连通性测试。
++- 用户 Key 使用独立 AES-GCM 密钥按账户和 provider 绑定加密；响应只返回末四位提示，浏览器存储、导出、日志及 Git 均不包含密钥原文。账户删除同步清理配置。
++- 原有 provider admission、三时点、Redis 缓存、future/stale/missing 校验和价格派生因子链路保持不变；个人 Key 只覆盖对应 adapter，不接受任意 URL。
++- SEO 第一版补充 canonical、description、Open Graph、robots 和 sitemap；OAuth 与 API 路径禁止索引。
++
++### Verification
++
++- API 全量测试、Web 69 项测试、TypeScript typecheck 和 Vite production build 通过。
++- 公网 `app` 首页、robots、sitemap、同源 `/snapshots` 与配置鉴权通过；临时账户完成配置保存、掩码读取和删除闭环。
+ 
+ ## Current implementation correction status — 2026-08-31
+ 
+
+--- a/.cloudflared/foresightnine-api-staging.yml
++++ b/.cloudflared/foresightnine-api-staging.yml
+@@ -4,4 +4,9 @@
+ 
+ ingress:
++  # Public apex entries redirect to the canonical app host in API middleware.
++  - hostname: foresightnine.com
++    service: http://127.0.0.1:8000
++  - hostname: www.foresightnine.com
++    service: http://127.0.0.1:8000
+   # Metrics are for a local supervisor/Prometheus only, never a public route.
+   - hostname: app.foresightnine.com
+@@ -19,5 +24,5 @@
+       httpHostHeader: 127.0.0.1:4173
+   - hostname: app.foresightnine.com
+-    path: '^/(api|oauth|v1)(/.*)?$'
++    path: '^/(api|oauth|v1|snapshots)(/.*)?$'
+     service: http://127.0.0.1:8000
+   - hostname: app.foresightnine.com
+
+--- a/src/apps/web/.env.production.local (selected non-secret fields)
++++ b/src/apps/web/.env.production.local (selected non-secret fields)
+@@
+-VITE_FORESIGHTNINE_API_BASE_URL=https://api-staging.foresightnine.com
++VITE_FORESIGHTNINE_API_BASE_URL=https://app.foresightnine.com
+-VITE_FORESIGHTNINE_MARKET_DATA_BASE_URL=https://api-staging.foresightnine.com
++VITE_FORESIGHTNINE_MARKET_DATA_BASE_URL=https://app.foresightnine.com

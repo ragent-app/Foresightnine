@@ -1,0 +1,40 @@
+CHANGE_BRANCH=android_upload_material.filesystem_permissions
+CHANGED_FIELD=POSIX file mode
+
+ARTIFACT_MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/android-upload-material-permissions-20260915/MODIFIED_FILE
+ARTIFACT_DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/android-upload-material-permissions-20260915/DIFF_FILE
+ARTIFACT_VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/android-upload-material-permissions-20260915/VERIFICATION.txt
+ARTIFACT_ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/android-upload-material-permissions-20260915/ROLLBACK.sh
+
+BASELINE_COMMAND=stat -c %a for the two upload keystores and two DPAPI-protected password files
+BASELINE_INPUT=/home/lxx/ForesightNine-secrets/android-upload/{foresightnine-upload.jks,foresightnine-upload-2026-08-31.jks,foresightnine-upload-2026-08-31.keystore-password.dpapi,foresightnine-upload-2026-08-31.key-password.dpapi}
+BASELINE_LITERAL_OUTPUT:
+foresightnine-upload.jks mode=664
+foresightnine-upload-2026-08-31.jks mode=664
+foresightnine-upload-2026-08-31.keystore-password.dpapi mode=664
+foresightnine-upload-2026-08-31.key-password.dpapi mode=664
+BASELINE_RESULT=FAIL_GROUP_WORLD_READABLE
+BASELINE_EXIT_STATUS=1
+
+MODIFIED_COMMAND=chmod 600 for the same four files; sha256sum -c against their pre-change hashes
+MODIFIED_INPUT=the same four files; no credential or password content is read or printed
+MODIFIED_LITERAL_OUTPUT:
+foresightnine-upload.jks mode=600
+foresightnine-upload-2026-08-31.jks mode=600
+foresightnine-upload-2026-08-31.keystore-password.dpapi mode=600
+foresightnine-upload-2026-08-31.key-password.dpapi mode=600
+HASHES_UNCHANGED=True
+MODIFIED_RESULT=PASS_OWNER_ONLY
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/android-upload-material-permissions-20260915/ROLLBACK.sh --local /home/lxx/.config/foresightnine/rollback-tests/android-upload-material-permissions-20260915
+ROLLBACK_INPUT=four isolated copies with mode 600
+ROLLBACK_LITERAL_OUTPUT:
+foresightnine-upload.jks mode=664
+foresightnine-upload-2026-08-31.jks mode=664
+foresightnine-upload-2026-08-31.keystore-password.dpapi mode=664
+foresightnine-upload-2026-08-31.key-password.dpapi mode=664
+ROLLBACK_STATUS=restored_original_permissions
+ROLLBACK_EXIT=0
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=the original mode 664 is reproduced only on isolated copies; live files remain mode 600 and content hashes remain unchanged.

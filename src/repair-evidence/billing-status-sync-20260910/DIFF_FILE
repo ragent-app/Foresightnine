@@ -1,0 +1,284 @@
+--- /home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/billing.py.orig	2026-09-10 01:14:51.753289745 +0800
++++ /home/lxx/Foresightnine/src/repair-evidence/billing-status-sync-20260910/MODIFIED_FILE	2026-09-10 01:14:51.755169060 +0800
+@@ -7,13 +7,14 @@
+ from __future__ import annotations
+ 
+ from calendar import monthrange
+-from collections.abc import Mapping
++from collections.abc import Callable, Mapping
+ from datetime import datetime, timedelta, timezone
+ from hashlib import sha256
+ import base64
+ import binascii
+ import json
+ import os
++from pathlib import Path
+ from threading import RLock
+ from typing import Any, Literal, Protocol
+ from urllib.parse import quote
+@@ -33,6 +34,18 @@
+ DEFAULT_PROVIDER_MODEL = "glm-5.3-flash"
+ 
+ 
++def configured_provider_model(environ: Mapping[str, str] | None = None) -> str:
++    """Return the server-selected model shown on an account entitlement.
++
++    The GLM model remains the safe default for deployments without an
++    override.  The staging deployment explicitly selects the host-local Cline
++    OpenAI-compatible model, so the account surface must not claim that GLM
++    handled a request when the pool handled it instead.
++    """
++    value = (environ or os.environ).get("FORESIGHTNINE_LLM_MODEL", "").strip()
++    return value or DEFAULT_PROVIDER_MODEL
++
++
+ class BillingError(RuntimeError):
+     def __init__(self, status_code: int, code: str, message: str, *, retry_after: int | None = None) -> None:
+         super().__init__(message)
+@@ -58,7 +71,15 @@
+ 
+     @classmethod
+     def from_environment(cls, environ: Mapping[str, str] | None = None) -> "PurchaseTokenCipher | None":
+-        raw = (environ or os.environ).get("FORESIGHTNINE_PURCHASE_TOKEN_ENCRYPTION_KEY", "").strip()
++        env = environ or os.environ
++        raw = env.get("FORESIGHTNINE_PURCHASE_TOKEN_ENCRYPTION_KEY", "").strip()
++        if not raw:
++            key_file = env.get("FORESIGHTNINE_PURCHASE_TOKEN_ENCRYPTION_KEY_FILE", "").strip()
++            if key_file:
++                try:
++                    raw = Path(key_file).read_text(encoding="ascii").strip()
++                except (OSError, UnicodeError):
++                    raise BillingError(503, "billing_storage_unavailable", "Billing storage encryption is not configured.", retry_after=30) from None
+         if not raw:
+             return None
+         try:
+@@ -167,6 +188,13 @@
+     }.get(product_id)
+ 
+ 
++def _subscription_has_quota(verified: VerifiedGooglePurchase, now: datetime) -> bool:
++    """Keep access for active/grace subscriptions and unexpired cancellations."""
++    return verified.subscription_state in {"active", "grace_period"} or (
++        verified.subscription_state == "canceled" and _utc(now) < _utc(verified.period_end)
++    )
++
++
+ def _parse_rfc3339(value: str) -> datetime:
+     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+ 
+@@ -260,8 +288,14 @@
+         self.cipher = cipher
+         self._lock = RLock()
+ 
++    def _with_lock(self, key: str, operation: Callable[[], Any]) -> Any:
++        locker = getattr(self.states, "with_advisory_lock", None)
++        if callable(locker):
++            return locker(key, operation)
++        return operation()
++
+     def _free_state(self, account_id: str, now: datetime) -> BillingState:
+-        return BillingState(account_id=account_id, plan="free", entitlement_status="active", period_start=now, quota_limit=FREE_GRANT_TOKENS, consumed_tokens=0, reserved_tokens=0, provider_model=DEFAULT_PROVIDER_MODEL, free_grant_claimed=True, updated_at=now)
++        return BillingState(account_id=account_id, plan="free", entitlement_status="active", period_start=now, quota_limit=FREE_GRANT_TOKENS, consumed_tokens=0, reserved_tokens=0, provider_model=configured_provider_model(), free_grant_claimed=True, updated_at=now)
+ 
+     def ensure_state(self, account_id: str, *, now: datetime | None = None) -> BillingState:
+         current = _utc(now or datetime.now(timezone.utc))
+@@ -272,6 +306,25 @@
+                 self.states.put(account_id, state)
+             elif not isinstance(state, BillingState):
+                 state = BillingState.model_validate(state)
++            configured_model = configured_provider_model()
++            if state.provider_model != configured_model:
++                state = state.model_copy(update={"provider_model": configured_model, "updated_at": current})
++                self.states.put(account_id, state)
++            if (
++                state.plan != "free"
++                and state.period_end is not None
++                and current >= _utc(state.period_end)
++                and state.entitlement_status != "expired"
++            ):
++                state = state.model_copy(
++                    update={
++                        "entitlement_status": "expired",
++                        "quota_limit": 0,
++                        "reserved_tokens": 0,
++                        "updated_at": current,
++                    }
++                )
++                self.states.put(account_id, state)
+             return state
+ 
+     def snapshot(self, account_id: str, *, now: datetime | None = None) -> dict[str, Any]:
+@@ -283,7 +336,8 @@
+         if estimated_tokens < 1:
+             raise ValueError("estimated_tokens must be positive")
+         current = _utc(now or datetime.now(timezone.utc))
+-        with self._lock:
++        def operation() -> None:
++          with self._lock:
+             entry = self.usage.get(reservation_id)
+             if entry is not None:
+                 return
+@@ -294,40 +348,59 @@
+             updated = state.model_copy(update={"reserved_tokens": state.reserved_tokens + estimated_tokens, "updated_at": current})
+             self.states.put(account_id, updated)
+             self.usage.put(reservation_id, UsageLedgerEntry(reservation_id=reservation_id, account_id=account_id, provider_model=state.provider_model, estimated_tokens=estimated_tokens, status="reserved", created_at=current))
++        self._with_lock(f"billing-account:{account_id}", operation)
+ 
+     def settle(self, reservation_id: str, actual_tokens: int, *, now: datetime | None = None) -> None:
+         if actual_tokens < 0:
+             raise ValueError("actual_tokens must be non-negative")
+         current = _utc(now or datetime.now(timezone.utc))
+-        with self._lock:
+-            entry = self.usage.get(reservation_id)
+-            if entry is None:
+-                raise BillingError(409, "usage_reservation_missing", "Usage reservation was not found.")
+-            if not isinstance(entry, UsageLedgerEntry):
+-                entry = UsageLedgerEntry.model_validate(entry)
+-            if entry.status == "settled":
+-                return
+-            state = self.ensure_state(entry.account_id, now=current)
+-            if actual_tokens > state.quota_limit - state.consumed_tokens:
+-                raise BillingError(429, "quota_exceeded", "Token quota exceeded.", retry_after=60)
+-            reserved = max(0, state.reserved_tokens - entry.estimated_tokens)
+-            updated = state.model_copy(update={"reserved_tokens": reserved, "consumed_tokens": state.consumed_tokens + actual_tokens, "updated_at": current})
+-            self.states.put(entry.account_id, updated)
+-            self.usage.put(reservation_id, entry.model_copy(update={"actual_tokens": actual_tokens, "status": "settled", "settled_at": current}))
++        entry = self.usage.get(reservation_id)
++        if entry is None:
++            raise BillingError(409, "usage_reservation_missing", "Usage reservation was not found.")
++        if not isinstance(entry, UsageLedgerEntry):
++            entry = UsageLedgerEntry.model_validate(entry)
++        def operation() -> None:
++            with self._lock:
++                current_entry = self.usage.get(reservation_id)
++                if current_entry is None:
++                    raise BillingError(409, "usage_reservation_missing", "Usage reservation was not found.")
++                if not isinstance(current_entry, UsageLedgerEntry):
++                    current_entry = UsageLedgerEntry.model_validate(current_entry)
++                if current_entry.status == "settled":
++                    return
++                entry = current_entry
++                if entry.status == "settled":
++                    return
++                state = self.ensure_state(entry.account_id, now=current)
++                if actual_tokens > state.quota_limit - state.consumed_tokens:
++                    raise BillingError(429, "quota_exceeded", "Token quota exceeded.", retry_after=60)
++                reserved = max(0, state.reserved_tokens - entry.estimated_tokens)
++                updated = state.model_copy(update={"reserved_tokens": reserved, "consumed_tokens": state.consumed_tokens + actual_tokens, "updated_at": current})
++                self.states.put(entry.account_id, updated)
++                self.usage.put(reservation_id, entry.model_copy(update={"actual_tokens": actual_tokens, "status": "settled", "settled_at": current}))
++        self._with_lock(f"billing-account:{entry.account_id}", operation)
+ 
+     def release(self, reservation_id: str, *, now: datetime | None = None) -> None:
+         current = _utc(now or datetime.now(timezone.utc))
+-        with self._lock:
+-            entry = self.usage.get(reservation_id)
+-            if entry is None:
+-                return
+-            if not isinstance(entry, UsageLedgerEntry):
+-                entry = UsageLedgerEntry.model_validate(entry)
+-            if entry.status != "reserved":
+-                return
+-            state = self.ensure_state(entry.account_id, now=current)
+-            self.states.put(entry.account_id, state.model_copy(update={"reserved_tokens": max(0, state.reserved_tokens - entry.estimated_tokens), "updated_at": current}))
+-            self.usage.put(reservation_id, entry.model_copy(update={"status": "released", "settled_at": current}))
++        entry = self.usage.get(reservation_id)
++        if entry is None:
++            return
++        if not isinstance(entry, UsageLedgerEntry):
++            entry = UsageLedgerEntry.model_validate(entry)
++        def operation() -> None:
++            with self._lock:
++                current_entry = self.usage.get(reservation_id)
++                if current_entry is None:
++                    return
++                if not isinstance(current_entry, UsageLedgerEntry):
++                    current_entry = UsageLedgerEntry.model_validate(current_entry)
++                entry = current_entry
++                if entry.status != "reserved":
++                    return
++                state = self.ensure_state(entry.account_id, now=current)
++                self.states.put(entry.account_id, state.model_copy(update={"reserved_tokens": max(0, state.reserved_tokens - entry.estimated_tokens), "updated_at": current}))
++                self.usage.put(reservation_id, entry.model_copy(update={"status": "released", "settled_at": current}))
++        self._with_lock(f"billing-account:{entry.account_id}", operation)
+ 
+     def apply_google_purchase(self, account_id: str, purchase_token: str, verified: VerifiedGooglePurchase, *, now: datetime | None = None) -> dict[str, Any]:
+         current = _utc(now or datetime.now(timezone.utc))
+@@ -337,16 +410,73 @@
+         if self.cipher is None:
+             raise BillingError(503, "billing_storage_unavailable", "Billing storage encryption is not configured.", retry_after=30)
+         token_hash = purchase_token_hash(purchase_token)
+-        record = PurchaseRecord(purchase_token_hash=token_hash, encrypted_purchase_token=self.cipher.encrypt(purchase_token), account_id=account_id, product_id=verified.product_id, base_plan_id=verified.base_plan_id, subscription_state=verified.raw_state, period_start=verified.period_start, period_end=verified.period_end, created_at=current, updated_at=current)
+-        self.purchases.put(token_hash, record)
++        return self._with_lock(f"billing-token:{token_hash}", lambda: self._apply_google_purchase_locked(account_id, purchase_token, token_hash, verified, current))
++
++    def _apply_google_purchase_locked(self, account_id: str, purchase_token: str, token_hash: str, verified: VerifiedGooglePurchase, current: datetime) -> dict[str, Any]:
++        with self._lock:
++          return self._apply_google_purchase_account_locked(account_id, purchase_token, token_hash, verified, current)
++
++    def _apply_google_purchase_account_locked(self, account_id: str, purchase_token: str, token_hash: str, verified: VerifiedGooglePurchase, current: datetime) -> dict[str, Any]:
++        return self._with_lock(f"billing-account:{account_id}", lambda: self._apply_google_purchase_body(account_id, purchase_token, token_hash, verified, current))
++
++    def _apply_google_purchase_body(self, account_id: str, purchase_token: str, token_hash: str, verified: VerifiedGooglePurchase, current: datetime) -> dict[str, Any]:
++        existing = self.purchases.get(token_hash)
++        if existing is not None:
++            if not isinstance(existing, PurchaseRecord):
++                existing = PurchaseRecord.model_validate(existing)
++            if existing.account_id != account_id or existing.product_id != verified.product_id or existing.base_plan_id != verified.base_plan_id:
++                raise BillingError(409, "billing_purchase_binding_conflict", "The purchase is already bound to another account or product.")
++            current_state = self.ensure_state(account_id, now=current)
++        else:
++            current_state = self.ensure_state(account_id, now=current)
++        selected = plan_for_product(verified.product_id)
++        if selected is None:
++            raise BillingError(409, "billing_product_mismatch", "The purchase does not match a supported subscription.")
+         plan, quota = selected
+-        state = BillingState(account_id=account_id, plan=plan, entitlement_status=verified.subscription_state, product_id=verified.product_id, base_plan_id=verified.base_plan_id, period_start=verified.period_start, period_end=verified.period_end, quota_limit=quota, consumed_tokens=0, reserved_tokens=0, provider_model=DEFAULT_PROVIDER_MODEL, free_grant_claimed=True, updated_at=current)
++        same_period = (
++            current_state.product_id == verified.product_id
++            and current_state.base_plan_id == verified.base_plan_id
++            and current_state.period_end is not None
++            and _utc(current_state.period_end) >= _utc(verified.period_end)
++        )
++        has_quota = _subscription_has_quota(verified, current)
++        if existing is not None and same_period:
++            # A restore/status refresh for the same provider period must not
++            # reset already-consumed tokens. It may only change entitlement
++            # state and reopen/close the quota gate.
++            record = existing.model_copy(update={"subscription_state": verified.raw_state, "period_end": verified.period_end, "updated_at": current})
++            self.purchases.put(token_hash, record)
++            state = current_state.model_copy(
++                update={
++                    "plan": plan,
++                    "entitlement_status": verified.subscription_state,
++                    "period_end": max(_utc(current_state.period_end), _utc(verified.period_end)),
++                    "quota_limit": quota if has_quota else 0,
++                    "updated_at": current,
++                }
++            )
++            self.states.put(account_id, state)
++            return self.snapshot(account_id, now=current)
++        record = PurchaseRecord(
++            purchase_token_hash=token_hash,
++            encrypted_purchase_token=self.cipher.encrypt(purchase_token),
++            account_id=account_id,
++            product_id=verified.product_id,
++            base_plan_id=verified.base_plan_id,
++            subscription_state=verified.raw_state,
++            period_start=verified.period_start,
++            period_end=verified.period_end,
++            created_at=current,
++            updated_at=current,
++        )
++        self.purchases.put(token_hash, record)
++        state = BillingState(account_id=account_id, plan=plan, entitlement_status=verified.subscription_state, product_id=verified.product_id, base_plan_id=verified.base_plan_id, period_start=verified.period_start, period_end=verified.period_end, quota_limit=quota if has_quota else 0, consumed_tokens=0, reserved_tokens=0, provider_model=configured_provider_model(), free_grant_claimed=True, updated_at=current)
+         self.states.put(account_id, state)
+         return self.snapshot(account_id, now=current)
+ 
+ 
+ __all__ = [
+-    "BillingError", "BillingLedger", "BillingState", "DEFAULT_PROVIDER_MODEL", "FREE_GRANT_TOKENS",
++    "BillingError", "BillingLedger", "BillingState", "DEFAULT_PROVIDER_MODEL", "FREE_GRANT_TOKENS", "configured_provider_model",
+     "GooglePlaySubscriptionVerifier", "MAX_MONTHLY_TOKENS", "MONTHLY_BASE_PLAN_ID", "MAX_PRODUCT_ID",
+     "PRO_MONTHLY_TOKENS", "PRO_PRODUCT_ID", "PurchaseRecord", "PurchaseTokenCipher", "UsageLedgerEntry",
+     "VerifiedGooglePurchase", "GooglePlayVerifyRequest", "parse_google_subscription", "plan_for_product",

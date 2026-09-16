@@ -1,0 +1,11 @@
+ARTIFACT_REOPEN=PASS
+MODIFIED_FILE path=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/MODIFIED_FILE bytes=1064960 sha256=bf8ac8667e925a27c0e8ede21a89cc790327005fcbf07e1f833d82b0b5a7466e
+DIFF_FILE path=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/DIFF_FILE bytes=430558 sha256=8c2868db8eb0196266621cc88b296acaeb2cc0b764e9a167749e263226a41316
+VERIFICATION.txt path=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/VERIFICATION.txt bytes=15807 sha256=a30e5c2d73981f5af3546283c7a1913de96ac8d6b9c4aee3a7f0b7bcfda966c0
+ROLLBACK.sh path=/home/lxx/Foresightnine/src/repair-evidence/product-ux-20260913/ROLLBACK.sh bytes=7618 sha256=9a04089ca4aa3635f410608218b36429af54212d8e8b82068136aa66075a286e
+ROLLBACK_EXECUTABLE=PASS
+MODIFIED_FILE_REOPEN=PASS files=43
+MODIFIED_MANIFEST_LIVE_ARCHIVE=PASS entries=43
+ORIGINAL_MANIFEST=PASS entries=35
+VERIFICATION_REOPEN=PASS
+DIFF_REOPEN=PASS first_line='--- a/apps/web/src/App.tsx'

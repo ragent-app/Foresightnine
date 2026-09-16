@@ -1,0 +1,101 @@
+ForesightNine Cloudflare verification — global HTTPS redirect
+Date: 2026-08-31
+
+CHANGED_BRANCH_FIELD
+- Cloudflare Zone branch: always_use_https changed from off to on for the zone-global HTTPS policy.
+- Host coverage: app.foresightnine.com, staging.foresightnine.com, api-staging.foresightnine.com.
+- Existing Tunnel branch: the checked-in staging-negative ingress remains active; no DNS, WAF, DDoS, billing, or account setting was changed.
+- Key branch: /home/lxx/.cloudflared/key.txt remains mode 600; contents were never printed.
+
+ARTIFACTS
+- MODIFIED_FILE: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-https-20260831/MODIFIED_FILE
+- DIFF_FILE: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-https-20260831/DIFF_FILE
+- VERIFICATION.txt: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-https-20260831/VERIFICATION.txt
+- ROLLBACK.sh: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-https-20260831/ROLLBACK.sh
+
+BASELINE COMMAND / INPUT / LITERAL OUTPUT / EXIT STATUS
+Command: GET zone always_use_https using the existing key
+Input: Authorization header from /home/lxx/.cloudflared/key.txt; zone scope for foresightnine.com; response body reduced to status/value only.
+Literal output: HTTP_STATUS:200 success=True value=off errors=
+Exit status: 0.
+
+Command: curl -A 'Mozilla/5.0 ForesightNine-readonly-probe' -sS -o /dev/null -D - http://app.foresightnine.com/
+Input: HTTP app root before setting change.
+Literal output: HTTP/1.1 530 <none>
+Exit status: 0.
+
+Command: curl -A 'Mozilla/5.0 ForesightNine-readonly-probe' -sS -o /dev/null -D - http://staging.foresightnine.com/
+Input: HTTP staging root before setting change.
+Literal output: HTTP/1.1 530 <none>
+Exit status: 0.
+
+MODIFIED COMMAND / INPUT / LITERAL OUTPUT / EXIT STATUS
+Command: curl -sS -X PATCH -H 'Authorization: Bearer <value from key file>' -H 'Content-Type: application/json' --data '{"value":"on"}' https://api.cloudflare.com/client/v4/zones/<zone>/settings/always_use_https
+Input: Zone setting update; credential value omitted from all output.
+Literal output: endpoint=zones/<zone>/settings/always_use_https method=PATCH HTTP_STATUS=200 success=True value=on errors=
+Exit status: 0.
+
+Command: GET zone always_use_https
+Input: Same zone, readback after PATCH.
+Literal output: GET HTTP_STATUS:200 success=True value=on errors=
+Exit status: 0.
+
+Command: curl -A 'Mozilla/5.0 ForesightNine-readonly-probe' -sS -o /dev/null -D - http://app.foresightnine.com/oauth/google/start?return=1
+Input: HTTP app OAuth start URL with query string.
+Literal output:
+HTTP/1.1 301 Moved Permanently
+Location: https://app.foresightnine.com/oauth/google/start?return=1
+Exit status: 0.
+
+Command: curl -A 'Mozilla/5.0 ForesightNine-readonly-probe' -sS -o /dev/null -D - http://staging.foresightnine.com/oauth/mobile-callback?state=probe
+Input: HTTP staging mobile callback URL with query string.
+Literal output:
+HTTP/1.1 301 Moved Permanently
+Location: https://staging.foresightnine.com/oauth/mobile-callback?state=probe
+Exit status: 0.
+
+Command: curl -A 'Mozilla/5.0 ForesightNine-readonly-probe' -sS -o /dev/null -D - http://api-staging.foresightnine.com/v1/health?x=1
+Input: HTTP API staging URL with query string.
+Literal output:
+HTTP/1.1 301 Moved Permanently
+Location: https://api-staging.foresightnine.com/v1/health?x=1
+Exit status: 0.
+
+Command: HTTPS origin probes
+Input: HTTPS app health, staging reserved health, canonical factor manifest, unversioned factor route.
+Literal output:
+https://app.foresightnine.com/health -> HTTP/2 200, content-type: application/json
+https://staging.foresightnine.com/health -> HTTP/2 404
+https://api-staging.foresightnine.com/v1/factor-libraries/v1.0.0/manifest -> HTTP/2 200, content-type: application/json
+https://api-staging.foresightnine.com/v1/factor-libraries/manifest -> HTTP/2 404, content-type: application/json
+Exit status: 0.
+
+Command: cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate
+Input: installed Tunnel config after previous CF-04 change.
+Literal output:
+Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+Exit status: 0.
+
+Command: systemctl --user is-active foresightnine-cloudflared.service
+Input: user Tunnel service after restart.
+Literal output: active
+Exit status: 0.
+
+ROLLBACK COMMAND / INPUT / LITERAL OUTPUT / EXIT STATUS
+Command: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-https-20260831/ROLLBACK.sh --api-base http://127.0.0.1:18765/client/v4 --zone test-zone --token-file /tmp/fn-cf-rollback-token.txt
+Input: separate local mock API and copied zone state initialized to on; non-secret test token; real Cloudflare zone not touched by rollback test.
+Literal output:
+HTTP_STATUS=200 value=off
+state_after=off
+rollback_copy_assertion=PASS
+Exit status: 0.
+
+RESTORED BEHAVIOR / CURRENT STATUS
+- Rollback copy restored off and passed; the live Cloudflare zone remains intentionally modified to on.
+- Current live readback is always_use_https=on.
+- Current HTTP app/staging/api-staging behavior is 301 to same-host HTTPS with path/query preserved.
+- Current HTTPS app health is 200; staging reserved API-like path is 404; canonical factor route is 200 and unversioned route is 404.
+- Current Tunnel service is active and ingress validation is OK.
+- CF-02, CF-03, and CF-04 are marked RESOLVED_2026-08-31 in docs/problem.md.
+- No OAuth code, access token, credential body, private key, Cookie, or sensitive response body was written.

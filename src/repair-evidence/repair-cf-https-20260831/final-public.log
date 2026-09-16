@@ -1,0 +1,23 @@
+===== FINAL PUBLIC ROUTE VALIDATION =====
+URL=http://app.foresightnine.com/oauth/google/start?return=1
+HTTP/1.1 301 Moved Permanently
+URL=http://staging.foresightnine.com/oauth/mobile-callback?state=probe
+HTTP/1.1 301 Moved Permanently
+URL=http://api-staging.foresightnine.com/v1/health?x=1
+HTTP/1.1 301 Moved Permanently
+URL=https://app.foresightnine.com/health
+HTTP/2 200 
+content-type: application/json
+URL=https://staging.foresightnine.com/health
+HTTP/2 404 
+URL=https://staging.foresightnine.com/oauth/mobile-callback
+HTTP/2 200 
+content-type: text/html
+URL=https://api-staging.foresightnine.com/v1/factor-libraries/v1.0.0/manifest
+HTTP/2 200 
+content-type: application/json
+URL=https://api-staging.foresightnine.com/v1/factor-libraries/manifest
+HTTP/2 404 
+content-type: application/json
+service=active
+finished=2026-08-31T23:28:07+08:00

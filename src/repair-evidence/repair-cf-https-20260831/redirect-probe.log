@@ -1,0 +1,25 @@
+===== HTTPS REDIRECT PATH/QUERY PROBE =====
+URL=http://app.foresightnine.com/oauth/google/start?return=1
+HTTP/1.1 301 Moved Permanently
+URL=http://staging.foresightnine.com/oauth/mobile-callback?state=probe
+HTTP/1.1 301 Moved Permanently
+URL=http://api-staging.foresightnine.com/v1/health?x=1
+HTTP/1.1 301 Moved Permanently
+===== COMMAND: systemctl --user restart foresightnine-cloudflared.service =====
+EXIT_STATUS: 0
+===== COMMAND: cloudflared tunnel info =====
+NAME:     [REDACTED]
+ID:       [REDACTED]
+CREATED:  2026-08-30 13:25:29.820071 +0000 UTC
+
+CONNECTOR ID                         CREATED              ARCHITECTURE VERSION  ORIGIN IP   EDGE             
+[REDACTED] 2026-08-31T15:27:31Z linux_amd64  2026.8.2 56.10.62.87 1xsin14, 1xsin18 
+2026-08-31T15:27:40Z WRN Your version 2026.8.2 is outdated. We recommend upgrading it to 2026.8.3
+EXIT_STATUS: 0
+===== COMMAND: HTTPS app health =====
+HTTP/2 200 
+content-type: application/json
+CURL_EXIT_STATUS: 0
+===== COMMAND: HTTPS staging reserved route =====
+HTTP/2 404 
+finished=2026-08-31T23:27:43+08:00

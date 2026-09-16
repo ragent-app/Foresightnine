@@ -1,0 +1,41 @@
+baseline_started=2026-08-31T22:46:46+08:00
+
+===== COMMAND: corepack pnpm verify:boundaries =====
+$ node scripts/verify/boundaries.mjs
+FAIL governance D:\Foresightnine\plan.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\plan.md'
+FAIL governance D:\Foresightnine\agent.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\agent.md'
+FAIL governance D:\Foresightnine\GOAL_PROMPT.md: ENOENT: no such file or directory, stat 'D:\Foresightnine\GOAL_PROMPT.md'
+FAIL unexpected implementation root: /home/lxx/Foresightnine/src
+[ELIFECYCLE] Command failed with exit code 1.
+EXIT_STATUS: 1
+
+===== COMMAND: corepack pnpm verify:reference-hashes =====
+$ node scripts/verify/reference-hashes.mjs
+FAIL D:\FM acceleration-deepseek\bundle\agent-framework\scheduler\fm_walk_forward.py: ENOENT: no such file or directory, stat 'D:\FM acceleration-deepseek\bundle\agent-framework\scheduler\fm_walk_forward.py'
+FAIL D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\combination.py: ENOENT: no such file or directory, stat 'D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\combination.py'
+FAIL D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\portfolio.py: ENOENT: no such file or directory, stat 'D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\portfolio.py'
+FAIL D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\metrics.py: ENOENT: no such file or directory, stat 'D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\metrics.py'
+FAIL D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\backtest.py: ENOENT: no such file or directory, stat 'D:\FM acceleration-deepseek\bundle\agent-framework\FactorMiner\factorminer\evaluation\backtest.py'
+FAIL D:\FM acceleration-deepseek\bundle\agent-framework\ASSETS.yaml: ENOENT: no such file or directory, stat 'D:\FM acceleration-deepseek\bundle\agent-framework\ASSETS.yaml'
+[ELIFECYCLE] Command failed with exit code 1.
+EXIT_STATUS: 1
+
+===== COMMAND: uv run --project apps/api pytest apps/api/tests/test_api.py -q =====
+..........                                                               [100%]
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+EXIT_STATUS: 0
+
+===== COMMAND: cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate =====
+Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+EXIT_STATUS: 0
+
+===== COMMAND: git status --short --branch =====
+## master...origin/master
+?? repair-evidence/repair-cf-gov-data-20260831/
+baseline_finished=2026-08-31T22:46:51+08:00

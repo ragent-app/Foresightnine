@@ -1,0 +1,13 @@
+diff --git a/src/repair-evidence/problem-play-credential-diff-20260910/baseline-files/problem.md.orig b/src/docs/problem.md
+index be25369..5992c91 100644
+--- a/src/repair-evidence/problem-play-credential-diff-20260910/baseline-files/problem.md.orig
++++ b/src/docs/problem.md
+@@ -138,6 +138,8 @@ P0：当前未发现已由只读证据确认的 P0。
+ 
+ ## 4. Google Play 侧
+ 
++- 两份本地 Play credential 已独立只读验证：OLD 与 NEW token exchange 均 PASS，订阅目录及 Pro/Max 商品详情均 HTTP 200；两者 Internal track releases 均 HTTP 403 `PERMISSION_DENIED`。内部比较结果为 `SAME_SERVICE_ACCOUNT_DIFFERENT_KEY`，因此当前轨道权限问题与所选 key 无关，应在 Play Console 核对该 Service Account 的 app-level 测试轨道授权和传播状态。
++
+ - `/home/lxx/.config/google-play/service-account.json` 存在、JSON 结构有效、权限为 600；没有在报告或终端输出任何字段值。
+ - 使用短生命周期 JWT assertion 在内存签名并交换 access token：token endpoint HTTP 200；tokeninfo HTTP 200；scope 含 `androidpublisher`；过期字段存在。token 未落盘。
+ - 对 `com.foresightnine.mobile` 的 internal、closed、open releases 仅执行 GET：最新连续 3 次均 HTTP 403、reason=`PERMISSION_DENIED`；订阅目录和两个商品详情仍 HTTP 200。没有调用 `edits.insert`、upload、commit、track update、user/grant mutation、billing、orders、subscriptions、refund 或生产发布接口。

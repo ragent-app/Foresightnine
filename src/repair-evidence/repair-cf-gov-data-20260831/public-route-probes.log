@@ -1,0 +1,80 @@
+===== PUBLIC ROUTE PROBES AFTER TUNNEL RESTART =====
+
+[app-http-root]
+HTTP/1.1 200 OK
+body-shape=non-json
+
+[staging-http-root]
+HTTP/1.1 200 OK
+body-shape=non-json
+
+[app-https-root]
+HTTP/2 200 
+content-type: text/html
+server: cloudflare
+body-shape=non-json
+
+[staging-https-root]
+HTTP/2 200 
+content-type: text/html
+server: cloudflare
+body-shape=non-json
+
+[staging-health]
+HTTP/2 404 
+server: cloudflare
+body-shape=non-json
+
+[staging-readyz]
+HTTP/2 404 
+server: cloudflare
+body-shape=non-json
+
+[staging-providers]
+HTTP/2 404 
+server: cloudflare
+body-shape=non-json
+
+[staging-metrics]
+HTTP/2 404 
+server: cloudflare
+body-shape=non-json
+
+[staging-mobile-callback]
+HTTP/2 200 
+content-type: text/html
+server: cloudflare
+body-shape=non-json
+
+[app-health]
+HTTP/2 200 
+content-type: application/json
+server: cloudflare
+body-shape=clock,project_search_available,provider,schema_version,search_provider,status
+status=ok
+schema_version=v1
+
+[app-readyz]
+HTTP/2 200 
+content-type: application/json
+server: cloudflare
+body-shape=status
+status=ready
+
+[api-factor-canonical]
+HTTP/2 200 
+content-type: application/json
+server: cloudflare
+body-shape=admission,as_of,content_hash,created_at,dsl_version,factor_ids,integrity,library_version,metric_version,schema_version,shards,source_refs
+schema_version=v1
+library_version=v1.0.0
+shards=[{'shard_id': 'factor-shard:core', 'content_hash': 'ae543fcdef2f6c419f834a0b6f8a36096e61bb7f69912f1b9306d6c441b0d6cf', 'row_count': 1, 'from': '2026-08-10T00:00:00Z', 'to': '2026-08-10T00:00:00Z'}]
+
+[api-factor-unversioned]
+HTTP/2 404 
+content-type: application/json
+server: cloudflare
+body-shape=detail
+detail=Not Found
+
+EXIT_STATUS: 0 (probe script completed; each curl status recorded above)

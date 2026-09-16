@@ -1,0 +1,49 @@
+
+===== COMMAND: stat -c %a %n /home/lxx/.cloudflared/key.txt =====
+600 /home/lxx/.cloudflared/key.txt
+EXIT_STATUS: 0
+
+===== COMMAND: GET zone always_use_https =====
+HTTP_STATUS:200 success=True value=off errors=
+
+===== COMMAND: curl -A Mozilla/5.0 ForesightNine-readonly-probe -k -sS -o /dev/null -D - --max-time 20 http://app.foresightnine.com/ =====
+HTTP/1.1 530 <none>
+Date: Mon, 31 Aug 2026 15:25:39 GMT
+Content-Type: text/plain; charset=UTF-8
+Content-Length: 17
+Connection: keep-alive
+Cache-Control: private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0
+Expires: Thu, 01 Jan 1970 00:00:01 GMT
+Referrer-Policy: same-origin
+X-Frame-Options: SAMEORIGIN
+Server: cloudflare
+CF-RAY: a33d0c8f08cf8811-SIN
+alt-svc: h3=":443"; ma=86400
+
+EXIT_STATUS: 0
+
+===== COMMAND: curl -A Mozilla/5.0 ForesightNine-readonly-probe -k -sS -o /dev/null -D - --max-time 20 http://staging.foresightnine.com/ =====
+HTTP/1.1 530 <none>
+Date: Mon, 31 Aug 2026 15:25:39 GMT
+Content-Type: text/plain; charset=UTF-8
+Content-Length: 17
+Connection: keep-alive
+Cache-Control: private, max-age=0, no-store, no-cache, must-revalidate, post-check=0, pre-check=0
+Expires: Thu, 01 Jan 1970 00:00:01 GMT
+Referrer-Policy: same-origin
+X-Frame-Options: SAMEORIGIN
+Server: cloudflare
+CF-RAY: a33d0c91ff14832b-SIN
+alt-svc: h3=":443"; ma=86400
+
+EXIT_STATUS: 0
+
+===== COMMAND: cloudflared --config /home/lxx/.cloudflared/foresightnine-api-staging.yml tunnel ingress validate =====
+Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+EXIT_STATUS: 0
+
+===== COMMAND: systemctl --user is-active foresightnine-cloudflared.service =====
+active
+EXIT_STATUS: 0
+BASELINE_FINISHED=2026-08-31T23:25:39+08:00

@@ -1,0 +1,113 @@
+--- problem.md ---
+diff --git a/src/repair-evidence/play-permission-current-20260910/baseline-files/problem.md.orig b/src/docs/problem.md
+index ac2d187..378204b 100644
+--- a/src/repair-evidence/play-permission-current-20260910/baseline-files/problem.md.orig
++++ b/src/docs/problem.md
+@@ -1,6 +1,6 @@
+ # ForesightNine 五维只读审计报告（含修复后复测）
+ 
+-> **当前复核说明（2026-09-10）**：下方 2026-08-31 内容保留为历史基线；本节“当前复核”是现阶段权威状态。最新只读矩阵显示 OLD 的 internal/closed/open 分别为 HTTP 200/404/403，NEW 三个轨道均为 HTTP 403；此前也观察到两者 internal 均 HTTP 200，记录为按 credential/轨道变化的间歇性 Play 轨道权限或服务响应问题，PLAY-01 保持观察状态。两个订阅商品可读但仍为 `DRAFT`；Cline 本机池、计费账本、Android Billing 桥接、Web/Mobile logout 客户端和 Secret Scan 已完成实现与复测。
++> **当前复核说明（2026-09-10）**：下方 2026-08-31 内容保留为历史基线；本节“当前复核”是现阶段权威状态。最新 5 次/轨道只读采样中，OLD 与 NEW 的 internal/closed/open 均为 HTTP 403 `PERMISSION_DENIED`；此前曾观察到 internal HTTP 200 以及 OLD 的 200/404/403 矩阵，记录为轨道读取间歇性或权限传播不稳定，PLAY-01 保持外部复核状态。两个订阅商品可读但仍为 `DRAFT`；Cline 本机池、计费账本、Android Billing 桥接、Web/Mobile logout 客户端和 Secret Scan 已完成实现与复测。
+ 
+ ## 当前复核（2026-09-10）
+ 
+@@ -11,7 +11,7 @@
+ - Cline 本机池通过通用 OpenAI-compatible 适配器接入 API；当前实测模型为 `deepseek/deepseek-v4-flash`，`glm-5.3-flash` 保留为无覆盖时的默认回退。
+ - 服务端额度：Free 200,000、Pro 30,000,000/月、Max 500,000,000/月；provider `total_tokens` 已进入账本，超额返回 `quota_exceeded`。
+ - Google Play token exchange 与 `androidpublisher` scope：PASS；`foresightnine_pro/monthly`、`foresightnine_max/monthly` 读取 HTTP 200，价格分别为 USD 20/USD 200，状态均为 `DRAFT`。
+-- 订阅目录读取 HTTP 200；最新只读矩阵为 OLD internal/closed/open=`200/404/403`，NEW internal/closed/open=`403/403/403`；此前曾取得两者 internal HTTP 200 和两者连续 HTTP 403，故 PLAY-01 保持间歇性权限/服务响应观察。
++- 订阅目录读取 HTTP 200；最新 5 次/轨道双 credential 采样均为 HTTP 403、reason=`PERMISSION_DENIED`；此前曾取得 internal HTTP 200，PLAY-01 当前按轨道权限/传播不稳定处理。
+ - JSON logout HTTP 200，注销后 `/v1/account` HTTP 401；删除账户后 `/v1/account` HTTP 401、再次登录 HTTP 401。Web/Mobile 客户端已发送符合 API 边界的 JSON logout 请求。
+ - 根测试 `266 passed, 1 skipped`、Secret Scan PASS、generated contracts PASS、release-candidate PASS；Web 66、Mobile 63 测试通过。
+ 
+@@ -19,7 +19,7 @@
+ 
+ | ID | 严重级别 | 当前状态 | 证据/复现命令 | 下一步 |
+ |---|---|---|---|---|
+-| PLAY-01 | P1 | `PENDING_INTERMITTENT_PERMISSION_RECHECK` | 最新 3 次矩阵：OLD internal/closed/open=`200/404/403`，NEW=`403/403/403`；订阅目录与商品详情 HTTP 200；此前也出现两者 internal=`200` | 同一 Service Account 的不同 key 对相同 read scope 应得到一致且稳定的轨道结果；未配置轨道才应返回 404 | credential/轨道结果不一致，可能阻断自动化轨道核验和 Billing 前置确认 | 在 Play Console 核对 app-level track 权限、Active 状态和传播；用同一时段的 OLD/NEW token 连续复测 |
++| PLAY-01 | P1 | `PENDING_EXTERNAL_PERMISSION_RECHECK` | 最新 5 次/轨道双 credential `GET .../tracks/{internal,closed,open}/releases` 均 HTTP 403，JSON reason=`PERMISSION_DENIED`；订阅目录与商品详情 HTTP 200；历史采样曾出现 internal HTTP 200 | 同一 Service Account 对相同 read scope 的轨道结果应稳定；未配置轨道才应返回 404 | 当前 track read 未稳定，自动化 release/Billing 前置确认受影响 | 在 Play Console 核对 app-level track 权限、Active 状态和传播；传播后同一时段复测双 credential 三轨道 |
+ | BILL-01 | P1 | `PENDING_EXTERNAL` | `GET .../subscriptions/{foresightnine_pro,foresightnine_max}` → HTTP 200，但 monthly 均 `DRAFT` | 在 Play Console 激活两个 base plan，再执行 License Tester 购买 |
+ | BILL-02 | P1 | `PENDING_EXTERNAL` | Linux `adb devices` 无设备；checkout 当前只有 debug APK | 提供 release/internal-test AAB 与 Windows Play Store 模拟器，完成真实 Billing 矩阵 |
+ | PLAY-02 | P2 | `TOOLCHAIN_GAP` | `command -v gcloud fastlane bundle` 无结果 | 后续任务安装并固定工具版本 |
+@@ -41,7 +41,7 @@
+ 
+ 截至当前复核，Cloudflare、Cline OpenAI-compatible provider、API 计费账本、Android Billing 桥接、Web/Mobile 账户状态和 Google Play 只读 API 均有现行证据。生产发布和真实 Billing 购买仍未判定通过。
+ 
+-当前主要未闭合项是：两个 Play monthly base plan 仍为 `DRAFT`；track read 在 OLD/NEW credential 间出现 200/404/403 不一致，仍需 Play Console 权限与传播稳定性复核；真实购买需要 base plan 激活、License Tester、internal opt-in、正式签名 AAB 和连接中的 Play Store 模拟器；生产 preflight 仍按设计失败。
++当前主要未闭合项是：两个 Play monthly base plan 仍为 `DRAFT`；最新 5 次/轨道双 credential track read 均 HTTP 403 `PERMISSION_DENIED`，历史采样曾短暂返回 200/404，仍需 Play Console 权限与传播稳定性复核；真实购买需要 base plan 激活、License Tester、internal opt-in、正式签名 AAB 和连接中的 Play Store 模拟器；生产 preflight 仍按设计失败。
+ 
+ P0：当前未发现已由只读证据确认的 P0。
+ 
+@@ -67,7 +67,7 @@ P0：当前未发现已由只读证据确认的 P0。
+ | AUTH-01 | P1 | 认证/CF | `curl -i -H 'Origin: https://app.foresightnine.com' https://api-staging.foresightnine.com/health` | 修复后 HTTP 200，返回 `Access-Control-Allow-Origin: https://app.foresightnine.com`；staging Origin 仍通过 | app 正式来源应被 API 明确允许 | 原阻断已解除 | 已在 Compose 加入 app 与 staging 两个 HTTPS origin，并重建 API | RESOLVED_2026-08-31 |
+ | CF-01 | P1 | CF | `curl -sS -D - https://app.foresightnine.com/readyz` | 修复后 HTTP 200，`application/json`，`status=ready` | readiness 应返回 API JSON | 原假阳性已解除 | 已在 app Tunnel ingress 增加精确 `/readyz`→API 路由并重启用户级 Tunnel | RESOLVED_2026-08-31 |
+ | DATA-01 | P1 | 数据 | `docker inspect docker-api-1 ...`（仅比较配置键状态）；`curl -sS https://api-staging.foresightnine.com/health` | 修复后运行值为 `glm_coding`，公网 provider 为 `openai-compatible`，status=ok | 部署声明、运行注入和 health 语义一致 | 原配置漂移已解除；实际 provider 可用性仍需业务 smoke | Compose 改为读取 deployment env 的非 secret provider 选择值；secret 仍仅在服务端环境 | RESOLVED_2026-08-31 |
+-| PLAY-01 | P1 | Google Play | 只读 JWT probe；`GET .../applications/com.foresightnine.mobile/tracks/{internal,closed,open}/releases` | 最新 3 次矩阵：OLD internal/closed/open=`200/404/403`，NEW=`403/403/403`；订阅目录与商品详情 HTTP 200；此前两者 internal 均 HTTP 200 | 同一 Service Account 对同一 scope 的轨道结果应稳定一致；未配置轨道才应返回 HTTP 404 | OLD/NEW 与轨道结果不一致，自动化测试 release 读取仍未稳定 | 在 Play Console 核对 app-level track 权限、Active 状态和传播；随后同一时段复测双 credential 三轨道 | PENDING_INTERMITTENT_PERMISSION_RECHECK_2026-09-10 |
++| PLAY-01 | P1 | Google Play | 只读 JWT probe；`GET .../applications/com.foresightnine.mobile/tracks/{internal,closed,open}/releases` | 最新 5 次/轨道双 credential 均 HTTP 403、reason=`PERMISSION_DENIED`；订阅目录与商品详情 HTTP 200；历史采样曾出现 internal HTTP 200 和 OLD 200/404/403 | 同一 Service Account 对同一 scope 的轨道结果应稳定一致；未配置轨道才应返回 HTTP 404 | Track read 当前未稳定，自动化测试 release 读取与 Billing 前置确认受影响 | 在 Play Console 核对 app-level track 权限、Active 状态和传播；随后同一时段复测双 credential 三轨道 | PENDING_EXTERNAL_PERMISSION_RECHECK_2026-09-10 |
+ | AUTH-02 | P1 | 认证 | `docker logs --since 2h docker-api-1 2>&1 | grep -E 'oauth_callback_(failed|ticket_issued)|/v1/auth/oauth/exchange|/api/auth/callback'`；数据库 auth identity/session 只读计数 | Google 真实 callback HTTP 303；`POST /v1/auth/oauth/exchange` HTTP 200；Google identity 1、auth_sessions 8；GitHub 登录此前已有 callback/exchange 200；修复前 token exchange 阶段报 `OAuthProviderError`，修复为 Google `grant_type=authorization_code` | 真实授权后 callback 完成 code→token→identity→session | Google/GitHub 登录闭环已解除；公网 refresh/logout 未在本轮重复操作，本地相关测试已覆盖 | 保留 callback/exchange/session 日志的脱敏观测；下一轮单独复核 refresh/logout，不记录 code/token | RESOLVED_LOGIN_2026-08-31 |
+ | CF-02 | P1 | CF | `PATCH /zones/<zone>/settings/always_use_https`；`curl -sS -D - -o /dev/null http://{app,staging,api-staging}.foresightnine.com/` | Zone API HTTP 200，`success=true`、`value=on`；三个 HTTP host 均 HTTP 301，Location 指向同 host 的 HTTPS URL；无 DNS/计费变更 | HTTP 请求应 301/308 到对应 HTTPS | 明文入口已统一收敛 | 保持 Zone Always Use HTTPS=on；HTTPS 终端和 Tunnel ingress 继续单独复核 | RESOLVED_2026-08-31 |
+ | GOV-01 | P1 | 其余 | `corepack pnpm verify:boundaries`；`node --test scripts/verify/boundaries.test.mjs` | 两者均 exit 0；三份 Windows 记录路径解析到 Linux checkout，hash 和 size 全部匹配 | 治理检查应使用可移植路径并在目标 checkout 正常运行 | Linux CI/审计已恢复可判定性 | 保留平台无关路径解析和实际 Git root 检查；不修改基线 | RESOLVED_2026-08-31 |
+@@ -138,11 +138,11 @@ P0：当前未发现已由只读证据确认的 P0。
+ 
+ ## 4. Google Play 侧
+ 
+-- 两份本地 Play credential 已独立只读验证：OLD 与 NEW token exchange 均 PASS，订阅目录及 Pro/Max 商品详情均 HTTP 200；最新 3 次矩阵为 OLD internal/closed/open=`200/404/403`、NEW=`403/403/403`，此前两者 internal 均 HTTP 200。比较结果为 `SAME_SERVICE_ACCOUNT_DIFFERENT_KEY`，结果差异不能归因于 product 配置，继续核对 Play Console 授权传播或服务响应稳定性。
++- 两份本地 Play credential 已独立只读验证：OLD 与 NEW token exchange 均 PASS，订阅目录及 Pro/Max 商品详情均 HTTP 200；最新 5 次/轨道两者 Internal/closed/open 均 HTTP 403 `PERMISSION_DENIED`，历史采样曾出现 internal HTTP 200。比较结果为 `SAME_SERVICE_ACCOUNT_DIFFERENT_KEY`，轨道问题与 key 选择无关，继续核对 Play Console 授权传播或服务响应稳定性。
+ 
+ - `/home/lxx/.config/google-play/service-account.json` 存在、JSON 结构有效、权限为 600；没有在报告或终端输出任何字段值。
+ - 使用短生命周期 JWT assertion 在内存签名并交换 access token：token endpoint HTTP 200；tokeninfo HTTP 200；scope 含 `androidpublisher`；过期字段存在。token 未落盘。
+-- 对 `com.foresightnine.mobile` 的 internal、closed、open releases 仅执行 GET：最新 3 次矩阵为 OLD internal/closed/open=`200/404/403`、NEW=`403/403/403`；此前两者 internal 均 HTTP 200。订阅目录和两个商品详情 HTTP 200。没有调用 `edits.insert`、upload、commit、track update、user/grant mutation、billing、orders、subscriptions、refund 或生产发布接口。
++- 对 `com.foresightnine.mobile` 的 internal、closed、open releases 仅执行 GET：最新 5 次/轨道双 credential 均 HTTP 403、reason=`PERMISSION_DENIED`；订阅目录和两个商品详情 HTTP 200。没有调用 `edits.insert`、upload、commit、track update、user/grant mutation、billing、orders、subscriptions、refund 或生产发布接口。
+ - 仓库未找到可用 Developer ID 引用，因此没有调用 Users API；Service Account 的最终 Play Console 包级读取/轨道证据仍待外部核对。接口语义依据 [Google Play API Getting Started](https://developers.google.com/android-publisher/getting_started?hl=en)、[Users API](https://developers.google.com/android-publisher/api-ref/rest/v3/users) 和 [Track Releases List](https://developers.google.com/android-publisher/api-ref/rest/v3/applications/tracks/releases/list)。
+ - `gcloud`、`fastlane`、`bundle` 均未安装；按计划只记录，不安装和配置。
+ 
+@@ -174,7 +174,7 @@ P0：当前未发现已由只读证据确认的 P0。
+ - AUTH-02：Google/GitHub 真实登录 callback、token exchange 和 session 已复测；Google token 请求已补齐 `grant_type=authorization_code`。
+ 
+ ### 待处理的 P1（历史段；当前状态以“当前复核”节为准）
+-- PLAY-01：最新双 credential 三轨道矩阵为 OLD=`200/404/403`、NEW=`403/403/403`；此前两者 internal 均 HTTP 200，状态保持 `PENDING_INTERMITTENT_PERMISSION_RECHECK`。
++- PLAY-01：最新 5 次/轨道双 credential 均 HTTP 403 `PERMISSION_DENIED`；此前采样曾出现 HTTP 200/404，状态保持 `PENDING_EXTERNAL_PERMISSION_RECHECK`。
+ - BILL-01：两个 monthly base plan 当前仍为 `DRAFT`，等待 Play Console 激活后进行测试购买。
+ - BILL-02：真实 Billing 购买仍等待 release/internal-test AAB、License Tester 和连接中的 Play Store 模拟器。
+ 
+@@ -189,7 +189,7 @@ P0：当前未发现已由只读证据确认的 P0。
+ 
+ ### 已通过
+ 
+-API/Web/Mobile 本地测试、类型检查、契约生成漂移、secret scan、Compose config、依赖漏洞计数、Tunnel ingress validate、用户级服务状态、容器健康、HTTPS 证书、provider readiness、OAuth start redirect、无参 callback fail-closed、assetlinks JSON/package/fingerprint 匹配、Google Play credential mode/JSON/token scope、订阅目录和双 credential track read 只读验证；轨道结果不一致保留为观察项。
++API/Web/Mobile 本地测试、类型检查、契约生成漂移、secret scan、Compose config、依赖漏洞计数、Tunnel ingress validate、用户级服务状态、容器健康、HTTPS 证书、provider readiness、OAuth start redirect、无参 callback fail-closed、assetlinks JSON/package/fingerprint 匹配、Google Play credential mode/JSON/token scope、订阅目录和双 credential track read 只读验证；最新 track 采样均为 403，历史不一致结果保留为观察项。
+ 
+ ### 未执行
+ 
+--- plan.md ---
+diff --git a/src/repair-evidence/play-permission-current-20260910/baseline-files/plan.md.orig b/plan.md
+index c237e19..2a3fcb3 100644
+--- a/src/repair-evidence/play-permission-current-20260910/baseline-files/plan.md.orig
++++ b/plan.md
+@@ -1243,8 +1243,8 @@ Google 官方说明了 License Tester 与 Billing 测试流程；Billing 实现
+   两个订阅商品仍需在测试轨道激活后，才能执行真实 Billing 购买验收。
+ - 两个订阅商品已由 Android Publisher API 读回：`foresightnine_pro/monthly`
+   为 USD 20、`foresightnine_max/monthly` 为 USD 200，当前均为 `DRAFT`；
+-  最新 3 次矩阵为 OLD internal/closed/open=`200/404/403`、NEW=`403/403/403`；
+-  此前一轮两者 internal 均 HTTP 200，保留为间歇性稳定性证据。
++  最新 5 次/轨道矩阵为 OLD/NEW internal/closed/open 均 `403/403/403`；
++  历史采样曾出现 internal HTTP 200 和 OLD `200/404/403`，保留为间歇性稳定性证据。
+ - Android Billing 原生桥接已通过 `compileDebugKotlin` 和 `assembleDebug`；
+   生成的 debug APK 仅用于 QA，Linux 当前没有可用 adb 设备，也没有 release
+   keystore，因此尚未进行 Play 安装和真实测试购买。
+--- governance-baseline.json ---
+diff --git a/src/repair-evidence/play-permission-current-20260910/baseline-files/governance-baseline.json.orig b/src/docs/verification/governance-baseline.json
+index a6f0253..a1195e5 100644
+--- a/src/repair-evidence/play-permission-current-20260910/baseline-files/governance-baseline.json.orig
++++ b/src/docs/verification/governance-baseline.json
+@@ -4,8 +4,8 @@
+   "files": [
+     {
+       "path": "D:\\Foresightnine\\plan.md",
+-      "size": 44490,
+-      "sha256": "46f16418dbc1578bdf2db700e77867a6a3fdb66d568f45c5181abab1d7b12bf3"
++      "size": 44506,
++      "sha256": "b8f42dd7c84a178ce28cb65559ee0c73553bb5514b928156ed30af03469676a9"
+     },
+     {
+       "path": "D:\\Foresightnine\\agent.md",

@@ -1,0 +1,279 @@
+--- a/apps/api/app/billing.py
++++ b/apps/api/app/billing.py
+@@ -156,6 +156,8 @@
+     period_start: datetime
+     period_end: datetime
+     raw_state: str
++    acknowledgement_state: Literal["pending", "acknowledged"] = "pending"
++    obfuscated_account_id: str | None = None
+ 
+ 
+ class GooglePlayVerifyRequest(BaseModel):
+@@ -199,7 +201,13 @@
+     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+ 
+ 
+-def parse_google_subscription(payload: Mapping[str, Any], *, expected_product_id: str, expected_base_plan_id: str) -> VerifiedGooglePurchase:
++def parse_google_subscription(
++    payload: Mapping[str, Any],
++    *,
++    expected_product_id: str,
++    expected_base_plan_id: str,
++    expected_obfuscated_account_id: str | None = None,
++) -> VerifiedGooglePurchase:
+     """Validate only the fields needed to bind a Play purchase to an account."""
+     line_items = payload.get("lineItems")
+     if not isinstance(line_items, list) or len(line_items) != 1 or not isinstance(line_items[0], dict):
+@@ -221,10 +229,19 @@
+     }
+     state = state_map.get(raw_state)
+     expiry = item.get("expiryTime")
+-    if not isinstance(raw_state, str) or state is None or not isinstance(expiry, str):
++    start = payload.get("startTime")
++    acknowledgement = {
++        "ACKNOWLEDGEMENT_STATE_PENDING": "pending",
++        "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED": "acknowledged",
++    }.get(payload.get("acknowledgementState"))
++    identifiers = payload.get("externalAccountIdentifiers")
++    obfuscated_account_id = identifiers.get("obfuscatedExternalAccountId") if isinstance(identifiers, dict) else None
++    if expected_obfuscated_account_id is not None and obfuscated_account_id != expected_obfuscated_account_id:
++        raise BillingError(409, "billing_account_mismatch", "The purchase is not bound to the signed-in account.")
++    if not isinstance(raw_state, str) or state is None or not isinstance(expiry, str) or acknowledgement is None:
+         raise BillingError(502, "billing_provider_invalid", "Google Play returned an invalid subscription state.")
+     period_end = _parse_rfc3339(expiry)
+-    period_start = _utc(datetime.now(timezone.utc))
++    period_start = _parse_rfc3339(start) if isinstance(start, str) else _utc(datetime.now(timezone.utc))
+     return VerifiedGooglePurchase(
+         product_id=product_id,
+         base_plan_id=base_plan_id,
+@@ -232,6 +249,8 @@
+         period_start=period_start,
+         period_end=period_end,
+         raw_state=raw_state,
++        acknowledgement_state=acknowledgement,
++        obfuscated_account_id=obfuscated_account_id,
+     )
+ 
+ 
+@@ -254,7 +273,14 @@
+             raise BillingError(503, "billing_provider_unavailable", "Google Play verification is unavailable.", retry_after=30)
+         return credentials.token
+ 
+-    def fetch(self, purchase_token: str, *, expected_product_id: str, expected_base_plan_id: str) -> VerifiedGooglePurchase:
++    def fetch(
++        self,
++        purchase_token: str,
++        *,
++        expected_product_id: str,
++        expected_base_plan_id: str,
++        expected_obfuscated_account_id: str,
++    ) -> VerifiedGooglePurchase:
+         import requests
+         token = self._access_token()
+         url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.foresightnine.mobile/purchases/subscriptionsv2/tokens/" + quote(purchase_token, safe="")
+@@ -269,13 +295,25 @@
+             raise BillingError(502, "billing_provider_invalid", "Google Play returned an invalid subscription response.") from error
+         if payload.get("packageName") != "com.foresightnine.mobile":
+             raise BillingError(409, "billing_package_mismatch", "The purchase belongs to a different application.")
+-        return parse_google_subscription(payload, expected_product_id=expected_product_id, expected_base_plan_id=expected_base_plan_id)
++        return parse_google_subscription(
++            payload,
++            expected_product_id=expected_product_id,
++            expected_base_plan_id=expected_base_plan_id,
++            expected_obfuscated_account_id=expected_obfuscated_account_id,
++        )
+ 
+     def acknowledge(self, purchase_token: str, product_id: str) -> None:
+         import requests
+         token = self._access_token()
+-        url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.foresightnine.mobile/purchases/subscriptions/" + quote(product_id, safe="") + ":acknowledge"
+-        response = requests.post(url, params={"token": purchase_token}, headers={"Authorization": "Bearer " + token}, json={}, timeout=20)
++        url = (
++            "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/"
++            "com.foresightnine.mobile/purchases/subscriptions/"
++            + quote(product_id, safe="")
++            + "/tokens/"
++            + quote(purchase_token, safe="")
++            + ":acknowledge"
++        )
++        response = requests.post(url, headers={"Authorization": "Bearer " + token}, json={}, timeout=20)
+         if response.status_code not in {200, 204}:
+             raise BillingError(503, "billing_acknowledge_failed", "Google Play purchase acknowledgement is temporarily unavailable.", retry_after=30)
+ 
+--- a/apps/api/app/main.py
++++ b/apps/api/app/main.py
+@@ -1580,19 +1580,27 @@
+     ).strip()
+     verifier = GooglePlaySubscriptionVerifier(credentials_path)
+     try:
++        expected_obfuscated_account_id = sha256(account.account_id.encode("utf-8")).hexdigest()
+         verified = verifier.fetch(
+             request.purchase_token,
+             expected_product_id=request.product_id,
+             expected_base_plan_id=request.base_plan_id,
++            expected_obfuscated_account_id=expected_obfuscated_account_id,
+         )
+-        if verified.subscription_state not in {"pending", "on_hold", "canceled", "expired"}:
+-            verifier.acknowledge(request.purchase_token, verified.product_id)
+         snapshot = billing_ledger.apply_google_purchase(
+             account.account_id,
+             request.purchase_token,
+             verified,
+             now=lifecycle_clock.now(),
+         )
++        # Grant the verified entitlement before acknowledgement. A retry is
++        # idempotent if the acknowledgement call transiently fails after the
++        # durable entitlement write.
++        if (
++            verified.subscription_state not in {"pending", "on_hold", "canceled", "expired"}
++            and verified.acknowledgement_state == "pending"
++        ):
++            verifier.acknowledge(request.purchase_token, verified.product_id)
+     except BillingError as error:
+         response = JSONResponse(
+             {"schema_version": "v1", "error_code": error.code, "message": error.message, "retryable": error.status_code in {502, 503}},
+--- a/apps/api/tests/test_billing.py
++++ b/apps/api/tests/test_billing.py
+@@ -2,6 +2,7 @@
+ 
+ from datetime import datetime, timedelta, timezone
+ import base64
++from hashlib import sha256
+ from threading import Event, Thread
+ from time import sleep
+ 
+@@ -13,6 +14,7 @@
+     BillingError,
+     BillingLedger,
+     BillingState,
++    GooglePlaySubscriptionVerifier,
+     GooglePlayVerifyRequest,
+     PurchaseTokenCipher,
+     UsageLedgerEntry,
+@@ -139,21 +141,65 @@
+ 
+ 
+ def test_google_subscription_payload_binds_product_and_base_plan() -> None:
++    account_binding = sha256(b"account_google_play_123").hexdigest()
+     payload = {
+         "packageName": "com.foresightnine.mobile",
++        "startTime": "2026-09-01T00:00:00Z",
+         "subscriptionState": "SUBSCRIPTION_STATE_ACTIVE",
++        "acknowledgementState": "ACKNOWLEDGEMENT_STATE_PENDING",
++        "externalAccountIdentifiers": {"obfuscatedExternalAccountId": account_binding},
+         "lineItems": [{
+             "productId": "foresightnine_pro",
+             "expiryTime": "2026-10-01T00:00:00Z",
+             "offerDetails": {"basePlanId": "monthly"},
+         }],
+     }
+-    verified = parse_google_subscription(payload, expected_product_id="foresightnine_pro", expected_base_plan_id="monthly")
++    verified = parse_google_subscription(
++        payload,
++        expected_product_id="foresightnine_pro",
++        expected_base_plan_id="monthly",
++        expected_obfuscated_account_id=account_binding,
++    )
+     assert verified.subscription_state == "active"
+     assert verified.product_id == "foresightnine_pro"
++    assert verified.period_start == datetime(2026, 9, 1, tzinfo=timezone.utc)
++    assert verified.acknowledgement_state == "pending"
++    assert verified.obfuscated_account_id == account_binding
+     with pytest.raises(BillingError) as error:
+         parse_google_subscription(payload, expected_product_id="foresightnine_max", expected_base_plan_id="monthly")
+     assert error.value.code == "billing_product_mismatch"
++    with pytest.raises(BillingError) as account_error:
++        parse_google_subscription(
++            payload,
++            expected_product_id="foresightnine_pro",
++            expected_base_plan_id="monthly",
++            expected_obfuscated_account_id=sha256(b"different_account").hexdigest(),
++        )
++    assert account_error.value.code == "billing_account_mismatch"
++
++
++def test_google_play_acknowledgement_uses_the_documented_token_path(monkeypatch) -> None:
++    captured: dict[str, object] = {}
++
++    class Response:
++        status_code = 204
++
++    def post(url: str, **kwargs: object) -> Response:
++        captured["url"] = url
++        captured["kwargs"] = kwargs
++        return Response()
++
++    verifier = GooglePlaySubscriptionVerifier("unused-for-test")
++    monkeypatch.setattr(verifier, "_access_token", lambda: "test-only-access-token")
++    monkeypatch.setattr("requests.post", post)
++    verifier.acknowledge("purchase/token+value", "foresightnine_pro")
++
++    assert captured["url"] == (
++        "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/"
++        "com.foresightnine.mobile/purchases/subscriptions/foresightnine_pro/"
++        "tokens/purchase%2Ftoken%2Bvalue:acknowledge"
++    )
++    assert "params" not in captured["kwargs"]
+ 
+ 
+ def test_account_endpoint_exposes_server_authoritative_free_grant(monkeypatch) -> None:
+@@ -543,6 +589,7 @@
+         period_start=datetime(2026, 9, 1, tzinfo=timezone.utc),
+         period_end=datetime(2026, 10, 1, tzinfo=timezone.utc),
+         raw_state="SUBSCRIPTION_STATE_ACTIVE",
++        acknowledgement_state="pending",
+     )
+     pending = active.model_copy(update={
+         "product_id": "foresightnine_max",
+@@ -557,12 +604,15 @@
+         def __init__(self, _credentials_path: str) -> None:
+             pass
+ 
+-        def fetch(self, _purchase_token: str, *, expected_product_id: str, expected_base_plan_id: str):
++        def fetch(self, _purchase_token: str, *, expected_product_id: str, expected_base_plan_id: str, expected_obfuscated_account_id: str):
+             assert self.verified.product_id == expected_product_id
+             assert self.verified.base_plan_id == expected_base_plan_id
++            assert len(expected_obfuscated_account_id) == 64
+             return self.verified
+ 
+         def acknowledge(self, purchase_token: str, product_id: str) -> None:
++            states = list(ledger.states.values())
++            assert states and states[0].plan == "pro"
+             self.acknowledgements.append((purchase_token, product_id))
+ 
+     previous_ledger = main_module.billing_ledger
+@@ -588,6 +638,15 @@
+         assert active_response.json()["quota_limit"] == 30_000_000
+         assert FakeVerifier.acknowledgements == [("active-purchase-token-1234567890", "foresightnine_pro")]
+ 
++        FakeVerifier.verified = active.model_copy(update={"acknowledgement_state": "acknowledged"})
++        acknowledged_response = client.post(
++            "/v1/billing/google-play/restore",
++            headers=headers,
++            json={"purchase_token": "active-purchase-token-1234567890", "product_id": "foresightnine_pro", "base_plan_id": "monthly"},
++        )
++        assert acknowledged_response.status_code == 200
++        assert FakeVerifier.acknowledgements == [("active-purchase-token-1234567890", "foresightnine_pro")]
++
+         FakeVerifier.verified = pending
+         pending_response = client.post(
+             "/v1/billing/google-play/verify",
+--- a/docs/problem.md
++++ b/docs/problem.md
+@@ -9,6 +9,7 @@
+ - `PLAY-01`：`GET .../tracks/internal/releases` HTTP 200；可见一个已发布 release，名称 `0.1.0`，active artifact versionCode 1。原“轨道权限不稳定”按当前权威读数标记为 `RESOLVED_CURRENT`。
+ - `BILL-01`：Pro/Max 的 `monthly` base plan 均为 `ACTIVE`；商品价格仍为 USD 20/月与 USD 200/月。商品目录阻断标记为 `RESOLVED_2026-09-15`。
+ - `APP-LINK-01`：公网 assetlinks HTTP 200、包名匹配、证书列表共 4 条，并包含 Play App Signing 证书。Play 安装包的 OAuth App Link 配置阻断标记为 `RESOLVED_2026-09-15`。
++- `BILL-02-SERVER`：修正订阅 acknowledgement 为 Google 官方 `/subscriptions/{subscriptionId}/tokens/{token}:acknowledge` 路径；服务端现在校验 Play 返回的 `obfuscatedExternalAccountId` 必须匹配当前登录账户，并按“验证 → 持久化权益 → 必要时 acknowledge”的顺序执行。API 已重新部署并通过完整测试。
+ - Android upload keystore 与两份 DPAPI 口令文件的权限已由 `664` 收紧为 `600`，内容 hash 未变化。
+ - 新增 `apps/api/scripts/google_play_internal_release.py`：默认只验证 signed AAB，只有显式 `--publish` 才创建 Play edit；包名固定为 `com.foresightnine.mobile`、轨道固定为 `internal`，失败时丢弃未提交 edit。当前 unsigned v2 实测在任何网络写入前以 exit 2 停止。
+ - 新增 `scripts/release/sign-android-aab-windows.ps1`：由原 Windows 用户解密现有 DPAPI SecureString，通过 stdin 向 `jarsigner` 提供口令，保留 unsigned 输入并生成单独的 signed AAB；不把口令写入参数、文件、日志或 Git。
+@@ -17,7 +18,7 @@
+ 
+ | ID | 严重级别 | 当前状态 | 当前证据 | 下一步 |
+ |---|---|---|---|---|
+-| BILL-02 | P1 | `READY_FOR_SIGNING_AND_DEVICE_TEST` | versionCode 2 AAB 构建成功；Billing permission=YES；Billing native module present；Pro/Max base plan=ACTIVE；Windows 签名 helper 与 internal-only Publisher 脚本已就绪 | 在原 Windows 用户上下文运行签名 helper；将 signed AAB 交给 Publisher 脚本上传 internal；将实际 Gmail 加入 License testing/internal tester；在 Play Store 安装并执行测试购买、确认、恢复、取消/过期矩阵 |
++| BILL-02 | P1 | `SERVER_READY_FOR_SIGNING_AND_DEVICE_TEST` | versionCode 2 AAB 构建成功；Billing permission=YES；Billing native module present；Pro/Max base plan=ACTIVE；服务端 purchase-token 绑定、正确 acknowledgement URL、幂等权益写入已通过回归并部署；Windows 签名 helper 与 internal-only Publisher 脚本已就绪 | 在原 Windows 用户上下文运行签名 helper；将 signed AAB 交给 Publisher 脚本上传 internal；将实际 Gmail 加入 License testing/internal tester；在 Play Store 安装并执行测试购买、确认、恢复、取消/过期矩阵 |
+ | AND-01 | P1 | `PARTIALLY_RESOLVED` | v2 AAB 包名、版本、Billing、production App Link 均通过静态检查；AAB SHA-256=`3d0a2741097d67d843dd37342164ecb68e532ad83c68aee1407577531799007e`；当前 signature=`UNSIGNED`；Linux 无 adb 设备 | Windows 签名/上传后，以 Play 生成 APK 在 Play Store 模拟器或设备验证 domain verification、OAuth 回跳、session、Billing UI 与 entitlement 同步 |
+ | PLAY-02 | P2 | `API_AUTOMATION_AVAILABLE_TOOLCHAIN_OPTIONAL` | Python `google-auth` 已完成商品激活、商品读取与 internal track 读取；未依赖 gcloud/fastlane | 首次 signed AAB internal 上传稳定后再固定 fastlane 版本；当前不再是 Publisher API 操作阻断 |
+ 

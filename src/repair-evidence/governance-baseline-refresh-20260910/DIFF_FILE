@@ -1,0 +1,13 @@
+--- /home/lxx/Foresightnine/src/repair-evidence/governance-baseline-refresh-20260910/baseline-files/governance-baseline.json.orig	2026-09-10 02:42:48.362431812 +0800
++++ /home/lxx/Foresightnine/src/docs/verification/governance-baseline.json	2026-09-10 02:42:49.352200862 +0800
+@@ -4,8 +4,8 @@
+   "files": [
+     {
+       "path": "D:\\Foresightnine\\plan.md",
+-      "size": 26950,
+-      "sha256": "2740da112354f25408c60416b7b880e73431e4d7fea57e208494fd2d09ceef3c"
++      "size": 44380,
++      "sha256": "0eb5ebe03bf8b6282c88f742ce0df25e80ea01d4694ebd21164460c0214e66d4"
+     },
+     {
+       "path": "D:\\Foresightnine\\agent.md",

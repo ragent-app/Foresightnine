@@ -1,0 +1,38 @@
+CHANGE_BRANCH_FIELD=server billing entitlement/usage ledger and Google Play verify/restore routes; default provider model glm-5.3-flash; dependencies google-auth requests cryptography
+LIVE_MODIFIED_FILE=/home/lxx/Foresightnine/src/apps/api/app/billing.py
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-foundation-20260907/DIFF_FILE
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-foundation-20260907/ROLLBACK.sh
+BASELINE_HASHES=5dad0e63a4578a51b0da9fd2b02b6f448c4b85fa1f1e6a608a5493149540dce5  src/apps/api/app/main.py
+340e56f39b2e3489fc584f512f697e39df22abfe94ad9c9f19fd9e74791c2850  src/apps/api/app/phase3.py
+49b90e15521f19caed633a7973c60350fe224cb54a89d12df6917c7c56a7d251  src/apps/api/app/openai_compatible.py
+a0e04e4032b0702c80d7dbf689e2ac9c77273d003626a95b18a7a2eeb5a157fb  src/apps/api/pyproject.toml
+MODIFIED_HASHES=394127e4babf5b8ee79b29bab77d1ecbf41ed5c5685a8a20fb948b31f8e720d4  src/apps/api/app/main.py
+1e58d46c6ac48303852766c017d3e6da2d523ad2ca4850e40d9badd6dac7b466  src/apps/api/app/billing.py
+247f0c0e100c7c971928fee136eaa756b0d372006642ea4dff6800546fc067cc  src/apps/api/pyproject.toml
+
+BASELINE_COMMAND=uv run --project src/apps/api pytest -q
+BASELINE_INPUT=current checkout before billing foundation
+BASELINE_LITERAL_OUTPUT=250 passed, 1 skipped, 1 warning in 12.33s
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=uv run --project src/apps/api pytest -q
+MODIFIED_INPUT=billing.py, main.py account/billing routes, pyproject dependencies, billing tests
+MODIFIED_LITERAL_OUTPUT=255 passed, 1 skipped, 1 warning in 12.61s
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=ROLLBACK_TARGET_DIR=/home/lxx/Foresightnine/src/repair-evidence/billing-foundation-20260907/rollback-test-root /home/lxx/Foresightnine/src/repair-evidence/billing-foundation-20260907/ROLLBACK.sh
+ROLLBACK_INPUT=separate modified copy under rollback-test-root
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED
+ROLLBACK_COMPARE_EXIT_STATUS=0
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored to pre-billing main.py/pyproject and billing files removed; live checkout remains modified
+COMPILE_COMMAND=uv run --project src/apps/api python -m compileall -q src/apps/api/app
+COMPILE_LITERAL_OUTPUT=empty stdout
+COMPILE_EXIT_STATUS=0
+SCOPED_DIFF_CHECK_COMMAND=git diff --check -- src/apps/api/app/main.py src/apps/api/app/billing.py src/apps/api/app/pyproject.toml src/apps/api/tests/test_billing.py
+SCOPED_DIFF_CHECK_LITERAL_OUTPUT=
+SCOPED_DIFF_CHECK_EXIT_STATUS=0
+REPOSITORY_WIDE_DIFF_CHECK_NOTE=existing unrelated finding in src/docs/data/dataprovider指导.md:679; not part of this change

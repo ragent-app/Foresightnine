@@ -1,0 +1,36 @@
+ForesightNine mobile Billing/provider copy verification
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=mobile Console provider status and Google Play subscription copy
+CHANGE_DETAILS=replace stale Not configured/reserved-only copy with the live server OpenAI-compatible Cline-pool route and configured monthly Pro/Max server-authoritative quota copy; no credential, billing state, or Play product data changed
+
+LIVE_FILES=/home/lxx/Foresightnine/src/apps/mobile/src/i18n.ts;/home/lxx/Foresightnine/src/apps/mobile/app/console.tsx
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-copy-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-copy-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-copy-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-copy-20260910/ROLLBACK.sh
+EXTRA_MODIFIED_COPIES=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-copy-20260910/MODIFIED_console.tsx
+
+BASELINE_HASHES=src/apps/mobile/src/i18n.ts=ec12320b197a7ab30e304b359414417fbfdfe8c67c121bbbb3768dd7fcc88d5c; src/apps/mobile/app/console.tsx captured in baseline.sha256
+
+BASELINE_COMMAND=cd /home/lxx/Foresightnine/src/apps/mobile && npm test -- --run
+BASELINE_INPUT=live checkout immediately before the copy-only change
+BASELINE_LITERAL_OUTPUT=Test Files 8 passed (8); Tests 63 passed (63); MOBILE_TEST_EXIT=0
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=cd /home/lxx/Foresightnine/src/apps/mobile && npm test -- --run; npm run typecheck; cd android && NODE_ENV=development ANDROID_HOME=/home/lxx/Android/Sdk ANDROID_SDK_ROOT=/home/lxx/Android/Sdk ./gradlew --no-daemon :app:compileDebugKotlin
+MODIFIED_INPUT=live checkout with updated i18n.ts and console.tsx
+MODIFIED_LITERAL_OUTPUT=Test Files 8 passed (8); Tests 63 passed (63); MOBILE_TEST_EXIT=0; MOBILE_TYPECHECK_EXIT=0; BUILD SUCCESSFUL; ANDROID_COMPILE_WITH_QA_ENV_EXIT=0
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/mobile-billing-copy-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy of the modified i18n.ts and console.tsx
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY; ROLLBACK_COPY_VERIFY=PASS; LIVE_I18N_STILL_MODIFIED=PASS; LIVE_CONSOLE_STILL_MODIFIED=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy matched both baseline snapshots; live checkout remains modified
+
+CURRENT_RUNTIME_EVIDENCE=cloudflared user service active; Cline gateway active; gateway health JSON reported ok with keys=6 and alive=5; app /health HTTP 200; api /health HTTP 200; api /readyz HTTP 200
+CURRENT_PLAY_EVIDENCE=token exchange PASS; androidpublisher scope PASS; foresightnine_pro/monthly HTTP 200 USD 20 P1M DRAFT; foresightnine_max/monthly HTTP 200 USD 200 P1M DRAFT
+SECURITY=No credential JSON, private key, OAuth code, access token, cookie, or secret value is included.

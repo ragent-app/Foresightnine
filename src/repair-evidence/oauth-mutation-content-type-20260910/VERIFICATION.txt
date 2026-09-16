@@ -1,0 +1,36 @@
+ForesightNine OAuth mutation content-type verification
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=OAuth logout POST request content type/body
+CHANGE_DETAILS=the web and mobile OAuth clients now send an empty JSON object for POST /v1/auth/logout; DELETE account requests remain bodyless. This matches the API security boundary, which requires application/json for POST/PUT/PATCH.
+
+LIVE_FILES=/home/lxx/Foresightnine/src/apps/web/src/oauth-client.ts;/home/lxx/Foresightnine/src/apps/web/src/oauth-client.test.ts;/home/lxx/Foresightnine/src/apps/mobile/src/oauth-client.ts;/home/lxx/Foresightnine/src/apps/mobile/tests/oauth-client.test.ts
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_web-oauth-client.ts
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/ROLLBACK.sh
+EXTRA_MODIFIED_COPIES=/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_web-oauth-client.test.ts;/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_mobile-oauth-client.ts;/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_mobile-oauth-client.test.ts
+BASELINE_HASHES=see /home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/baseline.sha256
+
+BASELINE_COMMAND=(cd /tmp/tmp.Z99a1Ukfei && ./node_modules/.bin/vitest run --passWithNoTests oauth-client.test.ts); (cd /tmp/tmp.TIb0XLHiOv && ./node_modules/.bin/vitest run --passWithNoTests tests/oauth-client.test.ts)
+BASELINE_INPUT=separate copies using the pre-change web/mobile OAuth clients and pre-change tests
+BASELINE_LITERAL_OUTPUT=web: Test Files 1 passed (1); Tests 7 passed (7); BASELINE_WEB_OAUTH_EXIT=0; mobile: Test Files 1 passed (1); Tests 7 passed (7); BASELINE_MOBILE_OAUTH_EXIT=0
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=(cd /home/lxx/Foresightnine/src/apps/web && ./node_modules/.bin/vitest run --passWithNoTests src/oauth-client.test.ts); (cd /home/lxx/Foresightnine/src/apps/mobile && ./node_modules/.bin/vitest run --passWithNoTests tests/oauth-client.test.ts)
+MODIFIED_INPUT=live checkout after adding JSON content type/body to POST logout and assertions for both clients
+MODIFIED_LITERAL_OUTPUT=web: Test Files 1 passed (1); Tests 7 passed (7); MODIFIED_WEB_OAUTH_EXIT=0; mobile: Test Files 1 passed (1); Tests 7 passed (7); MODIFIED_MOBILE_OAUTH_EXIT=0
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ADDITIONAL_MODIFIED_CHECKS=web full suite 66 passed/exit 0; mobile full suite 63 passed/exit 0; web typecheck exit 0; mobile typecheck exit 0; public JSON logout HTTP 200; account after logout HTTP 401
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/oauth-mutation-content-type-20260910/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy containing all four modified client/test files
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY; ROLLBACK_COPY_VERIFY=PASS; LIVE_WEB_STILL_MODIFIED=PASS; LIVE_MOBILE_STILL_MODIFIED=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy matched all four baseline snapshots; live checkout remains modified
+
+DEPLOY_RESULT=Web build completed; foresightnine-web.service active; app /health HTTP 200; app /oauth/complete HTTP 200; staging root HTTP 200
+SECURITY=No credential JSON, private key, OAuth code, access token, cookie, or secret value is included.

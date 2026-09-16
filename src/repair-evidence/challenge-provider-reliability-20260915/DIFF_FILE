@@ -1,0 +1,99 @@
+--- a/apps/api/app/openai_compatible.py
++++ b/apps/api/app/openai_compatible.py
+@@ -140,7 +140,7 @@
+     """Server-owned generation controls for the fixed GLM Coding profile."""
+ 
+     thinking_enabled: bool = True
+-    reasoning_effort: str = "high"
++    reasoning_effort: str = "low"
+     do_sample: bool = False
+ 
+     def __post_init__(self) -> None:
+@@ -176,7 +176,7 @@
+     import os
+ 
+     thinking_raw = os.environ.get(_GLM_CODING_THINKING_ENV, "enabled")
+-    reasoning_effort = os.environ.get(_GLM_CODING_REASONING_EFFORT_ENV, "high").strip().lower()
++    reasoning_effort = os.environ.get(_GLM_CODING_REASONING_EFFORT_ENV, "low").strip().lower()
+     do_sample_raw = os.environ.get(_GLM_CODING_DO_SAMPLE_ENV, "false")
+     if reasoning_effort not in _GLM_CODING_REASONING_EFFORTS:
+         raise _invalid_glm_generation_config("reasoning_effort")
+@@ -394,7 +394,7 @@
+         # the server-owned route.  Exact URL + model matching prevents these
+         # vendor-specific fields from leaking into unrelated compatible APIs.
+         glm_generation = (
+-            GlmCodingGenerationSettings()
++            _glm_coding_generation_from_environment()
+             if base_url.rstrip("/") == _GLM_CODING_BASE_URL and model == _GLM_CODING_DEFAULT_MODEL
+             else None
+         )
+@@ -717,6 +717,12 @@
+                         "unresolved_issues", "citation_ids", "public_fact_citation_ids", "native_search_used",
+                     ],
+                     "questions_count": "Return one to three high-value questions.",
++                    "claims_count": "Return one to three concise claims.",
++                    "objections_count": "Return three to five distinct objections.",
++                    "missing_evidence_count": "Return two to five concrete evidence gaps.",
++                    "unresolved_issues_count": "Return zero to four unresolved issues.",
++                    "rubric_rationale_length": "Each rationale must be one concise sentence of at most 120 characters.",
++                    "readability": "Do not combine numbered items into prose; keep every item self-contained and non-repetitive.",
+                     "rubric_criteria_exact_order": list(RUBRIC_CRITERIA),
+                     "citation_policy": "citation_ids and public_fact_citation_ids must be exact subsets of input evidence_ids; when input evidence_ids is empty, return both as empty arrays; never invent evidence IDs.",
+                     "do_not_add_keys": True,
+--- a/apps/api/tests/test_openai_compatible_provider.py
++++ b/apps/api/tests/test_openai_compatible_provider.py
+@@ -79,7 +79,14 @@
+     assert calls[0][0:2] == ("POST", "https://llm.example.test/v1/chat/completions")
+     request_body = json.loads(calls[0][3])
+     assert request_body["model"] == "test-model"
+-    assert "same natural language as input.claim" in request_body["messages"][1]["content"]
++    prompt = json.loads(request_body["messages"][1]["content"])
++    assert "same natural language as input.claim" in prompt["language"]
++    constraints = prompt["response_constraints"]
++    assert constraints["claims_count"] == "Return one to three concise claims."
++    assert constraints["objections_count"] == "Return three to five distinct objections."
++    assert constraints["missing_evidence_count"] == "Return two to five concrete evidence gaps."
++    assert constraints["rubric_rationale_length"] == "Each rationale must be one concise sentence of at most 120 characters."
++    assert constraints["readability"] == "Do not combine numbered items into prose; keep every item self-contained and non-repetitive."
+ 
+ 
+ def test_connection_probe_falls_back_to_minimal_chat_when_models_listing_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+@@ -217,7 +224,7 @@
+     assert built.policy.timeout_seconds == 120
+     assert built.policy.max_output_tokens == 4000
+     assert payload["thinking"] == {"type": "enabled"}
+-    assert payload["reasoning_effort"] == "high"
++    assert payload["reasoning_effort"] == "low"
+     assert payload["do_sample"] is False
+ 
+ 
+@@ -468,7 +475,7 @@
+         "response_format",
+     }
+     assert body["thinking"] == {"type": "enabled"}
+-    assert body["reasoning_effort"] == "high"
++    assert body["reasoning_effort"] == "low"
+     assert body["do_sample"] is False
+     assert "temperature" not in body
+     assert "top_p" not in body
+@@ -476,6 +483,20 @@
+     assert body["response_format"] == {"type": "json_object"}
+ 
+ 
++def test_glm_coding_account_profile_inherits_low_reasoning_default(monkeypatch: pytest.MonkeyPatch) -> None:
++    monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
++    monkeypatch.delenv("FORESIGHTNINE_GLM_CODING_REASONING_EFFORT", raising=False)
++
++    settings = OpenAICompatibleSettings.from_account_values(
++        base_url="https://open.bigmodel.cn/api/coding/paas/v4",
++        model="glm-5.3-flash",
++        api_key=_SECRET,
++    )
++
++    assert settings.glm_generation is not None
++    assert settings.glm_generation.reasoning_effort == "low"
++
++
+ def test_glm_coding_profile_default_budget_allows_thinking_and_full_rubric(monkeypatch: pytest.MonkeyPatch) -> None:
+     captured: list[bytes] = []
+ 

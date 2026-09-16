@@ -1,0 +1,4 @@
+rollback-test-command: /home/lxx/Foresightnine/src/repair-evidence/repair-cf-https-20260831/ROLLBACK.sh --api-base http://127.0.0.1:18765/client/v4 --zone test-zone --token-file /tmp/fn-cf-rollback-token.txt
+HTTP_STATUS=200 value=off
+state_after=off
+rollback_copy_assertion=PASS

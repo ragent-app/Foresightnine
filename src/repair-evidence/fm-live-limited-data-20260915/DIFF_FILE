@@ -1,0 +1,173 @@
+--- a/apps/web/src/fixtures.ts
++++ b/apps/web/src/fixtures.ts
+@@ -1,7 +1,7 @@
+ import type { EvidenceItem, ProbabilityAssessment, ThesisDocument, Worldline } from "@foresightnine/contracts";
+ import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessPolicy, type FreshnessDecision, type ProviderFreshnessStatus } from "@foresightnine/domain";
+ import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
+-import { applyLatestCompletedSessionPrices, computeAnchorFactorMetrics, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
++import { computeAnchorFactorMetrics, computeMarketSnapshotIntegrityHash, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, SNAPSHOT_ANCHORS, type MarketSnapshotBundle } from "@foresightnine/market-data";
+ import type { AssetFixture, BranchView, Currency, EvidenceView, FreshnessOptions } from "./types";
+ 
+ export const MARKET_DATA_AS_OF = "2026-08-09";
+@@ -194,7 +194,25 @@
+ export const MARKET_DATA_STATUS = marketDataStatus(MARKET_SNAPSHOT_BUNDLE);
+ 
+ export function assetsForMarketBundle(bundle: MarketSnapshotBundle): readonly AssetFixture[] {
+-  return applyLatestCompletedSessionPrices(ASSET_FIXTURES, bundle);
++  const latest = new Map(bundle.snapshots.filter((row) => row.anchor === "latest_completed_session").map((row) => [row.assetId, row]));
++  return ASSET_FIXTURES.map((asset) => {
++    if (asset.assetClass === "cash" || asset.assetId === "CASH") return asset;
++    const row = latest.get(asset.assetId);
++    const price = row?.close ?? row?.price;
++    if (!row || row.status === "missing" || price === null || price === undefined || !Number.isFinite(price) || price <= 0) {
++      throw new Error(`No usable latest completed-session price for ${asset.assetId}.`);
++    }
++    if (row.currency !== "CNY" && row.currency !== "USD" && row.currency !== "EUR") {
++      throw new Error(`Unsupported quote currency for ${asset.assetId}.`);
++    }
++    return {
++      ...asset,
++      price,
++      quoteCurrency: row.currency,
++      asOf: row.asOf ?? bundle.cutoff.slice(0, 10),
++      freshness: row.status === "stale" ? "stale" : "current",
++    };
++  });
+ }
+ 
+ /** Live licensed bundles derive IC/ICIR from the three price anchors; vendor momentum/RSI/SMA-derived features drive the FM factors. */
+@@ -216,8 +234,50 @@
+   });
+ }
+ 
++function factorFields(expression: FactorExpression["expression"], fields = new Set<string>()): ReadonlySet<string> {
++  switch (expression.op) {
++    case "field": fields.add(expression.name); break;
++    case "constant": break;
++    case "add": case "sub": case "mul": case "div":
++      factorFields(expression.left, fields);
++      factorFields(expression.right, fields);
++      break;
++    case "neg": case "abs": case "rank": case "rolling_mean": case "rolling_std":
++      factorFields(expression.input, fields);
++      break;
++  }
++  return fields;
++}
++
++function factorHasCompleteInputs(factor: FactorExpression, bundle: MarketSnapshotBundle): boolean {
++  return [...factorFields(factor.expression)].every((field) => bundle.snapshots.every((row) => {
++    const value = field === "close" ? (row.close ?? row.price) : row.features?.[field];
++    return value !== null && value !== undefined && Number.isFinite(value);
++  }));
++}
++
+ export function fmInput(bundle: MarketSnapshotBundle = MARKET_SNAPSHOT_BUNDLE): ComputeFmInput {
+-  const converted = marketSnapshotBundleToFmInput(bundle, fmFactorsForBundle(bundle), { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
+-  if (converted.status !== "ready") throw new Error("The deterministic market snapshot bundle is limited and cannot drive the FM fixture.");
++  // Cash is the portfolio residual rather than a priced factor exposure.  A
++  // provider is allowed to return three explicit `missing` CASH rows; exclude
++  // that dimension from Raw FM instead of making the whole research flow
++  // impossible. Historical anchors marked stale remain usable for Raw only,
++  // while the freshness layer continues to block Public Default execution.
++  const cashRows = bundle.snapshots.filter((row) => row.assetId === "CASH");
++  const cashIsExplicitlyMissing = cashRows.length === SNAPSHOT_ANCHORS.length && cashRows.every((row) => row.status === "missing");
++  const fmAssetIds = cashIsExplicitlyMissing ? bundle.assets.filter((assetId) => assetId !== "CASH") : bundle.assets;
++  const fmSnapshots = bundle.snapshots.filter((row) => fmAssetIds.includes(row.assetId));
++  const fmBase = { ...bundle, assets: fmAssetIds, snapshots: fmSnapshots };
++  const fmBundle: MarketSnapshotBundle = { ...fmBase, integrityHash: computeMarketSnapshotIntegrityHash(fmBase) };
++  const currentByAsset = new Map(ASSET_FIXTURES.map((asset, index) => [asset.assetId, [280, 200, 180, 140, 120, 80][index]!]));
++  // Providers may expose a declared feature with null values (for example,
++  // momentum when the available history is shorter than its lookback).  FM
++  // evaluates every expression, including non-admitted factors, so omit only
++  // expressions whose required cells are incomplete and retain all complete
++  // factors.  This preserves a truthful limited-data result without allowing
++  // one unavailable feature to abort the whole local computation.
++  const usableFactors = fmFactorsForBundle(fmBundle).filter((factor) => factorHasCompleteInputs(factor, fmBundle));
++  const converted = marketSnapshotBundleToFmInput(fmBundle, usableFactors, { currentValues: Float64Array.from(fmAssetIds.map((assetId) => currentByAsset.get(assetId) ?? 0)), maxFactors: 10, initialAllocation: true, costBps: 3 });
++  const completeCells = converted.input.observations.every((observation) => Object.values(observation.fields).every((values) => values.length === fmAssetIds.length && values.every((value) => value !== null && Number.isFinite(value))));
++  if (!completeCells) throw new Error("The market snapshot bundle has missing non-cash factor cells and cannot drive Raw FM.");
+   return converted.input;
+ }
+--- a/apps/web/src/app.test.ts
++++ b/apps/web/src/app.test.ts
+@@ -1,7 +1,7 @@
+ import { describe, expect, it, vi } from "vitest";
+ import { assertProbabilityAssessment, assertWorldlineDates } from "@foresightnine/domain";
+ import { computeFm, mountFmWorker, type FmWorkerPort, type FmWorkerResponse } from "@foresightnine/fm-engine";
+-import { ASSET_FIXTURES, FX_SNAPSHOT, MARKET_DATA_AS_OF, PUBLIC_CONSTRAINTS, branches, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, privateEvidenceFixture, searchEvidenceFixture, sourceMaterialHash } from "./fixtures";
++import { ASSET_FIXTURES, FX_SNAPSHOT, MARKET_DATA_AS_OF, MARKET_SNAPSHOT_BUNDLE, PUBLIC_CONSTRAINTS, assetsForMarketBundle, branches, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, privateEvidenceFixture, searchEvidenceFixture, sourceMaterialHash } from "./fixtures";
+ import { allocationRows, canConfirmNormally, canConfirmReserved, canEnterStage, canSubmitReply, initialState, publicWeights, reducer, rubricDefaults, rubricDefaultsEn, safeStageFor, totalRubricScore } from "./state";
+ import { authoritativeChallengeFetchOptions, cancelAcceptedPendingReceipt, createGenerationGuard, operationReplayCursor, recoveryActionFor, replayPendingReceipt } from "./App";
+ import { CSV_HEADER, csvExport, navExport, researchExport } from "./exports";
+@@ -16,6 +16,7 @@
+ import { LanguageProvider, t } from "./i18n";
+ import { SocialLoginPanel } from "./components/SocialLoginPanel";
+ import { historical } from "./nav-data";
++import { computeMarketSnapshotIntegrityHash, type MarketSnapshotBundle } from "@foresightnine/market-data";
+ 
+ const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
+ 
+@@ -428,6 +429,39 @@
+ });
+ 
+ describe("FM worker and public delta", () => {
++  it("computes the raw FM slice when cash is missing, latest prices are stale, and one declared factor is unavailable", () => {
++    const snapshots = MARKET_SNAPSHOT_BUNDLE.snapshots.map((row, index) => row.assetId === "CASH"
++      ? { ...row, asOf: null, price: null, close: null, features: {}, status: "missing" as const }
++      : {
++        ...row,
++        status: row.anchor === "latest_completed_session" ? "stale" as const : "ok" as const,
++        features: {
++          momentum: null,
++          momentum_month: (row.features?.momentum ?? index + 1) * 0.8,
++          rsi14: 40 + index,
++          sma_ratio: 0.9 + index / 100,
++        },
++      });
++    const unhashed = {
++      ...MARKET_SNAPSHOT_BUNDLE,
++      provider: { id: "public-live", mode: "public" as const },
++      snapshots,
++      warnings: ["Cash is an explicit missing provider row."],
++    };
++    const liveBundle: MarketSnapshotBundle = { ...unhashed, integrityHash: computeMarketSnapshotIntegrityHash(unhashed) };
++
++    const assets = assetsForMarketBundle(liveBundle);
++    const input = fmInput(liveBundle);
++    const result = computeFm(input);
++
++    expect(assets.filter((asset) => asset.assetId !== "CASH").every((asset) => asset.freshness === "stale")).toBe(true);
++    expect(input.observations[0]?.fields.close).toHaveLength(5);
++    expect(input.observations[0]?.fields.momentum).toBeUndefined();
++    expect(input.observations[0]?.fields.momentum_month).toHaveLength(5);
++    expect(input.currentValues).toHaveLength(5);
++    expect(result.weights.weights).toHaveLength(5);
++  });
++
+   it("keeps the completed FM audit state visible before portfolio navigation", () => {
+     const readyRubric = rubricDefaults.map((item) => ({ ...item, score: 3 }));
+     let state = reducer({ ...initialState, stage: "worldline", viewpoint: "一个通过确认门槛的测试观点", challengeStatus: "complete", challengeTurns: [{ id: "system-1", author: "system", time: "现在", body: "挑战已启动" }, { id: "challenger-1", author: "challenger", time: "现在", body: "反方问题" }, { id: "user-1", author: "user", time: "现在", body: "用户回复" }], rubric: readyRubric, evidence: [searchEvidenceFixture], confirmation: "confirmed" }, { type: "fm_start" });
+--- a/apps/web/src/freshness.test.ts
++++ b/apps/web/src/freshness.test.ts
+@@ -61,12 +61,14 @@
+     expect(invalid.allowCurrentPublicDefault).toBe(false);
+   });
+ 
+-  it("rejects explicit missing/stale market rows instead of silently substituting mock prices", () => {
+-    for (const status of ["missing", "stale"] as const) {
+-      const bundle = bundleWithExplicitRowStatus(status);
+-      expect(marketDataStatus(bundle)).toBe("limited_data");
+-      expect(() => assetsForMarketBundle(bundle)).toThrow("No valid latest completed-session price for GRID.");
+-    }
++  it("rejects missing prices but retains stale provider prices as explicitly stale Raw inputs", () => {
++    const missing = bundleWithExplicitRowStatus("missing");
++    expect(marketDataStatus(missing)).toBe("limited_data");
++    expect(() => assetsForMarketBundle(missing)).toThrow("No usable latest completed-session price for GRID.");
++
++    const stale = bundleWithExplicitRowStatus("stale");
++    expect(marketDataStatus(stale)).toBe("limited_data");
++    expect(assetsForMarketBundle(stale).find((asset) => asset.assetId === "GRID")?.freshness).toBe("stale");
+   });
+ 
+   it("never enables Public Default for a missing row or stale provider result while retaining Raw", () => {

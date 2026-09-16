@@ -1,0 +1,39 @@
+CHANGE_BRANCH_FIELD=Cline OpenAI-compatible live provider completion and account quota reservation lifecycle
+CHANGE_DETAILS=server-side timeout 120 seconds for the host-local Cline gateway; strict adapter accepts only the known Cline transport metadata key type; prompt requires citations to be exact attached-evidence subsets; all API error/contract/unhandled paths release idempotent account token reservations
+LIVE_FILES=/home/lxx/Foresightnine/src/apps/api/app/openai_compatible.py;/home/lxx/Foresightnine/src/apps/api/app/main.py;/home/lxx/Foresightnine/src/apps/api/tests/test_openai_compatible_provider.py;/home/lxx/Foresightnine/src/apps/api/tests/test_billing.py
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-provider-live-e2e-20260910/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-provider-live-e2e-20260910/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-provider-live-e2e-20260910/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/billing-provider-live-e2e-20260910/ROLLBACK.sh
+EXTRA_MODIFIED_COPIES=/home/lxx/Foresightnine/src/repair-evidence/billing-provider-live-e2e-20260910/MODIFIED_openai_compatible.py;/home/lxx/Foresightnine/src/repair-evidence/billing-provider-live-e2e-20260910/MODIFIED_test_billing.py
+
+BASELINE_COMMAND=cd /tmp/fn-billing-provider-baseline.gfJscn && PYTHONPATH=/tmp/fn-billing-provider-baseline.gfJscn/src/apps/api uv run --project /home/lxx/Foresightnine/src/apps/api pytest -q src/apps/api/tests/test_billing.py
+BASELINE_INPUT=baseline copies of main.py, openai_compatible.py, and test_billing.py from before the live-provider fix
+BASELINE_LITERAL_OUTPUT=10 passed, 1 warning in 0.87s
+BASELINE_RESULT=PASS
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=uv run --project src/apps/api pytest -q
+MODIFIED_INPUT=live checkout after timeout, Cline metadata compatibility, citation-policy, and reservation-release changes
+MODIFIED_LITERAL_OUTPUT=266 passed, 1 skipped, 1 warning in 11.81s
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/billing-provider-live-e2e-20260910/ROLLBACK.sh /tmp/fn-billing-provider-rollback.wNrQpY
+ROLLBACK_INPUT=separate copy containing the modified main.py, openai_compatible.py, and test_billing.py
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY; MAIN_COMPARE_EXIT_STATUS=0; OPENAI_COMPARE_EXIT_STATUS=0; TEST_COMPARE_EXIT_STATUS=0
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=all three separate-copy files matched their baseline snapshots; live checkout remains modified
+
+LIVE_BEFORE_FIX=real staging authenticated challenge returned HTTP 500 after approximately 20 seconds; account quota_reserved remained 4500 and quota_remaining was 195500
+DEPLOY_COMMAND=docker compose --env-file staging.env build api && docker compose --env-file staging.env up -d --no-deps api
+DEPLOY_RESULT=container healthy; FORESIGHTNINE_LLM_TIMEOUT_SECONDS=120; app/api/readyz HTTP 200
+LIVE_AFTER_FIX=real staging authenticated challenge returned HTTP 201; CHALLENGE_SCHEMA=PASS; quota_consumed=1991; quota_reserved=0; logout HTTP 200; account after logout HTTP 401
+LIVE_AFTER_RESULT=PASS
+
+MODEL_PROVIDER=host-local Cline OpenAI-compatible gateway; server account surface reported deepseek/deepseek-v4-flash
+QUOTA_POLICY=free 200000; pro 30000000; max 500000000
+SECURITY=No credential JSON, private key, OAuth code, access token, cookie, or secret value is included in this evidence.
+BASELINE_HASHES=main.py.orig=964e302d87cbc762d16ea4a3365611eeb91ccca7d4d4d393afd6fdae301c4ee1; openai_compatible.py.orig=cumulative pre-timeout Cline branch snapshot; test_billing.py.orig=f9eb8fb2f3fcb437f58e880712523c87ae126f3ca546adae285ea79b02c1684d
+CURRENT_HASHES=MODIFIED_FILE=7f879f18c179ee469bd4a80f75b162e287959994b215f9b398c31750fbf5673c; MODIFIED_openai_compatible.py=19b9ecaa196c493efbd4cfa0f1539ebbdfc4f604419983490b3b22eaf5d6770a2; MODIFIED_test_billing.py=7bb593897098054a05a9f2a06e51c286268a1f59455216dfb9ded11a6d7563be

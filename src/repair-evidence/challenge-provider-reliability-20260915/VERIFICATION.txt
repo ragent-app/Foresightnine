@@ -1,0 +1,75 @@
+ForesightNine structured challenge reliability verification
+AUDIT_TIME=2026-09-15 Asia/Shanghai
+BRANCH=master
+COMMIT_BEFORE_WORKTREE=a30481162bfd783d9a3806db9f99cf4e8b2deddf
+CHANGED_FIELD=GLM Coding reasoning effort default, account-profile inheritance, and concise structured challenge output constraints.
+ROOT_CAUSE=The deployed GLM profile used high reasoning effort while the response contract required ten rubric items and unconstrained objections/evidence lists. A live request consumed the bounded output budget after claims, objections, evidence gaps, questions and only three rubric rows, so the provider returned HTTP 200 but the application correctly rejected the incomplete object. This caused a 150-second browser wait and a failed review.
+FIX=Use low reasoning effort for the deterministic structured-review task, inherit that server-owned profile for the exact official GLM Coding endpoint/model pair, and bound claims, objections, missing evidence, unresolved issues and rationale length while requiring self-contained non-repetitive list items.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/challenge-provider-reliability-20260915/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/challenge-provider-reliability-20260915/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/challenge-provider-reliability-20260915/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/challenge-provider-reliability-20260915/ROLLBACK.sh
+
+BASELINE
+COMMAND=uv run --project apps/api pytest -q --tb=no apps/api/tests/test_openai_compatible_provider.py::test_success_posts_chat_completion_and_returns_validated_draft apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_profile_sends_deterministic_generation_defaults apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_account_profile_inherits_low_reasoning_default
+INPUT=Three regressions against the preserved current implementation: concise prompt constraints, low-reasoning GLM default, and low-reasoning inheritance for the exact account GLM profile.
+LITERAL_OUTPUT_BEGIN
+FFF                                                                      [100%]
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_success_posts_chat_completion_and_returns_validated_draft
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_profile_sends_deterministic_generation_defaults
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_account_profile_inherits_low_reasoning_default
+LITERAL_OUTPUT_END
+EXIT_STATUS=1
+RESULT=FAIL as expected: all three required behaviors were absent.
+
+MODIFIED
+COMMAND=uv run --project apps/api pytest -q --tb=no apps/api/tests/test_openai_compatible_provider.py::test_success_posts_chat_completion_and_returns_validated_draft apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_profile_sends_deterministic_generation_defaults apps/api/tests/test_openai_compatible_provider.py::test_glm_coding_account_profile_inherits_low_reasoning_default
+INPUT=The same three regression cases and values used by BASELINE.
+LITERAL_OUTPUT_BEGIN
+...                                                                      [100%]
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: all three regressions pass.
+
+FULL_VALIDATION
+COMMAND=uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py apps/api/tests/test_glm_coding_live_smoke.py apps/api/tests/test_phase3_providers.py
+LITERAL_RESULT=76 tests passed; one existing Starlette/httpx deprecation warning only.
+EXIT_STATUS=0
+
+LIVE_BEFORE
+INPUT=The same 97-character Chinese thesis used in the visible browser.
+LITERAL_RESULT=Browser async operation failed after about 150 seconds. Direct structural diagnosis returned HTTP 200, invalid_provider_output, reason 'Provider structured result is incomplete', payload keys claims/missing_evidence/objections/questions/rubric_scores, and only 3 rubric rows after 117.93 seconds.
+
+LIVE_AFTER
+INPUT=Visible-browser retry of the same thesis after deploying the low-reasoning concise profile.
+LITERAL_OUTPUT_BEGIN
+HTTP=200
+OPERATION_STATUS=completed
+CHALLENGE_STATUS=CHALLENGING
+CLAIMS=3
+OBJECTIONS=5
+QUESTIONS=3
+MISSING_EVIDENCE=5
+RUBRIC_ITEMS=10
+LANGUAGE_CHINESE=True
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: the retry operation completed, the browser rendered separate numbered Questions/Core objections/Evidence gaps sections, and the ten-row rubric remained collapsed.
+DEPLOYMENT=API container healthy; live worktree remains changed.
+
+ROLLBACK
+COMMAND=/home/lxx/Foresightnine/src/repair-evidence/challenge-provider-reliability-20260915/ROLLBACK.sh /home/lxx/.config/foresightnine/rollback-test/challenge-provider-reliability-20260915/work
+INPUT=An isolated copy of the two changed files under /home/lxx/.config/foresightnine/rollback-test/challenge-provider-reliability-20260915/work; live source and deployed API were not rolled back.
+LITERAL_OUTPUT_BEGIN
+RESTORED apps/api/app/openai_compatible.py SHA256=10c5884055c4efbc65c6e32957f706b0c156750b964515fc2a117b0e1e359d7f
+RESTORED apps/api/tests/test_openai_compatible_provider.py SHA256=5a6d4813d994ed6683a692cc3f5633c14a9d9823d1b9a21b39b2abf4d21b4f5a
+ROLLBACK_STATUS=restored_original_files
+ROLLBACK_EXIT=0
+ROLLBACK_HASH_MATCH=true
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: isolated rollback restored both original SHA-256 values.
+RESTORED_BEHAVIOR_STATUS=PASS: the isolated copy again uses high reasoning defaults and the previous unconstrained prompt. The live working tree and API retain the low-reasoning concise behavior.

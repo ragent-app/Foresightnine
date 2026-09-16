@@ -1,0 +1,1 @@
+if rg -n 'Data cutoff|数据截止.*marketDataAsOf|three anchors|三个时点锚点' apps/web/src/App.tsx; then echo 'RESULT=FAIL status strip contains requested metadata'; exit 1; else echo 'RESULT=PASS metadata absent'; fi

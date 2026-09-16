@@ -1,0 +1,45 @@
+--- src/repair-evidence/oauth-mutation-content-type-20260910/baseline-files/web-oauth-client.ts.orig	2026-09-10 02:17:56.316063547 +0800
++++ src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_web-oauth-client.ts	2026-09-10 02:19:43.489559567 +0800
+@@ -174,7 +174,8 @@
+ 
+ async function authenticatedMutation(path: string, accessToken: string, fetcher: typeof fetch): Promise<void> {
+   if (!isSafeApiBaseUrl(new URL(path).origin) || !/^\S{32,256}$/.test(accessToken)) throw new Error("OAuth session is invalid.");
+-  const response = await fetcher(path, { method: path.endsWith("/account") ? "DELETE" : "POST", headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` }, credentials: "omit" });
++  const method = path.endsWith("/account") ? "DELETE" : "POST";
++  const response = await fetcher(path, { method, headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) }, ...(method === "POST" ? { body: JSON.stringify({}) } : {}), credentials: "omit" });
+   if (!response.ok) throw new Error("OAuth account operation failed.");
+ }
+ 
+--- src/repair-evidence/oauth-mutation-content-type-20260910/baseline-files/web-oauth-client.test.ts.orig	2026-09-10 02:17:56.318386270 +0800
++++ src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_web-oauth-client.test.ts	2026-09-10 02:19:43.492314377 +0800
+@@ -48,7 +48,7 @@
+     const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
+     await logoutOAuthSession("https://api.example.test", session.access_token, fetcher);
+     const logoutCall = fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit];
+-    expect(logoutCall[1]).toMatchObject({ method: "POST", headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}` }) });
++    expect(logoutCall[1]).toMatchObject({ method: "POST", body: JSON.stringify({}), headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }) });
+     clearOAuthSession(fakeStorage);
+     await deleteOAuthAccount("https://api.example.test", session.access_token, fetcher);
+     const deleteCall = fetcher.mock.calls[1] as unknown as [RequestInfo | URL, RequestInit];
+--- src/repair-evidence/oauth-mutation-content-type-20260910/baseline-files/mobile-oauth-client.ts.orig	2026-09-10 02:17:56.320610154 +0800
++++ src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_mobile-oauth-client.ts	2026-09-10 02:19:43.494559162 +0800
+@@ -125,7 +125,7 @@
+ 
+ async function authenticatedMutation(apiBaseUrl: string, path: string, accessToken: string, method: "POST" | "DELETE", fetcher: typeof fetch): Promise<void> {
+   if (!safeApiBaseUrl(apiBaseUrl) || !/^\S{32,256}$/.test(accessToken)) throw new Error("OAuth session is invalid.");
+-  const response = await fetcher(new URL(path.replace(/^\/+/, ""), `${apiBaseUrl.replace(/\/+$/, "")}/`), { method, headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` }, credentials: "omit" });
++  const response = await fetcher(new URL(path.replace(/^\/+/, ""), `${apiBaseUrl.replace(/\/+$/, "")}/`), { method, headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) }, ...(method === "POST" ? { body: JSON.stringify({}) } : {}), credentials: "omit" });
+   if (!response.ok) throw new Error("OAuth account operation failed.");
+ }
+ 
+--- src/repair-evidence/oauth-mutation-content-type-20260910/baseline-files/mobile-oauth-client.test.ts.orig	2026-09-10 02:17:56.322748709 +0800
++++ src/repair-evidence/oauth-mutation-content-type-20260910/MODIFIED_mobile-oauth-client.test.ts	2026-09-10 02:19:43.496603787 +0800
+@@ -50,7 +50,7 @@
+     const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
+     await logoutOAuthSession("https://api.example.test", session.access_token, fetcher);
+     await deleteOAuthAccount("https://api.example.test", session.access_token, fetcher);
+-    expect((fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit])[1]).toMatchObject({ method: "POST", headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}` }) });
++    expect((fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit])[1]).toMatchObject({ method: "POST", body: JSON.stringify({}), headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }) });
+     await clearOAuthSession(sessionStore);
+     expect((await sessionStore.getItemAsync(MOBILE_OAUTH_SESSION_KEY))).toBeNull();
+   });

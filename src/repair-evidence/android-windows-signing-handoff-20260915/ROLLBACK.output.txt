@@ -1,0 +1,3 @@
+RESTORED_scripts/release/sign-android-aab-windows.ps1=MISSING
+ROLLBACK_STATUS=restored_pre_helper_absence
+ROLLBACK_EXIT=0

@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/app.test.ts (52 tests | 51 skipped) 11ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 51 skipped (52)
+   Start at  15:32:29
+   Duration  1.87s (transform 1.00s, setup 0ms, collect 1.36s, tests 11ms, environment 0ms, prepare 147ms)
+

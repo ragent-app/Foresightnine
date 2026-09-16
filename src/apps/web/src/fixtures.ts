@@ -1,7 +1,7 @@
 import type { EvidenceItem, ProbabilityAssessment, ThesisDocument, Worldline } from "@foresightnine/contracts";
 import { DEFAULT_FRESHNESS_POLICY, evaluateFreshness, type FreshnessPolicy, type FreshnessDecision, type ProviderFreshnessStatus } from "@foresightnine/domain";
 import { sha256Hex, type ComputeFmInput, type FactorExpression } from "@foresightnine/fm-engine";
-import { applyLatestCompletedSessionPrices, computeAnchorFactorMetrics, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, type MarketSnapshotBundle } from "@foresightnine/market-data";
+import { computeAnchorFactorMetrics, computeMarketSnapshotIntegrityHash, createMockMarketSnapshotBundle, marketDataStatus, marketSnapshotBundleToFmInput, SNAPSHOT_ANCHORS, type MarketSnapshotBundle } from "@foresightnine/market-data";
 import type { AssetFixture, BranchView, Currency, EvidenceView, FreshnessOptions } from "./types";
 
 export const MARKET_DATA_AS_OF = "2026-08-09";
@@ -64,6 +64,8 @@ export interface SourceMaterialHashInput {
   readonly title: string;
   readonly published_at: string | null;
   readonly retrieved_at: string;
+  readonly search_provider?: string | null;
+  readonly search_result_hash?: string | null;
   readonly excerpt: string;
   readonly user_note: string;
 }
@@ -74,7 +76,7 @@ function normalizeApiDateTime(value: string | null): string | null {
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed}T00:00:00`;
   const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/i.exec(trimmed);
   if (!match) return trimmed;
-  const fraction = match[3] ? `.${match[3].slice(0, 6).padEnd(6, "0")}` : "";
+  const fraction = match[3] && /[1-9]/.test(match[3]) ? `.${match[3].slice(0, 6).padEnd(6, "0")}` : "";
   const timezone = match[4] ? (match[4].toUpperCase() === "Z" ? "+00:00" : match[4]) : "";
   return `${match[1]}T${match[2]}${fraction}${timezone}`;
 }
@@ -85,6 +87,8 @@ export function sourceMaterialHash(item: SourceMaterialHashInput): string {
     excerpt: item.excerpt,
     published_at: normalizeApiDateTime(item.published_at),
     retrieved_at: normalizeApiDateTime(item.retrieved_at),
+    search_provider: item.search_provider?.trim() || null,
+    search_result_hash: item.search_result_hash?.trim() || null,
     title: item.title,
     url: item.url?.trim() || null,
     user_note: item.user_note,
@@ -190,7 +194,25 @@ export const MARKET_SNAPSHOT_BUNDLE: MarketSnapshotBundle = createMockMarketSnap
 export const MARKET_DATA_STATUS = marketDataStatus(MARKET_SNAPSHOT_BUNDLE);
 
 export function assetsForMarketBundle(bundle: MarketSnapshotBundle): readonly AssetFixture[] {
-  return applyLatestCompletedSessionPrices(ASSET_FIXTURES, bundle);
+  const latest = new Map(bundle.snapshots.filter((row) => row.anchor === "latest_completed_session").map((row) => [row.assetId, row]));
+  return ASSET_FIXTURES.map((asset) => {
+    if (asset.assetClass === "cash" || asset.assetId === "CASH") return asset;
+    const row = latest.get(asset.assetId);
+    const price = row?.close ?? row?.price;
+    if (!row || row.status === "missing" || price === null || price === undefined || !Number.isFinite(price) || price <= 0) {
+      throw new Error(`No usable latest completed-session price for ${asset.assetId}.`);
+    }
+    if (row.currency !== "CNY" && row.currency !== "USD" && row.currency !== "EUR") {
+      throw new Error(`Unsupported quote currency for ${asset.assetId}.`);
+    }
+    return {
+      ...asset,
+      price,
+      quoteCurrency: row.currency,
+      asOf: row.asOf ?? bundle.cutoff.slice(0, 10),
+      freshness: row.status === "stale" ? "stale" : "current",
+    };
+  });
 }
 
 /** Live licensed bundles derive IC/ICIR from the three price anchors; vendor momentum/RSI/SMA-derived features drive the FM factors. */
@@ -212,8 +234,50 @@ export function fmFactorsForBundle(bundle: MarketSnapshotBundle): readonly Facto
   });
 }
 
+function factorFields(expression: FactorExpression["expression"], fields = new Set<string>()): ReadonlySet<string> {
+  switch (expression.op) {
+    case "field": fields.add(expression.name); break;
+    case "constant": break;
+    case "add": case "sub": case "mul": case "div":
+      factorFields(expression.left, fields);
+      factorFields(expression.right, fields);
+      break;
+    case "neg": case "abs": case "rank": case "rolling_mean": case "rolling_std":
+      factorFields(expression.input, fields);
+      break;
+  }
+  return fields;
+}
+
+function factorHasCompleteInputs(factor: FactorExpression, bundle: MarketSnapshotBundle): boolean {
+  return [...factorFields(factor.expression)].every((field) => bundle.snapshots.every((row) => {
+    const value = field === "close" ? (row.close ?? row.price) : row.features?.[field];
+    return value !== null && value !== undefined && Number.isFinite(value);
+  }));
+}
+
 export function fmInput(bundle: MarketSnapshotBundle = MARKET_SNAPSHOT_BUNDLE): ComputeFmInput {
-  const converted = marketSnapshotBundleToFmInput(bundle, fmFactorsForBundle(bundle), { currentValues: Float64Array.from([280, 200, 180, 140, 120, 80]), maxFactors: 10, initialAllocation: true, costBps: 3 });
-  if (converted.status !== "ready") throw new Error("The deterministic market snapshot bundle is limited and cannot drive the FM fixture.");
+  // Cash is the portfolio residual rather than a priced factor exposure.  A
+  // provider is allowed to return three explicit `missing` CASH rows; exclude
+  // that dimension from Raw FM instead of making the whole research flow
+  // impossible. Historical anchors marked stale remain usable for Raw only,
+  // while the freshness layer continues to block Public Default execution.
+  const cashRows = bundle.snapshots.filter((row) => row.assetId === "CASH");
+  const cashIsExplicitlyMissing = cashRows.length === SNAPSHOT_ANCHORS.length && cashRows.every((row) => row.status === "missing");
+  const fmAssetIds = cashIsExplicitlyMissing ? bundle.assets.filter((assetId) => assetId !== "CASH") : bundle.assets;
+  const fmSnapshots = bundle.snapshots.filter((row) => fmAssetIds.includes(row.assetId));
+  const fmBase = { ...bundle, assets: fmAssetIds, snapshots: fmSnapshots };
+  const fmBundle: MarketSnapshotBundle = { ...fmBase, integrityHash: computeMarketSnapshotIntegrityHash(fmBase) };
+  const currentByAsset = new Map(ASSET_FIXTURES.map((asset, index) => [asset.assetId, [280, 200, 180, 140, 120, 80][index]!]));
+  // Providers may expose a declared feature with null values (for example,
+  // momentum when the available history is shorter than its lookback).  FM
+  // evaluates every expression, including non-admitted factors, so omit only
+  // expressions whose required cells are incomplete and retain all complete
+  // factors.  This preserves a truthful limited-data result without allowing
+  // one unavailable feature to abort the whole local computation.
+  const usableFactors = fmFactorsForBundle(fmBundle).filter((factor) => factorHasCompleteInputs(factor, fmBundle));
+  const converted = marketSnapshotBundleToFmInput(fmBundle, usableFactors, { currentValues: Float64Array.from(fmAssetIds.map((assetId) => currentByAsset.get(assetId) ?? 0)), maxFactors: 10, initialAllocation: true, costBps: 3 });
+  const completeCells = converted.input.observations.every((observation) => Object.values(observation.fields).every((values) => values.length === fmAssetIds.length && values.every((value) => value !== null && Number.isFinite(value))));
+  if (!completeCells) throw new Error("The market snapshot bundle has missing non-cash factor cells and cannot drive Raw FM.");
   return converted.input;
 }

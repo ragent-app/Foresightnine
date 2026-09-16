@@ -1,0 +1,1223 @@
+ForesightNine worldline -> FM route repair modified source snapshot
+CHANGED_BRANCH=canEnterStage(state, "fm")
+CHANGED_FIELD=fmStatus failed/cancelled route eligibility
+
+===== state.ts =====
+import type { ComputeFmResult } from "@foresightnine/fm-engine";
+import { ASSET_FIXTURES, DEFAULT_RUNTIME_AS_OF, FRESHNESS_POLICY, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, PUBLIC_CONSTRAINTS, RUNTIME_AS_OF, freshnessFor, fxToBase, hasCurrentFx, isPublicEligible } from "./fixtures";
+import { isSafeEvidenceUrl, parseCapital } from "./validation";
+import type { AllocationRow, AppAction, AppState, AssetFixture, BranchView, ChallengeStatus, Currency, EvidenceView, FreshnessOptions, PortfolioMode, PublicConstraintReason, RubricView, TranscriptTurn } from "./types";
+
+export const rubricDefaults: readonly RubricView[] = [
+  { label: "前提清晰度", score: 3, max: 4, rationale: "观点已提交，但仍需确认关键假设。" },
+  { label: "时间边界", score: 4, max: 4, rationale: "基线与 24 个月窗口明确。" },
+  { label: "触发可观察性", score: 3, max: 4, rationale: "已提出可观察的需求、投资或订单信号。" },
+  { label: "因果链", score: 3, max: 4, rationale: "触发事件与资产影响已连接。" },
+  { label: "反事实与替代解释", score: 2, max: 4, rationale: "需要补充融资条件恶化或需求不及预期的替代路径。" },
+  { label: "证据质量", score: 1, max: 4, rationale: "尚未附上可独立复核的公开证据。" },
+  { label: "资产传导", score: 3, max: 4, rationale: "资产方向已提出，但传导强度仍需证据支持。" },
+  { label: "市场已定价程度", score: 2, max: 4, rationale: "尚未证明市场是否已经反映该观点。" },
+  { label: "可证伪性", score: 3, max: 4, rationale: "已有可观察指标，公开证据仍需补强。" },
+  { label: "用户确认", score: 1, max: 4, rationale: "等待用户回复反方问题并选择确认方式。" },
+];
+
+export const rubricDefaultsEn: readonly RubricView[] = [
+  { label: "Premise clarity", score: 3, max: 4, rationale: "The thesis is submitted, but its key assumptions still need confirmation." },
+  { label: "Time boundary", score: 4, max: 4, rationale: "The baseline and 24-month window are explicit." },
+  { label: "Observable trigger", score: 3, max: 4, rationale: "Observable demand, investment, or order signals are proposed." },
+  { label: "Causal chain", score: 3, max: 4, rationale: "The trigger and asset impact are connected." },
+  { label: "Counterfactuals", score: 2, max: 4, rationale: "Add alternative paths such as tighter financing or weaker demand." },
+  { label: "Evidence quality", score: 1, max: 4, rationale: "No independently reviewable public evidence has been attached yet." },
+  { label: "Asset transmission", score: 3, max: 4, rationale: "The asset direction is proposed, but transmission strength still needs evidence." },
+  { label: "Priced-in risk", score: 2, max: 4, rationale: "It is not yet established how much of the thesis is already priced in." },
+  { label: "Falsifiability", score: 3, max: 4, rationale: "Observable indicators exist, but public evidence still needs strengthening." },
+  { label: "User confirmation", score: 1, max: 4, rationale: "Waiting for the user's counterargument response and confirmation choice." },
+];
+
+export function rubricFor(language: AppState["language"]): readonly RubricView[] {
+  return language === "en" ? rubricDefaultsEn : rubricDefaults;
+}
+
+function localizeRubric(rubric: readonly RubricView[], language: AppState["language"]): readonly RubricView[] {
+  const defaults = rubricFor(language);
+  return defaults.map((item, index) => ({ ...item, score: rubric[index]?.score ?? item.score }));
+}
+
+function rubricLabel(language: AppState["language"], zhLabel: string): string {
+  const index = rubricDefaults.findIndex((item) => item.label === zhLabel);
+  return rubricFor(language)[index]?.label ?? zhLabel;
+}
+
+export const initialState: AppState = {
+  stage: "thesis",
+  language: "zh",
+  viewpoint: "",
+  capital: "100000",
+  currency: "CNY",
+  draftRestored: false,
+  challengeStatus: "idle",
+  challengeTurns: [],
+  replyDraft: "",
+  rubric: rubricDefaults,
+  evidence: [],
+  confirmation: "pending",
+  unresolvedIssuesAcknowledged: false,
+  reservationNote: "",
+  selectedBranch: "main",
+  fmStatus: "idle",
+  fmProgress: 0,
+  fmStep: "等待本地计算",
+  fmResult: null,
+  portfolioMode: "raw",
+  stressScenario: "main",
+  drawdownVisible: true,
+  exportNotice: "",
+  freshness: { runtimeAsOf: DEFAULT_RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, fxProviderStatus: "unavailable" },
+  apiSessionId: null,
+  apiChallengeId: null,
+  apiError: "",
+  serverBranches: null,
+};
+
+function challengeTurnsFor(viewpoint: string, language: AppState["language"]): readonly [TranscriptTurn, TranscriptTurn] {
+  const premise = viewpoint.trim() || (language === "en" ? "(no thesis entered)" : "（尚未填写观点）");
+  const challengerBody = language === "en"
+    ? `Strongest counterargument around "${premise}": which observable evidence would show this causal chain is occurring? If the key trigger does not appear, what would invalidate the conclusion?`
+    : `围绕「${premise}」，最强反方问题是：哪些可观察证据能证明这条因果链正在发生？如果关键触发条件没有出现，哪一项会使结论失效？`;
+  return [
+    { id: "user-1", author: "user", time: "现在", body: premise },
+    { id: "challenger-1", author: "challenger", time: "现在", body: challengerBody },
+  ];
+}
+
+/** Replies are valid only after a started challenge has a usable transcript. */
+export function canSubmitReply(status: ChallengeStatus, turns: readonly TranscriptTurn[]): boolean {
+  if (!["streaming", "recovering", "complete"].includes(status) || !hasStartedChallenge(turns)) return false;
+  const challengerIndex = turns.reduce((latest, turn, index) => turn.author === "challenger" ? index : latest, -1);
+  return challengerIndex >= 0 && !turns.slice(challengerIndex + 1).some((turn) => turn.author === "user");
+}
+
+function hasStartedChallenge(turns: readonly TranscriptTurn[]): boolean {
+  if (!Array.isArray(turns) || turns.length < 2) return false;
+  const ids = new Set<string>();
+  for (const turn of turns) {
+    if (!turn || typeof turn.id !== "string" || turn.id.trim().length === 0 || ids.has(turn.id) || !["user", "challenger", "system"].includes(turn.author) || typeof turn.body !== "string" || turn.body.trim().length === 0) return false;
+    ids.add(turn.id);
+  }
+  return turns.some((turn) => turn.author === "challenger");
+}
+
+/** A completed challenge must contain a real challenger turn followed by a user reply. */
+export function hasValidCompletedChallenge(status: ChallengeStatus, turns: readonly TranscriptTurn[]): boolean {
+  if (status !== "complete" || !hasStartedChallenge(turns)) return false;
+  const challengerIndex = turns.findIndex((turn) => turn.author === "challenger");
+  return challengerIndex >= 0 && turns.slice(challengerIndex + 1).some((turn) => turn.author === "user");
+}
+
+function resetWorkflow(state: AppState, viewpoint: string): AppState {
+  return { ...initialState, language: state.language, viewpoint, capital: state.capital, currency: state.currency, rubric: rubricFor(state.language), draftRestored: false };
+}
+
+export function reducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case "set_stage": return canEnterStage(state, action.stage) ? { ...state, stage: action.stage } : { ...state, stage: safeStageFor(state) };
+    case "set_language": return { ...state, language: action.language, rubric: localizeRubric(state.rubric, action.language) };
+    case "set_viewpoint": {
+      if (action.viewpoint === state.viewpoint) return { ...state, draftRestored: false };
+      // A viewpoint is the root identity of every downstream artifact.  Keep
+      // only the user inputs and locale when it changes; no challenge,
+      // evidence, worldline, FM, or portfolio state may cross that boundary.
+      return resetWorkflow(state, action.viewpoint);
+    }
+    case "set_capital": return { ...state, capital: action.capital, draftRestored: false };
+    case "set_currency": return { ...state, currency: action.currency, draftRestored: false };
+    case "restore_draft": return { ...state, viewpoint: action.draft.viewpoint, capital: action.draft.capital, currency: action.draft.currency, draftRestored: true };
+    case "start_challenge": {
+      const viewpoint = action.viewpoint ?? state.viewpoint;
+      if (viewpoint.trim().length === 0 || parseCapital(state.capital) <= 0) return { ...state, stage: safeStageFor(state) };
+      const fresh = resetWorkflow(state, viewpoint);
+      return { ...fresh, stage: "challenge", challengeStatus: "streaming", challengeTurns: action.server ? [{ id: "api-user-pending", author: "user", time: "现在", body: viewpoint }] : [...challengeTurnsFor(viewpoint, state.language)] };
+    }
+    case "set_reply_draft": return { ...state, replyDraft: action.draft };
+    case "begin_reply_submit": return action.body.trim().length === 0 || state.stage !== "challenge" || !canSubmitReply(state.challengeStatus, state.challengeTurns) ? state : { ...state, challengeStatus: "submitting_reply" };
+    case "submit_reply": return action.body.trim().length === 0 || state.stage !== "challenge" || !canSubmitReply(state.challengeStatus, state.challengeTurns) ? state : { ...state, replyDraft: "", challengeStatus: "complete", fmStep: "反方审查完成", rubric: updateRubric(state.rubric, { [rubricLabel(state.language, "用户确认")]: { score: 3, rationale: state.language === "en" ? "The user answered the counterargument; a confirmation choice is still required." : "用户已回答反方问题，仍需选择确认方式。" } }), challengeTurns: [...state.challengeTurns, { id: `user-reply-${state.challengeTurns.length + 1}`, author: "user", time: "现在", body: action.body.trim() }] };
+    case "challenge_complete": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasValidCompletedChallenge("complete", state.challengeTurns) ? { ...state, challengeStatus: "complete", fmStep: "反方审查完成" } : state;
+    case "challenge_cancel": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering" || state.challengeStatus === "submitting_reply") && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "cancelled", challengeTurns: [...state.challengeTurns, { id: `cancelled-${state.challengeTurns.length + 1}`, author: "system", time: "现在", body: "已取消生成；已接收内容和证据仍保留。" }] } : state;
+    case "challenge_recover": return ["cancelled", "failed"].includes(state.challengeStatus) && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "recovering" } : state;
+    case "challenge_fail": return state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "recovering") && hasStartedChallenge(state.challengeTurns) ? { ...state, challengeStatus: "failed" } : state;
+    case "add_evidence": return state.evidence.some((item) => item.evidence_id === action.evidence.evidence_id) ? state : { ...state, rubric: updateRubric(state.rubric, { [rubricLabel(state.language, "证据质量")]: { score: 3, rationale: state.language === "en" ? "Evidence is attached; source grade and reviewability remain explicit." : "已附上证据；来源等级与可复核状态仍保留。" }, [rubricLabel(state.language, "反事实与替代解释")]: { score: 3, rationale: state.language === "en" ? "Evidence is being used to test alternatives; continued review is required." : "证据已用于检验替代解释，仍需持续复核。" }, [rubricLabel(state.language, "市场已定价程度")]: { score: 3, rationale: state.language === "en" ? "Evidence is included in the priced-in review; it is not a fact judgment." : "证据已进入已定价程度审查，仍不是事实判断。" } }), evidence: [...state.evidence, action.evidence] };
+    case "set_unresolved_issues_acknowledged": return { ...state, unresolvedIssuesAcknowledged: action.acknowledged };
+    case "set_reservation_note": return { ...state, reservationNote: action.note };
+    case "confirm": {
+      const allowed = action.confirmation === "confirmed" ? canConfirmNormally(state) : canConfirmReserved(state);
+      return !allowed ? state : { ...state, confirmation: action.confirmation, stage: "worldline" };
+    }
+    case "select_branch": return { ...state, selectedBranch: action.branch };
+    case "fm_start": return canStartFm(state) ? { ...state, stage: "fm", fmStatus: "computing", fmProgress: 8, fmStep: "正在验证签名数据快照…", exportNotice: "" } : state;
+    case "fm_progress": return state.fmStatus === "computing" && state.stage === "fm" ? { ...state, fmProgress: action.progress, fmStep: action.step } : state;
+    case "fm_complete": return state.fmStatus === "computing" && state.stage === "fm" ? { ...state, fmStatus: "complete", fmProgress: 100, fmStep: "本地计算完成，原始结果已保留", fmResult: action.result, stage: "fm" } : state;
+    case "fm_cancel": return state.stage === "fm" && state.fmStatus === "computing" ? { ...state, fmStatus: "cancelled", fmStep: "本地计算已取消；中间结果未上传。" } : state;
+    case "fm_fail": return state.stage === "fm" && state.fmStatus === "computing" ? { ...state, fmStatus: "failed", fmStep: "计算失败。研究状态仍已保存，可重试。" } : state;
+    case "set_mode": return { ...state, portfolioMode: action.mode };
+    case "set_stress": return { ...state, stressScenario: action.scenario };
+    case "toggle_drawdown": return { ...state, drawdownVisible: !state.drawdownVisible };
+    case "export_notice": return { ...state, exportNotice: action.notice };
+    case "set_freshness": return { ...state, freshness: action.freshness };
+    case "api_session_ready": return { ...state, apiSessionId: action.sessionId, apiError: "" };
+    case "api_challenge_update": return { ...state, apiChallengeId: action.challengeId, challengeTurns: action.turns, rubric: action.rubric, challengeStatus: action.status, apiError: "", fmStep: action.status === "complete" ? "反方审查完成" : state.fmStep };
+    case "api_worldlines_ready": return { ...state, serverBranches: action.branches, apiError: "" };
+    case "api_error": return { ...state, apiError: action.notice, ...(state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "submitting_reply" || state.challengeStatus === "recovering") ? { challengeStatus: "failed" as const } : {}) };
+    case "api_cancel": return { ...state, challengeStatus: "cancelled", apiError: "" };
+    case "reset": return { ...initialState, language: state.language, rubric: rubricFor(state.language) };
+  }
+  return state;
+}
+
+export function totalRubricScore(rubric: readonly RubricView[]): number { return rubric.reduce((sum, item) => sum + item.score, 0); }
+
+export function updateRubric(rubric: readonly RubricView[], updates: Readonly<Record<string, { readonly score: number; readonly rationale: string }>>): readonly RubricView[] {
+  return rubric.map((item) => updates[item.label] ? { ...item, ...updates[item.label], score: Math.max(0, Math.min(item.max, updates[item.label]!.score)) } : item);
+}
+
+const PUBLIC_EVIDENCE_SOURCE_GRADE: Readonly<Record<EvidenceView["source_type"], EvidenceView["grade"]>> = {
+  primary: "A",
+  reliable_secondary: "B",
+  commentary: "C",
+  user_private: "D",
+  model_inference: "E",
+};
+
+function isSemanticallyValidEvidence(item: EvidenceView): boolean {
+  const expectedGrade = PUBLIC_EVIDENCE_SOURCE_GRADE[item.source_type];
+  return expectedGrade === item.grade && (item.grade === "D" || item.grade === "E" || isSafeEvidenceUrl(item.url.trim()));
+}
+
+function isDerivedPublicEvidence(item: EvidenceView): boolean {
+  return (item.grade === "A" || item.grade === "B" || item.grade === "C")
+    && PUBLIC_EVIDENCE_SOURCE_GRADE[item.source_type] === item.grade
+    && isSafeEvidenceUrl(item.url.trim());
+}
+
+function isCanonicalRubric(rubric: readonly RubricView[], language: AppState["language"]): boolean {
+  const canonical = rubricFor(language);
+  return rubric.length === canonical.length && rubric.every((item, index) => {
+    const expected = canonical[index];
+    return expected !== undefined && item.label === expected.label && item.max === expected.max && Number.isSafeInteger(item.score) && item.score >= 0 && item.score <= item.max && typeof item.rationale === "string";
+  });
+}
+
+type ConfirmationState = Pick<AppState, "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "unresolvedIssuesAcknowledged" | "reservationNote">;
+
+export function canConfirmNormally(state: ConfirmationState): boolean {
+  if (!hasValidCompletedChallenge(state.challengeStatus, state.challengeTurns) || !isCanonicalRubric(state.rubric, state.language) || totalRubricScore(state.rubric) < 30) return false;
+  const requiredIndices = [0, 1, 3, 6, 8];
+  if (requiredIndices.some((index) => (state.rubric[index]?.score ?? 0) < 3)) return false;
+  return state.evidence.every(isSemanticallyValidEvidence) && state.evidence.some(isDerivedPublicEvidence);
+}
+
+export function canConfirmReserved(state: ConfirmationState): boolean {
+  return hasValidCompletedChallenge(state.challengeStatus, state.challengeTurns)
+    && isCanonicalRubric(state.rubric, state.language)
+    && state.evidence.every(isSemanticallyValidEvidence)
+    && state.unresolvedIssuesAcknowledged
+    && state.reservationNote.trim().length > 0;
+}
+
+export function canEnterWorldline(state: Pick<AppState, "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote">): boolean {
+  return state.confirmation === "confirmed" ? canConfirmNormally(state) : state.confirmation === "reserved" ? canConfirmReserved(state) : false;
+}
+
+export function canStartFm(state: Pick<AppState, "stage" | "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote">): boolean {
+  return (state.stage === "worldline" || state.stage === "fm") && canEnterWorldline(state);
+}
+
+export function canEnterStage(state: AppState, stage: AppState["stage"]): boolean {
+  switch (stage) {
+    case "thesis":
+    case "console":
+      return true;
+    case "challenge":
+      return state.viewpoint.trim().length > 0 && parseCapital(state.capital) > 0;
+    case "worldline":
+      return canEnterWorldline(state);
+    case "fm": {
+      if (!canEnterWorldline(state)) return false;
+      if (state.fmStatus === "complete") return state.fmResult !== null;
+      if (state.stage === "worldline") return true;
+      return state.stage === "fm" && (state.fmStatus === "computing" || state.fmStatus === "failed" || state.fmStatus === "cancelled");
+    }
+    case "portfolio":
+    case "nav":
+      return state.fmStatus === "complete" && state.fmResult !== null && canEnterWorldline(state);
+  }
+}
+
+export function safeStageFor(state: AppState): AppState["stage"] {
+  if (canEnterStage(state, state.stage)) return state.stage;
+  if (state.stage === "thesis" || state.stage === "challenge") return canEnterStage(state, "challenge") ? "challenge" : "thesis";
+  if (!canEnterWorldline(state)) return canEnterStage(state, "challenge") ? "challenge" : "thesis";
+  if (state.stage === "portfolio" || state.stage === "nav") return state.fmStatus === "complete" && state.fmResult !== null ? "fm" : "worldline";
+  return "worldline";
+}
+
+const fallbackCash: AssetFixture = { assetId: "CASH", displayName: "现金等价物", economicExposureId: "cash", instrumentId: "CASH", assetClass: "cash", quoteCurrency: "CNY", price: 1, lotSize: 1, fractionalSupported: true, tradable: true, liquidity: "high", volatility: "low", asOf: MARKET_DATA_AS_OF, freshness: "current" };
+
+function boundedProRata(indices: readonly number[], budget: number, base: readonly number[], assets: readonly AssetFixture[]): readonly number[] {
+  const result = new Array<number>(base.length).fill(0);
+  const open = new Set(indices);
+  let remaining = budget;
+  while (open.size > 0 && remaining > 1e-12) {
+    const openIndices = [...open];
+    const totalBase = openIndices.reduce((sum, index) => sum + Math.max(base[index] ?? 0, 0), 0);
+    const share = totalBase > 0 ? (index: number) => remaining * Math.max(base[index] ?? 0, 0) / totalBase : () => remaining / openIndices.length;
+    let fixed = false;
+    for (const index of openIndices) {
+      const cap = assets[index]?.assetClass === "cash" ? Number.POSITIVE_INFINITY : PUBLIC_CONSTRAINTS.singleSecurityMax;
+      const proposed = share(index);
+      if (proposed > cap + 1e-12) {
+        result[index] = cap;
+        remaining -= cap;
+        open.delete(index);
+        fixed = true;
+      }
+    }
+    if (!fixed) {
+      for (const index of openIndices) result[index] = share(index);
+      remaining = 0;
+    }
+  }
+  if (remaining > 1e-12) {
+    const cashIndex = indices.find((index) => assets[index]?.assetClass === "cash");
+    if (cashIndex !== undefined) result[cashIndex] = (result[cashIndex] ?? 0) + remaining;
+  }
+  return result;
+}
+
+function weightAssets(rawWeights: readonly number[], assets?: readonly AssetFixture[]): readonly AssetFixture[] {
+  return rawWeights.map((_weight, index) => assets?.[index] ?? (index === rawWeights.length - 1 ? fallbackCash : ASSET_FIXTURES[index] ?? fallbackCash));
+}
+
+export function publicWeights(rawWeights: readonly number[], assets?: readonly AssetFixture[], freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): readonly number[] {
+  const normalizedAssets = weightAssets(rawWeights, assets);
+  const base = rawWeights.map((weight) => Math.max(0, Number.isFinite(weight) ? weight : 0));
+  if (base.length === 0) return [];
+  const eligible = normalizedAssets.map((asset, index) => isPublicEligible(asset, freshnessOptions) ? index : -1).filter((index) => index >= 0);
+  if (eligible.length === 0) return new Array<number>(base.length).fill(0);
+  const eligibleBaseTotal = eligible.reduce((sum, index) => sum + base[index]!, 0);
+  const workingBase = base.map((value, index) => eligible.includes(index) ? (eligibleBaseTotal > 0 ? value / eligibleBaseTotal : 1 / eligible.length) : 0);
+  const highVol = eligible.filter((index) => normalizedAssets[index]!.volatility === "high");
+  const highVolShare = highVol.reduce((sum, index) => sum + workingBase[index]!, 0);
+  const highBudget = Math.min(PUBLIC_CONSTRAINTS.highVolatilityClassMax, highVolShare);
+  const lowVol = eligible.filter((index) => !highVol.includes(index));
+  const resultHigh = boundedProRata(highVol, highBudget, workingBase, normalizedAssets);
+  const resultLow = boundedProRata(lowVol, 1 - highBudget, workingBase, normalizedAssets);
+  const result = resultHigh.map((value, index) => value + (resultLow[index] ?? 0));
+  const residual = 1 - result.reduce((sum, value) => sum + value, 0);
+  const cashIndex = eligible.find((index) => normalizedAssets[index]!.assetClass === "cash");
+  if (cashIndex !== undefined && Math.abs(residual) > 1e-12) result[cashIndex] = (result[cashIndex] ?? 0) + residual;
+  return result;
+}
+
+function eligibilityReason(asset: AssetFixture, freshnessOptions: FreshnessOptions): PublicConstraintReason | undefined {
+  if (!hasCurrentFx(freshnessOptions, ["CNY", asset.quoteCurrency])) return { code: "fx_unavailable", label: "汇率数据不可用", detail: "Public Default 需要同一数据时点的受支持货币汇率；当前仅保留 FM Raw/历史展示。" };
+  if (!asset.tradable && !asset.proxyInstrument) return { code: "not_tradable", label: "不可直接交易", detail: `${asset.displayName} 没有可用 proxyInstrument。` };
+  const freshness = freshnessFor(asset, freshnessOptions);
+  if (!freshness.allowCurrentPublicDefault) return { code: "stale_data", label: "过期/历史数据", detail: `Public Default 禁止使用 ${freshness.status} 数据；data as-of ${asset.asOf}。` };
+  if (asset.liquidity === "low" || asset.liquidity === "restricted") return { code: "low_liquidity", label: "流动性不足", detail: `liquidity=${asset.liquidity}，不进入 Public Default。` };
+  return undefined;
+}
+
+export function allocationRows(result: ComputeFmResult | null, capital: number, baseCurrency: Currency = "CNY", mode: PortfolioMode = "raw", freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }, assets: readonly AssetFixture[] = ASSET_FIXTURES): readonly AllocationRow[] {
+  if (!result) return [];
+  const raw = result.weights.weights;
+  const weights = assets.map((_asset, index) => Math.max(0, Number.isFinite(raw[index] ?? 0) ? raw[index] ?? 0 : 0));
+  const publicized = publicWeights(weights, assets, freshnessOptions);
+  const highVolTotal = publicized.reduce((sum, weight, index) => sum + (assets[index]!.volatility === "high" ? weight : 0), 0);
+  const roles: Readonly<Record<string, string>> = { GRID: "核心受益", CHIP: "次级受益", UTIL: "防守", GOLD: "对冲", WORLD: "分散", CASH: "流动性" };
+  return assets.map((asset, index) => {
+    const weight = weights[index] ?? 0;
+    const publicWeight = publicized[index] ?? 0;
+    const fx = fxToBase(asset.quoteCurrency, baseCurrency, freshnessOptions.fxCnyPerUnit);
+    const conversion = Number.isFinite(fx) && fx > 0 ? fx : 1;
+    const rawDesired = capital * weight / (asset.price * conversion);
+    const publicDesired = capital * publicWeight / (asset.price * conversion);
+    const rawUnits = asset.fractionalSupported ? rawDesired : Math.floor(rawDesired / asset.lotSize) * asset.lotSize;
+    const publicUnits = asset.fractionalSupported ? publicDesired : Math.floor(publicDesired / asset.lotSize) * asset.lotSize;
+    const rawAmount = rawUnits * asset.price * conversion;
+    const publicAmount = publicUnits * asset.price * conversion;
+    const rawTarget = capital * weight;
+    const publicTarget = capital * publicWeight;
+    const rawResidualReason = rawUnits === 0 && rawTarget > 0 ? "Raw 金额过小，无法满足最小交易单位。" : rawAmount + 1e-9 < rawTarget ? `Raw lot rounding residual ${formatResidual(rawTarget - rawAmount, baseCurrency)}。` : undefined;
+    const publicResidualReason = publicUnits === 0 && publicTarget > 0 ? "Public Default 金额过小，无法满足最小交易单位。" : publicAmount + 1e-9 < publicTarget ? `Public lot rounding residual ${formatResidual(publicTarget - publicAmount, baseCurrency)}。` : undefined;
+    const constraintReasons: PublicConstraintReason[] = [];
+    const freshness = freshnessFor(asset, freshnessOptions);
+    const eligibility = eligibilityReason(asset, freshnessOptions);
+    if (eligibility) constraintReasons.push(eligibility);
+    if (!asset.tradable && asset.proxyInstrument) constraintReasons.push({ code: "proxy_mapping", label: "代理映射", detail: `${asset.assetId} 非直接交易资产，使用 ${asset.proxyInstrument} 代理。` });
+    if (asset.volatility === "high" && highVolTotal >= PUBLIC_CONSTRAINTS.highVolatilityClassMax - 1e-9 && publicWeight < weight - 1e-9) constraintReasons.push({ code: "high_volatility_cap", label: "高波动类别上限", detail: `高波动资产类别合计上限 ${PUBLIC_CONSTRAINTS.highVolatilityClassMax * 100}%。` });
+    if (asset.assetClass !== "cash" && publicWeight < weight - 1e-9 && !constraintReasons.some((reason) => reason.code === "high_volatility_cap")) constraintReasons.push({ code: "single_security_cap", label: "单证券上限", detail: `单证券上限 ${PUBLIC_CONSTRAINTS.singleSecurityMax * 100}%。释放权重按可用资产原始权重比例确定性再分配。` });
+    if (publicWeight > weight + 1e-9) constraintReasons.push({ code: "redistributed_weight", label: "释放权重再分配", detail: "其他不合资格或受限资产释放的权重按可用资产原始权重比例再分配。" });
+    const selectedAmount = mode === "public" ? publicAmount : rawAmount;
+    const selectedUnits = mode === "public" ? publicUnits : rawUnits;
+    const row: AllocationRow = { id: asset.assetId, role: roles[asset.assetId] ?? asset.displayName, weight, publicWeight, amount: selectedAmount, units: selectedUnits, rawAmount, rawUnits, publicAmount, publicUnits, currency: baseCurrency, price: asset.price, quoteCurrency: asset.quoteCurrency, lotSize: asset.lotSize, constraintReasons, dataAsOf: asset.asOf, instrumentId: asset.instrumentId, tradable: asset.tradable, liquidity: asset.liquidity, volatility: asset.volatility, freshness: freshness.status, freshnessLabel: freshness.label, publicExecutionAllowed: isPublicEligible(asset, freshnessOptions) };
+    return { ...row, ...(rawResidualReason ? { rawResidualReason } : {}), ...(publicResidualReason ? { publicResidualReason } : {}), ...(mode === "raw" && rawResidualReason ? { residualReason: rawResidualReason } : {}), ...(mode === "public" && publicResidualReason ? { residualReason: publicResidualReason } : {}), ...(asset.proxyInstrument ? { proxyInstrument: asset.proxyInstrument } : {}) };
+  });
+}
+
+function formatResidual(value: number, currency: Currency): string { return `${currency} ${value.toFixed(2)}`; }
+
+export function branchByKind(branches: readonly BranchView[], kind: BranchView["kind"]): BranchView { return branches.find((branch) => branch.kind === kind) ?? branches[1]!; }
+
+===== app.test.ts =====
+import { describe, expect, it, vi } from "vitest";
+import { assertProbabilityAssessment, assertWorldlineDates } from "@foresightnine/domain";
+import { computeFm, mountFmWorker, type FmWorkerPort, type FmWorkerResponse } from "@foresightnine/fm-engine";
+import { ASSET_FIXTURES, FX_SNAPSHOT, MARKET_DATA_AS_OF, PUBLIC_CONSTRAINTS, branches, evidenceHash, fmInput, isEvidenceIndependentlyReviewable, makeBranches, privateEvidenceFixture, searchEvidenceFixture, sourceMaterialHash } from "./fixtures";
+import { allocationRows, canConfirmNormally, canConfirmReserved, canEnterStage, canSubmitReply, initialState, publicWeights, reducer, rubricDefaults, rubricDefaultsEn, safeStageFor, totalRubricScore } from "./state";
+import { authoritativeChallengeFetchOptions, cancelAcceptedPendingReceipt, createGenerationGuard, operationReplayCursor, recoveryActionFor, replayPendingReceipt } from "./App";
+import { CSV_HEADER, csvExport, navExport, researchExport } from "./exports";
+import { isSafeEvidenceUrl, validateSearchEvidence, validateThesis } from "./validation";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { NavPanel } from "./components/NavPanel";
+import { ChallengePanel } from "./components/ChallengePanel";
+import { PortfolioPanel } from "./components/PortfolioPanel";
+import { WorldlinePanel } from "./components/WorldlinePanel";
+import { ThesisInput } from "./components/ThesisInput";
+import { LanguageProvider, t } from "./i18n";
+import { SocialLoginPanel } from "./components/SocialLoginPanel";
+import { historical } from "./nav-data";
+
+const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
+
+describe("authoritative challenge result fetch", () => {
+  it("binds the SSE context operation id to the complete-result request", () => {
+    const signal = new AbortController().signal;
+    expect(authoritativeChallengeFetchOptions({ operation_id: "operation/current" }, signal)).toEqual({ operationId: "operation/current", signal });
+  });
+});
+
+describe("Web thesis validation", () => {
+  it("rejects empty, overlong, and non-positive inputs", () => {
+    expect(validateThesis({ viewpoint: "", capital: "0", currency: "CNY" })).toEqual({ viewpoint: "请先写下你的观点。", capital: "请输入大于 0 的可投资金额。" });
+    expect(validateThesis({ viewpoint: "a".repeat(2001), capital: "1000", currency: "CNY" }).viewpoint).toContain("2,000");
+    expect(validateThesis({ viewpoint: "valid", capital: "1,000", currency: "CNY" })).toEqual({});
+  });
+
+  it("rejects trailing-dot spellings of loopback and local hosts", () => {
+    for (const url of [
+      "https://localhost./report",
+      "https://service.localhost./report",
+      "https://127.0.0.1./loopback",
+      "https://127.1./loopback",
+      "https://10.0.0.7./private",
+      "https://[::1]./loopback",
+    ]) expect(isSafeEvidenceUrl(url)).toBe(false);
+    expect(isSafeEvidenceUrl("https://example.com./report")).toBe(true);
+  });
+});
+
+describe("bilingual presentation", () => {
+  it("translates export notices emitted by the runtime", () => {
+    const notices = [
+      "JSON 已导出；当前观点、挑战回复和证据均保留。",
+      "CSV 已导出；这是 allocation-only 快照，完整审计字段请使用 JSON。",
+      "路径数据已导出，并标记了当前 premise、完整 NAV 数组与历史 / 模拟边界。",
+      "方法说明已导出。",
+    ];
+    for (const notice of notices) {
+      expect(t("zh", notice)).toBe(notice);
+      expect(t("en", notice)).not.toBe(notice);
+    }
+  });
+
+  it("changes product copy to English while preserving user-entered thesis text", () => {
+    const thesis = "AI data-centre power demand may accelerate grid investment";
+    const markup = renderToStaticMarkup(createElement(LanguageProvider, { language: "en", setLanguage: () => undefined }, createElement(ThesisInput, { viewpoint: thesis, capital: "100000", currency: "USD", draftRestored: false, onViewpoint: () => undefined, onCapital: () => undefined, onCurrency: () => undefined, onStart: () => undefined, onReset: () => undefined })));
+    expect(markup).toContain("Turn a thesis into auditable worldlines");
+    expect(markup).toContain("Investable capital");
+    expect(markup).toContain(thesis);
+    expect(t("en", `「${thesis}」按部分路径兑现，设备与基础设施投资逐步验证。`)).toContain(thesis);
+    expect(reducer(initialState, { type: "set_language", language: "en" }).language).toBe("en");
+  });
+
+  it("rebuilds the English rubric when resetting or starting a challenge", () => {
+    const en = { ...initialState, language: "en" as const, viewpoint: "An English thesis with a testable premise", capital: "100000" };
+    expect(reducer(en, { type: "reset" }).rubric).toEqual(rubricDefaultsEn);
+    expect(reducer(en, { type: "start_challenge" }).rubric).toEqual(rubricDefaultsEn);
+    expect(reducer({ ...en, stage: "challenge", rubric: rubricDefaults }, { type: "set_viewpoint", viewpoint: "A fresh English thesis" }).rubric).toEqual(rubricDefaultsEn);
+    expect(reducer(en, { type: "reset" }).rubric.every((item) => !/[\u4e00-\u9fff]/.test(`${item.label} ${item.rationale}`))).toBe(true);
+  });
+
+  it("translates the complete challenge decision surface", () => {
+    expect(["审查评分", "继续生成世界线", "带保留意见确认", "支持", "反驳", "背景", "。"].map((copy) => t("en", copy))).toEqual([
+      "Challenge score",
+      "Continue to worldlines",
+      "Confirm with reservations",
+      "Supports",
+      "Challenges",
+      "Context",
+      ".",
+    ]);
+  });
+
+  it("renders Google and GitHub as accurately unavailable until the server supplies OAuth readiness", () => {
+    const markup = renderToStaticMarkup(createElement(LanguageProvider, { language: "en", setLanguage: () => undefined }, createElement(SocialLoginPanel)));
+    expect(markup).toContain("Anonymous research");
+    expect(markup).toContain("Google");
+    expect(markup).toContain("GitHub");
+    expect(markup).toContain("Not configured");
+    expect(markup).toContain("disabled=\"\"");
+  });
+});
+
+describe("worldline fixture semantics", () => {
+  it("keeps conditional probabilities exhaustive and uses auditable event/reveal dates", () => {
+    const generated = makeBranches("可观察的电网投资观点");
+    expect(generated.reduce((sum, branch) => sum + branch.assessment.conditional_probability, 0)).toBe(1);
+    for (const branch of generated) {
+      assertProbabilityAssessment(branch.assessment);
+      assertWorldlineDates(branch.worldline);
+      expect(branch.worldline.event_reveal_schedule.map((reveal) => reveal.event_id)).toEqual(branch.worldline.nodes.map((node) => node.node_id));
+      expect(branch.worldline.event_reveal_schedule.every((reveal) => reveal.event_date === branch.worldline.nodes.find((node) => node.node_id === reveal.event_id)?.event_date)).toBe(true);
+      expect(branch.worldline.horizon_end).toBe("2028-08-31");
+      expect(branch.worldline.nodes.find((node) => node.event_date === "2028-08-10") && branch.worldline.event_reveal_schedule.find((reveal) => reveal.event_date === "2028-08-10")?.reveal_date).toBe("2028-08-31");
+      expect(branch.worldline.event_reveal_schedule.some((reveal) => reveal.event_date !== reveal.reveal_date && reveal.reveal_date >= reveal.event_date)).toBe(true);
+    }
+  });
+});
+
+describe("challenge recovery state", () => {
+  it("fails closed for idle or unstarted reply submissions in the reducer and UI", () => {
+    expect(canSubmitReply("idle", [])).toBe(false);
+    expect(reducer(initialState, { type: "submit_reply", body: "forged reply" })).toEqual(initialState);
+
+    const forged = { ...initialState, stage: "challenge" as const, challengeStatus: "idle" as const, challengeTurns: [{ id: "user-1", author: "user" as const, time: "现在", body: "Forged" }, { id: "challenger-1", author: "challenger" as const, time: "现在", body: "Forged" }] };
+    expect(reducer(forged, { type: "submit_reply", body: "still forged" })).toEqual(forged);
+
+    const markup = renderToStaticMarkup(createElement(ChallengePanel, { status: "idle", turns: [], replyDraft: "forged reply", evidence: [], rubric: initialState.rubric, unresolvedIssuesAcknowledged: false, reservationNote: "", onStart: () => undefined, onCancel: () => undefined, onRetry: () => undefined, onRecover: () => undefined, onReplyDraft: () => undefined, onSubmitReply: () => undefined, onEvidence: () => undefined, onUnresolvedIssuesAcknowledged: () => undefined, onReservationNote: () => undefined, onConfirm: () => undefined }));
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>提交回复<\/button>/);
+  });
+
+  it("allows one reply after an authoritative model operation completes, then exposes confirmation", () => {
+    const initialTurns = [
+      { id: "user-1", author: "user" as const, time: "now", body: "Initial thesis" },
+      { id: "challenger-1", author: "challenger" as const, time: "now", body: "Counterargument" },
+    ];
+    expect(canSubmitReply("complete", initialTurns)).toBe(true);
+    const repliedTurns = [...initialTurns, { id: "user-2", author: "user" as const, time: "now", body: "Evidence-based answer" }];
+    expect(canSubmitReply("complete", repliedTurns)).toBe(false);
+  });
+
+  it("fully resets a completed and confirmed workflow when the viewpoint changes", () => {
+    const oldViewpoint = "旧观点：电网设备投资会加速";
+    let state = reducer({ ...initialState, viewpoint: oldViewpoint, capital: "250000", currency: "USD" }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "公开订单数据将验证这条路径。" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    state = reducer(state, { type: "select_branch", branch: "strong" });
+    state = reducer(state, { type: "fm_start" });
+    state = reducer(state, { type: "fm_progress", progress: 65, step: "计算中" });
+    state = reducer(state, { type: "fm_complete", result: computeFm(fmInput()) });
+    state = reducer(state, { type: "set_mode", mode: "public" });
+    state = reducer(state, { type: "set_stress", scenario: "weak" });
+    state = reducer(state, { type: "export_notice", notice: "已导出" });
+
+    const next = reducer(state, { type: "set_viewpoint", viewpoint: "新观点：储能投资会改变资产传导" });
+    expect(next).toMatchObject({
+      stage: "thesis",
+      language: state.language,
+      viewpoint: "新观点：储能投资会改变资产传导",
+      capital: "250000",
+      currency: "USD",
+      challengeStatus: "idle",
+      challengeTurns: [],
+      replyDraft: "",
+      rubric: rubricDefaults,
+      evidence: [],
+      confirmation: "pending",
+      unresolvedIssuesAcknowledged: false,
+      reservationNote: "",
+      selectedBranch: "main",
+      fmStatus: "idle",
+      fmProgress: 0,
+      fmStep: "等待本地计算",
+      fmResult: null,
+      portfolioMode: "raw",
+      stressScenario: "main",
+      exportNotice: "",
+    });
+  });
+
+  it("fully resets a pending partial workflow and starts the new challenge cleanly", () => {
+    const oldViewpoint = "旧观点：需求增长会带动订单";
+    let state = reducer({ ...initialState, viewpoint: oldViewpoint, capital: "90000", currency: "EUR" }, { type: "start_challenge" });
+    state = reducer(state, { type: "set_reply_draft", draft: "旧回复不应被复用" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "set_unresolved_issues_acknowledged", acknowledged: true });
+    state = reducer(state, { type: "set_reservation_note", note: "旧保留意见" });
+    state = reducer(state, { type: "select_branch", branch: "weak" });
+    state = reducer(state, { type: "fm_start" });
+
+    const next = reducer(state, { type: "set_viewpoint", viewpoint: "新观点：融资条件会决定传导强度" });
+    expect(next.challengeStatus).toBe("idle");
+    expect(next.challengeTurns).toEqual([]);
+    expect(next.evidence).toEqual([]);
+    expect(next.fmResult).toBeNull();
+    expect(next.selectedBranch).toBe("main");
+    expect(next.stage).toBe("thesis");
+    expect(next.capital).toBe("90000");
+    expect(next.currency).toBe("EUR");
+
+    const started = reducer(next, { type: "start_challenge" });
+    expect(started.challengeStatus).toBe("streaming");
+    expect(started.challengeTurns[0]?.body).toBe("新观点：融资条件会决定传导强度");
+    expect(started.challengeTurns.some((turn) => turn.body.includes("旧观点") || turn.body.includes("旧回复"))).toBe(false);
+  });
+
+  it("does not reuse downstream state when restarting a challenge for the same viewpoint", () => {
+    const viewpoint = "同一观点重新审查也必须从零开始";
+    let state = reducer({ ...initialState, viewpoint }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "旧回复" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "select_branch", branch: "strong" });
+    state = reducer(state, { type: "fm_start" });
+    const restarted = reducer(state, { type: "start_challenge", viewpoint });
+    expect(restarted).toMatchObject({ stage: "challenge", challengeStatus: "streaming", viewpoint, replyDraft: "", evidence: [], selectedBranch: "main", fmStatus: "idle", fmProgress: 0, fmResult: null, confirmation: "pending" });
+    expect(restarted.challengeTurns[0]?.body).toBe(viewpoint);
+    expect(restarted.rubric).toEqual(rubricDefaults);
+    expect(restarted.challengeTurns.some((turn) => turn.body === "旧回复")).toBe(false);
+  });
+
+  it("uses all ten rubric criteria and fail-closed normal confirmation", () => {
+    expect(rubricDefaults).toHaveLength(10);
+    expect(rubricDefaults.every((item) => item.max === 4)).toBe(true);
+    let state = reducer({ ...initialState, viewpoint: "带门槛的观点" }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    expect(canConfirmNormally(state)).toBe(false);
+    expect(reducer(state, { type: "confirm", confirmation: "confirmed" }).stage).toBe("challenge");
+    state = reducer(state, { type: "submit_reply", body: "我会提供公开验证条件。" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    expect(totalRubricScore(state.rubric)).toBeGreaterThanOrEqual(30);
+    expect(canConfirmNormally(state)).toBe(true);
+    expect(reducer(state, { type: "confirm", confirmation: "confirmed" }).stage).toBe("worldline");
+  });
+
+  it("rejects forged completion flags, transcripts, evidence flags, and direct route jumps", () => {
+    const started = reducer({ ...initialState, viewpoint: "一个用于安全门回归的有效观点" }, { type: "start_challenge" });
+    const prematurelyComplete = reducer(started, { type: "challenge_complete" });
+    expect(prematurelyComplete.challengeStatus).toBe("streaming");
+    const completed = reducer(prematurelyComplete, { type: "submit_reply", body: "我会用公开订单数据验证。" });
+    expect(completed.challengeStatus).toBe("complete");
+    expect(canConfirmNormally({ ...completed, rubric: rubricDefaults.map((item) => ({ ...item, score: 4 })), evidence: [{ ...searchEvidenceFixture, independently_reviewable: false }] })).toBe(true);
+    expect(canConfirmReserved({ ...completed, unresolvedIssuesAcknowledged: true, reservationNote: "仍有未解决的传导风险。", challengeTurns: completed.challengeTurns.filter((turn) => turn.author !== "user" || turn.id === "user-1") })).toBe(false);
+    const forged = { ...completed, stage: "portfolio" as const, confirmation: "confirmed" as const, challengeTurns: completed.challengeTurns.filter((turn) => turn.author !== "user" || turn.id === "user-1"), rubric: rubricDefaults.map((item) => ({ ...item, score: 4 })), evidence: [searchEvidenceFixture], fmStatus: "complete" as const, fmResult: computeFm(fmInput()) };
+    expect(reducer(forged, { type: "set_stage", stage: "portfolio" }).stage).toBe("challenge");
+    expect(researchExport(forged, branches, []).challenge).toMatchObject({ confirmation: "pending", unresolved_issues_acknowledged: false, reservation_note: "" });
+  });
+
+  it("retains transcript across cancel/retry and reaches confirmation", () => {
+    let state = reducer({ ...initialState, viewpoint: "一个用于回归测试的有效观点" }, { type: "start_challenge" });
+    expect(state.challengeStatus).toBe("streaming");
+    expect(state.challengeTurns.length).toBe(2);
+    state = reducer(state, { type: "challenge_cancel" });
+    expect(state.challengeStatus).toBe("cancelled");
+    expect(state.challengeTurns.at(-1)?.body).toContain("仍保留");
+    state = reducer(state, { type: "challenge_recover" });
+    state = reducer(state, { type: "challenge_complete" });
+    expect(canConfirmReserved(state)).toBe(false);
+    state = reducer(state, { type: "submit_reply", body: "我会继续观察订单和现金流。" });
+    state = reducer(state, { type: "confirm", confirmation: "reserved" });
+    expect(state.stage).toBe("challenge");
+    state = reducer(state, { type: "set_unresolved_issues_acknowledged", acknowledged: true });
+    state = reducer(state, { type: "set_reservation_note", note: "未验证的需求传导仍需观察订单与现金流。" });
+    expect(canConfirmReserved(state)).toBe(true);
+    state = reducer(state, { type: "confirm", confirmation: "reserved" });
+    expect(state.stage).toBe("worldline");
+    expect(state.confirmation).toBe("reserved");
+  });
+
+  it("keeps terminal recovery state intact while selecting a replacement operation instead of workflow reset", () => {
+    const started = reducer({ ...initialState, viewpoint: "终态恢复不能抹去研究状态" }, { type: "start_challenge" });
+    const withDraft = reducer(reducer(started, { type: "set_reply_draft", draft: "保留的答复草稿" }), { type: "add_evidence", evidence: searchEvidenceFixture });
+    const cancelled = reducer(withDraft, { type: "challenge_cancel" });
+    const recovered = reducer(cancelled, { type: "challenge_recover" });
+    expect(recovered).toMatchObject({ viewpoint: withDraft.viewpoint, replyDraft: "保留的答复草稿", evidence: [searchEvidenceFixture], rubric: withDraft.rubric, challengeTurns: cancelled.challengeTurns });
+    expect(recoveryActionFor("running")).toBe("resume");
+    expect(recoveryActionFor("cancelled")).toBe("restart");
+    expect(recoveryActionFor("failed")).toBe("restart");
+    expect(recoveryActionFor("completed")).toBe("replay");
+  });
+
+  it("compensates a cancel requested before the async operation receipt arrives", async () => {
+    const cancelOperation = vi.fn(async () => ({ operation: { status: "cancelled" } }));
+    const pending = { cancelRequested: true, cancelIdempotencyKey: "cancel-idempotency-delayed", submissionIdempotencyKey: "submission-idempotency-delayed" };
+    const receipt = { operation: { operation_id: "operation:delayed", cancel_token: "cancel-token-delayed" } };
+
+    await expect(cancelAcceptedPendingReceipt({ cancelOperation } as never, pending, receipt as never)).resolves.toMatchObject({ status: "cancelled" });
+    expect(cancelOperation).toHaveBeenCalledWith(
+      "operation:delayed", "cancel-token-delayed", { idempotencyKey: "cancel-idempotency-delayed" },
+    );
+
+    pending.cancelRequested = false;
+    await expect(cancelAcceptedPendingReceipt({ cancelOperation } as never, pending, receipt as never)).resolves.toBeNull();
+    expect(cancelOperation).toHaveBeenCalledTimes(1);
+
+    pending.cancelRequested = true;
+    const nonTerminalCancel = vi.fn(async () => ({ operation: { status: "running" } }));
+    await expect(cancelAcceptedPendingReceipt({ cancelOperation: nonTerminalCancel } as never, pending, receipt as never)).rejects.toThrow("terminal operation state");
+  });
+
+  it("replays a lost async receipt with the original submission idempotency key", async () => {
+    const pending = { submissionIdempotencyKey: "submission-idempotency-lost-receipt" };
+    const receipt = { operation: { operation_id: "operation:replayed" } };
+    const submit = vi.fn()
+      .mockRejectedValueOnce(new Error("response lost after acceptance"))
+      .mockResolvedValueOnce(receipt);
+
+    await expect(replayPendingReceipt(pending, submit)).rejects.toThrow("response lost after acceptance");
+    await expect(replayPendingReceipt(pending, submit)).resolves.toBe(receipt);
+    expect(submit).toHaveBeenNthCalledWith(1, "submission-idempotency-lost-receipt");
+    expect(submit).toHaveBeenNthCalledWith(2, "submission-idempotency-lost-receipt");
+  });
+
+  it("rewinds a terminal replay receipt so the terminal SSE frame is observed", () => {
+    expect(operationReplayCursor({ operation_id: "operation:done", last_event_id: "operation:done:2", status: "completed" })).toBe("operation:done:0");
+    expect(operationReplayCursor({ operation_id: "operation:failed", last_event_id: "operation:failed:2", status: "failed" })).toBe("operation:failed:0");
+    expect(operationReplayCursor({ operation_id: "operation:live", last_event_id: "operation:live:1", status: "running" })).toBe("operation:live:1");
+  });
+
+  it("moves a failed recovery into an explicit retryable failed state", () => {
+    const started = reducer({ ...initialState, viewpoint: "恢复失败必须如实显示" }, { type: "start_challenge" });
+    const recovering = reducer(reducer(started, { type: "challenge_cancel" }), { type: "challenge_recover" });
+    const failed = reducer(recovering, { type: "api_error", notice: "模型供应商暂时不可用。" });
+    expect(failed.challengeStatus).toBe("failed");
+    expect(failed.apiError).toBe("模型供应商暂时不可用。");
+    expect(failed.challengeTurns).toEqual(recovering.challengeTurns);
+  });
+
+  it("uses the current viewpoint, retains an editable reply, and keeps evidence fields", () => {
+    const viewpoint = "欧洲电网储能投资会因可再生能源并网而加速";
+    let state = reducer({ ...initialState, viewpoint }, { type: "start_challenge" });
+    expect(state.challengeTurns[0]?.body).toBe(viewpoint);
+    expect(state.challengeTurns[1]?.body).toContain(viewpoint);
+    state = reducer(state, { type: "set_reply_draft", draft: "我会用订单和并网数据验证。" });
+    state = reducer(state, { type: "submit_reply", body: state.replyDraft });
+    expect(state.challengeTurns.at(-1)?.body).toContain("订单和并网数据");
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    expect(state.evidence[0]).toMatchObject({ url: "https://www.iea.org/", publisher: expect.any(String), published_at: expect.any(String), user_note: expect.any(String), content_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+  });
+});
+
+describe("SearchEvidenceBundle validation and premise rendering", () => {
+  it("rejects unsafe URLs and overlong fields while accepting a safe bundle", () => {
+    const valid = { url: "https://example.com/report", title: "公开报告", publisher: "Example", published_at: "2026-08-09", excerpt: "可复核摘录", user_note: "fixture note", supports_or_challenges: "supports" as const, grade: "B" as const };
+    expect(validateSearchEvidence(valid)).toEqual({});
+    expect(validateSearchEvidence({ ...valid, url: "http://127.0.0.1/private" }).url).toContain("http(s)");
+    expect(validateSearchEvidence({ ...valid, url: "http://2130706433/private" }).url).toContain("http(s)");
+    expect(validateSearchEvidence({ ...valid, url: "http://127.1/private" }).url).toContain("http(s)");
+    expect(validateSearchEvidence({ ...valid, url: "http://[::1]/private" }).url).toContain("http(s)");
+    expect(validateSearchEvidence({ ...valid, url: "https://example.com:8443/report" }).url).toContain("http(s)");
+    expect(validateSearchEvidence({ ...valid, publisher: "" }).publisher).toContain("发布者");
+    expect(validateSearchEvidence({ ...valid, published_at: "2026-08-10" }).published_at).toContain("数据截止日");
+    expect(validateSearchEvidence({ ...valid, excerpt: "x".repeat(4001) }).excerpt).toContain("4,000");
+    expect(validateSearchEvidence({ ...valid, grade: "D", url: "", published_at: "" })).toEqual({});
+    expect(validateSearchEvidence({ ...valid, grade: "E", url: "", published_at: "" })).toEqual({});
+    expect(validateSearchEvidence({ ...valid, grade: "A", url: "" }).url).toContain("A–C");
+    expect(validateSearchEvidence({ ...valid, grade: "B", url: "" }).url).toContain("A–C");
+    expect(validateSearchEvidence({ ...valid, grade: "C", url: "" }).url).toContain("A–C");
+  });
+
+  it("binds identity, provenance, direction, grade, and reviewability into the content hash", () => {
+    const item = { evidence_id: "e1", challenge_id: "c1", source_type: "primary" as const, url: "https://example.com", title: "t", publisher: "p", published_at: "2026-08-09", retrieved_at: "2026-08-10T00:00:00Z", excerpt: "e", user_note: "n", grade: "A" as const, supports_or_challenges: "supports" as const, independently_reviewable: true };
+    expect(evidenceHash(item)).not.toBe(evidenceHash({ ...item, grade: "D" }));
+    expect(evidenceHash(item)).not.toBe(evidenceHash({ ...item, supports_or_challenges: "challenges" }));
+    expect(evidenceHash(item)).not.toBe(evidenceHash({ ...item, source_type: "commentary" }));
+    expect(evidenceHash(item)).not.toBe(evidenceHash({ ...item, challenge_id: "c2" }));
+  });
+
+  it("keeps the API source-material hash separate and canonical", () => {
+    const material = { url: "https://example.com/evidence", title: "Client search excerpt", published_at: "2026-08-01T00:00:00Z", retrieved_at: "2026-08-10T00:00:00Z", excerpt: "A client-submitted excerpt.", user_note: "Search fallback." };
+    expect(sourceMaterialHash(material)).toBe("7f334c646f625da01253b95ec362f62384cace4820d8697a324183aceec36e7e");
+    expect(sourceMaterialHash({ ...material, published_at: "2026-08-01T00:00:00.000Z", retrieved_at: "2026-08-10T00:00:00.000000Z" })).toBe(sourceMaterialHash(material));
+    expect(sourceMaterialHash({ ...material, url: "", published_at: null })).toBe(sourceMaterialHash({ ...material, url: null, published_at: null }));
+    expect(sourceMaterialHash({ ...material, search_provider: "provider-a", search_result_hash: "a".repeat(64) })).not.toBe(sourceMaterialHash(material));
+    expect(evidenceHash({ evidence_id: "e1", challenge_id: "c1", source_type: "primary", url: material.url, title: material.title, publisher: "Example", published_at: material.published_at, retrieved_at: material.retrieved_at, excerpt: material.excerpt, user_note: material.user_note, grade: "A", supports_or_challenges: "supports", independently_reviewable: true })).not.toBe(sourceMaterialHash(material));
+  });
+
+  it("exports the API source-material hash with search provenance intact", () => {
+    const item = { ...searchEvidenceFixture, search_provider: "provider-a", search_result_hash: "a".repeat(64) };
+    const exported = (researchExport({ ...initialState, evidence: [item] }, branches, []) as { evidence: Array<Record<string, unknown>> }).evidence[0];
+    expect(exported?.challenge_id).toBe(item.challenge_id);
+    expect(exported?.source_material_hash).toBe(sourceMaterialHash({
+      url: item.url, title: item.title, published_at: item.published_at, retrieved_at: item.retrieved_at,
+      excerpt: item.excerpt, user_note: item.user_note, search_provider: item.search_provider, search_result_hash: item.search_result_hash,
+    }));
+  });
+
+  it("marks D/E and private/model evidence as not independently reviewable", () => {
+    expect(privateEvidenceFixture.url).toBe("");
+    expect(privateEvidenceFixture.independently_reviewable).toBe(false);
+    expect(isEvidenceIndependentlyReviewable("D", "user_private", "https://example.com/private")).toBe(false);
+    expect(isEvidenceIndependentlyReviewable("E", "model_inference", "https://example.com/inference")).toBe(false);
+    expect(isEvidenceIndependentlyReviewable("B", "reliable_secondary", "https://example.com/report")).toBe(true);
+    expect(isEvidenceIndependentlyReviewable("C", "commentary", "")).toBe(false);
+    expect(researchExport({ ...initialState, evidence: [privateEvidenceFixture] }, branches, []).evidence).toEqual([expect.objectContaining({ url: "", grade: "D", independently_reviewable: false })]);
+  });
+
+  it("renders editable reply/evidence schema and the viewpoint premise", () => {
+    const viewpoint = "亚洲电网投资受数据中心负荷驱动";
+    const challengeMarkup = renderToStaticMarkup(createElement(ChallengePanel, { status: "complete", turns: [{ id: "t1", author: "challenger", time: "现在", body: "问题" }], replyDraft: "", evidence: [], rubric: initialState.rubric, unresolvedIssuesAcknowledged: false, reservationNote: "", onStart: () => undefined, onCancel: () => undefined, onRetry: () => undefined, onRecover: () => undefined, onReplyDraft: () => undefined, onSubmitReply: () => undefined, onEvidence: () => undefined, onUnresolvedIssuesAcknowledged: () => undefined, onReservationNote: () => undefined, onConfirm: () => undefined }));
+    expect(challengeMarkup).toContain("回答挑战");
+    expect(challengeMarkup).toContain("SearchEvidenceBundle");
+    expect(challengeMarkup).toContain("A–C 必填；D/E 可留空");
+    expect(challengeMarkup).toContain("发布日期");
+    const worldlineMarkup = renderToStaticMarkup(createElement(WorldlinePanel, { branches: makeBranches(viewpoint), selected: "main", onSelect: () => undefined, onCompute: () => undefined }));
+    expect(worldlineMarkup).toContain(viewpoint);
+  });
+
+  it("renders the selected branch assessment and its actual first post-baseline reveal", () => {
+    const weak = makeBranches("A branch-specific premise").find((branch) => branch.kind === "weak")!;
+    const markup = renderToStaticMarkup(createElement(WorldlinePanel, { branches: makeBranches("A branch-specific premise"), selected: "weak", onSelect: () => undefined, onCompute: () => undefined }));
+    expect(markup).toContain("弱情景 W−");
+    expect(markup).toContain(`${(weak.assessment.premise_probability_range.minimum * 100).toFixed(2)}–${(weak.assessment.premise_probability_range.maximum * 100).toFixed(2)}%`);
+    expect(markup).toContain(`${(weak.assessment.conditional_probability_range.minimum * 100).toFixed(2)}–${(weak.assessment.conditional_probability_range.maximum * 100).toFixed(2)}%`);
+    expect(markup).toContain(`${(weak.assessment.joint_probability_range.minimum * 100).toFixed(2)}–${(weak.assessment.joint_probability_range.maximum * 100).toFixed(2)}%`);
+    expect(markup).toContain("2027-02-28");
+    expect(markup).not.toContain("主世界线 P(W₀ | H)");
+  });
+
+  it("generates an English challenger body while preserving the entered premise", () => {
+    const premise = "Data-centre demand accelerates grid investment";
+    const state = reducer({ ...initialState, language: "en", viewpoint: premise }, { type: "start_challenge" });
+    expect(state.challengeTurns[1]?.body).toContain("Strongest counterargument");
+    expect(state.challengeTurns[1]?.body).toContain(premise);
+    expect(state.challengeTurns[1]?.body).not.toContain("最强反方");
+  });
+});
+
+describe("FM worker and public delta", () => {
+  it("keeps the completed FM audit state visible before portfolio navigation", () => {
+    const readyRubric = rubricDefaults.map((item) => ({ ...item, score: 3 }));
+    let state = reducer({ ...initialState, stage: "worldline", viewpoint: "一个通过确认门槛的测试观点", challengeStatus: "complete", challengeTurns: [{ id: "system-1", author: "system", time: "现在", body: "挑战已启动" }, { id: "challenger-1", author: "challenger", time: "现在", body: "反方问题" }, { id: "user-1", author: "user", time: "现在", body: "用户回复" }], rubric: readyRubric, evidence: [searchEvidenceFixture], confirmation: "confirmed" }, { type: "fm_start" });
+    state = reducer(state, { type: "fm_complete", result: computeFm(fmInput()) });
+    expect(state.stage).toBe("fm");
+    expect(state.fmStatus).toBe("complete");
+    expect(state.fmProgress).toBe(100);
+  });
+
+  it("computes through the real worker contract and retains raw weights", () => {
+    const messages: FmWorkerResponse[] = [];
+    const port: FmWorkerPort = { onmessage: null, postMessage: (message) => messages.push(message) };
+    const cleanup = mountFmWorker(port);
+    port.onmessage?.({ data: { type: "compute", requestId: "test-1", input: fmInput() } });
+    expect(messages[0]?.type).toBe("result");
+    if (messages[0]?.type === "result") {
+      expect(messages[0].result.rawClientResult.targetWeights.length).toBe(6);
+      expect(messages[0].result.cutoff).toBe("2026-08-09");
+    }
+    cleanup();
+  });
+
+  it("caps and renormalises Public Default without mutating Raw", () => {
+    const raw = [0.8, 0.1, 0.1];
+    const publicised = publicWeights(raw, undefined, FRESH_FIXTURE);
+    expect(raw).toEqual([0.8, 0.1, 0.1]);
+    expect(publicised[0]).toBeLessThanOrEqual(PUBLIC_CONSTRAINTS.singleSecurityMax);
+    expect(publicised.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1);
+  });
+
+  it("enforces Public caps, eligibility, proxy reasons, and deterministic redistribution", () => {
+    const rows = allocationRows(computeFm(fmInput()), 100000, "CNY", "public", FRESH_FIXTURE);
+    const nonCash = rows.filter((row) => row.id !== "CASH");
+    const highVolTotal = rows.filter((row) => row.volatility === "high").reduce((sum, row) => sum + row.publicWeight, 0);
+    expect(rows.reduce((sum, row) => sum + row.publicWeight, 0)).toBeCloseTo(1);
+    expect(nonCash.every((row) => row.publicWeight <= PUBLIC_CONSTRAINTS.singleSecurityMax + 1e-12)).toBe(true);
+    expect(highVolTotal).toBeLessThanOrEqual(PUBLIC_CONSTRAINTS.highVolatilityClassMax + 1e-12);
+    expect(rows.find((row) => row.id === "WORLD")?.publicWeight).toBe(0);
+    expect(rows.find((row) => row.id === "WORLD")?.constraintReasons.some((reason) => reason.code === "stale_data" || reason.code === "low_liquidity")).toBe(true);
+    expect(rows.find((row) => row.id === "GRID")?.constraintReasons.some((reason) => reason.code === "proxy_mapping")).toBe(true);
+  });
+
+  it("changes amounts by FX currency and keeps Raw/Public lot calculations independent", () => {
+    const fmResult = computeFm(fmInput());
+    const cny = allocationRows(fmResult, 100000, "CNY", "raw");
+    const usd = allocationRows(fmResult, 100000, "USD", "raw");
+    const eur = allocationRows(fmResult, 100000, "EUR", "raw");
+    expect(cny[0]?.currency).toBe("CNY");
+    expect(usd[0]?.currency).toBe("USD");
+    expect(eur[0]?.currency).toBe("EUR");
+    expect(cny[0]?.rawAmount).not.toBe(usd[0]?.rawAmount);
+    expect(usd[0]?.rawAmount).not.toBe(eur[0]?.rawAmount);
+    expect(FX_SNAPSHOT.label).toContain("not live");
+    expect(FX_SNAPSHOT.asOf).toBe(MARKET_DATA_AS_OF);
+    const raw = allocationRows(fmResult, 100000, "CNY", "raw");
+    const publicRows = allocationRows(fmResult, 100000, "CNY", "public");
+    expect(raw.some((row, index) => row.units !== publicRows[index]?.units)).toBe(true);
+    expect(raw.reduce((sum, row) => sum + row.amount, 0)).not.toBe(publicRows.reduce((sum, row) => sum + row.amount, 0));
+    expect(publicRows.every((row) => row.currency === "CNY")).toBe(true);
+  });
+
+  it("rejects future-dated assets from Public Default", () => {
+    const futureAssets = ASSET_FIXTURES.map((asset, index) => index === 0 ? { ...asset, asOf: "2026-08-10" } : asset);
+    const weights = publicWeights([0.8, 0.1, 0.1, 0, 0, 0], futureAssets, { ...FRESH_FIXTURE, runtimeAsOf: "2026-08-09T00:00:00Z", fxAsOf: "2026-08-09" });
+    expect(weights[0]).toBe(0);
+    expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1);
+  });
+
+  it("fails closed for direct stage manipulation and FM starts", () => {
+    const ready = { ...initialState, viewpoint: "一个用于 gate 回归的有效观点", capital: "100000" };
+    expect(reducer(initialState, { type: "set_stage", stage: "worldline" }).stage).toBe("thesis");
+    expect(reducer(initialState, { type: "fm_start" }).fmStatus).toBe("idle");
+
+    let state = reducer(ready, { type: "start_challenge" });
+    expect(state.stage).toBe("challenge");
+    expect(reducer(state, { type: "set_stage", stage: "worldline" }).stage).toBe("challenge");
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "我会使用公开订单数据验证这条路径。" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    expect(state.stage).toBe("worldline");
+    expect(reducer(state, { type: "set_stage", stage: "portfolio" }).stage).toBe("worldline");
+    expect(safeStageFor({ ...state, stage: "portfolio", fmStatus: "idle", fmResult: null })).toBe("worldline");
+    expect(canEnterStage(state, "fm")).toBe(true);
+    expect(reducer(state, { type: "fm_start" }).stage).toBe("fm");
+  });
+
+  it("keeps failed and cancelled FM states visible so computation can be retried", () => {
+    const readyRubric = rubricDefaults.map((item) => ({ ...item, score: 3 }));
+    const readyState = {
+      ...initialState,
+      stage: "worldline" as const,
+      viewpoint: "一个通过确认门槛并进入因子计算的测试观点",
+      challengeStatus: "complete" as const,
+      challengeTurns: [
+        { id: "system-1", author: "system" as const, time: "现在", body: "挑战已启动" },
+        { id: "challenger-1", author: "challenger" as const, time: "现在", body: "反方问题" },
+        { id: "user-1", author: "user" as const, time: "现在", body: "用户回复" },
+      ],
+      rubric: readyRubric,
+      evidence: [searchEvidenceFixture],
+      confirmation: "confirmed" as const,
+    };
+
+    let failed = reducer(readyState, { type: "fm_start" });
+    failed = reducer(failed, { type: "fm_fail" });
+    expect(failed.stage).toBe("fm");
+    expect(failed.fmStatus).toBe("failed");
+    expect(canEnterStage(failed, "fm")).toBe(true);
+    expect(safeStageFor(failed)).toBe("fm");
+    expect(reducer(failed, { type: "fm_start" }).fmStatus).toBe("computing");
+
+    let cancelled = reducer(readyState, { type: "fm_start" });
+    cancelled = reducer(cancelled, { type: "fm_cancel" });
+    expect(cancelled.stage).toBe("fm");
+    expect(cancelled.fmStatus).toBe("cancelled");
+    expect(canEnterStage(cancelled, "fm")).toBe(true);
+    expect(safeStageFor(cancelled)).toBe("fm");
+    expect(reducer(cancelled, { type: "fm_start" }).fmStatus).toBe("computing");
+  });
+
+  it("invalidates stale timer or worker results with a generation token", () => {
+    const guard = createGenerationGuard();
+    const first = guard.current();
+    const second = guard.invalidate();
+    expect(guard.isCurrent(first)).toBe(false);
+    expect(guard.isCurrent(second)).toBe(true);
+    const third = guard.invalidate();
+    expect(guard.isCurrent(second)).toBe(false);
+    expect(guard.isCurrent(third)).toBe(true);
+  });
+});
+
+describe("portfolio residual and export", () => {
+  it("shows lot residual for small capital and exports JSON/CSV", () => {
+    const rows = allocationRows(computeFm(fmInput()), 100);
+    expect(rows.some((row) => row.residualReason)).toBe(true);
+    const state = { ...initialState, viewpoint: "test thesis", capital: "100", evidence: [] };
+    const json = researchExport(state, branches, rows);
+    const csv = csvExport(rows);
+    expect(json).toMatchObject({ labels: { historical: "historical_only", simulated: "simulated fixture" } });
+    expect(csv.split("\n")[0]).toBe(CSV_HEADER.join(","));
+    expect(csv.split("\n")[0]).toContain("currency");
+    expect(csv.split("\n")[0]).toContain("raw_amount");
+    expect(csv.split("\n")[0]).toContain("public_units");
+    expect(csv).toContain("金额过小");
+  });
+
+  it("keeps no-FM allocation and export explicitly empty", () => {
+    expect(allocationRows(null, 100000, "CNY", "raw")).toEqual([]);
+    expect(allocationRows(null, 100000, "CNY", "public")).toEqual([]);
+    const output = researchExport({ ...initialState, viewpoint: "未计算" }, branches, []);
+    expect(output.portfolio).toEqual({ status: "not_computed", mode: "raw", currency: "CNY", allocations: [], note: expect.stringContaining("FM") });
+    expect(JSON.stringify(output.portfolio)).not.toContain("weight");
+    const markup = renderToStaticMarkup(createElement(PortfolioPanel, { mode: "raw", currency: "CNY", rows: [], capital: 100000, selectedBranch: "main", branches, stress: "main", onMode: () => undefined, onStress: () => undefined, onCompute: () => undefined, onNav: () => undefined, onExport: () => undefined, fmReady: false }));
+    expect(markup).toContain("尚未计算 FM");
+    expect(markup).not.toContain("GRID");
+  });
+
+  it("keeps the selected portfolio mode visually and semantically aligned", () => {
+    const markup = renderToStaticMarkup(createElement(PortfolioPanel, { mode: "public", currency: "CNY", rows: allocationRows(computeFm(fmInput()), 100000, "CNY", "public"), capital: 100000, selectedBranch: "main", branches, stress: "main", onMode: () => undefined, onStress: () => undefined, onCompute: () => undefined, onNav: () => undefined, onExport: () => undefined, fmReady: true }));
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain("◉ Public Default");
+    expect(markup).toContain("○ FM Raw");
+    expect(markup).toContain("组合资产分配 · Public Default");
+  });
+
+  it("exports complete audit fields and actual local FM arrays", () => {
+    const fmResult = computeFm(fmInput());
+    let state = reducer({ ...initialState, viewpoint: "测试观点进入完整导出", capital: "100000" }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "用户回复保留" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    state = reducer(state, { type: "set_currency", currency: "USD" });
+    state = reducer(state, { type: "fm_start" });
+    state = reducer(state, { type: "fm_complete", result: fmResult });
+    state = reducer(state, { type: "set_mode", mode: "public" });
+    const rows = allocationRows(fmResult, 100000, "USD", "public");
+    const output = researchExport(state, makeBranches(state.viewpoint), rows);
+    expect(output).toMatchObject({ product: { name: "ForesightNine" }, method_version: expect.any(String), data_as_of: MARKET_DATA_AS_OF, thesis: { raw_text: state.viewpoint, base_currency: "USD" }, challenge: { status: "complete", confirmation: "confirmed", transcript: state.challengeTurns }, labels: { historical: "historical_only", simulated: "simulated fixture", probability: "model_estimate_unvalidated" } });
+    expect(output.evidence).toEqual([expect.objectContaining({ evidence_id: expect.any(String), challenge_id: expect.any(String), url: expect.any(String), title: expect.any(String), publisher: expect.any(String), published_at: expect.any(String), retrieved_at: expect.any(String), excerpt: expect.any(String), user_note: expect.any(String), content_hash: expect.any(String), source_material_hash: expect.any(String), grade: expect.any(String), source_type: expect.any(String), independently_reviewable: true })]);
+    expect(output.worldlines).toHaveLength(3);
+    expect(output.portfolio).toEqual(expect.objectContaining({ currency: "USD", allocations: expect.any(Array), raw_residual_cash: expect.any(Number), public_residual_cash: expect.any(Number) }));
+    expect(output.fm).toEqual(expect.objectContaining({ status: "computed", fixture: true, data_source: expect.stringContaining("client"), result: expect.objectContaining({ selectedFactorIds: expect.any(Array), metrics: null, weights: expect.any(Object), forecasts: expect.any(Array), rawClientResult: expect.any(Object) }) }));
+
+    const idleWorldline = { ...state, stage: "worldline" as const, fmStatus: "idle" as const, fmResult: null };
+    const idleWorldlineOutput = researchExport(idleWorldline, makeBranches(state.viewpoint), []);
+    expect(idleWorldlineOutput.worldlines).toHaveLength(3);
+    expect(idleWorldlineOutput.nav).toMatchObject({ status: "not_available", worldlines: [] });
+
+    const forgedNav = { ...idleWorldline, stage: "nav" as const };
+    const forgedNavOutput = researchExport(forgedNav, makeBranches(state.viewpoint), []);
+    expect(forgedNavOutput.worldlines).toEqual([]);
+    expect(forgedNavOutput.nav).toMatchObject({ status: "not_available", worldlines: [] });
+    expect(forgedNavOutput.portfolio).toMatchObject({ status: "not_available", allocations: [] });
+
+    const noFm = researchExport({ ...initialState, viewpoint: "未计算" }, branches, allocationRows(null, 100));
+    expect(noFm.fm).toEqual(expect.objectContaining({ status: "not_computed", fixture: true, result: null }));
+    expect(noFm.portfolio).toEqual(expect.objectContaining({ status: "not_computed", allocations: [] }));
+  });
+
+  it("fails closed for forged completion, rubric, evidence, and FM results", () => {
+    const forged = {
+      ...initialState,
+      stage: "portfolio" as const,
+      viewpoint: "伪造下游结果不应公开",
+      challengeStatus: "complete" as const,
+      confirmation: "confirmed" as const,
+      rubric: rubricDefaults.map((item) => ({ ...item, score: item.max })),
+      evidence: [{ ...searchEvidenceFixture, independently_reviewable: true }],
+      fmStatus: "complete" as const,
+      fmResult: computeFm(fmInput()),
+    };
+    const output = researchExport(forged, branches, allocationRows(forged.fmResult, 100000));
+    expect(output.worldlines).toEqual([]);
+    expect(output.nav).toMatchObject({ status: "not_available", worldlines: [] });
+    expect(output.portfolio).toMatchObject({ status: "not_available", allocations: [] });
+    expect(output.fm).toMatchObject({ status: "not_available", result: null });
+    expect(JSON.stringify(output.fm)).not.toContain("selectedFactorIds");
+  });
+
+  it("does not export a malformed or stale client FM result", () => {
+    let state = reducer({ ...initialState, viewpoint: "FM shape gate 的有效观点" }, { type: "start_challenge" });
+    state = reducer(state, { type: "challenge_complete" });
+    state = reducer(state, { type: "submit_reply", body: "用户确认挑战回复" });
+    state = reducer(state, { type: "add_evidence", evidence: searchEvidenceFixture });
+    state = reducer(state, { type: "confirm", confirmation: "confirmed" });
+    state = reducer(state, { type: "fm_start" });
+    state = reducer(state, { type: "fm_complete", result: computeFm(fmInput()) });
+    const result = state.fmResult!;
+    const malformed = { ...state, fmResult: { ...result, forecasts: new Float64Array(1) } };
+    const output = researchExport(malformed, makeBranches(state.viewpoint), allocationRows(result, 100000));
+    expect(output.worldlines).toHaveLength(3);
+    expect(output.fm).toMatchObject({ status: "not_available", result: null });
+    expect(output.portfolio).toMatchObject({ status: "not_available", allocations: [] });
+
+    const emptyVolatility = { ...state, fmResult: { ...result, forecastScale: { ...result.forecastScale, crossSectionalVolatility: new Float64Array() } } };
+    expect(researchExport(emptyVolatility, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+
+    const infiniteVolatility = { ...state, fmResult: { ...result, forecastScale: { ...result.forecastScale, crossSectionalVolatility: Float64Array.from([Number.POSITIVE_INFINITY]) } } };
+    expect(researchExport(infiniteVolatility, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+
+    const wrongVolatilityContainer = { ...state, fmResult: { ...result, forecastScale: { ...result.forecastScale, crossSectionalVolatility: [0.1] as unknown as Float64Array } } };
+    expect(researchExport(wrongVolatilityContainer, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+
+    const malformedMetrics = { ...state, fmResult: { ...result, metrics: { icSeries: Float64Array.from([Number.POSITIVE_INFINITY]), icMean: 0, icir: 0 } } };
+    expect(researchExport(malformedMetrics, makeBranches(state.viewpoint), allocationRows(result, 100000)).fm).toMatchObject({ status: "not_available", result: null });
+  });
+
+  it.each([
+    ["confirmed", { unresolvedIssuesAcknowledged: false, reservationNote: "" }],
+    ["reserved", { unresolvedIssuesAcknowledged: true, reservationNote: "保留意见仍需后续验证。" }],
+  ] as const)("requires a real transcript before exporting a %s confirmation", (confirmation, reservation) => {
+    const state = {
+      ...initialState,
+      stage: "worldline" as const,
+      viewpoint: "缺少 transcript 的状态",
+      challengeStatus: "complete" as const,
+      confirmation,
+      rubric: rubricDefaults.map((item) => ({ ...item, score: item.max })),
+      evidence: confirmation === "reserved" ? [privateEvidenceFixture] : [searchEvidenceFixture],
+      ...reservation,
+    };
+    const output = researchExport(state, branches, []);
+    expect(output.worldlines).toEqual([]);
+    expect(output.nav).toMatchObject({ status: "not_available" });
+    expect(output.fm).toMatchObject({ status: "not_computed", result: null });
+    expect(output.portfolio).toMatchObject({ allocations: [] });
+    expect(["not_available", "not_computed"]).toContain((output.portfolio as { status: string }).status);
+  });
+
+  it("derives reviewability from source, grade, and safe public URL", () => {
+    const state = {
+      ...initialState,
+      evidence: [
+        { ...searchEvidenceFixture, independently_reviewable: false },
+        { ...privateEvidenceFixture, independently_reviewable: true, url: "https://example.com/private" },
+        { ...privateEvidenceFixture, evidence_id: "evidence-model-no-url", source_type: "model_inference" as const, grade: "E" as const, independently_reviewable: true },
+        { ...searchEvidenceFixture, evidence_id: "evidence-no-url", url: "", independently_reviewable: true },
+        { ...searchEvidenceFixture, evidence_id: "evidence-unsafe-url", url: "http://127.0.0.1/private", independently_reviewable: true },
+      ],
+    };
+    const evidence = researchExport(state, branches, []).evidence as Array<Record<string, unknown>>;
+    expect(evidence.map((item) => item.independently_reviewable)).toEqual([true, false, false, false, false]);
+  });
+});
+
+describe("NAV chart paths", () => {
+  const renderNav = (selected: "weak" | "main" | "strong") => renderToStaticMarkup(createElement(NavPanel, { branches, selected, onSelect: () => undefined, stress: "main", onExport: () => undefined }));
+
+  it("renders history, all three scenario lines, interval, labels, and today boundary", () => {
+    const markup = renderNav("main");
+    expect(markup).toContain("interval-band");
+    expect(markup).toContain("interval-high");
+    expect(markup).toContain("interval-low");
+    expect(markup).toContain("series-history");
+    expect(markup).toContain("series-weak");
+    expect(markup).toContain("series-main");
+    expect(markup).toContain("series-strong");
+    expect(markup).toContain("today-line");
+    expect(markup).toContain("弱情景 W−");
+    expect(markup).toContain("主情景 W₀");
+    expect(markup).toContain("强情景 W+");
+    expect(markup).toContain("10–90% 区间");
+  });
+
+  it("changes emphasis without removing other scenario paths", () => {
+    const weakMarkup = renderNav("weak");
+    expect(weakMarkup).toContain("series-group-weak is-emphasized");
+    expect(weakMarkup).toContain("series-group-main is-context");
+    expect(weakMarkup).toContain("series-group-strong is-context");
+    expect(weakMarkup).toContain("组合回撤：历史与三条模拟路径");
+  });
+
+  it("exports the page arrays and toggles drawdown visibility", () => {
+    const nav = navExport({ ...initialState, selectedBranch: "main" }, branches);
+    expect(nav).toEqual(expect.objectContaining({ historical: expect.any(Array), weak: expect.any(Array), main: expect.any(Array), strong: expect.any(Array), interval: expect.objectContaining({ low: expect.any(Array), high: expect.any(Array) }), drawdown: expect.objectContaining({ weak: expect.any(Array), main: expect.any(Array), strong: expect.any(Array) }), boundary: expect.objectContaining({ todayIndex: historical.length - 1 }) }));
+    let state = reducer(initialState, { type: "toggle_drawdown" });
+    expect(state.drawdownVisible).toBe(false);
+    state = reducer(state, { type: "toggle_drawdown" });
+    expect(state.drawdownVisible).toBe(true);
+    const hidden = renderToStaticMarkup(createElement(NavPanel, { branches, selected: "main", onSelect: () => undefined, stress: "main", onExport: () => undefined, drawdownVisible: false, onToggleDrawdown: () => undefined }));
+    expect(hidden).toContain("显示回撤");
+    expect(hidden).toContain("回撤图已隐藏");
+  });
+});
+
+===== FmPanel.tsx =====
+import { Button, StatusDot, Tag } from "./Controls";
+import { Header } from "./AppShell";
+import { t, useLanguage } from "../i18n";
+import type { FmStatus } from "../types";
+
+interface FmProps { readonly status: FmStatus; readonly progress: number; readonly step: string; readonly resultReady: boolean; readonly onCompute: () => void; readonly onCancel: () => void; readonly onPortfolio: () => void; }
+const steps = ["验证签名数据快照", "筛选有效因子", "截面百分位与 IC 方向", "合成信号与标准化", "目标权重与成本死区"];
+
+export function FmPanel({ status, progress, step, resultReady, onCompute, onCancel, onPortfolio }: FmProps) {
+  const { language } = useLanguage();
+  return <section className="content-column fm-view">
+    <Header title={t(language, "本地因子计算")} action={<span className="operation-label"><StatusDot tone={status === "complete" ? "sage" : status === "failed" ? "danger" : "accent"} />{status === "computing" ? `${t(language, "正在用户设备上计算")} · ${progress}%` : status === "complete" ? t(language, "本地计算完成") : t(language, "等待本地计算")}</span>} />
+    <div className="fm-topline"><span>{t(language, "原始市场分片不会上传最终组合")}</span><span className="worker-badge">Web Worker · {t(language, "本地计算")}</span></div>
+    <div className="fm-grid"><ol className="trace-list">{steps.map((item, index) => <li className={`${progress >= (index + 1) * 20 ? "is-done" : progress > index * 20 ? "is-active" : ""}`} key={item}><span>{progress >= (index + 1) * 20 ? "✓" : index + 1}</span><div><strong>{t(language, item)}</strong><small>{progress >= (index + 1) * 20 ? t(language, "已完成") : progress > index * 20 ? t(language, step) : t(language, "等待当前步骤完成")}</small></div></li>)}</ol><div className="factor-table-wrap"><table className="factor-table"><caption>{t(language, "因子质量与录取状态")}</caption><thead><tr><th>{t(language, "因子")}</th><th>IC</th><th>ICIR</th><th>{t(language, "质量权重")}</th><th>{t(language, "状态")}</th></tr></thead><tbody>{[["盈利修正", "0.072", "0.64", "0.046", "已接受"], ["质量", "0.051", "0.58", "0.030", "已接受"], ["中期动量", "−0.044", "−0.52", "0.023", "已接受"], ["低波动", "0.028", "0.31", "0.009", "已拒绝"], ["估值", "−0.018", "−0.21", "0.004", "已拒绝"]].map((row) => <tr key={row[0]}>{row.map((cell, index) => <td key={`${row[0]}-${index}`}>{index === 4 ? <><StatusDot tone={cell === "已接受" ? "sage" : "danger"} /> {t(language, cell)}</> : t(language, cell)}</td>)}</tr>)}</tbody></table><p className="formula-note">{t(language, "质量权重 q")}<sub>f</sub> = max(|IC<sub>f</sub>|, 1e−6) × max(|ICIR<sub>f</sub>|, 1e−6)。{t(language, "负 IC 只改变贡献方向，不改变质量权重。")}</p></div></div>
+    <div className="fm-explanation"><div><Tag tone="accent">FM-v1</Tag><h2>{t(language, "合成与标准化信号")}</h2><p>rank_pct(signal) − 0.5 → {t(language, "按 IC 方向调整")} → {t(language, "按有效支持加权")} → {t(language, "截面 z-score")} → clip / re-normalise。</p></div><div className="fm-controls">{status === "computing" ? <Button variant="danger" onClick={onCancel}>{t(language, "暂停 / 取消计算")}</Button> : resultReady ? <Button variant="primary" onClick={onPortfolio}>{t(language, "查看配置方案")}</Button> : <Button variant="primary" onClick={onCompute}>{t(language, "开始本地计算")}</Button>}{resultReady ? <span className="intermediate-note">{t(language, "中间值已包含在 JSON 审计导出中")}</span> : <span className="intermediate-note">{t(language, "完成计算后可在 JSON 审计导出中查看")}</span>}</div></div>
+    {status === "cancelled" ? <div className="notice notice-warning" role="status">{t(language, "本地计算已取消；中间结果未上传。")} <Button variant="quiet" onClick={onCompute}>{t(language, "继续计算")}</Button></div> : null}
+    {status === "failed" ? <div className="notice notice-warning" role="alert">{t(language, "因子计算或金融数据获取失败，已保留研究状态。")} <Button variant="quiet" onClick={onCompute}>{t(language, "重试")}</Button></div> : null}
+  </section>;
+}
+
+===== i18n.tsx =====
+import { createContext, useContext, type PropsWithChildren } from "react";
+import type { Language } from "./types";
+
+// User-entered viewpoints, evidence excerpts and source-fixture content are data,
+// not product copy.  They deliberately remain in their original language.
+const english: Readonly<Record<string, string>> = {
+  "新建推演": "New research", "反方审查": "Challenge", "世界线": "Worldlines", "配置方案": "Allocation", "组合路径": "Portfolio path", "控制台": "Console", "研究控制台": "Research console",
+  "公开研究模式 · 不连接券商 · 不托管资金": "Public research mode · no broker · no custody", "隐私政策": "Privacy Policy", "跳到主要内容": "Skip to main content", "研究导航": "Research navigation", "研究侧栏": "Research side panel",
+  "可选账户登录": "Optional account sign-in", "匿名研究中": "Anonymous research", "登录服务尚未配置；你可以继续匿名研究，本地草稿不会因该状态上传。": "Account sign-in is not configured. You can continue anonymously; this state does not upload local drafts.", "使用账户提供方登录": "Sign in with account provider", "尚未配置": "Not configured", "可用": "Available",
+  "账户状态、模型路由和产品边界都在这里明确呈现；未配置项不会模拟为可用服务。": "Account state, model routing and product boundaries are explicit here; unconfigured items are never simulated as available services.", "控制台状态": "Console status", "模型提供方路由": "Model provider routing", "服务端 OpenAI-compatible · 本机 Cline pool": "Server OpenAI-compatible · local Cline pool", "研究请求通过服务端 OpenAI-compatible 适配器路由到本机 Cline pool；模型密钥不会下发到设备。": "Research requests are routed through the server OpenAI-compatible adapter to the local Cline pool; model keys never reach the device.", "Google Play 月度订阅已配置：Pro 每月 3000 万 token，Max 每月 5 亿 token。商品需在 Play Console 激活后才可购买；会员权益由服务端验证。": "Google Play monthly subscriptions are configured: Pro includes 30 million tokens/month and Max includes 500 million tokens/month. Products become purchasable after Play Console activation; entitlements are verified server-side.", "已配置": "Configured", "仅服务端环境变量可启用实时提供方。客户端不会收集、保存或显示 API key；实时启用前还需红脱敏日志与独立验收。": "Only server environment configuration can enable a live provider. The client never collects, stores or displays an API key; redacted logs and independent acceptance are also required before live enablement.", "个人 OpenAI 兼容提供方": "Personal OpenAI-compatible provider", "预留接口": "Reserved interface", "未来版本可通过加密的服务端凭据仓配置兼容端点和模型选择；本构建没有 BYOK 输入、持久化或网络调用。": "A future version can configure a compatible endpoint and model choice through an encrypted server credential vault; this build has no BYOK input, persistence or network call.", "订阅与账单": "Subscription & billing", "仅预留订阅入口；尚未配置试用、购买、退款、权益或支付处理。": "The subscription entry is reserved only; trials, purchases, refunds, entitlements and payment processing are not configured.", "研究方法导航": "Research method navigation",
+  "情景模拟，不是预测或收益承诺。": "Scenario simulation, not a forecast or return promise.", "本产品用于情景研究与教育，不构成投资建议；不连接券商、不下单、不托管资金。": "For scenario research and education only; not investment advice. No broker, trading, or custody.",
+  "把观点变成可审计的世界线": "Turn a thesis into auditable worldlines", "描述前提、时间段、关键事件，以及你预期它将如何影响资产。": "Describe the premise, horizon, trigger events, and expected asset impact.",
+  "已恢复本地草稿。内容只保存在此设备。": "Your local draft was restored. It remains on this device.", "你的观点": "Your thesis", "观点最多 2,000 个字符；可在刷新后恢复草稿。": "Up to 2,000 characters; the draft can be restored after refresh.", "如果未来两年全球数据中心电力需求持续上升，并推动电网设备投资提速，那么……": "If global data-centre power demand keeps rising for the next two years and accelerates grid-equipment investment, then…",
+  "可投资资金": "Investable capital", "可投资资金金额": "Investable capital amount", "基础货币": "Base currency", "仅用于情景模拟，不会连接账户。": "Used for scenario simulation only; no account is connected.", "开始反方审查": "Start the challenge", "研究进度": "Research progress", "观点": "Thesis", "证据": "Evidence", "配置": "Allocation", "重置": "Reset", "草稿自动保存于本地 · 不上传观点": "Draft autosaves locally · your thesis is not uploaded",
+  "等待开始": "Waiting to start", "审查中 · 正在接收回复": "Reviewing · receiving response", "已取消生成": "Generation cancelled", "连接中断，正在从上次事件恢复…": "Connection interrupted; recovering from the last event…", "模型暂时不可用": "Model is temporarily unavailable", "审查完成 · 第 4 轮": "Review complete · round 4",
+  "先提交一个观点，反方会检查因果链、时间边界与可证伪性。": "Submit a thesis first. The challenger will check causal links, timing, and falsifiability.", "你（正方）": "You (proponent)", "反方（AI）": "Challenger (AI)", "系统": "System", "正在接收回复，可随时取消。": "Receiving a response; you can cancel at any time.", "取消": "Cancel", "已取消生成；已接收内容和证据仍保留。": "Generation was cancelled; received content and evidence remain.", "重试": "Retry", "立即恢复": "Recover now", "恢复失败。你可以重试，不会重复提交已确认内容。": "Recovery failed. You can retry without resubmitting confirmed content.", "你的回复": "Your response", "回答挑战": "Answer the challenge", "提交回复": "Submit response",
+  "证据工作台": "Evidence workspace", "条": "items", "方向": "Direction", "等级": "Grade", "URL（A–C 必填；D/E 可留空）": "URL (required for A–C; optional for D/E)", "标题": "Title", "发布者": "Publisher", "发布日期（D/E 无 URL 可留空）": "Publication date (D/E without a URL may be blank)", "摘录": "Excerpt", "用户说明": "User note", "提交 SearchEvidenceBundle": "Submit SearchEvidenceBundle", "可独立复核": "Independently reviewable", "不可独立复核": "Not independently reviewable", "来源等级表示来源与可核验性，不代表结论正确。": "Source grades describe provenance and reviewability, not whether a conclusion is correct.",
+  "世界线与条件概率": "Worldlines & conditional probability", "区间优先 · 当前未校准": "Intervals first · currently uncalibrated", "前提成立 P(H)": "P(premise)", "主世界线 P(W₀ | H)": "P(main worldline | premise)", "联合概率 P(H ∩ W₀)": "Joint probability P(H ∩ W₀)", "当前状态：": "Current status:", "当前 premise": "Current premise", "该前提来自本次用户输入；三条分支共享它，只改变传导路径。": "This premise comes from the current user input; all three branches share it and vary only the transmission path.", "弱、主、强三条世界线": "Weak, main and strong worldlines", "现在": "Now", "6个月": "6 months", "12个月": "12 months", "24个月": "24 months", "确认选择": "Confirm selection", "进入因子计算": "Continue to factor computation", "事件发生时间与市场可见时间分开记录。首个揭示：": "Event occurrence and market-visible time are recorded separately. First reveal:", "失效条件": "Invalidation condition", "世界线分支可以修订，概率不是事实。": "Worldline branches can be revised; probabilities are not facts.",
+  "本地因子计算": "Local factor computation", "本地计算完成": "Local computation complete", "等待本地计算": "Waiting for local computation", "原始市场分片不会上传最终组合": "Raw market shards never upload the final portfolio", "本地计算": "Local computation", "验证签名数据快照": "Validate signed data snapshot", "筛选有效因子": "Select valid factors", "截面百分位与 IC 方向": "Cross-sectional percentiles & IC direction", "合成信号与标准化": "Combine signals & standardize", "目标权重与成本死区": "Target weights & cost dead-band", "已完成": "Complete", "等待当前步骤完成": "Waiting for this step", "因子质量与录取状态": "Factor quality & admission", "因子": "Factor", "质量权重": "Quality weight", "状态": "Status", "已接受": "Accepted", "已拒绝": "Rejected", "合成与标准化信号": "Combined & standardized signal", "暂停 / 取消计算": "Pause / cancel computation", "查看配置方案": "View allocation", "开始本地计算": "Run local computation", "中间值已包含在 JSON 审计导出中": "Intermediate values are included in the JSON audit export", "完成计算后可在 JSON 审计导出中查看": "Intermediate values will be available in the JSON audit export after computation",
+  "仅模拟 · 不连接券商": "Simulation only · no broker", "组合输出模式": "Portfolio output mode", "实验层": "Research layer", "公开层": "Public layer", "已分配": "Allocated", "残余现金": "Residual cash", "尚未计算 FM": "FM has not been computed", "组合权重、金额和单位将在本地 FM 计算完成后显示；当前没有静态默认配置。": "Weights, amounts and units will appear after local FM computation; there is no static default allocation.", "计算 FM": "Compute FM", "组合资产分配": "Portfolio allocations", "资产": "Asset", "角色": "Role", "权重": "Weight", "金额": "Amount", "单位": "Units", "世界线暴露": "Worldline exposure", "主、强": "Main, strong", "弱、主": "Weak, main", "全部": "All", "约束未触发": "No constraint triggered", "世界线压力测试": "Worldline stress test", "基于世界线冲击与波动率模拟的相对基准差异。": "Relative benchmark difference under worldline shocks and volatility simulation.", "当前压力情景：": "Current stress scenario:", "查看组合路径 →": "View portfolio path →", "先计算 FM": "Compute FM first", "导出 JSON": "Export JSON", "导出 CSV": "Export CSV", "JSON 已导出；当前观点、挑战回复和证据均保留。": "JSON exported; the current thesis, challenge replies and evidence are retained.", "CSV 已导出；这是 allocation-only 快照，完整审计字段请使用 JSON。": "CSV exported; this is an allocation-only snapshot. Use JSON for the full audit fields.", "历史/模拟展示；过期或无效数据下，当前 Public Default 金额已停用。": "Historical/simulated display only; current Public Default amounts are disabled for stale or invalid data.",
+  "主世界线下的组合路径": "Portfolio path under the main worldline", "选择世界线": "Select worldline", "组合 NAV（归一化）": "Portfolio NAV (normalized)", "历史观测 + 世界线情景模拟": "Historical observations + worldline scenario simulation", "今天 / 模拟起点": "Today / simulation start", "历史 NAV": "Historical NAV", "主情景中位数": "Main scenario median", "10–90% 区间": "10–90% interval", "回撤": "Drawdown", "隐藏回撤": "Hide drawdown", "显示回撤": "Show drawdown", "导出路径数据": "Export path data", "查看数据表（历史 + 三条模拟路径）": "View data table (history + three simulated paths)", "组合 NAV 数据表": "Portfolio NAV data table", "区段": "Segment", "索引": "Index", "历史": "History", "主情景": "Main", "弱情景": "Weak", "强情景": "Strong",
+  "本地草稿已启用": "Local draft enabled", "数据截止 2026-08-09": "Data as of 2026-08-09", "公开研究模式保留从观点、证据到组合路径的审计线索。": "Public research mode preserves an audit trail from thesis and evidence to allocation path.", "本地保存": "Saved locally", "路径数据已导出，并标记了当前 premise、完整 NAV 数组与历史 / 模拟边界。": "Path data exported; the current premise, complete NAV arrays and historical / simulated boundary are marked.",
+  "方法、证据与风险": "Method, evidence & risk", "下载方法说明": "Download method note", "方法说明已导出。": "Method note exported.", "方法页面导航": "Method page navigation", "观点审查": "Thesis challenge", "证据等级": "Evidence grades", "世界线概率": "Worldline probability", "FM 因子模型": "FM factor model", "公开版安全层": "Public safety layer", "所有证据在使用前被分级；级别不代表正确性，仅表示来源与可核验性。": "Every item is graded before use. A grade signals provenance and reviewability, not correctness.",
+  "原始数据、监管文件、公司公告": "Primary data, regulatory filings and company disclosures", "来自政府、监管、央行、国际组织、主流学术不期明的公开材料": "Public material from governments, regulators, central banks, international organisations and mainstream academic sources.", "可靠媒体、机构研究、可追溯数据库": "Reliable media, institutional research and traceable databases", "由具有专业声誉的机构或研究者基于 A 级来源形成": "Produced by reputable institutions or researchers using Grade A sources.", "二手评论或专家访谈": "Secondary commentary or expert interviews", "来源可识别但观点本身仍需审查": "The source is identifiable, but the view itself still requires scrutiny.", "用户内部经验或不可外部验证信息": "User internal experience or externally unverifiable information", "可作为私有前提单独标记": "May be marked separately as a private premise.", "模型推断": "Model inference", "不直接来自可核验的外部来源": "Not directly derived from a reviewable external source.", "等级表示来源与可核验性，不代表结论正确；D/E 不得表述为公开事实。": "Grades signal provenance and reviewability, not correctness; Grade D/E must not be presented as public fact.",
+  "是前提成立的先验概率；": "is the prior probability that the premise holds; ", "是在假设成立条件下世界线发生的条件概率；": "is the conditional probability of a worldline given that premise; ", "用于排序与组合。": "is used for ranking and allocation.", "区间优先": "Intervals first", "联合区间按配置精度重新计算": "Joint intervals are recomputed to the configured precision.", "组合双层输出": "Two-layer portfolio output", "保留原始因子、假设、参数与结果，不做迎合性或可读性改写。": "Retains raw factors, assumptions, parameters and results without tailoring them for persuasion or readability.", "在不覆盖 Raw 的前提下，叠加集中度、流动性、可实施性与冲击约束，显示每项调整理由。": "Adds concentration, liquidity, implementability and shock constraints without overwriting Raw, and shows each adjustment reason.",
+  "所有结果基于公开信息、用户输入与模型推断，存在重大不确定性与误差风险。历史数据与模拟路径不代表未来表现。": "All results combine public information, user input and model inference, with material uncertainty and error risk. Historical data and simulated paths do not represent future performance.",
+  "条证据": "evidence items", "研究档案": "Research archive", "概率依据": "Probability basis", "方向表示判断影响，不是可加总百分点。": "Direction expresses an assessed impact, not additive percentage points.",
+  "基准率 · 中性起点": "Base rate · neutral starting point", "支持证据 · 向上": "Supporting evidence · upward", "反对证据 · 向下": "Contrary evidence · downward", "专家约束 · 排除不可能路径": "Expert constraints · rule out impossible paths", "模型不确定性 · 区间加宽": "Model uncertainty · widen intervals", "可复现性": "Reproducibility", "决策时点 2026-08-09": "Decision time 2026-08-09", "Python golden parity": "Python golden parity", "无未来数据": "No future data", "Web Worker": "Web Worker", "数据快照": "Data snapshot", "签名哈希由本地计算生成，原始市场分片不会上传。": "The signed hash is generated locally; raw market shards are not uploaded.",
+  "配置说明": "Allocation note", "当前组合基于 FM 方法论，在世界线框架下平衡收益贡献与风险暴露。": "The current portfolio follows FM methodology and balances return contribution with risk exposure in the worldline framework.", "当前选择：": "Current selection: ", "残余现金：": "Residual cash: ", "FM 尚未计算；暂无配置权重、金额、单位或残余现金结果。": "FM has not run; no allocation weights, amounts, units or residual cash results are available.", "路径假设": "Path assumptions", "世界线版本 WL-v1": "Worldline version WL-v1", "波动率窗口 252 日": "Volatility window 252 days", "噪声种子 已固定": "Noise seed fixed", "价格口径 复权收盘": "Price basis adjusted close",
+  "前提清晰度": "Premise clarity", "时间边界": "Time boundary", "触发可观察性": "Observable triggers", "因果链": "Causal chain", "反事实与替代解释": "Counterfactuals & alternatives", "证据质量": "Evidence quality", "资产传导": "Asset transmission", "市场已定价程度": "Priced-in assessment", "可证伪性": "Falsifiability", "用户确认": "User confirmation", "观点已提交，但仍需确认关键假设。": "The thesis is submitted, but key assumptions still need confirmation.", "基线与 24 个月窗口明确。": "The baseline and 24-month window are explicit.", "已提出可观察的需求、投资或订单信号。": "Observable demand, investment or order signals are specified.", "触发事件与资产影响已连接。": "The trigger event and asset impact are connected.", "需要补充融资条件恶化或需求不及预期的替代路径。": "Add alternative paths for tightening finance or weaker-than-expected demand.", "尚未附上可独立复核的公开证据。": "No independently reviewable public evidence has been attached yet.", "资产方向已提出，但传导强度仍需证据支持。": "The asset direction is stated, but transmission strength still needs evidence.", "尚未证明市场是否已经反映该观点。": "It is not yet shown whether the market has already priced in this thesis.", "已有可观察指标，公开证据仍需补强。": "Observable indicators exist; public evidence still needs strengthening.", "等待用户回复反方问题并选择确认方式。": "Awaiting an answer to the challenge and a confirmation mode.", "用户已回答反方问题，仍需选择确认方式。": "The user answered the challenge; a confirmation mode is still required.", "已附上证据；来源等级与可复核状态仍保留。": "Evidence is attached; provenance grade and reviewability remain explicit.", "证据已用于检验替代解释，仍需持续复核。": "Evidence has been used to test alternatives and still needs ongoing review.", "证据已进入已定价程度审查，仍不是事实判断。": "Evidence entered the priced-in review; it is not a factual determination.",
+  "反方审查完成": "Challenge complete", "正在验证签名数据快照…": "Validating signed data snapshot…", "本地计算完成，原始结果已保留": "Local computation complete; raw results retained", "计算失败。研究状态仍已保存，可重试。": "Computation failed. Research state remains saved; retry is available.", "因子计算或金融数据获取失败，已保留研究状态。": "Factor computation or market-data retrieval failed. Research state was retained.", "正在用户设备上计算": "Computing on this device", "固定模拟路径": "Fixed simulated paths", "模拟路径由固定的世界线冲击、波动率拟合与可复现噪声生成；不是预测或收益承诺。历史段仅表示 historical_only 数据。": "Simulated paths use fixed worldline shocks, volatility fitting and reproducible noise; they are not forecasts or return promises. The historical segment represents historical_only data only.", "历史回撤与三条固定模拟路径同时显示；选中路径加粗，线型与直接标签保留。": "Historical drawdown and three fixed simulated paths are shown together; the selected path is bold, with line styles and direct labels preserved.", "历史 NAV，仅使用 historical_only 数据": "Historical NAV using historical_only data only", "历史观测与弱、主、强三条世界线模拟；今日边界在历史与模拟之间": "Historical observations and weak, main and strong worldline simulations; today separates history from simulation.", "下方路径保留三种情景供比较。": "The paths below retain all three scenarios for comparison.", "回撤图已隐藏；点击“显示回撤”恢复。": "Drawdown is hidden; select \"Show drawdown\" to restore it.",
+  "保留研究的原始因子权重、假设、参数与结果。": "Retains the research's raw factor weights, assumptions, parameters and results.", "在不覆盖 Raw 的前提下，加入集中度、流动性、可实施性与冲击约束。": "Adds concentration, liquidity, implementability and shock constraints without overwriting Raw.", "FM 尚未计算；当前不显示任何 Raw 或 Public 配置行。": "FM has not run; no Raw or Public allocation rows are shown.", "Public Default 不会重写 FM Raw；单证券上限": "Public Default does not rewrite FM Raw; single-security cap", "高波动资产类别上限": "high-volatility asset-class cap", "释放权重按原始权重确定性再分配。": "Released weight is deterministically redistributed by the original weights.", "组合冲击区间": "Portfolio shock interval", "FM 尚未计算；配置金额和单位暂不可用。": "FM has not run; allocation amounts and units are unavailable.", "金额过小，部分资产无法满足最小交易单位。": "Capital is too small for some assets to meet the minimum trading unit.", "金额仅用于模拟。": "Amounts are for simulation only.", "未触发": "Not triggered", "电网基础设施": "Grid infrastructure", "半导体基础设施": "Semiconductor infrastructure", "公用事业": "Utilities", "黄金对冲": "Gold hedge", "全球股票": "Global equities", "现金等价物": "Cash equivalents",
+  "回答反方问题，说明证据、条件或保留意见……": "Answer the challenge with evidence, conditions or reservations…", "搜索不可用时，提交客户端证据 bundle；不会把标题按钮当作导入。": "When search is unavailable, submit a client evidence bundle; title buttons are not treated as imports.", "SearchEvidenceBundle：A–C 必须填写安全 URL；D/E 可留空并标记为不可独立复核。标题、发布者、摘录和用户说明仍会校验；离线 fixture 也使用同一字段结构。": "SearchEvidenceBundle: A–C require a safe URL; D/E may omit it and are marked not independently reviewable. Title, publisher, excerpt and user note are still validated; offline fixtures use the same fields.", "https://…（D/E 可留空）": "https://… (optional for D/E)", "A–E 表示来源与可核验性，不代表结论正确。": "A–E represents provenance and reviewability, not correctness.", "将保存未解决问题、AI 异议与私有证据声明。用户身份或业内经验不是公开证据；可作为私有前提单独标记。": "Unresolved issues, AI objections and private-evidence declarations will be retained. Identity or industry experience is not public evidence; it can be marked as a private premise.",
+  "弱情景 W−": "Weak W−", "主情景 W₀": "Main W₀", "强情景 W+": "Strong W+", "条件概率 P(W | H)": "Conditional probability P(W | H)", "个月": "months", "世界线版本 WL-v1 · 数据截止 2026-08-09 · 噪声种子已固定 · 当前路径为 simulated fixture": "Worldline version WL-v1 · data as of 2026-08-09 · noise seed fixed · current path is a simulated fixture", "历史观测": "Historical observations", "世界线模拟": "Worldline simulation", "组合回撤": "Portfolio drawdown", "组合 NAV": "Portfolio NAV", "组合回撤：历史与三条模拟路径": "Portfolio drawdown: history and three simulated paths", "组合 NAV：历史、主情景中位数、弱情景、强情景与 10–90% 区间": "Portfolio NAV: history, main median, weak, strong and 10–90% interval",
+  "盈利修正": "Earnings revisions", "质量": "Quality", "中期动量": "Medium-term momentum", "低波动": "Low volatility", "估值": "Valuation", "按 IC 方向调整": "IC direction adjustment", "按有效支持加权": "Weight by valid support", "截面 z-score": "Cross-sectional z-score", "负 IC 只改变贡献方向，不改变质量权重。": "A negative IC changes contribution direction, not quality weight.", "质量权重 q": "Quality weight q", "本地计算已取消；中间结果未上传。": "Local computation cancelled; intermediate results were not uploaded.",
+  "请先写下你的观点。": "Write your thesis first.", "观点最多 2,000 个字符。": "Thesis is limited to 2,000 characters.", "请输入大于 0 的可投资金额。": "Enter an investable amount greater than 0.", "A–C 证据必须填写安全的 http(s) URL；禁止本机、内网、凭据和危险地址。D/E 可留空。": "Grade A–C evidence requires a safe http(s) URL; local, private-network, credentialed and dangerous addresses are prohibited. Grade D/E may omit it.", "标题必填且最多 240 个字符。": "Title is required and limited to 240 characters.", "发布者必填且最多 160 个字符。": "Publisher is required and limited to 160 characters.", "请使用有效发布日期，例如 2026-08-09。": "Use a valid publication date, for example 2026-08-09.", "发布日期不能晚于数据截止日 2026-08-09。": "Publication date cannot be later than the 2026-08-09 data cutoff.", "摘录必填且最多 4,000 个字符。": "Excerpt is required and limited to 4,000 characters.", "用户说明最多 1,000 个字符。": "User note is limited to 1,000 characters.",
+  "需求与订单没有按观点展开": "Demand and orders do not unfold as the thesis expects", "订单增速与现金流可见": "Order growth and cash flow become visible", "订单和政策信号同时超预期": "Orders and policy signals both exceed expectations", "需求下修、投资周期延迟": "Demand downgrade; investment cycle delay", "需求增速持续低于观点基线": "Demand growth persistently trails the thesis baseline", "融资收紧、政策约束": "Tighter financing or policy constraints", "传导走弱": "Weaker transmission", "资本开支延后": "Capital expenditure delayed", "估值压缩": "Valuation compression", "观点触发": "Thesis trigger", "投资指引": "Investment guidance", "订单增速": "Order growth", "估值再定价": "Valuation repricing", "需求加速": "Demand accelerates", "资本开支提前": "Capital expenditure advances", "订单超预期": "Orders exceed expectations", "估值扩张": "Valuation expansion", "需求与投资延迟": "Demand and investment delay", "投资按计划兑现": "Investment plays out as planned", "政策与融资共振": "Policy and financing reinforce each other", "尚未提供观点；请先返回输入页。": "No thesis provided; return to the input page first.",
+  "不可直接交易": "Not directly tradable", "过期/历史数据": "Stale/historical data", "流动性不足": "Insufficient liquidity", "代理映射": "Proxy mapping", "高波动类别上限": "High-volatility class cap", "单证券上限": "Single-security cap", "释放权重再分配": "Released-weight redistribution", "核心受益资产": "Core beneficiary asset", "风险缓冲": "Risk buffer", "宏观/利率敏感": "Macro/rate sensitive", "对冲": "Hedge", "广义市场暴露": "Broad market exposure", "现金缓冲": "Cash buffer", "我确认仍存在未解决问题，并同意保存这些保留事项": "I acknowledge that unresolved issues remain and agree to preserve these reservations.", "保留意见说明（必填）": "Reservation note (required)", "请写下尚未解决的问题或使用边界": "Describe the unresolved issue or usage boundary.",
+  "支持": "Supports", "反驳": "Challenges", "背景": "Context", "审查评分": "Challenge score", "继续生成世界线": "Continue to worldlines", "带保留意见确认": "Confirm with reservations", "。": ".",
+};
+
+interface LanguageContextValue {
+  readonly language: Language;
+  readonly setLanguage: (language: Language) => void;
+}
+
+const fallbackContext: LanguageContextValue = { language: "zh", setLanguage: () => undefined };
+const LanguageContext = createContext<LanguageContextValue>(fallbackContext);
+
+export function LanguageProvider({ language, setLanguage, children }: PropsWithChildren<LanguageContextValue>) {
+  return <LanguageContext.Provider value={{ language, setLanguage }}>{children}</LanguageContext.Provider>;
+}
+
+export function useLanguage(): LanguageContextValue {
+  return useContext(LanguageContext);
+}
+
+export function t(language: Language, value: string): string {
+  if (language !== "en") return value;
+  const exact = english[value];
+  if (exact) return exact;
+
+  // Only translate the fixture wrapper around user-provided text. The premise
+  // itself remains verbatim so a user's meaning is never silently rewritten.
+  const wrapped = /^「(.+)」中的传导低于预期，订单或需求延后。$/.exec(value);
+  if (wrapped) return `Transmission from “${wrapped[1]}” is below expectations, delaying orders or demand.`;
+  const partial = /^「(.+)」按部分路径兑现，设备与基础设施投资逐步验证。$/.exec(value);
+  if (partial) return `“${partial[1]}” plays out along part of its path, with equipment and infrastructure investment progressively verified.`;
+  const secondOrder = /^「(.+)」触发二阶效应，政策与融资共同加速扩容。$/.exec(value);
+  if (secondOrder) return `“${secondOrder[1]}” triggers second-order effects as policy and financing accelerate expansion together.`;
+  return value;
+}

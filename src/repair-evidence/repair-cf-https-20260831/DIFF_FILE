@@ -1,0 +1,16 @@
+Cloudflare zone setting change
+
+BASELINE:
+  zone setting: always_use_https=off
+  HTTP app/staging/api-staging roots: 530 while Tunnel had no active edge connection
+
+MODIFIED:
+  zone setting: always_use_https=on
+  HTTP app/staging/api-staging roots: 301
+  Location preserves host, path, and query string
+
+API operation:
+  PATCH /zones/<zone>/settings/always_use_https
+  body: {"value":"on"}
+
+No DNS record, Tunnel ingress, WAF, DDoS, billing, or account setting is changed by this operation.

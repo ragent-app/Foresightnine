@@ -1,0 +1,13 @@
+=== API ===
+NAME                IMAGE                COMMAND                  SERVICE    CREATED          STATUS                    PORTS
+docker-api-1        docker-api           "uv run --project /a…"   api        18 seconds ago   Up 16 seconds (healthy)   127.0.0.1:8000->8000/tcp
+docker-postgres-1   postgres:16-alpine   "docker-entrypoint.s…"   postgres   2 weeks ago      Up 2 weeks (healthy)      5432/tcp
+docker-redis-1      redis:7-alpine       "docker-entrypoint.s…"   redis      2 weeks ago      Up 2 weeks (healthy)      6379/tcp
+{"status":"ok","provider":"openai-compatible","search_provider":"client-evidence-bundle","project_search_available":false,"schema_version":"v1","clock":"2026-08-10T00:00:00Z"}
+HEALTH_HTTP=200
+{"status":"ready"}
+READYZ_HTTP=200
+=== WEB ===
+assets/index-BXn_PuaU.js
+查看 10 项评分详情
+关键反驳

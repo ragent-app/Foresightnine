@@ -1,0 +1,32 @@
+ForesightNine Play credential/track matrix reconciliation
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=Play dual-credential track-read matrix in problem.md/plan.md and corresponding plan governance hash
+CHANGE_DETAILS=record current OLD/NEW matrix 200/404/403 versus 403/403/403 while retaining prior 200 and 403 observations; no Play or Cloudflare writes performed.
+LIVE_FILE=/home/lxx/Foresightnine/src/docs/problem.md
+LIVE_PLAN=/home/lxx/Foresightnine/plan.md
+LIVE_GOVERNANCE_FILE=/home/lxx/Foresightnine/src/docs/verification/governance-baseline.json
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-matrix-20260910-v2/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-matrix-20260910-v2/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-matrix-20260910-v2/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-permission-matrix-20260910-v2/ROLLBACK.sh
+BASELINE_HASHES=dbb07b1f0176c65eb7e0051fc82b720ca86e962882a2fc9e6c83a7ce46572e31  plan.md;d9fe1ca417ed5585fb5fd2f4b9fd1022d3136af62c29ea11a3d898231c437a89  src/docs/problem.md;49d833f45ad803c32acf82138901383f12c914c4288c75dc307ccc00bdcf7508  src/docs/verification/governance-baseline.json;
+
+BASELINE_COMMAND=corepack pnpm --dir src verify:boundaries
+BASELINE_INPUT=current checkout before Play credential/track matrix reconciliation
+BASELINE_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;Governance boundary baseline is unchanged.;
+BASELINE_RESULT=PASS_BEFORE_CHANGE
+BASELINE_EXIT_STATUS=0
+
+MODIFIED_COMMAND=corepack pnpm --dir src verify:boundaries
+MODIFIED_INPUT=current checkout after report/plan matrix reconciliation and governance hash refresh
+MODIFIED_LITERAL_OUTPUT=$ node scripts/verify/boundaries.mjs;PASS governance D:\Foresightnine\plan.md -> /home/lxx/Foresightnine/plan.md;PASS governance D:\Foresightnine\agent.md -> /home/lxx/Foresightnine/agent.md;PASS governance D:\Foresightnine\GOAL_PROMPT.md -> /home/lxx/Foresightnine/GOAL_PROMPT.md;PASS implementation root /home/lxx/Foresightnine/src;Governance boundary baseline is unchanged.;
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/play-permission-matrix-20260910-v2/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy initialized with modified report, plan, and governance baseline
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY;ROLLBACK_COPY_VERIFY=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored all three pre-change files; live report and plan remain updated and verified=PASS
+SECURITY=no credential JSON, private key, OAuth code, access token, cookie, or sensitive response body included

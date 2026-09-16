@@ -56,7 +56,7 @@ set `FORESIGHTNINE_PROXY_MODE=direct` and leave
 release owner must verify the direct peer and forwarded-header path in
 staging; never use a broad placeholder network or a user-controlled value.
 
-The GLM profile is fixed to the official Coding Plan endpoint and `glm-5.3`.
+The GLM profile is fixed to the official Coding Plan endpoint and `glm-5.3-flash`.
 It uses the server-owned thinking configuration and does not expose or send
 user-selectable `temperature` or `top_p`. The MCP search profile uses the
 fixed Streamable HTTP endpoint and exact tool name returned by `tools/list`.

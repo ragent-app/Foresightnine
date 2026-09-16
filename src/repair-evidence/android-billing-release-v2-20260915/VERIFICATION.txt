@@ -1,0 +1,45 @@
+CHANGE_BRANCH=android_release_candidate.v2_billing_and_production_app_link
+CHANGED_FIELDS=versionCode,versionName,Android OAuth App Link host/path,custom-scheme presence
+
+ARTIFACT_MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/android-billing-release-v2-20260915/MODIFIED_FILE
+ARTIFACT_DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/android-billing-release-v2-20260915/DIFF_FILE
+ARTIFACT_VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/android-billing-release-v2-20260915/VERIFICATION.txt
+ARTIFACT_ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/android-billing-release-v2-20260915/ROLLBACK.sh
+
+BASELINE_COMMAND=Inspect the Play-generated versionCode 1 universal APK with aapt/apksigner and search its manifest/DEX for Billing capability.
+BASELINE_INPUT=/tmp/foresightnine-play-v1-universal.apk; package com.foresightnine.mobile
+BASELINE_LITERAL_OUTPUT:
+PACKAGE=com.foresightnine.mobile VERSION_CODE=1 VERSION_NAME=0.1.0
+PLAY_V1_BILLING_PERMISSION=NO
+PLAY_V1_BILLING_MODULE=0
+BASELINE_EXIT_STATUS=1
+
+MODIFIED_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/android-billing-release-v2-20260915/run-bundle-release.sh; inspect the merged bundle manifest, DEX, embedded JS bundle, signature state, size, and SHA-256.
+MODIFIED_INPUT=ANDROID_HOME=/home/lxx/Android/Sdk; NODE_ENV=production; FORESIGHTNINE_ENV=production; API/market base=https://api-staging.foresightnine.com; market mode=public; OAuth return=https://app.foresightnine.com/oauth/complete; App Link package=com.foresightnine.mobile; App Link certificate derived from the Play-generated APK; App Link verified=true
+MODIFIED_LITERAL_OUTPUT:
+PACKAGE=com.foresightnine.mobile
+VERSION_CODE=2
+VERSION_NAME=0.2.0
+BILLING_PERMISSION=YES
+APP_LINK_HOST=app.foresightnine.com
+APP_LINK_PATH=/oauth/complete
+CUSTOM_SCHEME_PRESENT=NO
+BILLING_MODULE_DEX_COUNT=14
+MARKET_PUBLIC_BUNDLE_COUNT=1
+API_BASE_BUNDLE_COUNT=1
+AAB_SIGNATURE_STATUS=UNSIGNED
+AAB_SHA256=3d0a2741097d67d843dd37342164ecb68e532ad83c68aee1407577531799007e
+AAB_BYTES=69252255
+ANDROID_BUNDLE_RELEASE_EXIT=0
+MODIFIED_RESULT=PASS_UNSIGNED_AAB_READY_FOR_UPLOAD_KEY_SIGNING
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/android-billing-release-v2-20260915/ROLLBACK.sh --local /home/lxx/.config/foresightnine/rollback-tests/android-billing-release-v2-20260915
+ROLLBACK_INPUT=secure pre-change build.gradle and AndroidManifest.xml copies
+ROLLBACK_LITERAL_OUTPUT:
+RESTORED_BUILD_GRADLE_SHA256=f0d2b24728008ffc6464d0d605c22092654ef2c3e8a94dbd0c11c60346a10cab
+RESTORED_ANDROID_MANIFEST_SHA256=f491d27c831c4466f2fef2af9fc260f681c2dc5b0ef52570d376bba62feff535
+ROLLBACK_STATUS=restored_version_1_source_and_prior_app_link_configuration
+ROLLBACK_EXIT=0
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=versionCode 1 and the prior staging/custom-scheme source configuration are reproduced only in the isolated rollback-test directory; live source remains versionCode 2 with the production App Link. The generated unsigned v2 AAB is intentionally retained as a separate build artifact.

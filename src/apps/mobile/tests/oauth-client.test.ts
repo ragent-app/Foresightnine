@@ -50,7 +50,7 @@ describe("mobile OAuth client boundary", () => {
     const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
     await logoutOAuthSession("https://api.example.test", session.access_token, fetcher);
     await deleteOAuthAccount("https://api.example.test", session.access_token, fetcher);
-    expect((fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit])[1]).toMatchObject({ method: "POST", headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}` }) });
+    expect((fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit])[1]).toMatchObject({ method: "POST", body: JSON.stringify({}), headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }) });
     await clearOAuthSession(sessionStore);
     expect((await sessionStore.getItemAsync(MOBILE_OAUTH_SESSION_KEY))).toBeNull();
   });

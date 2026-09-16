@@ -8,7 +8,7 @@ has `FORESIGHTNINE_GLM_CODING_API_KEY`; it never falls back to the mock provider
 
 - Official base endpoint: `https://open.bigmodel.cn/api/coding/paas/v4`
 - Chat-completions request: `POST https://open.bigmodel.cn/api/coding/paas/v4/chat/completions`
-- Model: `glm-5.3`
+- Model: `glm-5.3-flash`
 - Server-owned generation controls remain in the existing adapter. The smoke
   has no CLI flags for endpoint, model, temperature, or `top_p` overrides.
 
@@ -30,7 +30,7 @@ content, or evidence excerpts.
 With no server secret, the known safe output is:
 
 ```json
-{"model":"glm-5.3","no_network_attempted":true,"status":"blocked","validation_summary":{"challenge_draft":false,"result":"secret_missing"}}
+{"model":"glm-5.3-flash","no_network_attempted":true,"status":"blocked","validation_summary":{"challenge_draft":false,"result":"secret_missing"}}
 ```
 
 The command exits non-zero when blocked or when the provider fails. A live

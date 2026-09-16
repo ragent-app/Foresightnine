@@ -1,0 +1,30 @@
+ForesightNine diff-check cleanup
+Date: 2026-09-10 Asia/Shanghai
+CHANGE_BRANCH_FIELD=trailing whitespace at EOF in src/docs/data/dataprovider指导.md
+CHANGE_DETAILS=remove one unintended blank line at EOF; substantive documentation content is unchanged.
+LIVE_FILE=/home/lxx/Foresightnine/src/docs/data/dataprovider指导.md
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/diff-check-clean-20260910-v2/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/diff-check-clean-20260910-v2/DIFF_FILE
+VERIFICATION_FILE=/home/lxx/Foresightnine/src/repair-evidence/diff-check-clean-20260910-v2/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/src/repair-evidence/diff-check-clean-20260910-v2/ROLLBACK.sh
+BASELINE_HASH=91e441d2901be9d529c9956a7bcec95f3f9c1e5d9ca43cee1008dae4b2652937
+
+BASELINE_COMMAND=git diff --check
+BASELINE_INPUT=current checkout before trailing-whitespace cleanup
+BASELINE_LITERAL_OUTPUT=src/docs/data/dataprovider指导.md:679: new blank line at EOF.;
+BASELINE_RESULT=EXPECTED_FAIL_TRAILING_WHITESPACE
+BASELINE_EXIT_STATUS=2
+
+MODIFIED_COMMAND=git diff --check
+MODIFIED_INPUT=current checkout after trailing-whitespace cleanup
+MODIFIED_LITERAL_OUTPUT=
+MODIFIED_RESULT=PASS
+MODIFIED_EXIT_STATUS=0
+
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/src/repair-evidence/diff-check-clean-20260910-v2/ROLLBACK.sh <separate-copy-directory>
+ROLLBACK_INPUT=separate copy initialized with MODIFIED_FILE
+ROLLBACK_LITERAL_OUTPUT=ROLLBACK_RESULT=RESTORED_COPY;ROLLBACK_COPY_VERIFY=PASS
+ROLLBACK_RESULT=PASS_ON_SEPARATE_COPY
+ROLLBACK_EXIT_STATUS=0
+RESTORED_BEHAVIOR=separate copy restored the pre-cleanup file; live file remains cleaned and verified=PASS
+SECURITY=no credentials or sensitive values involved

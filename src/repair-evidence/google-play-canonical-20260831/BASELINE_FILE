@@ -1,0 +1,5 @@
+GOOGLE_APPLICATION_CREDENTIALS=/home/lxx/.config/google-play/service-account.json
+CANONICAL_TARGET=/home/lxx/.config/google-play/foresightnine-play-publisher.json
+DIRECTORY_MODE=700
+CANONICAL_MODE=600
+CONFIGURATION_STATE=old_canonical

@@ -1,0 +1,477 @@
+Scope: 9 of 10 workspace projects
+packages/contracts test$ node scripts/generate.mjs --check && tsc -b --pretty false
+packages/design-system test$ tsc --noEmit
+packages/fm-engine test$ tsc -b --pretty false && node --test test/*.mjs
+packages/contracts test: PASS generated TypeScript 564894e81b5857ce7f881d6c3b06d0a2d555ffde9d91c7b931d83ab3dfc6e071
+packages/fm-engine test: TAP version 13
+packages/contracts test: Done
+packages/fm-engine test: # Subtest: Python oracle fixture: selection, pandas ties/NaN, support, z and forecasts
+packages/fm-engine test: ok 1 - Python oracle fixture: selection, pandas ties/NaN, support, z and forecasts
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 5.218635
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: Python oracle fixture: IC shape, tie ranks and sample boundaries
+packages/fm-engine test: ok 2 - Python oracle fixture: IC shape, tie ranks and sample boundaries
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 1.427798
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: Python oracle fixture: 3bps transfer, dead-band equality, empty and missing forecasts
+packages/fm-engine test: ok 3 - Python oracle fixture: 3bps transfer, dead-band equality, empty and missing forecasts
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.92402
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: Python oracle fixture: FX / lot amounts and canonical SHA-256
+packages/fm-engine test: ok 4 - Python oracle fixture: FX / lot amounts and canonical SHA-256
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 1.588912
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: Python stable factor-selection ties retain non-ID input order
+packages/fm-engine test: ok 5 - Python stable factor-selection ties retain non-ID input order
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 3.010327
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: selection skips non-finite quality before maxFactors truncation
+packages/fm-engine test: ok 6 - selection skips non-finite quality before maxFactors truncation
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.812334
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: golden fixture visibly covers the six mapped reference subsets
+packages/fm-engine test: ok 7 - golden fixture visibly covers the six mapped reference subsets
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.861407
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: finite Factor AST whitelist evaluates supported operators and rejects malformed nodes
+packages/fm-engine test: ok 8 - finite Factor AST whitelist evaluates supported operators and rejects malformed nodes
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 2.370981
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: computeFm is cutoff-aware, returns intermediates, and keeps initial cost free
+packages/fm-engine test: ok 9 - computeFm is cutoff-aware, returns intermediates, and keeps initial cost free
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 4.582656
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: forecasts use only factors that contributed and do not alter dead-band
+packages/fm-engine test: ok 10 - forecasts use only factors that contributed and do not alter dead-band
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 2.742633
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: computeFm keeps width-shaped equal fallback when every factor is invalid
+packages/fm-engine test: ok 11 - computeFm keeps width-shaped equal fallback when every factor is invalid
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 1.028119
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: dead-band is equality-closed and strictly-above
+packages/fm-engine test: ok 12 - dead-band is equality-closed and strictly-above
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.287404
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: Worker message path returns typed results and sanitized errors
+packages/fm-engine test: ok 13 - Worker message path returns typed results and sanitized errors
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 1.502998
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: shared entry executes an Android-sized 15-asset fixture
+packages/fm-engine test: ok 14 - shared entry executes an Android-sized 15-asset fixture
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 1.823297
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: all-invalid and single-factor inputs use explicit equal-weight fallback
+packages/fm-engine test: ok 15 - all-invalid and single-factor inputs use explicit equal-weight fallback
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.392385
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: allocateCapital rejects non-finite and non-positive numeric asset inputs
+packages/fm-engine test: ok 16 - allocateCapital rejects non-finite and non-positive numeric asset inputs
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 1.357125
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: allocateCapital rejects over-invested and non-finite target-weight totals without normalizing
+packages/fm-engine test: ok 17 - allocateCapital rejects over-invested and non-finite target-weight totals without normalizing
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.401877
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: allocateCapital preserves under-invested targets as non-negative cash
+packages/fm-engine test: ok 18 - allocateCapital preserves under-invested targets as non-negative cash
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.358375
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: allocateCapital fails closed for large-capital tolerated overage
+packages/fm-engine test: ok 19 - allocateCapital fails closed for large-capital tolerated overage
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.30148
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: # Subtest: allocateCapital rejects non-finite allocation arithmetic
+packages/fm-engine test: ok 20 - allocateCapital rejects non-finite allocation arithmetic
+packages/fm-engine test:   ---
+packages/fm-engine test:   duration_ms: 0.205827
+packages/fm-engine test:   type: 'test'
+packages/fm-engine test:   ...
+packages/fm-engine test: 1..20
+packages/fm-engine test: # tests 20
+packages/fm-engine test: # suites 0
+packages/fm-engine test: # pass 20
+packages/fm-engine test: # fail 0
+packages/fm-engine test: # cancelled 0
+packages/fm-engine test: # skipped 0
+packages/fm-engine test: # todo 0
+packages/fm-engine test: # duration_ms 151.240926
+packages/fm-engine test: Done
+packages/design-system test: Done
+packages/api-client test$ tsc -b --pretty false && node --test test/*.test.mjs
+packages/asset-registry test$ node scripts/generate-registry.mjs --check && tsc -b --pretty false && node --test test/*.test.mjs
+packages/domain test$ tsc -b --pretty false && node --test test/*.test.mjs
+packages/market-data test$ tsc -b --pretty false && node --test test/*.test.mjs
+packages/asset-registry test: PASS generated asset registry ecf1bc03c7ad54500eb9f728fcc3d9d8b88a18c2a987e419e11ba7891a424a28
+packages/api-client test: TAP version 13
+packages/market-data test: TAP version 13
+packages/domain test: TAP version 13
+packages/asset-registry test: TAP version 13
+packages/api-client test: # Subtest: normalizes API configuration and labels absent configuration offline/mock
+packages/api-client test: ok 1 - normalizes API configuration and labels absent configuration offline/mock
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 2.186886
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: POST sends generated Idempotency-Key and JSON request body
+packages/domain test: # Subtest: state machine exposes only the approved durable graph
+packages/api-client test: ok 2 - POST sends generated Idempotency-Key and JSON request body
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 41.772068
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: default fetch is called with the global receiver for browser brand checks
+packages/api-client test: ok 3 - default fetch is called with the global receiver for browser brand checks
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 1.181946
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: runtime response validation rejects malformed generated-contract payloads
+packages/api-client test: ok 4 - runtime response validation rejects malformed generated-contract payloads
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 2.675127
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/domain test: ok 1 - state machine exposes only the approved durable graph
+packages/domain test:   ---
+packages/domain test:   duration_ms: 4.287269
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: reservation confirmation requires the explicit audited command
+packages/domain test: ok 2 - reservation confirmation requires the explicit audited command
+packages/domain test:   ---
+packages/domain test:   duration_ms: 0.416826
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: probability scalars and intervals are jointly recomputable
+packages/api-client test: # Subtest: runtime validation rejects unknown fields and coerced rubric values
+packages/api-client test: ok 5 - runtime validation rejects unknown fields and coerced rubric values
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 2.050503
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: SSE validation applies unknown-field checks to each union variant
+packages/api-client test: ok 6 - SSE validation applies unknown-field checks to each union variant
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 0.732174
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: typed ApiError preserves status, error code, retryability, retry-after, and safe diagnostics
+packages/api-client test: ok 7 - typed ApiError preserves status, error code, retryability, retry-after, and safe diagnostics
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 1.841417
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: AbortSignal cancellation is passed through without exposing transport details
+packages/api-client test: ok 8 - AbortSignal cancellation is passed through without exposing transport details
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 1.102841
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: fails closed when no secure idempotency-key source exists
+packages/api-client test: ok 9 - fails closed when no secure idempotency-key source exists
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 0.635814
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: path parameters are URL encoded before transport
+packages/api-client test: ok 10 - path parameters are URL encoded before transport
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 1.753661
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: getChallenge forwards an encoded authoritative operation_id query
+packages/domain test: ok 3 - probability scalars and intervals are jointly recomputable
+packages/domain test:   ---
+packages/domain test:   duration_ms: 0.878435
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: worldlines reject cycles and require causally complete reveal schedules while retaining leak semantics
+packages/domain test: ok 4 - worldlines reject cycles and require causally complete reveal schedules while retaining leak semantics
+packages/domain test:   ---
+packages/domain test:   duration_ms: 1.305898
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: 9WL regression fixture is source-auditable and has nine complete deterministic branch decompositions
+packages/domain test: ok 5 - 9WL regression fixture is source-auditable and has nine complete deterministic branch decompositions
+packages/domain test:   ---
+packages/domain test:   duration_ms: 14.19911
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: fresh data and the exact inclusive threshold are current
+packages/domain test: ok 6 - fresh data and the exact inclusive threshold are current
+packages/domain test:   ---
+packages/domain test:   duration_ms: 3.332822
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: stale and historical-only data remain displayable only as historical/simulated
+packages/domain test: ok 7 - stale and historical-only data remain displayable only as historical/simulated
+packages/domain test:   ---
+packages/domain test:   duration_ms: 0.400233
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: provider stale and unavailable fail closed even when the timestamp is fresh
+packages/domain test: ok 8 - provider stale and unavailable fail closed even when the timestamp is fresh
+packages/domain test:   ---
+packages/domain test:   duration_ms: 0.410406
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: # Subtest: invalid and future dates never become current or executable
+packages/domain test: ok 9 - invalid and future dates never become current or executable
+packages/domain test:   ---
+packages/domain test:   duration_ms: 0.458798
+packages/domain test:   type: 'test'
+packages/domain test:   ...
+packages/domain test: 1..9
+packages/domain test: # tests 9
+packages/domain test: # suites 0
+packages/domain test: # pass 9
+packages/domain test: # fail 0
+packages/domain test: # cancelled 0
+packages/domain test: # skipped 0
+packages/api-client test: ok 11 - getChallenge forwards an encoded authoritative operation_id query
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 1.180721
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: getChallenge omits operation_id when it is not supplied
+packages/api-client test: ok 12 - getChallenge omits operation_id when it is not supplied
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 1.035445
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: SSE text helper validates replay frames and stream helper sends Last-Event-ID
+packages/api-client test: ok 13 - SSE text helper validates replay frames and stream helper sends Last-Event-ID
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 4.321797
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: # Subtest: SSE text fallback checks AbortSignal before and after reading the body
+packages/api-client test: ok 14 - SSE text fallback checks AbortSignal before and after reading the body
+packages/api-client test:   ---
+packages/api-client test:   duration_ms: 0.617991
+packages/api-client test:   type: 'test'
+packages/api-client test:   ...
+packages/api-client test: 1..14
+packages/api-client test: # tests 14
+packages/api-client test: # suites 0
+packages/api-client test: # pass 14
+packages/api-client test: # fail 0
+packages/api-client test: # cancelled 0
+packages/api-client test: # skipped 0
+packages/api-client test: # todo 0
+packages/api-client test: # duration_ms 192.573496
+packages/domain test: # todo 0
+packages/domain test: # duration_ms 138.373452
+packages/domain test: Done
+packages/api-client test: Done
+packages/asset-registry test: # Subtest: registry contains benchmark exposures and their tradable proxies
+packages/asset-registry test: ok 1 - registry contains benchmark exposures and their tradable proxies
+packages/asset-registry test:   ---
+packages/asset-registry test:   duration_ms: 1.91384
+packages/asset-registry test:   type: 'test'
+packages/asset-registry test:   ...
+packages/asset-registry test: # Subtest: registry spans public MVP classes and deterministic search
+packages/asset-registry test: ok 2 - registry spans public MVP classes and deterministic search
+packages/asset-registry test:   ---
+packages/asset-registry test:   duration_ms: 1.803429
+packages/asset-registry test:   type: 'test'
+packages/asset-registry test:   ...
+packages/asset-registry test: 1..2
+packages/asset-registry test: # tests 2
+packages/asset-registry test: # suites 0
+packages/asset-registry test: # pass 2
+packages/asset-registry test: # fail 0
+packages/asset-registry test: # cancelled 0
+packages/asset-registry test: # skipped 0
+packages/asset-registry test: # todo 0
+packages/asset-registry test: # duration_ms 106.936027
+packages/asset-registry test: Done
+packages/market-data test: # Subtest: resolves all three anchors with weekend-aware calendar semantics
+packages/market-data test: ok 1 - resolves all three anchors with weekend-aware calendar semantics
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 4.007865
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: validates cutoff, timezone, complete anchor matrix, and deterministic integrity
+packages/market-data test: ok 2 - validates cutoff, timezone, complete anchor matrix, and deterministic integrity
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 30.835939
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: validates point-in-time FX independently and includes it in the integrity hash
+packages/market-data test: ok 3 - validates point-in-time FX independently and includes it in the integrity hash
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 12.821224
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: rejects a same-calendar-date observation after an intraday cutoff
+packages/market-data test: ok 4 - rejects a same-calendar-date observation after an intraday cutoff
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 2.387215
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: public provider sends bounded JSON without an Authorization header
+packages/market-data test: ok 5 - public provider sends bounded JSON without an Authorization header
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 40.479726
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: BYOK authorization is request-only and absent from bundle, hash, and redacted output
+packages/market-data test: ok 6 - BYOK authorization is request-only and absent from bundle, hash, and redacted output
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 7.646332
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: rejects unknown assets, duplicate rows, malformed/future dates, bad prices, and unsafe URLs
+packages/market-data test: ok 7 - rejects unknown assets, duplicate rows, malformed/future dates, bad prices, and unsafe URLs
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 18.312391
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: accepts explicit stale/missing rows but returns limited-data status without fixture substitution
+packages/market-data test: ok 8 - accepts explicit stale/missing rows but returns limited-data status without fixture substitution
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 8.311082
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: rejects retrievedAt after the cutoff for both valued and missing rows
+packages/market-data test: ok 9 - rejects retrievedAt after the cutoff for both valued and missing rows
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 1.900166
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: converts a valid bundle to the existing local FM shape with latest currentValues and no future observations
+packages/market-data test: ok 10 - converts a valid bundle to the existing local FM shape with latest currentValues and no future observations
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 2.207664
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: rejects oversized provider responses before making an unbounded bundle
+packages/market-data test: ok 11 - rejects oversized provider responses before making an unbounded bundle
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 5.220207
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: runtime controller starts with explicit mock and records a ready bundle
+packages/market-data test: ok 12 - runtime controller starts with explicit mock and records a ready bundle
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 0.951542
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: selected public provider failure does not silently fall back to mock
+packages/market-data test: ok 13 - selected public provider failure does not silently fall back to mock
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 0.762754
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: selected public provider without a URL fails closed
+packages/market-data test: ok 14 - selected public provider without a URL fails closed
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 0.277479
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: runtime BYOK is request-only and cannot be reused after success
+packages/market-data test: ok 15 - runtime BYOK is request-only and cannot be reused after success
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 1.793509
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: latest completed-session prices map for both Web and Android asset key shapes
+packages/market-data test: ok 16 - latest completed-session prices map for both Web and Android asset key shapes
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 0.631685
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: computeAnchorFactorMetrics derives IC/ICIR from the three anchors
+packages/market-data test: ok 17 - computeAnchorFactorMetrics derives IC/ICIR from the three anchors
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 3.806851
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: # Subtest: computeAnchorFactorMetrics fails closed below five assets
+packages/market-data test: ok 18 - computeAnchorFactorMetrics fails closed below five assets
+packages/market-data test:   ---
+packages/market-data test:   duration_ms: 0.777419
+packages/market-data test:   type: 'test'
+packages/market-data test:   ...
+packages/market-data test: 1..18
+packages/market-data test: # tests 18
+packages/market-data test: # suites 0
+packages/market-data test: # pass 18
+packages/market-data test: # fail 0
+packages/market-data test: # cancelled 0
+packages/market-data test: # skipped 0
+packages/market-data test: # todo 0
+packages/market-data test: # duration_ms 303.607183
+packages/market-data test: Done
+apps/mobile test$ vitest run --passWithNoTests
+apps/web test$ vitest run --passWithNoTests
+apps/mobile test:  RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/mobile
+apps/web test:  RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+apps/mobile test:  ✓ tests/billing-api.test.ts (3 tests) 16ms
+apps/mobile test:  ✓ tests/app-link-certificates.test.mjs (2 tests) 6ms
+apps/mobile test:  ✓ tests/share-config-plugin.test.mjs (2 tests) 10ms
+apps/web test:  ✓ src/methods-guide.test.ts (3 tests) 10ms
+apps/mobile test:  ✓ tests/oauth-client.test.ts (7 tests) 33ms
+apps/web test:  ✓ src/market-config-client.test.ts (7 tests) 21ms
+apps/mobile test:  ✓ tests/market-data.test.ts (1 test) 15ms
+apps/web test:  ✓ src/oauth-client.test.ts (7 tests) 31ms
+apps/mobile test:  ✓ tests/freshness.test.ts (7 tests) 70ms
+apps/web test:  ✓ src/api-runtime.error.test.ts (6 tests) 14ms
+apps/mobile test:  ✓ tests/archive-resume.test.ts (16 tests) 163ms
+apps/web test:  ✓ src/model-config-client.test.ts (10 tests) 34ms
+apps/mobile test:  ✓ tests/mobile-domain.test.ts (25 tests) 94ms
+apps/web test:  ✓ src/market-data.test.ts (1 test) 27ms
+apps/mobile test:  Test Files  8 passed (8)
+apps/mobile test:       Tests  63 passed (63)
+apps/mobile test:    Start at  19:15:25
+apps/mobile test:    Duration  1.66s (transform 1.33s, setup 0ms, collect 2.90s, tests 407ms, environment 4ms, prepare 2.81s)
+apps/mobile test: Done
+apps/web test:  ✓ src/search-client.test.ts (6 tests) 21ms
+apps/web test:  ✓ src/freshness.test.ts (9 tests) 79ms
+apps/web test:  ✓ src/challenge-panel.interaction.test.ts (13 tests) 92ms
+apps/web test:  ✓ src/app.test.ts (51 tests) 185ms
+apps/web test:  Test Files  10 passed (10)
+apps/web test:       Tests  113 passed (113)
+apps/web test:    Start at  19:15:25
+apps/web test:    Duration  2.15s (transform 2.70s, setup 0ms, collect 6.18s, tests 513ms, environment 8ms, prepare 2.35s)
+apps/web test: Done

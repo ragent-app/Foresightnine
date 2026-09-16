@@ -1,0 +1,11 @@
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/freshness.test.ts (9 tests) 90ms
+ ✓ src/app.test.ts (53 tests) 187ms
+
+ Test Files  2 passed (2)
+      Tests  62 passed (62)
+   Start at  01:22:27
+   Duration  1.89s (transform 1.20s, setup 0ms, collect 1.83s, tests 277ms, environment 1ms, prepare 383ms)
+

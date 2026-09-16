@@ -1,0 +1,10 @@
+--- /home/lxx/Foresightnine/src/repair-evidence/cloudflared-http2-20260907/BASELINE_FILE	2026-09-07 20:45:50.782615431 +0800
++++ /home/lxx/Foresightnine/src/repair-evidence/cloudflared-http2-20260907/MODIFIED_FILE	2026-09-07 20:46:24.351356822 +0800
+@@ -1,6 +1,6 @@
+ tunnel: b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4
+ credentials-file: /home/lxx/.cloudflared/b3a095a8-b1a7-4dcc-b452-9a9cd83cd5a4.json
+-protocol: auto
++protocol: http2
+ 
+ ingress:
+   # Metrics are for a local supervisor/Prometheus only, never a public route.

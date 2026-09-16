@@ -1,0 +1,2 @@
+POSTGRES_ATOMIC_ROLLBACK document=True claim=True operation=True
+POSTGRES_ATOMIC_ROLLBACK_EXIT=0

@@ -1,0 +1,83 @@
+ForesightNine Google Play monthly base-plan activation
+AUDIT_TIME=2026-09-15 Asia/Shanghai
+BRANCH=master
+CHANGED_FIELD=Google Play package com.foresightnine.mobile subscription base-plan state: foresightnine_pro/monthly and foresightnine_max/monthly changed from DRAFT to ACTIVE; prices, recurrence and internal release state retained.
+
+ARTIFACTS
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/google-play-baseplan-activation-20260915/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/google-play-baseplan-activation-20260915/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/google-play-baseplan-activation-20260915/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/google-play-baseplan-activation-20260915/ROLLBACK.sh
+
+ACTIVATION
+COMMAND=uv run --with google-auth --with requests python <bounded Android Publisher activate transaction>
+INPUT=Canonical credential path; package fixed to com.foresightnine.mobile; product allowlist fixed to foresightnine_pro and foresightnine_max; base plan fixed to monthly; precondition states restricted to DRAFT/ACTIVE; exact activate endpoint from the Android Publisher v3 discovery document; compensating deactivate on partial failure; no production-track endpoint.
+LITERAL_OUTPUT_BEGIN
+foresightnine_pro_PRECHECK_HTTP=200
+foresightnine_pro_PRECHECK_STATE=DRAFT
+foresightnine_max_PRECHECK_HTTP=200
+foresightnine_max_PRECHECK_STATE=DRAFT
+foresightnine_pro_ACTIVATE_HTTP=200
+foresightnine_max_ACTIVATE_HTTP=200
+ACTIVATION_TRANSACTION=COMMITTED
+LITERAL_OUTPUT_END
+EXIT_STATUS=0 at transaction script level; a surrounding shell status-report quirk returned process exit 1 after the committed API calls, so authoritative GET verification follows.
+
+BASELINE
+COMMAND=uv run --with google-auth --with requests python <baseline subscription validator>
+INPUT=Preserved pre-activation GET responses for only foresightnine_pro and foresightnine_max; required base plan monthly, P1M recurrence and US target prices USD 20/USD 200.
+LITERAL_OUTPUT_BEGIN
+foresightnine_pro_BASE_PLAN=monthly
+foresightnine_pro_STATE=DRAFT
+foresightnine_pro_PERIOD=P1M
+foresightnine_pro_US_PRICE_MATCH=True
+foresightnine_max_BASE_PLAN=monthly
+foresightnine_max_STATE=DRAFT
+foresightnine_max_PERIOD=P1M
+foresightnine_max_US_PRICE_MATCH=True
+BASELINE_RESULT=PASS_DRAFT_READY_FOR_ACTIVATION
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: both pre-change products were complete but non-purchasable DRAFT base plans.
+
+MODIFIED
+COMMAND=uv run --with google-auth --with requests python <post-activation subscription-and-internal-track-readback>
+INPUT=Canonical credential; read-only GET of the two subscription products and internal release; no access token or credential value persisted.
+LITERAL_OUTPUT_BEGIN
+foresightnine_pro_HTTP=200
+foresightnine_pro_BASE_PLAN=monthly
+foresightnine_pro_STATE=ACTIVE
+foresightnine_pro_PERIOD=P1M
+foresightnine_pro_US_PRICE_MATCH=True
+foresightnine_max_HTTP=200
+foresightnine_max_BASE_PLAN=monthly
+foresightnine_max_STATE=ACTIVE
+foresightnine_max_PERIOD=P1M
+foresightnine_max_US_PRICE_MATCH=True
+INTERNAL_HTTP=200
+INTERNAL_RELEASES=1
+INTERNAL_PUBLISHED=True
+MODIFIED_RESULT=PASS_ACTIVE_INTERNAL_ONLY
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: both monthly base plans are active with the requested US prices, while the app remains internal-track only.
+
+ROLLBACK
+COMMAND=/home/lxx/Foresightnine/src/repair-evidence/google-play-baseplan-activation-20260915/ROLLBACK.sh --local /home/lxx/Foresightnine/src/repair-evidence/google-play-baseplan-activation-20260915/rollback-test/work/MODIFIED_FILE
+INPUT=An isolated copy of the post-activation product documents; the live Play products were not deactivated.
+LITERAL_OUTPUT_BEGIN
+foresightnine_pro_ROLLBACK_STATE=INACTIVE
+foresightnine_max_ROLLBACK_STATE=INACTIVE
+ROLLBACK_STATUS=restored_nonpurchasable_behavior
+ROLLBACK_EXIT=0
+LITERAL_OUTPUT_END
+EXIT_STATUS=0
+RESULT=PASS: the rollback path converts both active plans to a non-purchasable state on an isolated copy.
+RESTORED_BEHAVIOR_STATUS=PASS: isolated rollback restored non-purchasable behavior for both products; live Google Play remains ACTIVE for internal-testing purchase validation. Google Play cannot restore an activated base plan to its original DRAFT state; live rollback uses the official deactivate endpoint and restores INACTIVE/non-purchasable status.
+
+SECURITY
+PRIVATE_KEY_PRINTED=NO
+ACCESS_TOKEN_PRINTED_OR_PERSISTED=NO
+PURCHASE_TOKEN_USED=NO
+PRODUCTION_RELEASE_MUTATION=NO
+PAYMENT_OR_REFUND_OPERATION=NO

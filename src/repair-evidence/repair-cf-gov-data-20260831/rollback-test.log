@@ -1,0 +1,3 @@
+rollback restored base revision a30481162bfd783d9a3806db9f99cf4e8b2deddf
+repo=/tmp/foresightnine-rollback-test
+config=/tmp/fn-rollback-config.yml

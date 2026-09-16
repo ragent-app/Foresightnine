@@ -1,0 +1,88 @@
+ForesightNine Cline-pool OpenAI-compatible provider verification
+Date: 2026-09-10 Asia/Shanghai
+Changed branch/field: staging LLM provider -> openai_compatible via the host-local Cline pool; model -> deepseek/deepseek-v4-flash; billing model display follows the server-selected model and keeps glm-5.3-flash as fallback.
+
+Changed files:
+- /home/lxx/Foresightnine/src/apps/api/app/openai_compatible.py
+- /home/lxx/Foresightnine/src/apps/api/app/main.py
+- /home/lxx/Foresightnine/src/apps/api/app/billing.py
+- /home/lxx/Foresightnine/src/apps/api/tests/test_openai_compatible_provider.py
+- /home/lxx/Foresightnine/src/apps/api/tests/test_billing.py
+- /home/lxx/Foresightnine/src/infra/docker/compose.yaml
+- /home/lxx/Foresightnine/src/infra/docker/staging.env (ignored deployment file; secret value not recorded)
+- /home/lxx/Foresightnine/src/docs/deployment/cline-pool-openai-compatible.md
+
+Required artifacts:
+- /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/MODIFIED_FILE
+- /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/DIFF_FILE
+- /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/VERIFICATION.txt
+- /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/ROLLBACK.sh
+
+BASELINE:
+Command: (temporary copy with baseline snapshots) uv run --project . pytest -q tests/test_openai_compatible_provider.py
+Literal output:
+..............................                                           [100%]
+Result: 30 passed; exit status 0.
+
+MODIFIED:
+Command: uv run --project src/apps/api pytest -q
+Literal output:
+........................................................................ [ 27%]
+........................................................................ [ 55%]
+...............................................
+......................... [ 83%]
+.................s..........................                             [100%]
+260 passed, 1 skipped, 1 warning in 12.22s
+Result: exit status 0.
+Command: uv run --project src/apps/api pytest -q src/apps/api/tests/test_openai_compatible_provider.py src/apps/api/tests/test_billing.py
+Literal output:
+.......................................                                  [100%]
+=============================== warnings summary ===============================
+src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+Result: exit status 0.
+
+DEPLOYED:
+Command: docker compose --env-file staging.env build api && docker compose --env-file staging.env up -d --no-deps api
+Result: exit status 0; container reached running/healthy.
+Command: systemctl --user restart cloudflared-foresightnine.service
+Literal output: active; final app=200 api=200 health probes.
+Result: exit status 0.
+
+PROVIDER SMOKE:
+Command: docker exec docker-api-1 sh -lc 'cd /app/apps/api && uv run python <bounded ChallengeInput smoke>'
+Literal output:
+GATEWAY_HEALTH_HTTP=200
+PROVIDER_TYPE=OpenAICompatibleLlmProvider
+PROVIDER_REQUEST=PASS
+DRAFT_VALIDATED=True
+USAGE_PRESENT=True
+Result: exit status 0.
+
+ACCOUNT/SESSION SMOKE:
+Command: local register -> GET /v1/account -> POST /v1/auth/logout -> GET /v1/account
+Literal output:
+REGISTER_HTTP=201
+ACCOUNT_PLAN=free
+ACCOUNT_MODEL=deepseek/deepseek-v4-flash
+ACCOUNT_QUOTA=200000
+LOGOUT_HTTP=200
+SESSION_AFTER_LOGOUT_HTTP=401
+LOCAL_HEALTH=200
+PUBLIC_APP_HEALTH=200
+PUBLIC_API_HEALTH=200
+Result: exit status 0.
+
+ROLLBACK:
+Command: /home/lxx/Foresightnine/src/repair-evidence/cline-pool-openai-compatible-20260910/ROLLBACK.sh <temporary copy>
+Literal output:
+ROLLBACK_RESULT=RESTORED_COPY
+ROLLBACK_COPY_VERIFY=PASS
+Result: exit status 0. Live MODIFIED_FILE and live deployment remain changed.
+
+SECURITY/REDACTION:
+- Provider credential values, OAuth material, purchase tokens, and access tokens are absent from this artifact.
+- staging.env remains ignored and mode 600; only configuration shape is recorded.
+- No Play, OAuth, Cloudflare, production, payment, refund, or subscription mutation was performed in this change.

@@ -29,6 +29,18 @@
 
 Every operation has an explicit `operationId`. Every route documents the canonical `ErrorResponse` for 400, 403, 404, 409, 422 and 500. Request and response objects reject unknown properties; nested entities do too.
 
+### Factor library route version
+
+The currently deployed factor library version is `v1.0.0`. The complete read
+routes are therefore:
+
+- `GET /v1/factor-libraries/v1.0.0/manifest`
+- `GET /v1/factor-libraries/v1.0.0/shards?shard_id=<manifest shard id>`
+
+The version segment is required. `GET /v1/factor-libraries/manifest` is not a
+compatibility alias and must return `404`; clients and monitoring probes must
+use the explicit version and verify the manifest/shard integrity fields.
+
 ## Idempotency and operation control
 
 Every POST requires `Idempotency-Key` (8–128 characters). Its scope is endpoint plus key.

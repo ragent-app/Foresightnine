@@ -3,7 +3,7 @@ import type { FreshnessDecision, ProviderFreshnessStatus } from "@foresightnine/
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
 
 export type Stage = "thesis" | "challenge" | "worldline" | "fm" | "portfolio" | "nav" | "console";
-export type ChallengeStatus = "idle" | "streaming" | "cancelled" | "recovering" | "failed" | "complete";
+export type ChallengeStatus = "idle" | "streaming" | "submitting_reply" | "cancelled" | "recovering" | "failed" | "complete";
 export type FmStatus = "idle" | "computing" | "complete" | "cancelled" | "failed";
 export type PortfolioMode = "raw" | "public";
 export type StressScenario = "weak" | "main" | "strong";
@@ -98,11 +98,19 @@ export interface RubricView {
   readonly rationale: string;
 }
 
+export interface ChallengeReview {
+  readonly objections: readonly string[];
+  readonly missingEvidence: readonly string[];
+  readonly questions: readonly string[];
+}
+
 export interface TranscriptTurn {
   readonly id: string;
   readonly author: "user" | "challenger" | "system";
   readonly time: string;
   readonly body: string;
+  /** Structured provider output used for scannable reviewer presentation. */
+  readonly review?: ChallengeReview;
 }
 
 export interface AssetFixture {
@@ -225,6 +233,7 @@ export type AppAction =
   | { readonly type: "restore_draft"; readonly draft: DraftState }
   | { readonly type: "start_challenge"; readonly viewpoint?: string; readonly server?: boolean }
   | { readonly type: "set_reply_draft"; readonly draft: string }
+  | { readonly type: "begin_reply_submit"; readonly body: string }
   | { readonly type: "submit_reply"; readonly body: string }
   | { readonly type: "challenge_complete" }
   | { readonly type: "challenge_cancel" }

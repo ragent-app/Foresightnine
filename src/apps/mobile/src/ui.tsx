@@ -98,6 +98,7 @@ export function SocialLoginPanel(): React.JSX.Element {
     <Text style={styles.heading}>{t(state.language, "optionalSignIn")}</Text>
     <Text style={styles.strong}>{oauth.session ? `${oauth.session.account.email}` : t(state.language, "anonymousResearch")}</Text>
     <Text style={styles.muted}>{statusCopy}</Text>
+    {oauth.billingSummary ? <><Text style={styles.strong}>{oauth.billingSummary.plan.toUpperCase()} · {oauth.billingSummary.quota_remaining.toLocaleString()} / {oauth.billingSummary.quota_limit.toLocaleString()} tokens</Text><Text style={styles.muted}>{oauth.billingSummary.provider_model} · {oauth.billingSummary.entitlement_status}</Text></> : null}
     {oauth.errorNotice ? <Text style={styles.error}>{state.language === "en" ? oauth.errorNotice : "安全登录未能完成，请重试。"}</Text> : null}
     <View style={stacked ? styles.stack : styles.row}>
       {readiness.providers.map(({ provider, enabled }) => {

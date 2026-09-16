@@ -1,0 +1,4 @@
+a60f7f215b42df0020bb39ed93826c9fa1e635d884de74ea2b56a21d2eb18ee1  apps/api/app/billing.py
+feac8c6ac688d22723d3e93b1d9778f85c426130601662a90b5f8598641febcd  apps/api/app/main.py
+63a562b1c406db5878ee2046ac05ce98191775a951ddf29501e9a9f4124a89a3  apps/api/tests/test_billing.py
+dc1aa5d97f6c3e7a2f24810caefa6f6ae82f0b999eaad37a60f4062e3d6116f0  docs/problem.md

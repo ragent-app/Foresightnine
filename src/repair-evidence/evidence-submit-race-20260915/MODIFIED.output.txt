@@ -1,0 +1,20 @@
+$ vitest run --passWithNoTests -- challenge-panel.interaction.test.ts
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/methods-guide.test.ts (3 tests) 14ms
+ ✓ src/market-config-client.test.ts (7 tests) 32ms
+ ✓ src/oauth-client.test.ts (7 tests) 36ms
+ ✓ src/api-runtime.error.test.ts (7 tests) 15ms
+ ✓ src/model-config-client.test.ts (10 tests) 33ms
+ ✓ src/market-data.test.ts (1 test) 29ms
+ ✓ src/search-client.test.ts (6 tests) 25ms
+ ✓ src/freshness.test.ts (9 tests) 87ms
+ ✓ src/challenge-panel.interaction.test.ts (17 tests) 96ms
+ ✓ src/app.test.ts (52 tests) 185ms
+
+ Test Files  10 passed (10)
+      Tests  119 passed (119)
+   Start at  00:48:17
+   Duration  1.75s (transform 1.95s, setup 0ms, collect 5.02s, tests 550ms, environment 4ms, prepare 1.92s)
+

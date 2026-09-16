@@ -1,0 +1,31 @@
+--- plan.md ---
+diff --git a/src/repair-evidence/plan-play-recheck-20260910/baseline-files/plan.md.orig b/plan.md
+index 0bae76b..555f7bf 100644
+--- a/src/repair-evidence/plan-play-recheck-20260910/baseline-files/plan.md.orig
++++ b/plan.md
+@@ -1243,7 +1243,8 @@ Google 官方说明了 License Tester 与 Billing 测试流程；Billing 实现
+   两个订阅商品仍需在测试轨道激活后，才能执行真实 Billing 购买验收。
+ - 两个订阅商品已由 Android Publisher API 读回：`foresightnine_pro/monthly`
+   为 USD 20、`foresightnine_max/monthly` 为 USD 200，当前均为 `DRAFT`；
+-  internal track 已读到已发布的 versionCode `1`。
++  最新 internal track releases GET 连续 3 次返回 HTTP 403 `PERMISSION_DENIED`，此前的
++  versionCode `1` HTTP 200 结果保留为历史证据，等待 Play Console 权限传播复核。
+ - Android Billing 原生桥接已通过 `compileDebugKotlin` 和 `assembleDebug`；
+   生成的 debug APK 仅用于 QA，Linux 当前没有可用 adb 设备，也没有 release
+   keystore，因此尚未进行 Play 安装和真实测试购买。
+--- governance-baseline.json ---
+diff --git a/src/repair-evidence/plan-play-recheck-20260910/baseline-files/governance-baseline.json.orig b/src/docs/verification/governance-baseline.json
+index 229a00f..5f56146 100644
+--- a/src/repair-evidence/plan-play-recheck-20260910/baseline-files/governance-baseline.json.orig
++++ b/src/docs/verification/governance-baseline.json
+@@ -4,8 +4,8 @@
+   "files": [
+     {
+       "path": "D:\\Foresightnine\\plan.md",
+-      "size": 44380,
+-      "sha256": "0eb5ebe03bf8b6282c88f742ce0df25e80ea01d4694ebd21164460c0214e66d4"
++      "size": 44518,
++      "sha256": "f35d867a34b2be9a505aca21b08ec3c677e3ea1defaf5874f33a1c1b1080229e"
+     },
+     {
+       "path": "D:\\Foresightnine\\agent.md",

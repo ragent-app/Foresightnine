@@ -1,0 +1,7 @@
+FFFF                                                                     [100%]
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_falls_back_to_minimal_chat_when_models_listing_is_unavailable
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_connection_probe_stays_unavailable_when_models_and_chat_are_rejected
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_account_settings_inherit_the_bounded_deployment_timeout
+FAILED apps/api/tests/test_openai_compatible_provider.py::test_account_glm_coding_endpoint_uses_its_required_generation_profile
+4 failed in 0.24s

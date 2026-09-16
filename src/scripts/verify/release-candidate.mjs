@@ -68,7 +68,7 @@ async function collectFiles(directory) {
 let head;
 try {
   const root = resolve(gitOutput(["rev-parse", "--show-toplevel"]));
-  if (root.toLowerCase() !== projectRoot.toLowerCase()) fail("Git root is not D:\\Foresightnine");
+  if (root.toLowerCase() !== projectRoot.toLowerCase()) fail(`Git root is not the project root ${projectRoot}`);
   head = gitOutput(["rev-parse", "--verify", "HEAD^{commit}"]);
   if (!/^[0-9a-f]{40}$/i.test(head)) fail("git HEAD is not a commit hash");
   else pass(`git HEAD ${head}`);

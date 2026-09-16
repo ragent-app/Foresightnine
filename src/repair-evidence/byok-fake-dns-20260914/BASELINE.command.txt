@@ -1,0 +1,1 @@
+uv run --project apps/api pytest -q apps/api/tests/test_openai_compatible_provider.py::test_fake_dns_proxy_addresses_require_public_doh_confirmation apps/api/tests/test_model_credentials.py::test_personal_configuration_converts_dns_transport_failure_to_validation_error

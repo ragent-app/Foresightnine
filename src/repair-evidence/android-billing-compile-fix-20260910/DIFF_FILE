@@ -1,0 +1,50 @@
+--- build.gradle ---
+--- /home/lxx/Foresightnine/src/repair-evidence/android-billing-compile-fix-20260910/build.gradle.orig	2026-09-10 00:52:52.405122518 +0800
++++ src/apps/mobile/android/app/build.gradle	2026-09-10 01:01:48.314675963 +0800
+@@ -194,7 +194,7 @@
+     // The version of react-native is set by the React Native Gradle Plugin
+     implementation("com.facebook.react:react-android")
+     // Purchase verification and entitlement granting remain server-authoritative.
+-    implementation("com.android.billingclient:billing-ktx:9.1.0")
++    implementation("com.android.billingclient:billing:9.1.0")
+ 
+     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
+     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
+--- ForesightNineBillingModule.kt ---
+--- /home/lxx/Foresightnine/src/repair-evidence/android-billing-compile-fix-20260910/ForesightNineBillingModule.kt.orig	2026-09-10 00:52:52.407203143 +0800
++++ src/apps/mobile/android/app/src/main/java/com/foresightnine/mobile/ForesightNineBillingModule.kt	2026-09-10 01:01:48.317168582 +0800
+@@ -2,6 +2,7 @@
+ 
+ import android.app.Activity
+ import com.android.billingclient.api.BillingClient
++import com.android.billingclient.api.BillingClientStateListener
+ import com.android.billingclient.api.BillingClient.ProductType.SUBS
+ import com.android.billingclient.api.BillingFlowParams
+ import com.android.billingclient.api.ProductDetails
+@@ -63,7 +64,7 @@
+       action(current)
+       return
+     }
+-    current.startConnection(object : BillingClient.BillingClientStateListener {
++    current.startConnection(object : BillingClientStateListener {
+       override fun onBillingSetupFinished(result: com.android.billingclient.api.BillingResult) {
+         if (result.responseCode == BillingClient.BillingResponseCode.OK) action(current)
+         else billingError(result, promise)
+@@ -92,7 +93,7 @@
+         productsById.clear()
+         basePlanByProductId.clear()
+         val output = Arguments.createArray()
+-        details.forEach { product ->
++        details.productDetailsList.forEach { product ->
+           val offer = product.subscriptionOfferDetails?.firstOrNull { it.basePlanId == "monthly" }
+             ?: product.subscriptionOfferDetails?.firstOrNull()
+           if (offer != null) {
+@@ -112,7 +113,7 @@
+       promise.reject("BILLING_INVALID_INPUT", "A product, offer, and account binding are required.")
+       return
+     }
+-    val activity: Activity = currentActivity ?: run {
++    val activity: Activity = reactContext.currentActivity ?: run {
+       promise.reject("BILLING_NO_ACTIVITY", "The billing activity is unavailable.")
+       return
+     }

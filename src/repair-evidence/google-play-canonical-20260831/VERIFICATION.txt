@@ -1,0 +1,146 @@
+GOOGLE PLAY CANONICAL CREDENTIAL VERIFICATION
+DATE=2026-08-31
+SCOPE=read-only Android Publisher token exchange and package bootstrap probe
+PRODUCTION_MUTATION=NO
+BILLING_MUTATION=NO
+OAUTH_CODE_OR_ACCESS_TOKEN_PERSISTED=NO
+
+CHANGED_BRANCH=Google Play runtime credential configuration
+CHANGED_FIELD=GOOGLE_APPLICATION_CREDENTIALS
+BEFORE=/home/lxx/.config/google-play/service-account.json was a regular file containing the old credential
+AFTER=/home/lxx/.config/google-play/service-account.json is a symlink to /home/lxx/.config/google-play/foresightnine-play-publisher.json
+OLD_JSON_ACTUAL_BASELINE_PATH=/home/lxx/.config/google-play/service-account.json
+NEW_JSON_ACTUAL_PATH=/home/lxx/.config/google-play/foresightnine-play-publisher.json
+RELATIONSHIP=SAME_SERVICE_ACCOUNT_DIFFERENT_KEY
+OLD_PROJECT_ID=foresightnine-play-automation
+OLD_CLIENT_EMAIL=foresightnine-play-publisher@foresightnine-play-automation.iam.gserviceaccount.com
+NEW_PROJECT_ID=foresightnine-play-automation
+NEW_CLIENT_EMAIL=foresightnine-play-publisher@foresightnine-play-automation.iam.gserviceaccount.com
+PRE_CHANGE_HASH=recorded_in_credential-fingerprints.txt_without_printing_credential_content
+OLD_HASH_PRESERVED=YES
+
+CONFIGURATION:
+CONFIG_DIRECTORY=/home/lxx/.config/google-play
+CONFIG_DIRECTORY_MODE=700
+NEW_TARGET=/home/lxx/.config/google-play/foresightnine-play-publisher.json
+NEW_TARGET_MODE=600
+CANONICAL=/home/lxx/.config/google-play/service-account.json
+CANONICAL_SYMLINK_TARGET=/home/lxx/.config/google-play/foresightnine-play-publisher.json
+ENV_FILE=/home/lxx/.config/google-play/google-play.env
+ENV_FILE_CONTENT=GOOGLE_APPLICATION_CREDENTIALS=/home/lxx/.config/google-play/service-account.json
+ENV_FILE_MODE=600
+LEGACY_ROLLBACK_CREDENTIAL=/home/lxx/.config/google-play/legacy/service-account.json
+LEGACY_MODE=600
+
+BASELINE TEST
+COMMAND:
+set -o pipefail
+uv run --with google-auth --with requests python3 /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/check_play_auth.py OLD /home/lxx/.config/google-play/service-account.json NEW /home/lxx/.config/google-play/foresightnine-play-publisher.json | tee /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/baseline-play-auth.log
+status=${PIPESTATUS[0]}
+printf 'BASELINE_EXIT_STATUS=%s\n' "$status"
+exit "$status"
+INPUT=OLD_JSON=/home/lxx/.config/google-play/service-account.json; NEW_JSON=/home/lxx/.config/google-play/foresightnine-play-publisher.json
+LITERAL_OUTPUT_BEGIN
+OLD_METADATA=PASS TYPE=service_account PROJECT_ID=foresightnine-play-automation CLIENT_EMAIL=foresightnine-play-publisher@foresightnine-play-automation.iam.gserviceaccount.com
+OLD_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher EXPIRY=2026-08-31T08:40:26.956786+00:00
+OLD_APPLICATION_READ=HTTP_STATUS=404 RESULT=package_not_bootstrapped
+OLD_TRACK_READ=HTTP_STATUS=403 RESULT=permission_error
+OLD_PLAY_API_AUTHENTICATION=PASS PACKAGE_STATUS=AUTHENTICATION_PASS_PACKAGE_NOT_BOOTSTRAPPED
+OLD_TRACK_READ_NOTE=PERMISSION_DENIED_WHILE_PACKAGE_BOOTSTRAP_CHECK_IS_404
+NEW_METADATA=PASS TYPE=service_account PROJECT_ID=foresightnine-play-automation CLIENT_EMAIL=foresightnine-play-publisher@foresightnine-play-automation.iam.gserviceaccount.com
+NEW_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher EXPIRY=2026-08-31T08:40:29.716928+00:00
+NEW_APPLICATION_READ=HTTP_STATUS=404 RESULT=package_not_bootstrapped
+NEW_TRACK_READ=HTTP_STATUS=403 RESULT=permission_error
+NEW_PLAY_API_AUTHENTICATION=PASS PACKAGE_STATUS=AUTHENTICATION_PASS_PACKAGE_NOT_BOOTSTRAPPED
+NEW_TRACK_READ_NOTE=PERMISSION_DENIED_WHILE_PACKAGE_BOOTSTRAP_CHECK_IS_404
+LITERAL_OUTPUT_END
+RESULT=PASS
+EXIT_STATUS=0
+
+MODIFIED TEST
+COMMAND:
+set -o pipefail
+uv run --with google-auth --with requests python3 /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/check_play_auth.py LEGACY /home/lxx/.config/google-play/legacy/service-account.json CANONICAL /home/lxx/.config/google-play/service-account.json | tee /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/modified-play-auth.log
+status=${PIPESTATUS[0]}
+printf 'MODIFIED_EXIT_STATUS=%s\n' "$status"
+exit "$status"
+INPUT=LEGACY=/home/lxx/.config/google-play/legacy/service-account.json; CANONICAL=/home/lxx/.config/google-play/service-account.json
+LITERAL_OUTPUT_BEGIN
+LEGACY_METADATA=PASS TYPE=service_account PROJECT_ID=foresightnine-play-automation CLIENT_EMAIL=foresightnine-play-publisher@foresightnine-play-automation.iam.gserviceaccount.com
+LEGACY_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher EXPIRY=2026-08-31T08:41:29.483566+00:00
+LEGACY_APPLICATION_READ=HTTP_STATUS=404 RESULT=package_not_bootstrapped
+LEGACY_TRACK_READ=HTTP_STATUS=403 RESULT=permission_error
+LEGACY_PLAY_API_AUTHENTICATION=PASS PACKAGE_STATUS=AUTHENTICATION_PASS_PACKAGE_NOT_BOOTSTRAPPED
+LEGACY_TRACK_READ_NOTE=PERMISSION_DENIED_WHILE_PACKAGE_BOOTSTRAP_CHECK_IS_404
+CANONICAL_METADATA=PASS TYPE=service_account PROJECT_ID=foresightnine-play-automation CLIENT_EMAIL=foresightnine-play-publisher@foresightnine-play-automation.iam.gserviceaccount.com
+CANONICAL_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher EXPIRY=2026-08-31T08:41:31.938751+00:00
+CANONICAL_APPLICATION_READ=HTTP_STATUS=404 RESULT=package_not_bootstrapped
+CANONICAL_TRACK_READ=HTTP_STATUS=403 RESULT=permission_error
+CANONICAL_PLAY_API_AUTHENTICATION=PASS PACKAGE_STATUS=AUTHENTICATION_PASS_PACKAGE_NOT_BOOTSTRAPPED
+CANONICAL_TRACK_READ_NOTE=PERMISSION_DENIED_WHILE_PACKAGE_BOOTSTRAP_CHECK_IS_404
+LITERAL_OUTPUT_END
+RESULT=PASS
+EXIT_STATUS=0
+RESTORED_BEHAVIOR_AFTER_ROLLBACK_TEST=BASELINE_CONFIG_MATCHED_ON_SEPARATE_COPY
+
+ROLLBACK TEST
+COMMAND:
+set -euo pipefail
+cp -- /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/MODIFIED_FILE /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/rollback-test-config.env
+/home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/ROLLBACK.sh /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/rollback-test-config.env /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/BASELINE_FILE | tee /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/rollback-test.log
+status=${PIPESTATUS[0]}
+printf 'ROLLBACK_SCRIPT_EXIT_STATUS=%s\n' "$status" | tee -a /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/rollback-test.log
+cmp -s /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/rollback-test-config.env /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/BASELINE_FILE
+printf 'ROLLBACK_RESTORED_BEHAVIOR=BASELINE_MATCH\n' | tee -a /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/rollback-test.log
+exit "$status"
+INPUT=target_copy=rollback-test-config.env; rollback_source=BASELINE_FILE
+LITERAL_OUTPUT_BEGIN
+ROLLBACK_RESULT=RESTORED
+ROLLBACK_SCRIPT_EXIT_STATUS=0
+ROLLBACK_RESTORED_BEHAVIOR=BASELINE_MATCH
+LITERAL_OUTPUT_END
+RESULT=PASS
+EXIT_STATUS=0
+
+FINAL CANONICAL TEST
+COMMAND:
+uv run --with google-auth --with requests python3 /home/lxx/Foresightnine/src/repair-evidence/google-play-canonical-20260831/check_play_auth.py CANONICAL /home/lxx/.config/google-play/service-account.json
+INPUT=CANONICAL=/home/lxx/.config/google-play/service-account.json
+LITERAL_OUTPUT_BEGIN
+CANONICAL_METADATA=PASS TYPE=service_account PROJECT_ID=foresightnine-play-automation CLIENT_EMAIL=foresightnine-play-publisher@foresightnine-play-automation.iam.gserviceaccount.com
+CANONICAL_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher EXPIRY=2026-08-31T08:42:29.490173+00:00
+CANONICAL_APPLICATION_READ=HTTP_STATUS=404 RESULT=package_not_bootstrapped
+CANONICAL_TRACK_READ=HTTP_STATUS=403 RESULT=permission_error
+CANONICAL_PLAY_API_AUTHENTICATION=PASS PACKAGE_STATUS=AUTHENTICATION_PASS_PACKAGE_NOT_BOOTSTRAPPED
+CANONICAL_TRACK_READ_NOTE=PERMISSION_DENIED_WHILE_PACKAGE_BOOTSTRAP_CHECK_IS_404
+LITERAL_OUTPUT_END
+RESULT=PASS
+EXIT_STATUS=0
+
+FINAL FILE AND GIT CHECKS:
+CANONICAL_SYMLINK=PASS
+TARGET_MODE_600=PASS
+DIRECTORY_MODE_700=PASS
+LEGACY_MODE_600=PASS
+ENV_PATH_ONLY=PASS
+SECRET_SCAN_EXIT_STATUS=0
+INDEXED_CREDENTIAL_JSON=NONE
+WORKTREE_CREDENTIAL_JSON_STATUS=NONE
+EVIDENCE_JSON_CREDENTIAL=NONE
+
+CLOUDFLARE_READ_ONLY_STATUS:
+TOKEN=active (HTTP 200)
+ZONE_READ=pass (HTTP 200)
+SINGLE_REDIRECT_READ=fail (HTTP 403; permission unavailable)
+SINGLE_REDIRECT_WRITE=not_attempted
+CF-02=resolved (always_use_https=on)
+
+PLAY_STATUS:
+OLD_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher
+NEW_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher
+CANONICAL_TOKEN_EXCHANGE=PASS HTTP_STATUS=200 SCOPE=androidpublisher
+PLAY_API_AUTHENTICATION=PASS
+PACKAGE=com.foresightnine.mobile
+PACKAGE_STATUS=AUTHENTICATION_PASS_PACKAGE_NOT_BOOTSTRAPPED (application read HTTP 404)
+TRACK_READ=HTTP 403 permission_error; package bootstrap/readiness remains unresolved
+LEGACY_CREDENTIAL=retained_for_rollback_unchanged

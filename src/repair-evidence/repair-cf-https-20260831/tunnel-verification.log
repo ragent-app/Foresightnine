@@ -1,0 +1,9 @@
+===== TUNNEL VALIDATION =====
+Validating rules from /home/lxx/.cloudflared/foresightnine-api-staging.yml
+OK
+service=active
+===== TUNNEL CONNECTIONS =====
+CONNECTOR ID                         CREATED              ARCHITECTURE VERSION  ORIGIN IP   EDGE             
+d583ae5f-538b-4ec4-9914-be2b287b6e94 2026-08-31T15:27:31Z linux_amd64  2026.8.2 56.10.62.87 1xsin14, 1xsin18 
+config_hash=63515e0ece7a417ca4bccab4ffd6024b310284044d930e29cfa10a13b7bfa5a2
+key_mode=600
