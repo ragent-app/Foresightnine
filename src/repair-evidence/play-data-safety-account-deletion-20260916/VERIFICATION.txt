@@ -1,0 +1,18 @@
+Changed branch/field: web public account-deletion URL and privacy-policy deletion entry
+MODIFIED_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-data-safety-account-deletion-20260916/MODIFIED_FILE
+DIFF_FILE=/home/lxx/Foresightnine/src/repair-evidence/play-data-safety-account-deletion-20260916/DIFF_FILE
+VERIFICATION=/home/lxx/Foresightnine/src/repair-evidence/play-data-safety-account-deletion-20260916/VERIFICATION.txt
+ROLLBACK=/home/lxx/Foresightnine/src/repair-evidence/play-data-safety-account-deletion-20260916/ROLLBACK.sh
+BASELINE command: test ! -e apps/web/public/delete-account.html
+BASELINE input: repository before change
+BASELINE literal result: delete-account.html absent
+BASELINE exit status: 0
+MODIFIED command: corepack pnpm --filter @foresightnine/web test && corepack pnpm --filter @foresightnine/web typecheck && corepack pnpm --filter @foresightnine/web build
+MODIFIED input: deletion page and privacy link
+MODIFIED literal result: ✓ built in 2.32s
+MODIFIED exit status: 0
+ROLLBACK command: ROLLBACK.sh <temporary-copy>
+ROLLBACK input: modified temporary copy
+ROLLBACK literal result: rollback restored privacy and removed active deletion page
+ROLLBACK exit status: 0
+Restored behavior/status: baseline privacy restored and active deletion page removed on rollback copy; live modified files remain changed.

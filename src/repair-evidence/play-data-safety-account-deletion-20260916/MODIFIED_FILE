@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,follow">
+  <meta name="theme-color" content="#f7f2e9">
+  <title>删除 ForesightNine 账户与数据 / Delete account and data</title>
+  <style>
+    :root { color-scheme: light; --ink:#272522; --muted:#6e675f; --paper:#fffaf5; --accent:#a94325; --line:#ded5ca; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#f7f2e9; color:var(--ink); font:16px/1.75 system-ui,-apple-system,"Segoe UI","Noto Sans SC",sans-serif; }
+    main { max-width:860px; margin:0 auto; padding:56px 24px 80px; }
+    article { background:var(--paper); border:1px solid var(--line); padding:clamp(28px,6vw,64px); box-shadow:0 12px 40px rgba(67,48,35,.06); }
+    h1,h2 { font-family:Georgia,"Noto Serif SC",serif; font-weight:500; line-height:1.25; }
+    h1 { margin:0 0 8px; font-size:clamp(30px,6vw,50px); color:var(--accent); }
+    h2 { margin:34px 0 10px; font-size:24px; border-top:1px solid var(--line); padding-top:22px; }
+    p,ol,ul { margin:10px 0; }
+    li { margin:8px 0; }
+    a { color:var(--accent); }
+    .action { display:inline-block; margin:12px 0; padding:10px 18px; border-radius:8px; background:var(--accent); color:white; text-decoration:none; font-weight:650; }
+    .note { border-left:3px solid var(--accent); padding:10px 16px; background:#fbefe8; }
+  </style>
+</head>
+<body>
+<main><article>
+  <h1>删除账户与用户数据</h1>
+  <p>ForesightNine 用户可以在登录后直接永久删除账户及其账户数据。</p>
+  <a class="action" href="/">打开 ForesightNine / Open ForesightNine</a>
+
+  <h2>应用内删除步骤</h2>
+  <ol>
+    <li>使用 Google 或 GitHub 登录 ForesightNine。</li>
+    <li>打开“研究控制台 / Console”。</li>
+    <li>在账户区域选择“删除账户 / Delete account”。</li>
+    <li>确认删除。服务端将撤销该账户的全部会话并删除账户、OAuth 身份绑定、个人模型配置和个人金融数据源配置。</li>
+  </ol>
+  <p class="note">删除是永久操作。设备本地保存的草稿和导出文件由用户在设备或浏览器中另行清除。依法必须保留的安全、审计或交易记录可在法定期限内受限保存。</p>
+
+  <h2 lang="en">Delete your account in the app</h2>
+  <ol lang="en">
+    <li>Sign in with Google or GitHub.</li>
+    <li>Open the Research Console.</li>
+    <li>Select “Delete account” in the account section.</li>
+    <li>Confirm deletion. ForesightNine revokes all sessions and deletes the account, linked OAuth identities, personal model configuration, and personal market-data provider configuration.</li>
+  </ol>
+  <p lang="en">Deletion is permanent. Locally stored drafts and exported files must be removed separately from the browser or device. Security, audit, or transaction records that must be retained by law may be kept with restricted access for the applicable period.</p>
+
+  <h2>相关政策 / Related policy</h2>
+  <p><a href="/privacy.html">隐私政策 / Privacy Policy</a></p>
+</article></main>
+</body>
+</html>
