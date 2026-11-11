@@ -5,9 +5,10 @@ import { SocialLoginPanel, type OAuthProviderAvailability, type OAuthReadinessSt
 import type { AccountBillingSummary, OAuthSession } from "../oauth-client";
 
 const navItems: readonly { stage: Stage; label: string; icon: string }[] = [
-  { stage: "thesis", label: "新建推演", icon: "✎" },
+  { stage: "thesis", label: "研究观点", icon: "✎" },
   { stage: "challenge", label: "反方审查", icon: "□" },
   { stage: "worldline", label: "世界线", icon: "⑂" },
+  { stage: "fm", label: "因子计算", icon: "∑" },
   { stage: "portfolio", label: "配置方案", icon: "◈" },
   { stage: "nav", label: "组合路径", icon: "⌁" },
   { stage: "console", label: "控制台", icon: "♢" },
@@ -37,7 +38,7 @@ export function AppShell({ stage, onStage, canNavigate = (target) => target === 
       <div className="brand-row"><div className="brand">ForesightNine</div><button className="rail-item language-toggle" type="button" onClick={() => setLanguage(language === "zh" ? "en" : "zh")} aria-label={language === "zh" ? "Switch language to English" : "切换为中文"}>{language === "zh" ? "EN" : "中文"}</button></div>
       <nav className="rail-nav">
         {navItems.map((item) => <button key={item.stage} className={`rail-item ${stage === item.stage ? "is-active" : ""}`} aria-current={stage === item.stage ? "page" : undefined} disabled={!canNavigate(item.stage)} onClick={() => { if (canNavigate(item.stage)) onStage(item.stage); }}>
-          <span className="rail-icon" aria-hidden="true">{item.icon}</span><span>{t(language, item.label)}</span>
+          <span className="rail-icon" aria-hidden="true">{item.icon}</span><span>{item.stage === "thesis" ? (language === "en" ? "Premise" : "研究观点") : item.stage === "fm" && language === "en" ? "Factors" : t(language, item.label)}</span>
         </button>)}
       </nav>
       <SocialLoginPanel providers={oauthProviders} readinessStatus={oauthReadinessStatus} onStart={onOAuthStart} session={oauthSession} onLogout={onOAuthLogout} onDelete={onOAuthDelete} billingSummary={billingSummary} />

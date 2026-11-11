@@ -37,12 +37,16 @@ DEFAULT_PROVIDER_MODEL = "glm-5.3-flash"
 def configured_provider_model(environ: Mapping[str, str] | None = None) -> str:
     """Return the server-selected model shown on an account entitlement.
 
-    The GLM model remains the safe default for deployments without an
-    override.  The staging deployment explicitly selects the host-local Cline
-    OpenAI-compatible model, so the account surface must not claim that GLM
-    handled a request when the pool handled it instead.
+    Mirror the selected profile: GLM routes retain their fixed model, while
+    the generic adapter uses its override. This is display metadata only;
+    it does not change model routing or quotas.
     """
-    value = (environ or os.environ).get("FORESIGHTNINE_LLM_MODEL", "").strip()
+    environment = os.environ if environ is None else environ
+    selected = environment.get("FORESIGHTNINE_LLM_PROVIDER", "").strip().lower()
+    # Fixed GLM ignores generic model overrides; account metadata must agree.
+    if selected in {"glm_coding", "zhipu_glm_coding"}:
+        return DEFAULT_PROVIDER_MODEL
+    value = environment.get("FORESIGHTNINE_LLM_MODEL", "").strip()
     return value or DEFAULT_PROVIDER_MODEL
 
 

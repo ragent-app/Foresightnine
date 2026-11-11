@@ -235,18 +235,16 @@ describe("worldline, FM and Public Default", () => {
     expect(safe[ASSETS.findIndex((asset) => asset.id === "CASH")]!).toBeGreaterThan(concentrated[5]!);
   });
 
-  it("maps selected paths to typed NAV, return, and running-peak drawdown", () => {
-    const weak = scenarioNavFor("weak");
-    const main = scenarioNavFor("main");
-    expect(weak.fixtureState).toBe("historical_reference_and_simulated");
-    expect(weak.points.some((point) => point.segment === "historical")).toBe(true);
-    expect(weak.points.some((point) => point.segment === "simulated")).toBe(true);
-    expect(weak.maxDrawdown).toBeLessThan(0);
-    expect(weak.scenarioReturn).toBeLessThan(0);
-    expect(main.scenarioReturn).toBeGreaterThan(0);
-    expect(weak.points.every((point) => point.drawdown <= 1e-12)).toBe(true);
-  });
-});
+  it("does not invent NAV, return or drawdown when assumptions are absent", () => {
+    for (const kind of ["weak", "main", "strong"] as const) {
+      const scenario = scenarioNavFor(kind);
+      expect(scenario.fixtureState).toBe("user_assumptions");
+      expect(scenario.status).toBe("missing_inputs");
+      expect(scenario.points).toEqual([]);
+      expect(scenario.scenarioReturn).toBeNull();
+      expect(scenario.maxDrawdown).toBeNull();
+    }
+  });});
 
 describe("privacy-safe archive envelope", () => {
   it("excludes private evidence by default and makes an explicit device-only opt-in visible", () => {

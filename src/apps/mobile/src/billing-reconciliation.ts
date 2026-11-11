@@ -7,6 +7,10 @@ export interface BillingReconciliationResult {
   readonly ignored: number;
 }
 
+// Successful event deduplication and in-flight work are different states. A
+// restore must recheck a successful token: renewals can keep the same token.
+const inFlightByLedger = new WeakMap<Set<string>, Map<string, Promise<boolean>>>();
+
 /**
  * Reconcile a Play purchase snapshot without letting one bad token prevent the
  * remaining subscriptions from reaching the server. The processed set is
@@ -18,12 +22,18 @@ export async function reconcileBillingPurchases(
   sessionScope: string,
   processed: Set<string>,
   verify: (purchase: BillingPurchase) => Promise<void>,
+  options: { readonly refreshVerified?: boolean } = {},
 ): Promise<BillingReconciliationResult> {
   let verified = 0;
   let failed = 0;
   let pending = 0;
   let ignored = 0;
   const seen = new Set<string>();
+  let inFlight = inFlightByLedger.get(processed);
+  if (!inFlight) {
+    inFlight = new Map();
+    inFlightByLedger.set(processed, inFlight);
+  }
 
   for (const purchase of purchases) {
     if (seen.has(purchase.purchaseToken)) {
@@ -40,17 +50,33 @@ export async function reconcileBillingPurchases(
       continue;
     }
     const key = `${sessionScope}:${purchase.purchaseToken}`;
-    if (processed.has(key)) {
+    const existing = inFlight.get(key);
+    if (existing) {
+      // Wait before callers read the account summary, otherwise a concurrent
+      // restore can fetch the old entitlement while verification is running.
+      if (await existing) ignored += 1;
+      else failed += 1;
+      continue;
+    }
+    if (!options.refreshVerified && processed.has(key)) {
       ignored += 1;
       continue;
     }
-    processed.add(key);
+    const task = (async () => {
+      try {
+        await verify(purchase);
+        processed.add(key);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    inFlight.set(key, task);
     try {
-      await verify(purchase);
-      verified += 1;
-    } catch {
-      processed.delete(key);
-      failed += 1;
+      if (await task) verified += 1;
+      else failed += 1;
+    } finally {
+      if (inFlight.get(key) === task) inFlight.delete(key);
     }
   }
 

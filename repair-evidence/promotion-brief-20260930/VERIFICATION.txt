@@ -1,0 +1,13 @@
+FORESIGHTNINE PROMOTION BRIEF — VERIFICATION
+MODIFIED_FILE=/home/lxx/Foresightnine/src/docs/marketing/FORESIGHTNINE_PROMOTION_BRIEF_ZH.md
+DIFF_FILE=/home/lxx/Foresightnine/repair-evidence/promotion-brief-20260930/DIFF_FILE.diff
+VERIFICATION_FILE=/home/lxx/Foresightnine/repair-evidence/promotion-brief-20260930/VERIFICATION.txt
+ROLLBACK_FILE=/home/lxx/Foresightnine/repair-evidence/promotion-brief-20260930/ROLLBACK.sh
+BASELINE_COMMAND=test ! -e /home/lxx/Foresightnine/src/docs/marketing/FORESIGHTNINE_PROMOTION_BRIEF_ZH.md
+BASELINE_RESULT=exit 0 (file absent before creation)
+MODIFIED_COMMAND=grep -F "把高认知信息，推演成可审计的世界线。" /home/lxx/Foresightnine/src/docs/marketing/FORESIGHTNINE_PROMOTION_BRIEF_ZH.md
+MODIFIED_RESULT=matched literal headline; exit 0
+ROLLBACK_COMMAND=/home/lxx/Foresightnine/repair-evidence/promotion-brief-20260930/ROLLBACK.sh /home/lxx/Foresightnine/repair-evidence/promotion-brief-20260930/rollback-test-copy.md
+ROLLBACK_RESULT=RESTORED_ABSENT; exit 0
+RESTORED_BEHAVIOR=rollback test copy returned to the original absent-file state; primary MODIFIED_FILE remains present.
+DEPLOYED_APP_PROBE=curl -L https://app.foresightnine.com/ -> HTTP 530, body: error code: 1033

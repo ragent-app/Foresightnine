@@ -76,6 +76,7 @@ from .operations import ApiProblem, OperationManager, format_sse
 from .retention import RetentionPolicy, cleanup_research_state
 from .security import SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
 from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
+from .phase4_live import LivePhase4Adapter
 from .phase3 import ChallengeDraft, ChallengeInput, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
 from .openai_compatible import OpenAICompatibleLlmProvider
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
@@ -496,7 +497,7 @@ def _model_provider_for_request(request: Request) -> tuple[LlmProvider, bool]:
     return OpenAICompatibleLlmProvider(settings), True
 
 
-def _reserve_model_call(request: Request, operation_id: str, *, session_id: str | None = None) -> None:
+def _reserve_model_call(request: Request, operation_id: str, *, session_id: str | None = None, token_budget: int = 4_500) -> None:
     decision = abuse_control.model.reserve(operation_id, _model_subjects(request, session_id))
     if not decision.available:
         raise ApiProblem(
@@ -521,11 +522,12 @@ def _reserve_model_call(request: Request, operation_id: str, *, session_id: str 
     if account is not None and not getattr(request.state, "personal_model", False):
         reservation_id = f"model:{operation_id}"
         try:
-            billing_ledger.reserve(account.account_id, reservation_id, 4_500, now=lifecycle_clock.now())
+            billing_ledger.reserve(account.account_id, reservation_id, token_budget, now=lifecycle_clock.now())
         except BillingError as error:
             raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code in {502, 503}, retry_after=error.retry_after) from error
         request.state.billing_account_id = account.account_id
         request.state.billing_reservation_id = reservation_id
+        request.state.billing_token_budget = token_budget
 
 
 def _settle_model_call(request: Request, operation_id: str, total_tokens: int | None) -> None:
@@ -534,7 +536,7 @@ def _settle_model_call(request: Request, operation_id: str, total_tokens: int | 
     if not account_id:
         return
     try:
-        actual_tokens = 4_500 if total_tokens is None else max(0, int(total_tokens))
+        actual_tokens = getattr(request.state, "billing_token_budget", 4_500) if total_tokens is None else max(0, int(total_tokens))
         billing_ledger.settle(reservation_id, actual_tokens, now=lifecycle_clock.now())
     except BillingError as error:
         raise ApiProblem(error.status_code, error.code, error.message, retryable=error.status_code in {502, 503}, retry_after=error.retry_after) from error
@@ -554,7 +556,13 @@ def _release_model_on_failure(
     def wrapped(operation_id: str) -> tuple[BaseModel, str]:
         try:
             return build_result(operation_id)
-        except BaseException:
+        except BaseException as error:
+            # Record only bounded internal categories, never provider text,
+            # account identifiers, prompt content, or credentials.
+            logging.getLogger(__name__).warning(
+                "model_operation_failed kind=%s code=%s",
+                type(error).__name__, error.code if isinstance(error, ProviderFailure) else "internal",
+            )
             _release_model_call(request)
             raise
     return wrapped
@@ -642,7 +650,7 @@ def _metadata(payload: dict[str, Any], ref_id: str, label: str, source_type: str
     hash_input = {"schema_version": "v1", "source_refs": [ref.model_dump(mode="json", exclude_none=True)], **payload}
     return {
         "schema_version": "v1",
-        "created_at": clock.now(),
+        "created_at": lifecycle_clock.now(),
         "source_refs": refs,
         "content_hash": content_hash(hash_input),
     }
@@ -690,7 +698,7 @@ def _candidate_response(raw: object, provider_name: str) -> SearchCandidate:
         if raw_published_at is not None
         else None
     )
-    retrieved_at = clock.now()
+    retrieved_at = lifecycle_clock.now()
     hash_payload = {
         "search_provider": provider_name,
         "title": title,
@@ -769,7 +777,7 @@ def _validate_provider_worldline_bundle(
             if worldline.premise != expected_premise:
                 raise ContractViolation("WorldlineBundle", ["every worldline premise must match the retained thesis"])
             if worldline.baseline_date != expected_baseline_date:
-                raise ContractViolation("WorldlineBundle", ["every worldline baseline_date must match the fixed API baseline"])
+                raise ContractViolation("WorldlineBundle", ["every worldline baseline_date must match the requested API baseline"])
             if worldline.horizon_end != expected_horizon_end:
                 raise ContractViolation("WorldlineBundle", ["every worldline horizon_end must match the requested horizon"])
         validate_worldline_bundle_semantics(bundle)
@@ -2248,7 +2256,7 @@ def _confirmed_challenge(
     }
     updated = ChallengeRecord(
         schema_version="v1",
-        created_at=clock.now(),
+        created_at=lifecycle_clock.now(),
         source_refs=refs,
         content_hash=content_hash(hash_input),
         **payload,
@@ -2343,7 +2351,14 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         raise ApiProblem(404, "not_found", "Challenge not found.")
     if challenge.status != "CONFIRMED":
         raise ApiProblem(409, "invalid_state_transition", "Worldlines require a confirmed challenge.")
-    if request.horizon_end < clock.today():
+    selected_provider, _personal = _model_provider_for_request(http_request)
+    live = None
+    if isinstance(selected_provider, OpenAICompatibleLlmProvider):
+        live = LivePhase4Adapter(selected_provider, lifecycle_clock)
+    elif selected_provider.name != "deterministic_mock":
+        raise ApiProblem(503, "internal_error", "The selected model does not support structured scenarios.", retryable=False)
+    baseline = live.clock.today() if live else clock.today()
+    if request.horizon_end < baseline:
         raise ApiProblem(422, "validation_error", "Worldline horizon must not precede the baseline date.")
     session_id = _session_for_challenge(request.challenge_id)
     if session_id is not None:
@@ -2354,7 +2369,10 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         thesis = THESES.get(challenge.thesis_id)
         if not thesis:
             raise ApiProblem(409, "lifecycle_conflict", "Confirmed challenge has no retained thesis input.")
-        bundle = worldline_generator.generate(WorldlineGenerationInput(
+        if live:
+            live.cancel_event = operations.cancel_event(operation_id)
+            _reserve_model_call(http_request, operation_id, session_id=session_id, token_budget=live.token_budget)
+        bundle = (live or worldline_generator).generate(WorldlineGenerationInput(
             operation_id=operation_id, challenge=challenge, thesis=thesis, horizon_end=request.horizon_end,
         ))
         if not isinstance(bundle, WorldlineBundle):
@@ -2363,7 +2381,7 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
             bundle,
             challenge_id=request.challenge_id,
             expected_premise=thesis.normalized_premise,
-            expected_baseline_date=clock.today(),
+            expected_baseline_date=baseline,
             expected_horizon_end=request.horizon_end,
         )
         before = {worldline.worldline_id: (WORLDLINES.get(worldline.worldline_id), WORLDLINE_CHALLENGES.get(worldline.worldline_id)) for worldline in bundle.worldlines}
@@ -2372,11 +2390,14 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
 
     def commit(operation_id: str, _result: BaseModel) -> None:
         bundle, _before = prepared[operation_id]
+        if live:
+            _settle_model_call(http_request, operation_id, live.total_tokens)
         for worldline in bundle.worldlines:
             WORLDLINES[worldline.worldline_id] = worldline
             WORLDLINE_CHALLENGES[worldline.worldline_id] = request.challenge_id
 
     def rollback(operation_id: str, _result: BaseModel) -> None:
+        _release_model_call(http_request)
         staged = prepared.get(operation_id)
         if staged is None:
             return
@@ -2402,7 +2423,7 @@ def create_worldlines(request: WorldlineRequest, response: Response, idempotency
         request_payload=_request_payload(request),
         response_model=WorldlineBundleOperationResponse,
         result_field="bundle",
-        build_result=build,
+        build_result=_release_model_on_failure(http_request, build),
         session_id=session_id,
         commit_result=commit,
         rollback_result=rollback,
@@ -2435,14 +2456,31 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
     if session_id is not None:
         _require_session_owner(http_request, session_id)
 
+    selected_provider, _personal = _model_provider_for_request(http_request)
+    live = None
+    if isinstance(selected_provider, OpenAICompatibleLlmProvider):
+        live = LivePhase4Adapter(selected_provider, lifecycle_clock)
+    elif selected_provider.name != "deterministic_mock":
+        raise ApiProblem(503, "internal_error", "The selected model does not support structured probabilities.", retryable=False)
+
     def build(operation_id: str) -> tuple[BaseModel, str]:
-        result = probability_assessor.assess(ProbabilityAssessmentInput(
+        if live:
+            live.cancel_event = operations.cancel_event(operation_id)
+            _reserve_model_call(http_request, operation_id, session_id=session_id, token_budget=live.token_budget)
+        result = (live or probability_assessor).assess(ProbabilityAssessmentInput(
             operation_id=operation_id, worldline=WORLDLINES[request.worldline_id],
         ))
         if not isinstance(result, ProbabilityAssessment):
             raise ProviderFailure("invalid_provider_output", "Probability provider returned an unknown structured result.", retryable=False)
         _validate_provider_probability_assessment(result, expected_worldline_id=request.worldline_id)
         return result, result.assessment_id
+
+    def commit(operation_id: str, _result: BaseModel) -> None:
+        if live:
+            _settle_model_call(http_request, operation_id, live.total_tokens)
+
+    def rollback(_operation_id: str, _result: BaseModel) -> None:
+        _release_model_call(http_request)
 
     result, replayed = operations.execute(
         endpoint="/v1/probabilities/assess",
@@ -2451,7 +2489,9 @@ def assess_probability(request: ProbabilityRequest, response: Response, idempote
         request_payload=_request_payload(request),
         response_model=ProbabilityOperationResponse,
         result_field="probability",
-        build_result=build,
+        build_result=_release_model_on_failure(http_request, build),
+        commit_result=commit,
+        rollback_result=rollback,
         session_id=session_id,
     )
     _mark_replay(response, replayed)

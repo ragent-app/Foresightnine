@@ -1,3 +1,4 @@
+import { legacyLiveScenarios } from "./scenario-status";
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
 import { ASSET_FIXTURES, DEFAULT_RUNTIME_AS_OF, FRESHNESS_POLICY, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, PUBLIC_CONSTRAINTS, RUNTIME_AS_OF, freshnessFor, fxToBase, hasCurrentFx, isPublicEligible } from "./fixtures";
 import { isSafeEvidenceUrl, parseCapital } from "./validation";
@@ -53,9 +54,12 @@ export const initialState: AppState = {
   challengeStatus: "idle",
   challengeTurns: [],
   replyDraft: "",
+  evidenceDraft: {url:"", title:"", publisher:"", published_at:"", excerpt:"", user_note:"", supports_or_challenges:"supports", grade:"B"},
+  evidenceSearchQuery: "",
   rubric: rubricDefaults,
   evidence: [],
   confirmation: "pending",
+  reviewConfirmation: "pending",
   unresolvedIssuesAcknowledged: false,
   reservationNote: "",
   selectedBranch: "main",
@@ -70,6 +74,9 @@ export const initialState: AppState = {
   freshness: { runtimeAsOf: DEFAULT_RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, fxProviderStatus: "unavailable" },
   apiSessionId: null,
   apiChallengeId: null,
+  apiOperationId: null,
+  apiCompletedOperationId: null,
+  apiPendingPhase: null,
   apiError: "",
   serverBranches: null,
 };
@@ -113,8 +120,18 @@ function resetWorkflow(state: AppState, viewpoint: string): AppState {
   return { ...initialState, language: state.language, viewpoint, capital: state.capital, currency: state.currency, rubric: rubricFor(state.language), draftRestored: false };
 }
 
+export function isReviewLocked(state: Pick<AppState, "confirmation"> & Partial<Pick<AppState, "reviewConfirmation">>): boolean {
+  return state.confirmation !== "pending" || (state.reviewConfirmation !== undefined && state.reviewConfirmation !== "pending");
+}
+
 export function reducer(state: AppState, action: AppAction): AppState {
+  if (isReviewLocked(state) && ["submit_reply", "begin_reply_submit", "add_evidence", "set_reservation_note", "set_unresolved_issues_acknowledged", "set_reply_draft", "set_evidence_draft", "set_evidence_query"].includes(action.type)) return state;
   switch (action.type) {
+    case "set_evidence_draft": return {...state,evidenceDraft:action.draft};
+    case "set_evidence_query": return {...state,evidenceSearchQuery:action.query};
+    case "restore_workspace": return { ...action.state, stage: safeStageFor(action.state), draftRestored: true };
+    case "api_operation_pending": return { ...state, apiOperationId: action.operationId, apiPendingPhase: action.phase };
+    case "api_operation_finished": return { ...state, apiOperationId: action.operationId, apiCompletedOperationId: action.operationId, apiPendingPhase: null };
     case "set_stage": return canEnterStage(state, action.stage) ? { ...state, stage: action.stage } : { ...state, stage: safeStageFor(state) };
     case "set_language": return { ...state, language: action.language, rubric: localizeRubric(state.rubric, action.language) };
     case "set_viewpoint": {
@@ -145,10 +162,11 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "set_reservation_note": return { ...state, reservationNote: action.note };
     case "confirm": {
       const allowed = action.confirmation === "confirmed" ? canConfirmNormally(state) : canConfirmReserved(state);
-      return !allowed ? state : { ...state, confirmation: action.confirmation, stage: "worldline" };
+      return !allowed ? state : { ...state, confirmation: action.confirmation, reviewConfirmation: action.confirmation, stage: "worldline" };
     }
+    case "api_review_confirmed": return { ...state, reviewConfirmation: action.confirmation };
     case "select_branch": return { ...state, selectedBranch: action.branch };
-    case "fm_start": return canStartFm(state) ? { ...state, stage: "fm", fmStatus: "computing", fmProgress: 8, fmStep: "正在验证签名数据快照…", exportNotice: "" } : state;
+    case "fm_start": return canStartFm(state) ? { ...state, stage: "fm", fmStatus: "computing", fmProgress: 8, fmStep: "正在获取金融数据…", exportNotice: "" } : state;
     case "fm_progress": return state.fmStatus === "computing" && state.stage === "fm" ? { ...state, fmProgress: action.progress, fmStep: action.step } : state;
     case "fm_complete": return state.fmStatus === "computing" && state.stage === "fm" ? { ...state, fmStatus: "complete", fmProgress: 100, fmStep: "本地计算完成，原始结果已保留", fmResult: action.result, stage: "fm" } : state;
     case "fm_cancel": return state.stage === "fm" && state.fmStatus === "computing" ? { ...state, fmStatus: "cancelled", fmStep: "本地计算已取消；中间结果未上传。" } : state;
@@ -160,7 +178,9 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "set_freshness": return { ...state, freshness: action.freshness };
     case "api_session_ready": return { ...state, apiSessionId: action.sessionId, apiError: "" };
     case "api_challenge_update": return { ...state, apiChallengeId: action.challengeId, challengeTurns: action.turns, rubric: action.rubric, challengeStatus: action.status, apiError: "", fmStep: action.status === "complete" ? "反方审查完成" : state.fmStep };
-    case "api_worldlines_ready": return { ...state, serverBranches: action.branches, apiError: "" };
+    case "api_worldlines_ready": return { ...state, serverBranches: action.branches, apiError: "",
+      ...(state.reviewConfirmation !== "pending" ? {confirmation:state.reviewConfirmation,stage:"worldline" as const} : {}),
+      ...(state.serverBranches?.[0]?.worldline.bundle_id !== action.branches[0]?.worldline.bundle_id ? {fmResult:null,fmStatus:"idle" as const,fmProgress:0} : {}) };
     case "api_error": return { ...state, apiError: action.notice, ...(state.stage === "challenge" && (state.challengeStatus === "streaming" || state.challengeStatus === "submitting_reply" || state.challengeStatus === "recovering") ? { challengeStatus: "failed" as const } : {}) };
     case "api_cancel": return { ...state, challengeStatus: "cancelled", apiError: "" };
     case "reset": return { ...initialState, language: state.language, rubric: rubricFor(state.language) };
@@ -218,15 +238,19 @@ export function canConfirmReserved(state: ConfirmationState): boolean {
     && state.reservationNote.trim().length > 0;
 }
 
-export function canEnterWorldline(state: Pick<AppState, "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote">): boolean {
+export function canEnterWorldline(state: Pick<AppState, "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote"> & Partial<Pick<AppState,"apiChallengeId"|"reviewConfirmation"|"serverBranches">>): boolean {
+  // Server confirmation is a durable decision, not a fresh local rubric vote.
+  // It only unlocks navigation once the owner's actual bundle is present.
+  if (state.apiChallengeId && state.reviewConfirmation && state.reviewConfirmation !== "pending") return state.serverBranches?.length === 3;
   return state.confirmation === "confirmed" ? canConfirmNormally(state) : state.confirmation === "reserved" ? canConfirmReserved(state) : false;
 }
 
-export function canStartFm(state: Pick<AppState, "stage" | "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote">): boolean {
-  return (state.stage === "worldline" || state.stage === "fm") && canEnterWorldline(state);
+export function canStartFm(state: Pick<AppState, "stage" | "challengeStatus" | "challengeTurns" | "rubric" | "evidence" | "language" | "confirmation" | "unresolvedIssuesAcknowledged" | "reservationNote"> & Partial<Pick<AppState,"serverBranches">>): boolean {
+  return !legacyLiveScenarios(state.serverBranches) && (state.stage === "worldline" || state.stage === "fm") && canEnterWorldline(state);
 }
 
 export function canEnterStage(state: AppState, stage: AppState["stage"]): boolean {
+  if (["fm","portfolio","nav"].includes(stage) && legacyLiveScenarios(state.serverBranches)) return false;
   switch (stage) {
     case "thesis":
     case "console":
@@ -248,6 +272,7 @@ export function canEnterStage(state: AppState, stage: AppState["stage"]): boolea
 }
 
 export function safeStageFor(state: AppState): AppState["stage"] {
+  if (legacyLiveScenarios(state.serverBranches) && canEnterWorldline(state) && ["fm","portfolio","nav"].includes(state.stage)) return "worldline";
   if (canEnterStage(state, state.stage)) return state.stage;
   if (state.stage === "thesis" || state.stage === "challenge") return canEnterStage(state, "challenge") ? "challenge" : "thesis";
   if (!canEnterWorldline(state)) return canEnterStage(state, "challenge") ? "challenge" : "thesis";

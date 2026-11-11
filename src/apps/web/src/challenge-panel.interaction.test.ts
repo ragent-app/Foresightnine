@@ -196,14 +196,14 @@ describe("ChallengePanel information architecture", () => {
   it("prevents evidence submission while a reviewer operation is still running", () => {
     const markup = renderPanel({ status: "submitting_reply", turns: structuredChallengeTurns, replyDraft: "正在发送的答复" });
 
-    expectButtonState(markup, "提交 SearchEvidenceBundle", true);
+    expectButtonState(markup, "添加证据", true);
     expect(markup).toContain("审查请求完成后即可提交证据");
   });
 
   it("keeps evidence locked until the user has answered the first reviewer turn", () => {
     const markup = renderPanel({ status: "complete", turns: structuredChallengeTurns });
 
-    expectButtonState(markup, "提交 SearchEvidenceBundle", true);
+    expectButtonState(markup, "添加证据", true);
     expect(markup).toContain("请先回答至少一轮反方问题，再提交证据");
   });
 

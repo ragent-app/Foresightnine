@@ -1,7 +1,10 @@
 import { allocateCapital, type ComputeFmResult } from "@foresightnine/fm-engine";
-import { ASSETS, FIXTURE_STATE, FRESHNESS_POLICY, FX_SNAPSHOT, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, RUNTIME_AS_OF, WORLDLINE_BASELINE_DATE, freshnessFor, hasCurrentFx } from "./fixtures";
+import { ASSETS, FRESHNESS_POLICY, FX_SNAPSHOT, MARKET_DATA_AS_OF, PROVIDER_FRESHNESS_STATUS, RUNTIME_AS_OF, freshnessFor, hasCurrentFx } from "./fixtures";
 import { t, type CopyKey } from "./i18n";
-import type { AllocationRow, AssetFixture, BranchKind, Currency, FreshnessOptions, Language, NavPoint, PortfolioMode, ScenarioNav } from "./types";
+import type { AllocationRow, AssetFixture, BranchKind, Currency, FreshnessOptions, Language, PortfolioMode, ScenarioNav } from "./types";
+
+import { scenarioNavFor, type ScenarioInputs } from "./scenario-inputs";
+export { scenarioNavFor } from "./scenario-inputs";
 
 const SINGLE_SECURITY_CAP = 0.25;
 const HIGH_VOLATILITY_CLASS_CAP = 0.35;
@@ -116,26 +119,6 @@ function allocationFor(weights: Float64Array, capital: number, baseCurrency: Cur
   return { values, cashRemainder, executable };
 }
 
-const HISTORICAL_NAV: readonly [string, number][] = [["2026-08-05", 96], ["2026-08-07", 99], [MARKET_DATA_AS_OF, 100]];
-const SIMULATED_NAV: Readonly<Record<BranchKind, readonly [string, number][]>> = {
-  weak: [[WORLDLINE_BASELINE_DATE, 100], ["2027-02-28", 97], ["2027-08-31", 93], ["2028-08-31", 88]],
-  main: [[WORLDLINE_BASELINE_DATE, 100], ["2027-02-28", 104], ["2027-08-31", 109], ["2028-08-31", 114]],
-  strong: [[WORLDLINE_BASELINE_DATE, 100], ["2027-02-28", 110], ["2027-08-31", 119], ["2028-08-31", 130]],
-};
-
-/** Builds an explicitly mock, selected-worldline NAV series and a running-peak drawdown. */
-export function scenarioNavFor(branch: BranchKind): ScenarioNav {
-  const raw = [...HISTORICAL_NAV.map(([date, nav]) => ({ date, nav, segment: "historical" as const })), ...SIMULATED_NAV[branch].map(([date, nav]) => ({ date, nav, segment: "simulated" as const }))];
-  let peak = 0;
-  const first = raw[0]!.nav;
-  const points: NavPoint[] = raw.map((point) => {
-    peak = Math.max(peak, point.nav);
-    return { ...point, returnFromStart: point.nav / first - 1, drawdown: point.nav / peak - 1 };
-  });
-  const base = HISTORICAL_NAV.at(-1)![1];
-  return { branch, dataAsOf: MARKET_DATA_AS_OF, simulatedFrom: WORLDLINE_BASELINE_DATE, fixtureState: FIXTURE_STATE, points, scenarioReturn: points.at(-1)!.nav / base - 1, maxDrawdown: Math.min(...points.map((point) => point.drawdown)) };
-}
-
 export interface PortfolioPlan {
   readonly rows: readonly AllocationRow[];
   readonly rawTotal: number;
@@ -164,7 +147,7 @@ function constraintReasons(asset: AssetFixture, rawWeight: number, publicWeight:
   return reasons;
 }
 
-export function createPortfolioPlan(result: ComputeFmResult, capital: number, baseCurrency: Currency, assets: readonly AssetFixture[] = ASSETS, language: Language = "zh", selectedBranch: BranchKind = "main", freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }): PortfolioPlan {
+export function createPortfolioPlan(result: ComputeFmResult, capital: number, baseCurrency: Currency, assets: readonly AssetFixture[] = ASSETS, language: Language = "zh", selectedBranch: BranchKind = "main", freshnessOptions: FreshnessOptions = { runtimeAsOf: RUNTIME_AS_OF, providerStatus: PROVIDER_FRESHNESS_STATUS, policy: FRESHNESS_POLICY }, scenarioInput?: Omit<ScenarioInputs, "rows" | "capital">): PortfolioPlan {
   const raw = result.weights.weights;
   if (raw.length !== assets.length) throw new RangeError("FM result and asset registry must share a shape");
   const safe = publicWeights(raw, assets, freshnessOptions);
@@ -186,7 +169,7 @@ export function createPortfolioPlan(result: ComputeFmResult, capital: number, ba
     rawMarketValue: rows.reduce((total, row) => total + row.rawAmount, 0), publicMarketValue: rows.reduce((total, row) => total + row.publicAmount, 0),
     rawCashRemainder: rawAllocations.cashRemainder, publicCashRemainder: publicAllocations.cashRemainder,
     rawImplementable: rawAllocations.executable, publicImplementable: publicAllocations.executable,
-    scenario: scenarioNavFor(selectedBranch), rawReasons: result.reasons.map((reason) => reason.replaceAll("_", " ")),
+    scenario: scenarioNavFor(selectedBranch, scenarioInput ? { ...scenarioInput, rows, capital } : undefined), rawReasons: result.reasons.map((reason) => reason.replaceAll("_", " ")),
   };
 }
 
@@ -195,4 +178,4 @@ export function formatMoney(value: number, currency: Currency, language: Languag
 }
 
 export function modeWeight(row: AllocationRow, mode: PortfolioMode): number { return mode === "raw" ? row.rawWeight : row.publicWeight; }
-export const portfolioMetadata = { method: "FM-v1 / Public-Default-v2", dataAsOf: MARKET_DATA_AS_OF, navLabel: "historical reference plus simulated scenario NAV; not a return forecast" } as const;
+export const portfolioMetadata = { method: "FM-v1 / Public-Default-v2", dataAsOf: MARKET_DATA_AS_OF, navLabel: "user-entered scenario assumptions only; no observed historical NAV or return forecast" } as const;

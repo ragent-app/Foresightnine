@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeFm } from "@foresightnine/fm-engine";
-import { buildPrivacySafeDocument, buildResearchSnapshot, canRestoreArchive, canRestorePrivacySafeDocument, makeArchiveEnvelope, normalizePrivacySafeDocument, restoreAppState } from "../src/archive";
+import { buildPrivacySafeDocument, buildResearchSnapshot, canRestoreArchive, canRestorePrivacySafeDocument, makeArchiveEnvelope, normalizePrivacySafeDocument, restoreAppState, serializeArchiveDocument, MAX_ARCHIVE_PLAINTEXT_BYTES, MAX_ARCHIVE_SEALED_CHARS, type PrivacySafeDocument } from "../src/archive";
 import { ASSETS, FIXTURE_STATE, fmInput, makeBranches, MOCK_EVIDENCE, PROVIDER_FRESHNESS_STATUS, rubricFor, RUNTIME_AS_OF } from "../src/fixtures";
 import { createPortfolioPlan, portfolioMetadata } from "../src/portfolio";
 import type { AppState } from "../src/types";
+
+beforeEach(() => { vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-03T12:00:00Z")); });
+afterEach(() => vi.restoreAllMocks());
 
 const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
 
@@ -267,16 +270,16 @@ describe("offline complete snapshot resume", () => {
 
   it("rejects future FM, branch, and method data cutoffs", () => {
     const futureFm = currentDocumentJson();
-    ((futureFm.researchState as Record<string, unknown>).fmResult as Record<string, unknown>).cutoff = "2026-08-10";
+    ((futureFm.researchState as Record<string, unknown>).fmResult as Record<string, unknown>).cutoff = "2026-10-04T00:00:00Z";
     expect(canRestorePrivacySafeDocument(futureFm)).toBe(false);
 
     const futureBranch = currentDocumentJson();
     const branches = (futureBranch.researchState as Record<string, unknown>).branches as Array<Record<string, unknown>>;
-    branches[0]!.dataAsOf = "2026-08-10";
+    branches[0]!.dataAsOf = "2026-10-04T00:00:00Z";
     expect(canRestorePrivacySafeDocument(futureBranch)).toBe(false);
 
     const futureMethod = currentDocumentJson();
-    ((futureMethod.researchState as Record<string, unknown>).methodData as Record<string, unknown>).dataAsOf = "2026-08-10";
+    ((futureMethod.researchState as Record<string, unknown>).methodData as Record<string, unknown>).dataAsOf = "2026-10-04T00:00:00Z";
     expect(canRestorePrivacySafeDocument(futureMethod)).toBe(false);
   });
 
@@ -342,5 +345,94 @@ describe("offline complete snapshot resume", () => {
     researchState.branches = [];
     expect(canRestorePrivacySafeDocument(invalidArrays)).toBe(false);
     expect(() => restoreAppState(coldStartState(), invalidArrays)).not.toThrow();
+  });
+});
+
+
+describe("current API research archive recovery", () => {
+  it("accepts real-shaped September FM cutoffs rather than the August fixture ceiling", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    (rs.fmResult as Record<string, unknown>).cutoff = "2026-09-30T00:00:00Z";
+    (rs.methodData as Record<string, unknown>).dataAsOf = "2026-09-30T00:00:00Z";
+    expect(canRestorePrivacySafeDocument(doc)).toBe(true);
+    expect(restoreAppState(coldStartState(), doc).fmResult?.cutoff).toBe("2026-09-30T00:00:00Z");
+  });
+  it("writes actual FM cutoff into the saved method metadata", () => {
+    const state = stateForCompletedWorkflow(); const cutoff = "2026-09-30T00:00:00Z";
+    const snapshot = buildResearchSnapshot({ state: { ...state, fmResult: { ...state.fmResult!, cutoff } }, branches: makeBranches(state.viewpoint, state.language), methodData: { methodVersion: portfolioMetadata.method, dataAsOf: portfolioMetadata.dataAsOf, navLabel: portfolioMetadata.navLabel, fixtureState: FIXTURE_STATE, assetIds: ASSETS.map(asset => asset.id) } });
+    expect(snapshot.methodData.dataAsOf).toBe(cutoff);
+  });
+  it("preserves an unconfirmed evidence-stage draft without inventing worldlines", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    Object.assign(rs, { confirmation: "pending", stage: "evidence", branches: [], fmResult: null, fmStatus: "idle", fmProgress: 0, fmStep: "", replyDraft: "Unsubmitted answer", unresolvedIssuesAcknowledged: true, reservationNote: "Unsubmitted reservation" });
+    expect(canRestorePrivacySafeDocument(doc)).toBe(true);
+    expect(restoreAppState(coldStartState(), doc)).toMatchObject({ stage: "evidence", confirmation: "pending", branchSnapshot: null, fmResult: null, replyDraft: "Unsubmitted answer", reservationNote: "Unsubmitted reservation", unresolvedIssuesAcknowledged: true });
+  });
+  it("turns interrupted request flags into a stopped draft rather than an endless spinner", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    Object.assign(rs, { confirmation: "pending", stage: "challenge", branches: [], challengeStatus: "streaming", searchStatus: "loading", fmResult: null, fmStatus: "idle" });
+    expect(canRestorePrivacySafeDocument(doc)).toBe(true);
+    expect(restoreAppState(coldStartState(), doc)).toMatchObject({ challengeStatus: "cancelled", searchStatus: "idle", confirmation: "pending" });
+  });
+  it("keeps an API failure draft when no enumerated provider reason was available", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    Object.assign(rs, { confirmation: "pending", branches: [], challengeStatus: "failed", challengeFailure: null, fmResult: null, fmStatus: "idle" });
+    expect(canRestorePrivacySafeDocument(doc)).toBe(true); expect(restoreAppState(coldStartState(), doc).challengeStatus).toBe("failed");
+  });
+  it("accepts a bounded sealed full study larger than twenty thousand characters", () => {
+    expect(canRestoreArchive(makeArchiveEnvelope({ aad: "f9-archive-envelope-v1", combined: "YQ==".slice(0, 2).repeat(40_000), createdAt: "2026-10-03T00:00:00Z", documentHash: "a".repeat(64) }))).toBe(true);
+  });
+});
+
+
+describe("archive bounds and current worldline dates", () => {
+  it("restores current dated branches and compares equivalent timezone instants", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    const branches = rs.branches as Array<Record<string, unknown>>;
+    for (const branch of branches) {
+      branch.dataAsOf = "2026-10-01T00:00:00Z"; branch.baselineDate = "2026-10-02T00:00:00+08:00";
+      const nodes = branch.nodes as Array<Record<string, unknown>>;
+      for (const node of nodes) node.dataAsOf = branch.dataAsOf;
+      nodes[0]!.occurrenceDate = "2026-10-01T16:00:00Z"; nodes[0]!.revealDate = "2026-10-02T00:00:00+08:00";
+    }
+    expect(canRestorePrivacySafeDocument(doc)).toBe(true);
+    expect(restoreAppState(coldStartState(), doc).branchSnapshot).toHaveLength(3);
+  });
+  it("rejects future branch cutoffs even when their internal chronology is coherent", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    for (const branch of rs.branches as Array<Record<string, unknown>>) {
+      branch.dataAsOf = "2026-10-04T00:00:00Z"; branch.baselineDate = "2026-10-05T00:00:00Z";
+      const nodes = branch.nodes as Array<Record<string, unknown>>;
+      for (const node of nodes) node.dataAsOf = branch.dataAsOf;
+      nodes[0]!.occurrenceDate = branch.baselineDate; nodes[0]!.revealDate = branch.baselineDate;
+    }
+    expect(canRestorePrivacySafeDocument(doc)).toBe(false);
+  });
+  it("does not restore a confirmed portfolio without any actual worldlines", () => {
+    const doc = currentDocumentJson(); (doc.researchState as Record<string, unknown>).branches = [];
+    expect(canRestorePrivacySafeDocument(doc)).toBe(false);
+  });
+  it("serializes a real-shaped long transcript to restorable JSON", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    (rs.challengeTurns as unknown[]).push({ id: "long-review", author: "challenger", body: "Question ".repeat(1700) });
+    const bytes = serializeArchiveDocument(doc as unknown as PrivacySafeDocument);
+    expect(bytes.byteLength).toBeGreaterThan(20_000); expect(bytes.byteLength).toBeLessThan(MAX_ARCHIVE_PLAINTEXT_BYTES);
+    const restoredJson = JSON.parse(new TextDecoder().decode(bytes));
+    expect(canRestorePrivacySafeDocument(restoredJson)).toBe(true);
+    expect(restoreAppState(coldStartState(), restoredJson).stage).toBe("portfolio");
+  });
+  it("bounds actual UTF-8 bytes, not JavaScript character count", () => {
+    const doc = currentDocumentJson(); const rs = doc.researchState as Record<string, unknown>;
+    const turns = rs.challengeTurns as unknown[];
+    for (let i = 0; i < 40; i++) turns.push({ id: `large-${i}`, author: "challenger", body: "研".repeat(10_000) });
+    expect(JSON.stringify(doc).length).toBeLessThan(MAX_ARCHIVE_PLAINTEXT_BYTES);
+    expect(() => serializeArchiveDocument(doc as unknown as PrivacySafeDocument)).toThrow("archive_too_large");
+  });
+  it("rejects a malformed snapshot before native encryption or overwrite", () => {
+    const doc = currentDocumentJson(); (doc.researchState as Record<string, unknown>).rubric = [];
+    expect(() => serializeArchiveDocument(doc as unknown as PrivacySafeDocument)).toThrow("archive_snapshot_invalid");
+  });
+  it("keeps a finite ceiling for sealed envelope input", () => {
+    expect(canRestoreArchive(makeArchiveEnvelope({ aad: "f9-archive-envelope-v1", combined: "YQ".repeat(MAX_ARCHIVE_SEALED_CHARS / 2 + 2), createdAt: "2026-10-03T00:00:00Z", documentHash: "a".repeat(64) }))).toBe(false);
   });
 });

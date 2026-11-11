@@ -20,6 +20,35 @@ export interface BillingPurchase {
   readonly isAutoRenewing: boolean;
 }
 
+export interface BillingFlowResult {
+  readonly kind: "cancelled" | "error";
+  readonly responseCode: number;
+}
+
+function purchaseUpdate(value: unknown): { readonly kind: "purchase"; readonly purchase: BillingPurchase } | BillingFlowResult | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<BillingPurchase> & { readonly responseCode?: unknown };
+  // A cancelled/failed native result has no purchase token. Do not drop it or
+  // copy provider debug text (which may contain internal details) into the UI.
+  if (typeof item.responseCode === "number" && Number.isInteger(item.responseCode)) {
+    return { kind: item.responseCode === 1 ? "cancelled" : "error", responseCode: item.responseCode };
+  }
+  if (typeof item.purchaseToken !== "string" || item.purchaseToken.length < 20 || item.purchaseToken.length > 4096) return null;
+  if (item.productId !== null && item.productId !== undefined && !isBillingProductId(item.productId)) return null;
+  if (item.purchaseState !== 1 && item.purchaseState !== 2) return { kind: "error", responseCode: 0 };
+  return {
+    kind: "purchase",
+    purchase: {
+      purchaseToken: item.purchaseToken,
+      productId: item.productId ?? null,
+      basePlanId: typeof item.basePlanId === "string" ? item.basePlanId : null,
+      purchaseState: item.purchaseState,
+      isAcknowledged: item.isAcknowledged === true,
+      isAutoRenewing: item.isAutoRenewing === true,
+    },
+  };
+}
+
 interface NativeBillingModule {
   queryProducts(productIds: readonly string[]): Promise<readonly BillingProduct[]>;
   launchPurchase(productId: string, offerToken: string, obfuscatedAccountId: string): Promise<boolean>;
@@ -51,25 +80,21 @@ export async function restoreBillingPurchases(): Promise<readonly BillingPurchas
   const native = nativeBilling();
   if (!native) return [];
   const values = await native.restorePurchases();
-  return values.filter((item) => typeof item.purchaseToken === "string" && item.purchaseToken.length >= 20 && (item.productId === null || isBillingProductId(item.productId)));
+  if (!Array.isArray(values)) throw new Error("Google Play purchase response is invalid.");
+  return values.flatMap((value) => {
+    const event = purchaseUpdate(value);
+    return event?.kind === "purchase" ? [event.purchase] : [];
+  });
 }
 
-export function subscribeToBillingPurchases(listener: (purchase: BillingPurchase) => void): EmitterSubscription | null {
+export function subscribeToBillingPurchases(listener: (purchase: BillingPurchase) => void, onResult?: (result: BillingFlowResult) => void): EmitterSubscription | null {
   const native = nativeBilling();
   if (!native) return null;
   const emitter = new NativeEventEmitter(NativeModules.ForesightNineBilling);
   return emitter.addListener("foresightnineBillingPurchaseUpdated", (value: unknown) => {
-    if (!value || typeof value !== "object") return;
-    const item = value as Partial<BillingPurchase>;
-    if (typeof item.purchaseToken !== "string" || item.purchaseToken.length < 20) return;
-    if (item.productId !== null && item.productId !== undefined && !isBillingProductId(item.productId)) return;
-    listener({
-      purchaseToken: item.purchaseToken,
-      productId: item.productId ?? null,
-      basePlanId: item.basePlanId ?? null,
-      purchaseState: typeof item.purchaseState === "number" ? item.purchaseState : 0,
-      isAcknowledged: item.isAcknowledged === true,
-      isAutoRenewing: item.isAutoRenewing === true,
-    });
+    const event = purchaseUpdate(value);
+    if (!event) return;
+    if (event.kind === "purchase") listener(event.purchase);
+    else onResult?.(event);
   });
 }

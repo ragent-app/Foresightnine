@@ -51,9 +51,9 @@ export async function fetchAccountBillingSummary(apiBaseUrl: string, accessToken
   return parseSummary(await response.json());
 }
 
-export async function verifyGooglePlayPurchase(apiBaseUrl: string, accessToken: string, purchaseToken: string, productId: BillingProductId, fetcher: typeof fetch = fetch): Promise<VerifiedBillingResult> {
+export async function verifyGooglePlayPurchase(apiBaseUrl: string, accessToken: string, purchaseToken: string, productId: BillingProductId, fetcher: typeof fetch = fetch, signal?: AbortSignal): Promise<VerifiedBillingResult> {
   if (!safeApiBaseUrl(apiBaseUrl) || !/^\S{32,256}$/.test(accessToken) || purchaseToken.length < 20 || !isBillingProductId(productId)) throw new Error("Billing request is invalid.");
-  const response = await fetcher(new URL("v1/billing/google-play/verify", `${apiBaseUrl.replace(/\/+$/, "")}/`), { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ purchase_token: purchaseToken, product_id: productId, base_plan_id: BILLING_BASE_PLAN_ID }), credentials: "omit" });
+  const response = await fetcher(new URL("v1/billing/google-play/verify", `${apiBaseUrl.replace(/\/+$/, "")}/`), { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ purchase_token: purchaseToken, product_id: productId, base_plan_id: BILLING_BASE_PLAN_ID }), credentials: "omit", ...(signal ? { signal } : {}) });
   if (!response.ok) throw new Error("Google Play purchase verification failed.");
   const payload = await response.json() as Record<string, unknown>;
   return { summary: parseSummary(payload), ...(typeof payload.purchase_state === "string" ? { purchase_state: payload.purchase_state } : {}) };

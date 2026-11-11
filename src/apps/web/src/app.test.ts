@@ -15,7 +15,7 @@ import { WorldlinePanel } from "./components/WorldlinePanel";
 import { ThesisInput } from "./components/ThesisInput";
 import { LanguageProvider, t } from "./i18n";
 import { SocialLoginPanel } from "./components/SocialLoginPanel";
-import { historical } from "./nav-data";
+import { buildNavExport } from "./nav-data";
 import { computeMarketSnapshotIntegrityHash, type MarketSnapshotBundle } from "@foresightnine/market-data";
 
 const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
@@ -401,7 +401,10 @@ describe("SearchEvidenceBundle validation and premise rendering", () => {
     const viewpoint = "亚洲电网投资受数据中心负荷驱动";
     const challengeMarkup = renderToStaticMarkup(createElement(ChallengePanel, { status: "complete", turns: [{ id: "t1", author: "challenger", time: "现在", body: "问题" }], replyDraft: "", evidence: [], rubric: initialState.rubric, unresolvedIssuesAcknowledged: false, reservationNote: "", onStart: () => undefined, onCancel: () => undefined, onRetry: () => undefined, onRecover: () => undefined, onReplyDraft: () => undefined, onSubmitReply: () => undefined, onEvidence: () => undefined, onUnresolvedIssuesAcknowledged: () => undefined, onReservationNote: () => undefined, onConfirm: () => undefined }));
     expect(challengeMarkup).toContain("回答挑战");
-    expect(challengeMarkup).toContain("SearchEvidenceBundle");
+    expect(challengeMarkup).toContain("添加证据");
+    expect(challengeMarkup).toContain("A–C 级证据需填写来源链接");
+    expect(challengeMarkup).not.toContain("SearchEvidenceBundle");
+    expect(challengeMarkup).not.toContain("fixture");
     expect(challengeMarkup).toContain("A–C 必填；D/E 可留空");
     expect(challengeMarkup).toContain("发布日期");
     const worldlineMarkup = renderToStaticMarkup(createElement(WorldlinePanel, { branches: makeBranches(viewpoint), selected: "main", onSelect: () => undefined, onCompute: () => undefined }));
@@ -602,7 +605,7 @@ describe("portfolio residual and export", () => {
     const state = { ...initialState, viewpoint: "test thesis", capital: "100", evidence: [] };
     const json = researchExport(state, branches, rows);
     const csv = csvExport(rows);
-    expect(json).toMatchObject({ labels: { historical: "historical_only", simulated: "simulated fixture" } });
+    expect(json).toMatchObject({ labels: { historical: "none", simulated: "user_assumptions_uncalibrated" } });
     expect(csv.split("\n")[0]).toBe(CSV_HEADER.join(","));
     expect(csv.split("\n")[0]).toContain("currency");
     expect(csv.split("\n")[0]).toContain("raw_amount");
@@ -642,11 +645,11 @@ describe("portfolio residual and export", () => {
     state = reducer(state, { type: "set_mode", mode: "public" });
     const rows = allocationRows(fmResult, 100000, "USD", "public");
     const output = researchExport(state, makeBranches(state.viewpoint), rows);
-    expect(output).toMatchObject({ product: { name: "ForesightNine" }, method_version: expect.any(String), data_as_of: MARKET_DATA_AS_OF, thesis: { raw_text: state.viewpoint, base_currency: "USD" }, challenge: { status: "complete", confirmation: "confirmed", transcript: state.challengeTurns }, labels: { historical: "historical_only", simulated: "simulated fixture", probability: "model_estimate_unvalidated" } });
+    expect(output).toMatchObject({ product: { name: "ForesightNine" }, method_version: expect.any(String), data_as_of: MARKET_DATA_AS_OF, thesis: { raw_text: state.viewpoint, base_currency: "USD" }, challenge: { status: "complete", confirmation: "confirmed", transcript: state.challengeTurns }, labels: { historical: "none", simulated: "user_assumptions_uncalibrated", probability: "model_estimate_unvalidated" } });
     expect(output.evidence).toEqual([expect.objectContaining({ evidence_id: expect.any(String), challenge_id: expect.any(String), url: expect.any(String), title: expect.any(String), publisher: expect.any(String), published_at: expect.any(String), retrieved_at: expect.any(String), excerpt: expect.any(String), user_note: expect.any(String), content_hash: expect.any(String), source_material_hash: expect.any(String), grade: expect.any(String), source_type: expect.any(String), independently_reviewable: true })]);
     expect(output.worldlines).toHaveLength(3);
     expect(output.portfolio).toEqual(expect.objectContaining({ currency: "USD", allocations: expect.any(Array), raw_residual_cash: expect.any(Number), public_residual_cash: expect.any(Number) }));
-    expect(output.fm).toEqual(expect.objectContaining({ status: "computed", fixture: true, data_source: expect.stringContaining("client"), result: expect.objectContaining({ selectedFactorIds: expect.any(Array), metrics: null, weights: expect.any(Object), forecasts: expect.any(Array), rawClientResult: expect.any(Object) }) }));
+    expect(output.fm).toEqual(expect.objectContaining({ status: "computed", provider_status: state.freshness.providerStatus, data_source: expect.stringContaining("client"), result: expect.objectContaining({ selectedFactorIds: expect.any(Array), metrics: null, weights: expect.any(Object), forecasts: expect.any(Array), rawClientResult: expect.any(Object) }) }));
 
     const idleWorldline = { ...state, stage: "worldline" as const, fmStatus: "idle" as const, fmResult: null };
     const idleWorldlineOutput = researchExport(idleWorldline, makeBranches(state.viewpoint), []);
@@ -751,41 +754,20 @@ describe("portfolio residual and export", () => {
 });
 
 describe("NAV chart paths", () => {
-  const renderNav = (selected: "weak" | "main" | "strong") => renderToStaticMarkup(createElement(NavPanel, { branches, selected, onSelect: () => undefined, stress: "main", onExport: () => undefined }));
-
-  it("renders history, all three scenario lines, interval, labels, and today boundary", () => {
-    const markup = renderNav("main");
-    expect(markup).toContain("interval-band");
-    expect(markup).toContain("interval-high");
-    expect(markup).toContain("interval-low");
-    expect(markup).toContain("series-history");
-    expect(markup).toContain("series-weak");
-    expect(markup).toContain("series-main");
-    expect(markup).toContain("series-strong");
-    expect(markup).toContain("today-line");
-    expect(markup).toContain("弱情景 W−");
-    expect(markup).toContain("主情景 W₀");
-    expect(markup).toContain("强情景 W+");
-    expect(markup).toContain("10–90% 区间");
+  const rows = allocationRows(computeFm(fmInput()), 100000);
+  const assumptions = Object.fromEntries(branches.map((b,i) => [b.worldline.worldline_id, Object.fromEntries(rows.map(r=>[r.instrumentId,String((i-1)*10)]))]));
+  const data = buildNavExport(branches,rows,100000,assumptions);
+  const renderNav = (selected: "weak" | "main" | "strong", visible=true) => renderToStaticMarkup(createElement(NavPanel,{branches,selected,onSelect:()=>{},stress:"main",onExport:()=>{},data,assumptions,drawdownVisible:visible}));
+  it("renders three input-driven scenarios without inventing history or quantiles",()=>{
+    const markup=renderNav("main");
+    for(const k of ["weak","main","strong"]) expect(markup).toContain(`series-${k}`);
+    expect(markup).not.toContain("series-history");expect(markup).not.toContain("10–90%");
   });
-
-  it("changes emphasis without removing other scenario paths", () => {
-    const weakMarkup = renderNav("weak");
-    expect(weakMarkup).toContain("series-group-weak is-emphasized");
-    expect(weakMarkup).toContain("series-group-main is-context");
-    expect(weakMarkup).toContain("series-group-strong is-context");
-    expect(weakMarkup).toContain("组合回撤：历史与三条模拟路径");
+  it("changes emphasis without removing other scenario paths",()=>{
+    const markup=renderNav("weak");expect(markup).toContain("series-group-weak is-emphasized");expect(markup).toContain("series-group-main is-context");expect(markup).toContain("series-group-strong is-context");
   });
-
-  it("exports the page arrays and toggles drawdown visibility", () => {
-    const nav = navExport({ ...initialState, selectedBranch: "main" }, branches);
-    expect(nav).toEqual(expect.objectContaining({ historical: expect.any(Array), weak: expect.any(Array), main: expect.any(Array), strong: expect.any(Array), interval: expect.objectContaining({ low: expect.any(Array), high: expect.any(Array) }), drawdown: expect.objectContaining({ weak: expect.any(Array), main: expect.any(Array), strong: expect.any(Array) }), boundary: expect.objectContaining({ todayIndex: historical.length - 1 }) }));
-    let state = reducer(initialState, { type: "toggle_drawdown" });
-    expect(state.drawdownVisible).toBe(false);
-    state = reducer(state, { type: "toggle_drawdown" });
-    expect(state.drawdownVisible).toBe(true);
-    const hidden = renderToStaticMarkup(createElement(NavPanel, { branches, selected: "main", onSelect: () => undefined, stress: "main", onExport: () => undefined, drawdownVisible: false, onToggleDrawdown: () => undefined }));
-    expect(hidden).toContain("显示回撤");
-    expect(hidden).toContain("回撤图已隐藏");
+  it("toggles drawdown without removing path data",()=>{
+    let state=reducer(initialState,{type:"toggle_drawdown"});expect(state.drawdownVisible).toBe(false);state=reducer(state,{type:"toggle_drawdown"});expect(state.drawdownVisible).toBe(true);
+    const hidden=renderNav("main",false);expect(hidden).toContain("显示回撤");expect(hidden).toContain("回撤图已隐藏");
   });
 });

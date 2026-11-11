@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
-import { Linking, Pressable, Text, View } from "react-native";
+import { AppState, Linking, Pressable, Text, View } from "react-native";
 import { useMobileStore } from "../src/app-store";
 import { billingAvailable, launchBillingPurchase, queryBillingProducts, restoreBillingPurchases, subscribeToBillingPurchases, type BillingProduct, type BillingPurchase } from "../src/billing-client";
 import { reconcileBillingPurchases, type BillingReconciliationResult } from "../src/billing-reconciliation";
+import { subscribeToBillingForeground } from "../src/billing-lifecycle";
 import { useOAuthSession } from "../src/oauth-session";
 import { t } from "../src/i18n";
 import { BottomNav, Button, Card, Header, Screen, SocialLoginPanel, Status, styles } from "../src/ui";
@@ -17,7 +18,8 @@ export default function ConsoleScreen(): React.JSX.Element {
   const pendingPurchases = useRef<BillingPurchase[]>([]);
   const verifiedTokens = useRef(new Set<string>());
   const autoRestoredSession = useRef<string | null>(null);
-  const reconcile = useCallback(async (purchases: readonly BillingPurchase[]): Promise<BillingReconciliationResult> => {
+  const restoreInFlight = useRef(new Set<string>());
+  const reconcile = useCallback(async (purchases: readonly BillingPurchase[], refreshVerified = false): Promise<BillingReconciliationResult> => {
     if (!oauth.session) return { verified: 0, failed: 0, pending: purchases.length, ignored: 0 };
     return reconcileBillingPurchases(
       purchases,
@@ -27,6 +29,7 @@ export default function ConsoleScreen(): React.JSX.Element {
         if (!purchase.productId) return;
         await oauth.verifyPurchase(purchase.purchaseToken, purchase.productId);
       },
+      { refreshVerified },
     );
   }, [oauth.session, oauth.verifyPurchase]);
   const processPurchase = useCallback(async (purchase: BillingPurchase) => {
@@ -48,7 +51,17 @@ export default function ConsoleScreen(): React.JSX.Element {
     if (!billingAvailable()) return;
     let active = true;
     void queryBillingProducts().then((items) => { if (active) setProducts(items); }).catch(() => { if (active) setBillingNotice(state.language === "en" ? "Google Play products are unavailable." : "Google Play 商品暂不可用。"); });
-    const subscription = subscribeToBillingPurchases((purchase) => { void processPurchase(purchase); });
+    const subscription = subscribeToBillingPurchases((purchase) => { if (active) void processPurchase(purchase); }, (result) => {
+      if (!active) return;
+      setBillingBusy(false);
+      if (result.kind === "cancelled") {
+        setBillingNotice(state.language === "en" ? "Purchase cancelled. Your existing subscription is unchanged." : "已取消本次购买；现有订阅不变。");
+      } else if (result.responseCode === 7) {
+        setBillingNotice(state.language === "en" ? "Google Play reports an existing purchase. Use Restore purchases to synchronize it." : "Google Play 提示已购买，请点击“恢复购买”同步权益。");
+      } else {
+        setBillingNotice(state.language === "en" ? "Google Play did not confirm a completed purchase. Retry, or use Restore purchases if payment completed." : "尚未收到 Google Play 的购买成功确认。可以重试；若已完成付款，请点击“恢复购买”。");
+      }
+    });
     return () => { active = false; subscription?.remove(); };
   }, [processPurchase, state.language]);
   useEffect(() => {
@@ -64,7 +77,7 @@ export default function ConsoleScreen(): React.JSX.Element {
     let active = true;
     setBillingBusy(true);
     void restoreBillingPurchases().then(async (purchases) => {
-      const result = await reconcile(purchases);
+      const result = await reconcile(purchases, true);
       await oauth.refreshBilling();
       if (!active) return;
       if (result.failed > 0) {
@@ -82,21 +95,37 @@ export default function ConsoleScreen(): React.JSX.Element {
     }).finally(() => { if (active) setBillingBusy(false); });
     return () => { active = false; };
   }, [oauth.refreshBilling, oauth.session?.session_id, reconcile, state.language]);
-  const restore = useCallback(async () => {
+  const restore = useCallback(async (userInitiated = true) => {
     if (!oauth.session) {
-      setBillingNotice(state.language === "en" ? "Sign in to restore purchases." : "请先登录，再恢复购买。");
+      if (userInitiated) setBillingNotice(state.language === "en" ? "Sign in to restore purchases." : "请先登录，再恢复购买。");
       return;
     }
+    const sessionId = oauth.session.session_id;
+    if (restoreInFlight.current.has(sessionId)) return;
+    restoreInFlight.current.add(sessionId);
     setBillingBusy(true);
     try {
       const purchases = await restoreBillingPurchases();
-      const result = await reconcile(purchases);
+      const result = await reconcile(purchases, true);
       await oauth.refreshBilling();
-      setBillingNotice(state.language === "en" ? `${purchases.length} purchase record(s) checked; ${result.verified} updated, ${result.failed} failed.` : `已检查 ${purchases.length} 条购买记录：更新 ${result.verified} 条，失败 ${result.failed} 条。`);
+      if (result.failed > 0) {
+        setBillingNotice(state.language === "en" ? "Some purchases could not be verified. Retry Restore purchases." : "部分购买记录验证失败，请重试“恢复购买”。");
+      } else if (result.pending > 0) {
+        setBillingNotice(state.language === "en" ? "A Google Play payment is still pending." : "有一笔 Google Play 付款仍在处理中。");
+      } else if (userInitiated) {
+        setBillingNotice(state.language === "en" ? `${purchases.length} purchase record(s) checked; account refreshed.` : `已检查 ${purchases.length} 条购买记录，账户已刷新。`);
+      } else if (result.verified > 0) {
+        setBillingNotice(state.language === "en" ? "Subscription status synchronized." : "订阅状态已同步。");
+      }
     } catch {
       setBillingNotice(state.language === "en" ? "Purchase restore failed." : "恢复购买失败。");
-    } finally { setBillingBusy(false); }
+    } finally { restoreInFlight.current.delete(sessionId); setBillingBusy(false); }
   }, [oauth.refreshBilling, oauth.session, reconcile, state.language]);
+  useEffect(() => {
+    if (!oauth.session || !billingAvailable()) return;
+    const subscription = subscribeToBillingForeground(AppState, () => { void restore(false); });
+    return () => subscription.remove();
+  }, [oauth.session?.session_id, restore]);
   const buy = useCallback(async (product: BillingProduct) => {
     if (!oauth.session) {
       setBillingNotice(state.language === "en" ? "Sign in before buying a subscription." : "购买订阅前请先登录。");

@@ -56,6 +56,11 @@ export interface TranscriptTurn {
   readonly id: string;
   readonly author: "user" | "challenger" | "system";
   readonly body: string;
+  readonly review?: {
+    readonly questions: readonly string[];
+    readonly objections: readonly string[];
+    readonly missingEvidence: readonly string[];
+  };
 }
 
 export interface BranchNode {
@@ -152,12 +157,16 @@ export interface NavPoint {
 
 export interface ScenarioNav {
   readonly branch: BranchKind;
+  readonly status: "ready" | "missing_inputs" | "invalid_inputs";
   readonly dataAsOf: string;
   readonly simulatedFrom: string;
-  readonly fixtureState: FixtureState;
+  readonly fixtureState: "user_assumptions";
   readonly points: readonly NavPoint[];
-  readonly scenarioReturn: number;
-  readonly maxDrawdown: number;
+  readonly scenarioReturn: number | null;
+  readonly maxDrawdown: number | null;
+  readonly missingAssets: readonly string[];
+  readonly inputs: readonly { readonly assetId: string; readonly amount: number; readonly weight: number; readonly returnPercent: number | null; readonly cash: boolean }[];
+  readonly residualCash: number;
 }
 
 /** JSON-safe FM output retained by the offline archive. Typed arrays/maps are

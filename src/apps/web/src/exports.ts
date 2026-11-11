@@ -1,11 +1,11 @@
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
-import { buildNavExport } from "./nav-data";
+import { buildNavExport, type NavAssumptions } from "./nav-data";
 import { ASSET_FIXTURES, demoThesis, MARKET_DATA_AS_OF, PUBLIC_CONSTRAINTS, sourceMaterialHash } from "./fixtures";
 import { canEnterWorldline } from "./state";
 import type { AllocationRow, AppState, BranchView } from "./types";
 import { isSafeEvidenceUrl } from "./validation";
 
-export const EXPORT_METHOD_VERSION = "Web-Export-v1 / FM-v1 / Public-Default-v1";
+export const EXPORT_METHOD_VERSION = "Web-Export-v2 / FM-v1 / Public-Default-v1";
 
 function jsonSafe(value: unknown): unknown {
   if (value instanceof Float64Array) return Array.from(value);
@@ -72,25 +72,28 @@ function hasExportableWorldlineLifecycle(state: AppState, fmVerified: boolean): 
 }
 
 function isFmResultShape(value: unknown): value is ComputeFmResult {
-  // The Web client has a six-asset FM shape. Require the worker's typed intermediates and
-  // the raw client arrays to agree before serializing any computed downstream artifact.
+  // CASH is an explicit missing provider row in live bundles. Accept the
+  // five risky assets or all six assets, but require EVERY intermediate to match.
   const result = value as Record<string, unknown>;
+  if (!isRecord(value) || !(result.forecasts instanceof Float64Array)) return false;
+  const width = result.forecasts.length;
+  if (width !== ASSET_FIXTURES.length && !(width === ASSET_FIXTURES.length - 1 && ASSET_FIXTURES.at(-1)?.assetId === "CASH")) return false;
   if (!isRecord(value) || !isSafeFmCutoff(result.cutoff)
     || !Array.isArray(result.selectedFactorIds)
     || !result.selectedFactorIds.every((id) => Number.isSafeInteger(id))
     || !(result.factorSignalsByTime instanceof Map)
-    || !isFloat64Array(result.forecasts, ASSET_FIXTURES.length, true)
+    || !isFloat64Array(result.forecasts, width, true)
     || !isRecord(result.forecastScale)
     || !isFloat64Array(result.forecastScale.crossSectionalVolatility, undefined, true, 1)
     || !isFiniteNumber(result.forecastScale.returnScale)
     || result.forecastScale.returnScale <= 0
     || !isRecord(result.weights)
-    || !isFloat64Array(result.weights.z, ASSET_FIXTURES.length, true)
-    || !isFloat64Array(result.weights.weights, ASSET_FIXTURES.length)
+    || !isFloat64Array(result.weights.z, width, true)
+    || !isFloat64Array(result.weights.weights, width)
     || typeof result.weights.fallback !== "boolean"
     || !isRecord(result.combination)
-    || !isFloat64Array(result.combination.combined, ASSET_FIXTURES.length, true)
-    || !isFloat64Array(result.combination.supportWeight, ASSET_FIXTURES.length)
+    || !isFloat64Array(result.combination.combined, width, true)
+    || !isFloat64Array(result.combination.supportWeight, width)
     || !(result.combination.contributions instanceof Map)
     || !(result.combination.qualityWeights instanceof Map)
     || !Array.isArray(result.combination.usedFactorIds)
@@ -101,21 +104,21 @@ function isFmResultShape(value: unknown): value is ComputeFmResult {
       && isFiniteNumber(descriptor.icMean)
       && isFiniteNumber(descriptor.icir)
       && typeof descriptor.admitted === "boolean"
-      && isFloat64Array(descriptor.signal, ASSET_FIXTURES.length, true))
+      && isFloat64Array(descriptor.signal, width, true))
     || !Array.isArray(result.reasons)
     || !result.reasons.every((reason) => typeof reason === "string")
     || !isRecord(result.rawClientResult)
-    || !isFloat64Array(result.rawClientResult.targetWeights, ASSET_FIXTURES.length)
-    || !isFloat64Array(result.rawClientResult.forecastReturns, ASSET_FIXTURES.length, true)
+    || !isFloat64Array(result.rawClientResult.targetWeights, width)
+    || !isFloat64Array(result.rawClientResult.forecastReturns, width, true)
     || !isFiniteNumber(result.rawClientResult.transactionCost)
     || !Array.isArray(result.rawClientResult.reasons)
     || !result.rawClientResult.reasons.every((reason) => typeof reason === "string")) return false;
 
   for (const [factorId, signals] of result.factorSignalsByTime) {
-    if (!Number.isSafeInteger(factorId) || !Array.isArray(signals) || !signals.every((signal) => isFloat64Array(signal, ASSET_FIXTURES.length, true))) return false;
+    if (!Number.isSafeInteger(factorId) || !Array.isArray(signals) || !signals.every((signal) => isFloat64Array(signal, width, true))) return false;
   }
   for (const [factorId, signal] of result.combination.contributions) {
-    if (!Number.isSafeInteger(factorId) || !isFloat64Array(signal, ASSET_FIXTURES.length, true)) return false;
+    if (!Number.isSafeInteger(factorId) || !isFloat64Array(signal, width, true)) return false;
   }
   for (const [factorId, quality] of result.combination.qualityWeights) {
     if (!Number.isSafeInteger(factorId) || !isFiniteNumber(quality)) return false;
@@ -170,7 +173,7 @@ function allocationExport(state: AppState, rows: readonly AllocationRow[], fmAva
   return { mode: state.portfolioMode, currency: state.currency, current_public_default_enabled: rows.some((row) => row.publicExecutionAllowed && row.publicWeight > 0), selected: { amount: rows.reduce((sum, row) => sum + row.amount, 0), units: rows.reduce((sum, row) => sum + row.units, 0), residual_cash: Math.max(0, capital - rows.reduce((sum, row) => sum + row.amount, 0)) }, raw_residual_cash: Math.max(0, capital - rawAllocated), public_residual_cash: Math.max(0, capital - publicAllocated), constraints: PUBLIC_CONSTRAINTS, allocations: rows.map((row) => ({ asset: row.id, role: row.role, currency: row.currency, quote_currency: row.quoteCurrency, price: row.price, lot_size: row.lotSize, instrument_id: row.instrumentId, proxy_instrument: row.proxyInstrument ?? null, data_as_of: row.dataAsOf, freshness: row.freshness, freshness_label: row.freshnessLabel, public_execution_allowed: row.publicExecutionAllowed, raw: { weight: row.weight, amount: row.rawAmount, units: row.rawUnits, residual_reason: row.rawResidualReason ?? null }, public: { weight: row.publicWeight, amount: row.publicAmount, units: row.publicUnits, residual_reason: row.publicResidualReason ?? null }, selected: { weight: state.portfolioMode === "public" ? row.publicWeight : row.weight, amount: row.amount, units: row.units, residual_reason: row.residualReason ?? null }, constraint_reasons: row.constraintReasons, tradable: row.tradable, liquidity: row.liquidity, volatility: row.volatility })) };
 }
 
-export function researchExport(state: AppState, branches: readonly BranchView[], rows: readonly AllocationRow[], dataAsOf = MARKET_DATA_AS_OF): Record<string, unknown> {
+export function researchExport(state: AppState, branches: readonly BranchView[], rows: readonly AllocationRow[], dataAsOf = MARKET_DATA_AS_OF, assumptions: NavAssumptions = {}): Record<string, unknown> {
   const capital = Number(state.capital.replace(/,/g, ""));
   const challengeLifecycleVerified = hasConfirmedResearchLifecycle(state);
   const currentFmResult = isFmResultShape(state.fmResult) ? state.fmResult : null;
@@ -180,8 +183,8 @@ export function researchExport(state: AppState, branches: readonly BranchView[],
     && currentFmResult !== null;
   const lifecycleVerified = hasExportableWorldlineLifecycle(state, fmVerified);
   const unavailableFm = { status: "not_available", fixture: true, result: null, note: "当前确认、生命周期或客户端 FM 结果无效；未导出计算结果。" };
-  const unavailableNav = { status: "not_available", selected: null, current_premise: null, worldlines: [], method_version: EXPORT_METHOD_VERSION, data_as_of: dataAsOf, labels: { historical: "historical_only", simulated: "simulated fixture" }, note: "当前确认、生命周期或客户端 FM 结果无效；未导出 NAV 路径。" };
-  const nav = fmVerified && lifecycleVerified ? navExport(state, branches, dataAsOf) : unavailableNav;
+  const unavailableNav = { status: "not_available", selected: null, current_premise: null, worldlines: [], method_version: EXPORT_METHOD_VERSION, data_as_of: dataAsOf, labels: { historical: "none", simulated: "user_assumptions_uncalibrated" }, note: "当前确认、生命周期或客户端 FM 结果无效；未导出 NAV 路径。" };
+  const nav = fmVerified && lifecycleVerified ? navExport(state, branches, dataAsOf, rows, assumptions) : unavailableNav;
   return {
     product: { name: "ForesightNine", mode: "public research", simulated_only: true },
     method_version: EXPORT_METHOD_VERSION,
@@ -190,17 +193,19 @@ export function researchExport(state: AppState, branches: readonly BranchView[],
     challenge: { status: state.challengeStatus, confirmation: lifecycleVerified ? state.confirmation : "pending", unresolved_issues_acknowledged: lifecycleVerified ? state.unresolvedIssuesAcknowledged : false, reservation_note: lifecycleVerified ? state.reservationNote : "", transcript: state.challengeTurns, evidence_ids: state.evidence.map((item) => item.evidence_id) },
     evidence: state.evidence.map(evidenceExport),
     worldlines: lifecycleVerified ? branches.map(worldlineExport) : [],
-    fm: fmVerified && currentFmResult ? { status: "computed", fixture: true, data_source: "deterministic offline fixture computed in the client", result: serializeFmResult(currentFmResult) } : state.fmResult || state.fmStatus === "complete" ? unavailableFm : { status: "not_computed", fixture: true, result: null, note: "No local FM result exists yet; no weights or forecasts were fabricated." },
+    fm: fmVerified && currentFmResult ? { status: "computed", data_source: "client FM result; see cutoff and per-asset lineage", provider_status: state.freshness.providerStatus, result: serializeFmResult(currentFmResult) } : state.fmResult || state.fmStatus === "complete" ? unavailableFm : { status: "not_computed", fixture: true, result: null, note: "No local FM result exists yet; no weights or forecasts were fabricated." },
     portfolio: lifecycleVerified ? allocationExport(state, rows, fmVerified) : ["fm", "portfolio", "nav"].includes(state.stage) || state.fmResult || state.fmStatus === "complete" ? unavailableAllocationExport(state) : allocationExport(state, [], false),
     nav,
-    labels: { historical: "historical_only", simulated: "simulated fixture", probability: "model_estimate_unvalidated", product: "not investment advice", execution: "no broker, order, or custody" },
-    risk_disclosures: ["情景研究与组合模拟，不构成投资建议。", "历史数据与模拟路径不代表未来表现。", "金额和单位仅按 deterministic fixture quote/FX snapshot 模拟，不是 live market quote。", "数据许可、法律审查和生产市场数据仍是公开发布 gate。"],
+    fx: { as_of:state.freshness.fxAsOf ?? null, provider_status:state.freshness.fxProviderStatus ?? "unavailable", cny_per_unit:state.freshness.fxCnyPerUnit ?? null },
+    labels: { historical: "none", simulated: "user_assumptions_uncalibrated", probability: "model_estimate_unvalidated", product: "not investment advice", execution: "no broker, order, or custody" },
+    risk_disclosures: ["情景研究与组合模拟，不构成投资建议。", "历史数据与模拟路径不代表未来表现。", "金额与单位按导出的资产和汇率快照计算；请核对各自时间与新鲜度状态。", "数据许可、法律审查和生产市场数据仍是公开发布 gate。"],
   };
 }
 
-export function navExport(state: AppState, branches: readonly BranchView[], dataAsOf = MARKET_DATA_AS_OF): Record<string, unknown> {
-  const nav = buildNavExport();
-  return { ...nav, selected: state.selectedBranch, current_premise: branches.find((branch) => branch.kind === state.selectedBranch)?.worldline.premise ?? state.viewpoint, worldlines: branches.map(worldlineExport), method_version: EXPORT_METHOD_VERSION, data_as_of: dataAsOf, labels: { historical: "historical_only", simulated: "simulated fixture" } };
+export function navExport(state: AppState, branches: readonly BranchView[], dataAsOf = MARKET_DATA_AS_OF, rows: readonly AllocationRow[] = [], assumptions: NavAssumptions = {}): Record<string, unknown> {
+  const verified = hasConfirmedResearchLifecycle(state) && state.fmStatus === "complete" && isFmResultShape(state.fmResult) && ["fm","portfolio","nav"].includes(state.stage);
+  const nav = buildNavExport(verified ? branches : [], verified && (state.portfolioMode === "raw" || rows.some(r => r.publicExecutionAllowed)) ? rows : [], Number(state.capital.replace(/,/g,"")), verified ? assumptions : {});
+  return { ...nav, selected:state.selectedBranch, current_premise:verified ? branches.find(b=>b.kind===state.selectedBranch)?.worldline.premise ?? state.viewpoint : null, worldlines:verified ? branches.map(worldlineExport) : [], method_version:EXPORT_METHOD_VERSION, data_as_of:dataAsOf, currency:state.currency, mode:state.portfolioMode, labels:{historical:"none",simulated:"user_assumptions_uncalibrated"} };
 }
 
 export const CSV_HEADER = ["asset", "role", "currency", "raw_weight", "public_weight", "raw_amount", "public_amount", "raw_units", "public_units", "selected_amount", "selected_units", "price", "lot_size", "quote_currency", "instrument_id", "proxy_instrument", "raw_residual_reason", "public_residual_reason", "selected_reason", "constraint_reasons", "data_as_of", "freshness", "freshness_label", "public_execution_allowed", "method_version"] as const;

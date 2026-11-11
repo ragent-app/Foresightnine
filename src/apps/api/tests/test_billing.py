@@ -126,6 +126,7 @@ def test_cleanup_reconciles_terminal_reservation_left_by_prior_process() -> None
 
 
 def test_entitlement_model_uses_server_override_and_glm_is_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_LLM_PROVIDER", "openai_compatible")
     monkeypatch.delenv("FORESIGHTNINE_LLM_MODEL", raising=False)
     assert configured_provider_model({}) == "glm-5.3-flash"
     monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deepseek/deepseek-v4-flash")
@@ -576,6 +577,13 @@ def test_post_commit_operation_store_failure_compensates_business_and_billing(mo
 
 
 def test_google_play_verify_route_grants_only_verified_active_purchase(monkeypatch) -> None:
+    class PurchaseTestClock(FixedClock):
+        def now(self):
+            return datetime(2026, 9, 15, tzinfo=timezone.utc)
+
+    # The purchase fixture expires on Oct 1; pin lifecycle time instead of
+    # extending it, so the test keeps checking a genuinely active period.
+    monkeypatch.setattr(main_module, "lifecycle_clock", PurchaseTestClock())
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     reset_state()
     encryption_key = base64.urlsafe_b64encode(b"0123456789abcdef0123456789abcdef").decode()
@@ -662,3 +670,16 @@ def test_google_play_verify_route_grants_only_verified_active_purchase(monkeypat
         main_module.billing_ledger = previous_ledger
         main_module.GooglePlaySubscriptionVerifier = previous_verifier
         reset_state()
+
+
+@pytest.mark.parametrize("provider", ["glm_coding", "zhipu_glm_coding", " GLM_CODING "])
+def test_fixed_glm_account_model_ignores_stale_generic_override(provider: str) -> None:
+    assert configured_provider_model({
+        "FORESIGHTNINE_LLM_PROVIDER": provider,
+        "FORESIGHTNINE_LLM_MODEL": "deepseek/deepseek-v4-flash",
+    }) == "glm-5.3-flash"
+
+
+def test_explicit_empty_provider_environment_does_not_inherit_process_model(monkeypatch) -> None:
+    monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deployment/model")
+    assert configured_provider_model({}) == "glm-5.3-flash"

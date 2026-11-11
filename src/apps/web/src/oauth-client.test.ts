@@ -1,9 +1,24 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearOAuthSession, configuredOAuthReturnUriFromEnvironment, deleteOAuthAccount, exchangeOAuthTicket, fetchAccountBillingSummary, logoutOAuthSession, oauthStartUrl, parseOAuthCallbackUrl, readOAuthSession, saveOAuthSession, WEB_OAUTH_SESSION_KEY, type OAuthSession } from "./oauth-client";
 
 const session: OAuthSession = { account: { account_id: "account_12345678", email: "user@example.test", created_at: "2026-08-31T00:00:00Z" }, session_id: "session_12345678", access_token: "token_abcdefghijklmnopqrstuvwxyz0123456789", expires_at: "2026-09-30T00:00:00Z", auth_mode: "oauth", provider: "google" };
 
 describe("web OAuth client boundary", () => {
+  beforeEach(() => {
+    // Freeze Date so fixture expiry does not make tests calendar-dependent.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("rejects a stored session at its expiry boundary", () => {
+    const storage = new Map<string, string>();
+    const fakeStorage = { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => { storage.set(key, value); }, removeItem: (key: string) => { storage.delete(key); } } as Storage;
+    saveOAuthSession(session, fakeStorage);
+    vi.setSystemTime(new Date(session.expires_at));
+    expect(readOAuthSession(fakeStorage)).toBeNull();
+  });
+
   it("requires an explicit HTTPS return URI", () => {
     expect(configuredOAuthReturnUriFromEnvironment(undefined)).toBeNull();
     expect(configuredOAuthReturnUriFromEnvironment(" ")).toBeNull();

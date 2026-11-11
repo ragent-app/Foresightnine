@@ -48,7 +48,9 @@ class ForesightNineBillingModule(
   private fun client(): BillingClient {
     return billingClient ?: BillingClient.newBuilder(reactContext)
       .setListener(this)
-      .enablePendingPurchases(PendingPurchasesParams.newBuilder().build())
+      // Required by Billing even for a subscriptions-only client. Without this
+      // acknowledgement the params builder throws before a connection starts.
+      .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
       .enableAutoServiceReconnection()
       .build()
       .also { billingClient = it }

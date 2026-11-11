@@ -6,7 +6,7 @@ export interface FmRunOptions {
 }
 
 export function runFmInWorker(input: ComputeFmInput, options: FmRunOptions = {}): Promise<ComputeFmResult> {
-  options.onProgress?.(12, "正在验证签名数据快照…");
+  options.onProgress?.(12, "正在准备本地因子输入…");
   const worker = new Worker(new URL("./fm.worker.ts", import.meta.url), { type: "module" });
   const requestId = `fm-${Date.now()}`;
   return new Promise((resolve, reject) => {
@@ -24,7 +24,7 @@ export function runFmInWorker(input: ComputeFmInput, options: FmRunOptions = {})
       resolve(message.result);
     };
     worker.onerror = () => { finish(); reject(new Error("FM worker unavailable")); };
-    options.onProgress?.(34, "筛选有效因子 · 3 / 27");
+    options.onProgress?.(34, "正在提交因子表达式…");
     worker.postMessage({ type: "compute", requestId, input });
     options.onProgress?.(68, "合成信号与标准化 · 运行中");
   });

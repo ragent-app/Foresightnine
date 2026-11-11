@@ -1,8 +1,8 @@
 import type { ComputeFmResult } from "@foresightnine/fm-engine";
 import { t } from "./i18n";
 import { resetMobileWorkflowState } from "./lifecycle";
-import { ASSETS, MARKET_DATA_AS_OF } from "./fixtures";
-import { canConfirmNormally, canConfirmReserved, isCanonicalRubric, isDerivedPublicEvidence } from "./validation";
+import { ASSETS } from "./fixtures";
+import { canConfirmNormally, canConfirmReserved, canUseChallengeRoute, isCanonicalRubric, isDerivedPublicEvidence } from "./validation";
 import type { AppState, Branch, EvidenceBundle, Language, ResearchMethodData, ResearchSnapshot } from "./types";
 
 type FmResult = ComputeFmResult;
@@ -102,7 +102,7 @@ export function buildResearchSnapshot(input: { readonly state: AppState; readonl
     fmStep: state.fmStep,
     fmResult: archiveFmResult(state.fmResult),
     portfolioMode: state.portfolioMode,
-    methodData: input.methodData,
+    methodData: { ...input.methodData, dataAsOf: state.fmResult?.cutoff ?? input.branches[0]?.dataAsOf ?? input.methodData.dataAsOf },
   };
 }
 
@@ -130,9 +130,12 @@ export function makeArchiveEnvelope(parts: Pick<ArchiveEnvelope, "aad" | "combin
   return { schema: "f9-archive-envelope-v1", algorithm: "AES-256-GCM", keyRef: "secure-store:f9.archive.key", ...parts };
 }
 
+export const MAX_ARCHIVE_PLAINTEXT_BYTES = 1024 * 1024;
+export const MAX_ARCHIVE_SEALED_CHARS = 2 * 1024 * 1024;
+
 export function canRestoreArchive(envelope: unknown): envelope is ArchiveEnvelope {
   if (!isRecord(envelope) || !hasOnlyKeys(envelope, ["schema", "algorithm", "keyRef", "aad", "combined", "createdAt", "documentHash"])) return false;
-  return envelope.schema === "f9-archive-envelope-v1" && envelope.algorithm === "AES-256-GCM" && envelope.keyRef === "secure-store:f9.archive.key" && envelope.aad === ARCHIVE_AAD && boundedString(envelope.combined, 1, 20_000) && /^[A-Za-z0-9+/]+={0,2}$/.test(envelope.combined) && envelope.combined.length % 4 === 0 && dateString(envelope.createdAt) && typeof envelope.documentHash === "string" && /^[a-f0-9]{64}$/.test(envelope.documentHash);
+  return envelope.schema === "f9-archive-envelope-v1" && envelope.algorithm === "AES-256-GCM" && envelope.keyRef === "secure-store:f9.archive.key" && envelope.aad === ARCHIVE_AAD && boundedString(envelope.combined, 1, MAX_ARCHIVE_SEALED_CHARS) && /^[A-Za-z0-9+/]+={0,2}$/.test(envelope.combined) && envelope.combined.length % 4 === 0 && dateString(envelope.createdAt) && typeof envelope.documentHash === "string" && /^[a-f0-9]{64}$/.test(envelope.documentHash);
 }
 
 const ARCHIVE_AAD = "f9-archive-envelope-v1";
@@ -146,7 +149,7 @@ function finiteNumber(value: unknown): value is number { return typeof value ===
 function finiteInteger(value: unknown): value is number { return finiteNumber(value) && Number.isSafeInteger(value); }
 function boundedString(value: unknown, min = 0, max = MAX_TEXT): value is string { return typeof value === "string" && value.length >= min && value.length <= max && !value.includes("\u0000"); }
 function dateString(value: unknown): value is string { return boundedString(value, 1, 100) && Number.isFinite(Date.parse(value)); }
-function approvedDataDate(value: unknown): value is string { return dateString(value) && Date.parse(value) <= Date.parse(MARKET_DATA_AS_OF); }
+function approvedDataDate(value: unknown): value is string { return dateString(value) && Date.parse(value) <= Date.now(); }
 function enumValue<T extends string>(value: unknown, values: readonly T[]): value is T { return typeof value === "string" && values.includes(value as T); }
 function sameStringArray(left: readonly string[], right: readonly string[]): boolean { return left.length === right.length && left.every((item, index) => item === right[index]); }
 function stringArray(value: unknown, min = 0, max = MAX_ARRAY): value is readonly string[] {
@@ -196,7 +199,8 @@ function validTurns(value: unknown): value is ResearchSnapshot["challengeTurns"]
   const ids = new Set<string>();
   for (let index = 0; index < value.length; index += 1) {
     const turn = value[index];
-    if (!isRecord(turn) || !hasOnlyKeys(turn, ["id", "author", "body"]) || !boundedString(turn.id, 1, 200) || ids.has(turn.id) || !enumValue(turn.author, ["user", "challenger", "system"] as const) || !boundedString(turn.body, 1, MAX_TEXT) || turn.body.trim().length === 0) return false;
+    if (!isRecord(turn) || !hasOnlyKeys(turn, ["id", "author", "body", "review"]) || !boundedString(turn.id, 1, 200) || ids.has(turn.id) || !enumValue(turn.author, ["user", "challenger", "system"] as const) || !boundedString(turn.body, 1, MAX_TEXT) || turn.body.trim().length === 0) return false;
+    if (turn.review !== undefined && (turn.author !== "challenger" || !isRecord(turn.review) || !hasOnlyKeys(turn.review, ["questions", "objections", "missingEvidence"]) || ![turn.review.questions, turn.review.objections, turn.review.missingEvidence].every((items) => stringArray(items, 0, 100) && items.every((item) => item.trim().length > 0)))) return false;
     ids.add(turn.id);
   }
   return true;
@@ -220,11 +224,11 @@ function validBranchNode(value: unknown): boolean {
 }
 function validBranch(value: unknown): value is Branch {
   if (!isRecord(value) || !hasOnlyKeys(value, ["kind", "title", "baselineDate", "horizonEnd", "dataAsOf", "fixtureState", "premise", "premisePoint", "conditional", "conditionalPoint", "joint", "jointPoint", "description", "reveal", "nodes", "assetAnchors", "sourceRefs"])) return false;
-  if (!branchKind(value.kind) || !boundedString(value.title, 1, 1_000) || !dateString(value.baselineDate) || !dateString(value.horizonEnd) || !approvedDataDate(value.dataAsOf) || value.dataAsOf > value.baselineDate || value.baselineDate > value.horizonEnd || value.fixtureState !== "historical_reference_and_simulated" || !probabilityInterval(value.premise) || !finiteNumber(value.premisePoint) || value.premisePoint < value.premise.low || value.premisePoint > value.premise.high || !probabilityInterval(value.conditional) || !finiteNumber(value.conditionalPoint) || value.conditionalPoint < value.conditional.low || value.conditionalPoint > value.conditional.high || !probabilityInterval(value.joint) || !finiteNumber(value.jointPoint) || !boundedString(value.description, 1, MAX_TEXT) || !boundedString(value.reveal, 1, MAX_TEXT) || !Array.isArray(value.nodes) || value.nodes.length === 0 || value.nodes.length > 100 || !stringArray(value.assetAnchors, 1, 100) || !stringArray(value.sourceRefs, 1, 100)) return false;
+  if (!branchKind(value.kind) || !boundedString(value.title, 1, 1_000) || !dateString(value.baselineDate) || !dateString(value.horizonEnd) || !approvedDataDate(value.dataAsOf) || Date.parse(value.dataAsOf) > Date.parse(value.baselineDate) || Date.parse(value.baselineDate) > Date.parse(value.horizonEnd) || value.fixtureState !== "historical_reference_and_simulated" || !probabilityInterval(value.premise) || !finiteNumber(value.premisePoint) || value.premisePoint < value.premise.low || value.premisePoint > value.premise.high || !probabilityInterval(value.conditional) || !finiteNumber(value.conditionalPoint) || value.conditionalPoint < value.conditional.low || value.conditionalPoint > value.conditional.high || !probabilityInterval(value.joint) || !finiteNumber(value.jointPoint) || !boundedString(value.description, 1, MAX_TEXT) || !boundedString(value.reveal, 1, MAX_TEXT) || !Array.isArray(value.nodes) || value.nodes.length === 0 || value.nodes.length > 100 || !stringArray(value.assetAnchors, 1, 100) || !stringArray(value.sourceRefs, 1, 100)) return false;
   let previousOccurrence = value.baselineDate;
   for (let index = 0; index < value.nodes.length; index += 1) {
     const node = value.nodes[index];
-    if (!validBranchNode(node) || node.dataAsOf !== value.dataAsOf || node.occurrenceDate < previousOccurrence || node.occurrenceDate > node.revealDate || node.revealDate > value.horizonEnd) return false;
+    if (!validBranchNode(node) || node.dataAsOf !== value.dataAsOf || Date.parse(node.occurrenceDate) < Date.parse(previousOccurrence) || Date.parse(node.occurrenceDate) > Date.parse(node.revealDate) || Date.parse(node.revealDate) > Date.parse(value.horizonEnd)) return false;
     previousOccurrence = node.occurrenceDate;
   }
   return true;
@@ -243,6 +247,9 @@ function validBranches(value: unknown): value is readonly Branch[] {
   const conditionalHigh = value.reduce((sum, branch) => sum + branch.conditional.high, 0);
   if (Math.abs(conditionalPoint - 1) > EPSILON || conditionalLow > 1 + EPSILON || conditionalHigh < 1 - EPSILON) return false;
   return value.every((branch) => Math.abs(branch.premise.low - first.premise.low) <= EPSILON && Math.abs(branch.premise.high - first.premise.high) <= EPSILON && Math.abs(branch.premisePoint - first.premisePoint) <= EPSILON && Math.abs(branch.joint.low - branch.premise.low * branch.conditional.low) <= EPSILON && Math.abs(branch.joint.high - branch.premise.high * branch.conditional.high) <= EPSILON && Math.abs(branch.jointPoint - branch.premisePoint * branch.conditionalPoint) <= EPSILON);
+}
+function validSnapshotBranches(value: unknown, confirmation: unknown): value is readonly Branch[] {
+  return validBranches(value) || confirmation === "pending" && Array.isArray(value) && value.length === 0;
 }
 function validMethodData(value: unknown): value is ResearchMethodData {
   return isRecord(value) && hasOnlyKeys(value, ["methodVersion", "dataAsOf", "navLabel", "fixtureState", "assetIds"]) && boundedString(value.methodVersion, 1, 200) && approvedDataDate(value.dataAsOf) && boundedString(value.navLabel, 1, 2_000) && value.fixtureState === "historical_reference_and_simulated" && stringArray(value.assetIds, ASSETS.length, ASSETS.length) && sameStringArray(value.assetIds as readonly string[], ASSETS.map((asset) => asset.id));
@@ -302,9 +309,9 @@ export function canEnterPortfolio(state: Pick<AppState, "stage" | "challengeStat
   return state.confirmation === "confirmed" ? canConfirmNormally(state) : state.confirmation === "reserved" ? canConfirmReserved(state) : false;
 }
 
-export function normalizeResearchSnapshot(value: unknown): ResearchSnapshot | null {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["schema", "stage", "language", "viewpoint", "capital", "currency", "challengeStatus", "challengeFailure", "challengeTurns", "replyDraft", "rubric", "evidence", "searchStatus", "confirmation", "unresolvedIssuesAcknowledged", "reservationNote", "selectedBranch", "branches", "fmStatus", "fmProgress", "fmStep", "fmResult", "portfolioMode", "methodData"]) || value.schema !== "f9-research-snapshot-v1" || !enumValue(value.stage, ["thesis", "challenge", "evidence", "worldline", "portfolio", "export"] as const) || !enumValue(value.language, ["zh", "en"] as const) || !boundedString(value.viewpoint, 0, 2_000) || !capitalString(value.capital) || !enumValue(value.currency, ["CNY", "USD", "EUR"] as const) || !enumValue(value.challengeStatus, ["idle", "streaming", "cancelled", "recovering", "failed", "complete"] as const) || !enumValue(value.challengeFailure, ["timeout", "rate_limited", "invalid_provider", "no_search"] as const) && value.challengeFailure !== null || !validTurns(value.challengeTurns) || !boundedString(value.replyDraft, 0, MAX_TEXT) || !validRubric(value.rubric, value.language as Language) || !validEvidenceArray(value.evidence) || !enumValue(value.searchStatus, ["idle", "mock_ready", "loading", "available", "api_unavailable", "api_failed"] as const) || !enumValue(value.confirmation, ["pending", "confirmed", "reserved"] as const) || (value.unresolvedIssuesAcknowledged !== undefined && typeof value.unresolvedIssuesAcknowledged !== "boolean") || (value.reservationNote !== undefined && !boundedString(value.reservationNote, 0, MAX_TEXT)) || !branchKind(value.selectedBranch) || !validBranches(value.branches) || !enumValue(value.fmStatus, ["idle", "computing", "complete", "cancelled", "failed"] as const) || !finiteNumber(value.fmProgress) || value.fmProgress < 0 || value.fmProgress > 100 || !boundedString(value.fmStep, 0, 1_000) || !enumValue(value.portfolioMode, ["raw", "public"] as const) || !validMethodData(value.methodData)) return null;
-  if ((value.challengeStatus === "failed") !== (value.challengeFailure !== null)) return null;
+export function normalizeResearchSnapshot(value: unknown, options: { readonly draftInputs?: boolean } = {}): ResearchSnapshot | null {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["schema", "stage", "language", "viewpoint", "capital", "currency", "challengeStatus", "challengeFailure", "challengeTurns", "replyDraft", "rubric", "evidence", "searchStatus", "confirmation", "unresolvedIssuesAcknowledged", "reservationNote", "selectedBranch", "branches", "fmStatus", "fmProgress", "fmStep", "fmResult", "portfolioMode", "methodData"]) || value.schema !== "f9-research-snapshot-v1" || !enumValue(value.stage, ["thesis", "challenge", "evidence", "worldline", "portfolio", "export"] as const) || !enumValue(value.language, ["zh", "en"] as const) || !boundedString(value.viewpoint, 0, 2_000) || !(options.draftInputs ? boundedString(value.capital, 0, 100) : capitalString(value.capital)) || !enumValue(value.currency, ["CNY", "USD", "EUR"] as const) || !enumValue(value.challengeStatus, ["idle", "streaming", "cancelled", "recovering", "failed", "complete"] as const) || !enumValue(value.challengeFailure, ["timeout", "rate_limited", "invalid_provider", "no_search"] as const) && value.challengeFailure !== null || !validTurns(value.challengeTurns) || !boundedString(value.replyDraft, 0, MAX_TEXT) || !validRubric(value.rubric, value.language as Language) || !validEvidenceArray(value.evidence) || !enumValue(value.searchStatus, ["idle", "mock_ready", "loading", "available", "api_unavailable", "api_failed"] as const) || !enumValue(value.confirmation, ["pending", "confirmed", "reserved"] as const) || (value.unresolvedIssuesAcknowledged !== undefined && typeof value.unresolvedIssuesAcknowledged !== "boolean") || (value.reservationNote !== undefined && !boundedString(value.reservationNote, 0, MAX_TEXT)) || !branchKind(value.selectedBranch) || !(validSnapshotBranches(value.branches, value.confirmation) || options.draftInputs && Array.isArray(value.branches) && value.branches.length === 0) || !enumValue(value.fmStatus, ["idle", "computing", "complete", "cancelled", "failed"] as const) || !finiteNumber(value.fmProgress) || value.fmProgress < 0 || value.fmProgress > 100 || !boundedString(value.fmStep, 0, 1_000) || !enumValue(value.portfolioMode, ["raw", "public"] as const) || !validMethodData(value.methodData)) return null;
+  if (value.challengeStatus !== "failed" && value.challengeFailure !== null) return null;
   const fmResult = normalizeFmResult(value.fmResult);
   if (fmResult === undefined) return null;
   const evidence = normalizeEvidenceArray(value.evidence as readonly EvidenceBundle[]);
@@ -326,7 +333,7 @@ export function normalizeResearchSnapshot(value: unknown): ResearchSnapshot | nu
     reservationNote,
   };
   const validConfirmation = confirmation === "pending"
-    ? !acknowledgement && reservationNote.trim().length === 0
+    ? true // Unsubmitted acknowledgement/note are drafts, not a granted confirmation.
     : confirmation === "confirmed"
       ? canConfirmNormally(confirmationState)
       : canConfirmReserved(confirmationState);
@@ -336,6 +343,7 @@ export function normalizeResearchSnapshot(value: unknown): ResearchSnapshot | nu
     reservationNote = "";
   }
 
+  if (options.draftInputs && (value.branches as unknown[]).length === 0) confirmation = "pending";
   let stage: ResearchSnapshot["stage"] = value.stage;
   let fmStatus: ResearchSnapshot["fmStatus"] = value.fmStatus;
   let fmProgress = value.fmProgress;
@@ -343,7 +351,7 @@ export function normalizeResearchSnapshot(value: unknown): ResearchSnapshot | nu
   let safeFmResult = fmResult;
   let selectedBranch: ResearchSnapshot["selectedBranch"] = value.selectedBranch;
   if (confirmation === "pending" || value.challengeStatus !== "complete") {
-    stage = stage === "thesis" ? "thesis" : "challenge";
+    stage = stage === "thesis" ? "thesis" : stage === "evidence" && canUseChallengeRoute({ challengeStatus: value.challengeStatus, challengeTurns: value.challengeTurns }) ? "evidence" : "challenge";
     selectedBranch = "main";
     fmStatus = "idle";
     fmProgress = 0;
@@ -363,8 +371,8 @@ export function normalizeResearchSnapshot(value: unknown): ResearchSnapshot | nu
   }
   const normalizedFailure = value.challengeStatus === "failed" ? value.challengeFailure : null;
   return {
-    schema: "f9-research-snapshot-v1", stage, language: value.language, viewpoint: value.viewpoint, capital: value.capital, currency: value.currency,
-    challengeStatus: value.challengeStatus, challengeFailure: normalizedFailure, challengeTurns: value.challengeTurns, replyDraft: value.replyDraft, rubric: value.rubric, evidence, searchStatus: value.searchStatus, confirmation, unresolvedIssuesAcknowledged: acknowledgement, reservationNote, selectedBranch, branches: value.branches, fmStatus, fmProgress, fmStep, fmResult: safeFmResult, portfolioMode: value.portfolioMode, methodData: value.methodData,
+    schema: "f9-research-snapshot-v1", stage, language: value.language, viewpoint: value.viewpoint, capital: value.capital as string, currency: value.currency,
+    challengeStatus: value.challengeStatus === "streaming" || value.challengeStatus === "recovering" ? "cancelled" : value.challengeStatus, challengeFailure: normalizedFailure, challengeTurns: value.challengeTurns, replyDraft: value.replyDraft, rubric: value.rubric, evidence, searchStatus: value.searchStatus === "loading" ? "idle" : value.searchStatus, confirmation, unresolvedIssuesAcknowledged: acknowledgement, reservationNote, selectedBranch, branches: value.branches, fmStatus, fmProgress, fmStep, fmResult: safeFmResult, portfolioMode: value.portfolioMode, methodData: value.methodData,
   };
 }
 
@@ -395,6 +403,16 @@ export function normalizePrivacySafeDocument(value: unknown): PrivacySafeDocumen
 
 export function canRestorePrivacySafeDocument(value: unknown): value is PrivacySafeDocument { return normalizePrivacySafeDocument(value) !== null; }
 
+/** Validate the exact JSON representation (including NaN -> null) before replacing an archive. */
+export function serializeArchiveDocument(document: PrivacySafeDocument): Uint8Array {
+  const json = JSON.stringify(document);
+  const bytes = new TextEncoder().encode(json);
+  if (bytes.byteLength > MAX_ARCHIVE_PLAINTEXT_BYTES) throw new Error("archive_too_large");
+  if (!canRestorePrivacySafeDocument(JSON.parse(json))) throw new Error("archive_snapshot_invalid");
+  return bytes;
+}
+
+
 /** Hydrates the application state itself; archive UI rendering is not restoration. */
 export function restoreAppState(current: AppState, document: unknown): AppState {
   const normalized = normalizePrivacySafeDocument(document);
@@ -404,6 +422,11 @@ export function restoreAppState(current: AppState, document: unknown): AppState 
     const currency = normalized.currency === "USD" || normalized.currency === "EUR" ? normalized.currency : "CNY";
     return { ...resetMobileWorkflowState(current, normalized.viewpoint), capital: String(normalized.capital), currency, draftRestored: true };
   }
+  return restoreResearchState(current, snapshot);
+}
+
+/** Snapshot has already passed normalizeResearchSnapshot; never resumes network work. */
+export function restoreResearchState(current: AppState, snapshot: ResearchSnapshot): AppState {
   let restoredFmResult: AppState["fmResult"] = null;
   let fmRestoreFailed = false;
   if (snapshot.fmResult) {

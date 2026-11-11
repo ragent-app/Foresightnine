@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearOAuthSession, configuredOAuthReturnUriFromEnvironment, deleteOAuthAccount, exchangeOAuthTicket, logoutOAuthSession, oauthStartUrl, parseOAuthCallbackUrl, readOAuthSession, saveOAuthSession, MOBILE_OAUTH_SESSION_KEY } from "../src/oauth-client";
 // @ts-expect-error The Expo dynamic app config is intentionally CommonJS.
 import appConfig from "../app.config.cjs";
@@ -7,6 +7,12 @@ const session = { account: { account_id: "account_12345678", email: "user@exampl
 const store = () => { const data = new Map<string, string>(); return { getItemAsync: vi.fn(async (key: string) => data.get(key) ?? null), setItemAsync: vi.fn(async (key: string, value: string) => { data.set(key, value); }), deleteItemAsync: vi.fn(async (key: string) => { data.delete(key); }) }; };
 
 describe("mobile OAuth client boundary", () => {
+  beforeEach(() => {
+    // Keep the fixture's validity independent of the machine's calendar.
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-01T00:00:00Z"));
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   it("requires an explicit safe HTTPS or foresightnine return URI", () => {
     expect(configuredOAuthReturnUriFromEnvironment(undefined)).toBeNull();
     expect(configuredOAuthReturnUriFromEnvironment("http://localhost/callback")).toBeNull();
@@ -53,6 +59,21 @@ describe("mobile OAuth client boundary", () => {
     expect((fetcher.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit])[1]).toMatchObject({ method: "POST", body: JSON.stringify({}), headers: expect.objectContaining({ Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }) });
     await clearOAuthSession(sessionStore);
     expect((await sessionStore.getItemAsync(MOBILE_OAUTH_SESSION_KEY))).toBeNull();
+  });
+
+  it("rejects a server session at its exact expiry boundary", async () => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse(session.expires_at));
+    const fetcher = vi.fn(async () => new Response(JSON.stringify(session), { status: 200 }));
+    await expect(exchangeOAuthTicket("https://api.example.test", "A".repeat(43), fetcher)).rejects.toThrow("OAuth session response is invalid");
+  });
+
+  it("removes an expired stored session instead of restoring its account", async () => {
+    const sessionStore = store();
+    await saveOAuthSession(session, sessionStore);
+    vi.mocked(Date.now).mockReturnValue(Date.parse(session.expires_at) + 1);
+    expect(await readOAuthSession(sessionStore)).toBeNull();
+    expect(sessionStore.deleteItemAsync).toHaveBeenCalledWith(MOBILE_OAUTH_SESSION_KEY);
+    expect(await sessionStore.getItemAsync(MOBILE_OAUTH_SESSION_KEY)).toBeNull();
   });
 
   it("fails closed for production without an exact HTTPS callback and verified App Link inputs", () => {

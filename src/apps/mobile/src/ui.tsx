@@ -7,6 +7,7 @@ import { useMobileStore } from "./app-store";
 import { configuredApiBaseUrl } from "./api-runtime";
 import { t } from "./i18n";
 import { useOAuthSession } from "./oauth-session";
+import { researchStageAvailability, researchStageRoute } from "./stage-navigation";
 
 type OAuthProvider = "google" | "github";
 type OAuthProviderReadiness = { readonly provider: OAuthProvider; readonly enabled: boolean };
@@ -29,7 +30,19 @@ function parseOAuthReadiness(value: unknown): readonly OAuthProviderReadiness[] 
 }
 
 export function Screen({ children, scroll = true }: PropsWithChildren<{ readonly scroll?: boolean }>): React.JSX.Element {
-  const content = <View style={styles.page}>{children}</View>;
+  const { workspaceReady, workspaceStatus, retryWorkspace, state } = useMobileStore();
+  const en = state.language === "en";
+  if (workspaceReady === false) return <SafeAreaView style={styles.safe}>
+    <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled"><View style={styles.page}>
+      <Text accessibilityRole="header">{workspaceStatus === "error" ? (en ? "Draft could not be restored" : "草稿暂未恢复") : (en ? "Restoring study…" : "正在恢复研究…")}</Text>
+      {workspaceStatus === "error" ? <>
+        <Text>{en ? "Your stored study has not been overwritten." : "设备上的原研究未被覆盖。"}</Text>
+        <Button onPress={retryWorkspace} label={en ? "Retry restore" : "重试读取"}>{en ? "Retry restore" : "重试读取"}</Button>
+        <SocialLoginPanel />
+      </> : null}
+    </View></ScrollView>
+  </SafeAreaView>;
+  const content = <View style={styles.page}>{workspaceStatus === "saving" ? <Text accessibilityLiveRegion="polite" style={styles.tiny}>{en ? "Saving draft…" : "正在保存草稿…"}</Text> : workspaceStatus === "error" ? <View><Text style={styles.error}>{en ? "Draft not saved" : "草稿未保存"}</Text><Button onPress={retryWorkspace} label={en ? "Retry save" : "重试保存"}>{en ? "Retry save" : "重试保存"}</Button></View> : null}{children}</View>;
   return <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>{scroll ? <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}</SafeAreaView>;
 }
 
@@ -42,10 +55,11 @@ export function Header({ title, subtitle, back }: { readonly title: string; read
 }
 
 export function StageRail({ active }: { readonly active: number }): React.JSX.Element {
-  const { state } = useMobileStore();
+  const { state, branches } = useMobileStore();
   const labels = state.language === "zh" ? ["观点", "审查", "证据", "世界线", "配置"] : ["Thesis", "Challenge", "Evidence", "Worldline", "Plan"];
-  return <View style={styles.rail} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: labels.length, now: active + 1 }}>
-    {labels.map((label, index) => <View key={label} style={styles.railItem}><View style={[styles.railDot, index === active && styles.railDotActive]}><Text style={[styles.railNumber, index === active && styles.railNumberActive]}>{index + 1}</Text></View><Text style={[styles.railLabel, index === active && styles.railLabelActive]} numberOfLines={1}>{label}</Text></View>)}
+  const available = researchStageAvailability(state, branches.length === 3);
+  return <View style={styles.rail} accessibilityLabel={state.language === "en" ? "Research steps" : "研究步骤"}>
+    {labels.map((label, index) => <Pressable key={label} style={[styles.railItem, { minHeight: 48 }, !available[index] && styles.disabled]} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: index === active, disabled: !available[index] }} disabled={!available[index]} onPress={() => { const route = researchStageRoute(state, branches.length === 3, index); if (route && index !== active) router.navigate(route); }}><View style={[styles.railDot, index === active && styles.railDotActive]}><Text style={[styles.railNumber, index === active && styles.railNumberActive]}>{index + 1}</Text></View><Text style={[styles.railLabel, index === active && styles.railLabelActive]} numberOfLines={1}>{label}</Text></Pressable>)}
   </View>;
 }
 

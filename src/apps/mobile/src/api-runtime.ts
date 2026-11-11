@@ -5,19 +5,21 @@ import { rubricFor } from "./fixtures";
 import { configuredApiBaseUrl } from "./runtime-config";
 export { configuredApiBaseUrl, configuredApiBaseUrlFromEnvironment } from "./runtime-config";
 import type { Branch, BranchKind, Language, RubricItem, TranscriptTurn } from "./types";
+import { authenticatedResearchFetcher, type ResearchSessionAccess } from "./research-auth-fetch";
 
 const CRITERIA: Record<string, string> = {
   premise_clarity: "premise", time_boundary: "time", trigger_observability: "trigger", causal_chain: "causal", counterfactuals: "counterfactual", evidence_quality: "evidence", asset_transmission: "transmission", already_priced: "priced", falsifiability: "falsifiable", user_confirmation: "confirmation",
 };
 
-export function createMobileApiClient(): ApiClient | null {
+export function createMobileApiClient(access: ResearchSessionAccess): ApiClient | null {
   const baseUrl = configuredApiBaseUrl();
-  return baseUrl ? new ApiClient({ baseUrl, idempotencyKeyFactory: () => `f9-${Array.from(getRandomBytes(16), (byte) => byte.toString(16).padStart(2, "0")).join("")}` }) : null;
+  return baseUrl ? new ApiClient({ baseUrl, fetcher: authenticatedResearchFetcher(baseUrl, access), idempotencyKeyFactory: () => `f9-${Array.from(getRandomBytes(16), (byte) => byte.toString(16).padStart(2, "0")).join("")}` }) : null;
 }
 
 export function mobileApiMode(): "api" | "offline-mock" { return apiModeFor(configuredApiBaseUrl()); }
 
 export function apiErrorNotice(error: unknown, language: Language): string {
+  if (error instanceof ApiError && error.status === 401) return language === "en" ? "Sign-in expired. Sign in again before continuing this research." : "登录已过期，请重新登录后继续研究。";
   if (error instanceof ApiError && error.retryAfter !== undefined) return language === "en" ? `API rate limited; retry after ${error.retryAfter}s.` : `API 触发限流，请在 ${error.retryAfter} 秒后重试。`;
   return language === "en" ? "API unavailable or rejected; provider output is hidden." : "API 暂不可用或拒绝请求；供应商原始输出已隐藏。";
 }
@@ -29,17 +31,24 @@ export interface MobileChallengeUpdate {
   readonly status: "streaming" | "complete";
 }
 
-function challengeUiStatus(record: ChallengeRecord, hasReply: boolean): "streaming" | "complete" {
-  return hasReply && (record.status === "CHALLENGING" || record.status === "EVIDENCE_REQUIRED" || record.status === "CONFIRMED") ? "complete" : "streaming";
-}
-
-export function challengeToMobileUi(record: ChallengeRecord, viewpoint: string, language: Language, replyBody = ""): MobileChallengeUpdate {
+export function challengeToMobileUi(record: ChallengeRecord, viewpoint: string, language: Language, replyBody = "", priorTurns: readonly TranscriptTurn[] = []): MobileChallengeUpdate {
   const challengeText = [...record.objections, ...record.missing_evidence.map((item) => `${language === "en" ? "Missing evidence" : "缺失证据"}: ${item}`), ...record.questions].join("\n") || (language === "en" ? "No challenge text returned." : "API 未返回挑战文本。");
-  const turns: TranscriptTurn[] = [{ id: `api-system-${record.turn_id}`, author: "system", body: language === "en" ? "Server-backed structured challenge response." : "服务端返回的结构化反方审查结果。" }, { id: `api-user-${record.turn_id}`, author: "user", body: viewpoint }, { id: `api-challenger-${record.turn_id}`, author: "challenger", body: challengeText }];
-  if (replyBody) turns.push({ id: `api-reply-${record.turn_id}`, author: "user", body: replyBody });
+  const turns: TranscriptTurn[] = priorTurns.length ? [...priorTurns] : [
+    { id: `api-system-${record.turn_id}`, author: "system", body: language === "en" ? "Server-backed structured challenge response." : "服务端返回的结构化反方审查结果。" },
+    { id: `api-user-${record.turn_id}`, author: "user", body: viewpoint },
+  ];
+  const append = (turn: TranscriptTurn) => { if (!turns.some((item) => item.id === turn.id)) turns.push(turn); };
+  if (replyBody.trim()) append({ id: `api-reply-${record.turn_id}`, author: "user", body: replyBody.trim() });
+  append({ id: `api-challenger-${record.turn_id}`, author: "challenger", body: challengeText, review: {
+    questions: record.questions.map((item) => item.trim()).filter(Boolean),
+    objections: record.objections.map((item) => item.trim()).filter(Boolean),
+    missingEvidence: record.missing_evidence.map((item) => item.trim()).filter(Boolean),
+  } });
   const base = rubricFor(language);
   const scores = new Map(record.rubric_scores.map((item) => [CRITERIA[item.criterion], item]));
-  return { challengeId: record.challenge_id, turns, rubric: base.map((item) => { const score = scores.get(item.id); return score ? { ...item, score: score.score, rationale: score.rationale } : item; }), status: challengeUiStatus(record, Boolean(replyBody)) };
+  // A returned record is completed output, not an in-flight model stream.
+  // Confirmation still requires a real reply and the independent rubric/evidence gates.
+  return { challengeId: record.challenge_id, turns, rubric: base.map((item) => { const score = scores.get(item.id); return score ? { ...item, score: score.score, rationale: score.rationale } : item; }), status: "complete" };
 }
 
 function asInterval(range: { readonly minimum: number; readonly maximum: number }) { return { low: range.minimum, high: range.maximum }; }

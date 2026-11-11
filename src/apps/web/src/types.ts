@@ -203,9 +203,13 @@ export interface AppState {
   readonly challengeStatus: ChallengeStatus;
   readonly challengeTurns: readonly TranscriptTurn[];
   readonly replyDraft: string;
+  readonly evidenceDraft: EvidenceDraft;
+  readonly evidenceSearchQuery: string;
   readonly rubric: readonly RubricView[];
   readonly evidence: readonly EvidenceView[];
   readonly confirmation: "pending" | "confirmed" | "reserved";
+  /** Durable review receipt, independent of whether worldline generation completed. */
+  readonly reviewConfirmation: "pending" | "confirmed" | "reserved";
   readonly unresolvedIssuesAcknowledged: boolean;
   readonly reservationNote: string;
   readonly selectedBranch: BranchView["kind"];
@@ -220,11 +224,19 @@ export interface AppState {
   readonly freshness: FreshnessContext;
   readonly apiSessionId: string | null;
   readonly apiChallengeId: string | null;
+  readonly apiOperationId: string | null;
+  readonly apiCompletedOperationId: string | null;
+  readonly apiPendingPhase: "initial" | "reply" | null;
   readonly apiError: string;
   readonly serverBranches: readonly BranchView[] | null;
 }
 
 export type AppAction =
+  | { readonly type: "set_evidence_draft"; readonly draft: EvidenceDraft }
+  | { readonly type: "set_evidence_query"; readonly query: string }
+  | { readonly type: "restore_workspace"; readonly state: AppState }
+  | { readonly type: "api_operation_pending"; readonly operationId: string; readonly phase: "initial" | "reply" }
+  | { readonly type: "api_operation_finished"; readonly operationId: string }
   | { readonly type: "set_stage"; readonly stage: Stage }
   | { readonly type: "set_language"; readonly language: Language }
   | { readonly type: "set_viewpoint"; readonly viewpoint: string }
@@ -243,6 +255,7 @@ export type AppAction =
   | { readonly type: "set_unresolved_issues_acknowledged"; readonly acknowledged: boolean }
   | { readonly type: "set_reservation_note"; readonly note: string }
   | { readonly type: "confirm"; readonly confirmation: "confirmed" | "reserved" }
+  | { readonly type: "api_review_confirmed"; readonly confirmation: "confirmed" | "reserved" }
   | { readonly type: "select_branch"; readonly branch: BranchView["kind"] }
   | { readonly type: "fm_start" }
   | { readonly type: "fm_progress"; readonly progress: number; readonly step: string }

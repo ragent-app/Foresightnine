@@ -154,7 +154,7 @@ export function worldlineBundleToBranches(bundle: WorldlineBundle, language: Lan
     return {
       kind: worldline.branch_kind,
       title: worldline.title,
-      range: `${(assessment.joint_probability_range.minimum * 100).toFixed(1)}–${(assessment.joint_probability_range.maximum * 100).toFixed(1)}%`,
+      range: `${(assessment.conditional_probability_range.minimum * 100).toFixed(1)}–${(assessment.conditional_probability_range.maximum * 100).toFixed(1)}%`,
       color: worldline.branch_kind === "weak" ? "#B7796A" : worldline.branch_kind === "strong" ? "#6C8F7A" : "#6B7C9D",
       description: branchDescription(worldline, language),
       reveal: worldline.event_reveal_schedule.map((item) => `${item.event_date} → ${item.reveal_date}`).join(" · "),

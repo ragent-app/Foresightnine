@@ -17,6 +17,16 @@ const summary = {
 };
 
 describe("mobile billing API boundary", () => {
+  it.each(["summary", "verify"] as const)("forwards the request abort signal for %s", async (kind) => {
+    const controller = new AbortController();
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(summary), { status: 200 }));
+    if (kind === "summary") await fetchAccountBillingSummary("https://api.example.test", token, fetcher, controller.signal);
+    else await verifyGooglePlayPurchase("https://api.example.test", token, purchaseToken, "foresightnine_pro", fetcher, controller.signal);
+    expect(fetcher.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+    controller.abort();
+    expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
+
   it("reads server-owned quota state without persisting a credential", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(summary), { status: 200 }));
     const result = await fetchAccountBillingSummary("https://api.example.test", token, fetcher);

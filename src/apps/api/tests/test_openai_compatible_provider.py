@@ -679,3 +679,47 @@ def test_reasoning_content_is_not_exposed_as_challenge_fact(monkeypatch: pytest.
 
     draft = provider(monkeypatch, transport).generate_challenge(request())
     assert reasoning not in repr(draft)
+
+
+@pytest.mark.parametrize("post_fails", [False, True])
+def test_transport_falls_back_before_submission_only(monkeypatch: pytest.MonkeyPatch, post_fails: bool) -> None:
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(openai_compatible, "_validated_addresses", lambda *_args, **_kwargs: ("2606:4700::1111", "1.1.1.1"))
+
+    class Sock:
+        def settimeout(self, _timeout: float) -> None:
+            pass
+
+    class Response:
+        status = 200
+        headers: dict[str, str] = {}
+        def read(self, _size: int) -> bytes:
+            return b'{"ok": true}'
+
+    class Connection:
+        def __init__(self, host: str, port: int, address: str, timeout: float) -> None:
+            assert host == "models.example.test" and port == 443
+            assert 0 < timeout <= 5
+            self.address = address
+            self.sock = Sock()
+        def connect(self) -> None:
+            calls.append(("connect", self.address))
+            if ":" in self.address:
+                raise OSError(101, "network unreachable")
+        def close(self) -> None:
+            calls.append(("close", self.address))
+        def request(self, *_args: object, **_kwargs: object) -> None:
+            calls.append(("request", self.address))
+            if post_fails:
+                raise OSError("request failure")
+        def getresponse(self) -> Response:
+            return Response()
+
+    monkeypatch.setattr(openai_compatible, "_PinnedHTTPSConnection", Connection)
+    if post_fails:
+        with pytest.raises(openai_compatible._TransportFailure):
+            openai_compatible._default_transport("POST", "https://models.example.test/v1/chat/completions", {}, b'{}', 10)
+    else:
+        assert openai_compatible._default_transport("POST", "https://models.example.test/v1/chat/completions", {}, b'{}', 10).status_code == 200
+    assert [item for item in calls if item[0] == "request"] == [("request", "1.1.1.1")]
+    assert ("close", "2606:4700::1111") in calls

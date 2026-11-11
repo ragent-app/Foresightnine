@@ -8,9 +8,16 @@ import { canConfirmNormally, canConfirmReserved, canSubmitReply, totalRubricScor
 import { isSafeEvidenceUrl, validateSearchEvidence } from "../validation";
 
 interface ChallengeProps {
+  readonly confirmation?: "pending" | "confirmed" | "reserved";
+  readonly worldlinesReady?: boolean;
+  readonly onOpenWorldlines?: () => void;
   readonly status: ChallengeStatus;
   readonly turns: readonly TranscriptTurn[];
   readonly replyDraft: string;
+  readonly savedEvidenceDraft?: EvidenceDraft;
+  readonly onEvidenceDraftChange?: (draft: EvidenceDraft) => void;
+  readonly savedSearchQuery?: string;
+  readonly onSearchQueryChange?: (query: string) => void;
   readonly evidence: readonly EvidenceView[];
   readonly rubric: readonly RubricView[];
   readonly evidenceSubmitting?: boolean;
@@ -25,11 +32,12 @@ interface ChallengeProps {
   readonly onEvidence: (draft: EvidenceDraft) => void;
   readonly onUnresolvedIssuesAcknowledged: (acknowledged: boolean) => void;
   readonly onReservationNote: (note: string) => void;
+  readonly worldlineSubmitting?: boolean;
   readonly onConfirm: (kind: "confirmed" | "reserved") => void;
 }
 
 const statusCopy: Record<ChallengeStatus, string> = { idle: "等待开始", streaming: "审查中 · 正在接收回复", submitting_reply: "正在提交答复", cancelled: "已取消生成", recovering: "连接中断，正在从上次事件恢复…", failed: "模型暂时不可用", complete: "审查完成 · 第 4 轮" };
-const emptyEvidence: EvidenceDraft = { url: "", title: "", publisher: "", published_at: "2026-08-09", excerpt: "", user_note: "", supports_or_challenges: "supports", grade: "B" };
+const emptyEvidence: EvidenceDraft = { url: "", title: "", publisher: "", published_at: "", excerpt: "", user_note: "", supports_or_challenges: "supports", grade: "B" };
 
 type EvidenceMode = "search" | "manual";
 
@@ -68,18 +76,25 @@ function TurnContent({ turn, language }: { readonly turn: TranscriptTurn; readon
   return <div className="challenge-brief">{sections.filter((section) => section.items.length > 0).map((section) => <section className={`review-section review-${section.tone}`} aria-label={section.label} key={section.key}><div className="review-section-heading"><h3>{section.label}</h3><span>{section.items.length}</span></div><ol className="review-list">{section.items.map((item, index) => <li key={`${section.key}-${index}`}><span>{index + 1}</span><p>{item}</p></li>)}</ol></section>)}</div>;
 }
 
-export function ChallengePanel({ status, turns, replyDraft, evidence, rubric, evidenceSubmitting = false, unresolvedIssuesAcknowledged, reservationNote, onStart, onCancel, onRetry, onRecover, onReplyDraft, onSubmitReply, onEvidence, onUnresolvedIssuesAcknowledged, onReservationNote, onConfirm }: ChallengeProps) {
+export function ChallengePanel({ confirmation = "pending", worldlinesReady = false, onOpenWorldlines, savedEvidenceDraft, onEvidenceDraftChange, savedSearchQuery, onSearchQueryChange, status, turns, replyDraft, evidence, rubric, evidenceSubmitting = false, worldlineSubmitting = false, unresolvedIssuesAcknowledged, reservationNote, onStart, onCancel, onRetry, onRecover, onReplyDraft, onSubmitReply, onEvidence, onUnresolvedIssuesAcknowledged, onReservationNote, onConfirm }: ChallengeProps) {
   const { language } = useLanguage();
   const total = totalRubricScore(rubric);
-  const [evidenceDraft, setEvidenceDraft] = useState<EvidenceDraft>(emptyEvidence);
+  const [localEvidenceDraft, setLocalEvidenceDraft] = useState<EvidenceDraft>(emptyEvidence);
+  const evidenceDraft = savedEvidenceDraft ?? localEvidenceDraft;
+  const setEvidenceDraft = (value: EvidenceDraft | ((draft: EvidenceDraft) => EvidenceDraft)): void => {
+    const next = typeof value === "function" ? value(evidenceDraft) : value;
+    if (onEvidenceDraftChange) onEvidenceDraftChange(next); else setLocalEvidenceDraft(next);
+  };
   const [evidenceSubmitted, setEvidenceSubmitted] = useState(false);
   const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>("manual");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
+  const searchQuery = savedSearchQuery ?? localSearchQuery;
+  const setSearchQuery = (query: string): void => { if (onSearchQueryChange) onSearchQueryChange(query); else setLocalSearchQuery(query); };
   const [searchResult, setSearchResult] = useState<SearchCandidatesResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [selectionNote, setSelectionNote] = useState("");
   const evidenceErrors: EvidenceErrors = useMemo(() => evidenceSubmitted ? validateSearchEvidence(evidenceDraft) : {}, [evidenceDraft, evidenceSubmitted]);
-  const replyAllowed = canSubmitReply(status, turns);
+  const replyAllowed = !worldlineSubmitting && canSubmitReply(status, turns);
   const latestChallengerIndex = turns.reduce((latest, turn, index) => turn.author === "challenger" ? index : latest, -1);
   const hasChallengerResponse = latestChallengerIndex >= 0;
   const hasReplyAfterLatestChallenge = latestChallengerIndex >= 0 && turns.slice(latestChallengerIndex + 1).some((turn) => turn.author === "user");
@@ -103,10 +118,11 @@ export function ChallengePanel({ status, turns, replyDraft, evidence, rubric, ev
     available: "现在可用", unavailable: "暂不可用", awaiting: "等待你的答复", submittingStatus: "正在提交答复", submittingTitle: "正在提交答复", submittingDetail: "答复正在发送。此请求完成前编辑器已锁定；你可以取消审查。", submittingFeedback: "正在提交答复。此请求完成前不会重复发送。", characters: "个字符", remaining: "剩余", replyHint: "审查员提出问题后才能提交答复。草稿会保留在这里，直到你提交。",
     searchTab: "搜索候选来源", manualTab: "手动添加证据", evidenceCount: "条证据", selectedProvenance: "已选候选的来源信息", source: "搜索提供方", candidateHash: "候选哈希", searchResults: "搜索结果仅用于发现来源。选择候选只会预填此 bundle；不会打开 URL 或导入证据。",
     rubricScore: "审查评分", threshold: "正常确认需要 30/40、核心准则均至少 3/4，以及一条安全且可独立复核的 A–C 级证据。", reservedThreshold: "带保留意见确认需要完成对话、有效证据、确认未解决问题和保留意见说明。", unmet: "仍需完成", completedDialogue: "完成与审查员的对话。", rubricTotal: "将评分提高到 30/40。", coreRubric: "将每项核心准则提高到至少 3/4。", publicEvidence: "添加一条安全、可独立复核的 A–C 级证据。", evidenceValidity: "确认前请检查证据字段和等级。", acknowledge: "确认仍有未解决问题。", note: "填写保留意见说明。", allMet: "此路径已就绪。",
-    cancel: "取消审查", retryButton: "重试", recoverButton: "立即恢复", reviewStatus: "审查状态", candidateUnavailable: "搜索不可用；你仍可手动提交 SearchEvidenceBundle。", candidateEmpty: "没有可选择的公开候选来源。", searchTitle: "搜索来源候选", query: "搜索问题", search: "搜索", searching: "正在搜索…", choose: "选择此候选并预填证据", selected: "已选择候选。请核对后提交常规证据 bundle，才会创建证据。", clear: "清除已选候选的来源标记", optional: "可选。结果未经验证；不会自动打开链接或导入证据。",
+    cancel: "取消审查", retryButton: "重试", recoverButton: "立即恢复", reviewStatus: "审查状态", candidateUnavailable: "搜索不可用；你仍可手动添加证据。", candidateEmpty: "没有可选择的公开候选来源。", searchTitle: "搜索来源候选", query: "搜索问题", search: "搜索", searching: "正在搜索…", choose: "选择此候选并预填证据", selected: "已选择候选。请核对后提交常规证据 bundle，才会创建证据。", clear: "清除已选候选的来源标记", optional: "可选。结果未经验证；不会自动打开链接或导入证据。",
   };
+  if (confirmation !== "pending") return <CompletedReview confirmation={confirmation} worldlinesReady={worldlinesReady} onOpenWorldlines={onOpenWorldlines} worldlineSubmitting={worldlineSubmitting} onConfirm={onConfirm} turns={turns} evidence={evidence} rubric={rubric} reservationNote={reservationNote} replyDraft={replyDraft} evidenceDraft={evidenceDraft} searchQuery={searchQuery} />;
   const replySubmitting = status === "submitting_reply";
-  const reviewOperationBusy = status === "streaming" || status === "submitting_reply" || status === "recovering" || evidenceSubmitting;
+  const reviewOperationBusy = worldlineSubmitting || status === "streaming" || status === "submitting_reply" || status === "recovering" || evidenceSubmitting;
   // The API deliberately creates the first reviewer result in CHALLENGING and
   // only opens the evidence command after the user has answered at least one
   // reviewer turn.  The transport status `complete` means the current request
@@ -132,18 +148,18 @@ export function ChallengePanel({ status, turns, replyDraft, evidence, rubric, ev
     ...(reservationNote.trim() ? [] : [copy.note]),
   ];
   const nextAction = status === "idle" || turns.length === 0
-    ? { title: copy.start, detail: copy.startDetail, button: copy.start, action: onStart, disabled: false }
+    ? { title: copy.start, detail: copy.startDetail, button: copy.start, action: onStart, disabled: worldlineSubmitting }
     : status === "cancelled" || status === "failed"
-      ? { title: status === "failed" ? copy.retry : copy.recover, detail: copy.recoverDetail, button: status === "failed" ? copy.retryButton : copy.recoverButton, action: status === "failed" ? onRetry : onRecover, disabled: false }
+      ? { title: status === "failed" ? copy.retry : copy.recover, detail: copy.recoverDetail, button: status === "failed" ? copy.retryButton : copy.recoverButton, action: status === "failed" ? onRetry : onRecover, disabled: worldlineSubmitting }
       : replySubmitting
-      ? { title: copy.submittingTitle, detail: copy.submittingDetail, button: copy.cancel, action: onCancel, disabled: false }
+      ? { title: copy.submittingTitle, detail: copy.submittingDetail, button: copy.cancel, action: onCancel, disabled: worldlineSubmitting }
       : status === "recovering" || !replyAllowed && status === "streaming"
-        ? { title: copy.wait, detail: copy.waitDetail, button: copy.cancel, action: onCancel, disabled: false }
+        ? { title: copy.wait, detail: copy.waitDetail, button: copy.cancel, action: onCancel, disabled: worldlineSubmitting }
         : replyAllowed
-          ? { title: copy.answer, detail: copy.answerDetail, button: copy.answer, action: undefined, disabled: false }
+          ? { title: copy.answer, detail: copy.answerDetail, button: copy.answer, action: undefined, disabled: worldlineSubmitting }
           : normalAllowed
-            ? { title: copy.normal, detail: copy.normalDetail, button: copy.normal, action: () => onConfirm("confirmed"), disabled: false }
-            : { title: copy.reserve, detail: copy.reserveDetail, button: copy.reserve, action: undefined, disabled: false };
+            ? { title: copy.normal, detail: copy.normalDetail, button: copy.normal, action: () => onConfirm("confirmed"), disabled: worldlineSubmitting }
+            : { title: copy.reserve, detail: copy.reserveDetail, button: copy.reserve, action: undefined, disabled: worldlineSubmitting };
   const submitReply = (event: React.FormEvent<HTMLFormElement>): void => { event.preventDefault(); if (replyDraft.trim() && replyAllowed) onSubmitReply(replyDraft); };
   const submitEvidence = (event: React.FormEvent<HTMLFormElement>): void => { event.preventDefault(); if (reviewOperationBusy || !evidenceLifecycleReady) return; setEvidenceSubmitted(true); if (Object.keys(validateSearchEvidence(evidenceDraft)).length === 0) onEvidence(evidenceDraft); };
   const updateEvidence = <K extends keyof EvidenceDraft>(field: K, value: EvidenceDraft[K]): void => { setEvidenceDraft((current) => ({ ...current, [field]: value })); };
@@ -210,7 +226,7 @@ export function ChallengePanel({ status, turns, replyDraft, evidence, rubric, ev
           <p className="evidence-note">{copy.searchResults}</p>
         </section> : null}
         {evidenceMode === "manual" ? <form className="evidence-form" id="evidence-manual-panel" role="tabpanel" onSubmit={submitEvidence} noValidate>
-          <p className="evidence-schema-note">{t(language, "SearchEvidenceBundle：A–C 必须填写安全 URL；D/E 可留空并标记为不可独立复核。标题、发布者、摘录和用户说明仍会校验；离线 fixture 也使用同一字段结构。")}</p>
+          <p className="evidence-schema-note">{t(language, "A–C 级证据需填写来源链接；D/E 可记录未公开的前提。")}</p>
           {selectionNote ? <div className="selection-provenance" role="status"><strong>{copy.selectedProvenance}</strong><p>{selectionNote}</p>{evidenceDraft.search_provider ? <p>{copy.source}: {evidenceDraft.search_provider} · {copy.candidateHash}: {evidenceDraft.search_result_hash}</p> : null}<Button variant="quiet" type="button" onClick={clearSelectedCandidate}>{copy.clear}</Button></div> : null}
           <Field label={t(language, "URL（A–C 必填；D/E 可留空）")} error={evidenceErrors.url ? t(language, evidenceErrors.url) : undefined}><Input value={evidenceDraft.url} onChange={(event) => updateEvidence("url", event.target.value)} placeholder={t(language, "https://…（D/E 可留空）")} aria-invalid={Boolean(evidenceErrors.url)} /></Field>
           <Field label={t(language, "标题")} error={evidenceErrors.title ? t(language, evidenceErrors.title) : undefined}><Input value={evidenceDraft.title} onChange={(event) => updateEvidence("title", event.target.value)} maxLength={240} aria-invalid={Boolean(evidenceErrors.title)} /></Field>
@@ -219,10 +235,10 @@ export function ChallengePanel({ status, turns, replyDraft, evidence, rubric, ev
           <Field label={t(language, "摘录")} error={evidenceErrors.excerpt ? t(language, evidenceErrors.excerpt) : undefined}><Textarea value={evidenceDraft.excerpt} onChange={(event) => updateEvidence("excerpt", event.target.value)} maxLength={4000} aria-invalid={Boolean(evidenceErrors.excerpt)} /></Field>
           <Field label={t(language, "用户说明")} error={evidenceErrors.user_note ? t(language, evidenceErrors.user_note) : undefined}><Textarea value={evidenceDraft.user_note} onChange={(event) => updateEvidence("user_note", event.target.value)} maxLength={1000} aria-invalid={Boolean(evidenceErrors.user_note)} /></Field>
           <div className="evidence-form-row"><Field label={t(language, "方向")}><Select value={evidenceDraft.supports_or_challenges} onChange={(event) => updateEvidence("supports_or_challenges", event.target.value as EvidenceDraft["supports_or_challenges"])}><option value="supports">{t(language, "支持")}</option><option value="challenges">{t(language, "反驳")}</option><option value="context">{t(language, "背景")}</option></Select></Field><Field label={t(language, "等级")}><Select value={evidenceDraft.grade} onChange={(event) => updateEvidence("grade", event.target.value as EvidenceDraft["grade"])}>{["A", "B", "C", "D", "E"].map((grade) => <option key={grade}>{grade}</option>)}</Select></Field></div>
-          <Button variant="secondary" type="submit" disabled={reviewOperationBusy || !evidenceLifecycleReady}>{evidenceSubmitting ? (language === "en" ? "Submitting evidence…" : "证据提交中…") : t(language, "提交 SearchEvidenceBundle")}</Button>
+          <Button variant="secondary" type="submit" disabled={reviewOperationBusy || !evidenceLifecycleReady}>{evidenceSubmitting ? (language === "en" ? "Submitting evidence…" : "证据提交中…") : t(language, "添加证据")}</Button>
           {reviewOperationBusy ? <p className="evidence-submit-wait" role="status">{evidenceSubmitting ? (language === "en" ? "The evidence is being validated and the review is being updated. Please wait." : "证据正在验证并更新审查，请稍候。") : (language === "en" ? "Evidence can be submitted when the current review request finishes." : "审查请求完成后即可提交证据。")}</p> : !evidenceLifecycleReady ? <p className="evidence-submit-wait" role="status">{language === "en" ? "Answer at least one reviewer turn before submitting evidence." : "请先回答至少一轮反方问题，再提交证据。"}</p> : null}
         </form> : null}
-        {evidence.length === 0 ? <div className="evidence-empty"><p>{t(language, "搜索不可用时，提交客户端证据 bundle；不会把标题按钮当作导入。")}</p></div> : <div className="evidence-list">{evidence.map((item) => <article className="evidence-item" key={item.evidence_id}><div className={`grade grade-${item.grade}`}>{item.grade}</div><div><h3>{item.title}</h3><p>{item.publisher} · {item.published_at}</p><p>{item.excerpt}</p><dl><dt>URL</dt><dd>{item.url}</dd><dt>content_hash</dt><dd>{item.content_hash}</dd>{item.search_provider ? <><dt>{copy.source}</dt><dd>{item.search_provider} · {item.search_result_hash}</dd></> : null}<dt>{t(language, "用户说明")}</dt><dd>{item.user_note || "—"}</dd></dl><Tag tone={item.grade === "E" ? "warning" : item.grade === "C" ? "neutral" : "strong"}>{t(language, item.independently_reviewable ? "可独立复核" : "不可独立复核")}</Tag></div></article>)}</div>}
+        {evidence.length === 0 ? <div className="evidence-empty"><p>{t(language, "还没有证据。可搜索来源或手动添加。")}</p></div> : <div className="evidence-list">{evidence.map((item) => <article className="evidence-item" key={item.evidence_id}><div className={`grade grade-${item.grade}`}>{item.grade}</div><div><h3>{item.title}</h3><p>{item.publisher} · {item.published_at}</p><p>{item.excerpt}</p><dl><dt>URL</dt><dd>{item.url}</dd><dt>content_hash</dt><dd>{item.content_hash}</dd>{item.search_provider ? <><dt>{copy.source}</dt><dd>{item.search_provider} · {item.search_result_hash}</dd></> : null}<dt>{t(language, "用户说明")}</dt><dd>{item.user_note || "—"}</dd></dl><Tag tone={item.grade === "E" ? "warning" : item.grade === "C" ? "neutral" : "strong"}>{t(language, item.independently_reviewable ? "可独立复核" : "不可独立复核")}</Tag></div></article>)}</div>}
         <p className="evidence-note">{t(language, "来源等级表示来源与可核验性，不代表结论正确。")}</p>
       </aside>
     </div>
@@ -233,7 +249,8 @@ export function ChallengePanel({ status, turns, replyDraft, evidence, rubric, ev
       <details className="rubric-disclosure"><summary><span>{language === "en" ? "View 10 scoring criteria" : "查看 10 项评分详情"}</span><small>{language === "en" ? "Expand rubric" : "展开评分依据"}</small></summary><div className="rubric-panel">{rubric.map((item) => <article className="rubric-cell" key={item.label}><span>{t(language, item.label)}</span><strong>{item.score}</strong><small>/ {item.max}</small><p>{t(language, item.rationale)}</p></article>)}</div></details>
       <div className="gate-grid"><article className={normalAllowed ? "gate-card is-ready" : "gate-card"}><h3>{copy.normal}</h3><p>{copy.threshold}</p><GateList title={copy.unmet} items={normalUnmet} ready={copy.allMet} /></article><article className={reservedAllowed ? "gate-card is-ready" : "gate-card"}><h3>{copy.reserve}</h3><p>{copy.reservedThreshold}</p><GateList title={copy.unmet} items={reservedUnmet} ready={copy.allMet} /></article></div>
       <div className="reservation-controls"><label className="checkbox-field"><input type="checkbox" checked={unresolvedIssuesAcknowledged} onChange={(event) => onUnresolvedIssuesAcknowledged(event.target.checked)} /><span>{t(language, "我确认仍存在未解决问题，并同意保存这些保留事项")}</span></label><Field label={t(language, "保留意见说明（必填）")}><Textarea value={reservationNote} onChange={(event) => onReservationNote(event.target.value)} maxLength={2000} placeholder={t(language, "请写下尚未解决的问题或使用边界")} /></Field></div>
-      <div className="challenge-actions"><div><Button variant="primary" onClick={() => onConfirm("confirmed")} disabled={!normalAllowed}>{t(language, "继续生成世界线")}</Button>{!normalAllowed ? <p>{normalUnmet[0]}</p> : null}</div><div><Button variant="caution" onClick={() => onConfirm("reserved")} disabled={!reservedAllowed}>{t(language, "带保留意见确认")}</Button>{!reservedAllowed ? <p>{reservedUnmet[0]}</p> : null}</div></div>
+      {worldlineSubmitting ? <p role="status">{language === "en" ? "Generating three scenarios… Your review is saved." : "正在生成三条世界线…审查记录已保存。"}</p> : null}
+      <div className="challenge-actions"><div><Button variant="primary" onClick={() => onConfirm("confirmed")} disabled={worldlineSubmitting || !normalAllowed}>{t(language, "继续生成世界线")}</Button>{!normalAllowed ? <p>{normalUnmet[0]}</p> : null}</div><div><Button variant="caution" onClick={() => onConfirm("reserved")} disabled={worldlineSubmitting || !reservedAllowed}>{t(language, "带保留意见确认")}</Button>{!reservedAllowed ? <p>{reservedUnmet[0]}</p> : null}</div></div>
     </section>
     <p className="caution-copy">{t(language, "将保存未解决问题、AI 异议与私有证据声明。用户身份或业内经验不是公开证据；可作为私有前提单独标记。")}</p>
   </section>;
@@ -241,4 +258,27 @@ export function ChallengePanel({ status, turns, replyDraft, evidence, rubric, ev
 
 function GateList({ title, items, ready }: { readonly title: string; readonly items: readonly string[]; readonly ready: string }) {
   return items.length === 0 ? <p className="gate-ready"><StatusDot tone="sage" />{ready}</p> : <div className="gate-unmet"><strong>{title}</strong><div className="gate-unmet-items">{items.map((item) => <p key={item}>{item}</p>)}</div></div>;
+}
+
+function CompletedReview({confirmation,worldlinesReady,onOpenWorldlines,worldlineSubmitting,onConfirm,turns,evidence,rubric,reservationNote,replyDraft,evidenceDraft,searchQuery}: {
+  readonly confirmation:"confirmed"|"reserved"; readonly worldlinesReady:boolean; readonly onOpenWorldlines:(()=>void)|undefined;
+  readonly worldlineSubmitting:boolean; readonly onConfirm:(kind:"confirmed"|"reserved")=>void;
+  readonly turns:readonly TranscriptTurn[]; readonly evidence:readonly EvidenceView[]; readonly rubric:readonly RubricView[];
+  readonly reservationNote:string; readonly replyDraft:string; readonly evidenceDraft:EvidenceDraft; readonly searchQuery:string;
+}) {
+  const {language}=useLanguage();const en=language==="en";
+  const draftFields = Object.entries(evidenceDraft).filter(([key,value])=>!["grade","supports_or_challenges"].includes(key)&&typeof value==="string"&&value.trim());
+  const labels:Readonly<Record<string,string>>=en?{url:"URL",title:"Title",publisher:"Publisher",published_at:"Published",excerpt:"Excerpt",user_note:"Note",search_provider:"Provider",search_result_hash:"Candidate hash"}:{url:"URL",title:"标题",publisher:"发布者",published_at:"发布日期",excerpt:"摘录",user_note:"用户说明",search_provider:"来源",search_result_hash:"候选标识"};
+  return <section className="content-column challenge-view completed-review">
+    <Header title={t(language,"反方审查")} action={<span className="operation-label"><StatusDot tone="sage"/>{confirmation==="reserved"?(en?"Confirmed with reservations":"已确认 · 含保留意见"):(en?"Review confirmed":"审查已确认")}</span>}/>
+    <div className="review-completed-summary"><p>{en?"This review is saved. Viewing it does not resend replies or regenerate results.":"本轮审查已保存。回看不会重新提交答复或生成结果。"}</p>
+    {confirmation==="reserved"&&reservationNote?<blockquote>{reservationNote}</blockquote>:null}
+    {worldlinesReady?<Button variant="primary" onClick={onOpenWorldlines} disabled={!onOpenWorldlines}>{en?"View worldlines":"查看世界线"}</Button>:<><p role="status">{worldlineSubmitting?(en?"Generating worldlines…":"正在生成世界线…"):(en?"Worldlines are not yet available. Continue the existing generation attempt.":"世界线尚未取得，继续原有生成流程即可。")}</p><Button variant="primary" disabled={worldlineSubmitting} onClick={()=>onConfirm(confirmation)}>{en?"Continue worldline generation":"继续生成世界线"}</Button></>}
+    </div>
+    <details className="review-record"><summary>{en?"Review transcript":"审查记录"} · {turns.length} {en?"turns":"轮"}</summary><div className="turn-list">{turns.map(turn=><article className={`turn turn-${turn.author}`} key={turn.id}><div className="turn-meta"><strong>{t(language,turn.author==="user"?"你（正方）":turn.author==="challenger"?"反方（AI）":"系统")}</strong><time>{turn.time}</time></div><TurnContent turn={turn} language={language}/></article>)}</div></details>
+    <details className="review-record"><summary>{en?"Recorded evidence and rubric":"已存证据与评分"} · {evidence.length} {en?"sources":"条证据"} · {totalRubricScore(rubric)}/40</summary>
+    {evidence.length?evidence.map(item=><article className="evidence-item" key={item.evidence_id}><h3>{item.title}</h3><p>{item.grade} · {item.publisher}</p><p>{item.excerpt}</p>{isSafeEvidenceUrl(item.url)?<a href={item.url} target="_blank" rel="noreferrer">{en?"View source":"查看来源"}</a>:null}<p>{item.user_note}</p></article>):<p>{en?"No evidence was attached to this review.":"本轮未附证据。"}</p>}
+    <div className="rubric-panel">{rubric.map(item=><article className="rubric-cell" key={item.label}><span>{t(language,item.label)}</span><strong>{item.score}</strong><small>/ {item.max}</small><p>{item.rationale}</p></article>)}</div></details>
+    {replyDraft||draftFields.length||searchQuery?<details className="review-record"><summary>{en?"Unsubmitted drafts (local only)":"未提交草稿（仅本地保留）"}</summary>{replyDraft?<p>{replyDraft}</p>:null}{searchQuery?<p>{en?"Saved search":"保留搜索"}：{searchQuery}</p>:null}<dl>{draftFields.map(([key,value])=><div key={key}><dt>{labels[key]??key}</dt><dd>{value}</dd></div>)}</dl></details>:null}
+  </section>;
 }
