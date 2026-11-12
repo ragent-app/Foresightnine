@@ -1,0 +1,14 @@
+{
+  "baseline": {
+    "status": "completed",
+    "counterarguments": 1,
+    "specific_counterargument_indexes": [],
+    "mechanical_pass": false
+  },
+  "candidate": {
+    "status": "completed",
+    "counterarguments": 1,
+    "specific_counterargument_indexes": [],
+    "mechanical_pass": false
+  }
+}
