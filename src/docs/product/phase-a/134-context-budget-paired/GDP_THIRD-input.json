@@ -1,0 +1,17 @@
+{
+  "id": "GDP_THIRD",
+  "question": "Compare the current and preceding estimates of 2023 fourth-quarter real GDP growth. Explain revisions to consumer spending, fixed investment and inventories, including offsetting changes.",
+  "sources": [
+    {
+      "kind": "pdf",
+      "title": "BEA GDP fourth quarter 2023 third estimate",
+      "url": "https://www.bea.gov/sites/default/files/2024-03/gdp4q23-3rd.pdf",
+      "published_at": "2024-03-28T12:30:00Z",
+      "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+      "file": "bea-third.pdf",
+      "text_file": "bea-source.txt",
+      "sha256": "c656323aaa83f87c4524c7e58ab48ee8723855f99f307ab44be4bbca4f52799b",
+      "text_sha256": "7d66ab9a91100aa35e11f85cea2020529654466255699df378185b4e6309ae9f"
+    }
+  ]
+}

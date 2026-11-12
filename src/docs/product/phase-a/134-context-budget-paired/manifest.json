@@ -1,0 +1,78 @@
+{
+  "implementation_commit": "facf66f45f384da1b26df13762bf7b531e62022b",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "files": {
+    "common.py": "23faa7a7e33e12e78af03b5aaaf8eab454b4f83807e524e60a37e2679a0ada02",
+    "prepare.py": "eea13aaa18f9e7bd41d0c0589a593d3ba67709f60709e518340a2fefae3004b7",
+    "run.py": "630d6a2771ebba90b6c33fda2c48ba4211d0128365a284e529a4f40e87411c51",
+    "score.py": "e11c7e7436f87160b6bc57f4102686a447b6fadf667fa4e4c6816296ce4e4631",
+    "GDP_THIRD-input.json": "90e80a86d1974a3c823710315d5bfe0db15465e7be20f819ec225124033384ae",
+    "FED_PURCHASES-input.json": "0877769a3f0a3ca19c986e946d32b0d2fb085516faa55a4fad05022797af5c1e",
+    "bea-source.txt": "7d66ab9a91100aa35e11f85cea2020529654466255699df378185b4e6309ae9f"
+  },
+  "conditions": [
+    {
+      "task": "FED_PURCHASES",
+      "input_limit": 3000,
+      "prompt_sha256": "a36aec15e1f1a04ec3d8c1269c5da6fa4b1b01d7d621cbc37af903338852c10d",
+      "prompt_bytes": 2055,
+      "segments": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 6154,
+          "character_end": 6442
+        },
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 7486,
+          "character_end": 7781
+        }
+      ],
+      "source_hashes": {
+        "source_8a668505f5fe4d16b9694d2dfce28713": "0c5f6b1144bf337a31807a20b0d8e12200684d079ce14f95e28c949ac7470e0a"
+      }
+    },
+    {
+      "task": "FED_PURCHASES",
+      "input_limit": 6000,
+      "prompt_sha256": "17cab0e98b8244695655c546716c7ab481712a4e3d2063e08cf91d2469204efb",
+      "prompt_bytes": 5055,
+      "segments": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 4919,
+          "character_end": 6669
+        },
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 7037,
+          "character_end": 8787
+        }
+      ],
+      "source_hashes": {
+        "source_8a668505f5fe4d16b9694d2dfce28713": "0c5f6b1144bf337a31807a20b0d8e12200684d079ce14f95e28c949ac7470e0a"
+      }
+    }
+  ],
+  "max_calls": 2,
+  "per_call_max_total_tokens": 10000,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 139881
+}
