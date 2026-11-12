@@ -1,0 +1,15 @@
+{
+  "id": "PCE_PRICES",
+  "question": "根据所附 BEA 2023 年 2 月公告，PCE 总物价指数的环比和同比变化分别是多少？解释比较期间，并给出一项不能由该数据单独推断的限制。",
+  "sources": [
+    {
+      "kind": "pdf",
+      "file": "bea-feb-2023.pdf",
+      "title": "BEA Personal Income and Outlays February 2023",
+      "published_at": "2023-03-31T12:30:00Z",
+      "source_id": "source_fa19d151852f4b6c90667b2db03a6b50",
+      "sha256": "235d0f7f813c00ee66ac647b33bb483ae019c12489b9e89d6c435be5049d8b9b",
+      "text_sha256": "4f81298d626b7c321bdde60c7b2e35a71d8d2c72dbf7d041388e594d423990be"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "PCE_PRICES": {
+    "monthly": "0.3",
+    "annual": "5.0",
+    "period": "February 2023"
+  },
+  "FOMC_DISSENT": {
+    "target": [
+      "1/4",
+      "1/2"
+    ],
+    "dissenter": "Bullard",
+    "proposal": [
+      "0.5",
+      "1/2",
+      "3/4"
+    ]
+  }
+}

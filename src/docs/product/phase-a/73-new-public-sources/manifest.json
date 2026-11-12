@@ -1,0 +1,47 @@
+{
+  "implementation_commit": "f55c717658538d2a9c5314c04dd3ccf573dd6789",
+  "assessment": "Fresh-to-this-project official PDFs; task and references known to preparer, not blind or independently reviewed. Current copies do not prove historical byte identity. Not phase acceptance.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "PCE_PRICES",
+      "input_sha256": "13628d736cc23e461e1378804d7fdb9674122a4ab4f98afaff0c31f8ecbfbaba"
+    },
+    {
+      "id": "FOMC_DISSENT",
+      "input_sha256": "86b5617e26b95324e17dba24b458e0cfaf43cea62475ba5d9932a511a15e2fd1"
+    }
+  ],
+  "script_sha256": {
+    "prepare.py": "0975b0cb9e7ce8de4fb61ce06328a2215b4a91ba0de4e0fc8a037efc1be499ab",
+    "run.py": "60c7fdcf7098ced7a09d902dba653b0cec3ed79835b7b0504c1ab1204d15d292",
+    "score.py": "b62dbfab4c1c77ce632f648da57a3804ea3e97dd3263acab6069f53596b48eca"
+  },
+  "references_sha256": "b0122ecd0ccd3f3d95bfb18bc681c13d10ae4e470e6b0a16aaa21f9f511991ab",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v9",
+  "max_calls_per_task": 2,
+  "max_calls_total": 4,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 20000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "pass_rule": "Both tasks must satisfy all fixed checks in score.py. Mechanical checks do not prove semantic support or full phase B acceptance."
+}

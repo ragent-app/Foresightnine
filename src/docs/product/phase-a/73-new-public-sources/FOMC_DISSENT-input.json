@@ -1,0 +1,15 @@
+{
+  "id": "FOMC_DISSENT",
+  "question": "根据所附 2022 年 3 月美联储声明，目标利率区间是多少？谁投了反对票，其建议的加息幅度和目标区间是什么？引用原文并说明局限。",
+  "sources": [
+    {
+      "kind": "pdf",
+      "file": "fed-mar-2022.pdf",
+      "title": "FOMC statement March 16 2022",
+      "published_at": "2022-03-16T18:00:00Z",
+      "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+      "sha256": "f856240971b770727711519a87082a3e623f14102edd26cdc3a0fe2ea143556d",
+      "text_sha256": "2c1ec0e948b7cfa58e411445bae7e9d0537fdea3c7b44c2d779471936554ced1"
+    }
+  ]
+}
