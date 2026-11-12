@@ -1977,9 +1977,16 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     if not isinstance(raw_candidates, (list, tuple)):
                         raise ProviderFailure("search_response_invalid", "Search provider returned invalid results.", retryable=False)
                     provider_name = _provider_name(evidence_provider, "search")
+                    invalid_candidates = 0
                     for raw in raw_candidates[:5]:
-                        candidate = _candidate_response(raw, provider_name)
-                        ClientSearchEvidenceProvider().validate_url(str(candidate.url))
+                        try:
+                            candidate = _candidate_response(raw, provider_name)
+                            ClientSearchEvidenceProvider().validate_url(str(candidate.url))
+                        except (ProviderFailure, ValidationError, ValueError):
+                            # Search is an untrusted list: reject just the bad
+                            # lead without discarding independently valid ones.
+                            invalid_candidates += 1
+                            continue
                         # A date is not a publication timestamp. In historical
                         # mode omit unknown or same-day/future leads.
                         if topic.request.as_of is not None and (candidate.published_at is None or
@@ -1992,7 +1999,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             "retrieved_at": candidate.retrieved_at.isoformat(),
                             "search_result_hash": candidate.search_result_hash,
                             "search_provider": provider_name, "status": "unverified"})
-                    search_status = "completed"
+                    search_status = ("partial" if discovered else "failed") if invalid_candidates else "completed"
+                    if invalid_candidates:
+                        discovery_notes.append("Some search candidates could not be validated and were omitted." if discovered
+                                               else "No eligible search candidates remained after validation.")
                     discovery_notes.append("Search candidates are unverified leads, not evidence. Attach and authorize material before analysis.")
                     if topic.request.as_of is not None:
                         discovery_notes.append("Historical search publication dates are not independently verified.")

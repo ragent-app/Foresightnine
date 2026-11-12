@@ -28,6 +28,8 @@ function localizeLimitation(value: string, en: boolean): string {
     "Source discovery is unavailable; attach source material manually.": "来源搜索暂不可用，请手动添加资料。",
     "Source discovery failed or was rate limited; attach source material manually.": "来源搜索失败或受到限流，请手动添加资料。",
     "Search candidates are unverified leads, not evidence. Attach and authorize material before analysis.": "搜索结果是待核验线索，添加并授权资料后才能分析。",
+    "Some search candidates could not be validated and were omitted.": "部分搜索线索无法验证，已省略。",
+    "No eligible search candidates remained after validation.": "校验后没有可用的搜索线索。",
     "Historical search publication dates are not independently verified.": "历史搜索结果的公开日期尚未独立核验。",
   };
   if (fixed[value]) return fixed[value];

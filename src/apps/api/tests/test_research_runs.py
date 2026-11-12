@@ -701,3 +701,62 @@ def test_review_completion_does_not_overwrite_edits_to_generation_checkpoint(mon
     versions = client.get(path, headers=headers).json()["versions"]
     assert len(versions) == 3 and versions[-1]["content"]["summary"] == "User revision"
     assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
+
+
+def test_discovery_keeps_safe_leads_when_another_candidate_is_malformed(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    calls = []
+    class Search:
+        name = "mixed-search"
+        supports_project_search = True
+        valid = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            calls.append(query)
+            invalid = SimpleNamespace(title="SECRET_INVALID", url="not-a-url", excerpt="invalid", publisher=None,
+                                      published_at=None, independently_reviewable=True)
+            if not self.valid:
+                return (invalid,)
+            return (invalid, SearchCandidate(title="BEA report", url="https://www.bea.gov/news/report?private=secret",
+                        excerpt="Unverified result", publisher="BEA", published_at=date(2023, 1, 1), independently_reviewable=True),
+                    SearchCandidate(title="Unsafe local", url="http://127.0.0.1/private", excerpt="invalid",
+                                    publisher=None, published_at=None, independently_reviewable=True))
+    search = Search()
+    monkeypatch.setattr(api, "evidence_provider", search)
+    monkeypatch.setattr(api, "_reserve_search_call", lambda request: None)
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={"email": "mixed-search@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Find a report"}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    payload = {"parent_version_id": topic["versions"][0]["version_id"], "max_search_calls": 1}
+    req_headers = {**headers, "Idempotency-Key": "mixed-search-test"}
+    receipt = client.post(path + "/runs", headers=req_headers, json=payload)
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    content = client.get(path, headers=headers).json()["versions"][-1]["content"]
+    assert content["run"]["status"] == "partial" and content["run"]["search_status"] == "partial"
+    assert len(content["source_candidates"]) == 1 and content["source_candidates"][0]["url"] == "https://www.bea.gov/news/report"
+    assert "Some search candidates could not be validated and were omitted." in content["limitations"]
+    assert "SECRET_INVALID" not in str(content) and "private=secret" not in str(content)
+    replay = client.post(path + "/runs", headers=req_headers, json=payload)
+    assert replay.headers["Idempotency-Replayed"] == "true" and len(calls) == 1
+    search.valid = False
+    other = client.post("/v2/research/topics", headers=headers, json={"question": "Another report"}).json()
+    other_path = "/v2/research/topics/" + other["topic_id"]
+    second = client.post(other_path + "/runs", headers={**headers, "Idempotency-Key": "invalid-search-test"},
+        json={"parent_version_id": other["versions"][0]["version_id"], "max_search_calls": 1}).json()["operation"]["operation_id"]
+    for _ in range(100):
+        state = client.get(other_path + "/runs/" + second, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert state == "completed"
+    no_safe = client.get(other_path, headers=headers).json()["versions"][-1]["content"]
+    assert no_safe["run"]["search_status"] == "failed" and no_safe["source_candidates"] == []
+    assert "No eligible search candidates remained after validation." in no_safe["limitations"]
+    assert "SECRET_INVALID" not in str(no_safe) and len(calls) == 2
+    assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
