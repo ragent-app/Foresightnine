@@ -1,0 +1,113 @@
+{
+  "status": "completed",
+  "payload": {
+    "claims": [
+      {
+        "text": "Real GDP increased at an annual rate of 1.6 percent in the first quarter of 2026, according to the second estimate released by the U.S. Bureau of Economic Analysis.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 1.6 percent in the first quarter of 2026 (January, February, and March), according to the second estimate released today by the U.S. Bureau of Economic Analysis."
+          }
+        ]
+      },
+      {
+        "text": "In the fourth quarter of 2025, real GDP increased 0.5 percent (seasonally adjusted annual rate).",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "In the fourth quarter of 2025, real GDP increased 0.5 percent."
+          }
+        ]
+      },
+      {
+        "text": "The second estimate revised Q1 2026 real GDP growth down 0.4 percentage point from the advance estimate (2.0 percent to 1.6 percent), primarily reflecting downward revisions to investment and consumer spending.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real GDP was revised down 0.4 percentage point from the advance estimate, primarily reflecting downward revisions to investment and consumer spending."
+          }
+        ]
+      },
+      {
+        "text": "The revision is a statistical update to the estimate, not a change in economic activity itself: the 1.6 percent figure is the Bureau's revised measurement of Q1 2026 growth, whereas actual quarter-over-quarter growth is measured relative to Q4 2025's 0.5 percent (an acceleration of about 1.1 percentage points).",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real GDP increased at an annual rate of 1.6 percent (0.4 percent at a quarterly rate1) in the first quarter, a downward revision of 0.4 percentage point from the previous estimate, primarily reflecting downward revisions to investment and consumer spending."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Real GDI grew only 0.9 percent in Q1 2026 (vs. 1.6 percent decline... actually Q4 2025 GDI was slower), and the average of real GDP and real GDI rose 1.3 percent, suggesting GDP alone may overstate the pace relative to the income-side measure.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "0.9 percent in the first quarter of 2026, compared with an\nincrease of 1.6 percent in the fourth quarter of 2025. The average of real GDP and real GDI increased\n1.3 percent, compared with an increase of 1.1 percent."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source coverage is partial; the excerpt is truncated mid-sentence regarding the drivers of the acceleration versus Q4 2025, so full detail on contributors is unavailable.",
+      "The comparison of real GDI across quarters in the excerpt may reflect compressed PDF text; the exact Q4 2025 GDI figure is not clearly stated.",
+      "Release date (2026-05-28) is declared in metadata, not independently verified; a third estimate (June 25, 2026) will further revise the figures.",
+      "No cited source provides opposing evidence beyond the GDI divergence noted above; other counterpoints would be inference."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "real_gdp_q1_2026_saar",
+        "value": 1.6,
+        "unit": "percent",
+        "currency": null,
+        "period": "2026:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 1.6 percent in the first quarter of 2026"
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "real_gdp_q4_2025_saar",
+        "value": 0.5,
+        "unit": "percent",
+        "currency": null,
+        "period": "2025:Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "In the fourth quarter of 2025, real GDP increased 0.5 percent."
+        }
+      },
+      {
+        "fact_id": "f3",
+        "label": "real_gdp_q1_2026_advance_saar",
+        "value": 2.0,
+        "unit": "percent",
+        "currency": null,
+        "period": "2026:Q1 (advance estimate)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real GDP\t2.0\t1.6"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "f1",
+        "second_fact_id": "f2"
+      },
+      {
+        "formula": "difference",
+        "first_fact_id": "f1",
+        "second_fact_id": "f3"
+      }
+    ]
+  },
+  "reported_tokens": 2491,
+  "manifest_sha256": "030446765e66ec2bf24182a6a7524d44895759be25679c0c379bbc824576494e",
+  "cost_usd": "unknown"
+}
