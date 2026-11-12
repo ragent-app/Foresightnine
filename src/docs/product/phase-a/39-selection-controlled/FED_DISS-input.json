@@ -1,0 +1,11 @@
+{
+  "id": "FED_DISS",
+  "question": "According to the provided December 2025 FOMC statement, which dissenting voter preferred a half-point cut and how large was that preferred cut? Cite the statement.",
+  "source_kind": "original_pdf",
+  "source_file": "fed-dec-2025.pdf",
+  "source_title": "Federal Reserve FOMC statement December 10 2025",
+  "published_at": "2025-12-10T19:00:00Z",
+  "text_order": "layout",
+  "source_sha256": "234226e25444b3a2435f9a420064fba4d7d2a208793fe9efe74ec2b2f4328855",
+  "source_text_sha256": "b0fa15c7c62a2700ca4715a196709b700cea49e4994efd6d116fe3cb5617fa6b"
+}

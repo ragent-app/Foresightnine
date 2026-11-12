@@ -1,0 +1,164 @@
+{
+  "assessment": "Nonblind paired diagnostic: four previously run tasks, no independent acceptance, one stochastic sample per selection method; provider model version and infrastructure cannot be locked.",
+  "cost_usd": "unknown; no monetary cap asserted",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "5d077a67494762934e750f647003b1900be31a36",
+  "inputs": [
+    {
+      "id": "GDP_AQ",
+      "sha256": "3632fb5e81095886493d4660bb588d10f152ef55d2b551f3fff1be1c935ff41c",
+      "source_id": "source_851b830823de44a293832f28526cf99f",
+      "baseline_result_sha256": "a2483d00aa33063c95017cdf91835c262985d4159daebb205893ce78b3b1dccd",
+      "baseline_prompt_sha256": "257a1143f04dc8045495eb82f290ecafd85669b8292d680a797e77665397ea5b",
+      "variant_prompt_sha256": "bef2cfaba0009de72af443b63a75120b45ef1038d09ec6206b764d26b2e95d9a",
+      "baseline_segments": [
+        {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "character_start": 0,
+          "character_end": 289
+        },
+        {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "character_start": 3566,
+          "character_end": 3855
+        }
+      ],
+      "variant_segments": [
+        {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "character_start": 90,
+          "character_end": 380
+        },
+        {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "character_start": 3528,
+          "character_end": 3810
+        }
+      ]
+    },
+    {
+      "id": "GDP_REV",
+      "sha256": "63ddb5f9638a83cad3be2870d94fbad99d92a67be629902f31b95c0a480087de",
+      "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+      "baseline_result_sha256": "eb1136ce8d30f38de5616f520293ed7fcf1b0766c48a6c3989bf52fef2610398",
+      "baseline_prompt_sha256": "cfde63729d26b592c07d31406183f6bf04729dc5350fef971eb681b0bdc3e9b6",
+      "variant_prompt_sha256": "b9c51160df0279cbf114c8e0e3289a4472275281f8395d567afbc3c2b56d4d4f",
+      "baseline_segments": [
+        {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "character_start": 0,
+          "character_end": 292
+        },
+        {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "character_start": 3639,
+          "character_end": 3931
+        }
+      ],
+      "variant_segments": [
+        {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "character_start": 90,
+          "character_end": 380
+        },
+        {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "character_start": 876,
+          "character_end": 1172
+        }
+      ]
+    },
+    {
+      "id": "FED_RATE",
+      "sha256": "9a9a52e6dce28b72c3ceef4e648f8f356eb5fdf3d6fe621f8eb3f95ae206deb7",
+      "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+      "baseline_result_sha256": "8af1de00158f47aaacb81a9fb2e20b285d273e2c3e170d333dee26d86772e5e2",
+      "baseline_prompt_sha256": "25b4cfe2f25b7bd734c9e22a40ec56b8804b04c7f40d3c24bc2a86982eab1d94",
+      "variant_prompt_sha256": "0356129f6ed66890d7d2674c6fdb43cce06315cfca664e5ba827113f55f73783",
+      "baseline_segments": [
+        {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "character_start": 867,
+          "character_end": 1176
+        },
+        {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "character_start": 3723,
+          "character_end": 4104
+        }
+      ],
+      "variant_segments": [
+        {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "character_start": 754,
+          "character_end": 1070
+        },
+        {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "character_start": 3144,
+          "character_end": 3466
+        }
+      ]
+    },
+    {
+      "id": "FED_DISS",
+      "sha256": "a1026d832260ea2e851f84e9793eacce1e6670399884c1843b3bd597a8b2960d",
+      "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+      "baseline_result_sha256": "3dfa2ffd6137eaf672f6d4a99a649ab99570c4dbacd5570520678af90dcb183c",
+      "baseline_prompt_sha256": "86a965f81bef6a8051d25787cc0772785ee1fad9e5fd6c0fadbb2b6af0657bea",
+      "variant_prompt_sha256": "27aa50c8a93e7de99e64ac9dc8687185d7cbfa362c34ae0e9dd62cc3ce18034e",
+      "baseline_segments": [
+        {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "character_start": 3116,
+          "character_end": 3429
+        },
+        {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "character_start": 4977,
+          "character_end": 5300
+        }
+      ],
+      "variant_segments": [
+        {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "character_start": 2307,
+          "character_end": 2601
+        },
+        {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "character_start": 3100,
+          "character_end": 3410
+        }
+      ]
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 4,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "Same frozen mechanical scorer as original four PDF cases. Compare each case; four of four required for this narrow diagnostic. Model inputs differ only in selected source text, as checked before calls; scoring cannot prove semantic correctness or overall quality.",
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "dbe37b185a78c9a848e4f70e8787892d3b80697fbc0eedff18bd9d61fd6763b1",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "f954e4bd9169917d0fb205c2b22dd4cbf7f9e0182bd9717a696724dc60e15dec",
+  "scorer_sha256": "81e625a174ad5f0e21b90f90e9c84ff4b80d5aa4b5ee1d569109936381da8284",
+  "search_calls": 0,
+  "max_tokens_total": 40000,
+  "baseline_manifest_sha256": "8099afb5d66883d094145fbf76aafacf3308b308ee4a063b3bb61de24d9956e3",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
