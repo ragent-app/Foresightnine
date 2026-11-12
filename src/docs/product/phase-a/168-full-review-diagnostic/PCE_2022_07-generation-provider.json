@@ -1,0 +1,154 @@
+{
+  "manifest_sha256": "b484b993498eebec73a2ba06c9afbb28eb55e95d0eec7e9740349144686ba693",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Current-dollar (nominal) PCE increased $23.7 billion (0.1 percent) from the preceding month in July 2022.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Disposable personal income (DPI) increased $37.6 billion (0.2 percent) and personal consumption expenditures (PCE) increased $23.7 billion (0.1 percent)."
+          }
+        ]
+      },
+      {
+        "text": "The nominal increase reflected a $33.3 billion increase in services spending, partly offset by a $9.6 billion decrease in goods spending.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "$23.7 billion increase in current-dollar PCE in July reflected an increase of $33.3 billion in spending for services that was partly offset by a decrease of $9.6 billion in spending for goods (table 3)."
+          }
+        ]
+      },
+      {
+        "text": "The personal saving rate was 5.0 percent, with personal saving of $932.3 billion in July.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal saving was $932.3 billion in July and the personal saving rate—personal saving as a percentage of disposable personal income—was 5.0 percent (table 1)."
+          }
+        ]
+      },
+      {
+        "text": "Nominal (current-dollar) spending is distinct from the PCE price index: the price index decreased 0.1 percent in July, meaning the 0.1 percent nominal PCE increase occurred alongside slightly falling prices; real PCE rose 0.2 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The PCE price index decreased 0.1 percent. Excluding food and energy, the PCE price index increased 0.1 percent (table 9). Real DPI increased 0.3 percent in July and real PCE increased 0.2 percent; goods increased 0.2 percent and services increased 0.2 percent (tables 5 and 7)."
+          }
+        ]
+      },
+      {
+        "text": "Current-dollar estimates are nominal, valued at prices of the period of the transaction; real values exclude price changes.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Current-dollar estimates are valued in the prices of the period when the transactions occurred—that is, at “market value.” Also referred to as “nominal estimates” or as “current-price estimates.” Real values are inflation-adjusted estimates—that is, estimates that exclude the effects of price changes."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One might conflate the 0.1 percent PCE growth with the -0.1 percent price index change; the source explicitly separates the nominal spending increase from the price decrease, and real PCE rose 0.2 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal consumption expenditures (PCE): Current dollars 1.2 0.4 0.5 1.0 0.1 ... Chained (2012) dollars 0.3 0.2 -0.1 0.0 0.2 ... Price indexes: PCE 0.9 0.2 0.6 1.0 -0.1"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The provided excerpts are partial; detailed monthly PCE price indexes (table 9) and Table 2.3.5U detail are referenced but not fully included.",
+      "PDF table columns are compressed; monthly percent-change rows were quoted as a run of columns and are consistent with the prose but not independently verified digit-by-digit.",
+      "The release date (July 2022 publication covering July 2022 data) is declared in the text, not independently verified.",
+      "Counterargument structure: no opposing evidence exists in the sources; the 'counterarguments' entry reflects a common misreading rather than source disagreement."
+    ],
+    "facts": [
+      {
+        "fact_id": "pce_nominal_delta",
+        "label": "current-dollar PCE change",
+        "value": "23.7",
+        "unit": "billion USD, monthly change",
+        "currency": "USD",
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "personal consumption expenditures (PCE) increased $23.7 billion (0.1 percent)."
+        }
+      },
+      {
+        "fact_id": "pce_nominal_pct",
+        "label": "current-dollar PCE percent change from preceding month",
+        "value": "0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Personal consumption expenditures (PCE): Current dollars ... 0.1"
+        }
+      },
+      {
+        "fact_id": "services_delta",
+        "label": "services spending change (nominal)",
+        "value": "33.3",
+        "unit": "billion USD increase",
+        "currency": "USD",
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "an increase of $33.3 billion in spending for services"
+        }
+      },
+      {
+        "fact_id": "goods_delta",
+        "label": "goods spending change (nominal)",
+        "value": "-9.6",
+        "unit": "billion USD decrease",
+        "currency": "USD",
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "partly offset by a decrease of $9.6 billion in spending for goods"
+        }
+      },
+      {
+        "fact_id": "saving_rate",
+        "label": "personal saving rate",
+        "value": "5.0",
+        "unit": "percent of disposable personal income",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the personal saving rate—personal saving as a percentage of disposable personal income—was 5.0 percent (table )."
+        }
+      },
+      {
+        "fact_id": "pce_price_index",
+        "label": "PCE price index percent change (distinguishes price from nominal spending)",
+        "value": "-0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "From the preceding month, the PCE price index for July decreased 0.1 percent (table 9)."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "services_delta",
+        "second_fact_id": "goods_delta"
+      }
+    ]
+  },
+  "reported_tokens": 2855,
+  "prompt_sha256": "1503ac99f9988936836860031c5a233839b86002f78fcc9d82857b64064467dd",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
