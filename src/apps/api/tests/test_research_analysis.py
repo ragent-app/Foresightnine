@@ -760,6 +760,35 @@ def test_counterpoint_replaces_only_empty_table_header_when_requested():
     assert _replace_empty_table_with_counterpoint(text, "Bank capital ratio and risk?", short_windows) == short_windows
 
 
+@pytest.mark.parametrize("question,risk", [
+    ("银行资本比率的风险是什么？", "However, banks with concentrated loans had larger capital ratio declines."),
+    ("銀行資本比率的風險是什麼？", "然而，銀行貸款集中會導致資本比率下降。"),
+])
+def test_counterpoint_retrieves_chinese_question_risk_with_original_offsets(question, risk):
+    primary = "Bank capital ratio was 12 percent."
+    header = "Table 5. Capital ratios for 2023\nBank\nCapital ratio\nAdditional information and definitions\n"
+    text = primary + " " * 30 + risk + " " * 30 + header
+    windows = [(0, primary), (text.index(header), header)]
+    assert _replace_empty_table_with_counterpoint(text, question, windows) == [windows[0], (text.index(risk), risk)]
+
+
+def test_counterpoint_does_not_count_bilingual_aliases_as_two_subjects():
+    primary = "Main passage about banks."
+    risk = "However, the bank faced unexpected losses."
+    header = "Table 5. Capital ratios for 2023\nBank\nCapital ratio\nAdditional information and definitions\n"
+    text = primary + " " * 30 + risk + " " * 30 + header
+    windows = [(0, primary), (text.index(header), header)]
+    assert _replace_empty_table_with_counterpoint(text, "银行 bank 风险", windows) == windows
+
+
+def test_chinese_bank_question_can_retrieve_english_stress_results():
+    expected = ("Under the severely adverse scenario, individual banks' capital ratio remained above the "
+                "minimum. The aggregate capital ratio declined from 12.4 percent to 9.9 percent.")
+    report = "General unrelated commentary. " * 80 + expected + " General unrelated commentary. " * 80
+    parts = _select_windows(report, "银行资本比率和个别银行在严重不利压力测试下的最低水平如何？", 250, 2)
+    assert any("12.4 percent" in part and "9.9 percent" in part for _, part in parts)
+
+
 def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote():
     report = source("s", text="Revenue was 26,974 in 2023 and 26,914 in 2022.")
     def item(fact_id, value, period, quotation):

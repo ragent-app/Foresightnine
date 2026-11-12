@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v35"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v36"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -971,10 +971,28 @@ def _replace_empty_table_with_counterpoint(text: str, question: str, windows: li
         return windows
     ignored = {"according", "under", "above", "below", "what", "happened", "give", "material", "counterpoint", "counterargument", "counterevidence", "risk", "risks", "actual", "projected", "values", "their", "were", "does", "with", "from", "that", "this", "into", "about"}
     terms = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", intent) if word not in ignored}
-    if len(terms) < 2:
+    # Group bilingual aliases as a single subject, so translations cannot
+    # make one concept appear to satisfy the two-topic relevance safeguard.
+    groups = [(term,) for term in sorted(terms)]
+    for cues, aliases in (
+        (("银行", "銀行"), ("bank", "银行", "銀行")),
+        (("资本", "資本"), ("capital", "资本", "資本")),
+        (("比率", "比例"), ("ratio", "比率", "比例")),
+        (("收入", "营收", "營收"), ("revenue", "sales", "income", "收入", "营收", "營收")),
+        (("利润", "利潤"), ("profit", "利润", "利潤")),
+        (("贷款", "貸款"), ("loan", "贷款", "貸款")),
+        (("通胀", "通脹"), ("inflation", "通胀", "通脹")),
+        (("利率",), ("interest rate", "利率")),
+        (("失业", "失業"), ("unemployment", "失业", "失業")),
+        (("经济", "經濟"), ("economy", "economic", "经济", "經濟")),
+    ):
+        if any(cue in intent for cue in cues):
+            groups = [group for group in groups if not (len(group) == 1 and group[0] in aliases)]
+            groups.append(aliases)
+    if len(groups) < 2:
         return windows
     candidates = []
-    pattern = r"\b(?:however|nevertheless|although|despite)\b[^.!?。！？]{1,500}[.!?。！？]"
+    pattern = r"(?:\b(?:however|nevertheless|although|despite)\b|然而|但是|尽管|儘管|虽然|雖然)[^.!?。！？]{1,500}[.!?。！？]"
     for number, match in enumerate(re.finditer(pattern, text, re.IGNORECASE)):
         if number >= 256:
             break
@@ -983,8 +1001,10 @@ def _replace_empty_table_with_counterpoint(text: str, question: str, windows: li
         start, end = match.span()
         if end - start > len(header) or start < first[0] + len(first[1]) and first[0] < end:
             continue
-        words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", match.group().casefold())}
-        hits = len(terms & words)
+        sentence = match.group().casefold()
+        words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", sentence)}
+        hits = sum(any((alias in sentence if re.search(r"[^a-z ]", alias) or " " in alias else alias in words)
+                       for alias in group) for group in groups)
         if hits >= 2:
             candidates.append((-hits, start, end))
     if not candidates:
@@ -1031,6 +1051,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "according", "distinguish", "their", "periods", "note", "relevant", "limitations", "provided", "supplied", "using"}
     for chinese, english in {
         "收入": ("revenue", "sales"), "个人收入": ("personal", "income"), "营收": ("revenue", "sales"),
+        "银行": ("bank",), "銀行": ("bank",), "资本": ("capital",), "資本": ("capital",),
+        "比率": ("ratio",), "比例": ("ratio",), "压力测试": ("stress", "test"), "壓力測試": ("stress", "test"),
+        "严重不利": ("severely", "adverse"), "嚴重不利": ("severely", "adverse"),
+        "最低": ("minimum",), "个别": ("individual",), "個別": ("individual",),
         "利润": ("income", "profit", "margin"), "增长": ("growth", "increase"),
         "现金": ("cash",), "负债": ("debt", "liabilities"),
         "通胀": ("inflation", "price"), "利率": ("interest", "rate"),
