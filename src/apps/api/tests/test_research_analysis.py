@@ -1866,3 +1866,20 @@ def test_contrast_retrieval_requires_topical_opposite_movements():
     assert _contrast_sentence_spans(chinese,"分析收入和成本的变化并列出反方证据。")
     with pytest.raises(AnalysisInterrupted):
         _contrast_sentence_spans(text,question,lambda:True)
+
+
+def test_quoted_numbers_accept_sentence_punctuation_but_not_version_fragments():
+    from decimal import Decimal
+    from app.research_analysis import _quoted_numbers
+    assert _quoted_numbers("The ratio was 12.6. The year was 2025.")=={Decimal("12.6"),Decimal("2025")}
+    assert not _quoted_numbers("Version 1.2.3 and table A.17.")
+    assert _quoted_numbers("A loss was (12.6).") == {Decimal("-12.6")}
+
+
+def test_model_fact_can_cite_number_at_end_of_sentence():
+    text="The capital ratio in percent was 12.6."
+    raw={"facts":[{"fact_id":"ratio","label":"Capital ratio","value":"12.6","unit":"percent",
+          "period":"2025","citation":{"source_id":"s","quotation":text}}]}
+    result=analyze("What was the capital ratio?",[source("s",text=text)],None,lambda _:(raw,1))
+    assert len(result.facts)==1 and result.facts[0]["value"]=="12.6"
+    assert result.facts[0]["quotation"]==text
