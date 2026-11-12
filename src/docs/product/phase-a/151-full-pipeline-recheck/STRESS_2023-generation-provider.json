@@ -1,0 +1,91 @@
+{
+  "manifest_sha256": "24ed2c5fba2d42960f752f738e15b486b2e4617b79aeb8cc837fe64206b1fe5e",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Under the 2023 severely adverse scenario, the aggregate CET1 ratio of the 23 tested banks fell from an actual 12.4 percent at 2022:Q4 to a minimum of 9.9 percent, then rose to 10.5 percent at the end of the projection horizon, with aggregate and individual bank post-stress CET1 ratios remaining well above required minimums throughout.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from an actual 12.4 percent in the fourth quarter of 2022 to its minimum of 9.9 percent, before rising to 10.5 percent at the end of the projection"
+          }
+        ]
+      },
+      {
+        "text": "Aggregate and individual bank post-stress CET1 capital ratios remained well above required minimum levels throughout the projection horizon.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The aggregate and individual bank post-stress common equity tier 1 (CET1) capital ratios remain well above the required minimum levels throughout the projection horizon."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Individual bank-level minimum CET1 values are not provided in the supplied excerpts, so the claim that individual banks remained above minimums is supported only at the aggregate narrative level rather than by per-bank data; compressed PDF table columns may hide bank-specific breaches or near-breaches.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Table 5. Capital ratios, actual 2022:Q4 and projected 2023:Q1–2025:Q1 under the severely adverse scenario: 23 banks"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Individual bank CET1 ratio values are not present in the supplied excerpts, only the aggregate figures.",
+      "The exact required minimum CET1 level is not stated in the supplied text.",
+      "The severity of the decline (2.5 percentage points) cannot be contextualized against prior-year stress test results with the supplied sources.",
+      "The projection horizon (2023:Q1–2025:Q1) is declared in the table header but values for intermediate/end-horizon periods are only partially given in the excerpts."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact-start",
+        "label": "aggregate CET1 ratio, actual 2022:Q4",
+        "value": 12.4,
+        "unit": "percent",
+        "currency": null,
+        "period": "2022:Q4 (actual)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "an actual 12.4 percent in the fourth quarter of 2022"
+        }
+      },
+      {
+        "fact_id": "fact-min",
+        "label": "aggregate CET1 ratio, projected minimum under severely adverse scenario",
+        "value": 9.9,
+        "unit": "percent",
+        "currency": null,
+        "period": "2023:Q1–2025:Q1 (projected minimum)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "to its minimum of 9.9 percent"
+        }
+      },
+      {
+        "fact_id": "fact-end",
+        "label": "aggregate CET1 ratio, projected end of horizon",
+        "value": 10.5,
+        "unit": "percent",
+        "currency": null,
+        "period": "end of projection horizon 2025:Q1 (projected)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "before rising to 10.5 percent at the end of the projection"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact-start",
+        "second_fact_id": "fact-min"
+      }
+    ]
+  },
+  "reported_tokens": 1263,
+  "prompt_sha256": "c75bf75115db2236436c2de2c56f44c990c3cbcc35358a1e272e9e0dbb12b84f",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
