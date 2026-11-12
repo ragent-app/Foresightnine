@@ -6,6 +6,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../..");
 const commands = [
   [process.execPath, ["packages/contracts/scripts/generate.mjs", "--check"]],
+  [process.execPath, ["packages/contracts/scripts/generate-research-v2.mjs", "--check"]],
   [process.execPath, ["packages/asset-registry/scripts/generate-registry.mjs", "--check"]],
   ["uv", ["run", "--project", "apps/api", "python", "apps/api/scripts/export_openapi.py", "--check"]]
 ];

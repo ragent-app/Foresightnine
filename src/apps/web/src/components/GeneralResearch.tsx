@@ -1,0 +1,479 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { researchClient, type DiscoveryCandidate, type ResearchClaim, type ResearchFact, type ResearchOperation, type ResearchTopic, type SourceMetadata, type RunBudget, type RunInputSnapshot, type IssuerCandidate } from "../general-research-client";
+import type { Language } from "../types";
+import { Button, Field, Input, Textarea } from "./Controls";
+import { Header } from "./AppShell";
+import { SourceContext } from "./SourceContext";
+
+interface Props { baseUrl: string | null; accountId: string | null; language: Language }
+
+function localizeLimitation(value: string, en: boolean): string {
+  if (en) return value;
+  const fixed: Record<string, string> = {
+    "No permitted, time-eligible source was available for model analysis.": "没有可供模型分析且符合时间要求的授权资料。",
+    "The research is partial: supported claims or counterarguments are incomplete.": "研究尚未完成：有依据的结论或反方材料不足。",
+    "Matching a quotation does not independently establish that it supports a claim.": "原文匹配不代表已独立核实该资料支持结论。",
+    "A second model assessment is not independent proof that evidence supports a claim.": "模型二次判断不能独立证明证据支持结论。",
+    "The requested model support review did not cover all claims.": "所请求的模型证据复查未覆盖全部结论。",
+    "Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.": "跨来源数值差异需要核对研究对象和统计口径，不能直接认定为冲突。",
+    "At most 50 candidate differences are shown.": "最多展示 50 组待核查差异。",
+    "Source discovery is unavailable; attach source material manually.": "来源搜索暂不可用，请手动添加资料。",
+    "Source discovery failed or was rate limited; attach source material manually.": "来源搜索失败或受到限流，请手动添加资料。",
+    "Search candidates are unverified leads, not evidence. Attach and authorize material before analysis.": "搜索结果是待核验线索，添加并授权资料后才能分析。",
+    "Historical search publication dates are not independently verified.": "历史搜索结果的公开日期尚未独立核验。",
+  };
+  if (fixed[value]) return fixed[value];
+  const omitted = value.match(/^(\d+) model-generated numeric fact\(s\) were omitted because their format was invalid\.$/);
+  if (omitted) return `模型生成的 ${omitted[1]} 条数值事实因格式无效而被省略。`;
+  const prefixes: Record<string, string> = {
+    "Research analysis could not be completed: provider_budget_unknown": "无法完成分析：尚未配置供应商价格，无法保证不超过费用上限。",
+    "Research analysis could not be completed: provider_budget_exhausted": "无法完成分析：调用预算已用完。",
+    "Research analysis could not be completed: provider_unavailable": "无法完成分析：尚无可用的研究模型。",
+  };
+  return prefixes[value] ?? value;
+}
+
+function statusLabel(status: string, en: boolean): string {
+  if (en) return status;
+  return ({ pending: "等待中", running: "进行中", completed: "已结束", failed: "失败", cancelled: "已取消", partial: "部分完成" } as Record<string, string>)[status] ?? status;
+}
+
+function safeCitationUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password ? parsed.href : null;
+  } catch { return null; }
+}
+
+function reviewedAncestor(topic: ResearchTopic | null, parentId: string | null | undefined) {
+  const versions = new Map((topic?.versions ?? []).map((version) => [version.version_id, version]));
+  const visited = new Set<string>();
+  let id = parentId;
+  while (id && !visited.has(id)) {
+    visited.add(id);
+    const version = versions.get(id);
+    if (!version) return undefined;
+    if (version.review !== "draft") return version;
+    id = version.parent_version_id;
+  }
+  return undefined;
+}
+
+export function GeneralResearch({ baseUrl, accountId, language }: Props) {
+  const en = language === "en";
+  const api = useMemo(() => baseUrl ? researchClient(baseUrl) : null, [baseUrl]);
+  const [topics, setTopics] = useState<ResearchTopic[]>([]);
+  const [topic, setTopic] = useState<ResearchTopic | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [question, setQuestion] = useState("");
+  const [asOf, setAsOf] = useState("");
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+  const [publishedAt, setPublishedAt] = useState("");
+  const [sourceMode, setSourceMode] = useState<"text" | "sec" | "file">("text");
+  const [file, setFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
+  const [cik, setCik] = useState("");
+  const [issuerQuery, setIssuerQuery] = useState("");
+  const [issuerCandidates, setIssuerCandidates] = useState<IssuerCandidate[]>([]);
+  const [issuerRetrievedAt, setIssuerRetrievedAt] = useState("");
+  const [taxonomy, setTaxonomy] = useState("us-gaap");
+  const [concept, setConcept] = useState("RevenueFromContractWithCustomerExcludingAssessedTax");
+  const [unit, setUnit] = useState("USD");
+  const [filingBefore, setFilingBefore] = useState("");
+  const [modelInput, setModelInput] = useState(false);
+  const [allowExport, setAllowExport] = useState(false);
+  const [confirmRights, setConfirmRights] = useState(false);
+  const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
+  const [summary, setSummary] = useState("");
+  const [note, setNote] = useState("");
+  const [claims, setClaims] = useState<ResearchClaim[]>([]);
+  const [facts, setFacts] = useState<ResearchFact[]>([]);
+  const [editingFacts, setEditingFacts] = useState(false);
+  const [editingClaims, setEditingClaims] = useState(false);
+  const [operation, setOperation] = useState<ResearchOperation | null>(null);
+  const [runInputs, setRunInputs] = useState<RunInputSnapshot | null>(null);
+  const [allowSearch, setAllowSearch] = useState(true);
+  const [supportReview, setSupportReview] = useState(false);
+  const [maxElapsed, setMaxElapsed] = useState("60");
+  const [maxTokens, setMaxTokens] = useState("10000");
+  const [maxCost, setMaxCost] = useState("");
+  const [sourceMetadata, setSourceMetadata] = useState<SourceMetadata[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const pendingRun = useRef<{ topicId: string; versionId: string; key: string; budget: RunBudget } | null>(null);
+  const pendingSource = useRef<{ fingerprint: string; sourceId: string; file: File | null } | null>(null);
+  const sourceDetails = useRef<HTMLDetailsElement>(null);
+  const latest = topic?.versions[topic.versions.length - 1];
+  const current = topic?.versions.find((item) => item.version_id === selectedVersionId) ?? latest;
+  const isLatest = current?.version_id === latest?.version_id;
+  const parent = reviewedAncestor(topic, current?.parent_version_id);
+  const originalClaims = useMemo(() => new Set((current?.content.claims ?? []).map((item) => JSON.stringify(item))), [current]);
+  const originalFacts = useMemo(() => new Set((current?.content.facts ?? []).map((item) => JSON.stringify(item))), [current]);
+  const hasUnsavedFacts = !!current && JSON.stringify(facts) !== JSON.stringify(current.content.facts);
+  const hasUnsavedReview = !!current && (summary !== current.content.summary || note !== current.note ||
+    JSON.stringify(claims) !== JSON.stringify(current.content.claims) || hasUnsavedFacts);
+
+  useEffect(() => {
+    let active = true;
+    if (api && accountId) void api.list().then((items) => { if (active) setTopics(items); })
+      .catch(() => { if (active) setNotice(en ? "Could not load research." : "无法加载研究。") });
+    return () => { active = false; };
+  }, [api, accountId, en]);
+
+  useEffect(() => {
+    setSummary(current?.content.summary ?? "");
+    setNote(current?.note ?? "");
+    setClaims(current?.content.claims ?? []);
+    setFacts(current?.content.facts ?? []);
+    setEditingClaims(false);
+    setEditingFacts(false);
+  }, [current?.version_id]);
+
+  useEffect(() => {
+    let active = true;
+    setSourceMetadata([]);
+    if (api && topic && current) void api.sources(topic.topic_id, current.version_id)
+      .then((items) => { if (active) setSourceMetadata(items); })
+      .catch(() => { if (active) setNotice(en ? "Could not load source details." : "无法加载来源信息。"); });
+    return () => { active = false; };
+  }, [api, topic?.topic_id, current?.version_id, en]);
+
+  useEffect(() => {
+    let active = true;
+    setRunInputs(null);
+    if (api && topic && operation) void api.runInputs(topic.topic_id, operation.operation_id)
+      .then((inputs) => { if (active) setRunInputs(inputs); })
+      .catch(() => { if (active) setRunInputs(null); });
+    return () => { active = false; };
+  }, [api, topic?.topic_id, operation?.operation_id]);
+
+  useEffect(() => {
+    if (!api || !topic || !operation || !["pending", "running"].includes(operation.status)) return;
+    let active = true;
+    const timer = window.setInterval(() => {
+      void api.operation(topic.topic_id, operation.operation_id).then(async ({ operation: next }) => {
+        if (!active) return;
+        if (!["pending", "running"].includes(next.status)) {
+          const updated = await api.get(topic.topic_id);
+          if (active) { setTopic(updated); setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item)); setOperation(next); }
+        } else setOperation(next);
+      }).catch(() => { if (active) setNotice(en ? "Could not check progress. Your research is retained." : "无法获取运行状态，研究内容仍会保留。") });
+    }, 1500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [api, topic?.topic_id, operation?.operation_id, operation?.status, en]);
+
+  if (!baseUrl) return <p role="status">{en ? "Connect the API to use the research workspace." : "连接 API 后即可使用研究工作区。"}</p>;
+  if (!accountId || !api) return <p role="status">{en ? "Sign in to create private research." : "登录后即可创建私人研究。"}</p>;
+  const running = !!operation && ["pending", "running"].includes(operation.status);
+  const hasMaterial = sourceMode === "sec" ? Boolean(cik.trim()) : sourceMode === "file" ? Boolean(file) : Boolean(text.trim() || url.trim());
+
+  function updateFact(index: number, patch: Partial<ResearchFact>) {
+    setFacts((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+  }
+
+  async function uploadMaterial(): Promise<string> {
+    if (!api || !hasMaterial || !confirmRights) throw new Error("rights_required");
+    const fingerprint = JSON.stringify([sourceMode, title, text, url, publishedAt, cik, taxonomy, concept, unit, filingBefore, modelInput, allowExport]);
+    if (pendingSource.current?.fingerprint === fingerprint && pendingSource.current.file === file) return pendingSource.current.sourceId;
+    const sourceTitle = title.trim() || (en ? "Provided material" : "用户提供的资料");
+    const source = sourceMode === "sec" ? await api.fetchSecConcept(cik.trim(), taxonomy, concept.trim(), unit.trim(), filingBefore, modelInput, allowExport)
+      : sourceMode === "file" && file ? await (async () => {
+          if (file.size > 1_500_000) throw new Error("file_too_large");
+          if (!file.name.toLowerCase().endsWith(".pdf")) throw new Error("invalid_file");
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+          return api.uploadPdf(title.trim() || file.name, btoa(binary), modelInput, allowExport, publishedAt);
+        })()
+      : text.trim() ? await api.createSource(sourceTitle, text, url.trim(), modelInput, allowExport, publishedAt)
+      : await api.fetchSource(sourceTitle, url.trim(), modelInput, allowExport, publishedAt);
+    pendingSource.current = { fingerprint, sourceId: source.source_id, file };
+    return source.source_id;
+  }
+  function clearMaterial() {
+    pendingSource.current = null;
+    setTitle(""); setText(""); setUrl(""); setPublishedAt(""); setCik(""); setFilingBefore(""); setFile(null); setFileInputKey((value) => value + 1);
+    setConfirmRights(false); setModelInput(false); setAllowExport(false);
+    setIssuerQuery(""); setIssuerCandidates([]); setIssuerRetrievedAt("");
+  }
+
+  async function searchIssuers() {
+    if (!api || !issuerQuery.trim()) return;
+    setBusy(true); setNotice(""); setIssuerCandidates([]); setIssuerRetrievedAt("");
+    try {
+      const found = await api.searchSecIssuers(issuerQuery.trim());
+      setIssuerCandidates(found.candidates);
+      setIssuerRetrievedAt(found.retrieved_at);
+      if (!found.candidates.length) setNotice(en ? "No SEC issuer candidates found." : "未找到 SEC 公司候选项。");
+    } catch (error) {
+      setNotice(error instanceof Error && error.message === "request_429"
+        ? (en ? "SEC search is rate limited. Try again shortly." : "SEC 查询受到限流，请稍后重试。")
+        : (en ? "SEC issuer search is unavailable. You can enter a CIK directly." : "SEC 公司查询不可用，可以直接输入 CIK。"));
+    } finally { setBusy(false); }
+  }
+
+  async function create() {
+    if (!api || (!question.trim() && !hasMaterial)) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before creating another research topic." : "请先保存当前修改，再创建其他研究。"); return; }
+    setBusy(true); setNotice("");
+    try {
+      let sourceIds: string[] = [];
+      if (hasMaterial) {
+        if (!confirmRights) { setNotice(en ? "Confirm you can store this material." : "请先确认你有权保存这份资料。"); return; }
+        sourceIds = [await uploadMaterial()];
+      }
+      const created = await api.create(question.trim(), sourceIds, asOf);
+      setTopic(created); setSelectedVersionId(""); setTopics((items) => [created, ...items]); setOperation(null);
+      setQuestion(""); setAsOf(""); clearMaterial();
+    } catch (error) {
+      if (error instanceof Error && error.message === "file_too_large") {
+        setNotice(en ? "PDF files must be no larger than 1.5 MB." : "PDF 文件不能超过 1.5 MB。");
+      } else if (sourceMode === "sec" && error instanceof Error && error.message === "request_503") {
+        setNotice(en ? "SEC access is unavailable. Ask the service administrator to check its configuration." : "SEC 访问暂不可用，请联系服务管理员检查配置。");
+      } else if (error instanceof Error && error.message === "request_429") {
+        setNotice(en ? "The source is rate limited. Wait a moment and retry." : "来源请求过于频繁，请稍后重试。");
+      } else setNotice(en ? "Research could not be created. Check the material and try again." : "创建失败，请检查资料后重试。");
+    }
+    finally { setBusy(false); }
+  }
+  async function attachMaterial() {
+    if (!api || !topic || !current || !isLatest || !hasMaterial) return;
+    if (hasUnsavedReview) {
+      setNotice(en ? "Save your edits before attaching material." : "请先保存当前修改，再添加资料。"); return;
+    }
+    if (!confirmRights) { setNotice(en ? "Confirm you can store this material." : "请先确认你有权保存这份资料。"); return; }
+    setBusy(true); setNotice("");
+    try {
+      const sourceId = await uploadMaterial();
+      const updated = await api.attach(topic.topic_id, current.version_id, [sourceId]);
+      setTopic(updated); setSelectedVersionId("");
+      setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+      clearMaterial();
+      setNotice(en ? "Material added. Run research to analyze it." : "资料已添加，可运行研究进行分析。");
+    } catch { setNotice(en ? "Could not add material. Check permissions and retry." : "无法添加资料，请检查权限后重试。"); }
+    finally { setBusy(false); }
+  }
+  async function openTopic(topicId: string) {
+    if (!api) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before reopening research." : "请先保存当前修改，再打开研究。"); return; }
+    setBusy(true); setNotice("");
+    try {
+      const [updated, runs] = await Promise.all([api.get(topicId), api.runs(topicId)]);
+      setTopic(updated); setSelectedVersionId(""); setOperation(runs[0]?.operation ?? null);
+      setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+    } catch { setNotice(en ? "Could not open research." : "无法打开研究。"); }
+    finally { setBusy(false); }
+  }
+  async function discover() {
+    if (!api || !question.trim()) return;
+    setBusy(true); setNotice(""); setCandidates([]);
+    try {
+      const found = await api.search(question.trim());
+      if (!found.project_search_available) setNotice(en ? "Search is unavailable. Add a source directly." : "搜索暂不可用，可以直接添加来源资料。");
+      else if (!found.candidates.length) setNotice(en ? "No source candidates found." : "未找到候选来源。");
+      else setCandidates(found.candidates);
+    } catch { setNotice(en ? "Search is unavailable. Add a source directly." : "搜索暂不可用，可以直接添加来源资料。"); }
+    finally { setBusy(false); }
+  }
+  async function run() {
+    if (!api || !topic || !current) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before running research." : "请先保存当前修改，再运行研究。"); return; }
+    if (!/^\d+$/.test(maxElapsed) || Number(maxElapsed) < 1 || Number(maxElapsed) > 180 ||
+        !/^\d+$/.test(maxTokens) || Number(maxTokens) > 20000 ||
+        (maxCost !== "" && !/^\d+(?:\.\d{1,6})?$/.test(maxCost))) {
+      setNotice(en ? "Check the research budget values." : "请检查研究预算设置。"); return;
+    }
+    setBusy(true); setNotice("");
+    if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
+      pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
+        budget: { search: allowSearch, supportReview, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+    }
+    try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
+      pendingRun.current = null;
+      if (!["pending", "running"].includes(receipt.operation.status)) {
+        const updated = await api.get(topic.topic_id); setTopic(updated);
+        setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+      }
+      setOperation(receipt.operation); }
+    catch { setNotice(en ? "Could not start research." : "无法启动研究。"); }
+    finally { setBusy(false); }
+  }
+  async function save(review: "draft" | "confirmed" | "reservation") {
+    if (!api || !topic || !current) return;
+    if (claims.some((claim) => !claim.text.trim() || claim.text.length > 3000)) {
+      setNotice(en ? "Each finding must contain between 1 and 3,000 characters." : "每条结论或反方意见须填写 1 至 3000 个字符。"); return;
+    }
+    if (facts.some((fact) => !originalFacts.has(JSON.stringify(fact)) && (!String(fact.value).trim() || !String(fact.unit ?? "").trim() || !String(fact.period ?? "").trim() ||
+        !String(fact.label ?? "").trim() || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(String(fact.value).trim())))) {
+      setNotice(en ? "Each edited figure needs a valid number, label, unit and period." : "每项修改后的事实都需要填写指标、有效数值、单位和期间。"); return;
+    }
+    setBusy(true); setNotice("");
+    try { const updated = await api.save(topic.topic_id, current, summary, review, note, claims, facts); setTopic(updated); setSelectedVersionId("");
+      setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item)); }
+    catch (error) {
+      setNotice(error instanceof Error && error.message === "request_422"
+        ? (en ? "Check the findings and figure values, units and periods." : "请检查结论及数值、单位和期间是否有效。")
+        : (en ? "Save failed; reload before trying again." : "保存失败，请重新打开研究后再试。"));
+    }
+    finally { setBusy(false); }
+  }
+  async function recalculate(index: number) {
+    if (!api || !topic || !current || !isLatest || running) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before recalculating." : "请先保存当前修改，再重新计算。"); return; }
+    setBusy(true); setNotice("");
+    try {
+      const updated = await api.recalculate(topic.topic_id, current.version_id, index);
+      setTopic(updated); setSelectedVersionId("");
+      setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+      setNotice(en ? "Calculation updated in a new draft version." : "已重新计算，并保存为新的草稿版本。");
+    } catch { setNotice(en ? "Could not recalculate. Check that the input facts and units are valid." : "无法重新计算，请检查输入事实和单位。"); }
+    finally { setBusy(false); }
+  }
+  async function cancel() {
+    if (!api || !operation) return;
+    setBusy(true);
+    try { setOperation((await api.cancel(operation, crypto.randomUUID())).operation); }
+    catch { setNotice(en ? "Cancellation could not be confirmed." : "无法确认取消结果。"); }
+    finally { setBusy(false); }
+  }
+  async function exportResearch(metadataOnly: boolean) {
+    if (!api || !topic || !current) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before exporting." : "请先保存当前修改，再导出。"); return; }
+    setBusy(true); setNotice("");
+    try {
+      const result = metadataOnly ? await api.exportMetadata(topic.topic_id, current.version_id) : await api.exportVersion(topic.topic_id, current.version_id);
+      const link = document.createElement("a");
+      const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: "application/json" }));
+      link.href = objectUrl; link.download = metadataOnly ? "research-metadata.json" : "research.json"; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch { setNotice(en ? "Export is unavailable; check source permissions. A metadata-only record is available separately." : "无法导出完整研究，请检查资料权限；也可以单独导出不含研究内容的记录摘要。"); }
+    finally { setBusy(false); }
+  }
+  async function downloadOriginal(sourceId: string) {
+    if (!api) return;
+    setBusy(true); setNotice("");
+    try {
+      const blob = await api.originalPdf(sourceId);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a"); link.href = objectUrl; link.download = "source.pdf"; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch { setNotice(en ? "The original document is unavailable for download." : "原文件无法下载，请检查资料权限。"); }
+    finally { setBusy(false); }
+  }
+  return <section className="general-research">
+    <Header eyebrow={en ? "RESEARCH WORKSPACE" : "研究工作区"} title={en ? "Start with a question" : "从问题开始研究"} />
+    <p className="lead">{en ? "Collect sources, examine evidence and keep your research together." : "整理资料、检查证据，并保存你的研究。"}</p>
+    <div className="general-grid">
+      <div>
+        <Field label={en ? "Research question" : "研究问题"}><Textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={en ? "What would you like to investigate?" : "你想研究什么？"} /></Field>
+        <Field label={en ? "Research cutoff (optional)" : "研究截止时间（可选）"} helper={en ? "Uses your device's local time." : "使用设备所在时区。"}><Input type="datetime-local" value={asOf} onChange={(event) => setAsOf(event.target.value)} /></Field>
+        <Button disabled={busy || !question.trim()} onClick={() => void discover()}>{en ? "Find sources" : "查找资料"}</Button>
+        {candidates.length ? <section className="general-candidates"><p>{en ? "Search results are unverified leads." : "搜索结果是待核验线索。"}</p>{candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.excerpt}</p><Button onClick={() => { setTitle(candidate.title); setUrl(candidate.url); setSourceMode("text"); setCandidates([]); if (sourceDetails.current) sourceDetails.current.open = true; }}>{en ? "Use link" : "使用链接"}</Button></article>)}</section> : null}
+        <details className="general-source" ref={sourceDetails}><summary>{en ? "Add material (optional)" : "添加资料（可选）"}</summary>
+          <Field label={en ? "Source type" : "资料类型"}><select className="text-input select-input" value={sourceMode} onChange={(event) => setSourceMode(event.target.value as "text" | "sec" | "file")}><option value="text">{en ? "Text or official page" : "正文或官方网页"}</option><option value="file">{en ? "PDF document" : "PDF 文档"}</option><option value="sec">{en ? "SEC company concept" : "SEC 公司财务指标"}</option></select></Field>
+          {sourceMode === "sec" ? <>
+            <Field label={en ? "Company name or ticker" : "公司名称或股票代码"}><Input value={issuerQuery} onChange={(event) => { setIssuerQuery(event.target.value); setCik(""); setIssuerCandidates([]); setIssuerRetrievedAt(""); }} /></Field>
+            <Button disabled={busy || !issuerQuery.trim()} onClick={() => void searchIssuers()}>{en ? "Find SEC issuers" : "查找 SEC 公司"}</Button>
+            {issuerCandidates.length ? <div className="general-candidates"><p>{en ? "Choose an issuer candidate. Exchange, security class and historical validity are not established." : "请选择公司候选项；交易所、证券类别和历史有效性尚未确认。"}</p><p><a href="https://www.sec.gov/files/company_tickers.json" target="_blank" rel="noreferrer">SEC</a> · {en ? "retrieved" : "获取时间"}: {issuerRetrievedAt ? new Date(issuerRetrievedAt).toLocaleString() : (en ? "unknown" : "未知")}</p>{issuerCandidates.map((candidate) => <article key={`${candidate.cik}:${candidate.ticker}`}><strong>{candidate.name}</strong><p>{candidate.ticker} · CIK {candidate.cik}</p><Button onClick={() => { setCik(candidate.cik); setIssuerCandidates([]); }}>{en ? "Use this CIK" : "使用此 CIK"}</Button></article>)}</div> : null}
+            <Field label={en ? "Company CIK" : "公司 CIK"}><Input inputMode="numeric" value={cik} onChange={(event) => setCik(event.target.value)} placeholder="0000789019" /></Field>
+            <Field label={en ? "XBRL taxonomy" : "XBRL 分类"}><select className="text-input select-input" value={taxonomy} onChange={(event) => setTaxonomy(event.target.value)}><option value="us-gaap">US GAAP</option><option value="ifrs-full">IFRS</option><option value="dei">DEI</option></select></Field>
+            <Field label={en ? "XBRL concept" : "XBRL 指标"}><Input value={concept} onChange={(event) => setConcept(event.target.value)} /></Field>
+            <Field label={en ? "Unit (optional)" : "单位（可选）"}><Input value={unit} onChange={(event) => setUnit(event.target.value)} /></Field>
+            <Field label={en ? "Filed strictly before (optional)" : "提交日期早于（可选）"}><Input type="date" value={filingBefore} onChange={(event) => setFilingBefore(event.target.value)} /></Field>
+            <p>{en ? "SEC access requires a server-configured contact. Filing dates do not prove the exact public availability time." : "SEC 访问需要服务端配置联系信息。提交日期不能证明资料的精确公开时刻。"}</p>
+          </> : sourceMode === "file" ? <>
+            <Field label={en ? "PDF file (maximum 1.5 MB)" : "PDF 文件（最大 1.5 MB）"}><Input key={fileInputKey} type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field>
+            <Field label={en ? "Title (optional)" : "资料标题（可选）"}><Input value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
+            <Field label={en ? "Publication time (if known)" : "公开时间（如已知）"}><Input type="datetime-local" value={publishedAt} onChange={(event) => setPublishedAt(event.target.value)} /></Field>
+            <p>{en ? "Text-based PDFs are supported; scanned pages require text recognition before upload." : "支持含文本的 PDF；扫描件需要先识别文字。"}</p>
+          </> : <>
+          <Field label={en ? "Title" : "资料标题"}><Input value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
+          <Field label={en ? "Source URL (optional)" : "来源链接（可选）"}><Input type="url" value={url} onChange={(event) => setUrl(event.target.value)} /></Field>
+          <Field label={en ? "Publication time (if known)" : "公开时间（如已知）"} helper={en ? "Uses your device's local time; the date remains unverified." : "使用设备所在时区；此时间尚未独立核验。"}><Input type="datetime-local" value={publishedAt} onChange={(event) => setPublishedAt(event.target.value)} /></Field>
+          <Field label={en ? "Text" : "资料正文"}><Textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={200000} /></Field>
+          <p>{en ? "If text is empty, the app can fetch supported BEA or Federal Reserve HTML pages. Other sources require pasted text." : "正文为空时，可读取支持的美国经济分析局或美联储 HTML 页面；其他来源请粘贴正文。"}</p>
+          </>}
+          <label><input type="checkbox" checked={confirmRights} onChange={(event) => setConfirmRights(event.target.checked)} /> {en ? "I may store this material." : "我有权保存这份资料。"}</label>
+          <label><input type="checkbox" checked={modelInput} onChange={(event) => setModelInput(event.target.checked)} /> {en ? "Allow model processing." : "允许模型处理这份资料。"}</label>
+          <label><input type="checkbox" checked={allowExport} onChange={(event) => setAllowExport(event.target.checked)} /> {en ? "Allow export of this material." : "允许导出这份资料。"}</label>
+          {topic ? <Button disabled={busy || running || !isLatest || !hasMaterial} onClick={() => void attachMaterial()}>{en ? "Add to current research" : "添加到当前研究"}</Button> : null}
+        </details>
+        <Button variant="primary" disabled={busy || (!question.trim() && !hasMaterial)} onClick={() => void create()}>{en ? "Create research" : "创建研究"}</Button>
+      </div>
+      <aside className="general-library"><h2>{en ? "Your research" : "我的研究"}</h2>{topics.length === 0 ? <p>{en ? "No saved research yet." : "还没有保存的研究。"}</p> : topics.map((item) => <button type="button" disabled={busy} className="general-topic" key={item.topic_id} onClick={() => void openTopic(item.topic_id)}>{item.request.question || (en ? "Material-based research" : "资料研究")}</button>)}</aside>
+    </div>
+    {notice ? <p role="alert">{notice}</p> : null}
+    {topic && current ? <section className="general-result">
+      <div className="general-result-header"><div><p className="eyebrow">{en ? "CURRENT RESEARCH" : "当前研究"}</p><h2>{topic.request.question || (en ? "Material-based research" : "资料研究")}</h2></div>
+        <Button variant="primary" disabled={busy || running || !isLatest} onClick={() => void run()}>{en ? "Run research" : "开始研究"}</Button></div>
+      <Field label={en ? "Research version" : "研究版本"}><select className="text-input select-input" value={current.version_id} onChange={(event) => { if (hasUnsavedReview && event.target.value !== current.version_id) { setNotice(en ? "Save your edits before changing versions." : "请先保存当前修改，再切换版本。"); return; } setSelectedVersionId(event.target.value); }}>{topic.versions.map((version, index) => <option key={version.version_id} value={version.version_id}>{en ? "Version" : "版本"} {index + 1} · {version.review === "confirmed" ? (en ? "confirmed" : "已确认") : version.review === "reservation" ? (en ? "reservation" : "保留异议") : (en ? "draft" : "草稿")} · {new Date(version.created_at).toLocaleString()}</option>)}</select></Field>
+      {!isLatest ? <p role="status">{en ? "Historical version is read-only. Select the latest version to edit or run." : "历史版本为只读；选择最新版本后可编辑或运行研究。"}</p> : null}
+      <p>{en ? "Version created by: " : "版本创建者："}{current.created_by === "user" ? (en ? "user" : "用户") : current.created_by === "agent" ? (en ? "research agent" : "研究 Agent") : (en ? "unknown" : "未知")}</p>
+      {parent ? <details className="general-source"><summary>{en ? "Compare with the last reviewed version" : "对比此前复核的版本"}</summary>
+        <p><strong>{en ? "Previous summary" : "原总结"}</strong></p><p>{parent.content.summary || (en ? "No summary" : "无总结")}</p>
+        <p><strong>{en ? "Current summary" : "当前总结"}</strong></p><p>{summary || (en ? "No summary" : "无总结")}</p>
+        <p><strong>{en ? "Previous findings" : "原结论"}</strong></p><ul>{parent.content.claims.map((claim, index) => <li key={index}>{claim.text}</li>)}</ul>
+        <p><strong>{en ? "Current findings" : "当前结论"}</strong></p><ul>{claims.map((claim, index) => <li key={index}>{claim.text}</li>)}</ul>
+        <p><strong>{en ? "Previous figures" : "原数值"}</strong></p><ul>{parent.content.facts.map((fact, index) => <li key={index}>{fact.label}: {fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</li>)}</ul>
+        <p><strong>{en ? "Current figures" : "当前数值"}</strong></p><ul>{facts.map((fact, index) => <li key={index}>{fact.label}: {fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</li>)}</ul>
+      </details> : null}
+      <p>{en ? "Only provided material with model permission can be analyzed. A question alone may return a clear information gap." : "目前仅分析你提供且允许模型处理的资料。只输入问题时，系统可能先返回资料缺口。"}</p>
+      <label><input type="checkbox" checked={allowSearch} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setAllowSearch(event.target.checked)} /> {en ? "When no material is attached, send the question to the configured search provider to find leads." : "未关联资料时，将问题发送给已配置的搜索服务以查找线索。"}</label>
+      <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (up to one additional paid call; not independent verification)." : "请求模型复查引用是否支持结论（最多增加一次付费调用；不等于独立核验）。"}</label>
+      <details className="general-source"><summary>{en ? "Research budget" : "研究预算"}</summary>
+        <Field label={en ? "Time limit in seconds (1–180)" : "时间上限（秒，1–180）"}><Input type="number" min="1" max="180" value={maxElapsed} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxElapsed(event.target.value)} /></Field>
+        <Field label={en ? "Maximum model tokens" : "模型 Token 上限"}><Input type="number" min="0" max="20000" value={maxTokens} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxTokens(event.target.value)} /></Field>
+        <Field label={en ? "Maximum cost in USD (optional)" : "费用上限（美元，可选）"} helper={en ? "If provider pricing is unknown, a cost cap prevents external calls." : "供应商价格未知时，设置费用上限会阻止外部调用。"}><Input type="number" min="0" step="0.01" value={maxCost} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxCost(event.target.value)} /></Field>
+      </details>
+      {operation ? <p role="status">{en ? "Run status: " : "运行状态："}{statusLabel(operation.status, en)}{running ? <> <Button disabled={busy} onClick={() => void cancel()}>{en ? "Cancel" : "取消"}</Button></> : null}</p> : null}
+      {runInputs ? <details className="general-source"><summary>{en ? "Run input snapshot" : "运行时输入记录"}</summary>
+        <p>{en ? "Captured" : "记录时间"}: {new Date(runInputs.captured_at).toLocaleString()} · {en ? "Source version" : "输入版本"}: {runInputs.parent_version_id}</p>
+        <p>{en ? "Time limit" : "时间上限"}: {runInputs.budget.max_elapsed_seconds} s · {en ? "Token limit" : "Token 上限"}: {runInputs.budget.max_total_tokens} · {en ? "Cost limit (USD)" : "费用上限（美元）"}: {runInputs.budget.max_cost_usd ?? (en ? "not set" : "未设置")}</p>
+        <p>{en ? "Model" : "模型"}: {runInputs.model ?? (en ? "unknown" : "未知")} · {en ? "Provider" : "服务方"}: {runInputs.provider ?? (en ? "unknown" : "未知")}</p>
+        <ul>{runInputs.sources.map((source) => <li key={source.source_id}>{source.source_id} · SHA-256: {source.content_sha256} · {en ? "Model processing" : "模型处理"}: {source.permissions.model_input ? (en ? "allowed" : "允许") : (en ? "not allowed" : "未允许")}</li>)}</ul>
+      </details> : null}
+      {operation && ["failed", "cancelled"].includes(operation.status) ? <p role="status">{en ? "This run cannot resume from a checkpoint. Saved versions remain available. Starting another run makes new external requests; previous requests may still be billed." : "此运行无法从检查点续跑，已保存的版本仍可查看。再次运行会发起新的外部请求，之前的请求仍可能产生费用。"}</p> : null}
+      {current.content.run.status ? <p>{en ? "Result: " : "结果："}{statusLabel(String(current.content.run.status), en)}</p> : null}
+      {current.content.run.support_review_requested ? <p>{en ? "Model support review: " : "模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
+      <h3>{en ? "Sources" : "资料来源"}</h3>
+      {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.published_at || (en ? "Publication date unknown" : "公开时间未知")}</p><Button onClick={() => { setTitle(candidate.title); setUrl(candidate.url); setSourceMode("text"); if (sourceDetails.current) { sourceDetails.current.open = true; sourceDetails.current.scrollIntoView({ behavior: "smooth", block: "start" }); } }}>{en ? "Attach source" : "添加此来源"}</Button></article>)}</section> : null}
+      {sourceMetadata.length ? <><p>{en ? "Attached material" : "已关联资料"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : ""}{source.retrieval_method === "user_pdf" && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id)}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
+      {current.content.sources.length ? <ul>{current.content.sources.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} <small>{en ? "Published" : "公开时间"}: {source.published_at || (en ? "unknown" : "未知")} · {en ? "Retrieved" : "获取时间"}: {source.obtained_at || (en ? "unknown" : "未知")}</small></li>; })}</ul> : <p>{en ? "No source analyzed." : "尚无已分析来源。"}</p>}
+      {facts.length ? <>
+        <h3>{en ? "Extracted figures" : "提取的数值"}</h3>
+        <p>{en ? "Values, units and periods require review." : "数值、单位和期间仍需核验。"}</p>
+        {isLatest && !running ? <Button disabled={busy} onClick={() => setEditingFacts((value) => !value)}>{editingFacts ? (en ? "Done editing figures" : "完成编辑数值") : (en ? "Edit figures" : "编辑数值")}</Button> : null}
+        {editingFacts && isLatest && !running ? <p>{en ? "The original quotation is retained as context. An edited figure is not independently verified." : "原引文将作为上下文保留；修改后的数值尚未独立核验。"}</p> : null}
+        {facts.map((fact, index) => <article className="general-claim" key={`${fact.fact_id}:${index}`}>
+          <strong>{fact.label}</strong>
+          {fact.authorship === "user" || !originalFacts.has(JSON.stringify(fact)) ? <small> {en ? "User-edited; not independently verified." : "用户编辑，尚未独立核验。"}</small> : null}
+          {editingFacts && isLatest && !running ? <>
+            <Field label={`${en ? "Metric" : "指标"} ${index + 1}`}><Input value={fact.label ?? ""} maxLength={300} disabled={busy} onChange={(event) => updateFact(index, { label: event.target.value })} /></Field>
+            <Field label={`${en ? "Value" : "数值"} ${index + 1}`}><Input value={fact.value ?? ""} inputMode="decimal" maxLength={64} disabled={busy} onChange={(event) => updateFact(index, { value: event.target.value })} /></Field>
+            <Field label={`${en ? "Unit" : "单位"} ${index + 1}`}><Input value={fact.unit ?? ""} maxLength={100} disabled={busy} onChange={(event) => updateFact(index, { unit: event.target.value })} /></Field>
+            <Field label={`${en ? "Currency (optional)" : "币种（可选）"} ${index + 1}`}><Input value={fact.currency ?? ""} maxLength={16} disabled={busy} onChange={(event) => updateFact(index, { currency: event.target.value || null })} /></Field>
+            <Field label={`${en ? "Period" : "期间"} ${index + 1}`}><Input value={fact.period ?? ""} maxLength={100} disabled={busy} onChange={(event) => updateFact(index, { period: event.target.value })} /></Field>
+          </> : <p>{fact.value} {fact.unit} · {fact.period}</p>}
+          <blockquote>{fact.quotation}<small> {fact.source_id}{fact.location?.page ? ` · ${en ? "page" : "第"} ${fact.location.page}${en ? "" : " 页"}` : ""}</small>{fact.source_id ? <SourceContext key={`${current.version_id}:${fact.source_id}:${fact.location?.character_start}:${fact.location?.character_end}`} sourceId={fact.source_id} location={fact.location} quotation={fact.quotation ?? undefined} en={en} load={api.sourceContext} /> : null}</blockquote>
+        </article>)}
+        {hasUnsavedFacts ? <p role="status">{en ? "Figures have unsaved changes. Calculations and source differences still reflect the saved version." : "数值修改尚未保存；计算和来源差异仍依据已保存版本。"}</p> : null}
+      </> : null}
+      {current.content.evidence_differences?.length ? <><h3>{en ? "Differences to review" : "需要核查的数值差异"}</h3><p>{en ? "Matching labels and periods do not establish the same company, accounting basis or independent sources. Check the original material before treating a difference as a conflict." : "指标名称和期间相同，并不代表公司、统计口径或来源独立性相同；请查阅原文后再判断是否冲突。"}</p>{current.content.evidence_differences.length === 50 ? <p>{en ? "At most 50 candidate differences are displayed; additional differences may exist." : "最多展示 50 组待核查差异，可能还有其他差异。"}</p> : null}{current.content.evidence_differences.map((difference, index) => <article className="general-claim" key={index}><strong>{difference.label}</strong><p>{difference.period} · {difference.unit}{difference.currency ? ` · ${difference.currency}` : ""}</p><ul>{difference.facts.map((fact) => <li key={fact.fact_id}>{fact.value} · {sourceMetadata.find((source) => source.source_id === fact.source_id)?.title || fact.source_id} · {fact.fact_id}</li>)}</ul>{difference.truncated ? <small>{en ? "Additional observations were omitted." : "还有未显示的数值。"}</small> : null}</article>)}</> : null}
+      {current.content.calculations.length ? <><h3>{en ? "Calculations" : "计算过程"}</h3>{current.content.calculations.map((calculation, index) => <article className="general-claim" key={index}><strong>{calculation.formula_id}</strong>{calculation.authorship === "user" ? <small> {en ? "User-edited; not verified by the calculation engine." : "用户编辑，未经过计算引擎核验。"}</small> : null}{calculation.input_status && calculation.input_status !== "matched" ? <p role="status">{en ? "The saved inputs no longer match the current facts or cannot be checked. This historical result requires recalculation." : "保存的计算输入与当前事实不一致或无法核对；此历史结果需要重新计算。"}</p> : null}<p>{calculation.expression} = {calculation.value} {calculation.unit}</p><ul>{Array.isArray(calculation.inputs) ? calculation.inputs.map((input) => <li key={input.fact_id}>{input.fact_id}: {input.value} {input.unit} · {input.period}</li>) : null}</ul>{isLatest && calculation.formula_version === "1" && Array.isArray(calculation.inputs) && calculation.inputs.length === 2 ? <Button disabled={busy || running} onClick={() => void recalculate(index)}>{en ? "Recalculate" : "重新计算"}</Button> : null}</article>)}</> : null}
+      <h3>{en ? "Findings and counterarguments" : "研究结论与反方"}</h3>
+      {isLatest && !running ? <Button disabled={busy} onClick={() => setEditingClaims((value) => !value)}>{editingClaims ? (en ? "Done editing findings" : "完成编辑结论") : (en ? "Edit findings" : "编辑结论")}</Button> : null}
+      {editingClaims && isLatest && !running ? <p>{en ? "Edited findings retain their previous quotations as context; their support must be checked again." : "修改后的结论会保留原引文作为上下文，引用是否支持新结论需要重新核验。"}</p> : null}
+      {claims.length ? claims.map((claim, index) => <article className="general-claim" key={index}><strong>{claim.role === "counterargument" ? (en ? "Counterargument" : "反方") : (en ? "Finding" : "结论")}</strong>{editingClaims && isLatest && !running ? <><Field label={`${claim.role === "counterargument" ? (en ? "Counterargument" : "反方") : (en ? "Finding" : "结论")} ${index + 1}`}><Textarea value={claim.text} maxLength={3000} disabled={busy} onChange={(event) => { const value = event.target.value; setClaims((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, text: value } : item)); }} /></Field><Button disabled={busy} onClick={() => setClaims((items) => items.filter((_, itemIndex) => itemIndex !== index))}>{en ? "Remove" : "移除"}</Button></> : <p>{claim.text}</p>}<small>{claim.authorship === "user" || !originalClaims.has(JSON.stringify(claim)) ? (en ? "User-edited; source support has not been independently verified." : "用户编辑；来源是否支持结论尚未独立核验。") : (en ? "Model interpretation; source support has not been independently verified." : "模型解释；来源是否支持结论尚未独立核验。")}</small>{claim.support_review && originalClaims.has(JSON.stringify(claim)) ? <p><small>{en ? "Model review: " : "模型复查："}{en ? claim.support_review.verdict : ({ supports: "认为支持", does_not_support: "认为不支持", contradicts: "发现矛盾", uncertain: "无法判断" } as Record<string, string>)[claim.support_review.verdict]}{en ? "; not independently verified." : "；尚未独立核验。"}</small></p> : null}{claim.citations?.map((citation, index) => <blockquote key={index}>{citation.quotation ?? ""}<small> {citation.source_id}{citation.location?.page ? ` · ${en ? "page" : "第"} ${citation.location.page}${en ? "" : " 页"}` : ""}</small><SourceContext key={`${current.version_id}:${citation.source_id}:${citation.location?.character_start}:${citation.location?.character_end}`} sourceId={citation.source_id} location={citation.location} quotation={citation.quotation} en={en} load={api.sourceContext} /></blockquote>)}</article>) : <p>{en ? "No findings yet." : "尚无研究结论。"}</p>}
+      {editingClaims && isLatest && !running ? <div className="general-actions"><Button disabled={busy || claims.length >= 2000} onClick={() => setClaims((items) => [...items, { text: "", role: "support", citations: [] }])}>{en ? "Add finding" : "添加结论"}</Button><Button disabled={busy || claims.length >= 2000} onClick={() => setClaims((items) => [...items, { text: "", role: "counterargument", citations: [] }])}>{en ? "Add counterargument" : "添加反方"}</Button></div> : null}
+      <h3>{en ? "Gaps and limitations" : "缺口与限制"}</h3><ul>{current.content.limitations.map((item, index) => <li key={index}>{localizeLimitation(item, en)}</li>)}</ul>
+      {current.created_by === "agent" && (current.content.summary || current.note) ? <p>{en ? "Your summary and review notes were carried forward from the previous version and have not been reviewed against this run." : "总结和复核意见沿用自上一版本，尚未结合本次研究重新确认。"}</p> : null}
+      <Field label={en ? "Your summary" : "你的总结"}><Textarea value={summary} disabled={!isLatest || running} onChange={(event) => setSummary(event.target.value)} /></Field>
+      <Field label={en ? "Review notes" : "复核意见"}><Textarea value={note} disabled={!isLatest || running} onChange={(event) => setNote(event.target.value)} /></Field>
+      <div className="general-actions"><Button disabled={busy || running || !isLatest} onClick={() => void save("draft")}>{en ? "Save draft" : "保存草稿"}</Button><Button disabled={busy || running || !isLatest} onClick={() => void save("confirmed")}>{en ? "Confirm" : "确认"}</Button><Button disabled={busy || running || !isLatest} onClick={() => void save("reservation")}>{en ? "Save reservation" : "保留异议"}</Button><Button disabled={busy} onClick={() => void exportResearch(false)}>{en ? "Export research JSON" : "导出研究 JSON"}</Button><Button disabled={busy} onClick={() => void exportResearch(true)}>{en ? "Export record only" : "导出记录摘要"}</Button></div>
+      <p>{en ? "The record-only export excludes research text and source content." : "记录摘要不包含研究正文和来源内容。"}</p>
+    </section> : null}
+  </section>;
+}

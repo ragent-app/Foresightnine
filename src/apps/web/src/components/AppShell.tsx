@@ -28,16 +28,19 @@ interface AppShellProps {
   readonly onOAuthLogout?: (() => void) | undefined;
   readonly onOAuthDelete?: (() => void) | undefined;
   readonly billingSummary?: AccountBillingSummary | null | undefined;
+  readonly generalResearchActive?: boolean;
+  readonly onGeneralResearch?: (() => void) | undefined;
 }
 
-export function AppShell({ stage, onStage, canNavigate = (target) => target === "thesis" || target === "console", children, inspector, oauthProviders, oauthReadinessStatus, onOAuthStart, oauthSession, onOAuthLogout, onOAuthDelete, billingSummary }: AppShellProps) {
+export function AppShell({ stage, onStage, canNavigate = (target) => target === "thesis" || target === "console", children, inspector, oauthProviders, oauthReadinessStatus, onOAuthStart, oauthSession, onOAuthLogout, onOAuthDelete, billingSummary, generalResearchActive = false, onGeneralResearch }: AppShellProps) {
   const { language, setLanguage } = useLanguage();
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">{t(language, "跳到主要内容")}</a>
     <aside className="rail" aria-label={t(language, "研究导航")}>
       <div className="brand-row"><div className="brand">ForesightNine</div><button className="rail-item language-toggle" type="button" onClick={() => setLanguage(language === "zh" ? "en" : "zh")} aria-label={language === "zh" ? "Switch language to English" : "切换为中文"}>{language === "zh" ? "EN" : "中文"}</button></div>
       <nav className="rail-nav">
-        {navItems.map((item) => <button key={item.stage} className={`rail-item ${stage === item.stage ? "is-active" : ""}`} aria-current={stage === item.stage ? "page" : undefined} disabled={!canNavigate(item.stage)} onClick={() => { if (canNavigate(item.stage)) onStage(item.stage); }}>
+        {onGeneralResearch ? <button type="button" className={`rail-item ${generalResearchActive ? "is-active" : ""}`} aria-current={generalResearchActive ? "page" : undefined} onClick={onGeneralResearch}><span className="rail-icon" aria-hidden="true">⌕</span><span>{language === "en" ? "Research workspace" : "研究工作区"}</span></button> : null}
+        {navItems.map((item) => <button key={item.stage} className={`rail-item ${!generalResearchActive && stage === item.stage ? "is-active" : ""}`} aria-current={!generalResearchActive && stage === item.stage ? "page" : undefined} disabled={!canNavigate(item.stage)} onClick={() => { if (canNavigate(item.stage)) onStage(item.stage); }}>
           <span className="rail-icon" aria-hidden="true">{item.icon}</span><span>{item.stage === "thesis" ? (language === "en" ? "Premise" : "研究观点") : item.stage === "fm" && language === "en" ? "Factors" : t(language, item.label)}</span>
         </button>)}
       </nav>

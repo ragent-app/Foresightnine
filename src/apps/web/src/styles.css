@@ -263,3 +263,25 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .study-switcher p { font-size:.85rem; margin:.5rem 0; color:var(--muted); }
 .study-switcher [role="alert"] { color:#a13d35; }
 @media(max-width:640px) { .study-switcher-controls { flex-wrap:wrap; } .study-switcher-controls select { flex-basis:100%; } .study-switcher-controls button { flex:1; min-height:44px; } }
+.general-research { max-width: 1100px; margin: 0 auto; }
+.general-research .thesis-textarea { min-height: 140px; padding-bottom: 14px; }
+.general-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 32px; margin: 30px 0; }
+.general-source { margin: 16px 0 20px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.general-source summary { cursor: pointer; font-weight: 600; }
+.general-source label:has(input[type="checkbox"]) { display: block; margin: 10px 0; font-size: 14px; }
+.general-library { padding: 4px 0 4px 24px; border-left: 1px solid var(--border); }
+.general-library h2 { font-size: 18px; }
+.general-topic { display: block; width: 100%; border: 0; border-bottom: 1px solid var(--border); background: transparent; padding: 12px 0; text-align: left; color: inherit; cursor: pointer; }
+.general-topic:hover { color: var(--accent); }
+.general-result { border-top: 1px solid var(--border); padding-top: 28px; }
+.general-result-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.general-result-header h2 { overflow-wrap: anywhere; }
+.general-claim { padding: 16px; border: 1px solid var(--border); border-radius: 8px; margin: 12px 0; overflow-wrap: anywhere; }
+.general-claim p { margin: 8px 0; }
+.general-claim blockquote { margin: 12px 0 0; padding-left: 12px; border-left: 3px solid var(--border); }
+.general-claim small { color: var(--muted); overflow-wrap: anywhere; }
+.source-context { margin-top: 10px; }
+.source-context pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
+.source-context mark { color: #1d1b16; background: #f4e6ab; }
+.general-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 720px) { .general-grid { grid-template-columns: 1fr; }.general-library { border-left: 0; border-top: 1px solid var(--border); padding: 16px 0 0; }.general-result-header { align-items: flex-start; flex-direction: column; } }

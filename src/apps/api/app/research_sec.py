@@ -1,0 +1,195 @@
+"""Bounded SEC company-concept retrieval; no credentials in responses."""
+from __future__ import annotations
+
+import json
+import math
+import re
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from hashlib import sha256
+from typing import Callable, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .openai_compatible import HttpResponse, _TransportFailure, _TransportTimeout, _default_transport
+from .research_sources import SourcePermissions
+
+
+class SecConceptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    cik: str = Field(pattern=r"^\d{1,10}$")
+    taxonomy: Literal["us-gaap", "ifrs-full", "dei"] = "us-gaap"
+    tag: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    unit: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
+    filing_before: date | None = None
+    max_records: int = Field(default=30, ge=1, le=100)
+    permissions: SourcePermissions
+
+    @field_validator("cik")
+    @classmethod
+    def nonzero_cik(cls, value: str) -> str:
+        if int(value) == 0:
+            raise ValueError("CIK must be nonzero.")
+        return value.zfill(10)
+
+
+class SecIdentityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    query: str = Field(min_length=1, max_length=100)
+
+    @field_validator("query")
+    @classmethod
+    def nonblank_query(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Query must not be blank.")
+        return value
+
+
+class SecFailure(ValueError):
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class SecResult:
+    url: str
+    title: str
+    text: str
+    response_sha256: str
+
+
+def search_sec_identities(request: SecIdentityRequest, user_agent: str | None,
+                          transport: Callable[..., HttpResponse] | None = None) -> dict:
+    """Return current issuer candidates; ticker is not a unique security ID."""
+    agent = validate_user_agent(user_agent)
+    url = "https://www.sec.gov/files/company_tickers.json"
+    send = transport or (lambda method, address, headers, body, timeout:
+                         _default_transport(method, address, headers, body, timeout,
+                                            max_response_bytes=2 * 1024 * 1024))
+    try:
+        response = send("GET", url, {"User-Agent": agent, "Accept": "application/json"}, b"", 15.0)
+    except _TransportTimeout as error:
+        raise SecFailure("source_timeout") from error
+    except (_TransportFailure, OSError) as error:
+        raise SecFailure("source_unavailable") from error
+    if response.status_code == 429:
+        raise SecFailure("source_rate_limited")
+    if not 200 <= response.status_code < 300:
+        raise SecFailure("source_unavailable")
+    if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "application/json":
+        raise SecFailure("source_format_unsupported")
+    if len(response.body.encode("utf-8")) > 2 * 1024 * 1024:
+        raise SecFailure("source_invalid")
+    try:
+        payload = json.loads(response.body)
+        if not isinstance(payload, dict) or len(payload) > 50000:
+            raise ValueError("Invalid SEC ticker index")
+        query = request.query.casefold()
+        matches = []
+        valid_records = 0
+        for item in payload.values():
+            if not isinstance(item, dict):
+                continue
+            cik, ticker, name = item.get("cik_str"), item.get("ticker"), item.get("title")
+            if (isinstance(cik, bool) or not isinstance(cik, int) or not 0 < cik < 10**10 or
+                    not isinstance(ticker, str) or not re.fullmatch(r"[A-Za-z0-9.\-]{1,20}", ticker) or
+                    not isinstance(name, str) or not name.strip() or len(name) > 300):
+                continue
+            valid_records += 1
+            ticker_match, name_match = ticker.casefold(), name.casefold()
+            if query not in ticker_match and query not in name_match and query != str(cik):
+                continue
+            rank = 0 if query == ticker_match or query == str(cik) else 1 if name_match.startswith(query) else 2
+            matches.append((rank, ticker_match, cik, {"cik": str(cik).zfill(10), "ticker": ticker,
+                                                      "name": name, "exchange": None}))
+        if not valid_records:
+            raise ValueError("SEC ticker index has no valid entries")
+        matches.sort(key=lambda item: (item[0], item[1], item[2]))
+    except (ValueError, TypeError, json.JSONDecodeError) as error:
+        raise SecFailure("source_invalid") from error
+    return {"candidates": [item[3] for item in matches[:10]], "source_url": url,
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "response_sha256": sha256(response.body.encode("utf-8")).hexdigest(),
+            "limitation": "Current SEC ticker mapping only; exchange, security class and historical validity are not established."}
+
+
+def validate_user_agent(value: str | None) -> str:
+    # The deployment operator must provide their own real contact; never invent one.
+    if not value or len(value) > 200 or "\r" in value or "\n" in value or not re.search(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b", value):
+        raise SecFailure("sec_contact_unconfigured")
+    return value
+
+
+def fetch_sec_concept(request: SecConceptRequest, user_agent: str | None,
+                      transport: Callable[..., HttpResponse] = _default_transport) -> SecResult:
+    if not request.permissions.store:
+        raise SecFailure("source_permission_unknown")
+    agent = validate_user_agent(user_agent)
+    url = f"https://data.sec.gov/api/xbrl/companyconcept/CIK{request.cik}/{request.taxonomy}/{request.tag}.json"
+    try:
+        response = transport("GET", url, {"User-Agent": agent, "Accept": "application/json"}, b"", 15.0)
+    except _TransportTimeout as error:
+        raise SecFailure("source_timeout") from error
+    except (_TransportFailure, OSError) as error:
+        raise SecFailure("source_unavailable") from error
+    if response.status_code == 429:
+        raise SecFailure("source_rate_limited")
+    if not 200 <= response.status_code < 300:
+        raise SecFailure("source_unavailable")
+    if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "application/json":
+        raise SecFailure("source_format_unsupported")
+    try:
+        payload = json.loads(response.body)
+        if not isinstance(payload, dict) or int(payload["cik"]) != int(request.cik):
+            raise ValueError("CIK mismatch")
+        if payload.get("taxonomy") != request.taxonomy or payload.get("tag") != request.tag:
+            raise ValueError("Concept mismatch")
+        units = payload["units"]
+        if not isinstance(units, dict):
+            raise ValueError("Invalid units")
+        entity = payload.get("entityName", "Unknown entity")
+        label = payload.get("label", request.tag)
+        if not isinstance(entity, str) or not isinstance(label, str):
+            raise ValueError("Invalid metadata")
+        records = []
+        for unit, entries in units.items():
+            if not isinstance(unit, str) or not isinstance(entries, list) or (request.unit is not None and unit != request.unit):
+                continue
+            for item in entries:
+                if not isinstance(item, dict) or not isinstance(item.get("filed"), str):
+                    continue
+                filed = date.fromisoformat(item["filed"])
+                if request.filing_before is not None and filed >= request.filing_before:
+                    continue
+                value = item.get("val")
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+                    continue
+                records.append((filed, str(item.get("end", "")), unit, item))
+        records.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    except (ValueError, TypeError, KeyError, OverflowError, json.JSONDecodeError) as error:
+        raise SecFailure("source_invalid") from error
+    if not records:
+        raise SecFailure("source_no_matching_facts")
+    lines = [f"SEC company concept: {entity}; CIK {request.cik}; taxonomy {request.taxonomy}; tag {request.tag}; label {label}.",
+             f"Most recent {min(len(records), request.max_records)} of {len(records)} matching observations; filing date is not exact public availability time."]
+    for filed, _end, unit, item in records[:request.max_records]:
+        fields = {key: item.get(key) for key in ("val", "start", "end", "fy", "fp", "form", "filed", "accn", "frame") if item.get(key) is not None}
+        fields["unit"] = unit
+        lines.append(json.dumps(fields, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    return SecResult(url=url, title=f"{entity}: {label}", text="\n".join(lines),
+                     response_sha256=sha256(response.body.encode("utf-8")).hexdigest())
+
+
+def reserve_sec_request(repository, now: datetime | None = None) -> bool:
+    """Reserve a global one-second slot using the shared repository lock."""
+    current = now or datetime.now(timezone.utc)
+    def reserve() -> bool:
+        previous = repository.get("sec")
+        if previous:
+            last = datetime.fromisoformat(previous["requested_at"])
+            if (current - last).total_seconds() < 1:
+                return False
+        repository.put("sec", {"requested_at": current.isoformat()})
+        return True
+    return repository.with_advisory_lock("source:sec-global", reserve)

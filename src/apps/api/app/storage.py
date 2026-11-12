@@ -258,13 +258,14 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
 
     def put(self, key: str, value: ValueT, *, expected_version: int | None = None) -> int:
         _validate_key(key)
-        current = self._versions.get(key)
-        if expected_version is not None and current != expected_version:
-            raise StorageConflictError("Storage document version conflict.")
-        version = (current or 0) + 1
-        self._values[key] = value
-        self._versions[key] = version
-        return version
+        with self._advisory_locks_guard:
+            current = self._versions.get(key)
+            if expected_version is not None and current != expected_version:
+                raise StorageConflictError("Storage document version conflict.")
+            version = (current or 0) + 1
+            self._values[key] = value
+            self._versions[key] = version
+            return version
 
     def version(self, key: str) -> int | None:
         return self._versions.get(key)

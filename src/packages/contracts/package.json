@@ -11,13 +11,14 @@
     "./schemas/v1/contracts.schema.json": "./schemas/v1/contracts.schema.json",
     "./schemas/v1/research.schema.json": "./schemas/v1/research.schema.json",
     "./openapi/v1/openapi.json": "./openapi/v1/openapi.json",
-    "./openapi/v1/openapi.yaml": "./openapi/v1/openapi.yaml"
+    "./openapi/v1/openapi.yaml": "./openapi/v1/openapi.yaml",
+    "./openapi/v2/openapi.json": "./openapi/v2/openapi.json"
   },
   "scripts": {
-    "generate": "node scripts/generate.mjs",
-    "verify:generated": "node scripts/generate.mjs --check",
+    "generate": "node scripts/generate.mjs && node scripts/generate-research-v2.mjs",
+    "verify:generated": "node scripts/generate.mjs --check && node scripts/generate-research-v2.mjs --check",
     "typecheck": "tsc -b --pretty false",
-    "test": "node scripts/generate.mjs --check && tsc -b --pretty false"
+    "test": "node scripts/generate.mjs --check && node scripts/generate-research-v2.mjs --check && tsc -b --pretty false"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

@@ -1,0 +1,171 @@
+"""Versioned, account-owned research documents for the new workspace.
+
+This store is independent of the legacy thesis/challenge documents.  One
+aggregate contains its complete version history so an optimistic write is
+atomic even when PostgreSQL and multiple API processes are used.
+"""
+from __future__ import annotations
+
+from copy import deepcopy
+from datetime import datetime, timezone
+from typing import Literal
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .storage import JsonDocumentRepository, StorageConflictError
+
+
+class ResearchInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    question: str = Field(default="", max_length=10000)
+    source_ids: list[str] = Field(default_factory=list, max_length=100)
+    scope: str = Field(default="", max_length=10000)
+    as_of: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_input(self) -> ResearchInput:
+        if not self.question and not any(s.strip() for s in self.source_ids):
+            raise ValueError("A question or source is required.")
+        if any(not s.strip() for s in self.source_ids):
+            raise ValueError("Source IDs must not be blank.")
+        if self.as_of is not None and self.as_of.utcoffset() is None:
+            raise ValueError("as_of must include a timezone.")
+        return self
+
+
+class ResearchContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    summary: str = Field(default="", max_length=100000)
+    # The structured entries preserve separate categories; further processing
+    # and source authorization are implemented at the tool boundary.
+    sources: list[dict] = Field(default_factory=list, max_length=200)
+    source_candidates: list[dict] = Field(default_factory=list, max_length=10)
+    facts: list[dict] = Field(default_factory=list, max_length=2000)
+    evidence_differences: list[dict] = Field(default_factory=list, max_length=50)
+    calculations: list[dict] = Field(default_factory=list, max_length=2000)
+    claims: list[dict] = Field(default_factory=list, max_length=2000)
+    limitations: list[str] = Field(default_factory=list, max_length=500)
+    run: dict = Field(default_factory=dict)
+
+
+class VersionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    parent_version_id: str
+    content: ResearchContent
+    review: Literal["draft", "confirmed", "reservation"] = "draft"
+    note: str = Field(default="", max_length=10000)
+
+
+class AttachSourcesInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    parent_version_id: str = Field(min_length=1, max_length=100)
+    source_ids: list[str] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_sources(self) -> AttachSourcesInput:
+        if any(not source_id for source_id in self.source_ids):
+            raise ValueError("Source IDs must not be blank.")
+        return self
+
+
+class ResearchVersion(BaseModel):
+    version_id: str
+    parent_version_id: str | None = None
+    created_at: datetime
+    content: ResearchContent
+    review: Literal["draft", "confirmed", "reservation"]
+    note: str = ""
+    source_ids: list[str] = Field(default_factory=list)
+    created_by: Literal["user", "agent", "unknown"] = "unknown"
+
+
+class ResearchTopic(BaseModel):
+    schema_version: Literal["1"] = "1"
+    topic_id: str
+    owner_id: str
+    request: ResearchInput
+    created_at: datetime
+    updated_at: datetime
+    versions: list[ResearchVersion]
+
+
+class ResearchMetadataExport(BaseModel):
+    """Content-free export when the full research cannot be shared."""
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["1"] = "1"
+    format: Literal["metadata_only"] = "metadata_only"
+    topic_id: str
+    version_id: str
+    parent_version_id: str | None
+    version_created_at: datetime
+    generated_at: datetime
+    as_of: datetime | None
+    review: Literal["draft", "confirmed", "reservation"]
+    created_by: Literal["user", "agent", "unknown"]
+    tracked_source_count: int = Field(ge=0)
+    fact_count: int = Field(ge=0)
+    claim_count: int = Field(ge=0)
+    calculation_count: int = Field(ge=0)
+    limitation_count: int = Field(ge=0)
+    disclosure: Literal["No research text or source content is included. Full export requires source permissions."] = \
+        "No research text or source content is included. Full export requires source permissions."
+
+
+class TopicNotFound(Exception):
+    pass
+
+
+class TopicVersionConflict(Exception):
+    pass
+
+
+class ResearchTopics:
+    def __init__(self, repository: JsonDocumentRepository[ResearchTopic]):
+        self.repository = repository
+
+    def create(self, owner: str, request: ResearchInput) -> ResearchTopic:
+        now = datetime.now(timezone.utc)
+        topic = ResearchTopic(topic_id=f"topic_{uuid4().hex}", owner_id=owner,
+            request=request, created_at=now, updated_at=now,
+            versions=[ResearchVersion(version_id=f"version_{uuid4().hex}",
+                created_at=now, content=ResearchContent(), review="draft",
+                created_by="user",
+                source_ids=list(dict.fromkeys(request.source_ids)))])
+        self.repository.put(topic.topic_id, topic)
+        return topic.model_copy(deep=True)
+
+    def get(self, owner: str, topic_id: str) -> ResearchTopic:
+        topic = self.repository.get(topic_id)
+        if topic is None or topic.owner_id != owner:
+            raise TopicNotFound()
+        return topic.model_copy(deep=True)
+
+    def list(self, owner: str) -> list[ResearchTopic]:
+        return [topic.model_copy(deep=True) for _, topic in self.repository.items()
+                if topic.owner_id == owner]
+
+    def delete_owner(self, owner: str) -> None:
+        for topic in self.list(owner):
+            self.repository.delete(topic.topic_id)
+
+    def add_version(self, owner: str, topic_id: str, request: VersionInput, *, source_ids: list[str] | None = None,
+                    created_by: Literal["user", "agent"] = "user") -> ResearchTopic:
+        topic = self.get(owner, topic_id)
+        if topic.versions[-1].version_id != request.parent_version_id:
+            raise TopicVersionConflict()
+        now = datetime.now(timezone.utc)
+        updated = topic.model_copy(deep=True)
+        combined_source_ids = list(dict.fromkeys([*topic.versions[-1].source_ids, *(source_ids or [])]))
+        if len(combined_source_ids) > 100:
+            raise ValueError("A research version can include at most 100 sources.")
+        updated.versions.append(ResearchVersion(version_id=f"version_{uuid4().hex}",
+            parent_version_id=request.parent_version_id, created_at=now,
+            content=deepcopy(request.content), review=request.review, note=request.note,
+            source_ids=combined_source_ids, created_by=created_by))
+        updated.updated_at = now
+        try:
+            self.repository.put(topic_id, updated, expected_version=len(topic.versions))
+        except StorageConflictError as error:
+            raise TopicVersionConflict() from error
+        return updated.model_copy(deep=True)

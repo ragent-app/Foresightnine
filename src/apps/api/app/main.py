@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from copy import deepcopy
+from copy import copy, deepcopy
 from collections.abc import Callable, Mapping
+from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import json
+import inspect
 import logging
 import os
 import secrets
+from time import monotonic
 from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
@@ -18,7 +21,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from starlette.middleware.cors import CORSMiddleware
 
 from .contract_models import (
@@ -77,7 +80,7 @@ from .retention import RetentionPolicy, cleanup_research_state
 from .security import SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
 from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
 from .phase4_live import LivePhase4Adapter
-from .phase3 import ChallengeDraft, ChallengeInput, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
+from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
 from .openai_compatible import OpenAICompatibleLlmProvider
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, RuntimeClock, build_attestation
@@ -92,6 +95,18 @@ from .services import (
     validate_worldline_bundle_semantics,
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
+from .research_topics import AttachSourcesInput, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status
+from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
+from .research_evidence import evidence_differences
+from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
+                                    apply_support_review, prepare_support_review)
+from .research_runs import ResearchRunRequest, ResearchRunResult
+from .research_topics import ResearchContent
+from .research_fetch import FetchFailure, FetchSourceRequest, fetch_official_text
+from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, search_sec_identities, reserve_sec_request, validate_user_agent
+from .research_uploads import PdfFailure, PdfUploadRequest, extract_pdf
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -272,6 +287,12 @@ def _build_entity_repositories(
 
 
 storage_config = _storage_config()
+RESEARCH_TOPICS = build_repository(storage_config, "research_topics", value_loader=ResearchTopic.model_validate)
+research_topics = ResearchTopics(RESEARCH_TOPICS)
+RESEARCH_SOURCES = build_repository(storage_config, "research_sources", value_loader=ResearchSource.model_validate)
+research_sources = ResearchSources(RESEARCH_SOURCES)
+RESEARCH_RUN_INPUTS = build_repository(storage_config, "research_run_inputs")
+SOURCE_RATE_LIMITS = build_repository(storage_config, "source_rate_limits")
 (
     SESSIONS,
     THESES,
@@ -306,6 +327,12 @@ def _release_terminal_reservation(operation_id: str, status: str) -> None:
     if status not in {"failed", "cancelled"}:
         return
     try:
+        operation = operations.store.get_operation(operation_id)
+        if operation and str(operation.get("endpoint", "")).startswith("/v1/research/topics/"):
+            # A research call may already have reached the provider; leave
+            # ambiguous reservations for reconciliation instead of reversing
+            # a charge whose outcome is unknown.
+            return
         billing_ledger.release(f"model:{operation_id}", now=lifecycle_clock.now(), reverse_settled=True)
     except Exception:
         # The durable reconciliation pass below retries terminal reservations;
@@ -402,6 +429,10 @@ NORMAL_CONFIRM_CRITICAL_CRITERIA = (
 
 def reset_state() -> None:
     operations.reset()
+    RESEARCH_TOPICS.clear()
+    RESEARCH_SOURCES.clear()
+    RESEARCH_RUN_INPUTS.clear()
+    SOURCE_RATE_LIMITS.clear()
     abuse_control.reset()
     telemetry.reset()
     SESSIONS.clear()
@@ -448,6 +479,8 @@ def cleanup_expired_state() -> object:
         operation_id = reservation_id.removeprefix("model:")
         operation_document = operations.store.get_operation(operation_id)
         if operation_document is not None and operation_document.get("status") in {"failed", "cancelled"}:
+            if str(operation_document.get("endpoint", "")).startswith("/v1/research/topics/"):
+                continue
             billing_ledger.release(reservation_id, now=lifecycle_clock.now(), reverse_settled=True)
     active = operations.active_operation_ids()
     for operation_id in tuple(OPERATION_SESSIONS):
@@ -1114,6 +1147,9 @@ def local_delete_account(authorization: str | None = Header(default=None, alias=
     _local_auth_unavailable()
     try:
         account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        research_topics.delete_owner(account.account_id)
+        research_sources.delete_owner(account.account_id)
+        _delete_research_run_inputs(account.account_id)
         delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
         market_data_settings.delete(account.account_id)
         model_settings.delete(account.account_id)
@@ -1128,12 +1164,21 @@ def delete_authenticated_account(authorization: str | None = Header(default=None
 
     try:
         account, _session = authenticate_local(ACCOUNTS, AUTH_SESSIONS, authorization, now=lifecycle_clock.now())
+        research_topics.delete_owner(account.account_id)
+        research_sources.delete_owner(account.account_id)
+        _delete_research_run_inputs(account.account_id)
         delete_local_account(ACCOUNTS, AUTH_SESSIONS, account, now=lifecycle_clock.now(), identities=OAUTH_IDENTITIES)
         market_data_settings.delete(account.account_id)
         model_settings.delete(account.account_id)
     except LocalAuthError as error:
         raise _local_auth_problem(error) from error
     return JSONResponse({"deleted": True}, headers={"Cache-Control": "no-store"})
+
+
+def _delete_research_run_inputs(owner_id: str) -> None:
+    for key, record in list(RESEARCH_RUN_INPUTS.items()):
+        if record.get("owner_id") == owner_id:
+            RESEARCH_RUN_INPUTS.delete(key)
 
 
 @app.get(
@@ -1399,6 +1444,790 @@ def _authenticated_account(authorization: str | None) -> LocalAccount:
         return account
     except LocalAuthError as error:
         raise _local_auth_problem(error) from error
+
+
+@app.post("/v2/research/topics", response_model=ResearchTopic, status_code=201, include_in_schema=False)
+def create_research_topic(request: ResearchInput, authorization: str | None = Header(default=None)) -> ResearchTopic:
+    account = _authenticated_account(authorization)
+    try:
+        for source_id in request.source_ids:
+            research_sources.get(account.account_id, source_id)
+    except SourceNotFound as error:
+        raise ApiProblem(404, "not_found", "Research source not found.") from error
+    return research_topics.create(account.account_id, request)
+
+
+@app.get("/v2/research/topics", response_model=list[ResearchTopic], include_in_schema=False)
+def list_research_topics(authorization: str | None = Header(default=None)) -> list[ResearchTopic]:
+    account = _authenticated_account(authorization)
+    return research_topics.list(account.account_id)
+
+
+@app.get("/v2/research/topics/{topic_id}", response_model=ResearchTopic, include_in_schema=False)
+def get_research_topic(topic_id: str, authorization: str | None = Header(default=None)) -> ResearchTopic:
+    account = _authenticated_account(authorization)
+    try:
+        return research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+
+
+@app.get("/v2/research/topics/{topic_id}/versions/{version_id}", include_in_schema=False)
+def get_research_version(topic_id: str, version_id: str, authorization: str | None = Header(default=None)) -> dict:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    version = next((v for v in topic.versions if v.version_id == version_id), None)
+    if version is None:
+        raise ApiProblem(404, "not_found", "Research version not found.")
+    return version.model_dump(mode="json")
+
+
+@app.get("/v2/research/topics/{topic_id}/versions/{version_id}/sources", include_in_schema=False)
+def list_research_version_sources(topic_id: str, version_id: str, authorization: str | None = Header(default=None)) -> list[dict]:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    version = next((item for item in topic.versions if item.version_id == version_id), None)
+    if version is None:
+        raise ApiProblem(404, "not_found", "Research version not found.")
+    result = []
+    for source_id in version.source_ids:
+        try:
+            source = research_sources.get(account.account_id, source_id)
+        except SourceNotFound:
+            result.append({"source_id": source_id, "status": "unavailable"})
+            continue
+        metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64"})
+        if source.url:
+            parts = urlsplit(str(source.url))
+            metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+        metadata["status"] = "available"
+        metadata["verification"] = "user_declared_not_verified"
+        result.append(metadata)
+    return result
+
+
+@app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export", include_in_schema=False)
+def export_research_version(topic_id: str, version_id: str, authorization: str | None = Header(default=None)) -> dict:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    version = next((v for v in topic.versions if v.version_id == version_id), None)
+    if version is None:
+        raise ApiProblem(404, "not_found", "Research version not found.")
+    source_ids = set(topic.request.source_ids) | set(version.source_ids)
+    # All source references in stored content must be authorized. A reference
+    # to a missing or another account's source fails closed.
+    for entry in [*version.content.sources, *version.content.facts, *version.content.claims]:
+        source_id = entry.get("source_id")
+        if isinstance(source_id, str):
+            source_ids.add(source_id)
+        citations = entry.get("citations", [])
+        if not isinstance(citations, list):
+            raise ApiProblem(422, "invalid_request", "Research citations are invalid.")
+        for citation in citations:
+            if not isinstance(citation, dict) or not isinstance(citation.get("source_id"), str):
+                raise ApiProblem(422, "invalid_request", "Research citations are invalid.")
+            source_ids.add(citation["source_id"])
+    sources = []
+    try:
+        for source_id in sorted(source_ids):
+            source = research_sources.get(account.account_id, source_id)
+            if not source.permissions.export:
+                raise ApiProblem(403, "invalid_request", "A research source is not permitted for export.")
+            metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64"})
+            if source.url:
+                parts = urlsplit(str(source.url))
+                metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+            metadata["verification"] = "user_declared_not_verified"
+            sources.append(metadata)
+    except SourceNotFound as error:
+        raise ApiProblem(403, "invalid_request", "A research source is unavailable for export.") from error
+    return {"schema_version": "1", "topic_id": topic_id, "request": topic.request.model_dump(mode="json"),
+            "version": version.model_dump(mode="json"), "source_provenance": sources,
+            "disclosure": "Model interpretations and declared source permissions are not independently verified."}
+
+
+@app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export/metadata",
+         response_model=ResearchMetadataExport, include_in_schema=False)
+def export_research_metadata(topic_id: str, version_id: str,
+                             authorization: str | None = Header(default=None)) -> ResearchMetadataExport:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research version not found.") from error
+    version = next((item for item in topic.versions if item.version_id == version_id), None)
+    if version is None:
+        raise ApiProblem(404, "not_found", "Research version not found.")
+    return ResearchMetadataExport(topic_id=topic.topic_id, version_id=version.version_id,
+        parent_version_id=version.parent_version_id, version_created_at=version.created_at,
+        generated_at=lifecycle_clock.now(), as_of=topic.request.as_of, review=version.review,
+        created_by=version.created_by, tracked_source_count=len(set(topic.request.source_ids) | set(version.source_ids)),
+        fact_count=len(version.content.facts), claim_count=len(version.content.claims),
+        calculation_count=len(version.content.calculations), limitation_count=len(version.content.limitations))
+
+
+@app.post("/v2/research/topics/{topic_id}/versions", response_model=ResearchTopic, status_code=201, include_in_schema=False)
+def create_research_version(topic_id: str, request: VersionInput, authorization: str | None = Header(default=None)) -> ResearchTopic:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        previous = topic.versions[-1]
+        if previous.version_id != request.parent_version_id:
+            raise TopicVersionConflict()
+        # A user may change findings, facts, and calculations, but an edited
+        # item must not masquerade as an untouched model extraction. The run
+        # receipt and source inventory are server-produced historical records.
+        content = request.content.model_copy(deep=True)
+        for claim in content.claims:
+            if claim in previous.content.claims:
+                continue
+            text = claim.get("text")
+            citations = claim.get("citations", [])
+            role = claim.get("role", "support")
+            if (not isinstance(text, str) or not text.strip() or len(text) > 3000 or
+                    not isinstance(role, str) or role not in {"support", "counterargument"} or
+                    not isinstance(citations, list) or len(citations) > 10 or
+                    any(not isinstance(citation, dict) or not isinstance(citation.get("source_id"), str) or
+                        not citation["source_id"].strip() or len(citation["source_id"]) > 100 or
+                        ("quotation" in citation and (not isinstance(citation["quotation"], str) or len(citation["quotation"]) > 1000))
+                        for citation in citations)):
+                raise ApiProblem(422, "invalid_request", "Research findings or their citations are invalid.")
+        fact_id_counts = Counter(item["fact_id"].strip() for item in content.facts if isinstance(item.get("fact_id"), str))
+        for fact in content.facts:
+            if fact in previous.content.facts:
+                continue
+            try:
+                numeric = NumericFact.model_validate({key: fact[key] for key in
+                    ("fact_id", "value", "unit", "currency", "period") if key in fact})
+            except ValidationError as error:
+                raise ApiProblem(422, "invalid_request", "Research fact value, unit, currency, or period is invalid.") from error
+            if fact_id_counts[numeric.fact_id] != 1:
+                raise ApiProblem(422, "invalid_request", "Research fact identifiers must be unique.")
+            if ("label" in fact and (not isinstance(fact["label"], str) or not fact["label"].strip() or len(fact["label"]) > 300) or
+                    "source_id" in fact and fact["source_id"] is not None and (not isinstance(fact["source_id"], str) or not fact["source_id"].strip() or len(fact["source_id"]) > 100) or
+                    "quotation" in fact and fact["quotation"] is not None and (not isinstance(fact["quotation"], str) or len(fact["quotation"]) > 1000)):
+                raise ApiProblem(422, "invalid_request", "Research fact provenance is invalid.")
+            fact.update(numeric.model_dump(mode="json"))
+        for field in ("claims", "facts", "calculations"):
+            originals = getattr(previous.content, field)
+            entries = getattr(content, field)
+            for entry in entries:
+                if entry not in originals:
+                    entry["authorship"] = "user"
+                    entry["verification"] = "user_edited_not_independently_verified"
+                    if field == "claims":
+                        entry.pop("support_review", None)
+                        entry["support_status"] = "not_independently_verified"
+                        if isinstance(entry.get("citations"), list):
+                            for citation in entry["citations"]:
+                                if isinstance(citation, dict):
+                                    citation["support_status"] = "not_independently_verified"
+                    if field == "facts":
+                        entry.pop("numeric_normalization", None)
+        for entry in content.calculations:
+            entry["input_status"] = calculation_input_status(entry, content.facts)
+        content.evidence_differences = evidence_differences(content.facts)
+        retained = previous.content.model_copy(deep=True)
+        content.run = retained.run
+        content.sources = retained.sources
+        content.source_candidates = retained.source_candidates
+        return research_topics.add_version(account.account_id, topic_id, request.model_copy(update={"content": content}))
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    except TopicVersionConflict as error:
+        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before saving.") from error
+
+
+@app.post("/v2/research/topics/{topic_id}/sources", response_model=ResearchTopic, status_code=201, include_in_schema=False)
+def attach_research_sources(topic_id: str, request: AttachSourcesInput, authorization: str | None = Header(default=None)) -> ResearchTopic:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        for source_id in request.source_ids:
+            research_sources.get(account.account_id, source_id)
+        previous = topic.versions[-1]
+        return research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=request.parent_version_id, content=previous.content,
+            review="draft", note=previous.note), source_ids=request.source_ids)
+    except (TopicNotFound, SourceNotFound) as error:
+        raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
+    except TopicVersionConflict as error:
+        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before saving.") from error
+    except ValueError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+
+
+@app.post("/v2/research/topics/{topic_id}/calculations/recalculate", response_model=ResearchTopic,
+          status_code=201, include_in_schema=False)
+def recalculate_research(topic_id: str, request: RecalculateRequest,
+                         authorization: str | None = Header(default=None)) -> ResearchTopic:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        previous = topic.versions[-1]
+        if previous.version_id != request.parent_version_id:
+            raise TopicVersionConflict()
+        if request.calculation_index >= len(previous.content.calculations):
+            raise ApiProblem(422, "invalid_request", "Calculation does not exist in this version.")
+        old = previous.content.calculations[request.calculation_index]
+        inputs = old.get("inputs")
+        if (old.get("formula_version") != "1" or not isinstance(inputs, list) or len(inputs) != 2 or
+                any(not isinstance(item, dict) or not isinstance(item.get("fact_id"), str) for item in inputs)):
+            raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
+        facts = []
+        for item in inputs:
+            candidates = [fact for fact in previous.content.facts if fact.get("fact_id") == item["fact_id"]]
+            if len(candidates) != 1:
+                raise ApiProblem(422, "invalid_request", "Calculation input facts are missing or ambiguous.")
+            facts.append({key: candidates[0][key] for key in ("fact_id", "value", "unit", "currency", "period")
+                          if key in candidates[0]})
+        spec = CalculationRequest.model_validate({"formula": old.get("formula_id"), "first": facts[0],
+            "second": facts[1], "decimal_places": old.get("decimal_places", 2)})
+        result = calculate(spec)
+        result.update({"input_status": "matched", "authorship": "calculation_engine"})
+        content = previous.content.model_copy(deep=True)
+        content.calculations[request.calculation_index] = result
+        return research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=previous.version_id, content=content, note=previous.note))
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    except TopicVersionConflict as error:
+        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before calculating.") from error
+    except (ValidationError, CalculationError) as error:
+        raise ApiProblem(422, "invalid_request", "Calculation cannot be performed with the current facts.") from error
+
+
+@app.post("/v2/research/calculations", include_in_schema=False)
+def calculate_research(request: CalculationRequest, authorization: str | None = Header(default=None)) -> dict:
+    _authenticated_account(authorization)
+    try:
+        return calculate(request)
+    except CalculationError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+
+
+def _visible_research_source(source: ResearchSource) -> dict:
+    result = source.model_dump(mode="json", exclude={"original_pdf_base64"})
+    if not source.permissions.display:
+        result.pop("text", None)
+    # User-supplied provenance and permissions are declarations, not proof.
+    result["verification"] = "user_declared_not_verified"
+    return result
+
+
+@app.post("/v2/research/sources", status_code=201, include_in_schema=False)
+def create_research_source(request: SourceInput, authorization: str | None = Header(default=None)) -> dict:
+    account = _authenticated_account(authorization)
+    try:
+        return _visible_research_source(research_sources.create(account.account_id, request))
+    except SourcePermissionError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
+
+
+@app.post("/v2/research/sources/pdf", status_code=201, include_in_schema=False)
+def upload_research_pdf(request: PdfUploadRequest, authorization: str | None = Header(default=None)) -> dict:
+    account = _authenticated_account(authorization)
+    try:
+        document = extract_pdf(request)
+        source = research_sources.create(account.account_id, SourceInput(title=request.title, text=document.text,
+            published_at=request.published_at, permissions=request.permissions), retrieval_method="user_pdf",
+            response_sha256=document.original_sha256, response_content_type="application/pdf",
+            original_pdf_base64=document.original_base64)
+        metadata = _visible_research_source(source)
+        metadata.pop("text", None)
+        return metadata
+    except PdfFailure as error:
+        if error.code in {"pdf_extractor_unavailable", "pdf_timeout", "pdf_busy"}:
+            raise ApiProblem(503, "internal_error", "PDF extraction is unavailable or timed out.", retryable=True) from error
+        raise ApiProblem(422, "invalid_request", "PDF is invalid, too large, encrypted, or has no extractable text.") from error
+
+
+@app.get("/v2/research/sources/{source_id}/original", include_in_schema=False)
+def get_research_source_original(source_id: str, authorization: str | None = Header(default=None)) -> Response:
+    account = _authenticated_account(authorization)
+    try:
+        source = research_sources.get(account.account_id, source_id)
+    except SourceNotFound as error:
+        raise ApiProblem(404, "not_found", "Research source not found.") from error
+    if not source.original_pdf_base64 or not source.permissions.display or not source.permissions.export:
+        raise ApiProblem(403, "invalid_request", "The original document is not available for download.")
+    import base64
+    return Response(content=base64.b64decode(source.original_pdf_base64), media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="source.pdf"', "Cache-Control": "no-store"})
+
+
+@app.get("/v2/research/sources/{source_id}/context", include_in_schema=False)
+def get_research_source_context(source_id: str, start: Annotated[int, Query(ge=0, le=2_000_000)],
+                                end: Annotated[int, Query(ge=1, le=2_000_000)],
+                                authorization: str | None = Header(default=None)) -> dict:
+    account = _authenticated_account(authorization)
+    try:
+        source = research_sources.get(account.account_id, source_id)
+    except SourceNotFound as error:
+        raise ApiProblem(404, "not_found", "Research source not found.") from error
+    if not source.permissions.display:
+        raise ApiProblem(403, "invalid_request", "Source text is not permitted for display.")
+    if end <= start or end > len(source.text) or end - start > 1000:
+        raise ApiProblem(422, "invalid_request", "Source text location is invalid.")
+    left, right = max(0, start - 300), min(len(source.text), end + 300)
+    if source.retrieval_method == "user_pdf":
+        # Context stays on the relevant page(s), while retaining an exact
+        # quote that itself crosses a page boundary.
+        left = max(left, source.text.rfind("\f", 0, start) + 1)
+        next_page = source.text.find("\f", end)
+        if next_page >= 0:
+            right = min(right, next_page)
+    return {"source_id": source.source_id, "title": source.title, "content_sha256": source.content_sha256,
+            "start": start, "end": end, "context_start": left, "context_end": right,
+            "before": source.text[left:start], "selected": source.text[start:end], "after": source.text[end:right],
+            "page_start": source.text[:start].count("\f") + 1 if source.retrieval_method == "user_pdf" else None,
+            "page_end": source.text[:end].count("\f") + 1 if source.retrieval_method == "user_pdf" else None}
+
+
+@app.post("/v2/research/sources/fetch", status_code=201, include_in_schema=False)
+def fetch_research_source(request: FetchSourceRequest, http_request: Request) -> dict:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    if not request.permissions.store:
+        raise ApiProblem(422, "invalid_request", "Source storage permission is required.")
+    _reserve_search_call(http_request)
+    try:
+        fetched = fetch_official_text(request)
+        source = research_sources.create(account.account_id, SourceInput(title=request.title,
+            text=fetched.text, url=request.url, kind="official", permissions=request.permissions,
+            published_at=request.published_at),
+            retrieval_method="official_html", response_sha256=fetched.response_sha256,
+            response_content_type=fetched.content_type)
+        return _visible_research_source(source)
+    except FetchFailure as error:
+        if error.code == "source_rate_limited":
+            raise ApiProblem(429, "rate_limited", "Source temporarily rate limited.", retryable=True) from error
+        if error.code in {"source_timeout", "source_unavailable"}:
+            raise ApiProblem(503, "internal_error", "Source unavailable or timed out.", retryable=True) from error
+        raise ApiProblem(422, "invalid_request", "Source could not be used in the requested format.") from error
+
+
+@app.post("/v2/research/identities/sec-search", include_in_schema=False)
+def search_research_sec_identities(request: SecIdentityRequest, http_request: Request) -> dict:
+    _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
+        _reserve_search_call(http_request)
+        if not reserve_sec_request(SOURCE_RATE_LIMITS):
+            raise ApiProblem(429, "rate_limited", "SEC request limit reached; retry later.", retryable=True, retry_after=1)
+        return search_sec_identities(request, agent)
+    except SecFailure as error:
+        if error.code == "sec_contact_unconfigured":
+            raise ApiProblem(503, "internal_error", "SEC source contact is not configured.", retryable=False) from error
+        if error.code == "source_rate_limited":
+            raise ApiProblem(429, "rate_limited", "SEC source rate limited.", retryable=True, retry_after=1) from error
+        raise ApiProblem(503, "internal_error", "SEC identity search is unavailable.", retryable=True) from error
+
+
+@app.post("/v2/research/sources/sec-concept", status_code=201, include_in_schema=False)
+def fetch_research_sec_concept(request: SecConceptRequest, http_request: Request) -> dict:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
+        if not request.permissions.store:
+            raise SecFailure("source_permission_unknown")
+        _reserve_search_call(http_request)
+        if not reserve_sec_request(SOURCE_RATE_LIMITS):
+            raise ApiProblem(429, "rate_limited", "SEC request limit reached; retry later.", retryable=True, retry_after=1)
+        data = fetch_sec_concept(request, agent)
+        source = research_sources.create(account.account_id, SourceInput(title=data.title, text=data.text,
+            url=data.url, kind="official", permissions=request.permissions), retrieval_method="sec_companyconcept",
+            response_sha256=data.response_sha256, response_content_type="application/json")
+        return _visible_research_source(source)
+    except SecFailure as error:
+        if error.code == "sec_contact_unconfigured":
+            raise ApiProblem(503, "internal_error", "SEC source contact is not configured.", retryable=False) from error
+        if error.code == "source_rate_limited":
+            raise ApiProblem(429, "rate_limited", "SEC source rate limited.", retryable=True, retry_after=1) from error
+        if error.code in {"source_timeout", "source_unavailable"}:
+            raise ApiProblem(503, "internal_error", "SEC source unavailable or timed out.", retryable=True) from error
+        raise ApiProblem(422, "invalid_request", "SEC source data could not be used.") from error
+
+
+@app.get("/v2/research/sources/{source_id}", include_in_schema=False)
+def get_research_source(source_id: str, authorization: str | None = Header(default=None)) -> dict:
+    account = _authenticated_account(authorization)
+    try:
+        return _visible_research_source(research_sources.get(account.account_id, source_id))
+    except SourceNotFound as error:
+        raise ApiProblem(404, "not_found", "Research source not found.") from error
+
+
+@app.post("/v1/research/topics/{topic_id}/runs", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, include_in_schema=False)
+@app.post("/v2/research/topics/{topic_id}/runs", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, include_in_schema=False)
+def start_research_run(topic_id: str, request: ResearchRunRequest, response: Response,
+                       idempotency_key: IdempotencyKey, http_request: Request) -> OperationResponse:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        source_ids = list(dict.fromkeys([*topic.request.source_ids, *topic.versions[-1].source_ids, *request.source_ids]))
+        if len(source_ids) > 100:
+            raise ApiProblem(422, "invalid_request", "A research version can include at most 100 sources.")
+        sources = [research_sources.get(account.account_id, source_id) for source_id in source_ids]
+    except (TopicNotFound, SourceNotFound) as error:
+        raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
+    provider, _personal = _model_provider_for_request(http_request)
+    generate_structured = getattr(provider, "generate_structured", None)
+
+    def build(operation_id: str) -> tuple[ResearchRunResult, str]:
+        started = monotonic()
+        deadline = started + request.max_elapsed_seconds
+        calls = 0
+        search_calls = 0
+        discovered: list[dict[str, Any]] = []
+        discovery_notes: list[str] = []
+        search_status = "not_requested"
+        usage: int | None = None
+        unavailable_reason: str | None = None
+        _raise_if_operation_cancelled(operation_id)
+        if research_topics.get(account.account_id, topic_id).versions[-1].version_id != request.parent_version_id:
+            raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before running.")
+
+        # Search results are leads only: they never become evidence or model
+        # input until the user separately attaches appropriately licensed text.
+        if not sources and topic.request.question and request.max_search_calls:
+            search = getattr(evidence_provider, "search", None)
+            if request.max_cost_usd is not None:
+                search_status = "cost_unknown"
+                discovery_notes.append("Source discovery was skipped because search pricing is unknown under the requested cost cap.")
+            elif not getattr(evidence_provider, "supports_project_search", False) or not callable(search):
+                search_status = "unavailable"
+                discovery_notes.append("Source discovery is unavailable; attach source material manually.")
+            else:
+                try:
+                    try:
+                        parameters = inspect.signature(search).parameters
+                    except (TypeError, ValueError) as error:
+                        raise ProviderFailure("search_budget_unsupported", "Search provider cannot enforce the time budget.", retryable=False) from error
+                    if "deadline" not in parameters or "cancel_event" not in parameters:
+                        raise ProviderFailure("search_budget_unsupported", "Search provider cannot enforce the time budget.", retryable=False)
+                    if monotonic() >= deadline:
+                        raise ProviderFailure("search_timeout", "Search time budget is exhausted.", retryable=False)
+                    _reserve_search_call(http_request)
+                    search_calls = 1
+                    raw_candidates = search(topic.request.question.strip()[:70], limit=5,
+                                            deadline=deadline, cancel_event=operations.cancel_event(operation_id))
+                    if not isinstance(raw_candidates, (list, tuple)):
+                        raise ProviderFailure("search_response_invalid", "Search provider returned invalid results.", retryable=False)
+                    provider_name = _provider_name(evidence_provider, "search")
+                    for raw in raw_candidates[:5]:
+                        candidate = _candidate_response(raw, provider_name)
+                        ClientSearchEvidenceProvider().validate_url(str(candidate.url))
+                        # A date is not a publication timestamp. In historical
+                        # mode omit unknown or same-day/future leads.
+                        if topic.request.as_of is not None and (candidate.published_at is None or
+                                candidate.published_at.date() >= topic.request.as_of.astimezone(timezone.utc).date()):
+                            continue
+                        parts = urlsplit(str(candidate.url))
+                        discovered.append({"title": candidate.title,
+                            "url": urlunsplit((parts.scheme, parts.netloc, parts.path, "", "")),
+                            "published_at": candidate.published_at.isoformat() if candidate.published_at else None,
+                            "retrieved_at": candidate.retrieved_at.isoformat(),
+                            "search_result_hash": candidate.search_result_hash,
+                            "search_provider": provider_name, "status": "unverified"})
+                    search_status = "completed"
+                    discovery_notes.append("Search candidates are unverified leads, not evidence. Attach and authorize material before analysis.")
+                    if topic.request.as_of is not None:
+                        discovery_notes.append("Historical search publication dates are not independently verified.")
+                except (ProviderFailure, ApiProblem):
+                    search_status = "failed"
+                    discovery_notes.append("Source discovery failed or was rate limited; attach source material manually.")
+        _raise_if_operation_cancelled(operation_id)
+
+        attempted_prompt: dict[str, Any] = {}
+        analysis_error_detail: str | None = None
+
+        def generate(prompt: str) -> tuple[dict[str, Any], int | None]:
+            nonlocal calls, usage
+            if request.max_model_calls == 0:
+                raise ProviderFailure("provider_budget_exhausted", "Model call budget is zero.", retryable=False)
+            # A currency cap cannot be guaranteed without a provider quote and
+            # usage pricing. Fail closed rather than silently overspending it.
+            if request.max_cost_usd is not None:
+                raise ProviderFailure("provider_budget_unknown", "Model pricing is not configured for the requested cost cap.", retryable=False)
+            if not callable(generate_structured):
+                raise ProviderFailure("provider_unavailable", "A structured research model is not configured.", retryable=False)
+            policy = getattr(provider, "policy", None)
+            input_limit = getattr(policy, "max_input_tokens", None)
+            output_limit = getattr(policy, "max_output_tokens", None)
+            timeout = getattr(policy, "timeout_seconds", None)
+            try:
+                parameters = inspect.signature(generate_structured).parameters
+            except (TypeError, ValueError) as error:
+                raise ProviderFailure("provider_budget_unknown", "Provider limits cannot be enforced.", retryable=False) from error
+            if (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
+                    input_limit <= 0 or output_limit <= 0 or not isinstance(timeout, (int, float)) or
+                    not 0 < timeout <= 180 or "timeout_seconds" not in parameters):
+                raise ProviderFailure("provider_budget_unknown", "Provider limits cannot be enforced.", retryable=False)
+            token_reservation = input_limit + output_limit
+            if token_reservation > request.max_total_tokens:
+                raise ProviderFailure("provider_budget_exhausted", "Model token budget is insufficient.", retryable=False)
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
+            _reserve_model_call(http_request, operation_id, token_budget=token_reservation)
+            calls = 1
+            # Retain non-sensitive prompt provenance even if the provider
+            # returns invalid output or fails after accepting the request.
+            prompt_data = json.loads(prompt)
+            attempted_prompt.update({"prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
+                "prompt_characters": len(prompt), "prompt_bytes": len(prompt.encode("utf-8")),
+                "segments": [{"source_id": item["source_id"], "character_start": item["character_start"],
+                              "character_end": item["character_start"] + len(item["text"])}
+                             for item in prompt_data["sources"]]})
+            try:
+                payload, usage = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
+                    system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
+                return payload, usage
+            finally:
+                # An attempted remote request can incur charges even if the
+                # response is lost. Unknown token usage settles the reserved
+                # token budget; provider currency cost remains unknown.
+                _settle_model_call(http_request, operation_id, usage)
+
+        try:
+            max_input_tokens = getattr(getattr(provider, "policy", None), "max_input_tokens", 3000)
+            # Reserve room for the system instruction and transport framing;
+            # byte length is a conservative approximation, not a provider tokenizer.
+            max_prompt_chars = max(1, min(48000, int(max_input_tokens) - len(RESEARCH_SYSTEM_PROMPT.encode("utf-8")) - 512))
+            analysis = analyze(topic.request.question, sources, topic.request.as_of, generate,
+                               max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline)
+        except AnalysisInterrupted:
+            unavailable_reason = "provider_budget_exhausted"
+            from .research_analysis import AnalysisResult
+            analysis = AnalysisResult([], [], ["Research analysis could not be completed: provider_budget_exhausted"], [], usage)
+        except (ProviderFailure, InvalidAnalysis) as error:
+            unavailable_reason = error.code if isinstance(error, ProviderFailure) else "invalid_model_output"
+            if isinstance(error, InvalidAnalysis):
+                # InvalidAnalysis messages are fixed internal diagnostics and
+                # contain neither source text nor provider output.
+                analysis_error_detail = str(error)
+            from .research_analysis import AnalysisResult
+            analysis = AnalysisResult([], [], ["Research analysis could not be completed: " + unavailable_reason], [], usage,
+                                      **attempted_prompt)
+        _raise_if_operation_cancelled(operation_id)
+        claims = [{**item, "role": "support"} for item in analysis.claims]
+        claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
+        generation_usage = usage
+        review_usage: int | None = None
+        review_status = "not_requested"
+        review_error: str | None = None
+        review_hash: str | None = None
+        review_segments: list[dict[str, int | str]] = []
+        review_indexes: list[int] = []
+        if request.support_review:
+            review_status = "not_reviewable"
+            policy = getattr(provider, "policy", None)
+            input_limit = getattr(policy, "max_input_tokens", None)
+            output_limit = getattr(policy, "max_output_tokens", None)
+            timeout = getattr(policy, "timeout_seconds", None)
+            if calls and claims and request.max_model_calls < 2:
+                review_status = "budget_exhausted"
+            elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
+                per_call = input_limit + output_limit
+                first_charge = max(per_call, generation_usage if generation_usage is not None else per_call)
+                if request.max_total_tokens < first_charge + per_call or monotonic() >= deadline:
+                    review_status = "budget_exhausted"
+                else:
+                    # Only sources already admitted by the first analysis can
+                    # be reviewed; no extra retrieval or permission escalation.
+                    review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
+                    batch = prepare_support_review(claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
+                    if batch.indexes:
+                        review_hash, review_segments, review_indexes = batch.prompt_sha256, batch.segments, batch.indexes
+                        review_call_id = f"{operation_id}:support-review"
+                        try:
+                            _raise_if_operation_cancelled(operation_id)
+                            remaining = deadline - monotonic()
+                            if remaining <= 0:
+                                raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
+                            _reserve_model_call(http_request, review_call_id, token_budget=per_call)
+                            calls += 1
+                            try:
+                                raw_review, review_usage = generate_structured(batch.prompt,
+                                    cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
+                                    timeout_seconds=min(float(timeout), remaining))
+                            finally:
+                                _settle_model_call(http_request, review_call_id, review_usage)
+                            claims = apply_support_review(claims, batch, raw_review)
+                            review_status = "partial" if batch.omitted else "complete"
+                        except (ProviderFailure, InvalidReview, ApiProblem) as error:
+                            review_status = "failed"
+                            review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
+                        if calls == 2:
+                            usage = generation_usage + review_usage if generation_usage is not None and review_usage is not None else None
+        _raise_if_operation_cancelled(operation_id)
+        differences = evidence_differences(analysis.facts)
+        processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
+            "not processed", "remaining text was not examined", "was omitted", "were omitted",
+            "permission is not granted", "not established", "not authorized", "quotation location is ambiguous"))
+        review_supports_all = (review_status == "complete" and all(
+            c.get("support_review", {}).get("verdict") == "supports" for c in claims))
+        complete = bool(analysis.claims and analysis.counterarguments and all(c["citations"] for c in claims)
+                        and not processing_incomplete and not differences and
+                        (not request.support_review or review_supports_all))
+        limitations = [*discovery_notes, *analysis.limitations]
+        if request.support_review:
+            limitations.append("A second model assessment is not independent proof that evidence supports a claim.")
+            if review_status != "complete":
+                limitations.append("The requested model support review did not cover all claims.")
+        if differences:
+            limitations.append("Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.")
+        if len(differences) == 50:
+            limitations.append("At most 50 candidate differences are shown.")
+        if monotonic() > deadline:
+            complete = False
+            limitations.append("Research exceeded its time budget; the retained result is partial.")
+        if usage is not None and usage > request.max_total_tokens:
+            complete = False
+            limitations.append("Provider-reported token use exceeded the requested budget; the result is partial.")
+        if not complete:
+            limitations.append("The research is partial: supported claims or counterarguments are incomplete.")
+        result = ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
+            parent_version_id=request.parent_version_id, status="completed" if complete else "partial",
+            content=ResearchContent(source_candidates=discovered, sources=[{"source_id": s.source_id, "title": s.title,
+                "url": urlunsplit((urlsplit(str(s.url)).scheme, urlsplit(str(s.url)).netloc,
+                    urlsplit(str(s.url)).path, "", "")) if s.url else None,
+                "published_at": s.published_at.isoformat() if s.published_at else None,
+                "obtained_at": s.obtained_at.isoformat(),
+                "revised_at": s.revised_at.isoformat() if s.revised_at else None,
+                "content_sha256": s.content_sha256, "verification": "user_declared_not_verified"}
+                for s in sources if s.source_id in analysis.source_ids], facts=analysis.facts,
+                evidence_differences=differences,
+                calculations=analysis.calculations, claims=claims, limitations=limitations,
+                run={"operation_id": operation_id, "status": "completed" if complete else "partial",
+                     "model_calls": calls, "total_tokens": usage, "cost_usd": None,
+                     "generation_tokens": generation_usage, "support_review_tokens": review_usage,
+                     "support_review_requested": request.support_review, "support_review_status": review_status,
+                     "support_review_error": review_error, "support_review_method": REVIEW_METHOD if request.support_review else None,
+                     "analysis_error_detail": analysis_error_detail,
+                     "support_review_prompt_sha256": review_hash, "support_review_indexes": review_indexes,
+                     "support_review_segments": review_segments,
+                     "support_review_system_sha256": sha256(REVIEW_SYSTEM_PROMPT.encode("utf-8")).hexdigest() if request.support_review else None,
+                     "search_calls": search_calls, "search_status": search_status,
+                     "elapsed_seconds": round(monotonic() - started, 3),
+                     "cost_status": "unknown" if calls or search_calls else "no_external_call",
+                     "model": getattr(getattr(provider, "settings", None), "model", None),
+                     "provider": getattr(provider, "name", None),
+                     "prompt_sha256": analysis.prompt_sha256, "prompt_characters": analysis.prompt_characters,
+                     "prompt_bytes": analysis.prompt_bytes,
+                     "selection_method": RESEARCH_SELECTION_METHOD,
+                     "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+                     "selected_segments": analysis.segments,
+                     "provider_timeout_seconds": getattr(getattr(provider, "policy", None), "timeout_seconds", None),
+                     "provider_input_token_limit": getattr(getattr(provider, "policy", None), "max_input_tokens", None),
+                     "provider_output_token_limit": getattr(getattr(provider, "policy", None), "max_output_tokens", None),
+                     "source_hashes": {s.source_id: s.content_sha256 for s in sources},
+                     "max_model_calls": request.max_model_calls,
+                     "max_search_calls": request.max_search_calls,
+                     "max_elapsed_seconds": request.max_elapsed_seconds,
+                     "max_total_tokens": request.max_total_tokens,
+                     "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None,
+                     "error": unavailable_reason}))
+        return result, topic_id
+
+    def commit(_operation_id: str, result: BaseModel) -> None:
+        assert isinstance(result, ResearchRunResult)
+        # Refuse to save a stale result over a user's intervening edit.
+        try:
+            parent = topic.versions[-1]
+            content = result.content.model_copy(update={"summary": parent.content.summary})
+            research_topics.add_version(account.account_id, topic_id, VersionInput(
+                parent_version_id=result.parent_version_id, content=content, note=parent.note),
+                source_ids=source_ids, created_by="agent")
+        except (TopicNotFound, TopicVersionConflict) as error:
+            raise ApiProblem(409, "lifecycle_conflict", "Research changed before the result was saved.") from error
+
+    def record_inputs(operation_id: str) -> None:
+        # Write before any external call, within operation admission. Replays do
+        # not replace the original snapshot or send the provider another request.
+        policy = getattr(provider, "policy", None)
+        RESEARCH_RUN_INPUTS.put(operation_id, {
+            "schema_version": "1", "operation_id": operation_id, "owner_id": account.account_id,
+            "topic_id": topic_id, "parent_version_id": request.parent_version_id,
+            "captured_at": lifecycle_clock.now().isoformat(),
+            "question_sha256": sha256(topic.request.question.encode("utf-8")).hexdigest(),
+            "as_of": topic.request.as_of.isoformat() if topic.request.as_of else None,
+            "sources": [{"source_id": item.source_id, "content_sha256": item.content_sha256,
+                         "permissions": item.permissions.model_dump(mode="json")}
+                        for item in sources],
+            "budget": _request_payload(request),
+            "model": getattr(getattr(provider, "settings", None), "model", None),
+            "provider": getattr(provider, "name", None),
+            "provider_limits": {key: getattr(policy, key, None) for key in
+                                ("max_input_tokens", "max_output_tokens", "timeout_seconds")},
+            "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+            "selection_method": RESEARCH_SELECTION_METHOD,
+        })
+
+    # Existing operation receipts have a v1 endpoint constraint. The v1 alias
+    # above is a real route and keeps old receipt readers compatible.
+    result, replayed = operations.submit_async(endpoint=f"/v1/research/topics/{topic_id}/runs",
+        idempotency_key=idempotency_key, owner_subject=f"account:{account.account_id}",
+        request_payload=_request_payload(request), result_field="research", build_result=build,
+        session_id=topic_id, before_accept=record_inputs, commit_result=commit)
+    _mark_replay(response, replayed)
+    return result
+
+
+@app.get("/v2/research/topics/{topic_id}/runs", response_model=list[OperationResponse], response_model_exclude_none=True, include_in_schema=False)
+def list_research_runs(topic_id: str, http_request: Request) -> list[OperationResponse]:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    endpoint = f"/v1/research/topics/{topic_id}/runs"
+    result: list[OperationResponse] = []
+    for operation_id, session_id in operations.store.session_ids().items():
+        if session_id != topic_id:
+            continue
+        record = operations.store.get_operation(operation_id)
+        if not record or record.get("endpoint") != endpoint or record.get("owner_subject") != f"account:{account.account_id}":
+            continue
+        result.append(OperationResponse(operation=operations._cache_operation(operation_id)))
+    return sorted(result, key=lambda item: item.operation.created_at, reverse=True)
+
+
+@app.get("/v2/research/topics/{topic_id}/runs/{operation_id}", response_model=OperationResponse, response_model_exclude_none=True, include_in_schema=False)
+def get_research_run(topic_id: str, operation_id: str, http_request: Request) -> OperationResponse:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    operations.require_owner(operation_id, f"account:{account.account_id}")
+    operation = operations._cache_operation(operation_id)
+    if operation.endpoint != f"/v1/research/topics/{topic_id}/runs":
+        raise ApiProblem(404, "not_found", "Research run not found.")
+    return OperationResponse(operation=operation)
+
+
+@app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/inputs", include_in_schema=False)
+def get_research_run_inputs(topic_id: str, operation_id: str, http_request: Request) -> dict:
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research run not found.") from error
+    operations.require_owner(operation_id, f"account:{account.account_id}")
+    record = RESEARCH_RUN_INPUTS.get(operation_id)
+    if not record or record.get("owner_id") != account.account_id or record.get("topic_id") != topic_id:
+        raise ApiProblem(404, "not_found", "Research run inputs not found.")
+    return {key: value for key, value in record.items() if key != "owner_id"}
 
 
 def _operation_owner_subject(request: Request) -> str:
@@ -2649,7 +3478,8 @@ def cancel_operation(operation_id: str, request: CancelOperationRequest, respons
     _validate_request(request, "CancelOperationRequest")
     result, replayed = operations.cancel(operation_id, request.cancel_token, idempotency_key, owner_subject=_operation_owner_subject(http_request))
     if result.operation.status == "cancelled":
-        billing_ledger.release(f"model:{operation_id}", now=lifecycle_clock.now(), reverse_settled=True)
+        if not result.operation.endpoint.startswith("/v1/research/topics/"):
+            billing_ledger.release(f"model:{operation_id}", now=lifecycle_clock.now(), reverse_settled=True)
     _mark_replay(response, replayed)
     return result
 
@@ -2695,6 +3525,18 @@ def methodology() -> MethodologyResponse:
         probability_display="interval_first",
         client_computation=True,
     )
+
+
+@app.get("/v2/research/openapi.json", include_in_schema=False)
+def research_openapi() -> dict[str, Any]:
+    """Expose v2 schemas without changing the pinned v1 OpenAPI snapshot."""
+    routes = []
+    for route in app.routes:
+        if getattr(route, "path", "").startswith("/v2/research/") and getattr(route, "path", "") != "/v2/research/openapi.json":
+            route_copy = copy(route)
+            route_copy.include_in_schema = True
+            routes.append(route_copy)
+    return get_openapi(title="ForesightNine Research API", version="2", routes=routes)
 
 
 def canonical_openapi() -> dict[str, Any]:

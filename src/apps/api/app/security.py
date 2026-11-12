@@ -188,6 +188,7 @@ class SecurityConfig:
     allowed_origins: tuple[str, ...] = ()
     trusted_proxies: TrustedProxyConfig = TrustedProxyConfig()
     require_captcha: bool = False
+    max_pdf_body_bytes: int = 2_100_000
 
 
 def build_security_config() -> SecurityConfig:
@@ -197,6 +198,10 @@ def build_security_config() -> SecurityConfig:
         max_body = int(os.getenv("FORESIGHTNINE_MAX_BODY_BYTES", str(256 * 1024)))
     except ValueError:
         max_body = 256 * 1024
+    try:
+        max_pdf_body = int(os.getenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES", "2100000"))
+    except ValueError:
+        max_pdf_body = 2_100_000
     origins = _parse_origins(
         os.getenv("FORESIGHTNINE_CORS_ORIGINS", ""),
         hardened=require_captcha,
@@ -206,6 +211,7 @@ def build_security_config() -> SecurityConfig:
         allowed_origins=origins,
         trusted_proxies=TrustedProxyConfig(_parse_networks(os.getenv("FORESIGHTNINE_TRUSTED_PROXY_CIDRS", ""))),
         require_captcha=require_captcha,
+        max_pdf_body_bytes=min(2_100_000, max(1024, max_pdf_body)),
     )
 
 
@@ -268,21 +274,22 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
         session_id = request.headers.get("X-Session-ID")
         body: bytes = b""
         if request.method in {"POST", "PUT", "PATCH"}:
+            body_limit = self.config.max_pdf_body_bytes if request.url.path == "/v2/research/sources/pdf" else self.config.max_body_bytes
             content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
             if content_type != "application/json":
                 return _boundary_error(415, "unsupported_media_type", "JSON requests are required.", request)
             content_length = request.headers.get("content-length")
             if content_length is not None:
                 try:
-                    if int(content_length) > self.config.max_body_bytes:
+                    if int(content_length) > body_limit:
                         return _boundary_error(413, "request_too_large", "Request body exceeds the configured limit.", request)
                 except ValueError:
                     return _boundary_error(400, "invalid_request", "Request headers are invalid.", request)
             # Content-Length is only a fast rejection.  ASGI servers may
             # receive chunked requests without it, so cap the receive stream
             # before Starlette's body helper can concatenate an unbounded
-            # payload in memory.  A single transport chunk is owned by the
-            # server already; we never retain more than max_body_bytes here.
+            # payload in memory. A single transport chunk is owned by the
+            # server already; we never retain more than the applicable limit.
             original_receive = request._receive
             received_bytes = 0
 
@@ -292,7 +299,7 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
                 if message.get("type") == "http.request":
                     chunk = message.get("body", b"")
                     received_bytes += len(chunk)
-                    if received_bytes > self.config.max_body_bytes:
+                    if received_bytes > body_limit:
                         raise BodyTooLarge
                 return message
 
@@ -301,7 +308,7 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
                 body = await request.body()
             except BodyTooLarge:
                 return _boundary_error(413, "request_too_large", "Request body exceeds the configured limit.", request)
-            if len(body) > self.config.max_body_bytes:
+            if len(body) > body_limit:
                 return _boundary_error(413, "request_too_large", "Request body exceeds the configured limit.", request)
             try:
                 decoded = json.loads(body) if body else {}
@@ -315,7 +322,7 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
         # The bounded market adapter and browser OAuth endpoints are kept
         # outside the generated /v1 contract, but they are still public
         # data-plane routes and must receive the same abuse controls.
-        if request.url.path.startswith("/v1/") or request.url.path == "/snapshots" or request.url.path.startswith("/oauth/"):
+        if request.url.path.startswith(("/v1/", "/v2/")) or request.url.path == "/snapshots" or request.url.path.startswith("/oauth/"):
             decision = self.abuse.check_request(client_ip=client_ip, session_id=session_id)
             if not decision.available:
                 return _boundary_error(
@@ -335,5 +342,7 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
                         record_captcha_denial(reason="unavailable" if result is None else "rejected")
                         return _boundary_error(403, "captcha_required", "Request could not be verified.", request, retry_after=60)
         response = await call_next(request)
+        if request.url.path.startswith("/v2/research/"):
+            response.headers["Cache-Control"] = "no-store"
         _set_security_headers(response)
         return response

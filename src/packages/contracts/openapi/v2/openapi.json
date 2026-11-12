@@ -1,0 +1,2399 @@
+{
+  "components": {
+    "schemas": {
+      "AttachSourcesInput": {
+        "additionalProperties": false,
+        "properties": {
+          "parent_version_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Parent Version Id",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent_version_id",
+          "source_ids"
+        ],
+        "title": "AttachSourcesInput",
+        "type": "object"
+      },
+      "CalculationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decimal_places": {
+            "default": 2,
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Decimal Places",
+            "type": "integer"
+          },
+          "first": {
+            "$ref": "#/components/schemas/NumericFact"
+          },
+          "formula": {
+            "enum": [
+              "growth_percent",
+              "margin_percent",
+              "difference"
+            ],
+            "title": "Formula",
+            "type": "string"
+          },
+          "second": {
+            "$ref": "#/components/schemas/NumericFact"
+          }
+        },
+        "required": [
+          "formula",
+          "first",
+          "second"
+        ],
+        "title": "CalculationRequest",
+        "type": "object"
+      },
+      "FetchSourceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "$ref": "#/components/schemas/SourcePermissions"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "title",
+          "permissions"
+        ],
+        "title": "FetchSourceRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "NumericFact": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "fact_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "period": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Period",
+            "type": "string"
+          },
+          "unit": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "fact_id",
+          "value",
+          "unit",
+          "period"
+        ],
+        "title": "NumericFact",
+        "type": "object"
+      },
+      "Operation": {
+        "additionalProperties": false,
+        "properties": {
+          "cancel_token": {
+            "maxLength": 200,
+            "minLength": 16,
+            "title": "Cancel Token",
+            "type": "string"
+          },
+          "content_hash": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "endpoint": {
+            "pattern": "^/v1/",
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "idempotency_key_hash": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Idempotency Key Hash",
+            "type": "string"
+          },
+          "last_event_id": {
+            "pattern": "^[A-Za-z0-9._:-]+:[0-9]+$",
+            "title": "Last Event Id",
+            "type": "string"
+          },
+          "operation_id": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "resume_token": {
+            "maxLength": 200,
+            "minLength": 16,
+            "title": "Resume Token",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRef"
+            },
+            "title": "Source Refs",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "created_at",
+          "source_refs",
+          "content_hash",
+          "operation_id",
+          "endpoint",
+          "status",
+          "updated_at",
+          "idempotency_key_hash",
+          "cancel_token",
+          "resume_token",
+          "last_event_id"
+        ],
+        "title": "Operation",
+        "type": "object"
+      },
+      "OperationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "title": "OperationResponse",
+        "type": "object"
+      },
+      "PdfUploadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "pdf_base64": {
+            "maxLength": 2000000,
+            "minLength": 1,
+            "title": "Pdf Base64",
+            "type": "string"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SourcePermissions"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "pdf_base64",
+          "permissions"
+        ],
+        "title": "PdfUploadRequest",
+        "type": "object"
+      },
+      "RecalculateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "calculation_index": {
+            "maximum": 1999.0,
+            "minimum": 0.0,
+            "title": "Calculation Index",
+            "type": "integer"
+          },
+          "parent_version_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Parent Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_version_id",
+          "calculation_index"
+        ],
+        "title": "RecalculateRequest",
+        "type": "object"
+      },
+      "ResearchContent": {
+        "additionalProperties": false,
+        "properties": {
+          "calculations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 2000,
+            "title": "Calculations",
+            "type": "array"
+          },
+          "claims": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 2000,
+            "title": "Claims",
+            "type": "array"
+          },
+          "evidence_differences": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "title": "Evidence Differences",
+            "type": "array"
+          },
+          "facts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 2000,
+            "title": "Facts",
+            "type": "array"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Limitations",
+            "type": "array"
+          },
+          "run": {
+            "additionalProperties": true,
+            "title": "Run",
+            "type": "object"
+          },
+          "source_candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 10,
+            "title": "Source Candidates",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 200,
+            "title": "Sources",
+            "type": "array"
+          },
+          "summary": {
+            "default": "",
+            "maxLength": 100000,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "title": "ResearchContent",
+        "type": "object"
+      },
+      "ResearchInput": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "question": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Question",
+            "type": "string"
+          },
+          "scope": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Scope",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Source Ids",
+            "type": "array"
+          }
+        },
+        "title": "ResearchInput",
+        "type": "object"
+      },
+      "ResearchMetadataExport": {
+        "additionalProperties": false,
+        "description": "Content-free export when the full research cannot be shared.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "calculation_count": {
+            "minimum": 0.0,
+            "title": "Calculation Count",
+            "type": "integer"
+          },
+          "claim_count": {
+            "minimum": 0.0,
+            "title": "Claim Count",
+            "type": "integer"
+          },
+          "created_by": {
+            "enum": [
+              "user",
+              "agent",
+              "unknown"
+            ],
+            "title": "Created By",
+            "type": "string"
+          },
+          "disclosure": {
+            "const": "No research text or source content is included. Full export requires source permissions.",
+            "default": "No research text or source content is included. Full export requires source permissions.",
+            "title": "Disclosure",
+            "type": "string"
+          },
+          "fact_count": {
+            "minimum": 0.0,
+            "title": "Fact Count",
+            "type": "integer"
+          },
+          "format": {
+            "const": "metadata_only",
+            "default": "metadata_only",
+            "title": "Format",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "limitation_count": {
+            "minimum": 0.0,
+            "title": "Limitation Count",
+            "type": "integer"
+          },
+          "parent_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Version Id"
+          },
+          "review": {
+            "enum": [
+              "draft",
+              "confirmed",
+              "reservation"
+            ],
+            "title": "Review",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "1",
+            "default": "1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          },
+          "tracked_source_count": {
+            "minimum": 0.0,
+            "title": "Tracked Source Count",
+            "type": "integer"
+          },
+          "version_created_at": {
+            "format": "date-time",
+            "title": "Version Created At",
+            "type": "string"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic_id",
+          "version_id",
+          "parent_version_id",
+          "version_created_at",
+          "generated_at",
+          "as_of",
+          "review",
+          "created_by",
+          "tracked_source_count",
+          "fact_count",
+          "claim_count",
+          "calculation_count",
+          "limitation_count"
+        ],
+        "title": "ResearchMetadataExport",
+        "type": "object"
+      },
+      "ResearchRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "max_cost_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cost Usd"
+          },
+          "max_elapsed_seconds": {
+            "default": 60,
+            "maximum": 180.0,
+            "minimum": 1.0,
+            "title": "Max Elapsed Seconds",
+            "type": "integer"
+          },
+          "max_model_calls": {
+            "default": 1,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Max Model Calls",
+            "type": "integer"
+          },
+          "max_search_calls": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Max Search Calls",
+            "type": "integer"
+          },
+          "max_total_tokens": {
+            "default": 10000,
+            "maximum": 20000.0,
+            "minimum": 0.0,
+            "title": "Max Total Tokens",
+            "type": "integer"
+          },
+          "parent_version_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Parent Version Id",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "support_review": {
+            "default": false,
+            "title": "Support Review",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "parent_version_id"
+        ],
+        "title": "ResearchRunRequest",
+        "type": "object"
+      },
+      "ResearchTopic": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "owner_id": {
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ResearchInput"
+          },
+          "schema_version": {
+            "const": "1",
+            "default": "1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchVersion"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "topic_id",
+          "owner_id",
+          "request",
+          "created_at",
+          "updated_at",
+          "versions"
+        ],
+        "title": "ResearchTopic",
+        "type": "object"
+      },
+      "ResearchVersion": {
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/ResearchContent"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "default": "unknown",
+            "enum": [
+              "user",
+              "agent",
+              "unknown"
+            ],
+            "title": "Created By",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "parent_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Version Id"
+          },
+          "review": {
+            "enum": [
+              "draft",
+              "confirmed",
+              "reservation"
+            ],
+            "title": "Review",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "created_at",
+          "content",
+          "review"
+        ],
+        "title": "ResearchVersion",
+        "type": "object"
+      },
+      "SecConceptRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cik": {
+            "pattern": "^\\d{1,10}$",
+            "title": "Cik",
+            "type": "string"
+          },
+          "filing_before": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filing Before"
+          },
+          "max_records": {
+            "default": 30,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Max Records",
+            "type": "integer"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SourcePermissions"
+          },
+          "tag": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+            "title": "Tag",
+            "type": "string"
+          },
+          "taxonomy": {
+            "default": "us-gaap",
+            "enum": [
+              "us-gaap",
+              "ifrs-full",
+              "dei"
+            ],
+            "title": "Taxonomy",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "cik",
+          "tag",
+          "permissions"
+        ],
+        "title": "SecConceptRequest",
+        "type": "object"
+      },
+      "SecIdentityRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SecIdentityRequest",
+        "type": "object"
+      },
+      "SourceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
+          "kind": {
+            "default": "user_supplied",
+            "enum": [
+              "user_supplied",
+              "official"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SourcePermissions"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "revised_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised At"
+          },
+          "text": {
+            "maxLength": 2000000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "format": "uri",
+                "maxLength": 2083,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "title",
+          "text",
+          "permissions"
+        ],
+        "title": "SourceInput",
+        "type": "object"
+      },
+      "SourcePermissions": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "default": false,
+            "title": "Display",
+            "type": "boolean"
+          },
+          "export": {
+            "default": false,
+            "title": "Export",
+            "type": "boolean"
+          },
+          "model_input": {
+            "default": false,
+            "title": "Model Input",
+            "type": "boolean"
+          },
+          "store": {
+            "default": false,
+            "title": "Store",
+            "type": "boolean"
+          }
+        },
+        "title": "SourcePermissions",
+        "type": "object"
+      },
+      "SourceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "ref_id": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Ref Id",
+            "type": "string"
+          },
+          "source_type": {
+            "enum": [
+              "public",
+              "user_submitted",
+              "model_inference",
+              "market_data",
+              "registry",
+              "factor_library"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref_id",
+          "source_type",
+          "label"
+        ],
+        "title": "SourceRef",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VersionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/ResearchContent"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Note",
+            "type": "string"
+          },
+          "parent_version_id": {
+            "title": "Parent Version Id",
+            "type": "string"
+          },
+          "review": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "confirmed",
+              "reservation"
+            ],
+            "title": "Review",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_version_id",
+          "content"
+        ],
+        "title": "VersionInput",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "ForesightNine Research API",
+    "version": "2"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v2/research/calculations": {
+      "post": {
+        "operationId": "calculate_research_v2_research_calculations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Calculate Research V2 Research Calculations Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Calculate Research"
+      }
+    },
+    "/v2/research/identities/sec-search": {
+      "post": {
+        "operationId": "search_research_sec_identities_v2_research_identities_sec_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecIdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Search Research Sec Identities V2 Research Identities Sec Search Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Research Sec Identities"
+      }
+    },
+    "/v2/research/sources": {
+      "post": {
+        "operationId": "create_research_source_v2_research_sources_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Research Source V2 Research Sources Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Research Source"
+      }
+    },
+    "/v2/research/sources/fetch": {
+      "post": {
+        "operationId": "fetch_research_source_v2_research_sources_fetch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fetch Research Source V2 Research Sources Fetch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Research Source"
+      }
+    },
+    "/v2/research/sources/pdf": {
+      "post": {
+        "operationId": "upload_research_pdf_v2_research_sources_pdf_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PdfUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Research Pdf V2 Research Sources Pdf Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Research Pdf"
+      }
+    },
+    "/v2/research/sources/sec-concept": {
+      "post": {
+        "operationId": "fetch_research_sec_concept_v2_research_sources_sec_concept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecConceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fetch Research Sec Concept V2 Research Sources Sec Concept Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Research Sec Concept"
+      }
+    },
+    "/v2/research/sources/{source_id}": {
+      "get": {
+        "operationId": "get_research_source_v2_research_sources__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Source V2 Research Sources  Source Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Source"
+      }
+    },
+    "/v2/research/sources/{source_id}/context": {
+      "get": {
+        "operationId": "get_research_source_context_v2_research_sources__source_id__context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "maximum": 2000000,
+              "minimum": 0,
+              "title": "Start",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "maximum": 2000000,
+              "minimum": 1,
+              "title": "End",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Source Context V2 Research Sources  Source Id  Context Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Source Context"
+      }
+    },
+    "/v2/research/sources/{source_id}/original": {
+      "get": {
+        "operationId": "get_research_source_original_v2_research_sources__source_id__original_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Source Original"
+      }
+    },
+    "/v2/research/topics": {
+      "get": {
+        "operationId": "list_research_topics_v2_research_topics_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResearchTopic"
+                  },
+                  "title": "Response List Research Topics V2 Research Topics Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Research Topics"
+      },
+      "post": {
+        "operationId": "create_research_topic_v2_research_topics_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Research Topic"
+      }
+    },
+    "/v2/research/topics/{topic_id}": {
+      "get": {
+        "operationId": "get_research_topic_v2_research_topics__topic_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Topic"
+      }
+    },
+    "/v2/research/topics/{topic_id}/calculations/recalculate": {
+      "post": {
+        "operationId": "recalculate_research_v2_research_topics__topic_id__calculations_recalculate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecalculateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recalculate Research"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs": {
+      "get": {
+        "operationId": "list_research_runs_v2_research_topics__topic_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OperationResponse"
+                  },
+                  "title": "Response List Research Runs V2 Research Topics  Topic Id  Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Research Runs"
+      },
+      "post": {
+        "operationId": "start_research_run_v2_research_topics__topic_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Research Run"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}": {
+      "get": {
+        "operationId": "get_research_run_v2_research_topics__topic_id__runs__operation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Run"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/inputs": {
+      "get": {
+        "operationId": "get_research_run_inputs_v2_research_topics__topic_id__runs__operation_id__inputs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Run Inputs V2 Research Topics  Topic Id  Runs  Operation Id  Inputs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Run Inputs"
+      }
+    },
+    "/v2/research/topics/{topic_id}/sources": {
+      "post": {
+        "operationId": "attach_research_sources_v2_research_topics__topic_id__sources_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachSourcesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach Research Sources"
+      }
+    },
+    "/v2/research/topics/{topic_id}/versions": {
+      "post": {
+        "operationId": "create_research_version_v2_research_topics__topic_id__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Research Version"
+      }
+    },
+    "/v2/research/topics/{topic_id}/versions/{version_id}": {
+      "get": {
+        "operationId": "get_research_version_v2_research_topics__topic_id__versions__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Version V2 Research Topics  Topic Id  Versions  Version Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Version"
+      }
+    },
+    "/v2/research/topics/{topic_id}/versions/{version_id}/export": {
+      "get": {
+        "operationId": "export_research_version_v2_research_topics__topic_id__versions__version_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Export Research Version V2 Research Topics  Topic Id  Versions  Version Id  Export Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Research Version"
+      }
+    },
+    "/v2/research/topics/{topic_id}/versions/{version_id}/export/metadata": {
+      "get": {
+        "operationId": "export_research_metadata_v2_research_topics__topic_id__versions__version_id__export_metadata_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchMetadataExport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Research Metadata"
+      }
+    },
+    "/v2/research/topics/{topic_id}/versions/{version_id}/sources": {
+      "get": {
+        "operationId": "list_research_version_sources_v2_research_topics__topic_id__versions__version_id__sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Research Version Sources V2 Research Topics  Topic Id  Versions  Version Id  Sources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Research Version Sources"
+      }
+    }
+  }
+}

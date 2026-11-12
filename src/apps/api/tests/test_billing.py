@@ -577,12 +577,12 @@ def test_post_commit_operation_store_failure_compensates_business_and_billing(mo
 
 
 def test_google_play_verify_route_grants_only_verified_active_purchase(monkeypatch) -> None:
+    current = datetime.now(timezone.utc)
     class PurchaseTestClock(FixedClock):
         def now(self):
-            return datetime(2026, 9, 15, tzinfo=timezone.utc)
+            return current
 
-    # The purchase fixture expires on Oct 1; pin lifecycle time instead of
-    # extending it, so the test keeps checking a genuinely active period.
+    # Keep lifecycle time aligned with the repository's real-time expiry clock.
     monkeypatch.setattr(main_module, "lifecycle_clock", PurchaseTestClock())
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     reset_state()
@@ -594,8 +594,8 @@ def test_google_play_verify_route_grants_only_verified_active_purchase(monkeypat
         product_id="foresightnine_pro",
         base_plan_id="monthly",
         subscription_state="active",
-        period_start=datetime(2026, 9, 1, tzinfo=timezone.utc),
-        period_end=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        period_start=current - timedelta(days=14),
+        period_end=current + timedelta(days=16),
         raw_state="SUBSCRIPTION_STATE_ACTIVE",
         acknowledgement_state="pending",
     )

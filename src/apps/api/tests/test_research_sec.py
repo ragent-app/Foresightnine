@@ -1,0 +1,121 @@
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone, timedelta
+import json
+
+import pytest
+from pydantic import ValidationError
+from fastapi.testclient import TestClient
+
+import app.main as api
+from app.openai_compatible import HttpResponse
+from app.research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, SecResult, fetch_sec_concept, search_sec_identities, reserve_sec_request
+from app.storage import InMemoryDocumentRepository
+
+
+def request(**changes):
+    data = {"cik": "789019", "tag": "Revenues", "unit": "USD", "permissions": {"store": True}}
+    return SecConceptRequest(**(data | changes))
+
+
+def test_sec_data_preserves_units_filing_and_prevents_future_filing():
+    payload = {"cik": 789019, "taxonomy": "us-gaap", "tag": "Revenues", "label": "Revenue",
+        "entityName": "Example", "units": {"USD": [
+            {"val": 100, "start": "2022-01-01", "end": "2022-12-31", "filed": "2023-02-01", "accn": "a", "form": "10-K"},
+            {"val": 200, "start": "2023-01-01", "end": "2023-12-31", "filed": "2024-02-01", "accn": "b", "form": "10-K"}],
+            "EUR": [{"val": 999, "end": "2022-12-31", "filed": "2023-02-01"}]}}
+    calls = []
+    def transport(method, url, headers, body, timeout):
+        calls.append(url)
+        assert headers["User-Agent"] == "Team test@example.test"
+        assert url == "https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/Revenues.json"
+        return HttpResponse(200, json.dumps(payload), {"content-type": "application/json"})
+    result = fetch_sec_concept(request(filing_before="2024-01-01"), "Team test@example.test", transport)
+    assert '"val":100' in result.text and '"unit":"USD"' in result.text
+    assert '"accn":"a"' in result.text
+    assert '"val":200' not in result.text and '"val":999' not in result.text
+    assert "not exact public availability time" in result.text
+    assert len(calls) == 1
+
+
+def test_sec_requires_configured_contact_and_valid_paths():
+    with pytest.raises(SecFailure, match="sec_contact_unconfigured"):
+        fetch_sec_concept(request(), None, lambda *args: pytest.fail("must not fetch"))
+    with pytest.raises(ValidationError):
+        request(tag="../../private")
+    with pytest.raises(ValidationError):
+        request(cik="0")
+
+
+def test_shared_gate_reserves_only_one_call_per_second():
+    repository = InMemoryDocumentRepository()
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda _: reserve_sec_request(repository, now), range(8)))
+    assert sum(results) == 1
+    assert not reserve_sec_request(repository, now + timedelta(milliseconds=999))
+    assert reserve_sec_request(repository, now + timedelta(seconds=1))
+
+
+def test_sec_endpoint_fails_closed_without_contact_and_records_provenance(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.delenv("FORESIGHTNINE_SEC_USER_AGENT", raising=False)
+    monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    monkeypatch.setattr(api, "_reserve_search_call", lambda request: None)
+    client = TestClient(api.app)
+    registration = client.post("/v1/auth/local/register", json={"email": "reader@example.test",
+        "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+    body = {"cik": "789019", "tag": "Revenues", "permissions": {"store": True, "display": True}}
+    path = "/v2/research/sources/sec-concept"
+    assert client.post(path, headers=headers, json=body).status_code == 503
+    monkeypatch.setenv("FORESIGHTNINE_SEC_USER_AGENT", "Test team contact@example.test")
+    monkeypatch.setattr(api, "fetch_sec_concept", lambda *_args: SecResult(
+        "https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/Revenues.json",
+        "Example: Revenue", "2023 revenue 100 USD", "a" * 64))
+    response = client.post(path, headers=headers, json=body)
+    assert response.status_code == 201, response.text
+    assert response.json()["retrieval_method"] == "sec_companyconcept"
+    assert response.json()["permissions"]["model_input"] is False
+    assert response.json()["response_sha256"] == "a" * 64
+    assert "contact@example.test" not in response.text
+    assert client.post(path, headers=headers, json=body).status_code == 429
+
+
+def test_sec_identity_candidates_are_sourced_and_do_not_assume_exchange():
+    records = {"0": {"cik_str": 789019, "ticker": "EXM", "title": "Example Corporation"},
+               "1": {"cik_str": 42, "ticker": "EXM.A", "title": "Example Other"},
+               "2": {"cik_str": 0, "ticker": "EXM", "title": "Invalid"}}
+    def transport(method, url, headers, body, timeout):
+        assert url == "https://www.sec.gov/files/company_tickers.json"
+        assert headers["User-Agent"] == "Team test@example.test"
+        return HttpResponse(200, json.dumps(records), {"content-type": "application/json; charset=utf-8"})
+    result = search_sec_identities(SecIdentityRequest(query="EXM"), "Team test@example.test", transport)
+    assert [item["cik"] for item in result["candidates"]] == ["0000789019", "0000000042"]
+    assert all(item["exchange"] is None for item in result["candidates"])
+    assert "historical validity" in result["limitation"] and len(result["response_sha256"]) == 64
+    with pytest.raises(SecFailure, match="sec_contact_unconfigured"):
+        search_sec_identities(SecIdentityRequest(query="EXM"), None, lambda *_: pytest.fail("must not fetch"))
+    with pytest.raises(SecFailure, match="source_invalid"):
+        search_sec_identities(SecIdentityRequest(query="EXM"), "Team test@example.test",
+            lambda *_: HttpResponse(200, '{}', {"content-type": "application/json"}))
+    assert search_sec_identities(SecIdentityRequest(query="absent"), "Team test@example.test", transport)["candidates"] == []
+
+
+def test_sec_identity_endpoint_requires_account_and_returns_unverified_candidates(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.delenv("FORESIGHTNINE_SEC_USER_AGENT", raising=False)
+    monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    client = TestClient(api.app)
+    path = "/v2/research/identities/sec-search"
+    assert client.post(path, json={"query": "EXM"}).status_code == 401
+    registration = client.post("/v1/auth/local/register", json={"email": "identity@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+    assert client.post(path, headers=headers, json={"query": "EXM"}).status_code == 503
+    monkeypatch.setenv("FORESIGHTNINE_SEC_USER_AGENT", "Team test@example.test")
+    monkeypatch.setattr(api, "_reserve_search_call", lambda _: None)
+    monkeypatch.setattr(api, "reserve_sec_request", lambda _: True)
+    monkeypatch.setattr(api, "search_sec_identities", lambda req, agent: {"candidates": [{"cik": "0000000042", "ticker": "EXM", "name": "Example", "exchange": None}], "limitation": "unknown exchange"})
+    response = client.post(path, headers=headers, json={"query": "EXM"})
+    assert response.status_code == 200
+    assert response.json()["candidates"][0]["exchange"] is None
+    assert "test@example.test" not in response.text

@@ -13,7 +13,7 @@ from datetime import date
 import json
 import os
 import re
-from time import sleep
+from time import monotonic, sleep
 from typing import Any, Callable, Mapping
 
 from .openai_compatible import HttpResponse, OpenAICompatibleTransport, _TransportFailure, _TransportTimeout, _default_transport
@@ -133,7 +133,8 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             return message["result"]
         raise ProviderFailure("search_response_invalid", "Search provider returned no matching protocol response.", retryable=False)
 
-    def _post(self, *, message: Mapping[str, Any], session_id: str | None, expected_id: int | None) -> tuple[dict[str, Any], str | None]:
+    def _post(self, *, message: Mapping[str, Any], session_id: str | None, expected_id: int | None,
+              deadline: float | None = None, cancel_event: Any = None) -> tuple[dict[str, Any], str | None]:
         if self._api_key is None:
             raise ProviderFailure("search_provider_unconfigured", "Project search is not configured on this server.", retryable=False)
         headers: dict[str, str] = {
@@ -146,8 +147,13 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
         body = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         last_failure: ProviderFailure | None = None
         for attempt in range(self._max_attempts):
+            if cancel_event is not None and cancel_event.is_set():
+                raise ProviderFailure("search_cancelled", "Search was cancelled.", retryable=True)
+            remaining = deadline - monotonic() if deadline is not None else self._timeout_seconds
+            if remaining <= 0:
+                raise ProviderFailure("search_timeout", "Search exceeded its time budget.", retryable=True)
             try:
-                response = self._transport("POST", _MCP_ENDPOINT, headers, body, self._timeout_seconds)
+                response = self._transport("POST", _MCP_ENDPOINT, headers, body, min(self._timeout_seconds, remaining))
             except _TransportTimeout as error:
                 last_failure = ProviderFailure("search_provider_timeout", "Search provider timed out without a usable result.", retryable=True)
             except (_TransportFailure, TimeoutError, OSError):
@@ -167,7 +173,10 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
                     retryable=True,
                 )
             if attempt + 1 < self._max_attempts:
-                self._sleeper(0.05 * (2**attempt))
+                delay = 0.05 * (2**attempt)
+                if deadline is not None and monotonic() + delay >= deadline:
+                    raise ProviderFailure("search_timeout", "Search exceeded its time budget.", retryable=True)
+                self._sleeper(delay)
         assert last_failure is not None
         raise last_failure
 
@@ -296,10 +305,12 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             raise ProviderFailure("search_response_invalid", "Search provider returned no safely usable source candidates.", retryable=False)
         return tuple(candidates)
 
-    def search(self, query: str, *, limit: int = 5) -> tuple[SearchCandidate, ...]:
+    def search(self, query: str, *, limit: int = 5, deadline: float | None = None, cancel_event: Any = None) -> tuple[SearchCandidate, ...]:
         """Discover bounded source candidates without supplying them to a model."""
 
         self._validate_query(query, limit)
+        # Omit new keywords for legacy callers and their injected transports.
+        budget = {"deadline": deadline, "cancel_event": cancel_event} if deadline is not None or cancel_event is not None else {}
         initialize, session_id = self._post(
             message={
                 "jsonrpc": "2.0",
@@ -313,6 +324,7 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             },
             session_id=None,
             expected_id=1,
+            **budget,
         )
         protocol_version = initialize.get("protocolVersion")
         if not isinstance(protocol_version, str) or not protocol_version:
@@ -321,11 +333,13 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             message={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
             session_id=session_id,
             expected_id=None,
+            **budget,
         )
         tools, session_id = self._post(
             message={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
             session_id=session_id,
             expected_id=2,
+            **budget,
         )
         schema, query_field, tool_name = self._tool_schema(tools)
         arguments: dict[str, Any] = {query_field: query.strip()}
@@ -341,5 +355,6 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             },
             session_id=session_id,
             expected_id=3,
+            **budget,
         )
         return self._candidates(result, limit)

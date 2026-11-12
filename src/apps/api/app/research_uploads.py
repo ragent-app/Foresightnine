@@ -1,0 +1,98 @@
+"""Bounded, local extraction of a user-provided PDF; never runs a shell."""
+from __future__ import annotations
+
+import base64
+import binascii
+from dataclasses import dataclass
+from datetime import datetime
+from hashlib import sha256
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+from threading import BoundedSemaphore
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .research_sources import SourcePermissions
+
+
+MAX_PDF_BYTES = 1_500_000
+MAX_TEXT_BYTES = 2_000_000
+_PDF_WORKERS = BoundedSemaphore(2)
+
+
+class PdfUploadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    title: str = Field(min_length=1, max_length=500)
+    pdf_base64: str = Field(min_length=1, max_length=2_000_000)
+    published_at: datetime | None = None
+    permissions: SourcePermissions
+
+    @field_validator("published_at")
+    @classmethod
+    def timezone_required(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.utcoffset() is None:
+            raise ValueError("Timestamp must include a timezone.")
+        return value
+
+
+class PdfFailure(ValueError):
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class ExtractedPdf:
+    text: str
+    original_base64: str
+    original_sha256: str
+
+
+def extract_pdf(request: PdfUploadRequest) -> ExtractedPdf:
+    if not request.permissions.store:
+        raise PdfFailure("source_permission_unknown")
+    try:
+        raw = base64.b64decode(request.pdf_base64, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise PdfFailure("invalid_pdf") from error
+    if not raw.startswith(b"%PDF-") or len(raw) > MAX_PDF_BYTES:
+        raise PdfFailure("invalid_pdf")
+    if not _PDF_WORKERS.acquire(blocking=False):
+        raise PdfFailure("pdf_busy")
+    try:
+        text = _extract_text(raw)
+    finally:
+        _PDF_WORKERS.release()
+    return ExtractedPdf(text=text, original_base64=base64.b64encode(raw).decode("ascii"),
+                        original_sha256=sha256(raw).hexdigest())
+
+
+def _extract_text(raw: bytes) -> str:
+    extractor = shutil.which("pdftotext")
+    limiter = shutil.which("prlimit")
+    if not extractor or not limiter:
+        raise PdfFailure("pdf_extractor_unavailable")
+    with tempfile.TemporaryDirectory(prefix="foresight-pdf-") as directory:
+        input_file = Path(directory) / "source.pdf"
+        output_file = Path(directory) / "source.txt"
+        input_file.write_bytes(raw)
+        try:
+            result = subprocess.run([limiter, "--as=536870912", "--cpu=10", f"--fsize={MAX_TEXT_BYTES + 1}",
+                "--", extractor, "-layout", "-enc", "UTF-8", str(input_file), str(output_file)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=15, check=False)
+        except subprocess.TimeoutExpired as error:
+            raise PdfFailure("pdf_timeout") from error
+        except OSError as error:
+            raise PdfFailure("pdf_extractor_unavailable") from error
+        if result.returncode != 0 or not output_file.is_file() or output_file.stat().st_size > MAX_TEXT_BYTES:
+            raise PdfFailure("pdf_unreadable_or_too_large")
+        try:
+            text = output_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise PdfFailure("pdf_unreadable_or_too_large") from error
+    if not text.strip():
+        raise PdfFailure("pdf_no_extractable_text")
+    return text

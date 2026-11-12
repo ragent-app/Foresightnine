@@ -1,0 +1,92 @@
+"""Opt-in destructive integration test: use a disposable PostgreSQL database only."""
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+
+
+@pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
+@pytest.mark.parametrize("review_phase", [False, True])
+def test_interrupted_research_retains_inputs_and_cannot_replay_external_call(tmp_path, review_phase):
+    state_file = tmp_path / "state.json"
+    env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
+               FORESIGHTNINE_POSTGRES_DSN=os.environ["FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"],
+               STAGEB_TEST_STATE=str(state_file))
+    root = Path(__file__).resolve().parents[3]
+    start = r'''
+import json, os, sys
+from threading import Event
+from types import SimpleNamespace
+from uuid import uuid4
+sys.path.insert(0, "apps/api")
+import app.main as api
+from fastapi.testclient import TestClient
+entered = Event()
+class Provider:
+    name = "restart-test"
+    policy = SimpleNamespace(timeout_seconds=30, max_input_tokens=3000, max_output_tokens=1500)
+    def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+        entered.set()
+        Event().wait(30)
+        raise AssertionError("process should be terminated")
+api.challenge_provider = Provider()
+client = TestClient(api.app)
+registered = client.post("/v1/auth/local/register", json={"email": f"restart-{uuid4().hex}@example.test", "password": "correct horse battery staple!"})
+assert registered.status_code == 201, registered.text
+token = registered.json()["access_token"]
+headers = {"Authorization": "Bearer " + token}
+source = client.post("/v2/research/sources", headers=headers, json={"title":"Report", "text":"Revenue was 100.", "permissions":{"store":True,"model_input":True,"display":True}})
+assert source.status_code == 201, source.text
+topic = client.post("/v2/research/topics", headers=headers, json={"question":"Revenue?", "source_ids":[source.json()["source_id"]]})
+assert topic.status_code == 201, topic.text
+value = topic.json(); path = "/v2/research/topics/" + value["topic_id"] + "/runs"
+payload = {"parent_version_id":value["versions"][0]["version_id"]}
+started = client.post(path, headers={**headers, "Idempotency-Key":"restart-test-key"}, json=payload)
+assert started.status_code == 202, started.text
+assert entered.wait(10)
+with open(os.environ["STAGEB_TEST_STATE"], "w") as f:
+    json.dump({"token":token, "path":path, "payload":payload, "operation":started.json()["operation"]["operation_id"]}, f)
+os._exit(0)
+'''
+    recover = r'''
+import json, os, sys
+from datetime import timedelta
+sys.path.insert(0, "apps/api")
+import app.main as api
+from fastapi.testclient import TestClient
+with open(os.environ["STAGEB_TEST_STATE"]) as f: state = json.load(f)
+headers = {"Authorization":"Bearer " + state["token"]}
+client = TestClient(api.app)
+path = state["path"]; op = state["operation"]
+assert client.get(path + "/" + op, headers=headers).json()["operation"]["status"] == "running"
+assert api.operations.recover_expired_leases(now=api.lifecycle_clock.now() + timedelta(seconds=301)) >= 1
+assert client.get(path + "/" + op, headers=headers).json()["operation"]["status"] == "failed"
+snapshot = client.get(path + "/" + op + "/inputs", headers=headers)
+assert snapshot.status_code == 200 and snapshot.json()["parent_version_id"] == state["payload"]["parent_version_id"]
+reservation = api.billing_ledger.usage.get("model:" + op)
+assert reservation is not None and reservation.status == "reserved"
+retry = client.post(path, headers={**headers, "Idempotency-Key":"restart-test-key"}, json=state["payload"])
+assert retry.status_code == 202 and retry.headers["Idempotency-Replayed"] == "true"
+assert retry.json()["operation"]["status"] == "failed"
+assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
+assert api.RESEARCH_RUN_INPUTS.get(op) is None
+'''
+    if review_phase:
+        start = start.replace('        entered.set()\n', '''        if "reviewing whether supplied evidence" not in system:
+            citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+            return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
+                    "counterarguments": [{"text": "Revenue alone does not establish profit", "citations": [citation]}],
+                    "facts": [], "calculations": [], "limitations": []}, 55
+        entered.set()
+''')
+        start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
+        start = start.replace('payload = {"parent_version_id":value["versions"][0]["version_id"]}',
+                              'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "max_model_calls":2, "max_total_tokens":9000}')
+        recover = recover.replace('assert reservation is not None and reservation.status == "reserved"', '''assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55
+review_reservation = api.billing_ledger.usage.get("model:" + op + ":support-review")
+assert review_reservation is not None and review_reservation.status == "reserved"''')
+    for script in (start, recover):
+        result = subprocess.run([sys.executable, "-c", script], cwd=root, env=env, capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stderr
