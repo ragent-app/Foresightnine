@@ -8,7 +8,7 @@ import pytest
 
 
 @pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
-@pytest.mark.parametrize("phase", ["before_provider", "generation", "review", "isolated_review_second", "result_commit"])
+@pytest.mark.parametrize("phase", ["before_provider", "generation", "generation_checkpoint", "review", "isolated_review_second", "result_commit"])
 def test_interrupted_research_retains_inputs_and_cannot_replay_external_call(tmp_path, phase):
     state_file = tmp_path / "state.json"
     env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
@@ -87,6 +87,29 @@ api._reserve_model_call = hold_before_reservation
 ''')
         recover = recover.replace('assert reservation is not None and reservation.status == "reserved"',
                                   'assert reservation is None')
+    elif phase == "generation_checkpoint":
+        # Generation was billed, but its checkpoint write is still in the
+        # transaction when the process exits. Do not replay the provider.
+        start = start.replace('        entered.set()\n', '''        citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+        return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
+                "counterarguments": [{"text": "Revenue alone does not establish profit", "citations": [citation]}],
+                "facts": [], "calculations": [], "limitations": []}, 55
+        entered.set()
+''')
+        start = start.replace('api.challenge_provider = Provider()\n', '''api.challenge_provider = Provider()
+original_add_version = api.research_topics.add_version
+def hold_after_checkpoint_write(*args, **kwargs):
+    result = original_add_version(*args, **kwargs)
+    entered.set()
+    Event().wait(30)
+    raise AssertionError("process should be terminated")
+api.research_topics.add_version = hold_after_checkpoint_write
+''')
+        start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
+        start = start.replace('payload = {"parent_version_id":value["versions"][0]["version_id"]}',
+                              'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "max_model_calls":2, "max_total_tokens":9000}')
+        recover = recover.replace('assert reservation is not None and reservation.status == "reserved"',
+                                  'assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55\nassert api.billing_ledger.usage.get("model:" + op + ":support-review") is None')
     elif phase == "review":
         start = start.replace('        entered.set()\n', '''        if system != api.REVIEW_SYSTEM_PROMPT:
             citation = {"source_id": source_id, "quotation": "Revenue was 100"}
