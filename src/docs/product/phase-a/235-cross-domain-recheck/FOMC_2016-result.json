@@ -1,0 +1,385 @@
+{
+  "task": "FOMC_2016",
+  "status": "completed",
+  "operation_id": "operation:8772f306ee5bcfa0acd559cd",
+  "manifest_sha256": "e901dc51c1f6649c02892c83864864d2720694462e7e87cada8d9e55e519bd94",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_23100000000000000000000000000003",
+        "title": "fomc-2016.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T18:03:24.349017+00:00",
+        "revised_at": null,
+        "content_sha256": "330dad9b81b6b137096c25d9b63f864dbca0ecb05bd57a998f0837adf15ca827",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ffr_range:lower",
+        "value": "0.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "announced December 14, 2016",
+        "label": "federal_funds_target_range (lower bound)",
+        "source_id": "source_23100000000000000000000000000003",
+        "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent.",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1671,
+          "character_end": 1768,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ffr_range:upper",
+        "value": "0.75",
+        "unit": "percent",
+        "currency": null,
+        "period": "announced December 14, 2016",
+        "label": "federal_funds_target_range (upper bound)",
+        "source_id": "source_23100000000000000000000000000003",
+        "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent.",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1671,
+          "character_end": 1768,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "inflation_objective",
+        "value": "2",
+        "unit": "percent (medium-term objective)",
+        "currency": null,
+        "period": "medium term as of December 14, 2016",
+        "label": "inflation_objective",
+        "source_id": "source_23100000000000000000000000000003",
+        "quotation": "Inflation is expected to rise to 2 percent over the\nmedium term as the transitory effects of past declines in energy and import prices dissipate and\nthe labor market strengthens further.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 1228,
+          "character_end": 1414,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ior_rate",
+        "value": "0.75",
+        "unit": "percent",
+        "currency": null,
+        "period": "effective December 15, 2016",
+        "label": "interest_on_reserves_rate",
+        "source_id": "source_23100000000000000000000000000003",
+        "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the\n       interest rate paid on required and excess reserve balances to 0.75 percent, effective\n       December 15, 2016.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 4337,
+          "character_end": 4539,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The Federal Reserve's December 14, 2016 statement raised the federal funds target range to 1/2 to 3/4 percent, effective with the policy decision announced that day.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 1671,
+              "character_end": 1768,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Janet L. Yellen chaired the FOMC at the time, as shown in the voting record of the December 14, 2016 statement.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 3684,
+              "character_end": 3931,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting for the FOMC monetary policy action were: Janet L. Yellen, Chair; William C.\nDudley, Vice Chairman; Lael Brainard; James Bullard; Stanley Fischer; Esther L. George;\nLoretta J. Mester; Jerome H. Powell; Eric Rosengren; and Daniel K. Tarullo."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "The policy rate (federal funds target range of 1/2 to 3/4 percent) is distinct from the Committee's 2 percent inflation objective, which is a medium-term goal under its statutory mandate, not the policy rate itself.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 921,
+              "character_end": 1414,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Consistent with its statutory mandate, the Committee seeks to foster maximum\nemployment and price stability. The Committee expects that, with gradual adjustments in the\nstance of monetary policy, economic activity will expand at a moderate pace and labor market\nconditions will strengthen somewhat further. Inflation is expected to rise to 2 percent over the\nmedium term as the transitory effects of past declines in energy and import prices dissipate and\nthe labor market strengthens further."
+          },
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 1769,
+              "character_end": 1931,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The stance of\nmonetary policy remains accommodative, thereby supporting some further strengthening in labor\nmarket conditions and a return to 2 percent inflation."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_percentages": [
+          "3/4 percent"
+        ],
+        "uncited_fact_values": [
+          "0.5 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "ffr_range:lower",
+            "source_id": "source_23100000000000000000000000000003",
+            "value": "0.5",
+            "unit": "percent",
+            "period": "announced December 14, 2016",
+            "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent.",
+            "location": {
+              "character_start": 1671,
+              "character_end": 1768,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "suggested_related_quotations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent.",
+            "location": {
+              "character_start": 1671,
+              "character_end": 1768,
+              "page": 1
+            },
+            "matched_amounts": [
+              "3/4 percent"
+            ],
+            "from_claim_index": 0,
+            "status": "requires_semantic_review"
+          },
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the\n       interest rate paid on required and excess reserve balances to 0.75 percent, effective\n       December 15, 2016.",
+            "location": {
+              "character_start": 4337,
+              "character_end": 4539,
+              "page": 3
+            },
+            "matched_amounts": [
+              "3/4 percent"
+            ],
+            "from_claim_index": 3,
+            "status": "requires_semantic_review"
+          }
+        ]
+      },
+      {
+        "text": "Implementation details effective December 15, 2016 included raising the interest rate on required and excess reserve balances to 0.75 percent, which is an administered rate distinct from the federal funds target range.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 4337,
+              "character_end": 4539,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the\n       interest rate paid on required and excess reserve balances to 0.75 percent, effective\n       December 15, 2016."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "One might conflate the 2 percent figure with policy, but the source states inflation of 2 percent is an objective the Committee expects inflation to 'rise to' over the medium term, given a 'current shortfall of inflation from 2 percent' — it is not the policy rate.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 2629,
+              "character_end": 2739,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In light of the current shortfall of inflation from 2 percent, the Committee will\ncarefully monitor actual and"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "reused_percentages": [
+          "2 percent"
+        ],
+        "uncited_fact_values": [
+          "2 percent (medium-term objective)"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "inflation_objective",
+            "source_id": "source_23100000000000000000000000000003",
+            "value": "2",
+            "unit": "percent (medium-term objective)",
+            "period": "medium term as of December 14, 2016",
+            "quotation": "Inflation is expected to rise to 2 percent over the\nmedium term as the transitory effects of past declines in energy and import prices dissipate and\nthe labor market strengthens further.",
+            "location": {
+              "character_start": 1228,
+              "character_end": 1414,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "citation_context_warnings": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "citation_index": 0,
+            "context_metric": "unfinished quoted phrase",
+            "context_character_start": 2629,
+            "context_character_end": 2784,
+            "status": "requires_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_23100000000000000000000000000003: only character ranges 850–2740, 2855–4939 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The excerpts are partial; the statement's full text, including the implementation directive's continuation, is not included.",
+      "Model-reported limitation (not independently verified): The date December 14, 2016 is declared in the source text itself ('For release at 2 p.m. EST December 14, 2016') but is not independently verified against an external record.",
+      "Model-reported limitation (not independently verified): The vote count (e.g., any dissents) is not fully characterized beyond the list of voting members.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "A percentage repeats within a claim; check that each measure has its own supporting evidence.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "A quotation may omit relevant context; review the source and claim.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:8772f306ee5bcfa0acd559cd",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 2488,
+      "cost_usd": null,
+      "generation_tokens": 2488,
+      "support_review_tokens": null,
+      "require_counterarguments": false,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 17.635,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "c4094bd3265be19ba5f92252ae254f62ef8c4834fdbbac14e04fb57ffd008295",
+      "prompt_characters": 4973,
+      "prompt_bytes": 4983,
+      "selection_method": "ranked_nonoverlapping_windows_v45",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_23100000000000000000000000000003",
+          "character_start": 850,
+          "character_end": 2740,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_23100000000000000000000000000003",
+          "character_start": 2855,
+          "character_end": 4939,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_23100000000000000000000000000003": "330dad9b81b6b137096c25d9b63f864dbca0ecb05bd57a998f0837adf15ca827"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_a31aa3d2dca04aa49246961a36fe1e86",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_f367658d70a7420b8e6d70de249c734d",
+      "parent_version_id": "version_a31aa3d2dca04aa49246961a36fe1e86",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 18.165
+}

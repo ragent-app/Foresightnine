@@ -1,0 +1,118 @@
+{
+  "manifest_sha256": "e901dc51c1f6649c02892c83864864d2720694462e7e87cada8d9e55e519bd94",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The Federal Reserve's December 14, 2016 statement raised the federal funds target range to 1/2 to 3/4 percent, effective with the policy decision announced that day.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 1/2 to 3/4 percent."
+          }
+        ]
+      },
+      {
+        "text": "Janet L. Yellen chaired the FOMC at the time, as shown in the voting record of the December 14, 2016 statement.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting for the FOMC monetary policy action were: Janet L. Yellen, Chair; William C. Dudley, Vice Chairman; Lael Brainard; James Bullard; Stanley Fischer; Esther L. George; Loretta J. Mester; Jerome H. Powell; Eric Rosengren; and Daniel K. Tarullo."
+          }
+        ]
+      },
+      {
+        "text": "The policy rate (federal funds target range of 1/2 to 3/4 percent) is distinct from the Committee's 2 percent inflation objective, which is a medium-term goal under its statutory mandate, not the policy rate itself.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Consistent with its statutory mandate, the Committee seeks to foster maximum employment and price stability. The Committee expects that, with gradual adjustments in the stance of monetary policy, economic activity will expand at a moderate pace and labor market conditions will strengthen somewhat further. Inflation is expected to rise to 2 percent over the medium term as the transitory effects of past declines in energy and import prices dissipate and the labor market strengthens further."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "The stance of monetary policy remains accommodative, thereby supporting some further strengthening in labor market conditions and a return to 2 percent inflation."
+          }
+        ]
+      },
+      {
+        "text": "Implementation details effective December 15, 2016 included raising the interest rate on required and excess reserve balances to 0.75 percent, which is an administered rate distinct from the federal funds target range.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the interest rate paid on required and excess reserve balances to 0.75 percent, effective December 15, 2016."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One might conflate the 2 percent figure with policy, but the source states inflation of 2 percent is an objective the Committee expects inflation to 'rise to' over the medium term, given a 'current shortfall of inflation from 2 percent' — it is not the policy rate.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "In light of the current shortfall of inflation from 2 percent, the Committee will carefully monitor actual and"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The excerpts are partial; the statement's full text, including the implementation directive's continuation, is not included.",
+      "The date December 14, 2016 is declared in the source text itself ('For release at 2 p.m. EST December 14, 2016') but is not independently verified against an external record.",
+      "The vote count (e.g., any dissents) is not fully characterized beyond the list of voting members."
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr_range",
+        "label": "federal_funds_target_range",
+        "value": "0.5 to 0.75",
+        "unit": "percent",
+        "currency": null,
+        "period": "announced December 14, 2016",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to raise the target range for the federal funds rate to 1/2 to 3/4 percent."
+        }
+      },
+      {
+        "fact_id": "inflation_objective",
+        "label": "inflation_objective",
+        "value": 2,
+        "unit": "percent (medium-term objective)",
+        "currency": null,
+        "period": "medium term as of December 14, 2016",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Inflation is expected to rise to 2 percent over the medium term as the transitory effects of past declines in energy and import prices dissipate and the labor market strengthens further."
+        }
+      },
+      {
+        "fact_id": "ior_rate",
+        "label": "interest_on_reserves_rate",
+        "value": 0.75,
+        "unit": "percent",
+        "currency": null,
+        "period": "effective December 15, 2016",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the interest rate paid on required and excess reserve balances to 0.75 percent, effective December 15, 2016."
+        }
+      },
+      {
+        "fact_id": "chair",
+        "label": "fomc_chair",
+        "value": "Janet L. Yellen",
+        "unit": null,
+        "currency": null,
+        "period": "December 14, 2016",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Voting for the FOMC monetary policy action were: Janet L. Yellen, Chair; William C. Dudley, Vice Chairman; Lael Brainard; James Bullard; Stanley Fischer; Esther L. George; Loretta J. Mester; Jerome H. Powell; Eric Rosengren; and Daniel K. Tarullo."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2488,
+  "prompt_sha256": "c4094bd3265be19ba5f92252ae254f62ef8c4834fdbbac14e04fb57ffd008295",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

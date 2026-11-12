@@ -20,3 +20,5 @@
 后续集中工程回归及跳过项见 [225 号记录](225-engineering-regression.md)；[224 号完整 HTML 财报试运行](224-html-company-pilot/README.md)仍因表格引文不完整而为部分完成。
 
 [230 号记录](230-persistence-regression.md)补充当前版本的临时 PostgreSQL、备份和 Redis 检查，包含 HTML 原件及表格复核记录的跨进程验证。
+
+[235 号三项既有任务回归](235-cross-domain-recheck/README.md)在后续修正后仍为 0/3；政策声明的主席引用已出现，但银行表格与 BEA 引文歧义等仍未解决。这是非盲诊断，不是独立验收。
