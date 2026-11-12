@@ -530,13 +530,17 @@ _BOTH_RAISE_PROFIT = re.compile(
 _REVENUE_FALL = re.compile(r"\b(?:revenues?|sales)\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?(?:revenues?|sales)\b|(?:营收|營收|收入)(?:下降|减少|減少|下滑)", re.IGNORECASE)
 _OPERATING_EXPENSE_FALL = re.compile(r"\boperating\s+expenses?\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?operating\s+expenses?\b|(?:营业|營業|经营|經營)费用(?:下降|减少|減少|下滑)|(?:營業|經營)費用(?:下降|減少|下滑)", re.IGNORECASE)
 _COMPONENT_NEGATION = re.compile(r"\b(?:not|neither|incorrect|false|deny|denies)\b|并非|並非|并不|並不|不认为|不認為|不是|没有|沒有|不能|未必|无法|無法|并未|並未", re.IGNORECASE)
+_REVISION_DIRECTION = re.compile(r"\b(?:downward|upward)\s+revision\b|\brevis(?:ed|ion)\s+(?:up|down|upwards?|downwards?)\b|(?:向下|向上|下调|下調|上调|上調)(?:修订|修訂|修正|调整|調整)|(?:修订|修訂|修正)(?:向下|向上|下调|下調|上调|上調)", re.IGNORECASE)
+_REVISION_CONTRADICTION = re.compile(r"\b(?:contrary\s+to|contradict(?:s|ed)?|refut(?:e|es|ed))\b|(?:反驳|反駁|与.{0,12}相矛盾|與.{0,12}相矛盾)", re.IGNORECASE)
 
 
 def flag_component_direction(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
-    """Flag narrow sign inconsistencies in two common accounting identities.
+    """Flag narrow direction risks, including revision versus change.
 
     A warning is a review cue, not proof of claim support or accounting basis.
-    Both component movements must occur in the same located quotation.
+    Both component movements must occur in the same located quotation for the
+    accounting rules. A revision warning is a cue, not a determination that
+    the claim is false: further evidence may establish a contradiction.
     """
     source_map = {s.source_id:s for s in sources if s.permissions.display and not s.is_simulated}
     rules = (("trade_deficit", _BOTH_NARROW_DEFICIT, _GOODS_DEFICIT_FALL, _SERVICES_SURPLUS_FALL),
@@ -548,6 +552,22 @@ def flag_component_direction(claims: list[dict], sources: list[ResearchSource]) 
         text,citations=entry.get("text"),entry.get("citations")
         if not isinstance(text,str) or len(text)>3000 or not isinstance(citations,list):
             output.append(entry);continue
+        revision = _REVISION_DIRECTION.search(text)
+        contrary = _REVISION_CONTRADICTION.search(text)
+        if revision and contrary and not _COMPONENT_NEGATION.search(text[max(0,contrary.start()-24):contrary.start()]):
+            for index, citation in enumerate(citations[:10]):
+                if not isinstance(citation,dict) or citation.get("partial_token"):
+                    continue
+                source=source_map.get(citation.get("source_id")) if isinstance(citation.get("source_id"),str) else None
+                quote,loc=citation.get("quotation"),citation.get("location")
+                if source is None or not isinstance(quote,str) or not isinstance(loc,dict) or loc.get("status")=="ambiguous":
+                    continue
+                a,b=loc.get("character_start"),loc.get("character_end")
+                if (type(a) is int and type(b) is int and 0<=a<b<=len(source.text) and source.text[a:b]==quote
+                        and not partial_ascii_token(source.text,a,b) and _REVISION_DIRECTION.search(quote)):
+                    entry.setdefault("balance_direction_warnings",[]).append({"source_id":source.source_id,"citation_index":index,
+                        "basis":"revision_vs_change","claimed_text":contrary.group(0),"status":"requires_review"})
+                    break
         for basis,claim_pattern,component_one,component_two in rules:
             matches=list(claim_pattern.finditer(text))[:5]
             matches=[m for m in matches if not _COMPONENT_NEGATION.search(text[max(0,m.start()-50):m.start()])]

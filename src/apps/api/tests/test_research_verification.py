@@ -318,6 +318,15 @@ def test_review_omits_trade_balance_direction_conflict():
     assert not batch.indexes and batch.omitted==[0]
 
 
+def test_review_does_not_turn_revision_direction_warning_into_support():
+    text="The estimate reflects a downward revision to consumer spending."
+    report=source().model_copy(update={"text":text})
+    item={"text":"The downward revision is contrary to a claim that spending rose.","citations":[{"source_id":"s","quotation":text,
+         "location":{"character_start":0,"character_end":len(text)}}]}
+    batch=prepare_support_review([item],[report],3000)
+    assert not batch.indexes and batch.omissions==[{"claim_index":0,"reason":"not_reviewable"}]
+
+
 def test_partial_review_retains_only_unique_submitted_verdicts_and_reports_missing():
     from app.research_verification import apply_partial_support_review
     original=[claim(), claim()]

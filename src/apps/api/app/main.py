@@ -2752,7 +2752,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if any(c.get("uncited_quarters") for c in claims):
             limitations.append("An explicit quarter and year could not be matched in the attached quotations; check the period and source context.")
         if any(c.get("balance_direction_warnings") for c in claims):
-            limitations.append("A claimed component direction may conflict with an accounting identity; check definitions, signs and periods.")
+            limitations.append("A claimed direction or contradiction may require review; check revision versus change, definitions, signs and periods.")
         if any(c.get("uncited_fact_values") for c in claims):
             limitations.append("A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.")
         if any(c.get("uncited_percentage_bounds") for c in claims):

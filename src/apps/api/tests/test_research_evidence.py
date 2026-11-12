@@ -611,6 +611,23 @@ def test_trade_deficit_direction_warning_requires_matching_located_components():
     assert not flag_component_direction([omitted],[source])[0].get("balance_direction_warnings")
 
 
+def test_revision_contradiction_warning_requires_original_located_revision():
+    from app.research_evidence import flag_component_direction
+    text="The estimate primarily reflects a downward revision to consumer spending."
+    source=ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
+    cite={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
+    claim={"text":"The downward revision is contrary to a claim that spending rose.","citations":[cite]}
+    flagged=flag_component_direction([claim],[source])[0]
+    assert flagged["balance_direction_warnings"][0]["basis"]=="revision_vs_change"
+    assert "balance_direction_warnings" not in claim
+    assert not flag_component_direction([{**claim,"text":"The downward revision does not contradict growth."}],[source])[0].get("balance_direction_warnings")
+    assert not flag_component_direction([{**claim,"text":"The downward revision reflects a lower earlier estimate."}],[source])[0].get("balance_direction_warnings")
+    for bad in ({**cite,"partial_token":True},{**cite,"quotation":"invented"},{**cite,"location":{"status":"ambiguous"}}):
+        assert not flag_component_direction([{**claim,"citations":[bad]}],[source])[0].get("balance_direction_warnings")
+    assert not flag_component_direction([claim],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("balance_direction_warnings")
+
+
 def test_component_direction_flags_chinese_trade_claims_against_english_or_chinese_sources():
     from app.research_evidence import flag_component_direction
     quotes=["A decrease in the goods deficit and a decrease in the services surplus.",

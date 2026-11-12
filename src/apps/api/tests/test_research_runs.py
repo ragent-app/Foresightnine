@@ -2282,6 +2282,42 @@ def test_trade_balance_direction_warning_is_recomputed_after_edit(monkeypatch):
     assert content["claims"][0]["balance_direction_warnings"]
 
 
+def test_revision_contradiction_warning_survives_version_and_is_recomputed(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    text="The estimate reflects a downward revision to consumer spending."
+    class Provider:
+        name="revision-direction-test"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {"claims":[{"text":"The downward revision is contrary to a claim that spending rose.",
+                    "citations":[{"source_id":source_id,"quotation":text}]}]},10
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    user=client.post("/v1/auth/local/register",json={"email":"revision-direction@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+user["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":text,
+        "permissions":{"store":True,"display":True,"model_input":True,"export":True}}).json()["source_id"]
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"What changed?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"revision-direction-test"},
+        json={"parent_version_id":topic["versions"][0]["version_id"],"require_counterarguments":False})
+    assert receipt.status_code==202
+    op=receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        state=client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+        if state in {"completed","failed"}:break
+        time.sleep(.02)
+    assert state=="completed"
+    version=client.get(path,headers=headers).json()["versions"][-1];content=version["content"]
+    assert content["run"]["status"]=="partial"
+    assert content["claims"][0]["balance_direction_warnings"][0]["basis"]=="revision_vs_change"
+    edited=deepcopy(content)
+    edited["claims"][0]["text"]="The downward revision does not contradict growth."
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
+    assert saved.status_code==201 and not saved.json()["versions"][-1]["content"]["claims"][0].get("balance_direction_warnings")
+    assert content["claims"][0]["balance_direction_warnings"]
+
+
 def test_model_omitted_review_is_partial_and_returned_verdict_is_retained(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     class Provider:
