@@ -1,0 +1,123 @@
+{
+  "implementation_commit": "8d7ee0f74e3a0a616491569792b59ad3785af0f1",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_method": "bounded_quotation_context_model_review_v23",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "38029012d0f7abead993cfcd818763abc4184b245fad9e5228f731199ae84070",
+    "prepare.py": "338512695eecff0f2e6f243b60e45fe4c954f5aeb9d363eb9bb41283f7a2dd33",
+    "run.py": "06c67045c5886099d9364e0641724395fcf19c35d290c577106bf0e07a478887",
+    "score.py": "529227529627d25ec5bfee98297a90fca700c8a17a7b3b708cd8e40b9745bf8f"
+  },
+  "source_files": {
+    "tasks.json": "ecdf19a37cdf3579f3675b2c6d1216bdb6b25c88bb406513bc847a5a8d00b2f5",
+    "reference.json": "1ddd150a9407844edad5e862fbf0a6358d6550050845dab5318a25fde611cf8d",
+    "fed-2025-stress.pdf": "4808e14a2809875080589e7c896e96ea5979e0bbc29cb090c94e5df425308bea",
+    "bea-2021-may.pdf": "d7cee0e26f18918224ca5783d52b30279f684dfe124b40447bfc8a5c1f3dfb0b",
+    "fomc-2017-mar.pdf": "d99f7c23cb09025fd7f680f1eecc27305a5d5e3ac193c1b17e12a5187b965359"
+  },
+  "conditions": [
+    {
+      "task": "BANK_2025",
+      "prompt_sha256": "ed103e022fd232ac37cac08502a3d93a4e41125e72b0bbba0f198802e766920e",
+      "prompt_bytes": 5052,
+      "segments": [
+        {
+          "source_id": "source_20900000000000000000000000000001",
+          "character_start": 34224,
+          "character_end": 35489,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20900000000000000000000000000001",
+          "character_start": 65448,
+          "character_end": 66553,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20900000000000000000000000000001",
+          "character_start": 69594,
+          "character_end": 70697,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_20900000000000000000000000000001": "3b8a1640e869fa6136175d6e1b1422f478d5a07dad0f98474525364357e63105"
+      }
+    },
+    {
+      "task": "PCE_2021",
+      "prompt_sha256": "382cb549840ba4832e075319af5008a91b985e0240539d00f681e45e12b13c21",
+      "prompt_bytes": 4183,
+      "segments": [
+        {
+          "source_id": "source_20900000000000000000000000000002",
+          "character_start": 323,
+          "character_end": 1616,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20900000000000000000000000000002",
+          "character_start": 2060,
+          "character_end": 2238,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20900000000000000000000000000002",
+          "character_start": 2453,
+          "character_end": 3742,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_20900000000000000000000000000002": "83a0f8099fc5b3c17c5283653cce85a9be0444c6588ace459356ab0628f17bc5"
+      }
+    },
+    {
+      "task": "FOMC_2017",
+      "prompt_sha256": "20758f9fc348fd1c5658b5132dda6f089d8ab32069ba80a8f0a785eae782f107",
+      "prompt_bytes": 4959,
+      "segments": [
+        {
+          "source_id": "source_20900000000000000000000000000003",
+          "character_start": 605,
+          "character_end": 2386,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20900000000000000000000000000003",
+          "character_start": 2640,
+          "character_end": 4471,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_20900000000000000000000000000003": "0c1ed989c5202375cae3d504c2e52e27b897bc5b3e370b8a3d7d721cbf121f47"
+      }
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 3,
+  "max_calls_per_task": 1,
+  "max_total_tokens": 30000,
+  "run_elapsed_seconds": 120,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 230383
+}

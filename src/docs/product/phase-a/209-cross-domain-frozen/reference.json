@@ -1,0 +1,22 @@
+{
+  "BANK_2025": {
+    "bank": "Bank of America Corporation",
+    "actual_2024_q4_percent": "11.9",
+    "projected_2027_q1_percent": "10.7",
+    "projected_minimum_percent": "10.2"
+  },
+  "PCE_2021": {
+    "total_spending_increase_billions": "2.9",
+    "goods": "decrease",
+    "services": "increase"
+  },
+  "FOMC_2017": {
+    "target_range_percent": [
+      "0.75",
+      "1"
+    ],
+    "dissenter": "Neel Kashkari",
+    "preference": "maintain existing target range",
+    "inflation_goal_percent": "2"
+  }
+}

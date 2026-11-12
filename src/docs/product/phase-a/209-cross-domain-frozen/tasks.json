@@ -1,0 +1,20 @@
+[
+  {
+    "id": "BANK_2025",
+    "question": "According to the 2025 Federal Reserve stress test report, what were Bank of America Corporation\u2019s actual common equity tier 1 capital ratio in 2024 Q4, projected ratio at the end of the severely adverse scenario in 2027 Q1, and projected minimum? Quote the bank name, applicable row and headings, and distinguish the actual figure from hypothetical projections.",
+    "source": "fed-2025-stress.pdf",
+    "source_id": "source_20900000000000000000000000000001"
+  },
+  {
+    "id": "PCE_2021",
+    "question": "Using the BEA May 2021 release, evaluate the claim that both goods and services consumer spending rose in May. State the current-dollar change in total consumer spending, cite the relevant source passages, and explain what the aggregate change alone cannot establish.",
+    "source": "bea-2021-may.pdf",
+    "source_id": "source_20900000000000000000000000000002"
+  },
+  {
+    "id": "FOMC_2017",
+    "question": "Using the March 15, 2017 FOMC statement, identify the target range for the federal funds rate after the decision, who dissented, and the policy the dissenter preferred. Cite the supporting passages and distinguish the policy range from the inflation goal.",
+    "source": "fomc-2017-mar.pdf",
+    "source_id": "source_20900000000000000000000000000003"
+  }
+]
