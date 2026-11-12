@@ -528,6 +528,18 @@ def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources
     return output
 
 
+def _difference_label(label: str) -> str:
+    # Ignore only an explicit, trailing release qualifier; accounting basis,
+    # geography and other parenthetical details remain part of the label.
+    return re.sub(r"\s*[（(]\s*(?:\d{1,2}\s*月)?(?:公告|发布稿)(?:初值|修订值|修订)?\s*[）)]\s*$", "", label).strip()
+
+
+def _difference_period(period: str) -> str:
+    # Publication time is not the observed financial period. Do not normalize
+    # free-form dates or infer the duration of fiscal or calendar periods.
+    return re.sub(r"\s*[；;]\s*(?:发布于|公布于)\s*(?:19|20)\d{2}-\d{2}-\d{2}\s*$", "", period).strip()
+
+
 def evidence_differences(facts: list[dict]) -> list[dict]:
     """Flag matching labels/periods/units with different cross-source values.
 
@@ -550,7 +562,10 @@ def evidence_differences(facts: list[dict]) -> list[dict]:
                 ("fact_id", "value", "unit", "currency", "period") if key in item})
         except (ValidationError, TypeError, ValueError):
             continue
-        key = (" ".join(label.split()).casefold(), fact.period.casefold(),
+        normalized_label, normalized_period = _difference_label(label), _difference_period(fact.period)
+        if not normalized_label or not normalized_period:
+            continue
+        key = (" ".join(normalized_label.split()).casefold(), normalized_period.casefold(),
                fact.unit.casefold(), fact.currency.casefold() if fact.currency else None)
         groups[key].append((fact, item))
     result = []
@@ -571,10 +586,16 @@ def evidence_differences(facts: list[dict]) -> list[dict]:
                 first_fact, first_item = next((fact, item) for fact, item in entries if fact.value != other[0].value)
             selected_ids = {first_fact.fact_id, other[0].fact_id}
             visible = [(first_fact, first_item), other] + [entry for entry in entries if entry[0].fact_id not in selected_ids][:18]
-        result.append({"label": entries[0][1]["label"], "period": entries[0][0].period,
+        normalized_label = _difference_label(entries[0][1]["label"])
+        normalized_period = _difference_period(entries[0][0].period)
+        qualifiers_removed = any(_difference_label(item["label"]) != item["label"].strip() or
+                                 _difference_period(fact.period) != fact.period.strip() for fact, item in entries)
+        result.append({"label": normalized_label, "period": normalized_period,
             "unit": entries[0][0].unit, "currency": entries[0][0].currency,
+            **({"matching_basis": "release_qualifiers_ignored"} if qualifiers_removed else {}),
             "status": "requires_entity_and_method_review", "truncated": len(entries) > 20,
-            "facts": [{"fact_id": fact.fact_id, "source_id": item["source_id"], "value": str(fact.value)}
+            "facts": [{"fact_id": fact.fact_id, "source_id": item["source_id"], "value": str(fact.value),
+                       "label": item["label"], "period": fact.period}
                       for fact, item in visible]})
         if len(result) == 50:
             break

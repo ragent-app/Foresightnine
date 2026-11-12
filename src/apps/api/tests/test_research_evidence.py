@@ -290,3 +290,19 @@ def test_suggest_uncited_numeric_facts_stays_with_cited_unique_sources():
     assert not suggest_uncited_numeric_facts([claim], [{**fa, "authorship": "user"}, {**fb, "authorship": "user"}], [a, b])[0].get("uncited_fact_values")
     assert not suggest_uncited_numeric_facts([claim], [fa, {**fa, "fact_id": "duplicate"}], [a, b])[0].get("uncited_fact_values")
     assert not suggest_uncited_numeric_facts([claim], [fa], [a.model_copy(update={"permissions": SourcePermissions(store=True)})])[0].get("uncited_fact_values")
+
+
+def test_revision_candidates_keep_original_label_and_publication_metadata():
+    earlier = fact("old", "one", "74.4", label="2024年9月个人收入环比变化（10月公告初值）",
+                   period="2024年9月（较8月变化）；发布于2024-11-27", unit="billions", currency="USD")
+    later = fact("new", "two", "88.2", label="2024年9月个人收入环比变化（11月公告修订值）",
+                 period="2024年9月（较8月变化）；发布于2024-12-20", unit="billions", currency="USD")
+    result = evidence_differences([earlier, later])[0]
+    assert result["status"] == "requires_entity_and_method_review"
+    assert result["matching_basis"] == "release_qualifiers_ignored"
+    assert result["label"] == "2024年9月个人收入环比变化" and result["period"] == "2024年9月（较8月变化）"
+    assert [x["period"] for x in result["facts"]] == [earlier["period"], later["period"]]
+    assert [x["label"] for x in result["facts"]] == [earlier["label"], later["label"]]
+    assert not evidence_differences([earlier, {**later, "label": "2024年9月个人收入环比变化（实际值）"}])
+    assert not evidence_differences([earlier, {**later, "period": "2024年10月（较9月变化）；发布于2024-12-20"}])
+    assert not evidence_differences([earlier, {**later, "unit": "millions"}])

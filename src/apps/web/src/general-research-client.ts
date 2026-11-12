@@ -26,7 +26,7 @@ export interface ResearchContent {
   sources: { source_id: string; title?: string; url?: string | null; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null }[];
   source_candidates: { title: string; url: string; status: string; published_at?: string | null }[];
   facts: ResearchFact[];
-  evidence_differences?: { label: string; period: string; unit: string; currency: string | null; status: string; truncated: boolean; facts: { fact_id: string; source_id: string; value: string }[] }[];
+  evidence_differences?: { label: string; period: string; unit: string; currency: string | null; status: string; matching_basis?: string; truncated: boolean; facts: { fact_id: string; source_id: string; value: string; label?: string; period?: string }[] }[];
   calculations: { formula_id: string; formula_version?: string; period_order_check?: string; expression: string; inputs: { fact_id: string; value: string; unit: string; period: string }[]; value: string; unit: string; authorship?: string; input_status?: string }[];
   calculation_differences?: { claim_index: number; calculation_index: number; claimed_value: string; calculated_value: string; unit: string; status: string }[];
   amount_differences?: { claim_index: number; claimed_amount: string; source_fact_ids: string[]; status: string }[];
