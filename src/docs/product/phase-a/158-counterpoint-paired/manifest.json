@@ -1,0 +1,73 @@
+{
+  "implementation_commit": "264ac54e12fb7b6a0b5b48c01b7067858d350ac3",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "source_hashes": {
+    "source_ce54ed6136754051baf2406f5be2a98c": "ef16be2912417b7e1d033e6863222be713759cd35acc48927cc2c17a4f143a07"
+  },
+  "task_sha256": "798f703d39cb172fd534c1bacfa65a57b1349b041ce5739f56e8726023e818f8",
+  "files": {
+    "prepare.py": "53f4f126baace9a0b665d0bea20295d9a9b06b77b42bfe661481dffa15b7bdb6",
+    "run.py": "b7769fba5573606dd863338833f9792daefc177a3d113159de434ebb2e699032"
+  },
+  "conditions": [
+    {
+      "name": "baseline",
+      "prompt_sha256": "c75bf75115db2236436c2de2c56f44c990c3cbcc35358a1e272e9e0dbb12b84f",
+      "prompt_bytes": 2055,
+      "segments": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 10197,
+          "character_end": 10623,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 27136,
+          "character_end": 27430,
+          "model_source_id": "ref-1"
+        }
+      ]
+    },
+    {
+      "name": "candidate",
+      "prompt_sha256": "1a381e23b20fea40c1b208dba332de8f2b3ffce63c7edcfd74d52bff95d8a1f7",
+      "prompt_bytes": 1957,
+      "segments": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 10175,
+          "character_end": 10646,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 11840,
+          "character_end": 12000,
+          "model_source_id": "ref-1"
+        }
+      ]
+    }
+  ],
+  "input_limit": 3000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 171980
+}
