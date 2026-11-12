@@ -224,3 +224,29 @@ def test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissio
     assert [fact["value"] for fact in difference["facts"]] == ["74.4", "88.2"]
     assert {fact["source_id"] for fact in difference["facts"]} == set(ids)
     assert all("发布于" in fact["period"] for fact in difference["facts"])
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+@pytest.mark.parametrize("case,needles", [
+    ("GDP_ESTIMATE", ("2.9 percent", "2.6 percent", "advance estimate")),
+    ("FED_PURCHASES", ("$20 billion for treasury", "$10 billion for agency", "$40 billion per month", "$20 billion per month")),
+])
+def test_retrieval_keeps_requested_estimates_and_purchase_plans(case, needles):
+    folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/70-multitask-evaluation"
+    task = json.loads((folder / (case + "-input.json")).read_text())
+    item = task["sources"][0]
+    text = _extract_text((folder / item["file"]).read_bytes(), text_order="reading")
+    assert sha256(text.encode()).hexdigest() == item["text_sha256"]
+    report = ResearchSource(source_id=item["source_id"], owner_id="test", title=item["title"], text=text,
+        kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+        published_at=datetime.fromisoformat(item["published_at"].replace("Z", "+00:00")),
+        content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+    captured = []
+    def model(prompt):
+        captured.extend(item["text"] for item in json.loads(prompt)["sources"])
+        return {}, 1
+    result = analyze(task["question"], [report], None, model,
+                     max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+    content = " ".join(" ".join(part.lower().split()) for part in captured)
+    assert all(needle in content for needle in needles)
+    assert all(text[segment["character_start"]:segment["character_end"]] for segment in result.segments)

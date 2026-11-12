@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v17"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v18"
 
 
 class Citation(BaseModel):
@@ -427,6 +427,32 @@ def _policy_vote_windows(text: str, question: str, size: int,
     return None
 
 
+def _asset_purchase_window(text: str, question: str, size: int,
+                           should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
+    """Keep a bounded policy purchase decision and its following sentence together."""
+    lower = question.casefold()
+    if not (any(term in lower for term in ("购买", "purchase", "buying")) and
+            any(term in lower for term in ("国债", "treasury")) and
+            any(term in lower for term in ("抵押贷款", "mortgage"))):
+        return None
+    pattern = (r"\b(?:committee|fomc)\s+decided\s+to\s+(?:reduce|increase|change)\s+"
+               r"the\s+monthly\s+pace\s+of\s+(?:its\s+)?(?:net\s+)?asset\s+purchases\b")
+    for match in islice(re.finditer(pattern, text, re.IGNORECASE), 64):
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        tail = text[match.start():min(len(text), match.start() + 1000)]
+        ends = list(islice(re.finditer(r"[.!?](?=\s|$)", tail), 2))
+        if len(ends) < 2:
+            continue
+        end = match.start() + ends[1].end()
+        passage = text[match.start():end]
+        if (len(passage) <= size and "\f" not in passage and
+                re.search(r"\btreasury\b", passage, re.IGNORECASE) and
+                re.search(r"\bmortgage", passage, re.IGNORECASE)):
+            return [(match.start(), passage)]
+    return None
+
+
 def _financial_table_windows(text: str, question: str, size: int,
                              should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
     """Keep a fiscal-year header, units and a matching total row together.
@@ -516,6 +542,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "下调": ("lower", "decrease"), "上调": ("raise", "increase"),
         "变化幅度": ("lower", "increase", "decrease"), "当期美元": ("current", "dollars"),
         "前月": ("preceding", "month"), "修订": ("revised", "previous"),
+        "购买": ("purchase", "purchases"), "国债": ("treasury",), "抵押贷款": ("mortgage",),
+        "减幅": ("reduce", "reduction"), "初次": ("advance",),
         "投票": ("voting", "vote"), "反对票": ("against", "dissent"), "异议": ("against", "dissent"),
     }.items():
         if chinese in lower:
@@ -548,7 +576,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
     wants_previous_period = any(term in lower for term in ("前月", "上月", "preceding month", "previous month"))
     wants_revision = any(term in lower for term in ("修订", "revision", "revised", "revise", "第二次估计", "second estimate"))
     wants_vote = any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against"))
-    wants_second_estimate = any(term in lower for term in ("第二次估计", "second estimate"))
+    wants_second_estimate = (any(term in lower for term in ("第二次估计", "second estimate")) or
+                             ("第二次" in lower and "估计" in lower))
+    wants_advance_estimate = (any(term in lower for term in ("初次估计", "advance estimate", "first estimate")) or
+                              ("初次" in lower and "估计" in lower))
     wants_third_estimate = any(term in lower for term in ("第三次估计", "third estimate"))
     wants_decision = (any(term in lower for term in ("决定", "decision", "decided")) or
                       ("目标区间" in lower and any(term in lower for term in ("下调", "上调", "变化幅度"))))
@@ -592,12 +623,14 @@ def _select_windows(text: str, question: str, length: int, count: int,
                             (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b"),
                             (wants_vote, r"\bvoting\s+against\s+this\s+action\b"),
                             (wants_third_estimate, r"\bthird[\"']?\s+estimate\b"),
+                            (wants_second_estimate, r"\bsecond[\"']?\s+estimate\b"),
+                            (wants_advance_estimate, r"\bin\s+the\s+advance\s+estimate\b"),
                             (wants_second_estimate, r"\bin\s+the\s+second\s+estimate\b")):
         if wanted:
             for index, match in enumerate(re.finditer(pattern, text, re.IGNORECASE)):
                 if index >= 64:
                     break
-                candidates.append((max(0, match.start() - length // 2) if pattern.startswith(r"\bthird")
+                candidates.append((max(0, match.start() - length // 2) if pattern.startswith((r"\bthird", r"\bsecond"))
                                    else match.start(), True))
     for iteration, (candidate, anchored) in enumerate(candidates):
         if iteration % 64 == 0 and should_stop is not None and should_stop():
@@ -643,6 +676,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
             score += 1000
         if wants_second_estimate and re.search(r"\bin\s+the\s+second\s+estimate\b", passage):
             score += 1000
+        if wants_second_estimate and re.search(r"\d+(?:\.\d+)?\s*percent\b[\s\S]{0,200}?\bsecond[\"']?\s+estimate\b", passage):
+            score += 1200
+        if wants_advance_estimate and re.search(r"\bin\s+the\s+advance\s+estimate\b[\s\S]{0,150}?\d+(?:\.\d+)?\s*percent\b", passage):
+            score += 1200
         if wants_third_estimate and re.search(r"\d+(?:\.\d+)?\s*(?:percent|%)\b[\s\S]{0,250}?\bthird[\"']?\s+estimate\b", passage):
             score += 1200
         if wants_revision and any(re.search(r"\b" + re.escape(term) + r"\b[\s\S]{0,35}?\brevis(?:ed|ion)\b", passage)
@@ -737,6 +774,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             if split and size >= 2:
                 windows = _policy_vote_windows(selection_text, question, size, should_stop)
+                if windows is None:
+                    windows = _asset_purchase_window(selection_text, question, size, should_stop)
                 if windows is None:
                     windows = _financial_table_windows(selection_text, question, size, should_stop)
                 if windows is None:
