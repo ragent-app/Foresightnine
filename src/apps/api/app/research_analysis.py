@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v39"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v40"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1119,6 +1119,59 @@ def _replace_empty_table_with_counterpoint(text: str, question: str, windows: li
     return [first, (start, text[start:end])]
 
 
+def _contrast_sentence_spans(text: str, question: str, should_stop: Callable[[], bool] | None = None) -> list[tuple[int, int]]:
+    """Find bounded topical sentences with opposite movements as retrieval cues.
+
+    A match is not evidence of contradiction: entities, periods, units and
+    the direction of each component still require interpretation.
+    """
+    intent = _query_intent(question[:2000])
+    if not re.search(r"\b(?:contrary|opposing|counter(?:\s*arguments?|evidence|points?)|refut\w*|challeng\w*|risks?)\b|反方|反证|反證|相反|质疑|質疑|風險|风险", intent):
+        return []
+    ignored = {"claim", "claims", "source", "sources", "passage", "passages", "evidence", "contrary", "opposing",
+               "counterargument", "counterarguments", "counterevidence", "evaluate", "explain", "supporting", "support",
+               "rise", "rose", "increased", "increase", "decreased", "decrease", "both", "that", "this", "from", "with",
+               "what", "which", "their", "alone", "these", "numbers", "quantify", "contributions", "contribution",
+               "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"}
+    terms = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", intent) if word not in ignored}
+    aliases = (("goods", ("goods", "good", "商品", "货物", "貨物")),
+               ("service", ("services", "service", "服务", "服務")),
+               ("revenue", ("revenue", "sales", "收入", "营收", "營收")),
+               ("expense", ("expense", "expenses", "cost", "costs", "费用", "費用", "成本")),
+               ("profit", ("profit", "profits", "利润", "利潤")))
+    groups: list[tuple[str, ...]] = []
+    for name, variants in aliases:
+        if name.rstrip("s") in terms or any(alias in intent for alias in variants if re.search(r"[^a-z ]", alias)):
+            groups.append(variants)
+            terms.difference_update(alias.rstrip("s") for alias in variants if re.fullmatch(r"[a-z]+", alias))
+    groups.extend((term,) for term in sorted(terms)[:24])
+    if len(groups) < 2:
+        return []
+    positive = re.compile(r"\b(?:increas\w*|ris(?:e|es|ing)|rose|grew|growth|higher)\b|增加|增长|增長|上升", re.IGNORECASE)
+    negative = re.compile(r"\b(?:decreas\w*|declin\w*|fell|fall\w*|drop\w*|lower)\b|减少|減少|下降|下跌", re.IGNORECASE)
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for index, boundary in enumerate(re.finditer(r"[.!?。！？](?=\s|$)|\f", text)):
+        if index >= 4096 or len(spans) >= 32:
+            break
+        if index % 64 == 0 and should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        end = boundary.end()
+        sentence = text[start:end]
+        start = end
+        if not 20 <= len(sentence) <= 1000 or not positive.search(sentence) or not negative.search(sentence):
+            continue
+        if len(re.findall(r"(?<![A-Za-z0-9_])\d+(?:\.\d+)?", sentence)) < 2:
+            continue
+        folded = sentence.casefold()
+        words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", folded)}
+        hits = sum(any((alias in folded if re.search(r"[^a-z ]", alias) or " " in alias else alias.rstrip("s") in words)
+                       for alias in group) for group in groups)
+        if hits >= 2:
+            spans.append((start - len(sentence), end))
+    return spans
+
+
 def _select_windows(text: str, question: str, length: int, count: int,
                     should_stop: Callable[[], bool] | None = None, *, source_title: str = "") -> list[tuple[int, str]]:
     """Select bounded, non-overlapping passages with original-text offsets."""
@@ -1234,12 +1287,16 @@ def _select_windows(text: str, question: str, length: int, count: int,
     for term in ("gdp", "pce", "revenue", "sales", "income", "inflation", "price"):
         if term in terms:
             metric_terms.add(term)
+    contrast_spans = _contrast_sentence_spans(text, question, should_stop)
     ranked: list[tuple[int, int]] = []
     seen: set[int] = set()
     # Cap scanning work for multi-megabyte material; unexamined ranges remain
     # explicitly disclosed and cannot become evidence.
     step = max(256, length // 4, (len(text) + 4095) // 4096)
     candidates = [(candidate, False) for candidate in range(0, len(text), step)]
+    for span_start, span_end in contrast_spans:
+        if span_end - span_start <= length:
+            candidates.append((max(0, min(span_start, span_end - length + length // 5)), True))
     # A coarse stride can place a high-scoring keyword at the very end of a
     # window, cutting off its associated value. Center bounded windows near
     # actual query terms as well; all ranges still come from the original
@@ -1303,6 +1360,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
         year_counts = [passage.count(year) for year in years]
         score = (sum(100 + min(count, 4) * 3 for count in counts if count) +
                  sum(25 + min(count, 4) * 5 for count in year_counts if count))
+        if any(start <= span_start and span_end <= end for span_start, span_end in contrast_spans):
+            score += 1200
         if partial_ascii_token(text, start, min(len(text), start + length)):
             score -= 4
         if (wants_monetary_amount and re.search(r"\b(?:millions?|billions?|trillions?)\s+of\s+dollars\b", passage) and

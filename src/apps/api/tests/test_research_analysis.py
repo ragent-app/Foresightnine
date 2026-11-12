@@ -1841,3 +1841,23 @@ def test_pdf_line_hyphen_fact_is_retained_but_not_used_for_automatic_calculation
     assert fact["quotation_match"]=="pdf_line_hyphen_restored"
     assert not result.calculations
     assert any("excluded from automatic calculations pending review" in note for note in result.limitations)
+
+
+def test_contrast_retrieval_requires_topical_opposite_numeric_movements():
+    from app.research_analysis import _contrast_sentence_spans, _select_windows
+    sentence="Revenue increased $12 million while operating expenses decreased $4 million."
+    text=("Unrelated filler and routine background. "*80)+sentence+("More unrelated discussion. "*80)
+    question="Assess the claim and cite opposing evidence about revenue and expenses."
+    spans=_contrast_sentence_spans(text,question)
+    assert len(spans)==1 and sentence in text[spans[0][0]:spans[0][1]]
+    selected=_select_windows(text,question,300,2)
+    assert any(sentence in part for _,part in selected)
+    assert all(text[start:start+len(part)]==part for start,part in selected)
+    assert not _contrast_sentence_spans(text,"What were revenue and expenses?")
+    assert not _contrast_sentence_spans("Revenue increased $12 million while expenses increased $4 million.",question)
+    assert not _contrast_sentence_spans("Revenue increased while expenses decreased.",question)
+    assert not _contrast_sentence_spans("Employment increased 12 while temperatures decreased 4.",question)
+    chinese="公司收入增加12亿元，但成本下降4亿元。"
+    assert _contrast_sentence_spans(chinese,"分析收入和成本的变化并列出反方证据。")
+    with pytest.raises(AnalysisInterrupted):
+        _contrast_sentence_spans(text,question,lambda:True)
