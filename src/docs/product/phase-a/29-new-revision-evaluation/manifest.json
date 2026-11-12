@@ -1,0 +1,48 @@
+{
+  "assessment": "Two previously unused PDFs and new month in a nonblind, single task similar to development; not independent human or broad quality validation.",
+  "implementation_commit": "3ad242185850bdf998d44880bf126bf21c1cf9d5",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "sources": [
+    {
+      "pdf": "bea-sep-2023.pdf",
+      "text": "bea-sep-2023.txt",
+      "title": "BEA September 2023 PIO release, published October 27 2023",
+      "published_at": "2023-10-27T12:30:00Z",
+      "pdf_sha256": "4061885585b9d409556978d8b0272710e6989e95e8723d52cf3c25259ad19ed9",
+      "text_sha256": "db8789fc7deb24a94a2e60cc5a416e82de70b4412ab0c6afd43f9b815b06a514"
+    },
+    {
+      "pdf": "bea-oct-2023.pdf",
+      "text": "bea-oct-2023.txt",
+      "title": "BEA October 2023 PIO release, published November 30 2023",
+      "published_at": "2023-11-30T13:30:00Z",
+      "pdf_sha256": "8fa9fb6d91c15e3af76ef49bc1210b992fc2a92a2dfd4a72c50ef9f20e7d7afe",
+      "text_sha256": "be5b402ced86f16c0cc5a0c69dd74b7e6872edf3fb1cce03afd22a338baf99db"
+    }
+  ],
+  "input_sha256": "5ef408f82f6a10d5579bb9ee38c653cd64415c9083f56b8f6e5efc17f7aa39e5",
+  "runner_sha256": "6341f0ba64a7dae1ae0c18223eb33e319d855fcfc47ee0e5db8dcdacb2ec0dfd",
+  "scorer_sha256": "dafa70ef9733f82322efb52c98fd26750b26495af4b58bbdc69100e8cd5aeafd",
+  "max_calls_total": 1,
+  "max_tokens_per_task": 10000,
+  "max_elapsed_seconds_per_task": 120,
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "search_calls": 0,
+  "review_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "reference": "August 2023 current-dollar personal-income change: $94.0 billion in October 27 release and $105.1 billion revised in November 30 release. Both figures, period, unit, valid source positions, and one revision claim citing both sources required. Mechanical checks cannot establish semantic support."
+}

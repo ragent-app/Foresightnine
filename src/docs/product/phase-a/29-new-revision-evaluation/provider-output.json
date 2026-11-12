@@ -1,0 +1,103 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "BEA 2023年9月发布的个人收入公告显示，2023年8月个人收入（当期美元）较前月变化约为876亿美元（初值），修订后为940亿美元。",
+        "citations": [
+          {
+            "source_id": "source_c510ddb99ae34ba6853f8cb0101fdafe",
+            "quotation": "Personal income: Current dollars\t54.8\t52.8\t0.2\t0.2\t87.6\t94.0\t0.4\t0.4"
+          }
+        ]
+      },
+      {
+        "text": "BEA 2023年10月发布的公告中，2023年8月个人收入（当期美元）较前月变化仅以百分比表示（0.5%），未提供当期美元金额。",
+        "citations": [
+          {
+            "source_id": "source_abaadbf6015d406cbe7b12623de2cb39",
+            "quotation": "Personal income: Current dollars\t0.2\t0.3\t0.5\t0.4\t0.2"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "两份公告给出的8月数据存在差异：9月公告显示8月百分比变化为0.4%，而10月公告显示0.5%，说明后续公告对8月数据进行了修订，金额对比应以此为准。",
+        "citations": [
+          {
+            "source_id": "source_c510ddb99ae34ba6853f8cb0101fdafe",
+            "quotation": "87.6\t94.0\t0.4\t0.4"
+          },
+          {
+            "source_id": "source_abaadbf6015d406cbe7b12623de2cb39",
+            "quotation": "0.2\t0.3\t0.5\t0.4\t0.2"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "9月公告为部分节选，表格列间距可能被压缩，列对齐（初值/修订值对应7月还是8月）需对照原PDF核实；按文本顺序，87.6和94.0推断对应8月的初值与修订值。",
+      "10月公告节选未包含8月变化的当期美元金额，无法从所给来源直接给出第二个美元数字；10月公告很可能含修订后的美元金额，但在所提供的节选范围之外。",
+      "使用旧数值（87.6或940亿美元中较早口径）的局限：BEA会随新数据修订个人收入估计，旧数值可能低估或高估最终值；比较时应使用最新修订值。",
+      "两份公告覆盖范围均为partial，不能代表全文。"
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "2023年8月个人收入较前月变化（初值，当期美元）",
+        "value": "87.6",
+        "unit": "billions of dollars",
+        "currency": "USD",
+        "period": "2023年8月",
+        "citation": {
+          "source_id": "source_c510ddb99ae34ba6853f8cb0101fdafe",
+          "quotation": "Personal income: Current dollars\t54.8\t52.8\t0.2\t0.2\t87.6\t94.0\t0.4\t0.4"
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "2023年8月个人收入较前月变化（修订值，当期美元）",
+        "value": "94.0",
+        "unit": "billions of dollars",
+        "currency": "USD",
+        "period": "2023年8月",
+        "citation": {
+          "source_id": "source_c510ddb99ae34ba6853f8cb0101fdafe",
+          "quotation": "87.6\t94.0\t0.4\t0.4"
+        }
+      },
+      {
+        "fact_id": "f3",
+        "label": "2023年8月个人收入较前月百分比变化（初值，当期美元）",
+        "value": "0.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023年8月",
+        "citation": {
+          "source_id": "source_c510ddb99ae34ba6853f8cb0101fdafe",
+          "quotation": "0.4\t0.4"
+        }
+      },
+      {
+        "fact_id": "f4",
+        "label": "2023年8月个人收入较前月百分比变化（10月公告，当期美元）",
+        "value": "0.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023年8月",
+        "citation": {
+          "source_id": "source_abaadbf6015d406cbe7b12623de2cb39",
+          "quotation": "0.2\t0.3\t0.5\t0.4\t0.2"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "f2",
+        "second_fact_id": "f1"
+      }
+    ]
+  },
+  "reported_tokens": 1813
+}

@@ -1,0 +1,506 @@
+EMBARGOED UNTIL RELEASE AT 8:30 a.m. EDT, Friday, October 27, 2023                           BEA 23–50
+Technical:   Lisa Mataloni (Personal Income)       (301) 278-9083                      piniwd@bea.gov
+             Kyle Brown (PCE Goods)                (301) 278-9086                         pce@bea.gov
+             Harvey Davis (PCE Services)           (301) 278-9719
+Media:       Connie O'Connell                      (301) 278-9003            Connie.OConnell@bea.gov
+
+
+             Personal Income and Outlays, September 2023
+Personal income increased $77.8 billion (0.3 percent at a monthly rate) in September, according to
+estimates released today by the Bureau of Economic Analysis (table 2 and table 3). Disposable personal
+income (DPI), personal income less personal current taxes, increased $56.1 billion (0.3 percent) and
+personal consumption expenditures (PCE) increased $138.7 billion (0.7 percent).
+
+The PCE price index increased 0.4 percent. Excluding food and energy, the PCE price index increased 0.3
+percent (table 5). Real DPI decreased 0.1 percent in September and real PCE increased 0.4 percent;
+goods increased 0.5 percent and services increased 0.3 percent (table 3 and table 4).
+
+                                                                          2023
+                                                      May      June        July    Aug.      Sept.
+                                                         Percent change from preceding month
+   Personal income:
+      Current dollars                                    0.3        0.2     0.2       0.4       0.3
+   Disposable personal income:
+      Current dollars                                    0.5        0.1      0.0      0.3       0.3
+      Chained (2017) dollars                             0.4        0.0     -0.2     -0.1      -0.1
+   Personal consumption expenditures (PCE):
+      Current dollars                                    0.2        0.4     0.8       0.4       0.7
+      Chained (2017) dollars                             0.1        0.3     0.6       0.1       0.4
+   Price indexes:
+      PCE                                                0.1        0.2     0.2       0.4       0.4
+      PCE, excluding food and energy                     0.3        0.2     0.2       0.1       0.3
+
+   Price indexes:                                        Percent change from month one year ago
+      PCE                                                4.0       3.2       3.4      3.4       3.4
+      PCE, excluding food and energy                     4.7       4.3       4.3      3.8       3.7
+The increase in current-dollar personal income in September primarily reflected increases in
+compensation, personal income receipts on assets, nonfarm proprietors’ income, and rental income of
+persons (table 2).
+
+The $138.7 billion increase in current-dollar PCE in September reflected an increase of $96.2 billion in
+spending for services and a $42.5 billion increase in spending for goods (table 2). Within services, the
+largest contributors to the increase were other services (led by international travel), housing and utilities
+(led by housing), health care (led by hospitals and nursing homes), and transportation (led by air
+transportation). Within goods, other nondurable goods (led by prescription drugs) and motor vehicles
+and parts (led by new motor vehicles) were the leading contributors to the increase. Detailed
+information on monthly PCE spending can be found on Table 2.4.5U.
+
+Personal outlays, the sum of PCE, personal interest payments, and personal current transfer payments,
+increased $175.1 billion in September (table 2). Personal saving was $687.7 billion in September and the
+personal saving rate—personal saving as a percentage of disposable personal income—was 3.4 percent
+(table 1).
+
+Prices
+
+From the preceding month, the PCE price index for September increased 0.4 percent (table 5). Prices for
+goods increased 0.2 percent and prices for services increased 0.5 percent. Food prices increased 0.3
+percent and energy prices increased 1.7 percent. Excluding food and energy, the PCE price index
+increased 0.3 percent. Detailed monthly PCE price indexes can be found on Table 2.4.4U.
+
+From the same month one year ago, the PCE price index for September increased 3.4 percent (table 7).
+Prices for goods increased 0.9 percent and prices for services increased 4.7 percent. Food prices
+increased 2.7 percent and energy prices decreased by less than 0.1 percent. Excluding food and energy,
+the PCE price index increased 3.7 percent from one year ago.
+
+Real PCE
+
+The 0.4 percent increase in real PCE in September reflected an increase of 0.5 percent in spending on
+goods and an increase of 0.3 percent in spending on services (table 4). Within goods, the largest
+contributors to the increase were motor vehicles and parts (both new and used vehicles) and other
+nondurable goods (led by prescription drugs). Within services, the largest contributor to the increase
+was other services (led by international travel). Detailed information on monthly real PCE spending can
+be found on Table 2.4.6U.
+
+Updates to Personal Income and Outlays
+
+Estimates have been updated for July and August. Revised and previously published changes from the
+preceding month for current-dollar personal income, and for current-dollar and chained (2017) dollar
+DPI and PCE, are provided below.
+
+
+
+
+                                                    -2-
+                                                                       Change from preceding month
+                                                     July                                                      August
+                            Previous      Revised           Previous    Revised          Previous      Revised     Previous     Revised
+                             (Billions of dollars)                (Percent)               (Billions of dollars)          (Percent)
+Personal income:
+   Current dollars             54.8         52.8                0.2              0.2        87.6        94.0          0.4          0.4
+Disposable personal
+income:
+   Current dollars             -1.6         -5.5                 0.0           0.0          46.6        51.8          0.2          0.3
+   Chained (2017) dollars     -37.3        -39.5                -0.2          -0.2         -27.4       -19.1         -0.2         -0.1
+Personal consumption
+expenditures:
+   Current dollars           157.9         149.4                0.9              0.8        83.6        79.8          0.4          0.4
+   Chained (2017) dollars     98.2          92.1                0.6              0.6         8.3         8.9          0.1          0.1
+
+
+
+
+                                                            *          *     *
+
+                                 Next release: November 30, 2023, at 8:30 a.m. EST
+                                    Personal Income and Outlays, October 2023
+
+
+                                   Personal Income and Outlays Release
+                                              Dates for 2024
+
+                                            Estimate                          Release Date
+                                        December 2023                        January 26, 2024
+                                           January 2024                     February 29, 2024
+                                          February 2024                      March 29, 2024
+                                           March 2024                         April 26, 2024
+                                            April 2024                        May 31, 2024
+                                             May 2024                         June 28, 2024
+                                             June 2024                           July 26, 2024
+                                             July 2024                       August 30, 2024
+                                           August 2024                     September 27, 2024
+                                         September 2024                      October 31, 2024
+                                           October 2024                     November 27, 2024
+                                         November 2024                      December 20, 2024
+
+
+
+
+                                                                   -3-
+                                         Additional Information
+
+Resources                                                            Real values are inflation-adjusted estimates—that is,
+                                                                     estimates that exclude the effects of price changes.
+Additional Resources available at www.bea.gov:
+                                                                     For more definitions, refer to the Glossary: National Income
+    •    Stay informed about BEA developments by                     and Product Accounts.
+         reading The BEA Wire, signing up for BEA’s email
+         subscription service, or following BEA on X,
+         formerly known as Twitter @BEA_News.                        Statistical conventions
+    •    Historical time series for these estimates can be
+         accessed in BEA’s Interactive Data Application.             Annual rates. Monthly and quarterly values are expressed
+    •    Access BEA data by registering for BEA’s Data               at seasonally-adjusted annual rates (SAAR). Dollar changes
+         Application Programming Interface (API).                    are calculated as the difference between these SAAR
+    •    For more on BEA’s statistics, refer to our online           values. For detail, refer to the FAQ “Why does BEA publish
+         journal, the Survey of Current Business.                    estimates at annual rates?”
+    •    BEA's news release schedule
+    •    NIPA Handbook: Concepts and Methods of the                  Month-to-month percent changes are calculated from
+         U.S. National Income and Product Accounts                   unrounded data and are not annualized.
+
+                                                                     Quarter-to-quarter percent changes are calculated from
+                                                                     unrounded data and are displayed at annual rates. For
+Definitions                                                          detail, refer to the FAQ “How is average annual growth
+                                                                     calculated?” and “Why does BEA publish percent changes
+Personal income is the income received by, or on behalf of,          in quarterly series at annual rates?”
+all persons from all sources: from participation as laborers
+in production, from owning a home or business, from the              Quantities and prices. Quantities, or “real” volume
+ownership of financial assets, and from government and               measures, and prices are expressed as index numbers with
+business in the form of transfers. It includes income from           a specified reference year equal to 100 (currently 2017).
+domestic sources as well as the rest of world. It does not           Quantity and price indexes are calculated using a Fisher-
+include realized or unrealized capital gains or losses.              chained weighted formula that incorporates weights from
+                                                                     two adjacent periods (months for monthly data, quarters
+Disposable personal income is the income available to                for quarterly data and annuals for annual data). For details
+persons for spending or saving. It is equal to personal              on the calculation of quantity and price indexes, refer to
+income less personal current taxes.                                  Chapter 4: Estimating Methods in the NIPA Handbook.
+
+Personal consumption expenditures (PCE) is the value of              Chained-dollar values are calculated by multiplying the
+the goods and services purchased by, or on the behalf of,            quantity index by the current-dollar value in the reference
+“persons” who reside in the United States.                           year (2017) and then dividing by 100. Percent changes
+                                                                     calculated from real quantity indexes and chained-dollar
+Personal outlays is the sum of PCE, personal interest                levels are conceptually the same; any differences are due to
+payments, and personal current transfer payments.                    rounding. Chained-dollar values are not additive because
+                                                                     the relative weights for a given period differ from those of
+Personal saving is personal income less personal outlays             the reference year. In tables that display chained-dollar
+and personal current taxes.                                          values, a "residual" line shows the difference between the
+                                                                     sum of detailed chained-dollar series and its corresponding
+The personal saving rate is personal saving as a percentage          aggregate.
+of disposable personal income.
+
+Current-dollar estimates are valued in the prices of the
+period when the transactions occurred—that is, at “market
+value.” Also referred to as “nominal estimates” or as
+“current-price estimates.”
+
+
+
+
+                                                               -4-
+Personal Income and Outlays News Release Tables
+
+Table 1.     Personal Income and Its Disposition (Months)
+Table 2.     Personal Income and Its Disposition, Change from Preceding Period (Months)
+Table 3.     Personal Income and Its Disposition, Percent Change from Preceding Period (Months)
+Table 4.     Real Personal Consumption Expenditures by Major Type of Product (Months)
+Table 5.     Price Indexes for Personal Consumption Expenditures: Level and Percent Change from Preceding Period (Months)
+Table 6.     Real Disposable Personal Income and Real Personal Consumption Expenditures: Percent Change from Month One
+             Year Ago
+Table 7.     Price Indexes for Personal Consumption Expenditures: Percent Change from Month One Year Ago
+
+
+
+
+                                                         -5-
+                                                                                                                                                                                                                                 October 27, 2023
+                                                                              Table 1. Personal Income and Its Disposition (Months)
+                                                                                                                [Billions of dollars]
+                                                                                                                                                          Seasonally adjusted at annual rates
+Line                                                                                                                                                                     2023                                                                       Line
+                                                                                                                                                                                                 r                           r                p
+                                                                                                                      Feb.           March            April       May          June         July                       Aug.            Sept.
+ 1 Personal income                                                                                                   22,648.4        22,757.9        22,815.8    22,893.1 22,941.5 22,994.3                            23,088.3        23,166.1        1
+ 2   Compensation of employees                                                                                       13,968.7        14,041.7        14,103.8 14,169.9 14,241.5             14,298.1                   14,366.2        14,419.1        2
+ 3      Wages and salaries                                                                                           11,568.5        11,633.1        11,690.4 11,748.3 11,810.4             11,857.8                   11,916.2        11,960.3        3
+ 4        Private industries                                                                                          9,882.8         9,937.7         9,987.2 10,037.3        10,091.8 10,123.9                        10,171.0        10,202.5        4
+ 5           Goods-producing industries                                                                               1,806.7         1,818.5         1,831.9      1,842.7      1,854.5      1,864.4                    1,874.4         1,881.1        5
+ 6             Manufacturing                                                                                          1,064.3         1,071.2         1,080.3      1,084.5      1,094.9      1,098.3                    1,103.0         1,106.0        6
+ 7           Services-producing industries                                                                            8,076.2         8,119.2         8,155.3      8,194.7      8,237.4      8,259.5                    8,296.7         8,321.4        7
+ 8             Trade, transportation, and utilities                                                                   1,795.8         1,796.0         1,805.4      1,805.9      1,820.0      1,823.8                    1,833.0         1,841.6        8
+ 9             Other services-producing industries                                                                    6,280.4         6,323.1         6,349.8      6,388.8      6,417.4      6,435.7                    6,463.7         6,479.9        9
+10        Government                                                                                                  1,685.7         1,695.5         1,703.2      1,711.0      1,718.6      1,733.9                    1,745.2         1,757.8       10
+11      Supplements to wages and salaries                                                                             2,400.2         2,408.6         2,413.3      2,421.5      2,431.1      2,440.3                    2,450.0         2,458.8       11
+                                                                          1                                           1,599.0         1,603.5         1,604.7      1,609.4      1,615.0      1,621.3                    1,627.2         1,633.2       12
+12        Employer contributions for employee pension and insurance funds
+13        Employer contributions for government social insurance                                                         801.1           805.1           808.6            812.2           816.1           819.0            822.7           825.6      13
+14   Proprietors' income with inventory valuation and capital
+      consumption adjustments                                                                                         1,828.6          1,821.5         1,821.1         1,821.3          1,829.9         1,835.9         1,846.9         1,854.7       14
+15         Farm                                                                                                          71.2            63.8            61.0             58.2            55.5            54.4             53.4            52.3       15
+16         Nonfarm                                                                                                    1,757.4         1,757.7         1,760.1          1,763.1         1,774.4         1,781.5          1,793.5         1,802.4       16
+17       Rental income of persons with capital consumption adjustment                                                   945.7           960.7           960.6            960.8           961.8           967.2            974.6           981.7       17
+18       Personal income receipts on assets                                                                           3,570.9         3,600.9         3,606.8          3,610.2         3,590.7         3,605.1          3,624.2         3,643.5       18
+19         Personal interest income                                                                                   1,744.3         1,752.6         1,753.6          1,754.7         1,756.1         1,773.3          1,790.8         1,808.4       19
+20         Personal dividend income                                                                                   1,826.6         1,848.3         1,853.3          1,855.5         1,834.7         1,831.8          1,833.4         1,835.1       20
+21       Personal current transfer receipts                                                                           4,108.8         4,115.1         4,112.3          4,126.8         4,121.3         4,097.5          4,093.7         4,090.1       21
+22         Government social benefits to persons                                                                      4,007.9         4,013.6         4,010.1          4,024.0         4,017.8         3,993.4          3,989.0         3,981.3       22
+                              2
+23            Social security                                                                                         1,340.1         1,344.5         1,349.9          1,354.7         1,356.7         1,358.2          1,361.8         1,364.1       23
+                        3
+24            Medicare                                                                                                  938.1           939.3           940.6            941.9           943.3           944.8            946.3           947.9       24
+25            Medicaid                                                                                                  871.5           886.1           908.2            916.2           909.8           892.5            880.5           875.0       25
+26            Unemployment insurance                                                                                     22.0            22.8            22.8             22.3            21.6            21.1             21.1            20.8       26
+27            Veterans' benefits                                                                                        172.9           172.7           172.7            172.4           172.5           172.7            172.9           173.0       27
+28            Other                                                                                                     663.3           648.2           615.9            616.4           613.8           604.2            606.4           600.4       28
+29         Other current transfer receipts, from business (net)                                                         100.9           101.6           102.2            102.8           103.5           104.1            104.7           108.9       29
+30       Less: Contributions for government social insurance, domestic                                                1,774.3         1,782.0         1,788.8          1,795.9         1,803.8         1,809.6          1,817.2         1,823.1       30
+31     Less: Personal current taxes                                                                                   2,763.4         2,760.4         2,709.2          2,694.3         2,716.7         2,775.0          2,817.2         2,838.9       31
+32     Equals: Disposable personal income                                                                            19,885.0        19,997.5        20,106.6         20,198.8        20,224.8        20,219.3         20,271.1        20,327.3       32
+33     Less: Personal outlays                                                                                        18,959.0        18,950.0        19,056.2         19,125.4        19,228.3        19,383.1         19,464.5        19,639.5       33
+34       Personal consumption expenditures                                                                           18,296.5        18,282.6        18,363.8         18,407.8        18,485.4        18,634.9         18,714.7        18,853.4       34
+35         Goods                                                                                                      6,164.2         6,089.2         6,139.1          6,144.7         6,150.1         6,186.8          6,230.4         6,272.9       35
+36            Durable goods                                                                                           2,203.6         2,167.3         2,183.7          2,202.8         2,194.2         2,206.9          2,199.3         2,221.5       36
+37            Nondurable goods                                                                                        3,960.6         3,921.9         3,955.4          3,941.9         3,955.9         3,979.9          4,031.1         4,051.3       37
+38         Services                                                                                                  12,132.4        12,193.4        12,224.7         12,263.0        12,335.3        12,448.0         12,484.3        12,580.5       38
+                                     4
+39       Personal interest payments                                                                                     419.8           424.7           449.7            474.7           499.8           502.3            503.6           539.6       39
+40       Personal current transfer payments                                                                             242.6           242.8           242.6            242.9           243.1           245.9            246.2           246.5       40
+41         To government                                                                                                129.7           129.9           130.1            130.4           130.6           130.9            131.2           131.5       41
+42         To the rest of the world (net)                                                                               112.9           112.9           112.5            112.5           112.5           115.0            115.0           115.0       42
+43     Equals: Personal saving                                                                                          926.0         1,047.5         1,050.4          1,073.4           996.5           836.3            806.7           687.7       43
+44       Personal saving as a percentage of disposable personal income                                                    4.7             5.2             5.2              5.3             4.9             4.1              4.0             3.4       44
+       Addenda:
+45       Personal income excluding current transfer receipts,
+                                                      5
+          billions of chained (2017) dollars                                                                         15,529.2        15,596.8        15,600.2         15,636.1        15,654.8        15,685.9         15,708.9        15,720.3       45
+         Disposable personal income:
+                                                              5
+46         Total, billions of chained (2017) dollars                                                                 16,656.1        16,730.2        16,770.5         16,829.7        16,823.2        16,783.7         16,764.6        16,751.4       46
+           Per capita:
+47           Current dollars                                                                                           59,423          59,738          60,041           60,293          60,343          60,297          60,421           60,556       47
+48           Chained (2017) dollars                                                                                    49,774          49,978          50,079           50,236          50,194          50,051          49,969           49,904       48
+                                             6
+49       Population (midperiod, thousands)                                                                            334,637         334,753         334,880          335,013         335,163         335,329         335,501          335,675       49
+  p Preliminary
+  r Revised
+
+  1. Includes actual employer contributions and actuarially imputed employer contributions to reflect benefits accrued by defined benefit pension plan participants through service to employers in the current period.
+  2. Social security benefits include old-age, survivors, and disability insurance benefits that are distributed from the federal old-age and survivors insurance trust fund and the disability insurance trust fund.
+  3. Medicare benefits include hospital and supplementary medical insurance benefits that are distributed from the federal hospital insurance trust fund and the supplementary medical insurance trust fund.
+  4. Consists of nonmortgage interest paid by households. Note that mortgage interest paid by households is an expense item in the calculation of rental income of persons.
+  5. The current-dollar measure is deflated by the implicit price deflator for personal consumption expenditures.
+  6. Population is the total population of the United States, including the Armed Forces overseas and the institutionalized population. The monthly estimate is the average of estimates for the first of the month and the first of the following month;
+  the annual and quarterly estimates are averages of the monthly estimates.
+  Source: U.S. Bureau of Economic Analysis
+
+
+
+                                                                                                                            -6-
+                                                                                                                                                                                                           October 27, 2023
+
+                                         Table 2. Personal Income and Its Disposition, Change from Preceding Period (Months)
+                                                                                                      [Billions of dollars]
+
+                                                                                                                                                Seasonally adjusted at annual rates
+Line                                                                                                                                                           2023                                                              Line
+                                                                                                                    Feb.        March          April     May        June       July r                Aug. r       Sept. p
+1 Personal income                                                                                                    123.1       109.5           57.8       77.3       48.4       52.8                 94.0          77.8          1
+2    Compensation of employees                                                                                        83.4         73.1          62.0       66.1       71.6       56.6                 68.1          52.9          2
+3       Wages and salaries                                                                                            73.8         64.6          57.3       57.9       62.1       47.4                 58.4          44.0          3
+4         Private industries                                                                                          64.5         54.8          49.6       50.1       54.5       32.1                 47.1          31.5          4
+5            Goods-producing industries                                                                                2.2         11.8          13.5       10.7       11.8         9.9                10.0           6.7          5
+6               Manufacturing                                                                                         -1.7          6.9            9.1       4.2       10.4         3.4                  4.8          3.0          6
+7            Services-producing industries                                                                            62.4         43.0          36.1       39.4       42.7       22.2                 37.1          24.8          7
+8               Trade, transportation, and utilities                                                                  17.0          0.3            9.4       0.4       14.1         3.9                  9.2          8.6          8
+9               Other services-producing industries                                                                   45.3         42.8          26.7       38.9       28.6       18.3                 28.0          16.2          9
+10        Government                                                                                                   9.3          9.8            7.7       7.8        7.6       15.3                 11.3          12.5         10
+11      Supplements to wages and salaries                                                                              9.6          8.5            4.7       8.2        9.6         9.2                  9.6          8.9         11
+12        Employer contributions for employee pension and insurance funds 1                                            5.0          4.5            1.2       4.6        5.6         6.3                  5.9          6.0         12
+13        Employer contributions for government social insurance                                                         4.6          4.0           3.5          3.6           3.9          2.9           3.8             2.9     13
+14   Proprietors' income with inventory valuation and capital
+      consumption adjustments                                                                                           -3.5         -7.1          -0.4          0.2           8.6           6.1         11.0             7.8     14
+15      Farm                                                                                                           -7.5          -7.5          -2.8         -2.8         -2.8           -1.0         -1.0             -1.0    15
+16      Nonfarm                                                                                                         4.0           0.3           2.4          3.0         11.3            7.1         12.0              8.9    16
+17   Rental income of persons with capital consumption adjustment                                                      14.9          14.9           0.0          0.1          1.0            5.5          7.3              7.2    17
+18   Personal income receipts on assets                                                                               11.6          30.0           6.0           3.4        -19.5         14.4           19.1         19.3        18
+19      Personal interest income                                                                                       8.1           8.3           1.0           1.2          1.3         17.3           17.5         17.6        19
+20      Personal dividend income                                                                                       3.4          21.7           5.0           2.2        -20.8         -2.9            1.6          1.7        20
+21   Personal current transfer receipts                                                                               25.5           6.4          -2.9          14.5         -5.5        -23.8           -3.8         -3.6        21
+22      Government social benefits to persons                                                                         24.8           5.7          -3.5          13.9         -6.1        -24.4           -4.4         -7.8        22
+23        Social security 2                                                                                            4.7           4.5           5.4           4.8          2.1          1.4            3.6          2.3        23
+24        Medicare 3                                                                                                   1.1           1.2           1.3           1.3          1.4          1.5            1.5          1.6        24
+25        Medicaid                                                                                                    14.9          14.6          22.0           8.0         -6.4        -17.3          -11.9         -5.6        25
+26        Unemployment insurance                                                                                       0.9           0.8           0.0          -0.5         -0.7         -0.5           -0.1         -0.2        26
+27        Veterans' benefits                                                                                          -0.2          -0.3           0.0          -0.3          0.1          0.1            0.2          0.2        27
+28        Other                                                                                                        3.5         -15.1         -32.2           0.5         -2.6         -9.6            2.2         -6.0        28
+29      Other current transfer receipts, from business (net)                                                           0.7           0.7           0.6           0.6          0.6          0.6            0.6          4.2        29
+30   Less: Contributions for government social insurance, domestic                                                     8.8           7.7           6.8           7.1          7.9          5.9            7.6          5.9        30
+31 Less: Personal current taxes                                                                                       -3.8          -3.0         -51.2         -14.9         22.4         58.3           42.2         21.7        31
+32 Equals: Disposable personal income                                                                                126.9         112.5         109.1          92.2         26.0         -5.5           51.8         56.1        32
+33 Less: Personal outlays                                                                                             72.0          -9.0         106.1          69.2        102.9        154.7           81.4        175.1        33
+34   Personal consumption expenditures                                                                                66.9         -14.0          81.3          43.9         77.6        149.4           79.8        138.7        34
+35      Goods                                                                                                         16.0         -75.0          50.0           5.6          5.4         36.8           43.5         42.5        35
+36        Durable goods                                                                                              -10.1         -36.3          16.5          19.1         -8.6         12.7           -7.7         22.3        36
+37        Nondurable goods                                                                                            26.1         -38.7          33.5         -13.5         14.0         24.0           51.2         20.2        37
+38      Services                                                                                                      51.0          61.0          31.3          38.4         72.3        112.7           36.3         96.2        38
+39   Personal interest payments 4                                                                                      4.8           4.8          25.0          25.0         25.0          2.5            1.3         36.1        39
+40   Personal current transfer payments                                                                                0.2           0.2          -0.2           0.2          0.3          2.8            0.3          0.3        40
+41      To government                                                                                                  0.2           0.2           0.3           0.2          0.3          0.3            0.3          0.3        41
+42      To the rest of the world (net)                                                                                 0.0           0.0          -0.4           0.0          0.0          2.5            0.0          0.0        42
+43 Equals: Personal saving                                                                                            54.9         121.5           2.9          23.0        -77.0       -160.2          -29.6       -119.0        43
+   Addenda:
+44   Personal income excluding current transfer receipts,
+          billions of chained (2017) dollars 5                                                                         33.1          67.7           3.4         35.9         18.7          31.1          23.1         11.3        44
+45       Disposable personal income, billions of chained (2017) dollars 5                                              54.2          74.2         40.3          59.2          -6.5        -39.5         -19.1        -13.2        45
+  p Preliminary
+  r Revised
+
+  1. Includes actual employer contributions and actuarially imputed employer contributions to reflect benefits accrued by defined benefit pension plan participants through service to employers in the current period.
+  2. Social security benefits include old-age, survivors, and disability insurance benefits that are distributed from the federal old-age and survivors insurance trust fund and the disability insurance trust fund.
+  3. Medicare benefits include hospital and supplementary medical insurance benefits that are distributed from the federal hospital insurance trust fund and the supplementary medical insurance trust fund.
+  4. Consists of nonmortgage interest paid by households. Note that mortgage interest paid by households is an expense item in the calculation of rental income of persons.
+  5. The current-dollar measure is deflated by the implicit price deflator for personal consumption expenditures.
+  Source: U.S. Bureau of Economic Analysis
+
+
+
+
+                                                                                                               -7-
+                                                                                                                                                         October 27, 2023
+
+                          Table 3. Personal Income and Its Disposition, Percent Change from Preceding Period (Months)
+                                                                                                Seasonally adjusted at monthly rates
+Line                                                                                                            2023                                                       Line
+                                                                                                                                        r            r               p
+                                                                      Feb.       March       April       May           June      July         Aug.           Sept.
+                                                                 Based on current-dollar measures
+ 1 Personal income                                                         0.5         0.5       0.3           0.3        0.2           0.2          0.4             0.3     1
+ 2   Compensation of employees                                             0.6         0.5       0.4           0.5        0.5           0.4          0.5             0.4     2
+ 3     Wages and salaries                                                  0.6         0.6       0.5           0.5        0.5           0.4          0.5             0.4     3
+ 4     Supplements to wages and salaries                                   0.4         0.4       0.2           0.3        0.4           0.4          0.4             0.4     4
+ 5   Proprietors' income with inventory valuation and capital
+     consumption adjustments                                              -0.2        -0.4       0.0           0.0        0.5           0.3          0.6             0.4     5
+ 6   Rental income of persons with capital consumption adjustment          1.6         1.6       0.0           0.0        0.1           0.6          0.8             0.7     6
+ 7   Personal income receipts on assets                                    0.3         0.8       0.2           0.1        -0.5          0.4        0.5             0.5       7
+ 8     Personal interest income                                            0.5         0.5       0.1           0.1         0.1          1.0        1.0             1.0       8
+ 9     Personal dividend income                                            0.2         1.2       0.3           0.1        -1.1         -0.2        0.1             0.1       9
+10   Personal current transfer receipts                                    0.6         0.2      -0.1           0.4        -0.1         -0.6       -0.1            -0.1      10
+11   Less: Contributions for government social insurance, domestic         0.5         0.4       0.4           0.4         0.4          0.3        0.4             0.3      11
+12 Less: Personal current taxes                                           -0.1        -0.1      -1.9         -0.6         0.8           2.1          1.5             0.8    12
+13 Equals: Disposable personal income                                      0.6         0.6       0.5          0.5         0.1           0.0          0.3             0.3    13
+   Addenda:
+14   Personal consumption expenditures                                     0.4        -0.1       0.4          0.2          0.4          0.8        0.4               0.7    14
+15     Goods                                                               0.3        -1.2       0.8          0.1          0.1          0.6        0.7               0.7    15
+16        Durable goods                                                   -0.5        -1.6       0.8          0.9         -0.4          0.6       -0.3               1.0    16
+17        Nondurable goods                                                 0.7        -1.0       0.9         -0.3          0.4          0.6        1.3               0.5    17
+18     Services                                                            0.4         0.5       0.3          0.3          0.6          0.9        0.3               0.8    18
+                                                              Based on chained (2017) dollar measures
+19       Real personal income excluding transfer receipts                  0.2         0.4        0.0          0.2        0.1           0.2        0.1             0.1      19
+20       Real disposable personal income                                   0.3         0.4        0.2          0.4        0.0          -0.2       -0.1            -0.1      20
+ p Preliminary
+ r Revised
+ Source: U.S. Bureau of Economic Analysis
+
+                                 Table 4. Real Personal Consumption Expenditures by Major Type of Product (Months)
+
+                                                                                                                2023
+Line                                                                                                                                                                       Line
+                                                                     Feb.        March      April       May        June       July r          Aug. r         Sept. p
+                                            Billions of chained (2017) dollars, seasonally adjusted at annual rates
+ 1         Personal consumption expenditures (PCE)                  15,325.5 15,295.4 15,316.9 15,337.4 15,376.3 15,468.5                     15,477.4      15,536.8         1
+ 2     Goods                                                         5,360.2      5,307.2    5,336.3    5,348.4     5,357.2    5,403.6         5,399.7       5,427.7         2
+ 3       Durable goods                                               2,031.1      1,999.5   2,012.6     2,025.4     2,024.6    2,051.0         2,050.6       2,073.6         3
+ 4       Nondurable goods                                            3,338.6      3,316.0    3,332.3    3,332.4     3,341.6    3,362.5         3,359.1       3,365.4         4
+ 5     Services                                                      9,993.3 10,013.8 10,007.3 10,016.0 10,045.9 10,092.8                     10,105.1      10,137.2         5
+                             Change from preceding period in billions of chained (2017) dollars, seasonally adjusted at annual rates
+ 6         Personal consumption expenditures (PCE)                        8.0       -30.1       21.5       20.5        38.9       92.1             8.9           59.4        6
+ 7     Goods                                                              4.5       -53.0       29.2       12.1         8.8       46.4            -3.9           27.9        7
+ 8       Durable goods                                                   -5.9       -31.5       13.1       12.7        -0.8       26.4            -0.4           23.0        8
+ 9       Nondurable goods                                                 9.8       -22.6       16.3        0.0         9.2       20.9            -3.4            6.4        9
+10     Services                                                           3.5        20.5        -6.4       8.7        29.9       46.8            12.4           32.0       10
+                             Percent change from preceding period in chained (2017) dollars, seasonally adjusted at monthly rates
+11         Personal consumption expenditures (PCE)                        0.1        -0.2         0.1       0.1         0.3         0.6            0.1               0.4    11
+12     Goods                                                              0.1        -1.0         0.5       0.2         0.2         0.9           -0.1               0.5    12
+13       Durable goods                                                   -0.3        -1.6         0.7       0.6         0.0         1.3            0.0               1.1    13
+14       Nondurable goods                                                 0.3        -0.7         0.5       0.0         0.3         0.6           -0.1               0.2    14
+15     Services                                                           0.0         0.2        -0.1       0.1         0.3         0.5            0.1               0.3    15
+ p Preliminary
+ r Revised
+
+ Source: U.S. Bureau of Economic Analysis
+
+
+
+
+                                                                                 -8-
+                                                                                                                                                                                               October 27, 2023
+
+       Table 5. Price Indexes for Personal Consumption Expenditures: Level and Percent Change from Preceding Period (Months)
+
+                                                                                                                                                 2023
+Line                                                                                                                                                                                                              Line
+                                                                        Feb.      March       April      May        June        July r                                                Aug. r         Sept. p
+                                                      Chain-type price indexes (2017=100), seasonally adjusted
+ 1          Personal consumption expenditures (PCE)                     119.386 119.530 119.893 120.020 120.221 120.471                                                               120.917        121.348         1
+ 2     Goods                                                            114.994 114.730 115.038 114.882 114.794 114.489                                                               115.378        115.567         2
+ 3       Durable goods                                                  108.507 108.400 108.514 108.772 108.390 107.615                                                               107.259        107.147         3
+ 4       Nondurable goods                                               118.618 118.259 118.685 118.279 118.369 118.349                                                               119.995        120.368         4
+ 5     Services                                                         121.413 121.774 122.165 122.441 122.797 123.343                                                               123.552        124.110         5
+       Addenda:
+ 6       PCE excluding food and energy                                  117.883 118.279 118.642 118.984 119.189 119.443                                                               119.583        119.940        6
+ 7       Food 1                                                         124.986 124.742 124.723 124.919 124.790 125.082                                                               125.394        125.769        7
+ 8       Energy goods and services 2                                    142.819 137.598 138.727 133.395 134.192 134.296                                                               142.455        144.816        8
+ 9       Market-based PCE 3                                             118.106 118.258 118.584 118.698 118.814 118.989                                                               119.424        119.954        9
+10       Market-based PCE excluding food and energy 3                   116.166 116.611 116.932 117.292 117.400 117.568                                                               117.648        118.108       10
+                                     Percent change from preceding period in price indexes, seasonally adjusted at monthly rates
+11          Personal consumption expenditures (PCE)                          0.3       0.1          0.3       0.1       0.2           0.2                                                   0.4             0.4    11
+12     Goods                                                                 0.2      -0.2          0.3      -0.1      -0.1         -0.3                                                    0.8             0.2    12
+13       Durable goods                                                      -0.2      -0.1          0.1       0.2      -0.4         -0.7                                                   -0.3            -0.1    13
+14       Nondurable goods                                                    0.4      -0.3          0.4      -0.3       0.1           0.0                                                   1.4             0.3    14
+15     Services                                                              0.4       0.3          0.3       0.2       0.3           0.4                                                   0.2             0.5    15
+       Addenda:
+16       PCE excluding food and energy                                       0.4       0.3         0.3        0.3       0.2          0.2                                                    0.1            0.3     16
+17       Food 1                                                              0.2      -0.2          0.0       0.2      -0.1           0.2                                                   0.2            0.3     17
+18       Energy goods and services 2                                        -0.5      -3.7          0.8      -3.8       0.6           0.1                                                   6.1            1.7     18
+19       Market-based PCE 3                                                  0.4       0.1          0.3       0.1       0.1           0.1                                                   0.4            0.4     19
+20       Market-based PCE excluding food and energy 3                        0.4       0.4          0.3       0.3       0.1           0.1                                                   0.1            0.4     20
+  p Preliminary
+  r Revised
+
+  1. Food consists of food and beverages purchased for off-premises consumption; food services, which include purchased meals and beverages, are not classified as food.
+  2. Consists of gasoline and other energy goods and of electricity and gas services.
+  3. Market-based PCE is a supplemental measure that is based on household expenditures for which there are observable price measures. It excludes most imputed transactions (for example, financial services furnished
+  without payment) and the final consumption expenditures of nonprofit institutions serving households.
+  Source: U.S. Bureau of Economic Analysis
+
+
+
+
+                                Table 6. Real Disposable Personal Income and Real Personal Consumption Expenditures:
+                                                       Percent Change from Month One Year Ago
+                                                                                                                                                 2023
+Line                                                                                                                                                                                                              Line
+                                                                                            Feb.          March           April           May           June            July r        Aug. r         Sept. p
+ 1 Disposable personal income                                                                     3.5            4.4            4.5            5.0            5.4             4.2          3.7             3.5       1
+ 2 Personal consumption expenditures                                                              2.3            1.7            1.6            1.8            2.1             2.6          2.3             2.4       2
+ 3   Goods                                                                                        1.7            0.4            0.4            1.3            1.8             2.9          2.4             2.4       3
+ 4      Durable goods                                                                             4.1            2.0            1.4            4.0            4.3             4.8          4.4             5.5       4
+ 5      Nondurable goods                                                                          0.4           -0.5           -0.1           -0.1            0.4             1.8          1.2             0.8       5
+ 6   Services                                                                                     2.6            2.5            2.2            2.1            2.2             2.5          2.2             2.4       6
+  p Preliminary
+  r Revised
+  Source: U.S. Bureau of Economic Analysis
+
+
+
+                  Table 7. Price Indexes for Personal Consumption Expenditures: Percent Change from Month One Year Ago
+                                                                                                                                                 2023
+Line                                                                                                                                                                                                              Line
+                                                                                            Feb.          March           April           May           June            July r        Aug. r         Sept. p
+ 1      Personal consumption expenditures (PCE)                                                   5.2            4.4              4.4           4.0           3.2             3.4          3.4             3.4       1
+ 2 Goods                                                                                          3.6            2.0              2.2           1.2          -0.4           -0.2           0.7             0.9       2
+ 3   Durable goods                                                                                0.3            0.4              0.5           0.4          -0.5           -1.0         -1.9            -2.3        3
+ 4   Nondurable goods                                                                             5.5            2.8              3.1           1.6          -0.3             0.2          2.1             2.7       4
+ 5 Services                                                                                       6.0            5.7              5.6           5.4           5.1             5.3          4.9             4.7       5
+   Addenda:
+ 6   PCE excluding food and energy                                                                4.8            4.8            4.8            4.7            4.3            4.3            3.8            3.7      6
+ 7   Food 1                                                                                       9.5            7.9            6.9            5.9            4.7            3.7            3.1            2.7      7
+ 8   Energy goods and services 2                                                                  4.3           -7.6           -5.7          -12.3          -17.5          -13.0           -3.6            0.0      8
+ 9   Market-based PCE 3                                                                           5.1            4.3            4.3            3.8            2.9            3.0            3.1            3.3      9
+10   Market-based PCE excluding food and energy 3                                                 4.7            4.7            4.7            4.6            4.1            4.0            3.5            3.5     10
+  p Preliminary
+  r Revised
+
+  1. Food consists of food and beverages purchased for off-premises consumption; food services, which include purchased meals and beverages, are not classified as food.
+  2. Consists of gasoline and other energy goods and of electricity and gas services.
+  3. Market-based PCE is a supplemental measure that is based on household expenditures for which there are observable price measures. It excludes most imputed transactions (for example, financial services furnished
+  without payment) and the final consumption expenditures of nonprofit institutions serving households.
+  Source: U.S. Bureau of Economic Analysis
+                                                                                                                   -9-
+

@@ -1,0 +1,58 @@
+{
+  "method": "ranked_nonoverlapping_windows_v11",
+  "kind": "offline selection only, not a model call or rescoring",
+  "results": [
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 0,
+      "value_visible": false,
+      "month_visible": false,
+      "published_at": "2024-11-27T15:00:00+00:00",
+      "segments": [
+        [
+          29440,
+          29947
+        ]
+      ]
+    },
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 1,
+      "value_visible": false,
+      "month_visible": true,
+      "published_at": "2024-12-20T13:30:00+00:00",
+      "segments": [
+        [
+          5632,
+          6203
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 0,
+      "value_visible": false,
+      "month_visible": false,
+      "published_at": "2023-10-27T12:30:00+00:00",
+      "segments": [
+        [
+          29952,
+          30513
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 1,
+      "value_visible": false,
+      "month_visible": false,
+      "published_at": "2023-11-30T13:30:00+00:00",
+      "segments": [
+        [
+          30208,
+          30804
+        ]
+      ]
+    }
+  ]
+}
