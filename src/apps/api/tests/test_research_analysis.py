@@ -1059,6 +1059,19 @@ def test_vote_retrieval_keeps_full_names_and_policy_preference_with_initials():
     assert sum(len(part) for _, part in parts) <= 360
 
 
+def test_policy_chair_retrieval_keeps_full_voting_passage_and_action():
+    action = 'The Committee decided to raise the target range for the federal funds rate to 1/2 to 3/4 percent.'
+    vote = 'Voting for the FOMC monetary policy action were: Jane A. Smith, Chair; Robert B. Jones, Vice Chairman.'
+    text = 'intro ' * 50 + action + ' background ' * 130 + vote + ' end ' * 30
+    parts = _policy_vote_windows(text, 'According to the Federal Reserve, what was the target range and who chaired the FOMC?', 360)
+    assert parts and len(parts) == 2 and action in parts[0][1] and vote in parts[1][1]
+    assert all(text[start:start + len(part)] == part for start, part in parts)
+    assert sum(len(part) for _, part in parts) <= 360
+    assert _policy_vote_windows(text, 'Who chaired the unrelated organization?', 360) is None
+    assert _policy_vote_windows(text.replace('Smith, Chair;', 'Smith, Vice Chair;'), 'Who chaired the FOMC?', 360) is None
+    assert _policy_vote_windows(text, 'Who chaired the FOMC?', 30) is None
+
+
 @pytest.mark.parametrize("verb,names", [("was", "Jane Smith"), ("were", "Jane Smith and Robert Jones")])
 def test_vote_retrieval_includes_singular_and_plural_dissent(verb, names):
     action = "The Committee decided to raise the target range for the federal funds rate to 1/4 to 1/2 percent."
@@ -1703,9 +1716,11 @@ def test_policy_rate_purchase_risk_windows_preserve_condition_and_bounded_offset
 
 def test_pure_evidence_gap_is_a_limitation_not_a_substantive_counterargument():
     from app.research_analysis import _counterargument_evidence_gap_only
-    for text in ("所提供的材料未包含未来风险的详细信息。", "The provided excerpts do not include future guidance.", "Available sources lack risk details."):
+    for text in ("所提供的材料未包含未来风险的详细信息。", "The provided excerpts do not include future guidance.", "Available sources lack risk details.",
+                 "The supplied excerpts do not explicitly name the committee chair, so any identification would be inference, not direct evidence."):
         assert _counterargument_evidence_gap_only(text)
-    for text in ("材料未提供风险，但库存下降。", "Sources do not include forecasts, but costs increased.", "公司没有提供预测。", "库存下降。", "材料未包含财务数据而销售下降。", "Sources do not include forecasts and revenue fell."):
+    for text in ("材料未提供风险，但库存下降。", "Sources do not include forecasts, but costs increased.", "公司没有提供预测。", "库存下降。", "材料未包含财务数据而销售下降。", "Sources do not include forecasts and revenue fell.",
+                 "The supplied excerpts do not explicitly name the chair, but rates rose."):
         assert not _counterargument_evidence_gap_only(text)
     report = source("s", text="Revenue increased.")
     citation = {"source_id": "s", "quotation": "Revenue increased."}

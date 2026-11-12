@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v44"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v45"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -379,7 +379,11 @@ def _counterargument_evidence_gap_only(text: str) -> bool:
     english = (r"(?:the\s+)?(?:provided\s+|available\s+|supplied\s+)?(?:sources?|materials?|excerpts?|quotations?|evidence|information)"
                r"\s+(?:do(?:es)?\s+not|did\s+not|doesn\u2019t|doesn't|lack(?:s|ed)?|omit(?:s|ted)?)\s+"
                r"[^.!?;,\n]{1,90}[.!?]?")
-    return bool(re.fullmatch(chinese, value) or re.fullmatch(english, value, re.IGNORECASE))
+    conditional = (r"(?:the\s+)?(?:provided|available|supplied)\s+(?:sources?|materials?|excerpts?|quotations?)\s+"
+                   r"(?:do\s+not|does\s+not|did\s+not)\s+[^.!?;,\n]{1,80},\s+so\s+"
+                   r"[^.!?;\n]{1,100}\b(?:inference|speculation|unverified)\b[^.!?;\n]{0,70}[.!?]?")
+    return bool(re.fullmatch(chinese, value) or re.fullmatch(english, value, re.IGNORECASE) or
+                re.fullmatch(conditional, value, re.IGNORECASE))
 
 
 def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
@@ -660,10 +664,13 @@ def _policy_vote_windows(text: str, question: str, size: int,
     still establish that the vote refers to the action.
     """
     lower = _query_intent(question)
-    if (not any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against")) or
+    asks_chair = bool(re.search(r"\b(?:who\s+chaired|chair(?:man|woman|person)?|presided)\b|主席|主持人|主持会议|主持會議", lower))
+    asks_dissent = any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against"))
+    if (not (asks_dissent or asks_chair) or
             not any(term in lower for term in ("货币政策", "利率", "美联储", "monetary policy", "federal reserve", "fomc"))):
         return None
-    vote_pattern = r"\bvoting\s+against\s+(?:this|the)\s+action(?:\s*:\s*|\s+(?:was|were)\s+)"
+    vote_pattern = (r"\bvoting\s+against\s+(?:this|the)\s+action(?:\s*:\s*|\s+(?:was|were)\s+)" if asks_dissent else
+                    r"\bvoting\s+for\s+(?:the\s+)?(?:fomc\s+)?monetary\s+policy\s+action\s+(?:was|were)\s*:\s*")
     action_pattern = (r"\b(?:members|committee)\s+(?:agreed|decided|voted)\s+to\s+"
                       r"(?:raise|lower|maintain|increase|reduce|hold)\s+(?:the\s+)?target\s+range\s+for\s+"
                       r"(?:the\s+)?federal\s+funds\s+rate\b")
@@ -687,6 +694,8 @@ def _policy_vote_windows(text: str, question: str, size: int,
         vote_tail = text[vote.end():min(len(text), vote.end() + 500)]
         vote_end = re.search(r"(?<!\b[A-Z])\.(?=\s|$)", vote_tail)
         if not vote_end or "\f" in vote_tail[:vote_end.end()]:
+            continue
+        if not asks_dissent and not re.search(r"(?<!vice\s)\bchair(?:man|woman|person)?\b", vote_tail[:vote_end.end()], re.IGNORECASE):
             continue
         spans = [[action.start(), action.end() + sentence_end.end()],
                  [vote.start(), vote.end() + vote_end.end()]]

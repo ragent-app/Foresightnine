@@ -122,7 +122,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert snapshot["sources"][0]["revised_at"].startswith("2024-02-01")
     assert snapshot["sources"][0]["obtained_at"]
     assert snapshot["budget"]["max_model_calls"] == 1
-    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v44"
+    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v45"
     assert "Revenue was 100" not in inputs.text and "owner_id" not in inputs.json()
     other = client.post("/v1/auth/local/register", json={"email": "other@example.test",
         "password": "correct horse battery staple!"}).json()["access_token"]
