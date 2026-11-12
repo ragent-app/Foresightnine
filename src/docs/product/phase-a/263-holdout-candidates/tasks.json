@@ -1,0 +1,29 @@
+[
+  {
+    "id": "COMPANY_CISCO_2024",
+    "set": "development_company_sample",
+    "question": "根据所附 Cisco 2024 年报，列出 2024 和 2023 财年的总收入、期间和单位，计算同比变化，并引用原文说明一个有关收入变化的限制。",
+    "source": "cisco-2024-sec.html.gz",
+    "source_id": "source_26300000000000000000000000000001",
+    "published_at": null,
+    "format": "html"
+  },
+  {
+    "id": "MACRO_GDP_2022Q4",
+    "set": "new_candidate",
+    "question": "According to the attached BEA second estimate, compare annualized real GDP growth in the fourth and third quarters of 2022. Assess whether both goods and services consumption increased in the fourth quarter; cite evidence and distinguish a revision to an estimate from an actual change.",
+    "source": "bea-gdp4q22.pdf",
+    "source_id": "source_26300000000000000000000000000002",
+    "published_at": "2023-02-23T13:30:00+00:00",
+    "format": "pdf"
+  },
+  {
+    "id": "POLICY_FOMC_201706",
+    "set": "new_candidate",
+    "question": "Using the attached June 14, 2017 FOMC statement, state the target range for the federal funds rate and identify the dissenting voter and that person's preferred action. Cite the policy decision and dissent separately, and explain one uncertainty about the future policy path.",
+    "source": "fomc-20170614.pdf",
+    "source_id": "source_26300000000000000000000000000003",
+    "published_at": "2017-06-14T18:00:00+00:00",
+    "format": "pdf"
+  }
+]

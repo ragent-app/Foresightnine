@@ -1,0 +1,23 @@
+{
+  "COMPANY_CISCO_2024": {
+    "revenue_fy2024_million_usd": "53803",
+    "revenue_fy2023_million_usd": "56998",
+    "growth_percent": "-5.61",
+    "limitations": "An income table alone does not establish why total revenue changed."
+  },
+  "MACRO_GDP_2022Q4": {
+    "q4_annualized_percent": "2.7",
+    "q3_annualized_percent": "3.2",
+    "advance_q4_annualized_percent": "2.9",
+    "consumer_services": "increased",
+    "consumer_goods": "decreased",
+    "limitation": "The downward revision is not itself evidence that GDP or consumer spending fell."
+  },
+  "POLICY_FOMC_201706": {
+    "target_lower_percent": "1",
+    "target_upper_percent": "1.25",
+    "dissent": "Neel Kashkari",
+    "preference": "maintain the existing target range",
+    "uncertainty": "Actual future rate path depends on the economic outlook and incoming data."
+  }
+}
