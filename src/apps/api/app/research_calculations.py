@@ -157,7 +157,13 @@ def _spanned_table_period_conflict(source_text: str, start: int, value: Decimal,
     """
     year_match = re.fullmatch(r"(?:FY\s*)?((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
     if year_match is None:
-        year_match = re.fullmatch(r"Year\s+Ended\s+[A-Za-z]+\s+\d{1,2},?\s+((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
+        year_match = re.fullmatch(r"(?:Fiscal\s+)?Year\s+Ended\s+[A-Za-z]+\s+\d{1,2},?\s+((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
+        if year_match is not None:
+            date_text = re.sub(r"^(?:Fiscal\s+)?Year\s+Ended\s+", "", period.strip(), flags=re.IGNORECASE)
+            try:
+                datetime.strptime(date_text.replace(",", ""), "%B %d %Y")
+            except ValueError:
+                return None
     if year_match is None:
         return None
     def parse_row(line: str) -> list[tuple[int, int, str]] | None:

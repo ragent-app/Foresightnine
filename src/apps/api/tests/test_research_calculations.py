@@ -316,6 +316,8 @@ def test_spanned_table_period_conflict_needs_complete_unique_consistent_columns(
         return table_period_conflict(t, t.index(q), q, Decimal(value), period)
     assert check(text) == {'declared_year': '2022', 'column_year': '2023'}
     assert check(text, period='Year Ended January 29, 2023') is None
+    assert check(text, period='Fiscal Year Ended January 30, 2022') == {'declared_year': '2022', 'column_year': '2023'}
+    assert check(text, period='Fiscal Year Ended February 30, 2022') is None
     assert check(text, q='9,108', value='9108', period='FY2023') == {'declared_year': '2023', 'column_year': '2022'}
     assert check(text, q='Operating cash', value='5641') is None
     assert check(text.replace('9,108','5,641')) is None
