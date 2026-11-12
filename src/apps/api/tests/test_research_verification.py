@@ -57,6 +57,15 @@ def test_review_does_not_equate_a_bare_number_with_a_percentage():
     assert batch.indexes == [] and batch.omitted == [0]
 
 
+def test_review_does_not_promote_explicit_opposite_direction():
+    quote='Revenue decreased 5 percent in Q1 2026.'
+    report=source().model_copy(update={'text':quote})
+    item={'text':'Revenue increased 5 percent in Q1 2026.',
+          'citations':[{'source_id':'s','quotation':quote,'location':{'character_start':0,'character_end':len(quote)}}]}
+    batch=prepare_support_review([item],[report],3000)
+    assert batch.indexes==[] and batch.omitted==[0]
+
+
 def test_review_cannot_clear_an_unquoted_dissent_motive():
     item = {**claim(), 'text':"Revenue was the concern behind the member's dissent."}
     batch = prepare_support_review([item], [source()], 3000)

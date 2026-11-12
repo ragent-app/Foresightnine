@@ -739,6 +739,29 @@ _PERIOD_RELATIVE_RATE = re.compile(
 _METRIC_PERCENT_CLAIM = re.compile(
     r"\b(?P<metric>GDP|GDI)(?:['’]s)?\s+(?:(?:grew|rose|increased|was|is|of)\s+)?"
     r"(?:only\s+)?(?P<value>\d+(?:\.\d+)?)\s*(?:percent\b|%)", re.IGNORECASE)
+_EXPLICIT_PERCENT_CHANGE = re.compile(
+    r"\b(?P<subject>[A-Za-z][A-Za-z0-9'-]*(?:\s+[A-Za-z][A-Za-z0-9'-]*){0,2})\s+"
+    r"(?P<direction>increased|rose|grew|decreased|fell|declined|dropped)\s+"
+    r"(?:by\s+)?(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>percentage\s+points?\b|percent\b|%)", re.IGNORECASE)
+
+
+def _explicit_percent_changes(text: str) -> list[tuple[str, str, Decimal, str, str]]:
+    """Extract only simple, explicit English metric-direction-value phrases."""
+    output = []
+    for match in _EXPLICIT_PERCENT_CHANGE.finditer(text):
+        if _COMPONENT_NEGATION.search(text[max(0, match.start()-30):match.start()]):
+            continue
+        subject = match.group('subject').casefold().split()
+        if subject and subject[0] in {'the', 'a', 'an'}:
+            subject.pop(0)
+        if not subject:
+            continue
+        direction = 'up' if match.group('direction').casefold() in {'increased','rose','grew'} else 'down'
+        unit = 'percentage_points' if match.group('unit').casefold().startswith('percentage') else 'percent'
+        output.append((' '.join(subject), direction, Decimal(match.group('value')), unit, match.group(0)))
+        if len(output) == 20:
+            break
+    return output
 
 
 def _explicit_quarters(text: str) -> list[tuple[str, tuple[int, int]]]:
@@ -825,6 +848,23 @@ def flag_component_direction(claims: list[dict], sources: list[ResearchSource]) 
         for _, _, quote, context in located_citations:
             for match in _METRIC_PERCENT_CLAIM.finditer(context + quote):
                 directly_quoted.add((match.group('metric').upper(), Decimal(match.group('value'))))
+        claim_changes = _explicit_percent_changes(text)
+        claim_quarters = {value for _, value in _explicit_quarters(text)}
+        claim_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', text))
+        for index, source, quote, _ in located_citations:
+            quote_quarters = {value for _, value in _explicit_quarters(quote)}
+            quote_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', quote))
+            if (claim_quarters and quote_quarters and claim_quarters.isdisjoint(quote_quarters) or
+                    claim_years and quote_years and claim_years.isdisjoint(quote_years)):
+                continue
+            quote_changes = _explicit_percent_changes(quote)
+            for subject, direction, value, unit, wording in claim_changes:
+                if any(other_subject == subject and other_value == value and other_unit == unit and other_direction != direction
+                       for other_subject, other_direction, other_value, other_unit, _ in quote_changes):
+                    entry.setdefault('balance_direction_warnings', []).append({
+                        'source_id':source.source_id, 'citation_index':index,
+                        'basis':'quoted_direction_conflict', 'claimed_text':wording, 'status':'requires_review'})
+                    break
         for assertion in metric_claims:
             metric, value = assertion.group('metric').upper(), Decimal(assertion.group('value'))
             if (metric, value) in directly_quoted:

@@ -1142,3 +1142,20 @@ def test_same_number_from_different_metric_is_a_review_cue_not_support():
     assert not flag_component_direction([same],[source])[0].get('balance_direction_warnings')
     ambiguous={**item,'citations':[{**cite(quote),'location':{'status':'ambiguous'}}]}
     assert not flag_component_direction([ambiguous],[source])[0].get('balance_direction_warnings')
+
+
+def test_explicit_opposite_direction_is_flagged_for_matching_metric_and_value():
+    from app.research_evidence import flag_component_direction
+    for subject in ('Revenue','Consumer spending','GDP','Exports'):
+        quote=f'{subject} decreased 5 percent in Q1 2026.'
+        source=ResearchSource(source_id='s',owner_id='owner',title='Report',text=quote,kind='user_supplied',
+            obtained_at=datetime.now(timezone.utc),content_sha256='hash',permissions=SourcePermissions(store=True,display=True,model_input=True))
+        cite={'source_id':'s','quotation':quote,'location':{'character_start':0,'character_end':len(quote)}}
+        claim={'text':f'{subject} increased 5 percent in Q1 2026.','citations':[cite]}
+        result=flag_component_direction([claim],[source])[0]
+        assert result['balance_direction_warnings'][0]['basis']=='quoted_direction_conflict'
+        assert not flag_component_direction([{**claim,'text':f'{subject} decreased 5 percent in Q1 2026.'}],[source])[0].get('balance_direction_warnings')
+        assert not flag_component_direction([{**claim,'text':f'{subject} increased 5 percentage points in Q1 2026.'}],[source])[0].get('balance_direction_warnings')
+        assert not flag_component_direction([{**claim,'text':f'{subject} increased 5 percent in Q2 2026.'}],[source])[0].get('balance_direction_warnings')
+        assert not flag_component_direction([{**claim,'text':f'It is not true that {subject} increased 5 percent in Q1 2026.'}],[source])[0].get('balance_direction_warnings')
+        assert not flag_component_direction([{**claim,'citations':[{**cite,'location':{'status':'ambiguous'}}]}],[source])[0].get('balance_direction_warnings')

@@ -85,6 +85,41 @@ def test_same_number_in_another_metric_does_not_silently_complete_research(monke
     assert not claim.get('balance_direction_warnings') and claim['support_status']=='not_independently_verified'
 
 
+def test_opposite_quoted_direction_keeps_research_partial_until_edited(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    source_id='';quote='Revenue decreased 5 percent in Q1 2026.'
+    class Provider:
+        name='direction-contradiction'
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {'claims':[{'text':'Revenue increased 5 percent in Q1 2026.',
+                'citations':[{'source_id':source_id,'quotation':quote}]}]},20
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    auth=client.post('/v1/auth/local/register',json={'email':f'polarity-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json();headers={'Authorization':'Bearer '+auth['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':quote,
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'direction-contradiction'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'require_counterarguments':False}).json()['operation']
+    for _ in range(100):
+        state=client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'):break
+        time.sleep(.02)
+    assert state=='completed'
+    version=client.get(path,headers=headers).json()['versions'][-1];content=version['content']
+    assert content['run']['status']=='partial'
+    assert content['claims'][0]['balance_direction_warnings'][0]['basis']=='quoted_direction_conflict'
+    edited=deepcopy(content);edited['claims'][0]['text']='Revenue decreased 5 percent in Q1 2026.'
+    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version['version_id'],'content':edited})
+    assert saved.status_code==201, saved.text
+    claim=saved.json()['versions'][-1]['content']['claims'][0]
+    assert not claim.get('balance_direction_warnings') and claim['support_status']=='not_independently_verified'
+
+
 def test_date_lead_is_a_reviewable_source_location_and_survives_version_save(monkeypatch):
     from uuid import uuid4
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
