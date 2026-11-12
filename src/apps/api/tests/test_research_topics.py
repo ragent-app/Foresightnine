@@ -68,6 +68,32 @@ def test_recalculate_current_facts_creates_auditable_draft(monkeypatch):
     assert client.get(path, headers=headers).json()["versions"][-1]["version_id"] == parent
 
 
+def test_legacy_percent_difference_recalculates_as_percentage_points(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    registration = client.post("/v1/auth/local/register", json={"email": "percentage-recalculate@example.test",
+        "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Growth differences?"}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    first = {"fact_id": "a", "value": "2.8", "period": "2024", "unit": "percent", "currency": None}
+    second = {"fact_id": "b", "value": "2.9", "period": "2023", "unit": "percent", "currency": None}
+    legacy = {**calculate(CalculationRequest(formula="difference", first=first, second=second)),
+              "formula_version": "1", "unit": "percent"}
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"],
+        "content": {"facts": [first, second], "calculations": [legacy]}}).json()["versions"][-1]
+    response = client.post(path + "/calculations/recalculate", headers=headers,
+        json={"parent_version_id": saved["version_id"], "calculation_index": 0})
+    assert response.status_code == 201
+    latest = response.json()["versions"][-1]
+    assert latest["content"]["calculations"][0]["unit"] == "percentage points"
+    assert latest["content"]["calculations"][0]["formula_version"] == "2"
+    assert response.json()["versions"][-2]["content"]["calculations"][0]["unit"] == "percent"
+    repeated = client.post(path + "/calculations/recalculate", headers=headers,
+        json={"parent_version_id": latest["version_id"], "calculation_index": 0})
+    assert repeated.status_code == 201 and repeated.json()["versions"][-1]["content"]["calculations"][0]["formula_version"] == "2"
+
+
 def test_edited_facts_reject_invalid_values_and_duplicate_identifiers(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     client = TestClient(app)

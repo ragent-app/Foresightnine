@@ -374,6 +374,50 @@ def test_research_marks_cross_source_differences_for_review_and_recomputes_them(
     assert len(saved.json()["versions"][-2]["content"]["evidence_differences"]) == 1
 
 
+def test_claim_calculation_difference_is_saved_and_rechecked_after_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "calculation-conflict-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def cite(quote): return {"source_id": source_id, "quotation": quote}
+            return {"claims": [{"text": "On sales of 642,637, the margin is 4.21%.", "citations": [cite("sales 642637")]}],
+                    "counterarguments": [{"text": "Revenue alone is not enough", "citations": [cite("income 27012")]}],
+                    "facts": [{"fact_id": "profit", "label": "Profit", "value": "27012", "unit": "USD million", "currency": "USD", "period": "2024", "citation": cite("income 27012")},
+                              {"fact_id": "sales", "label": "Sales", "value": "642637", "unit": "USD million", "currency": "USD", "period": "2024", "citation": cite("sales 642637")}],
+                    "calculations": [{"formula": "margin_percent", "first_fact_id": "profit", "second_fact_id": "sales"}], "limitations": []}, 20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    registered = client.post("/v1/auth/local/register", json={"email": "claim-calculation-conflict@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
+    source = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "income 27012; sales 642637",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()
+    source_id = source["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Margin?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "calculation-conflict-001"},
+        json={"parent_version_id": topic["versions"][0]["version_id"]}).json()
+    operation_id = receipt["operation"]["operation_id"]
+    for _ in range(100):
+        state = client.get(path + "/runs/" + operation_id, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert state == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    assert current["content"]["run"]["status"] == "partial"
+    assert current["content"]["calculation_differences"][0]["calculated_value"] == "4.20"
+    edited = deepcopy(current["content"])
+    edited["claims"][0]["text"] = "On sales of 642,637, the margin is 4.20%."
+    edited["calculation_differences"] = [{"fabricated": True}]
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": edited})
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["versions"][-1]["content"]["calculation_differences"] == []
+    assert len(saved.json()["versions"][-2]["content"]["calculation_differences"]) == 1
+
+
 def test_research_lease_recovery_keeps_ambiguous_charge_and_does_not_replay():
     api.reset_state()
     entered, release, finished = Event(), Event(), Event()

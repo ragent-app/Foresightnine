@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -39,6 +40,10 @@ class RecalculateRequest(BaseModel):
 
 class CalculationError(ValueError):
     """The available inputs do not support the requested calculation."""
+
+
+_TEXT_NUMBER = re.compile(r"(?<![\w.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+_TEXT_PERCENT = re.compile(r"(?<![\w.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
 
 
 def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
@@ -91,6 +96,7 @@ def calculate(request: CalculationRequest) -> dict:
         raise CalculationError("Growth requires a positive baseline.")
     if request.formula == "margin_percent" and b.value <= 0:
         raise CalculationError("Margin requires a positive denominator.")
+    formula_version = "1"
     try:
         with localcontext() as context:
             context.prec = 100
@@ -105,13 +111,77 @@ def calculate(request: CalculationRequest) -> dict:
             else:
                 result = a.value - b.value
                 expression = "first - second"
-                unit = a.unit
+                if a.unit.strip().casefold() in {"percent", "percentage", "%"}:
+                    if a.currency is not None:
+                        raise CalculationError("Percentage inputs cannot have a currency.")
+                    unit = "percentage points"
+                    formula_version = "2"
+                else:
+                    unit = a.unit
             rounded = result.quantize(Decimal(1).scaleb(-request.decimal_places), rounding=ROUND_HALF_UP)
     except (InvalidOperation, OverflowError) as error:
         raise CalculationError("Calculation exceeds supported precision.") from error
-    return {"formula_id": request.formula, "formula_version": "1", "expression": expression,
+    return {"formula_id": request.formula, "formula_version": formula_version, "expression": expression,
             "input_verification": "not_verified_by_calculator",
             "inputs": [a.model_dump(mode="json"), b.model_dump(mode="json")],
             "value": str(rounded), "unit": unit,
-            "currency": a.currency if unit != "percent" else None,
+            "currency": None if unit in {"percent", "percentage points"} else a.currency,
             "rounding": "half_up", "decimal_places": request.decimal_places}
+
+
+def claim_calculation_differences(claims: list[dict], calculations: list[dict], facts: list[dict]) -> list[dict]:
+    """Flag narrow numerical mismatches for review, without asserting entailment.
+
+    Compare only a claim with one percentage and a uniquely matching denominator.
+    Recompute the saved calculation from current facts at both its own and the
+    claim's stated precision; ignore user-edited, stale or ambiguous calculations.
+    """
+    by_denominator: dict[Decimal, list[tuple[int, CalculationRequest]]] = {}
+    for index, item in enumerate(calculations):
+        if (item.get("authorship") == "user" or item.get("formula_version") != "1" or
+                item.get("formula_id") not in {"growth_percent", "margin_percent"} or
+                item.get("unit") != "percent" or calculation_input_status(item, facts) != "matched"):
+            continue
+        try:
+            inputs = item["inputs"]
+            request = CalculationRequest.model_validate({"formula": item["formula_id"], "first": inputs[0],
+                "second": inputs[1], "decimal_places": item.get("decimal_places", 2)})
+            recomputed = calculate(request)
+            if Decimal(str(item.get("value"))) != Decimal(recomputed["value"]):
+                continue
+        except (ValidationError, CalculationError, InvalidOperation, TypeError, ValueError, KeyError, IndexError):
+            continue
+        by_denominator.setdefault(request.second.value, []).append((index, request))
+    differences: list[dict] = []
+    for claim_index, claim in enumerate(claims):
+        text = claim.get("text")
+        if not isinstance(text, str) or len(text) > 3000:
+            continue
+        percentages = list(_TEXT_PERCENT.finditer(text))
+        if len(percentages) != 1:
+            continue
+        raw = percentages[0].group(1).replace(",", "").replace("−", "-")
+        precision = len(raw.rsplit(".", 1)[1]) if "." in raw else 0
+        if precision > 8 or len(raw) > 40:
+            continue
+        try:
+            stated = Decimal(raw)
+            mentioned = {Decimal(m.group().replace(",", "").replace("−", "-")) for m in _TEXT_NUMBER.finditer(text)}
+        except InvalidOperation:
+            continue
+        candidates = [entry for value in mentioned for entry in by_denominator.get(value, [])]
+        if len(candidates) != 1:
+            continue
+        calculation_index, request = candidates[0]
+        try:
+            expected = calculate(request.model_copy(update={"decimal_places": precision}))["value"]
+            if stated == Decimal(expected):
+                continue
+        except (CalculationError, InvalidOperation):
+            continue
+        differences.append({"claim_index": claim_index, "calculation_index": calculation_index,
+                            "claimed_value": raw, "calculated_value": expected,
+                            "unit": "percent", "status": "requires_review"})
+        if len(differences) == 50:
+            break
+    return differences

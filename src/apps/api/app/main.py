@@ -96,7 +96,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
 from .research_evidence import evidence_differences
@@ -1636,6 +1636,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         for entry in content.calculations:
             entry["input_status"] = calculation_input_status(entry, content.facts)
         content.evidence_differences = evidence_differences(content.facts)
+        content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         retained = previous.content.model_copy(deep=True)
         content.run = retained.run
         content.sources = retained.sources
@@ -1680,7 +1681,7 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
             raise ApiProblem(422, "invalid_request", "Calculation does not exist in this version.")
         old = previous.content.calculations[request.calculation_index]
         inputs = old.get("inputs")
-        if (old.get("formula_version") != "1" or not isinstance(inputs, list) or len(inputs) != 2 or
+        if (old.get("formula_version") not in {"1", "2"} or not isinstance(inputs, list) or len(inputs) != 2 or
                 any(not isinstance(item, dict) or not isinstance(item.get("fact_id"), str) for item in inputs)):
             raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
         facts = []
@@ -1696,6 +1697,7 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
         result.update({"input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
         content.calculations[request.calculation_index] = result
+        content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         return research_topics.add_version(account.account_id, topic_id, VersionInput(
             parent_version_id=previous.version_id, content=content, note=previous.note))
     except TopicNotFound as error:
@@ -2071,13 +2073,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             usage = generation_usage + review_usage if generation_usage is not None and review_usage is not None else None
         _raise_if_operation_cancelled(operation_id)
         differences = evidence_differences(analysis.facts)
+        calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
         processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
             "not processed", "remaining text was not examined", "was omitted", "were omitted",
             "permission is not granted", "not established", "not authorized", "quotation location is ambiguous"))
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and analysis.counterarguments and all(c["citations"] for c in claims)
-                        and not processing_incomplete and not differences and
+                        and not processing_incomplete and not differences and not calculation_differences and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if request.support_review:
@@ -2086,6 +2089,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 limitations.append("The requested model support review did not cover all claims.")
         if differences:
             limitations.append("Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.")
+        if calculation_differences:
+            limitations.append("A claim percentage may differ from a deterministic calculation; review the wording and calculation.")
         if len(differences) == 50:
             limitations.append("At most 50 candidate differences are shown.")
         if monotonic() > deadline:
@@ -2107,7 +2112,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 "content_sha256": s.content_sha256, "verification": "user_declared_not_verified"}
                 for s in sources if s.source_id in analysis.source_ids], facts=analysis.facts,
                 evidence_differences=differences,
-                calculations=analysis.calculations, claims=claims, limitations=limitations,
+                calculations=analysis.calculations, calculation_differences=calculation_differences,
+                claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
                      "model_calls": calls, "total_tokens": usage, "cost_usd": None,
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,

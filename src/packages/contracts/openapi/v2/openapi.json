@@ -341,6 +341,15 @@
       "ResearchContent": {
         "additionalProperties": false,
         "properties": {
+          "calculation_differences": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "title": "Calculation Differences",
+            "type": "array"
+          },
           "calculations": {
             "items": {
               "additionalProperties": true,
