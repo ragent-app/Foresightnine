@@ -1,0 +1,84 @@
+{
+  "implementation_commit": "1425a6ddee1c7ac15010bfc7fd9333cd966721bb",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "files": {
+    "common.py": "58c65711d230d3166dc5d3341d9390923d8078852ed2e05ed6dd3956418550de",
+    "prepare.py": "77de741e8a1c015b17e43b445d7f67a5ac1e1b1070772b3c5dc4e46eea2264b5",
+    "run.py": "e535a80ea68fb2fa0645b414931c5f3f8838095650c1f7440a811fc9c8477091",
+    "score.py": "949dbcc4e6492ef94c9c99df498613334bd3dc2298dd53768e148ad7c421e7cf"
+  },
+  "original_files": {
+    "TRADE_FEB-input.json": "57fc8b79bd17d9b4a34d571a2202cb726bb7b3069ead105937d6b035ba231322",
+    "STRESS_2023-input.json": "798f703d39cb172fd534c1bacfa65a57b1349b041ce5739f56e8726023e818f8",
+    "bea-trade-source.txt": "aa3a1117eaa785c5fdd682b071da28ebe2f448aef4483e2fb82dcba3857f369b",
+    "fed-stress-source.txt": "ef16be2912417b7e1d033e6863222be713759cd35acc48927cc2c17a4f143a07",
+    "TRADE_FEB-result.json": "f89f0c9143f084156e5a45dc3d341d20f5afbe6566592e1f4c5d3aac11bf081c",
+    "STRESS_2023-result.json": "adf5b6fcbf5923e8923b826be82fc517a4eb75ca5b740f00e2d7b3f71ad7150c",
+    "score.py": "949dbcc4e6492ef94c9c99df498613334bd3dc2298dd53768e148ad7c421e7cf",
+    "score.json": "b84ba44ad763b7988bde73fbeac6e7547865b31207865c9dfe3daa4f32018408"
+  },
+  "conditions": [
+    {
+      "task": "TRADE_FEB",
+      "prompt_sha256": "b311317b8620ae6dd08e7b9d56455ff72cf8c5ee766c03e29db738d7ea72db87",
+      "prompt_bytes": 2045,
+      "segments": [
+        {
+          "source_id": "source_0652c1a906a34214bde1c9f31bc9d6a3",
+          "character_start": 1906,
+          "character_end": 2200
+        },
+        {
+          "source_id": "source_0652c1a906a34214bde1c9f31bc9d6a3",
+          "character_start": 2625,
+          "character_end": 2893
+        }
+      ],
+      "source_hashes": {
+        "source_0652c1a906a34214bde1c9f31bc9d6a3": "aa3a1117eaa785c5fdd682b071da28ebe2f448aef4483e2fb82dcba3857f369b"
+      }
+    },
+    {
+      "task": "STRESS_2023",
+      "prompt_sha256": "9fe40afe353fde2aa48bdd8805b3cf9bf00f3356cec40b0684b134f1deee0c73",
+      "prompt_bytes": 2052,
+      "segments": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 10197,
+          "character_end": 10503
+        },
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 27136,
+          "character_end": 27429
+        }
+      ],
+      "source_hashes": {
+        "source_ce54ed6136754051baf2406f5be2a98c": "ef16be2912417b7e1d033e6863222be713759cd35acc48927cc2c17a4f143a07"
+      }
+    }
+  ],
+  "input_limit": 3000,
+  "max_calls": 2,
+  "per_call_max_total_tokens": 10000,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 157440
+}
