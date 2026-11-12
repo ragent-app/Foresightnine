@@ -132,6 +132,90 @@ api.research_topics.add_version = hold_after_result_write
 
 
 @pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
+def test_committed_result_survives_process_exit_before_worker_cache_update(tmp_path):
+    """Crash after terminal commit and replay the same request in a fresh process."""
+    env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
+               FORESIGHTNINE_POSTGRES_DSN=os.environ["FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"],
+               STAGEB_TEST_STATE=str(tmp_path / "committed.json"),
+               STAGEB_TEST_MARKER=str(tmp_path / "committed-marker"),
+               STAGEB_PROVIDER_CALLS=str(tmp_path / "provider-calls"))
+    root = Path(__file__).resolve().parents[3]
+    start = r'''
+import json, os, sys
+from threading import Event
+from types import SimpleNamespace
+from uuid import uuid4
+sys.path.insert(0, "apps/api")
+import app.main as api
+from fastapi.testclient import TestClient
+ready, entered = Event(), Event()
+class Provider:
+    name = "post-commit-crash-test"
+    policy = SimpleNamespace(timeout_seconds=30, max_input_tokens=3000, max_output_tokens=1500)
+    def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+        with open(os.environ["STAGEB_PROVIDER_CALLS"], "a") as f: f.write("called\n")
+        entered.set()
+        assert ready.wait(10)
+        citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+        return {"claims":[{"text":"Revenue was 100", "citations":[citation]}],
+                "counterarguments":[{"text":"Revenue alone does not establish profit", "citations":[citation]}],
+                "facts":[], "calculations":[], "limitations":[]}, 55
+api.challenge_provider = Provider()
+client = TestClient(api.app)
+reg = client.post("/v1/auth/local/register", json={"email":f"commit-{uuid4().hex}@example.test", "password":"correct horse battery staple!"})
+assert reg.status_code == 201, reg.text
+token = reg.json()["access_token"]; headers = {"Authorization":"Bearer " + token}
+source = client.post("/v2/research/sources", headers=headers, json={"title":"Report", "text":"Revenue was 100.", "permissions":{"store":True,"model_input":True,"display":True}})
+assert source.status_code == 201, source.text
+source_id = source.json()["source_id"]
+topic = client.post("/v2/research/topics", headers=headers, json={"question":"Revenue?", "source_ids":[source_id]})
+assert topic.status_code == 201, topic.text
+value = topic.json(); path = "/v2/research/topics/" + value["topic_id"] + "/runs"
+payload = {"parent_version_id": value["versions"][0]["version_id"]}
+original_finish = api.operations.store.finish
+def exit_after_finish(**kwargs):
+    result = original_finish(**kwargs)
+    assert result[0]
+    with open(os.environ["STAGEB_TEST_MARKER"], "w") as f: f.write("committed")
+    os._exit(0)
+api.operations.store.finish = exit_after_finish
+started = client.post(path, headers={**headers, "Idempotency-Key":"post-commit-key"}, json=payload)
+assert started.status_code == 202, started.text
+assert entered.wait(10)
+with open(os.environ["STAGEB_TEST_STATE"], "w") as f:
+    json.dump({"token":token, "path":path, "payload":payload, "operation":started.json()["operation"]["operation_id"]}, f)
+ready.set()
+assert Event().wait(30), "worker did not exit after commit"
+'''
+    recover = r'''
+import json, os, sys
+sys.path.insert(0, "apps/api")
+import app.main as api
+from fastapi.testclient import TestClient
+with open(os.environ["STAGEB_TEST_STATE"]) as f: state = json.load(f)
+with open(os.environ["STAGEB_TEST_MARKER"]) as f: assert f.read() == "committed"
+client = TestClient(api.app); headers = {"Authorization":"Bearer " + state["token"]}
+path = state["path"]; op = state["operation"]
+check = client.get(path + "/" + op, headers=headers)
+assert check.status_code == 200 and check.json()["operation"]["status"] == "completed"
+topic = client.get(path.rsplit("/runs", 1)[0], headers=headers)
+assert topic.status_code == 200 and len(topic.json()["versions"]) == 2
+assert topic.json()["versions"][-1]["content"]["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"
+usage = api.billing_ledger.usage.get("model:" + op)
+assert usage is not None and usage.status == "settled" and usage.actual_tokens == 55
+retry = client.post(path, headers={**headers, "Idempotency-Key":"post-commit-key"}, json=state["payload"])
+assert retry.status_code == 202 and retry.headers["Idempotency-Replayed"] == "true"
+assert retry.json()["operation"]["status"] == "completed"
+with open(os.environ["STAGEB_PROVIDER_CALLS"]) as f: assert f.read() == "called\n"
+assert len(client.get(path.rsplit("/runs", 1)[0], headers=headers).json()["versions"]) == 2
+assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
+'''
+    for script in (start, recover):
+        result = subprocess.run([sys.executable, "-c", script], cwd=root, env=env, capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
 def test_uncommitted_admission_rolls_back_before_provider_and_allows_safe_retry(tmp_path):
     """Kill a process after snapshot write, before the admission transaction commits."""
     env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
