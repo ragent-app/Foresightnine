@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
-from datetime import date
+from datetime import date, datetime
 import re
 from typing import Literal
 
@@ -76,17 +76,123 @@ def quotation_is_table_row(source_text: str, start: object, quotation: object) -
     return row.startswith("|") and row.endswith("|") and row.count("|") >= 3
 
 
+def _spanned_table_period_conflict(source_text: str, start: int, value: Decimal,
+                                   period: str) -> dict[str, str] | None:
+    """Flag a possible mismatch in a tightly bounded extracted HTML table.
+
+    Span labels are extractor annotations or user-provided text, not proof of
+    the original HTML layout. The result is a review cue, never verification.
+    """
+    year_match = re.fullmatch(r"(?:FY\s*)?((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
+    if year_match is None:
+        year_match = re.fullmatch(r"Year\s+Ended\s+[A-Za-z]+\s+\d{1,2},?\s+((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
+    if year_match is None:
+        return None
+    def parse_row(line: str) -> list[tuple[int, int, str]] | None:
+        line = line.strip()
+        if len(line) > 1000 or not line.startswith("|") or not line.endswith("|"):
+            return None
+        result = []
+        position = 0
+        for raw in line[1:-1].split("|"):
+            cell = raw.strip()
+            marker = re.match(r"^\[colspan=([2-9]|[1-9]\d)\]\s*", cell, re.IGNORECASE)
+            span = int(marker.group(1)) if marker else 1
+            cell = cell[marker.end():].strip() if marker else cell
+            if "[colspan=" in cell.casefold() or "[rowspan=" in cell.casefold():
+                return None
+            result.append((position, position + span, cell))
+            position += span
+            if position > 120:
+                return None
+        return result if len(result) >= 2 else None
+    def amount(cell: str) -> Decimal | None:
+        if not re.fullmatch(r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", cell):
+            return None
+        try:
+            return Decimal(cell.replace(",", ""))
+        except InvalidOperation:
+            return None
+    def parsed_year(cell: str) -> str | None:
+        match = re.fullmatch(r"(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+([0-3]?\d),\s*((?:19|20)\d{2})", cell, re.IGNORECASE)
+        if not match:
+            return None
+        try:
+            datetime.strptime(" ".join(cell.split()), "%B %d, %Y")
+        except ValueError:
+            return None
+        return match.group(2)
+    line_start = source_text.rfind("\n", 0, start) + 1
+    line_end = source_text.find("\n", start)
+    if line_end < 0:
+        line_end = len(source_text)
+    line = source_text[line_start:line_end]
+    row = parse_row(line)
+    if row is None or "[colspan=" not in line.casefold() or not row[0][2]:
+        return None
+    positions = [(a, b) for a, b, cell in row[1:] if amount(cell) == value]
+    if len(positions) != 1:
+        return None
+    width = row[-1][1]
+    lines = source_text[max(0, line_start - 12000):line_start].splitlines()[-12:]
+    for i in range(len(lines) - 1, -1, -1):
+        cells = parse_row(lines[i])
+        if cells is None or cells[-1][1] != width:
+            return None
+        years = [(a, b, parsed_year(cell)) for a, b, cell in cells if parsed_year(cell)]
+        if len(years) >= 2:
+            if len({year for _, _, year in years}) != len(years):
+                return None
+            if any(cell and not parsed_year(cell) for _, _, cell in cells):
+                return None
+            title_found = False
+            for title_line in reversed(lines[max(0, i - 4):i]):
+                title_row = parse_row(title_line)
+                if title_row is None or title_row[-1][1] != width:
+                    break
+                content = [cell for _, _, cell in title_row if cell]
+                if len(content) == 1 and re.fullmatch(r"years?\s+ended", content[0], re.IGNORECASE):
+                    title_found = True
+                    break
+                if content:
+                    break
+            if not title_found:
+                return None
+            candidates = [year for a, b, year in years if a <= positions[0][0] and positions[0][1] <= b]
+            if len(candidates) == 1 and candidates[0] != year_match.group(1):
+                return {"declared_year": year_match.group(1), "column_year": candidates[0]}
+            return None
+        # Only blank rows, unit labels, or ordinary numeric data rows may
+        # intervene between date header and target. Arbitrary text stops us.
+        nonempty = [cell for _, _, cell in cells if cell]
+        if nonempty and not (len(nonempty) == 1 and re.fullmatch(r"\(in\s+(?:millions?|billions?|thousands?)\)", nonempty[0], re.IGNORECASE)):
+            if not cells[0][2] or any(cell and cell not in {"$", "€", "£"} and amount(cell) is None for _, _, cell in cells[1:]):
+                return None
+    return None
+
+
 def table_period_conflict(source_text: str, start: object, quotation: object,
                           value: Decimal, period: str) -> dict[str, str] | None:
     """Detect a narrow year/value mismatch in a simple rectangular table.
 
-    This never confirms that a fact is correct: merged cells, repeated values,
-    unrecognized periods, complex amounts and broken table layout fail open to
-    ordinary review rather than being guessed. The caller must already have
-    established that the quotation is unique and is valid evidence.
+    This never confirms that a fact is correct: unsupported spans, repeated
+    values, unrecognized periods, complex amounts and broken table layout fall
+    back to ordinary review. The caller must establish unique source location.
     """
     if not quotation_is_table_row(source_text, start, quotation):
         return None
+    clean_quote = re.sub(r"\[(?:colspan|rowspan)=\d+\]", " ", quotation, flags=re.IGNORECASE)
+    quoted_values = set()
+    for match in re.finditer(r"(?<![\w.])([+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\w.,])", clean_quote):
+        try:
+            quoted_values.add(Decimal(match.group(1).replace(",", "")))
+        except InvalidOperation:
+            continue
+    if value not in quoted_values:
+        return None
+    spanned_conflict = _spanned_table_period_conflict(source_text, start, value, period)
+    if spanned_conflict is not None:
+        return spanned_conflict
     year_match = re.fullmatch(r"(?:FY\s*)?((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
     if not year_match:
         return None

@@ -1372,3 +1372,18 @@ def test_table_fact_and_calculation_require_column_alignment_review():
     assert [item.get('table_alignment_unverified', False) for item in result.facts] == [True, True, False]
     assert result.calculations[0]['value'] == '11.11'
     assert any('Table column alignment is not established' in note for note in result.limitations)
+
+
+def test_spanned_table_year_conflict_does_not_feed_automatic_calculation():
+    text = ('| [colspan=3] | [colspan=9] Year Ended |\n'
+            '| [colspan=3] | [colspan=3] January 29, 2023 | [colspan=3] | [colspan=3] January 30, 2022 |\n'
+            '| [colspan=3] | [colspan=9] (In millions) |\n'
+            '| [colspan=3] Operating cash | $ | 5,641 | | [colspan=3] | $ | 9,108 | |\n')
+    raw = {'facts': [
+        {'fact_id':'a', 'label':'Operating cash', 'value':'5641', 'unit':'million', 'currency':'USD', 'period':'Year Ended January 30, 2022', 'citation':{'source_id':'s','quotation':'Operating cash | $ | 5,641'}},
+        {'fact_id':'b', 'label':'Operating cash', 'value':'9108', 'unit':'million', 'currency':'USD', 'period':'Year Ended January 29, 2023', 'citation':{'source_id':'s','quotation':'9,108'}}],
+        'calculations':[{'formula':'growth_percent', 'first_fact_id':'a', 'second_fact_id':'b'}]}
+    result = analyze('Compare operating cash.', [source('s', text=text)], None, lambda _: (raw, 1))
+    assert [f['table_period_conflict']['column_year'] for f in result.facts] == ['2023','2022']
+    assert not result.calculations
+    assert any('excluded from automatic calculations' in note for note in result.limitations)

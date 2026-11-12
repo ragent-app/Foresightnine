@@ -300,3 +300,27 @@ def test_table_period_conflict_only_for_narrow_unambiguous_rectangles():
                     text.replace('| Revenue |', 'Narrative\n| Revenue |'),
                     text.replace('| Revenue | USD 100 | USD 90 |', '| Revenue | USD 100 | USD 90 | 80 |')):
         assert check(changed, changed.index(quote), quote, '100', '2023') is None
+
+
+def test_spanned_table_period_conflict_needs_complete_unique_consistent_columns():
+    from decimal import Decimal
+    from app.research_calculations import table_period_conflict
+    title = '| [colspan=3] | [colspan=9] Year Ended |\n'
+    dates = '| [colspan=3] | [colspan=3] January 29, 2023 | [colspan=3] | [colspan=3] January 30, 2022 |\n'
+    unit = '| [colspan=3] | [colspan=9] (In millions) |\n'
+    row = '| [colspan=3] Operating cash | $ | 5,641 | | [colspan=3] | $ | 9,108 | |\n'
+    text = title + dates + unit + row
+    quote = 'Operating cash | $ | 5,641'
+    def check(t, q=quote, value='5641', period='Year Ended January 30, 2022'):
+        return table_period_conflict(t, t.index(q), q, Decimal(value), period)
+    assert check(text) == {'declared_year': '2022', 'column_year': '2023'}
+    assert check(text, period='Year Ended January 29, 2023') is None
+    assert check(text, q='9,108', value='9108', period='FY2023') == {'declared_year': '2023', 'column_year': '2022'}
+    assert check(text, q='Operating cash', value='5641') is None
+    assert check(text.replace('9,108','5,641')) is None
+    for changed in [text.replace('[colspan=9] Year Ended', '[rowspan=2] Year Ended'),
+                    text.replace('[colspan=3] January 29, 2023', '[colspan=2] January 29, 2023'),
+                    text.replace('January 29, 2023', 'February 30, 2023'),
+                    text.replace(unit, 'Intervening narrative\n'),
+                    text.replace('Year Ended', 'Year Beginning', 1)]:
+        assert check(changed) is None
