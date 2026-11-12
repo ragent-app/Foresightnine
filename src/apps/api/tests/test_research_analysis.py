@@ -162,6 +162,30 @@ def test_keeps_verified_portions_but_marks_partially_invalid_citations():
     assert any("quotation" in item and "omitted" in item for item in result.limitations)
 
 
+def test_joined_model_quote_recovers_only_independently_located_passages():
+    report = source("s", text='{"unit":"USD millions","revenue":{"2023":100,"2024":120}}')
+    def run(quote):
+        return analyze("Revenue?", [report], None, lambda _: ({"claims": [{"text": "Revenue grew", "citations": [
+            {"source_id": "s", "quotation": quote}]}]}, 10))
+    result = run('"revenue":{"2023":100,"2024":120} and "unit":"USD millions"')
+    claim = result.claims[0]
+    assert claim["support_status"] == "incomplete" and len(claim["citations"]) == 2
+    assert all(item["quotation_match"] == "split_conjunction" for item in claim["citations"])
+    assert all(report.text[item["location"]["character_start"]:item["location"]["character_end"]] == item["quotation"]
+               for item in claim["citations"])
+    assert any("split into separately located" in item for item in result.limitations)
+    assert not run('"revenue":{"2023":100,"2024":120} and "unit":"EUR"').claims
+    assert not run('"unit":"USD millions" and "unit":"USD millions"').claims
+    assert not run('"unit":"USD millions" and revenue ... 120').claims
+
+
+def test_joined_quote_recovery_rejects_ambiguous_fragments():
+    report = source("s", text="Unit USD. Revenue 100. Unit USD. Revenue 200.")
+    output = {"claims": [{"text": "Revenue", "citations": [{"source_id": "s", "quotation": "Unit USD and Revenue 100"}]}]}
+    result = analyze("Revenue?", [report], None, lambda _: (output, 1))
+    assert not result.claims
+
+
 def test_duplicate_model_fact_ids_cannot_feed_a_calculation():
     report = source("s", text="Revenue 100. Profit 20.")
     def model(_):

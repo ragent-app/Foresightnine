@@ -1,0 +1,50 @@
+{
+  "kind": "offline replay; not a new model call or original score",
+  "claim_count": 2,
+  "fact_count": 0,
+  "calculation_count": 0,
+  "claims": [
+    {
+      "support_status": "incomplete",
+      "citations": [
+        {
+          "quotation": "\"total_sales_and_revenues\":{\"2023\":67060,\"2024\":64809}",
+          "match": "split_conjunction",
+          "location": {
+            "character_start": 117,
+            "character_end": 171
+          }
+        },
+        {
+          "quotation": "\"unit\":\"USD millions\"",
+          "match": "split_conjunction",
+          "location": {
+            "character_start": 29,
+            "character_end": 50
+          }
+        }
+      ]
+    },
+    {
+      "support_status": "incomplete",
+      "citations": [
+        {
+          "quotation": "\"total_sales_and_revenues\":{\"2023\":67060,\"2024\":64809}",
+          "match": "split_conjunction",
+          "location": {
+            "character_start": 117,
+            "character_end": 171
+          }
+        },
+        {
+          "quotation": "\"fiscal_year_end_dates\":{\"2023\":\"2023-12-31\",\"2024\":\"2024-12-31\"}",
+          "match": "split_conjunction",
+          "location": {
+            "character_start": 51,
+            "character_end": 116
+          }
+        }
+      ]
+    }
+  ]
+}

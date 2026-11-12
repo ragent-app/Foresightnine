@@ -677,7 +677,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         for item in items:
             citations = []
             omitted = False
-            for citation in item.citations:
+            for citation_index, citation in enumerate(item.citations):
                 source = source_map.get(citation.source_id)
                 if source is None:
                     omitted = True
@@ -685,6 +685,29 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 try:
                     location, quotation, matching = quotation_location(source, citation.quotation)
                 except InvalidAnalysis:
+                    # Some models join independently quoted passages with
+                    # "and". Preserve them only as separate, unique original
+                    # quotations; never stitch them into invented source text.
+                    fragments = re.split(r"\s+and\s+", citation.quotation, flags=re.IGNORECASE)
+                    remaining_citations = len(item.citations) - citation_index - 1
+                    recovered = []
+                    if (2 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments) and
+                            len(citations) + len(fragments) + remaining_citations <= 10):
+                        for fragment in fragments:
+                            try:
+                                loc, original, match_kind = quotation_location(source, fragment.strip())
+                            except InvalidAnalysis:
+                                recovered = []
+                                break
+                            if loc.get("status") == "ambiguous" or match_kind not in {"exact", "whitespace_normalized"}:
+                                recovered = []
+                                break
+                            recovered.append({"source_id": citation.source_id, "location": loc,
+                                "quotation_match": "split_conjunction", "quotation": original,
+                                "support_status": "not_independently_verified"})
+                    if recovered and len({(part["location"]["character_start"], part["location"]["character_end"]) for part in recovered}) == len(recovered):
+                        citations.extend(recovered)
+                        limitations.append("A joined quotation was split into separately located passages; support requires review.")
                     omitted = True
                     continue
                 entry = {"source_id": citation.source_id,

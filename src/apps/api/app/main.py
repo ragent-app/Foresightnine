@@ -2217,7 +2217,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "simulated material is excluded"))
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
-        complete = bool(analysis.claims and analysis.counterarguments and all(c["citations"] for c in claims)
+        complete = bool(analysis.claims and analysis.counterarguments and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
                         not any(c.get("publication_date_warnings") for c in claims) and
                         (not request.support_review or review_supports_all))
