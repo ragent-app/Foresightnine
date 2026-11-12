@@ -1,0 +1,156 @@
+{
+  "task": "FED_PURCHASES",
+  "input_limit": 3000,
+  "manifest_sha256": "01a048a244a67c7bf940939f6f31a352c963444b4ca486be2456e116fd4310f6",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 1174,
+  "prompt_sha256": "a36aec15e1f1a04ec3d8c1269c5da6fa4b1b01d7d621cbc37af903338852c10d",
+  "segments": [
+    {
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "character_start": 6154,
+      "character_end": 6442
+    },
+    {
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "character_start": 7486,
+      "character_end": 7781
+    }
+  ],
+  "claims": [
+    {
+      "text": "The FOMC indicated that the economy has made progress toward its maximum employment and 2 percent inflation goals and that it will continue to assess progress in coming meetings.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 7493,
+            "character_end": 7613
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "the economy has made progress toward these goals, and the Committee will continue to assess progress in coming meetings."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "Asset purchases were described as helping foster smooth market functioning and accommodative financial conditions, supporting credit flow to households and businesses.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 7614,
+            "character_end": 7781
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "These asset purchases help foster smooth market functioning and accommodative financial conditions, thereby supporting the flow of credit to households and businesses."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "The Committee identified that risks to the economic outlook remain despite ongoing reduction of the public health crisis's effects on the economy.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 6155,
+            "character_end": 6283
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "will likely continue to reduce the effects of the public health crisis on the economy, but risks to the economic outlook remain."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "counterarguments": [
+    {
+      "text": "One cannot conclude from these excerpts that the target rate range was unchanged or that purchases continued at a specific monthly pace, since the excerpts omit those passages; the statement's existence and headline actions cannot be verified from the supplied text alone.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 7614,
+            "character_end": 7781
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "These asset purchases help foster smooth market functioning and accommodative financial conditions, thereby supporting the flow of credit to households and businesses."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "facts": [],
+  "calculations": [],
+  "limitations": [
+    "Source source_8a668505f5fe4d16b9694d2dfce28713: only character ranges 6154–6442, 7486–7781 were analyzed; remaining text was not examined.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "Model-reported limitation (not independently verified): The supplied excerpts do not contain the FOMC interest rate decision (target range) or any numeric amounts, pace, or duration of asset purchases; no such figures can be cited.",
+    "Model-reported limitation (not independently verified): Source coverage is declared partial; the excerpts are fragments of the full 2021-07-28 FOMC statement.",
+    "Model-reported limitation (not independently verified): The publication date (2021-07-28) is declared metadata, not verified, and the excerpts do not confirm the meeting period.",
+    "Model-reported limitation (not independently verified): Counterarguments or dissents, if any, are not visible in the supplied text.",
+    "Model-reported limitation (not independently verified): No numeric facts are available, so no calculations are supported."
+  ],
+  "raw": {
+    "claims": [
+      {
+        "text": "The FOMC indicated that the economy has made progress toward its maximum employment and 2 percent inflation goals and that it will continue to assess progress in coming meetings.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "the economy has made progress toward these goals, and the Committee will continue to assess progress in coming meetings."
+          }
+        ]
+      },
+      {
+        "text": "Asset purchases were described as helping foster smooth market functioning and accommodative financial conditions, supporting credit flow to households and businesses.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "These asset purchases help foster smooth market functioning and accommodative financial conditions, thereby supporting the flow of credit to households and businesses."
+          }
+        ]
+      },
+      {
+        "text": "The Committee identified that risks to the economic outlook remain despite ongoing reduction of the public health crisis's effects on the economy.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "will likely continue to reduce the effects of the public health crisis on the economy, but risks to the economic outlook remain."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One cannot conclude from these excerpts that the target rate range was unchanged or that purchases continued at a specific monthly pace, since the excerpts omit those passages; the statement's existence and headline actions cannot be verified from the supplied text alone.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "These asset purchases help foster smooth market functioning and accommodative financial conditions, thereby supporting the flow of credit to households and businesses."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The supplied excerpts do not contain the FOMC interest rate decision (target range) or any numeric amounts, pace, or duration of asset purchases; no such figures can be cited.",
+      "Source coverage is declared partial; the excerpts are fragments of the full 2021-07-28 FOMC statement.",
+      "The publication date (2021-07-28) is declared metadata, not verified, and the excerpts do not confirm the meeting period.",
+      "Counterarguments or dissents, if any, are not visible in the supplied text.",
+      "No numeric facts are available, so no calculations are supported."
+    ],
+    "facts": [],
+    "calculations": []
+  },
+  "elapsed_seconds": 11.544
+}

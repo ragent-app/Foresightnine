@@ -1,0 +1,28 @@
+{
+  "FED_PURCHASES-3000": {
+    "signals": {
+      "target_range": false,
+      "treasury_amount": false,
+      "mortgage_amount": false,
+      "risk_any_claim": true
+    },
+    "all_retained_claims_located": true,
+    "valid_claims": 4,
+    "claims_total": 4,
+    "counter_count": 1,
+    "semantic_support": "not independently established"
+  },
+  "FED_PURCHASES-6000": {
+    "signals": {
+      "target_range": false,
+      "treasury_amount": true,
+      "mortgage_amount": true,
+      "risk_any_claim": true
+    },
+    "all_retained_claims_located": true,
+    "valid_claims": 6,
+    "claims_total": 6,
+    "counter_count": 2,
+    "semantic_support": "not independently established"
+  }
+}
