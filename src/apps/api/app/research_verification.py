@@ -23,7 +23,7 @@ REVIEW_SYSTEM_PROMPT = (
     "when context, identity, period or meaning is insufficient. Return only JSON "
     "matching the requested schema. This is a model assessment, not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v2"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v3"
 
 
 class ReviewEntry(BaseModel):
@@ -60,7 +60,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         {"claim_index": 0, "verdict": "supports|does_not_support|contradicts|uncertain"}]}}
     indexes: list[int] = []
     omitted: list[int] = []
-    segments: list[dict[str, int | str]] = []
+    accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int]]]] = []
     def serialize() -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     for index, claim in enumerate(claims):
@@ -76,7 +76,8 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
                 break
             source = source_map.get(citation.get("source_id")) if isinstance(citation.get("source_id"), str) else None
             location, quotation = citation.get("location"), citation.get("quotation")
-            if source is None or not isinstance(location, dict) or location.get("status") == "ambiguous" or not isinstance(quotation, str):
+            if (source is None or citation.get("partial_token") or not isinstance(location, dict) or
+                    location.get("status") == "ambiguous" or not isinstance(quotation, str)):
                 break
             start, end = location.get("character_start"), location.get("character_end")
             if (type(start) is not int or type(end) is not int or start < 0 or end <= start or end > len(source.text) or
@@ -86,30 +87,43 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         if len(located) != len(citations):
             omitted.append(index)
             continue
-        # Prefer surrounding context, but if it does not fit, submit the
-        # exact quotations with less context and allow an uncertain verdict.
-        # Never truncate a quotation or exceed the byte budget.
-        for radius in (180, 90, 0):
-            excerpts = []
-            item_segments = []
-            for source, start, end in located:
-                left, right = max(0, start - radius), min(len(source.text), end + radius)
-                excerpts.append({"source_id": source.source_id, "text": source.text[left:right],
-                                 "quotation": source.text[start:end],
-                                 "quotation_start": start - left, "quotation_end": end - left,
-                                 "context_radius_characters": radius})
-                item_segments.append({"claim_index": index, "source_id": source.source_id,
-                                      "character_start": left, "character_end": right, "context_radius": radius})
-            payload["claims"].append({"claim_index": index, "text": text, "excerpts": excerpts})
-            if len(serialize().encode("utf-8")) <= max_bytes:
-                break
+        # Reserve exact quotations for as many claims as fit before spending
+        # the remaining budget on extra context for earlier claims.
+        payload["claims"].append(_review_item(index, text, located, 0)[0])
+        if len(serialize().encode("utf-8")) > max_bytes:
             payload["claims"].pop()
-        else:
             omitted.append(index)
             continue
         indexes.append(index)
-        segments.extend(item_segments)
+        accepted.append((index, text, located))
+    # Expand in rounds so one claim cannot consume all spare context while
+    # another still has only an exact quotation. Never truncate a quotation.
+    radii = [0] * len(accepted)
+    for radius in (90, 180):
+        for position, (index, text, located) in enumerate(accepted):
+            previous = payload["claims"][position]
+            payload["claims"][position] = _review_item(index, text, located, radius)[0]
+            if len(serialize().encode("utf-8")) <= max_bytes:
+                radii[position] = radius
+            else:
+                payload["claims"][position] = previous
+    segments = []
+    for (index, text, located), radius in zip(accepted, radii):
+        segments.extend(_review_item(index, text, located, radius)[1])
     return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments)
+
+
+def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int, int]], radius: int) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
+    excerpts = []
+    segments: list[dict[str, int | str]] = []
+    for source, start, end in located:
+        left, right = max(0, start - radius), min(len(source.text), end + radius)
+        excerpts.append({"source_id": source.source_id, "text": source.text[left:right],
+                         "quotation": source.text[start:end], "quotation_start": start - left,
+                         "quotation_end": end - left, "context_radius_characters": radius})
+        segments.append({"claim_index": index, "source_id": source.source_id,
+                         "character_start": left, "character_end": right, "context_radius": radius})
+    return {"claim_index": index, "text": text, "excerpts": excerpts}, segments
 
 
 def apply_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> list[dict]:

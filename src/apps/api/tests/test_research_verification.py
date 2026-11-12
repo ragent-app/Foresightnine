@@ -30,13 +30,14 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v2"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v3"
     assert len(batch.prompt_sha256) == 64
 
 
 @pytest.mark.parametrize("item,src", [
     (claim(), source(model=False)), (claim(), source(display=False)),
     (claim(quotation="invented"), source()),
+    ({**claim(), "citations": [{**claim()["citations"][0], "partial_token": True}]}, source()),
     (claim(location={"status": "ambiguous", "matches": []}), source()),
     ({**claim(), "support_status": "incomplete"}, source()),
     ({**claim(), "uncited_amounts": ["100万美元"]}, source()),
@@ -68,3 +69,15 @@ def test_review_reduces_context_to_fit_without_truncating_the_quote():
     assert batch.segments[0]["context_radius"] < 180
     excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
     assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == "Revenue 100"
+
+
+def test_review_reserves_budget_for_multiple_claims_before_extra_context():
+    report = source().model_copy(update={"text": "x" * 200 + "Revenue 100" + "y" * 200})
+    item = claim(location={"character_start": 200, "character_end": 211})
+    batch = prepare_support_review([item, item, item], [report], 850)
+    assert batch.indexes == [0, 1, 2] and not batch.omitted
+    assert len(batch.prompt.encode("utf-8")) <= 850
+    assert any(segment["context_radius"] < 180 for segment in batch.segments)
+    for entry in json.loads(batch.prompt)["claims"]:
+        excerpt = entry["excerpts"][0]
+        assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == "Revenue 100"
