@@ -12,7 +12,7 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from itertools import islice
@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v24"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v25"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -543,6 +543,85 @@ def _financial_table_windows(text: str, question: str, size: int,
     return [(start, text[start:end])]
 
 
+def _structured_observation_windows(text: str, question: str, size: int,
+                                    should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
+    """Retain unambiguous annual JSON observations and their source metadata.
+
+    This is a bounded retrieval hint, not validation of an issuer, period,
+    metric or source. Ambiguous or nonconforming documents use normal ranking.
+    """
+    years = set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", question))
+    if len(years) != 2 or len(text) > 100_000 or not text.lstrip().startswith("{"):
+        return None
+    def unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Duplicate JSON key")
+            result[key] = value
+        return result
+    def reject_constant(_value: str) -> None:
+        raise ValueError("Non-finite JSON constant")
+    try:
+        root = json.loads(text, parse_float=Decimal, parse_constant=reject_constant, object_pairs_hook=unique_pairs)
+        if not isinstance(root, dict) or not all(isinstance(root.get(k), str) and root[k] for k in ("issuer", "concept", "unit")):
+            return None
+        leaves = list(islice(re.finditer(r"\{[^{}]{1,1000}\}", text), 257))
+        if not leaves or len(leaves) > 256:
+            return None
+        found: dict[str, list[tuple[int, int]]] = {year: [] for year in years}
+        field_pattern = re.compile(r'"(start|end|val|fy)"\s*:\s*("(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)')
+        for leaf in leaves:
+            if should_stop is not None and should_stop():
+                raise AnalysisInterrupted()
+            item = json.loads(leaf.group(), parse_float=Decimal, parse_constant=reject_constant, object_pairs_hook=unique_pairs)
+            if not isinstance(item, dict) or not isinstance(item.get("start"), str) or not isinstance(item.get("end"), str):
+                continue
+            if any(key in item and item[key] != root[key] for key in ("issuer", "concept", "unit")):
+                return None
+            value = item.get("val")
+            if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
+                continue
+            number = Decimal(value)
+            if not number.is_finite() or len(number.as_tuple().digits) > 30 or abs(number.adjusted()) > 30:
+                continue
+            try:
+                start, end = date.fromisoformat(item["start"]), date.fromisoformat(item["end"])
+            except ValueError:
+                continue
+            year = str(end.year)
+            if year not in found or not 330 <= (end - start).days <= 400:
+                continue
+            fields = list(field_pattern.finditer(leaf.group()))
+            names = {field.group(1) for field in fields}
+            if len(fields) != len(names) or not {"start", "end", "val"}.issubset(names):
+                continue
+            # Include the fiscal-year label when present as well as the
+            # start, end and value, without implying a complete observation.
+            found[year].append((leaf.start() + min(field.start() for field in fields),
+                                leaf.start() + max(field.end() for field in fields)))
+        if any(len(spans) != 1 for spans in found.values()):
+            return None
+        records = [spans[0] for spans in found.values()]
+        prefix = text[:min(start for start, _ in records)]
+        metadata = []
+        for key in ("issuer", "concept", "unit"):
+            pattern = re.compile(r'"' + key + r'"\s*:\s*("(?:\\.|[^"\\])*")')
+            matching = [match for match in pattern.finditer(prefix) if json.loads(match.group(1)) == root[key]]
+            if len(matching) != 1:
+                return None
+            metadata.append((matching[0].start(), matching[0].end()))
+        meta = (min(start for start, _ in metadata), max(end for _, end in metadata))
+        if meta[1] - meta[0] > 320:
+            return None
+        spans = sorted([meta, *records])
+        if any(left[1] > right[0] for left, right in zip(spans, spans[1:])) or sum(end - start for start, end in spans) > size:
+            return None
+        return [(start, text[start:end]) for start, end in spans]
+    except (ValueError, TypeError, OverflowError, RecursionError, InvalidOperation):
+        return None
+
+
 def _select_windows(text: str, question: str, length: int, count: int,
                     should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
     """Select bounded, non-overlapping passages with original-text offsets."""
@@ -839,36 +918,43 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # remaining source; unused shares roll forward to later sources.
         current_bytes = len(serialize().encode("utf-8"))
         source_budget_limit = current_bytes + max(0, max_prompt_chars - current_bytes) // (len(eligible) - index)
+        structured_parts = (_structured_observation_windows(selection_text, question, max_size, should_stop)
+                            if source.retrieval_method != "user_pdf" else None)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
-            if split and size >= 2:
-                windows = _policy_vote_windows(selection_text, question, size, should_stop)
-                if windows is None:
-                    windows = _asset_purchase_window(selection_text, question, size, should_stop)
-                if windows is None:
-                    windows = _financial_table_windows(selection_text, question, size, should_stop)
-                if windows is None:
-                    windows = _comparison_windows(selection_text, question, size, should_stop)
-                if windows is None:
-                    windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop), key=lambda item: item[0])
-            else:
-                windows = [_select_window(selection_text, question, size, should_stop)]
+            windows = (structured_parts if structured_parts and
+                       sum(len(part) for _, part in structured_parts) <= size else None)
+            if windows is None:
+                if split and size >= 2:
+                    windows = _policy_vote_windows(selection_text, question, size, should_stop)
+                    if windows is None:
+                        windows = _asset_purchase_window(selection_text, question, size, should_stop)
+                    if windows is None:
+                        windows = _financial_table_windows(selection_text, question, size, should_stop)
+                    if windows is None:
+                        windows = _comparison_windows(selection_text, question, size, should_stop)
+                    if windows is None:
+                        windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop), key=lambda item: item[0])
+                else:
+                    windows = [_select_window(selection_text, question, size, should_stop)]
             windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
             return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                     for start, part in windows]
 
         def source_payload(parts: list[tuple[int, str]]) -> list[dict[str, Any]]:
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
-            return [{"source_id": source.source_id, "title": source.title,
+            structured = structured_parts is not None and parts == structured_parts
+            return [{"source_id": source.source_id,
+                     **({"title": source.title} if not structured or position == 0 else {}),
                      "source_coverage": coverage,
                      **({"user_selected_passage": re.sub(r"[ \t]{2,}", "\t", source.text[focus[1]:focus[2]])
                           if source.retrieval_method == "user_pdf" else source.text[focus[1]:focus[2]]}
                         if focus is not None and source.source_id == focus[0] and
                         start <= focus[1] and start + len(passage) >= focus[2] else {}),
-                     **({"declared_published_at": source.published_at.isoformat()} if source.published_at else {}),
-                     **({"declared_revised_at": source.revised_at.isoformat()} if source.revised_at else {}),
-                     **({"declared_event_at": source.event_at.isoformat()} if source.event_at else {}),
+                     **({"declared_published_at": source.published_at.isoformat()} if source.published_at and (not structured or position == 0) else {}),
+                     **({"declared_revised_at": source.revised_at.isoformat()} if source.revised_at and (not structured or position == 0) else {}),
+                     **({"declared_event_at": source.event_at.isoformat()} if source.event_at and (not structured or position == 0) else {}),
                      "text": re.sub(r"[ \t]{2,}", "\t", passage) if source.retrieval_method == "user_pdf" else passage}
-                    for start, passage in parts]
+                    for position, (start, passage) in enumerate(parts)]
 
         def fits(candidate: list[tuple[int, str]]) -> bool:
             data["sources"].extend(source_payload(candidate))

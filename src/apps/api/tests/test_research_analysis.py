@@ -1088,3 +1088,43 @@ def test_traditional_chinese_policy_query_selects_decision_not_other_rate():
     assert any('target range for the federal funds rate to 3-3/4 to 4 percent' in item['text'] for item in prompts[0]['sources'])
     assert result.prompt_bytes <= 2055
     assert all(text[seg['character_start']:seg['character_end']] == part['text'] for seg, part in zip(result.segments, prompts[0]['sources']))
+
+
+def test_structured_annual_observations_keep_period_value_and_issuer_within_budget():
+    from app.research_analysis import _structured_observation_windows
+    data = {'issuer': 'Example Corp', 'concept': 'Revenue', 'unit': 'USD', 'notes': 'unrelated ' * 180,
+            'records': [{'start': '2021-07-01', 'end': '2022-06-30', 'val': 100, 'fy': 2023},
+                        {'start': '2022-07-01', 'end': '2023-06-30', 'val': 120, 'fy': 2023}]}
+    text = json.dumps(data, indent=2)
+    question = 'Compare revenue for 2022 and 2023.'
+    windows = _structured_observation_windows(text, question, 1000)
+    assert windows and len(windows) == 3
+    assert 'Example Corp' in windows[0][1] and 'USD' in windows[0][1]
+    assert '2022-06-30' in windows[1][1] and '100' in windows[1][1] and '"fy": 2023' in windows[1][1]
+    assert '2023-06-30' in windows[2][1] and '120' in windows[2][1]
+    assert all(text[start:start + len(part)] == part for start, part in windows)
+    assert _structured_observation_windows(text, question, 20) is None
+    duplicate = {**data, 'records': [*data['records'], data['records'][0]]}
+    assert _structured_observation_windows(json.dumps(duplicate), question, 1000) is None
+    mismatch = {**data, 'records': [data['records'][0], {**data['records'][1], 'unit': 'EUR'}]}
+    assert _structured_observation_windows(json.dumps(mismatch), question, 1000) is None
+    quarter = {**data, 'records': [data['records'][0], {**data['records'][1], 'start': '2023-04-01'}]}
+    assert _structured_observation_windows(json.dumps(quarter), question, 1000) is None
+    duplicate_key = text.replace('"issuer": "Example Corp"', '"issuer": "Example Corp", "issuer": "Other"')
+    assert _structured_observation_windows(duplicate_key, question, 1000) is None
+    assert _structured_observation_windows(text[:-2], question, 1000) is None
+    assert _structured_observation_windows(text, 'Compare 2022, 2023 and 2024.', 1000) is None
+    with pytest.raises(AnalysisInterrupted):
+        _structured_observation_windows(text, question, 1000, lambda: True)
+    captured = []
+    def generate(prompt):
+        payload = json.loads(prompt);captured.append(payload)
+        parts = payload['sources']
+        return {'claims': [], 'facts': [
+            {'fact_id': 'prior', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2022', 'citation': {'source_id': 's', 'quotation': parts[1]['text']}},
+            {'fact_id': 'current', 'label': 'Revenue', 'value': '120', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2023', 'citation': {'source_id': 's', 'quotation': parts[2]['text']}}],
+            'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}, 5
+    result = analyze(question, [source('s', text=text)], None, generate, max_prompt_chars=2055)
+    assert len(captured[0]['sources']) == 3 and result.prompt_bytes <= 2055
+    assert result.calculations[0]['value'] == '20.00'
+    assert all(text[f['location']['character_start']:f['location']['character_end']] == f['quotation'] for f in result.facts)
