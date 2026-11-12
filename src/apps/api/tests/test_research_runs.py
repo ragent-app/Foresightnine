@@ -1691,3 +1691,43 @@ def test_reclassifying_findings_preserves_quotes_but_invalidates_review(monkeypa
         assert new['authorship'] == 'user' and 'support_review' not in new
     assert latest['content']['claims'][1]['support_status'] == 'incomplete'
     assert saved.json()['versions'][-2]['content']['claims'] == before
+
+
+def test_table_calculation_alignment_warning_keeps_run_partial(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    class Provider:
+        name = 'table-alignment-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def fact(fid, value, year):
+                return {'fact_id': fid, 'label': 'Revenue', 'value': value, 'unit': 'million', 'currency': 'USD',
+                        'period': year, 'citation': {'source_id': source_id, 'quotation': 'USD ' + value}}
+            return {'claims': [{'text': 'Revenue was reported.', 'citations': [{'source_id': source_id, 'quotation': 'Revenue | USD 100 | USD 90'}]}],
+                    'facts': [fact('a','100','2024'), fact('b','90','2023')],
+                    'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'a', 'second_fact_id': 'b'}]}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'alignment-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title': 'Report',
+        'text': '| Year Ended | 2024 | 2023 |\n| Revenue | USD 100 | USD 90 |',
+        'permissions': {'store': True, 'model_input': True, 'display': True, 'export': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Review revenue', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'table-alignment'},
+        json={'parent_version_id': topic['versions'][0]['version_id'], 'require_counterarguments': False}).json()
+    op = receipt['operation']['operation_id']
+    for _ in range(100):
+        status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    current = client.get(path, headers=headers).json()['versions'][-1]
+    content = current['content']
+    assert content['run']['status'] == 'partial'
+    assert all(item['table_alignment_unverified'] for item in content['facts'])
+    assert content['calculations'][0]['value'] == '11.11'
+    exported = client.get(path + '/versions/' + current['version_id'] + '/export', headers=headers)
+    assert exported.status_code == 200
+    assert all(item['table_alignment_unverified'] for item in exported.json()['version']['content']['facts'])

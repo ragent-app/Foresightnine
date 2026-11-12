@@ -63,6 +63,19 @@ def quotation_is_inside_table_row(source_text: str, start: object, quotation: ob
     return source_text[line_start:start].lstrip().startswith("|")
 
 
+def quotation_is_table_row(source_text: str, start: object, quotation: object) -> bool:
+    """Recognize a uniquely located single-line table quotation, including a fragment."""
+    if (type(start) is not int or not isinstance(quotation, str) or not quotation or
+            "\n" in quotation or start < 0 or source_text[start:start + len(quotation)] != quotation):
+        return False
+    line_start = source_text.rfind("\n", 0, start) + 1
+    line_end = source_text.find("\n", start)
+    if line_end < 0:
+        line_end = len(source_text)
+    row = source_text[line_start:line_end].strip()
+    return row.startswith("|") and row.endswith("|") and row.count("|") >= 3
+
+
 def table_currency_quote_missing(currency: str | None, quotation: str | None) -> bool:
     """Flag a table-row quotation without an explicit currency identifier.
 

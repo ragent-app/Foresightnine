@@ -317,13 +317,16 @@ def test_edited_table_fragment_preserves_currency_warning(monkeypatch):
     assert first.status_code == 201, first.text
     original = first.json()['versions'][-1]
     assert original['content']['facts'][0]['currency_quote_missing'] is True
+    assert original['content']['facts'][0]['table_alignment_unverified'] is True
     edited = deepcopy(original['content'])
     edited['facts'][0]['period'] = '2023'
     edited['facts'][0]['currency_quote_missing'] = False
+    edited['facts'][0]['table_alignment_unverified'] = False
     second = client.post(path + '/versions', headers=headers, json={'parent_version_id': original['version_id'], 'content': edited})
     assert second.status_code == 201, second.text
     current = second.json()['versions'][-1]
     assert current['content']['facts'][0]['currency_quote_missing'] is True
+    assert current['content']['facts'][0]['table_alignment_unverified'] is True
     assert client.get(path, headers=headers).json()['versions'][-1]['content']['facts'][0]['currency_quote_missing'] is True
     corrected = deepcopy(current['content'])
     quote = 'Revenue | USD 200'
@@ -332,3 +335,4 @@ def test_edited_table_fragment_preserves_currency_warning(monkeypatch):
     third = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': corrected})
     assert third.status_code == 201, third.text
     assert not third.json()['versions'][-1]['content']['facts'][0].get('currency_quote_missing')
+    assert third.json()['versions'][-1]['content']['facts'][0]['table_alignment_unverified'] is True

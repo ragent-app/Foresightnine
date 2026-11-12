@@ -96,7 +96,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
@@ -1722,6 +1722,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
             if currency_value_conflict(numeric.currency, numeric.value, quote):
                 fact["currency_conflict_unverified"] = True
             fact.pop("currency_quote_missing", None)
+            fact.pop("table_alignment_unverified", None)
             if not is_percent_unit(numeric.unit) and table_currency_quote_missing(numeric.currency, quote):
                 fact["currency_quote_missing"] = True
             if fact.get("source_id") is not None:
@@ -1750,6 +1751,8 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                             elif checked.get("partial_token"):
                                 warnings.append("quotation_partial")
                             else:
+                                if quotation_is_table_row(source.text, location.get("character_start"), quote):
+                                    fact["table_alignment_unverified"] = True
                                 if (not is_percent_unit(numeric.unit) and
                                         quotation_is_inside_table_row(source.text, location.get("character_start"), quote) and
                                         table_currency_quote_missing(numeric.currency, "|" + quote)):

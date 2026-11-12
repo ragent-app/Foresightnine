@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row
 
 
 SYSTEM_PROMPT = (
@@ -1422,6 +1422,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     numeric_facts: dict[str, NumericFact] = {}
     currency_context_noted = False
     currency_quote_noted = False
+    table_alignment_noted = False
     currency_conflict_noted = False
     directional_context_noted = False
     ambiguous_fact_noted = False
@@ -1463,6 +1464,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         currency_quote_missing = (not is_percent_unit(item.unit) and
                                   table_currency_quote_missing(item.currency,
                                       ("|" + quotation) if table_substring else quotation))
+        table_alignment_unverified = (location.get("status") != "ambiguous" and
+                                      quotation_is_table_row(source.text, quote_start, quotation))
         currency_conflict = currency_value_conflict(item.currency, item.value, quotation)
         ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:
@@ -1472,6 +1475,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if currency_quote_missing and not currency_quote_noted:
             limitations.append("A table fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.")
             currency_quote_noted = True
+        if table_alignment_unverified and not table_alignment_noted:
+            limitations.append("Table column alignment is not established; verify each value, period and unit against the source before relying on calculations.")
+            table_alignment_noted = True
         if currency_conflict and not currency_conflict_noted:
             limitations.append("A fact's currency conflicts with an explicit currency cue on the same quoted value; it was excluded from automatic calculations pending review.")
             currency_conflict_noted = True
@@ -1487,6 +1493,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
             **({"currency_context_unverified": True} if currency_context else {}),
             **({"currency_quote_missing": True} if currency_quote_missing else {}),
+            **({"table_alignment_unverified": True} if table_alignment_unverified else {}),
             **({"currency_conflict_unverified": True} if currency_conflict else {}),
             **({"direction_context_unverified": True} if direction_context else {}),
             **({"numeric_normalization": "thousands_separator"} if item.fact_id in normalized_grouped_ids else {}),

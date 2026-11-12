@@ -1359,3 +1359,16 @@ def test_currency_warning_for_quotation_inside_table_row():
     result = analyze('Review revenue.', [source('s', text=text)], None, lambda _: (raw, 1))
     assert result.facts[0]['currency_quote_missing'] is True
     assert 'currency_quote_missing' not in result.facts[1]
+
+
+def test_table_fact_and_calculation_require_column_alignment_review():
+    text = '| Year Ended | 2024 | 2023 |\n| Revenue | USD 100 | USD 90 |\nCash was USD 80.'
+    raw = {'facts': [
+        {'fact_id':'a', 'label':'Revenue', 'value':'100', 'unit':'million', 'currency':'USD', 'period':'2024', 'citation':{'source_id':'s','quotation':'Revenue | USD 100'}},
+        {'fact_id':'b', 'label':'Revenue', 'value':'90', 'unit':'million', 'currency':'USD', 'period':'2023', 'citation':{'source_id':'s','quotation':'USD 90'}},
+        {'fact_id':'c', 'label':'Cash', 'value':'80', 'unit':'million', 'currency':'USD', 'period':'2024', 'citation':{'source_id':'s','quotation':'Cash was USD 80'}}],
+        'calculations': [{'formula':'growth_percent', 'first_fact_id':'a', 'second_fact_id':'b'}]}
+    result = analyze('Compare revenue.', [source('s', text=text)], None, lambda _: (raw, 1))
+    assert [item.get('table_alignment_unverified', False) for item in result.facts] == [True, True, False]
+    assert result.calculations[0]['value'] == '11.11'
+    assert any('Table column alignment is not established' in note for note in result.limitations)

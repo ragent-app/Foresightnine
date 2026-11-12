@@ -54,7 +54,7 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
   items(c.facts).forEach((fact, i) => {
     lines.push(`\n${label("Figure", "数值")} ${i + 1}`);
     for (const [key, a, b] of [["fact_id","ID","标识"],["label","Metric","指标"],["value","Value","数值"],["unit","Unit","单位"],["currency","Currency","币种"],["period","Period","期间"],["verification","Verification","核验状态"],["authorship","Authorship","作者类型"],["source_id","Source ID","来源标识"],["quotation","Quotation","引文"],["location","Location","位置"]] as const) add(label(a,b), fact[key]);
-    for (const key of ["currency_context_unverified", "currency_quote_missing", "currency_conflict_unverified", "direction_context_unverified", "source_value_warnings", "numeric_normalization", "range_parent_id"]) if (fact[key] !== undefined) add(key, fact[key]);
+    for (const key of ["currency_context_unverified", "currency_quote_missing", "table_alignment_unverified", "currency_conflict_unverified", "direction_context_unverified", "source_value_warnings", "numeric_normalization", "range_parent_id"]) if (fact[key] !== undefined) add(key, fact[key]);
   });
   section(label("Calculations", "计算"));
   empty(items(c.calculations).length);
