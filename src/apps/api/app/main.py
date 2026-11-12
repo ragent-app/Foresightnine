@@ -1681,6 +1681,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                                     citation["support_status"] = "not_independently_verified"
                     if field == "facts":
                         entry.pop("numeric_normalization", None)
+                        entry.pop("range_parent_id", None)
         for entry in content.calculations:
             entry["input_status"] = calculation_input_status(entry, content.facts)
         content.claims = suggest_percentage_evidence(content.claims, content.facts)

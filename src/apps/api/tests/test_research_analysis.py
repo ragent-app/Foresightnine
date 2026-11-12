@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, analyze, _select_window, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, analyze, _select_window, _select_windows, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions
 
@@ -46,6 +46,20 @@ def test_fraction_fact_with_matching_unit_is_normalized_and_checked_against_sour
     result = analyze("target?", [report], None, lambda _: (raw, 10))
     assert result.facts[0]["value"] == "0.5"
     assert result.facts[0]["numeric_normalization"] == "exact_fraction"
+
+
+def test_explicit_rate_range_is_split_into_source_checked_bounds():
+    report = source("s", text="The target range was 4-1/4 to 4-1/2 percent.")
+    citation = {"source_id": "s", "quotation": "4-1/4 to 4-1/2 percent"}
+    raw = {"facts": [{"fact_id": "range", "label": "Target range", "value": "4-1/4 to 4-1/2 percent",
+                       "unit": "percent", "currency": None, "period": "2024", "citation": citation}]}
+    result = analyze("Target?", [report], None, lambda _: (raw, 10))
+    assert [(fact["fact_id"], fact["value"]) for fact in result.facts] == [("range:lower", "4.25"), ("range:upper", "4.5")]
+    assert all(fact["numeric_normalization"] == "exact_range_bound" and fact["range_parent_id"] == "range" for fact in result.facts)
+    reversed_range = {"facts": [{**raw["facts"][0], "value": "4-1/2 to 4-1/4 percent"}]}
+    assert analyze("Target?", [report], None, lambda _: (reversed_range, 10)).facts == []
+    bad_quote = {"facts": [{**raw["facts"][0], "citation": {"source_id": "s", "quotation": "4-1/4"}}]}
+    assert [fact["value"] for fact in analyze("Target?", [report], None, lambda _: (bad_quote, 10)).facts] == ["4.25"]
 
 
 def test_only_authorized_sources_are_sent_and_quotes_must_be_real():
@@ -153,6 +167,24 @@ def test_expands_ellipsis_only_to_a_unique_continuous_original_span():
         assert item["quotation_match"] == "expanded_ellipsis"
         assert item["quotation"] == "Unit USD millions; intervening context; Revenue 91471"
         assert report.text[loc["character_start"]:loc["character_end"]] == item["quotation"]
+
+
+def test_expands_unspaced_ellipsis_to_continuous_json_source():
+    report = source("s", text='{"issuer":"Example","unit":"USD millions","period":"2024","revenue":100}')
+    quote = '{"issuer":"Example","unit":"USD millions",..."revenue":100}'
+    result = analyze("Revenue?", [report], None, lambda _: ({"claims": [{"text": "Revenue",
+        "citations": [{"source_id": "s", "quotation": quote}]}]}, 10))
+    citation = result.claims[0]["citations"][0]
+    assert citation["quotation"] == report.text and citation["quotation_match"] == "expanded_ellipsis"
+
+
+def test_month_and_year_comparison_select_distinct_prose_passages():
+    paragraph_a = "From the preceding month, the PCE price index increased 0.1 percent."
+    paragraph_b = "From the same month one year ago, the PCE price index increased 2.1 percent."
+    report = ("PCE price index 2025 table. " * 350) + paragraph_a + (" neutral filler " * 80) + paragraph_b + ("PCE price index 2025. " * 350)
+    windows = _select_windows(report, "2025 年 PCE 价格指数较上月和较上年同期分别变化多少？", 300, 2)
+    assert any("0.1 percent" in part and "preceding month" in part for _, part in windows)
+    assert any("2.1 percent" in part and "same month one year" in part for _, part in windows)
 
 
 def test_expanded_ellipsis_does_not_hide_ambiguity_or_cross_the_length_limit():

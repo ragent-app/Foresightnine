@@ -33,7 +33,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v5"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v6"
 
 
 class Citation(BaseModel):
@@ -94,6 +94,8 @@ class AnalysisInterrupted(Exception):
 
 _NUMBER = re.compile(r"(?<![\w.])\(?\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)?(?![\w.])")
 _FRACTION = re.compile(r"(?<![\w./-])(-\s*)?(?:(\d+)-)?(\d+)/(\d+)(?![\w./-])")
+_RATE_PART = r"-?(?:\d+(?:-\d+)?/\d+|\d+(?:\.\d+)?)"
+_RATE_RANGE = re.compile(rf"^({_RATE_PART})\s*(?:\bto\b|[–—])\s*({_RATE_PART})$", re.IGNORECASE)
 
 
 def _quoted_numbers(quotation: str) -> set[Decimal]:
@@ -133,6 +135,30 @@ def _quoted_numbers(quotation: str) -> set[Decimal]:
             number = Decimal(whole) + Decimal(numerator) / Decimal(denominator)
             values.add(-number if sign else number)
     return values
+
+
+def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
+    """Split an explicit finite percentage range into independently checked bounds."""
+    match = _RATE_RANGE.fullmatch(value)
+    fact_id, label = fact.get("fact_id"), fact.get("label")
+    if (not match or unit.casefold() not in {"percent", "percentage", "%"} or fact.get("currency") is not None or
+            not isinstance(fact_id, str) or not fact_id or len(fact_id) > 190 or
+            not isinstance(label, str) or not label or len(label) > 280):
+        return None
+    parts = [_quoted_numbers(part) for part in match.groups()]
+    if any(len(values) != 1 for values in parts):
+        return None
+    lower, upper = (next(iter(values)) for values in parts)
+    if not lower < upper:
+        return None
+    split = [{**fact, "fact_id": fact_id + suffix, "label": label + label_suffix, "value": str(number)}
+             for suffix, label_suffix, number in ((":lower", " (lower bound)", lower), (":upper", " (upper bound)", upper))]
+    try:
+        for item in split:
+            ModelFact.model_validate(item)
+    except ValidationError:
+        return None
+    return split
 
 
 def prepare_sources(sources: list[ResearchSource], as_of: datetime | None) -> tuple[list[ResearchSource], list[str]]:
@@ -187,6 +213,9 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "通胀": ("inflation", "price"), "利率": ("interest", "rate"),
         "国内生产": ("gdp", "product"),
         "全年": ("annual",), "实际": ("real",), "季度": ("quarter",),
+        "价格指数": ("price", "index"), "环比": ("preceding", "month"),
+        "较上月": ("preceding", "month"), "同比": ("year", "month"),
+        "较上年同期": ("year", "month"),
         "联邦基金": ("federal", "funds"), "目标区间": ("target", "range"),
         "变化幅度": ("lower", "increase", "decrease"),
     }.items():
@@ -206,6 +235,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
     groups = list(dict.fromkeys(synonyms.get(term, (term,)) for term in words))
     wants_annual_levels = ("full-year" in lower or "full year" in lower or "全年" in lower or
                            bool(re.search(r"\bannual\s+(?:real\s+)?(?:gdp|growth|revenue|income)\b", lower)))
+    wants_month_comparison = any(term in lower for term in ("环比", "较上月", "month-on-month", "preceding month", "monthly"))
+    wants_year_comparison = any(term in lower for term in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))
     ranked: list[tuple[int, int]] = []
     seen: set[int] = set()
     # Cap scanning work for multi-megabyte material; unexamined ranges remain
@@ -234,6 +265,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
         score = (sum(100 + min(count, 4) * 3 for count in counts if count) +
                  sum(25 + min(count, 4) * 5 for count in year_counts if count))
         if wants_annual_levels and re.search(r"\b(?:annual (?:level|average)|calendar year|full[- ]year|year ended)\b", passage):
+            score += 350
+        if wants_month_comparison and re.search(r"\b(?:preceding|previous)\s+month\b", passage):
+            score += 350
+        if wants_year_comparison and re.search(r"\bsame\s+month\s+one\s+year\b", passage):
             score += 350
         ranked.append((score, start))
     ranked.sort(key=lambda item: (-item[0], item[1]))
@@ -336,6 +371,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     # calculator. Drop only those facts, disclose the omission, and continue
     # validating all remaining claims and citations against the source.
     normalized_fraction_ids: set[str] = set()
+    normalized_range_ids: dict[str, str] = {}
     if isinstance(raw, dict) and isinstance(raw.get("facts"), list) and len(raw["facts"]) <= 100:
         valid_facts = []
         omitted_facts = 0
@@ -346,6 +382,14 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 unit = fact["unit"].strip()
                 if value.casefold().endswith(" " + unit.casefold()):
                     value = value[:-(len(unit) + 1)].strip()
+                split = _split_rate_range(fact, value, unit)
+                if split is not None:
+                    if len(valid_facts) + 2 <= 100:
+                        valid_facts.extend(split)
+                        normalized_range_ids.update({item["fact_id"]: fact["fact_id"] for item in split})
+                    else:
+                        omitted_facts += 1
+                    continue
                 match = _FRACTION.fullmatch(value)
                 if match:
                     values = _quoted_numbers(value)
@@ -356,10 +400,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 validated = ModelFact.model_validate(fact)
                 if normalized_fraction:
                     normalized_fraction_ids.add(validated.fact_id)
-                valid_facts.append(fact)
+                if len(valid_facts) < 100:
+                    valid_facts.append(fact)
+                else:
+                    omitted_facts += 1
             except ValidationError:
                 omitted_facts += 1
-        if omitted_facts or normalized_fraction_ids:
+        if omitted_facts or normalized_fraction_ids or normalized_range_ids:
             raw = {**raw, "facts": valid_facts}
         if omitted_facts:
             limitations.append(f"{omitted_facts} model-generated numeric fact(s) were omitted because their format was invalid.")
@@ -401,7 +448,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             # Accept it only when every fragment occurs in order in ONE
             # analyzed passage and replace it with the entire continuous
             # original span. Never stitch passages or hide intervening text.
-            fragments = re.split(r"\s+(?:\.{3}|…)\s+", quotation)
+            fragments = re.split(r"\s*(?:\.{3}|…)\s*", quotation)
             if 2 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments):
                 patterns = [pattern_for(part.strip()) for part in fragments]
                 first_count = 0
@@ -460,6 +507,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         checked_facts.append({**numeric_facts[item.fact_id].model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),
+            **({"numeric_normalization": "exact_range_bound", "range_parent_id": normalized_range_ids[item.fact_id]}
+               if item.fact_id in normalized_range_ids else {}),
             "location": location,
             "verification": "model_extraction_not_independently_verified"})
 
