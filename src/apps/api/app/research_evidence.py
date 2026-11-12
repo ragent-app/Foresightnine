@@ -86,6 +86,20 @@ _PLURAL_SOURCE_SCOPE = re.compile(
     r"\b(?:sources|documents|reports|filings|releases)\b|"
     r"\bno\s+(?:(?:available|provided|supplied)\s+)?(?:source|document|report|filing|release)\b|"
     r"(?:所有|全部|这些|這些|各个|各個)(?:来源|來源|资料|資料|文件|报告|報告|原文|公告)", re.IGNORECASE)
+_UNQUALIFIED_OPPOSITION_ABSENCE = re.compile(
+    r"(?:没有|沒有|无|無|未发现|未發現)(?:任何)?(?:反对性|反對性|反方|相反|反证|反證)(?:证据|證據)|"
+    r"\bno\s+(?:opposing|contrary)\s+evidence\b", re.IGNORECASE)
+_EXCERPT_SCOPE = re.compile(r"\b(?:excerpts?|passages?|quotations?|snippets?)\b|摘录|摘錄|节选|節選|片段", re.IGNORECASE)
+
+
+def _unqualified_opposition_absence(text: str) -> bool:
+    for match in _UNQUALIFIED_OPPOSITION_ABSENCE.finditer(text):
+        left = max((text.rfind(mark, 0, match.start()) for mark in '.!?。！？;；'), default=-1) + 1
+        after = [text.find(mark, match.end()) for mark in '.!?。！？;；']
+        right = min((pos for pos in after if pos >= 0), default=len(text))
+        if not _EXCERPT_SCOPE.search(text[left:right]):
+            return True
+    return False
 
 
 def flag_partial_source_absence(claims: list[dict], sources: list[ResearchSource], segments: list[dict]) -> list[dict]:
@@ -117,10 +131,11 @@ def flag_partial_source_absence(claims: list[dict], sources: list[ResearchSource
         text = entry.get('text')
         citations = entry.get('citations')
         ids = {item.get('source_id') for item in citations if isinstance(item, dict) and isinstance(item.get('source_id'), str)} if isinstance(citations, list) else set()
-        relevant = (source_map.keys() if isinstance(text, str) and _PLURAL_SOURCE_SCOPE.search(text)
+        unqualified_absence = isinstance(text, str) and _unqualified_opposition_absence(text)
+        relevant = (source_map.keys() if isinstance(text, str) and (_PLURAL_SOURCE_SCOPE.search(text) or unqualified_absence)
                     else (ids & source_map.keys()) or source_map.keys())
         if (entry.get('authorship') != 'user' and isinstance(text, str) and len(text) <= 3000 and
-                _SOURCE_ABSENCE.search(text) and any(not coverage[source_id] for source_id in relevant)):
+                (_SOURCE_ABSENCE.search(text) or unqualified_absence) and any(not coverage[source_id] for source_id in relevant)):
             entry['source_scope_absence_unverified'] = True
         result.append(entry)
     return result
@@ -1373,7 +1388,17 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
 def _difference_label(label: str) -> str:
     # Ignore only an explicit, trailing release qualifier; accounting basis,
     # geography and other parenthetical details remain part of the label.
-    return re.sub(r"\s*[（(]\s*(?:\d{1,2}\s*月)?(?:公告|发布稿)(?:初值|修订值|修订)?\s*[）)]\s*$", "", label).strip()
+    match = re.search(r"\s*[（(]\s*(?:(?:\d{1,2}\s*月)?(?:公告|发布稿)(?:初值|修订值|修订)?|"
+                      r"(?P<release_date>(?:19|20)\d{2}-\d{2}-\d{2})\s*(?:发布|發布|公布)"
+                      r"(?:\s*[,，]\s*(?:初值|修订值|修訂值|修订|修訂))?)\s*[）)]\s*$", label)
+    if not match:
+        return label.strip()
+    if match.group('release_date'):
+        try:
+            date.fromisoformat(match.group('release_date'))
+        except ValueError:
+            return label.strip()
+    return label[:match.start()].strip()
 
 
 def _difference_period(period: str) -> str:

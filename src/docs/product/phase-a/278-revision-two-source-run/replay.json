@@ -1,0 +1,35 @@
+{
+  "model_calls": 0,
+  "result_sha256": "efb8eeafdd4feb53a6546cedb7f7ea66aaa96a456fd866f86ce761fbad6a37e9",
+  "evidence_differences": [
+    {
+      "label": "2023年8月个人收入较前月变化",
+      "period": "2023年8月",
+      "unit": "billions of dollars, seasonally adjusted at annual rates",
+      "currency": "USD",
+      "matching_basis": "release_qualifiers_ignored",
+      "status": "requires_entity_and_method_review",
+      "truncated": false,
+      "facts": [
+        {
+          "fact_id": "aug_change_sept_release",
+          "source_id": "source_00000000000000000000000000000001",
+          "value": "94.0",
+          "label": "2023年8月个人收入较前月变化（2023-10-27发布，修订值）",
+          "period": "2023年8月"
+        },
+        {
+          "fact_id": "aug_change_oct_release",
+          "source_id": "source_00000000000000000000000000000002",
+          "value": "105.1",
+          "label": "2023年8月个人收入较前月变化（2023-11-30发布，修订值）",
+          "period": "2023年8月"
+        }
+      ]
+    }
+  ],
+  "source_scope_absence_warning_claim_indexes": [
+    1
+  ],
+  "limitations": "Candidates require source, entity, timing, unit and semantic review; no independent verification."
+}

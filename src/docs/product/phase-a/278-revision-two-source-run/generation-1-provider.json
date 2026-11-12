@@ -1,0 +1,87 @@
+{
+  "manifest_sha256": "0609681879c8996bf2509fb31a18bcdd12983c835c053a39e1cf6a1297e9fd92",
+  "payload": {
+    "claims": [
+      {
+        "text": "根据 BEA 2023年10月27日发布的个人收入与支出（PIO）报告表2，2023年8月个人收入较前月的变化（当期美元，经季节调整的年率）为94.0（修订后，标记 r）十亿美元。",
+        "citations": [
+          {
+            "source_id": "source_00000000000000000000000000000001",
+            "quotation": "Table 2. Personal Income and Its Disposition, Change from Preceding Period (Months)\t[Billions of dollars]\n\n\tSeasonally adjusted at annual rates\nLine\t2023\tLine\n\tFeb.\tMarch\tApril\tMay\tJune\tJuly r\tAug. r\tSept. p\n1 Personal income\t123.1\t109.5\t57.8\t77.3\t48.4\t52.8\t94.0\t77.8"
+          }
+        ]
+      },
+      {
+        "text": "根据 BEA 2023年11月30日发布的下一期 PIO 报告表2，2023年8月同一指标被修订为105.1（修订后，标记 r）十亿美元。",
+        "citations": [
+          {
+            "source_id": "source_00000000000000000000000000000002",
+            "quotation": "Table 2. Personal Income and Its Disposition, Change from Preceding Period (Months)\t[Billions of dollars]\n\n\tSeasonally adjusted at annual rates\nLine\t2023\tLine\n\tMarch\tApril r\tMay r\tJune r\tJuly r\tAug. r\tSept. r\tOct. p\n 1 Personal income\t109.5\t48.2\t70.5\t44.7\t62.6\t105.1\t96.8\t57.1"
+          }
+        ]
+      },
+      {
+        "text": "两个数字的关系：它们是同一指标（2023年8月个人收入较前月变化，当期美元）在不同发布日期的估计值；11月30日发布包含更全面的修订（该报告中 Aug. 列同样标记为 r），因此105.1取代了94.0，成为更晚、更完整的估计。",
+        "citations": [
+          {
+            "source_id": "source_00000000000000000000000000000002",
+            "quotation": "\tMarch\tApril r\tMay r\tJune r\tJuly r\tAug. r\tSept. r\tOct. p\n 1 Personal income\t109.5\t48.2\t70.5\t44.7\t62.6\t105.1\t96.8\t57.1"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "没有反对性证据表明94.0应为最终值；相反，两份来源中BEA均对8月数值标注修订标记，且第二份来源包含对所有前列月份的 r 标记，表明修订是该机构的常规做法。",
+        "citations": [
+          {
+            "source_id": "source_00000000000000000000000000000002",
+            "quotation": "April r\tMay r\tJune r\tJuly r\tAug. r\tSept. r\tOct. p"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源文本为节选（source_coverage 为 partial），表格列在PDF压缩中可能错位，请核对原始表格。",
+      "首次估算（p）与中间修订（r）的相对可靠性差异未能从来源文本中量化；修订原因（如更完整的源数据、季节因素再估计）未在所提供文本中说明。",
+      "两份来源均注明本已带 r 标记的数值仍可能被进一步修订。",
+      "发布日期为声明的（declared_published_at），未经独立验证。"
+    ],
+    "facts": [
+      {
+        "fact_id": "aug_change_sept_release",
+        "label": "2023年8月个人收入较前月变化（2023-10-27发布，修订值）",
+        "value": "94.0",
+        "unit": "billions of dollars, seasonally adjusted at annual rates",
+        "currency": "USD",
+        "period": "2023年8月",
+        "citation": {
+          "source_id": "source_00000000000000000000000000000001",
+          "quotation": "July r\tAug. r\tSept. p\n1 Personal income\t123.1\t109.5\t57.8\t77.3\t48.4\t52.8\t94.0\t77.8"
+        }
+      },
+      {
+        "fact_id": "aug_change_oct_release",
+        "label": "2023年8月个人收入较前月变化（2023-11-30发布，修订值）",
+        "value": "105.1",
+        "unit": "billions of dollars, seasonally adjusted at annual rates",
+        "currency": "USD",
+        "period": "2023年8月",
+        "citation": {
+          "source_id": "source_00000000000000000000000000000002",
+          "quotation": "July r\tAug. r\tSept. r\tOct. p\n 1 Personal income\t109.5\t48.2\t70.5\t44.7\t62.6\t105.1\t96.8\t57.1"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "aug_change_oct_release",
+        "second_fact_id": "aug_change_sept_release"
+      }
+    ]
+  },
+  "reported_tokens": 2842,
+  "prompt_sha256": "6b17da2d3e936b759cc26b5eb2ae14092c9c023df5633825afc54123f5044629",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

@@ -19,6 +19,8 @@ def test_absence_claim_requires_full_source_coverage_before_generalizing():
     assert flag_partial_source_absence([claim], [source], partial)[0]['source_scope_absence_unverified']
     mixed = {**claim, 'text': 'Consumer spending rose. No opposing evidence exists in the sources for goods rising.'}
     assert flag_partial_source_absence([mixed], [source], partial)[0]['source_scope_absence_unverified']
+    assert flag_partial_source_absence([{**claim, 'text':'没有反对性证据表明数值应为最终值；相反，资料仍有修订。'}], [source], partial)[0]['source_scope_absence_unverified']
+    assert not flag_partial_source_absence([{**claim, 'text':'在这些摘录中没有反对性证据。'}], [source], partial)[0].get('source_scope_absence_unverified')
     assert flag_partial_source_absence([{**claim, 'text':'No opposing evidence is present in the supplied sources.'}], [source], partial)[0]['source_scope_absence_unverified']
     assert not flag_partial_source_absence([{**claim, 'text': 'No opposing evidence exists in the supplied excerpts.'}], [source], partial)[0].get('source_scope_absence_unverified')
     assert flag_partial_source_absence([{**claim, 'text':'该报告没有提供服务和商品的拆分。'}], [source], partial)[0]['source_scope_absence_unverified']
@@ -46,6 +48,8 @@ def test_plural_source_absence_requires_coverage_of_all_sources_not_only_cited_o
     none = {**claim, 'text':'None of the documents mention an opposing view.'}
     assert flag_partial_source_absence([none], [first, second], [full_first])[0]['source_scope_absence_unverified']
     none = {**claim, 'text':'No source disputes that revision.'}
+    assert flag_partial_source_absence([none], [first, second], [full_first])[0]['source_scope_absence_unverified']
+    none = {**claim, 'text':'没有反对性证据表明数值应为最终值。'}
     assert flag_partial_source_absence([none], [first, second], [full_first])[0]['source_scope_absence_unverified']
     singular = {**claim, 'text':'The source does not mention an opposing view.'}
     assert not flag_partial_source_absence([singular], [first, second], [full_first])[0].get('source_scope_absence_unverified')
@@ -387,6 +391,20 @@ def test_revision_candidates_keep_original_label_and_publication_metadata():
     assert not evidence_differences([earlier, {**later, "label": "2024年9月个人收入环比变化（实际值）"}])
     assert not evidence_differences([earlier, {**later, "period": "2024年10月（较9月变化）；发布于2024-12-20"}])
     assert not evidence_differences([earlier, {**later, "unit": "millions"}])
+
+
+def test_release_dates_in_labels_preserve_cross_source_revision_candidate():
+    earlier = fact('old', 'one', '94.0', label='2023年8月个人收入较前月变化（2023-10-27发布，修订值）',
+                   period='2023年8月', unit='billions of dollars, seasonally adjusted at annual rates', currency='USD')
+    later = fact('new', 'two', '105.1', label='2023年8月个人收入较前月变化（2023-11-30发布，修订值）',
+                 period='2023年8月', unit='billions of dollars, seasonally adjusted at annual rates', currency='USD')
+    candidate = evidence_differences([earlier, later])[0]
+    assert candidate['status'] == 'requires_entity_and_method_review'
+    assert candidate['matching_basis'] == 'release_qualifiers_ignored'
+    assert [entry['label'] for entry in candidate['facts']] == [earlier['label'], later['label']]
+    assert not evidence_differences([earlier, {**later, 'label':'2023年8月个人收入较前月变化（2023-11-30發布，实际值）'}])
+    assert not evidence_differences([earlier, {**later, 'label':'2023年8月个人收入较前月变化（2023-99-99发布，修订值）'}])
+    assert not evidence_differences([earlier, {**later, 'period':'2023年9月'}])
 
 
 def test_unfinished_quoted_phrase_is_flagged_without_claiming_it_is_false():
