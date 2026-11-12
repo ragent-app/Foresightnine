@@ -232,6 +232,38 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
                                  "status": "requires_review"})
                 if len(warnings) >= 5:
                     break
+            # A quotation beginning with a personal pronoun may omit the
+            # subject and date in the preceding part of the same sentence.
+            if re.match(r"(?i)^\s*(?:it|they|he|she|its|their)\b", quote):
+                prefix_start = max(0, start - 250)
+                prefix = source.text[prefix_start:start]
+                boundaries = list(_SENTENCE_END.finditer(prefix))
+                left = prefix_start + (boundaries[-1].end() if boundaries else 0)
+                antecedent = source.text[left:start]
+                covered = False
+                required_left = left + len(antecedent) - len(antecedent.lstrip())
+                required_right = left + len(antecedent.rstrip())
+                for other in citations:
+                    if not isinstance(other, dict) or other.get("source_id") != source_id or other.get("partial_token"):
+                        continue
+                    loc, q = other.get("location"), other.get("quotation")
+                    if not isinstance(loc, dict) or loc.get("status") == "ambiguous" or not isinstance(q, str):
+                        continue
+                    a, b = loc.get("character_start"), loc.get("character_end")
+                    if (type(a) is int and type(b) is int and 0 <= a <= required_left < required_right <= b <= len(source.text)
+                            and source.text[a:b] == q and not partial_ascii_token(source.text, a, b)):
+                        covered = True
+                        break
+                if (not covered and "\f" not in antecedent and len(antecedent) < 250 and
+                        len(re.findall(r"[A-Za-z]{3,}", antecedent)) >= 2 and
+                        antecedent[-1:].isspace()):
+                    warnings.append({"source_id": source_id, "citation_index": index,
+                                     "context_metric": "personal-pronoun antecedent",
+                                     "context_character_start": left, "context_character_end": start,
+                                     "status": "requires_review"})
+                    if len(warnings) >= 5:
+                        break
+                    continue
             # A relative clause can contain another metric (e.g. GDP) while
             # still omitting the subject it describes (e.g. imports). Check
             # this before the metric shortcut so a later noun cannot hide the

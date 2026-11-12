@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v12"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v13"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -250,3 +250,18 @@ def test_subject_and_related_context_remain_visible_together():
     warnings = flag_citation_subject_context([item],[report])[0]["citation_context_warnings"]
     assert {w["context_metric"] for w in warnings} == {"personal saving rate", "related unquoted sentence"}
     assert prepare_support_review([item],[report],2000).omitted == [0]
+
+
+def test_review_retains_pronoun_antecedent_as_context_not_evidence():
+    text = "Last December, the Committee indicated that it would continue to buy securities."
+    quote = "it would continue to buy securities."
+    start = text.index(quote)
+    item = {"text":"The Committee would continue to buy securities.","citations":[
+        {"source_id":"s","quotation":quote,"location":{"character_start":start,"character_end":start+len(quote)}}]}
+    report = source().model_copy(update={"text":text})
+    batch = prepare_support_review([item],[report],2000)
+    assert batch.indexes == [0]
+    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
+    assert "Last December, the Committee indicated that" in excerpt["preceding_context"]
+    assert excerpt["quotation"] == quote
+    assert "not as a substitute for an unquoted fact" in REVIEW_SYSTEM_PROMPT

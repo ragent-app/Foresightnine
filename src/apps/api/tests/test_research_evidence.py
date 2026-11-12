@@ -494,3 +494,21 @@ def test_related_sentence_detection_does_not_assume_unrelated_or_ambiguous_conte
     citation = {"source_id":"s", "quotation":quote, "location":{"character_start":0,"character_end":len(quote)}}
     claim = {"text":"Policy remained unchanged.", "citations":[citation]}
     assert not flag_citation_subject_context([claim], [source])[0].get("citation_context_warnings")
+
+
+def test_pronoun_quotation_exposes_same_sentence_antecedent_without_claiming_support():
+    from app.research_evidence import flag_citation_subject_context
+    text = "Last December, the Committee indicated that it would continue to buy securities."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Statement", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    def citation(quote):
+        start = text.index(quote)
+        return {"source_id":"s", "quotation":quote, "location":{"character_start":start,"character_end":start+len(quote)}}
+    original = {"text":"The Committee would continue to buy securities.", "citations":[citation("it would continue to buy securities.")]}
+    cue = flag_citation_subject_context([original],[source])[0]["citation_context_warnings"][0]
+    assert cue["context_metric"] == "personal-pronoun antecedent"
+    assert "Last December, the Committee indicated that" in text[cue["context_character_start"]:cue["context_character_end"]]
+    assert cue["status"] == "requires_review"
+    covered = {**original, "citations":[citation("Last December, the Committee indicated that"),*original["citations"]]}
+    assert not flag_citation_subject_context([covered],[source])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([original],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("citation_context_warnings")
