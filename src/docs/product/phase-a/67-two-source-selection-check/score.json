@@ -1,0 +1,24 @@
+{
+  "manifest_sha256": "47ac87264f7971516c249b9dbbcb4e321b5fad4bd5ef03983b66e27e0e2ddaaa",
+  "status": "completed",
+  "research_status": "partial",
+  "facts": [
+    {
+      "value": "74.4",
+      "source": "earlier",
+      "found": true
+    },
+    {
+      "value": "88.2",
+      "source": "later",
+      "found": true
+    }
+  ],
+  "one_revision_claim_cites_both_sources": true,
+  "budget_ok": true,
+  "reported_tokens": 1773,
+  "mechanical_pass": true,
+  "semantic_support": "unverified",
+  "historical_byte_identity": "unverified",
+  "cost_usd": "unknown"
+}

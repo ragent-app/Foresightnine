@@ -1,0 +1,100 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "在 BEA 2024年10月个人收入与支出公告（2024年11月27日发布）中，2024年9月个人收入较前月的变化（经季节调整年率，现值美元）为74.4亿美元级别（74.4，单位：十亿美元）。",
+        "citations": [
+          {
+            "source_id": "source_ced9e0914e4b481199ec59a4e76d4a2b",
+            "quotation": "Change from Preceding Period (Months)\n\t[Billions of dollars]"
+          },
+          {
+            "source_id": "source_ced9e0914e4b481199ec59a4e76d4a2b",
+            "quotation": "1 Personal income\t144.0\t36.2\t73.2\t42.5\t68.4\t45.1\t74.4\t147.4\t1"
+          }
+        ]
+      },
+      {
+        "text": "在 BEA 2024年11月公告（2024年12月20日发布）中，同一指标（2024年9月较前月变化）被修订为88.2（十亿美元）。",
+        "citations": [
+          {
+            "source_id": "source_3cca7c93f6a94e15982ac4dedf3128f7",
+            "quotation": "Change from Preceding Period (Months)\n\t[Billions of dollars]"
+          },
+          {
+            "source_id": "source_3cca7c93f6a94e15982ac4dedf3128f7",
+            "quotation": "1 Personal income\t36.2\t73.2\t42.5\t73.7\t53.9\t88.2\t165.9\t71.1\t1"
+          }
+        ]
+      },
+      {
+        "text": "两个数字的关系：88.2是对最初公布的74.4的修订值；使用旧数值（74.4）的局限在于它基于更早的数据和估计，后续修订反映了新的源数据，因此旧数值可能低估9月环比变化（按修订值高出13.8个十亿美元）。",
+        "citations": [
+          {
+            "source_id": "source_ced9e0914e4b481199ec59a4e76d4a2b",
+            "quotation": "Aug. r\tSept. r\tOct. p"
+          },
+          {
+            "source_id": "source_3cca7c93f6a94e15982ac4dedf3128f7",
+            "quotation": "Aug. r\tSept. r\tOct. r\tNov. p"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "两份表格均为部分摘录（partial coverage），无法确认列与月份的一一对应是否在截取中完整无误；若列对应有误，74.4与88.2的归属可能需重新核对。",
+        "citations": [
+          {
+            "source_id": "source_ced9e0914e4b481199ec59a4e76d4a2b",
+            "quotation": "Aug. r\tSept. r\tOct. p"
+          },
+          {
+            "source_id": "source_3cca7c93f6a94e15982ac4dedf3128f7",
+            "quotation": "Aug. r\tSept. r\tOct. r\tNov. p"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "摘录仅为表格部分内容，未包含公告正文或完整月份列标题上下文。",
+      "发布日期为声明值（declared_published_at），未经独立核实。",
+      "未提供 BEA 关于修订原因的说明；修订幅度归因仅为推断。",
+      "注意：数据注明 Seasonally adjusted at annual rates，而单位为月度变化（十亿美元），年率口径的精确含义需查阅完整公告。"
+    ],
+    "facts": [
+      {
+        "fact_id": "pi_sep_oct_release",
+        "label": "2024年9月个人收入环比变化（10月公告初值）",
+        "value": "74.4",
+        "unit": "billions of dollars, monthly change, seasonally adjusted at annual rates",
+        "currency": "USD",
+        "period": "2024年9月（较8月变化）；发布于2024-11-27",
+        "citation": {
+          "source_id": "source_ced9e0914e4b481199ec59a4e76d4a2b",
+          "quotation": "1 Personal income\t144.0\t36.2\t73.2\t42.5\t68.4\t45.1\t74.4\t147.4\t1"
+        }
+      },
+      {
+        "fact_id": "pi_sep_nov_release",
+        "label": "2024年9月个人收入环比变化（11月公告修订值）",
+        "value": "88.2",
+        "unit": "billions of dollars, monthly change, seasonally adjusted at annual rates",
+        "currency": "USD",
+        "period": "2024年9月（较8月变化）；发布于2024-12-20",
+        "citation": {
+          "source_id": "source_3cca7c93f6a94e15982ac4dedf3128f7",
+          "quotation": "1 Personal income\t36.2\t73.2\t42.5\t73.7\t53.9\t88.2\t165.9\t71.1\t1"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "pi_sep_nov_release",
+        "second_fact_id": "pi_sep_oct_release"
+      }
+    ]
+  },
+  "reported_tokens": 1773
+}
