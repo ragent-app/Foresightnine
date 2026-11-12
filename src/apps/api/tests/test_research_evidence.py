@@ -88,6 +88,20 @@ def test_offset_claim_requires_offset_cue_not_only_component_values():
     assert not flag_uncited_causal_attribution([direct],[src])[0].get('causal_attribution_unverified')
 
 
+def test_conditional_policy_claim_requires_quoted_condition_cue():
+    from app.research_evidence import flag_uncited_causal_attribution
+    text='Policy remains accommodative. Future policy is contingent on inflation.'
+    src=ResearchSource(source_id='s',owner_id='owner',title='Statement',text=text,kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc),content_sha256='hash',permissions=SourcePermissions(store=True,display=True))
+    def cite(quote):
+        start=text.index(quote)
+        return {'source_id':'s','quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)}}
+    claim={'text':'Policy remains accommodative and is contingent on inflation.', 'citations':[cite('Policy remains accommodative.')]}
+    assert flag_uncited_causal_attribution([claim],[src])[0]['causal_attribution_unverified']
+    assert flag_uncited_causal_attribution([{**claim,'text':'未来政策取决于通胀。'}],[src])[0]['causal_attribution_unverified']
+    assert not flag_uncited_causal_attribution([{**claim,'citations':[cite('Future policy is contingent on inflation.')]}],[src])[0].get('causal_attribution_unverified')
+
+
 def test_inferred_dissent_motive_is_not_established_by_unrelated_inflation_fact():
     from app.research_evidence import flag_uncited_causal_attribution
     text = ('Inflation compensation remained low. The committee acted because conditions improved. '

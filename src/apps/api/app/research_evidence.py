@@ -19,11 +19,11 @@ _STRICT_UPPER_BOUND = re.compile(r"(?:\bless\s+than|\bbelow|\bunder|<|小于|小
 _DECIMAL_TOKEN = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?![\w.])")
 _RELATED_DECIMAL = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?!\w|\.\d)")
 _CAUSAL_CUE = re.compile(
-    r"\b(?:because|due\s+to|attributable\s+to|driven\s+by|result(?:ed|s|ing)?\s+from|"
+    r"\b(?:because|due\s+to|attributable\s+to|driven\s+by|contingent\s+on|dependent\s+on|result(?:ed|s|ing)?\s+from|"
     r"result(?:ed|s|ing)?\s+in|caus(?:e|es|ed|ing)|led\s+to|leads?\s+to)\b|"
     r"\boffset\s+(?:by|from)\b|"
     r"\breflect(?:s|ed|ing)\s+(?:the\s+)?[^.;\n]{1,70}?\b(?:effects?|impact)\b|"
-    r"(?:由于|由於|因为|因為|导致|導致|造成|归因于|歸因於|受[^。；\n]{1,25}影响|被[^。；\n]{1,40}抵消)", re.IGNORECASE)
+    r"(?:由于|由於|因为|因為|导致|導致|造成|归因于|歸因於|取决于|取決於|依赖于|依賴於|受[^。；\n]{1,25}影响|被[^。；\n]{1,40}抵消)", re.IGNORECASE)
 _MOTIVE_CUE = re.compile(
     r"\b(?:reason|motivation|motive|concern)s?\s+(?:behind|for)\s+[^.;\n]{1,100}?"
     r"\b(?:dissent|vote|decision|opposition|objection)\b|"

@@ -1,0 +1,497 @@
+{
+  "task": "POLICY_FOMC_201706",
+  "status": "completed",
+  "operation_id": "operation:6da2f96f61d8f34b36f47f5c",
+  "manifest_sha256": "f559cbd25eb764f3853149a920009cea4a2bba964cf25b989a2281f4e74e177a",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_26300000000000000000000000000003",
+        "title": "fomc-20170614.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": "2017-06-14T18:00:00+00:00",
+        "obtained_at": "2026-11-12T21:49:36.341073+00:00",
+        "revised_at": null,
+        "content_sha256": "c3d14cc538bbbebc1a94583ce7dbdd58ed97c310090419373242ab7545ce4d81",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ffr_range:lower",
+        "value": "1",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017 decision (effective June 15, 2017)",
+        "label": "federal funds rate target range (lower bound)",
+        "source_id": "source_26300000000000000000000000000003",
+        "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1554,
+          "character_end": 1650,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ffr_range:upper",
+        "value": "1.25",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017 decision (effective June 15, 2017)",
+        "label": "federal funds rate target range (upper bound)",
+        "source_id": "source_26300000000000000000000000000003",
+        "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1554,
+          "character_end": 1650,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1554,
+              "character_end": 1650,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Neel Kashkari dissented, preferring to maintain the existing target range for the federal funds rate.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 3905,
+              "character_end": 4045,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against the action was\nNeel Kashkari, who preferred at this meeting to maintain the existing target range for the\nfederal funds rate."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "A key uncertainty about the future policy path is inflation: the Committee expects inflation to remain somewhat below 2 percent in the near term and is monitoring inflation developments closely, while the pace of future adjustments depends on realized and expected economic conditions.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1345,
+              "character_end": 1473,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Near-term risks to the economic outlook appear roughly balanced, but the Committee is\nmonitoring inflation developments closely."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_percentage_bounds": [
+          "2 percent"
+        ],
+        "uncited_percentages": [
+          "2 percent"
+        ]
+      },
+      {
+        "text": "The Committee will base the timing and size of future rate adjustments on an assessment of realized and expected economic conditions relative to its objectives.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1833,
+              "character_end": 2005,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In determining the timing and size of future adjustments to the target range for the\nfederal funds rate, the Committee will assess realized and expected economic conditions"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "A counterpoint to the rate hike is that inflation remained soft — market-based measures of inflation compensation were low and inflation was expected to stay below 2 percent near term — which is the implied concern behind Kashkari's dissent to hold rates steady. The dissent itself is the cited opposing evidence in the document.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 689,
+              "character_end": 840,
+              "page": 1
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Market-based measures of inflation compensation remain low; survey-based measures of\nlonger-term inflation expectations are little changed, on balance."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "uncited_percentage_bounds": [
+          "2 percent"
+        ],
+        "uncited_percentages": [
+          "2 percent"
+        ],
+        "causal_attribution_unverified": true
+      }
+    ],
+    "limitations": [
+      "Source source_26300000000000000000000000000003: only character ranges 689–2603, 3093–5048 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The source excerpts are partial; the full statement is not provided.",
+      "Model-reported limitation (not independently verified): The exact reason (e.g., inflation concern) Kashkari gave for his dissent is not stated in the source; only his preferred action is documented.",
+      "Model-reported limitation (not independently verified): The publication date of June 14, 2017 is declared in the source metadata, not independently verified.",
+      "A strict percentage upper bound is not present in the attached quotations; do not treat its threshold as an exact value.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "A causal explanation has no corresponding causal wording in its located quotations; check the original evidence.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:6da2f96f61d8f34b36f47f5c",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 3435,
+      "cost_usd": null,
+      "generation_tokens": 1862,
+      "support_review_tokens": null,
+      "counterpoint_requested": true,
+      "counterpoint_status": "failed",
+      "counterpoint_tokens": 1573,
+      "counterpoint_prompt_sha256": "00c6b46c5c88e0ca27643c6af43576c35ba7eb9e82608f2d6ff95a1e4c361135",
+      "counterpoint_error": "counterpoint_unavailable",
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "official_fetch_calls": 0,
+      "official_fetch_status": "not_requested",
+      "elapsed_seconds": 7.683,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "76562237740b708dda6af64f94e3b7191d1d48e32a435ca96691e1ad157477bd",
+      "prompt_characters": 5025,
+      "prompt_bytes": 5037,
+      "selection_method": "ranked_nonoverlapping_windows_v49",
+      "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+      "selected_segments": [
+        {
+          "source_id": "source_26300000000000000000000000000003",
+          "character_start": 689,
+          "character_end": 2603,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_26300000000000000000000000000003",
+          "character_start": 3093,
+          "character_end": 5048,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_26300000000000000000000000000003": "c3d14cc538bbbebc1a94583ce7dbdd58ed97c310090419373242ab7545ce4d81"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 20000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "generation_checkpoint": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_26300000000000000000000000000003",
+        "title": "fomc-20170614.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": "2017-06-14T18:00:00+00:00",
+        "obtained_at": "2026-11-12T21:49:36.341073+00:00",
+        "revised_at": null,
+        "content_sha256": "c3d14cc538bbbebc1a94583ce7dbdd58ed97c310090419373242ab7545ce4d81",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ffr_range:lower",
+        "value": "1",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017 decision (effective June 15, 2017)",
+        "label": "federal funds rate target range (lower bound)",
+        "source_id": "source_26300000000000000000000000000003",
+        "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1554,
+          "character_end": 1650,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ffr_range:upper",
+        "value": "1.25",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017 decision (effective June 15, 2017)",
+        "label": "federal funds rate target range (upper bound)",
+        "source_id": "source_26300000000000000000000000000003",
+        "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1554,
+          "character_end": 1650,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1554,
+              "character_end": 1650,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Neel Kashkari dissented, preferring to maintain the existing target range for the federal funds rate.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 3905,
+              "character_end": 4045,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against the action was\nNeel Kashkari, who preferred at this meeting to maintain the existing target range for the\nfederal funds rate."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "A key uncertainty about the future policy path is inflation: the Committee expects inflation to remain somewhat below 2 percent in the near term and is monitoring inflation developments closely, while the pace of future adjustments depends on realized and expected economic conditions.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1345,
+              "character_end": 1473,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Near-term risks to the economic outlook appear roughly balanced, but the Committee is\nmonitoring inflation developments closely."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_percentage_bounds": [
+          "2 percent"
+        ],
+        "uncited_percentages": [
+          "2 percent"
+        ]
+      },
+      {
+        "text": "The Committee will base the timing and size of future rate adjustments on an assessment of realized and expected economic conditions relative to its objectives.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1833,
+              "character_end": 2005,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In determining the timing and size of future adjustments to the target range for the\nfederal funds rate, the Committee will assess realized and expected economic conditions"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "A counterpoint to the rate hike is that inflation remained soft — market-based measures of inflation compensation were low and inflation was expected to stay below 2 percent near term — which is the implied concern behind Kashkari's dissent to hold rates steady. The dissent itself is the cited opposing evidence in the document.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 689,
+              "character_end": 840,
+              "page": 1
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Market-based measures of inflation compensation remain low; survey-based measures of\nlonger-term inflation expectations are little changed, on balance."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "uncited_percentage_bounds": [
+          "2 percent"
+        ],
+        "uncited_percentages": [
+          "2 percent"
+        ],
+        "causal_attribution_unverified": true
+      }
+    ],
+    "limitations": [
+      "Source source_26300000000000000000000000000003: only character ranges 689–2603, 3093–5048 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The source excerpts are partial; the full statement is not provided.",
+      "Model-reported limitation (not independently verified): The exact reason (e.g., inflation concern) Kashkari gave for his dissent is not stated in the source; only his preferred action is documented.",
+      "Model-reported limitation (not independently verified): The publication date of June 14, 2017 is declared in the source metadata, not independently verified.",
+      "Generation is saved; counterpoint follow-up is pending or was interrupted."
+    ],
+    "run": {
+      "operation_id": "operation:6da2f96f61d8f34b36f47f5c",
+      "status": "partial",
+      "checkpoint": "counterpoint",
+      "model_calls": 1,
+      "total_tokens": 1862,
+      "generation_tokens": 1862,
+      "counterpoint_requested": true,
+      "counterpoint_status": "pending",
+      "counterpoint_prompt_sha256": "00c6b46c5c88e0ca27643c6af43576c35ba7eb9e82608f2d6ff95a1e4c361135",
+      "cost_usd": null,
+      "cost_status": "unknown",
+      "prompt_sha256": "76562237740b708dda6af64f94e3b7191d1d48e32a435ca96691e1ad157477bd",
+      "prompt_characters": 5025,
+      "prompt_bytes": 5037,
+      "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "official_fetch_calls": 0,
+      "official_fetch_status": "not_requested",
+      "selected_segments": [
+        {
+          "source_id": "source_26300000000000000000000000000003",
+          "character_start": 689,
+          "character_end": 2603,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_26300000000000000000000000000003",
+          "character_start": 3093,
+          "character_end": 5048,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "selection_method": "ranked_nonoverlapping_windows_v49",
+      "source_hashes": {
+        "source_26300000000000000000000000000003": "c3d14cc538bbbebc1a94583ce7dbdd58ed97c310090419373242ab7545ce4d81"
+      },
+      "max_model_calls": 2,
+      "max_total_tokens": 20000,
+      "max_elapsed_seconds": 120,
+      "max_search_calls": 0,
+      "max_cost_usd": null
+    }
+  },
+  "elapsed_seconds": 8.219
+}
