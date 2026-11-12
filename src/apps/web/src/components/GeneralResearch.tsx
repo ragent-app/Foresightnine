@@ -121,6 +121,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [topic, setTopic] = useState<ResearchTopic | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [question, setQuestion] = useState("");
+  const [scope, setScope] = useState("");
   const [asOf, setAsOf] = useState("");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
@@ -326,9 +327,9 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         if (!confirmRights) { setNotice(en ? "Confirm you can store this material." : "请先确认你有权保存这份资料。"); return; }
         sourceIds = [await uploadMaterial()];
       }
-      const created = await api.create(question.trim(), sourceIds, asOf);
+      const created = await api.create(question.trim(), sourceIds, asOf, scope.trim());
       setTopic(created); setSelectedVersionId(""); setTopics((items) => [created, ...items]); setOperation(null);
-      setQuestion(""); setAsOf(""); clearMaterial();
+      setQuestion(""); setScope(""); setAsOf(""); clearMaterial();
     } catch (error) {
       if (error instanceof Error && error.message === "file_too_large") {
         setNotice(en ? "PDF files must be no larger than 1.5 MB." : "PDF 文件不能超过 1.5 MB。");
@@ -483,6 +484,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     <div className="general-grid">
       <div>
         <Field label={en ? "Research question" : "研究问题"}><Textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={en ? "What would you like to investigate?" : "你想研究什么？"} /></Field>
+        <Field label={en ? "Scope and desired output (optional)" : "研究范围与期望成果（可选）"} helper={en ? "For example, companies, periods or the comparison you need. The scope is sent to the model during research." : "例如需要研究的公司、期间或比较方式。运行研究时会将范围发送给模型。"}><Textarea value={scope} maxLength={10000} onChange={(event) => setScope(event.target.value)} /></Field>
         <Field label={en ? "Research cutoff (optional)" : "研究截止时间（可选）"} helper={en ? "Uses your device's local time." : "使用设备所在时区。"}><Input type="datetime-local" value={asOf} onChange={(event) => setAsOf(event.target.value)} /></Field>
         <Button disabled={busy || !question.trim()} onClick={() => void discover()}>{en ? "Find sources" : "查找资料"}</Button>
         {candidates.length ? <section className="general-candidates"><p>{en ? "Search results are unverified leads." : "搜索结果是待核验线索。"}</p>{candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.excerpt}</p><Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Use link" : "使用链接"}</Button></article>)}</section> : null}
@@ -531,6 +533,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     {topic && current ? <section className="general-result">
       <div className="general-result-header"><div><p className="eyebrow">{en ? "CURRENT RESEARCH" : "当前研究"}</p><h2>{topic.request.question || (en ? "Material-based research" : "资料研究")}</h2></div>
         <Button variant="primary" disabled={busy || running || !isLatest} onClick={() => void run()}>{en ? "Run research" : "开始研究"}</Button></div>
+      {topic.request.scope ? <p><strong>{en ? "Scope: " : "研究范围："}</strong>{topic.request.scope}</p> : null}
       <Field label={en ? "Research version" : "研究版本"}><select className="text-input select-input" value={current.version_id} onChange={(event) => { if (hasUnsavedReview && event.target.value !== current.version_id) { setNotice(en ? "Save your edits before changing versions." : "请先保存当前修改，再切换版本。"); return; } setSelectedVersionId(event.target.value); }}>{topic.versions.map((version, index) => <option key={version.version_id} value={version.version_id}>{en ? "Version" : "版本"} {index + 1} · {version.review === "confirmed" ? (en ? "confirmed" : "已确认") : version.review === "reservation" ? (en ? "reservation" : "保留异议") : (en ? "draft" : "草稿")} · {new Date(version.created_at).toLocaleString()}</option>)}</select></Field>
       {!isLatest ? <p role="status">{en ? "Historical version is read-only. Select the latest version to edit or run." : "历史版本为只读；选择最新版本后可编辑或运行研究。"}</p> : null}
       <p>{en ? "Version created by: " : "版本创建者："}{current.created_by === "user" ? (en ? "user" : "用户") : current.created_by === "agent" ? (en ? "research agent" : "研究 Agent") : (en ? "unknown" : "未知")}</p>

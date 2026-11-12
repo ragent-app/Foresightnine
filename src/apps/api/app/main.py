@@ -2185,7 +2185,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             max_prompt_chars = max(1, min(48000, int(max_input_tokens) - len(RESEARCH_SYSTEM_PROMPT.encode("utf-8")) - 512))
             analysis = analyze(topic.request.question, sources, topic.request.as_of, generate,
                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
-                               on_prepare=lambda segments: attempted_prompt.update({"segments": segments}), focus=focus)
+                               on_prepare=lambda segments: attempted_prompt.update({"segments": segments}),
+                               focus=focus, scope=topic.request.scope)
         except (AnalysisInterrupted, ProviderFailure, InvalidAnalysis) as error:
             unavailable_reason = ("provider_budget_exhausted" if isinstance(error, AnalysisInterrupted) else
                                   error.code if isinstance(error, ProviderFailure) else "invalid_model_output")
@@ -2438,6 +2439,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "topic_id": topic_id, "parent_version_id": request.parent_version_id,
             "captured_at": lifecycle_clock.now().isoformat(),
             "question_sha256": sha256(topic.request.question.encode("utf-8")).hexdigest(),
+            **({"scope_sha256": sha256(topic.request.scope.encode("utf-8")).hexdigest()} if topic.request.scope else {}),
             "as_of": topic.request.as_of.isoformat() if topic.request.as_of else None,
             "sources": [{"source_id": item.source_id, "content_sha256": item.content_sha256,
                          "pdf_text_order": item.pdf_text_order,

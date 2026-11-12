@@ -984,3 +984,20 @@ def test_model_added_json_closing_brace_recovers_only_unique_original_numeric_pr
     ]:
         rejected = analyze('Revenue?', [source('s', text=bad_text)], None, lambda _: (raw, 1))
         assert not rejected.facts and not rejected.calculations and not rejected.claims
+
+
+def test_scope_is_in_untrusted_question_and_influences_source_selection():
+    target = 'Geographic segment: Oceania. Revenue was 4321 dollars.'
+    text = 'Unrelated operations and commentary. ' * 180 + target + ' Other financial notes. ' * 200
+    report = source('s', text=text)
+    prompts = []
+    def capture(prompt):
+        prompts.append(json.loads(prompt))
+        return {}, 1
+    analyze('What was revenue?', [report], None, capture, scope='Oceania segment')
+    assert 'Oceania segment' in prompts[0]['question']
+    assert any(target in item['text'] for item in prompts[0]['sources'])
+    assert 'untrusted data' in __import__('app.research_analysis', fromlist=['SYSTEM_PROMPT']).SYSTEM_PROMPT
+    prompts.clear()
+    analyze('What was revenue?', [report], None, capture)
+    assert prompts[0]['question'] == 'What was revenue?'

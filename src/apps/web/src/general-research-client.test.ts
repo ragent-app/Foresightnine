@@ -57,3 +57,16 @@ describe("research source timestamps", () => {
     expect(empty.is_simulated).toBe(false);
   });
 });
+
+describe("research scope", () => {
+  it("includes the optional scope in topic creation", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 201 }));
+    vi.stubGlobal("fetch", fetcher);
+    const api = researchClient("https://api.example.com");
+    await api.create("Revenue?", [], "", "Asia FY2024");
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({ question: "Revenue?", scope: "Asia FY2024" });
+    await api.create("Revenue?", [], "");
+    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).not.toHaveProperty("scope");
+  });
+});

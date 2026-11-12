@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v19"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v20"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 
@@ -732,7 +732,11 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             generate: Callable[[str], tuple[dict[str, Any], int | None]], *,
             max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
             on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
-            focus: tuple[str, int, int] | None = None) -> AnalysisResult:
+            focus: tuple[str, int, int] | None = None, scope: str = "") -> AnalysisResult:
+    # Scope belongs to the user's untrusted request. Including it in the
+    # question also lets source selection account for the intended coverage.
+    if scope:
+        question = f"{question}\nResearch scope supplied by the user: {scope}"
     eligible, limitations = prepare_sources(sources, as_of)
     if focus is not None and not any(s.source_id == focus[0] and 0 <= focus[1] < focus[2] <= len(s.text) for s in eligible):
         return AnalysisResult([], [], limitations + ["The requested focus is unavailable; no model call was made."], [], None)

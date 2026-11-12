@@ -46,7 +46,7 @@ export interface ResearchVersion {
 }
 export interface ResearchTopic {
   topic_id: string;
-  request: { question: string; source_ids: string[]; as_of?: string | null };
+  request: { question: string; source_ids: string[]; scope?: string; as_of?: string | null };
   versions: ResearchVersion[];
 }
 export interface ResearchOperation {
@@ -137,7 +137,8 @@ export function researchClient(baseUrl: string) {
         permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
     search: (query: string) => request<{ project_search_available: boolean; candidates: DiscoveryCandidate[] }>(
       `/v1/search/candidates?query=${encodeURIComponent(query.slice(0, 70))}&limit=5`),
-    create: (question: string, sourceIds: string[], asOf: string) => request<ResearchTopic>("/v2/research/topics", { question, source_ids: sourceIds,
+    create: (question: string, sourceIds: string[], asOf: string, scope = "") => request<ResearchTopic>("/v2/research/topics", { question, source_ids: sourceIds,
+      ...(scope ? { scope } : {}),
       ...(asOf ? { as_of: new Date(asOf).toISOString() } : {}) }),
     attach: (topicId: string, parent: string, sourceIds: string[]) => request<ResearchTopic>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/sources`, { parent_version_id: parent, source_ids: sourceIds }),
