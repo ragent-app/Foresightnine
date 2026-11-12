@@ -93,6 +93,19 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
     assert "No opposing evidence supplied." in result.limitations
 
 
+def test_prompt_distinguishes_full_source_from_partial_excerpts():
+    def inspect(expected):
+        def generate(prompt):
+            payload = json.loads(prompt)
+            assert all(entry["source_coverage"] == expected for entry in payload["sources"])
+            assert all(entry["source_characters"] >= len(entry["text"]) for entry in payload["sources"])
+            assert "not from the entire document" in payload["evidence_guidance"]
+            return {"claims": []}, 10
+        return generate
+    analyze("Revenue?", [source("short")], None, inspect("complete"))
+    analyze("Revenue?", [source("long", text="Revenue. " * 1000)], None, inspect("partial"), max_prompt_chars=2500)
+
+
 def test_rejects_fabricated_citations_and_respects_display_permission():
     hidden = source("hidden", display=False)
     visible = source("hidden", display=True)
@@ -185,6 +198,15 @@ def test_month_and_year_comparison_select_distinct_prose_passages():
     windows = _select_windows(report, "2025 年 PCE 价格指数较上月和较上年同期分别变化多少？", 300, 2)
     assert any("0.1 percent" in part and "preceding month" in part for _, part in windows)
     assert any("2.1 percent" in part and "same month one year" in part for _, part in windows)
+
+
+def test_period_anchor_retains_a_number_after_wide_pdf_chart_spacing():
+    monthly = "From the preceding month" + " " * 210 + "0.1 percent."
+    annual = "From the same month one year ago, PCE increased 2.1 percent."
+    report = ("PCE price index 2025 table. " * 240) + monthly + (" filler " * 80) + annual + ("PCE price index 2025. " * 240)
+    windows = _select_windows(report, "2025 年 PCE 价格指数较上月和较上年同期分别变化多少？", 250, 2)
+    assert any("preceding month" in part and "0.1 percent" in part for _, part in windows)
+    assert any("same month one year" in part and "2.1 percent" in part for _, part in windows)
 
 
 def test_expanded_ellipsis_does_not_hide_ambiguity_or_cross_the_length_limit():

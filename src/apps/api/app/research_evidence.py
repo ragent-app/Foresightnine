@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from copy import deepcopy
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 import re
 
 from pydantic import ValidationError
@@ -14,6 +14,76 @@ from .research_analysis import _quoted_numbers
 
 _PERCENT = re.compile(r"(?<![\w.])([-−]?\d+(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
 _NUMBER = re.compile(r"(?<![\w.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+_ZH_USD_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(万亿|千万|百万|十万|亿|万|千)?\s*(美元|美金)")
+_ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "亿": Decimal("100"), "千万": Decimal("10"),
+                       "百万": Decimal("1"), "十万": Decimal("0.1"), "万": Decimal("0.01"),
+                       "千": Decimal("0.001"), "": Decimal("0.000001")}
+
+
+def claim_amount_differences(claims: list[dict], facts: list[dict]) -> list[dict]:
+    """Flag unmatched Chinese USD amounts only when another amount anchors the same cited facts.
+
+    This is a review candidate, not a finding that a claim is false. It covers
+    explicit Chinese USD units only, preserves rounding, and fails closed when
+    model facts or citations are missing or ambiguous.
+    """
+    usable: list[tuple[str, str, Decimal]] = []
+    for item in facts:
+        source_id, fact_id = item.get("source_id"), item.get("fact_id")
+        quote, location = item.get("quotation"), item.get("location")
+        unit = " ".join(str(item.get("unit") or "").casefold().split())
+        currency = str(item.get("currency") or "").upper()
+        if (item.get("verification") != "model_extraction_not_independently_verified" or item.get("authorship") == "user" or
+                not isinstance(source_id, str) or not isinstance(fact_id, str) or not isinstance(quote, str) or
+                not isinstance(location, dict) or location.get("status") == "ambiguous" or
+                type(location.get("character_start")) is not int or type(location.get("character_end")) is not int or
+                location["character_start"] < 0 or location["character_end"] - location["character_start"] != len(quote) or
+                not ("million" in unit and ("usd" in unit or currency == "USD")) or currency not in {"", "USD"}):
+            continue
+        try:
+            value = Decimal(str(item.get("value")))
+            if not value.is_finite() or value not in _quoted_numbers(quote):
+                continue
+        except (InvalidOperation, ValueError):
+            continue
+        usable.append((source_id, fact_id, value))
+    result: list[dict] = []
+    for index, claim in enumerate(claims):
+        text, citations = claim.get("text"), claim.get("citations")
+        if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
+            continue
+        cited = {c.get("source_id") for c in citations if isinstance(c, dict) and isinstance(c.get("source_id"), str)}
+        candidates = [(fact_id, value) for source_id, fact_id, value in usable if source_id in cited]
+        matches = list(_ZH_USD_AMOUNT.finditer(text))
+        if not candidates or len(matches) < 2 or len(matches) > 20:
+            continue
+        checked = []
+        for match in matches:
+            raw = match.group(1).replace(",", "").replace("−", "-")
+            precision = len(raw.rsplit(".", 1)[1]) if "." in raw else 0
+            if len(raw) > 40 or precision > 8:
+                checked = []
+                break
+            try:
+                amount = Decimal(raw); factor = _ZH_USD_TO_MILLIONS[match.group(2) or ""]
+                with localcontext() as context:
+                    context.prec = 100
+                    matches_fact = any((value / factor).quantize(Decimal(1).scaleb(-precision), rounding=ROUND_HALF_UP) == amount
+                                       for _, value in candidates)
+            except (InvalidOperation, ValueError):
+                checked = []
+                break
+            checked.append((match, matches_fact))
+        if not checked or not any(matched for _, matched in checked):
+            continue
+        for match, matched in checked:
+            if not matched:
+                result.append({"claim_index": index, "claimed_amount": match.group(0),
+                               "source_fact_ids": list(dict.fromkeys(fact_id for fact_id, _ in candidates))[:20],
+                               "status": "requires_review"})
+                if len(result) == 50:
+                    return result
+    return result
 
 
 def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[dict]:

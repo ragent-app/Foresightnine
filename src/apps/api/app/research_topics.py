@@ -45,6 +45,7 @@ class ResearchContent(BaseModel):
     evidence_differences: list[dict] = Field(default_factory=list, max_length=50)
     calculations: list[dict] = Field(default_factory=list, max_length=2000)
     calculation_differences: list[dict] = Field(default_factory=list, max_length=50)
+    amount_differences: list[dict] = Field(default_factory=list, max_length=50)
     claims: list[dict] = Field(default_factory=list, max_length=2000)
     limitations: list[str] = Field(default_factory=list, max_length=500)
     run: dict = Field(default_factory=dict)

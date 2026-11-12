@@ -74,7 +74,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert snapshot["sources"][0]["revised_at"].startswith("2024-02-01")
     assert snapshot["sources"][0]["obtained_at"]
     assert snapshot["budget"]["max_model_calls"] == 1
-    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v6"
+    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v7"
     assert "Revenue was 100" not in inputs.text and "owner_id" not in inputs.json()
     other = client.post("/v1/auth/local/register", json={"email": "other@example.test",
         "password": "correct horse battery staple!"}).json()["access_token"]
@@ -827,4 +827,46 @@ def test_simulated_source_is_not_sent_to_real_research_or_saved_as_evidence(monk
     sim_content = client.get(sim_path, headers=headers).json()["versions"][-1]["content"]
     assert sim_content["run"]["model_calls"] == 0 and sim_content["run"]["status"] == "partial"
     assert any("simulated material is excluded" in item for item in sim_content["limitations"])
+    assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
+
+
+def test_mismatched_currency_conversion_is_reviewable_and_recomputed_on_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    class Provider:
+        name = "amount-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            import json
+            sid = json.loads(prompt)["sources"][0]["source_id"]
+            quote = "2023 revenue 53717, 2024 revenue 57063 million USD"
+            cite = {"source_id": sid, "quotation": quote}
+            facts = [{"fact_id": id, "label": "Revenue", "value": value, "unit": "USD millions", "currency": "USD",
+                      "period": year, "citation": cite} for id, value, year in (("prior", "53717", "2023"), ("current", "57063", "2024"))]
+            return {"claims": [{"text": "2023为53,717百万美元，2024为57,063百万美元，即57,070.63亿美元。", "citations": [cite]}],
+                    "counterarguments": [{"text": "Revenue alone does not establish profit.", "citations": [cite]}], "facts": facts}, 55
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={"email": "amount-warning@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+    source = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+        "text": "2023 revenue 53717, 2024 revenue 57063 million USD", "permissions": {"store": True, "display": True, "model_input": True}}).json()
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source["source_id"]]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    op = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "amount-warning-run"},
+        json={"parent_version_id": topic["versions"][0]["version_id"]}).json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    original = client.get(path, headers=headers).json()["versions"][-1]
+    assert original["content"]["run"]["status"] == "partial"
+    assert original["content"]["amount_differences"][0]["claimed_amount"] == "57,070.63亿美元"
+    edited = deepcopy(original["content"])
+    edited["claims"][0]["text"] = "2023为53,717百万美元，2024为57,063百万美元，即570.63亿美元。"
+    edited["amount_differences"] = [{"fabricated": True}]
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": original["version_id"], "content": edited})
+    assert saved.status_code == 201
+    assert saved.json()["versions"][-1]["content"]["amount_differences"] == []
+    assert saved.json()["versions"][-2]["content"]["amount_differences"] == original["content"]["amount_differences"]
     assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200

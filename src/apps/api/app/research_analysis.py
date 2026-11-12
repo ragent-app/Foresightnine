@@ -33,7 +33,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v6"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v7"
 
 
 class Citation(BaseModel):
@@ -242,12 +242,23 @@ def _select_windows(text: str, question: str, length: int, count: int,
     # Cap scanning work for multi-megabyte material; unexamined ranges remain
     # explicitly disclosed and cannot become evidence.
     step = max(256, length // 4, (len(text) + 4095) // 4096)
-    for iteration, candidate in enumerate(range(0, len(text), step)):
+    candidates = [(candidate, False) for candidate in range(0, len(text), step)]
+    # A fixed stride can cut a short comparison sentence at both ends. Add
+    # bounded anchors at explicit period phrases, retaining original offsets.
+    for wanted, pattern in ((wants_month_comparison, r"\b(?:preceding|previous)\s+month\b"),
+                            (wants_year_comparison, r"\bsame\s+month\s+one\s+year\b"),
+                            (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b")):
+        if wanted:
+            for index, match in enumerate(re.finditer(pattern, text, re.IGNORECASE)):
+                if index >= 64:
+                    break
+                candidates.append((match.start(), True))
+    for iteration, (candidate, anchored) in enumerate(candidates):
         if iteration % 64 == 0 and should_stop is not None and should_stop():
             raise AnalysisInterrupted()
         start = min(candidate, max(0, len(text) - length))
         end = start + length
-        if end < len(text) and not text[max(start, end - 8):end].rstrip().endswith((".", "!", "?", "。", "！", "？")):
+        if not anchored and end < len(text) and not text[max(start, end - 8):end].rstrip().endswith((".", "!", "?", "。", "！", "？")):
             # Avoid cutting a relevant sentence at the right edge when a
             # nearby sentence ending fits without increasing the budget.
             limit = min(160, length // 3, len(text) - end)
@@ -266,10 +277,18 @@ def _select_windows(text: str, question: str, length: int, count: int,
                  sum(25 + min(count, 4) * 5 for count in year_counts if count))
         if wants_annual_levels and re.search(r"\b(?:annual (?:level|average)|calendar year|full[- ]year|year ended)\b", passage):
             score += 350
-        if wants_month_comparison and re.search(r"\b(?:preceding|previous)\s+month\b", passage):
+            if re.search(r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b", passage):
+                score += 250
+        month_anchor = re.search(r"\b(?:preceding|previous)\s+month\b", passage) if wants_month_comparison else None
+        year_anchor = re.search(r"\bsame\s+month\s+one\s+year\b", passage) if wants_year_comparison else None
+        if month_anchor:
             score += 350
-        if wants_year_comparison and re.search(r"\bsame\s+month\s+one\s+year\b", passage):
+            if re.search(r"\d+(?:\.\d+)?\s*(?:percent|%)", passage[month_anchor.end():]):
+                score += 250
+        if year_anchor:
             score += 350
+            if re.search(r"\d+(?:\.\d+)?\s*(?:percent|%)", passage[year_anchor.end():]):
+                score += 250
         ranked.append((score, start))
     ranked.sort(key=lambda item: (-item[0], item[1]))
     selected: list[tuple[int, str]] = []
@@ -299,7 +318,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]},
             "evidence_guidance": "Cite the supplied evidence for source-based counterarguments. "
-                "Put unanswered questions and missing evidence in limitations; do not invent evidence."}
+                "Put unanswered questions and missing evidence in limitations; do not invent evidence. "
+                "When source coverage is partial, describe missing information as absent from the supplied excerpts, "
+                "not from the entire document."}
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
@@ -319,8 +340,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             return [_select_window(source.text, question, size, should_stop)]
 
         def source_payload(parts: list[tuple[int, str]]) -> list[dict[str, Any]]:
+            coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
             return [{"source_id": source.source_id, "title": source.title,
-                     "character_start": start, "text": passage} for start, passage in parts]
+                     "character_start": start, "source_characters": len(source.text),
+                     "source_coverage": coverage, "text": passage} for start, passage in parts]
 
         def fits(candidate: list[tuple[int, str]]) -> bool:
             data["sources"].extend(source_payload(candidate))

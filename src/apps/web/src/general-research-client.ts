@@ -22,6 +22,7 @@ export interface ResearchContent {
   evidence_differences?: { label: string; period: string; unit: string; currency: string | null; status: string; truncated: boolean; facts: { fact_id: string; source_id: string; value: string }[] }[];
   calculations: { formula_id: string; formula_version?: string; expression: string; inputs: { fact_id: string; value: string; unit: string; period: string }[]; value: string; unit: string; authorship?: string; input_status?: string }[];
   calculation_differences?: { claim_index: number; calculation_index: number; claimed_value: string; calculated_value: string; unit: string; status: string }[];
+  amount_differences?: { claim_index: number; claimed_amount: string; source_fact_ids: string[]; status: string }[];
   claims: ResearchClaim[];
   limitations: string[];
   run: Record<string, unknown>;

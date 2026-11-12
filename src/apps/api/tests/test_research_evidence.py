@@ -1,4 +1,4 @@
-from app.research_evidence import evidence_differences, suggest_percentage_evidence
+from app.research_evidence import claim_amount_differences, evidence_differences, suggest_percentage_evidence
 
 
 def fact(fact_id, source_id, value, *, label="Revenue", period="FY2023", unit="USD million", currency="USD"):
@@ -69,3 +69,22 @@ def test_formula_scale_factor_does_not_suggest_unrelated_percent_fact():
     assert not suggest_percentage_evidence([formula], [hundred])[0].get("suggested_fact_evidence")
     statement = {"text": "Growth was 100%.", "citations": []}
     assert suggest_percentage_evidence([statement], [hundred])[0]["suggested_fact_evidence"][0]["fact_id"] == "a"
+
+
+def test_chinese_usd_conversion_flags_only_anchored_unmatched_amounts():
+    quote = "2023 revenue 53717, 2024 revenue 57063 million USD"
+    def sourced(id, value, year):
+        return {**fact(id, "one", value, period=year, unit="USD millions"), "quotation": quote,
+                "location": {"character_start": 0, "character_end": len(quote)},
+                "verification": "model_extraction_not_independently_verified"}
+    facts = [sourced("prior", "53717", "2023"), sourced("current", "57063", "2024")]
+    claim = {"text": "2023为53,717百万美元，2024为57,063百万美元，即57,070.63亿美元。",
+             "citations": [{"source_id": "one"}]}
+    warning = claim_amount_differences([claim], facts)
+    assert len(warning) == 1 and warning[0]["claimed_amount"] == "57,070.63亿美元"
+    assert warning[0]["status"] == "requires_review" and warning[0]["source_fact_ids"] == ["prior", "current"]
+    for amount in ("570.63亿美元", "570.6亿美元", "57063百万美元"):
+        assert claim_amount_differences([{**claim, "text": f"2024为57,063百万美元，即{amount}。"}], facts) == []
+    assert claim_amount_differences([{**claim, "text": "金额57,070.63亿美元。"}], facts) == []
+    assert claim_amount_differences([{**claim, "citations": [{"source_id": "other"}]}], facts) == []
+    assert claim_amount_differences([claim], [{**f, "authorship": "user"} for f in facts]) == []

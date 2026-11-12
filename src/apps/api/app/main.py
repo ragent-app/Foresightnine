@@ -99,7 +99,7 @@ from .research_topics import AttachSourcesInput, ResearchInput, ResearchMetadata
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
-from .research_evidence import evidence_differences, suggest_percentage_evidence
+from .research_evidence import claim_amount_differences, evidence_differences, suggest_percentage_evidence
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_support_review, prepare_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult
@@ -1687,6 +1687,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         content.claims = suggest_percentage_evidence(content.claims, content.facts)
         content.evidence_differences = evidence_differences(content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
+        content.amount_differences = claim_amount_differences(content.claims, content.facts)
         retained = previous.content.model_copy(deep=True)
         content.run = retained.run
         content.sources = retained.sources
@@ -2138,6 +2139,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     evidence_differences=evidence_differences(analysis.facts),
                                     calculations=analysis.calculations,
                                     calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                    amount_differences=claim_amount_differences(claims, analysis.facts),
                                     claims=claims, limitations=[*discovery_notes, *analysis.limitations,
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
@@ -2189,6 +2191,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         _raise_if_operation_cancelled(operation_id)
         differences = evidence_differences(analysis.facts)
         calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
+        amount_differences = claim_amount_differences(claims, analysis.facts)
         processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
             "not processed", "remaining text was not examined", "was omitted", "were omitted",
             "permission is not granted", "not established", "not authorized", "quotation location is ambiguous",
@@ -2196,7 +2199,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and analysis.counterarguments and all(c["citations"] for c in claims)
-                        and not processing_incomplete and not differences and not calculation_differences and
+                        and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if request.support_review:
@@ -2207,6 +2210,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.")
         if calculation_differences:
             limitations.append("A claim percentage may differ from a deterministic calculation; review the wording and calculation.")
+        if amount_differences:
+            limitations.append("A claim amount may not match the cited numeric facts after unit conversion; review the source and wording.")
+            if len(amount_differences) == 50:
+                limitations.append("At most 50 amount review candidates are shown; additional candidates may exist.")
         if len(differences) == 50:
             limitations.append("At most 50 candidate differences are shown.")
         if monotonic() > deadline:
@@ -2221,7 +2228,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             parent_version_id=request.parent_version_id, status="completed" if complete else "partial",
             content=ResearchContent(source_candidates=discovered, sources=source_summaries(analysis.source_ids), facts=analysis.facts,
                 evidence_differences=differences,
-                calculations=analysis.calculations, calculation_differences=calculation_differences,
+                calculations=analysis.calculations, calculation_differences=calculation_differences, amount_differences=amount_differences,
                 claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
                      "model_calls": calls, "total_tokens": usage, "cost_usd": None,
