@@ -1001,3 +1001,21 @@ def test_scope_is_in_untrusted_question_and_influences_source_selection():
     prompts.clear()
     analyze('What was revenue?', [report], None, capture)
     assert prompts[0]['question'] == 'What was revenue?'
+
+
+def test_prompt_includes_cutoff_only_for_historical_research():
+    cutoff = datetime(2023, 7, 1, 12, 30, 0, 123456, tzinfo=timezone.utc)
+    old = source('old', published_at=datetime(2023, 1, 1, tzinfo=timezone.utc))
+    later = source('later', text='Later revision', published_at=datetime(2023, 7, 2, tzinfo=timezone.utc))
+    captured = []
+    def generate(prompt):
+        captured.append(json.loads(prompt))
+        return {}, 1
+    analyze('What was known?', [old, later], cutoff, generate)
+    assert captured[0]['research_cutoff'] == cutoff.isoformat()
+    assert 'do not use later events' in captured[0]['evidence_guidance']
+    assert [item['source_id'] for item in captured[0]['sources']] == ['old']
+    captured.clear()
+    analyze('What happened?', [old], None, generate)
+    assert 'research_cutoff' not in captured[0]
+    assert 'do not use later events' not in captured[0]['evidence_guidance']

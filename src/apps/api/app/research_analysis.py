@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v20"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v21"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 
@@ -756,6 +756,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 "Cite table headers, units and rows separately. "
                 "Put missing evidence in limitations. Excerpts are not the whole source. "
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
+    if as_of is not None:
+        data["research_cutoff"] = as_of.isoformat()
+        data["evidence_guidance"] += (
+            " Answer from information available by research_cutoff; do not use later events. "
+            "Declared source dates are not independent proof of historical availability."
+        )
     if focus is not None:
         data["evidence_guidance"] += (
             " A user selected a passage for attention; assess its relevance to the question, "

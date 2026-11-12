@@ -122,7 +122,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert snapshot["sources"][0]["revised_at"].startswith("2024-02-01")
     assert snapshot["sources"][0]["obtained_at"]
     assert snapshot["budget"]["max_model_calls"] == 1
-    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v20"
+    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v21"
     assert "Revenue was 100" not in inputs.text and "owner_id" not in inputs.json()
     other = client.post("/v1/auth/local/register", json={"email": "other@example.test",
         "password": "correct horse battery staple!"}).json()["access_token"]
@@ -1437,3 +1437,42 @@ def test_run_passes_persisted_scope_and_records_hash(monkeypatch):
     inputs = client.get(path + '/runs/' + operation_id + '/inputs', headers=headers).json()
     assert inputs['scope_sha256'] == sha256(scope.encode()).hexdigest()
     assert scope not in str(inputs)
+
+
+def test_historical_run_sends_cutoff_and_excludes_later_source(monkeypatch):
+    import json
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *a, **k: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *a, **k: None)
+    prompts = []
+    class Provider:
+        name = 'cutoff-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            prompts.append(json.loads(prompt))
+            return {'claims': []}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'cutoff-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    ids = []
+    for title, date in [('Old', '2023-01-01T00:00:00Z'), ('Later', '2023-07-02T00:00:00Z')]:
+        response = client.post('/v2/research/sources', headers=headers, json={'title': title, 'text': title + ' material.', 'published_at': date, 'permissions': {'store': True, 'display': True, 'model_input': True}})
+        assert response.status_code == 201, response.text
+        ids.append(response.json()['source_id'])
+    cutoff = '2023-07-01T12:30:00.123456Z'
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was known?', 'as_of': cutoff, 'source_ids': ids}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    started = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'cutoff-request-key'}, json={'parent_version_id': topic['versions'][-1]['version_id']})
+    assert started.status_code == 202, started.text
+    op = started.json()['operation']['operation_id']
+    for _ in range(100):
+        status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(0.02)
+    assert status == 'completed' and len(prompts) == 1
+    assert prompts[0]['research_cutoff'] == '2023-07-01T12:30:00.123456+00:00'
+    assert [s['source_id'] for s in prompts[0]['sources']] == ids[:1]
+    snapshot = client.get(path + '/runs/' + op + '/inputs', headers=headers).json()
+    assert snapshot['as_of'] == prompts[0]['research_cutoff']
