@@ -261,10 +261,12 @@ def test_edited_source_fact_reports_stale_value_and_untrusted_location(monkeypat
     assert current['content']['facts'][0]['source_value_warnings'] == ['value_missing']
     assert current['content']['facts'][0]['verification'] == 'user_edited_not_independently_verified'
     assert not second.json()['versions'][-2]['content']['facts'][0].get('source_value_warnings')
-    corrected = deepcopy(current['content']);corrected['facts'][0]['quotation'] = 'Revenue 200';corrected['facts'][0]['location'] = {'character_start': 13, 'character_end': 24}
+    corrected = deepcopy(current['content']);corrected['facts'][0]['quotation'] = 'Revenue 200';corrected['facts'][0].pop('location')
     third = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': corrected})
     assert third.status_code == 201, third.text
     assert not third.json()['versions'][-1]['content']['facts'][0].get('source_value_warnings')
+    assert third.json()['versions'][-1]['content']['facts'][0]['location'] == {'character_start': 13, 'character_end': 24}
+    assert third.json()['versions'][-1]['content']['facts'][0]['quotation_match'] == 'exact'
     invalid = deepcopy(third.json()['versions'][-1]['content']);invalid['facts'][0]['location'] = {'character_start': True, 'character_end': 24}
     fourth = client.post(path + '/versions', headers=headers, json={'parent_version_id': third.json()['versions'][-1]['version_id'], 'content': invalid})
     assert fourth.status_code == 201, fourth.text
@@ -368,3 +370,44 @@ def test_create_calculation_from_saved_facts_validates_inputs_and_preserves_hist
     assert [x["fact_id"] for x in calc["inputs"]]==["new","old"]
     assert calc["authorship"]=="calculation_engine" and current["review"]=="draft"
     assert client.post(path+"/calculations",headers=headers,json=spec).status_code==409
+
+
+def test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client=TestClient(app)
+    account=client.post("/v1/auth/local/register",json={"email":f"retarget-{uuid4().hex}@example.test",
+        "password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+account["access_token"]}
+    source=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue 100. Revenue 200. Base 50.",
+        "permissions":{"store":True,"display":True,"model_input":True}}).json()
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Difference?","source_ids":[source["source_id"]]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    facts=[{"fact_id":"revenue","label":"Revenue","value":"200","unit":"USD","currency":"USD","period":"2024",
+            "source_id":source["source_id"],"quotation":"Revenue 100","location":{"character_start":0,"character_end":11}},
+           {"fact_id":"base","label":"Base","value":"50","unit":"USD","currency":"USD","period":"2024"}]
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":topic["versions"][0]["version_id"],"content":{"facts":facts}})
+    assert saved.status_code==201
+    old=saved.json()["versions"][-1]
+    assert old["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
+    request={"parent_version_id":old["version_id"],"formula":"difference","first_fact_id":"revenue","second_fact_id":"base"}
+    assert client.post(path+"/calculations",headers=headers,json=request).status_code==422
+    corrected=deepcopy(old["content"]);corrected["facts"][0]["quotation"]="Revenue 200";corrected["facts"][0].pop("location")
+    updated=client.post(path+"/versions",headers=headers,json={"parent_version_id":old["version_id"],"content":corrected})
+    assert updated.status_code==201,updated.text
+    current=updated.json()["versions"][-1];fact=current["content"]["facts"][0]
+    assert fact["location"]=={"character_start":13,"character_end":24}
+    assert fact["quotation_match"]=="exact" and not fact.get("source_value_warnings")
+    request["parent_version_id"]=current["version_id"]
+    calculation=client.post(path+"/calculations",headers=headers,json=request)
+    assert calculation.status_code==201,calculation.text
+    latest=calculation.json()["versions"][-1]
+    assert latest["content"]["calculations"][0]["value"]=="150.00"
+    assert updated.json()["versions"][-2]["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
+    ambiguous=deepcopy(latest["content"]);ambiguous["facts"][0]["quotation"]="Revenue";ambiguous["facts"][0].pop("location")
+    saved_ambiguous=client.post(path+"/versions",headers=headers,json={"parent_version_id":latest["version_id"],"content":ambiguous})
+    assert saved_ambiguous.status_code==201
+    uncertain=saved_ambiguous.json()["versions"][-1]
+    assert uncertain["content"]["facts"][0]["source_value_warnings"]==["quotation_ambiguous"]
+    assert uncertain["content"]["calculations"][0]["input_status"]=="unverifiable"
+    assert client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":uncertain["version_id"],"calculation_index":0}).status_code==422

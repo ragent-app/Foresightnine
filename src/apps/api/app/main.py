@@ -1679,6 +1679,9 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                 normalized.append(deepcopy(checked_citations[key]))
             claim["citations"] = normalized
         fact_id_counts = Counter(item["fact_id"].strip() for item in content.facts if isinstance(item.get("fact_id"), str))
+        prior_counts = Counter(item.get("fact_id") for item in previous.content.facts if isinstance(item.get("fact_id"), str))
+        prior_facts = {item["fact_id"]: item for item in previous.content.facts
+                       if isinstance(item.get("fact_id"), str) and prior_counts[item["fact_id"]] == 1}
         fact_check_limit = max(0, 200 - len(checked_citations))
         fact_check_attempts = 0
         for fact in content.facts:
@@ -1707,6 +1710,11 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                 except (SourceNotFound, ValueError) as error:
                     raise ApiProblem(422, "invalid_request", "Research fact must use an attached real source.") from error
             fact.update(numeric.model_dump(mode="json"))
+            prior_fact = prior_facts.get(numeric.fact_id)
+            quotation_changed = (prior_fact is None or prior_fact.get("source_id") != fact.get("source_id") or
+                                 prior_fact.get("quotation") != fact.get("quotation"))
+            if quotation_changed:
+                fact.pop("quotation_match", None)
             # User edits can retain an older source quotation and location.
             # Recompute visible review cues instead of treating that retained
             # provenance as evidence for the edited value.
@@ -1764,13 +1772,20 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                                         table_currency_quote_missing(numeric.currency, "|" + quote)):
                                     fact["currency_quote_missing"] = True
                                 saved_location = fact.get("location")
-                                if (not isinstance(saved_location, dict) or
+                                if saved_location is None:
+                                    # A new quotation can request server-side
+                                    # location instead of supplying coordinates.
+                                    fact["location"] = deepcopy(location)
+                                    fact["quotation_match"] = checked.get("quotation_match")
+                                elif (not isinstance(saved_location, dict) or
                                         saved_location.get("status") is not None or
                                         type(saved_location.get("character_start")) is not int or
                                         type(saved_location.get("character_end")) is not int or
                                         saved_location.get("character_start") != location["character_start"] or
                                         saved_location.get("character_end") != location["character_end"]):
                                     warnings.append("location_mismatch")
+                                elif quotation_changed:
+                                    fact["quotation_match"] = checked.get("quotation_match")
                                 if numeric.value not in _quoted_numbers(quote) and not fact.get("direction_context_unverified"):
                                     warnings.append("value_missing")
                         except ValueError:
@@ -1919,6 +1934,8 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
         if len(candidates) != 1:
             raise ApiProblem(422, "invalid_request", "Calculation input facts are missing or ambiguous.")
         fact = candidates[0]
+        if fact.get("source_value_warnings"):
+            raise ApiProblem(422, "invalid_request", "The fact's source quotation requires review before calculation.")
         location = fact.get("location")
         if isinstance(location, dict) and location.get("status") == "ambiguous":
             raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before calculation.")

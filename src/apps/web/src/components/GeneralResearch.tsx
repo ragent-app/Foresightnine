@@ -680,6 +680,11 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
             <Field label={`${en ? "Unit" : "单位"} ${index + 1}`}><Input value={fact.unit ?? ""} maxLength={100} disabled={busy} onChange={(event) => updateFact(index, { unit: event.target.value })} /></Field>
             <Field label={`${en ? "Currency (optional)" : "币种（可选）"} ${index + 1}`}><Input value={fact.currency ?? ""} maxLength={16} disabled={busy} onChange={(event) => updateFact(index, { currency: event.target.value || null })} /></Field>
             <Field label={`${en ? "Period" : "期间"} ${index + 1}`}><Input value={fact.period ?? ""} maxLength={100} disabled={busy} onChange={(event) => updateFact(index, { period: event.target.value })} /></Field>
+            <CitationEditor mode="replace" loadSource={(sourceId) => api.sourceText(topic.topic_id, current.version_id, sourceId)} sources={sourceMetadata} asOf={topic.request.as_of} disabled={busy} en={en} onAdd={(sourceId, quotation) => setFacts((items) => items.map((item, itemIndex) => {
+              if (itemIndex !== index) return item;
+              const { location: _location, direction_confirmation: _confirmation, quotation_match: _match, ...rest } = item;
+              return { ...rest, source_id: sourceId, quotation };
+            }))} />
           </> : <p>{fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</p>}
           {fact.location?.status === "ambiguous" ? <p role="status">{en ? "The quotation has multiple possible locations; this figure is excluded from automatic calculations." : "引文有多个可能位置，该数值未用于自动计算。"}</p> : null}
           {fact.currency && typeof fact.unit === "string" && ["percent", "percentage", "%"].includes(fact.unit.trim().toLowerCase()) ? <p role="status">{en ? "The currency associated with this percentage is unverified; it is excluded from automatic calculations until the metadata is corrected." : "此百分比关联的币种尚未核验；更正资料前不用于自动计算。"}</p> : null}
