@@ -26,6 +26,8 @@ def test_explicit_chinese_amount_scales_and_rounding():
     refs = ["74400", "88200", "13800"]  # USD millions
     assert unexpected_explicit_usd_amounts("74.4亿美元", refs) == ["74.4亿美元"]
     assert unexpected_explicit_usd_amounts("744亿美元、882亿美元、138亿美元", refs) == []
+    assert unexpected_explicit_usd_amounts("74.4个十亿美元、0.882千亿美元", refs) == []
+    assert unexpected_explicit_usd_amounts("74.4亿美元、74.4十亿美元", refs) == ["74.4亿美元"]
     assert unexpected_explicit_usd_amounts("744.0亿美元，约880亿美元", refs) == ["880亿美元"]
     assert unexpected_explicit_usd_amounts("74.4 euros, 88.2", refs) == []
 

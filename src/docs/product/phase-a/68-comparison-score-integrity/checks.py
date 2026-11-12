@@ -6,10 +6,11 @@ mismatches. They do not establish entity, temporal or semantic entailment.
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 import re
 
-_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(万亿|千万|百万|十万|亿|万|千)?\s*(?:美元|美金)")
-_FACTORS = {"万亿": Decimal("1000000"), "亿": Decimal("100"), "千万": Decimal("10"),
+_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:个\s*)?(万亿|千亿|百亿|十亿|千万|百万|十万|亿|万|千|百)?\s*(?:美元|美金)")
+_FACTORS = {"万亿": Decimal("1000000"), "千亿": Decimal("100000"), "百亿": Decimal("10000"),
+            "十亿": Decimal("1000"), "亿": Decimal("100"), "千万": Decimal("10"),
             "百万": Decimal("1"), "十万": Decimal("0.1"), "万": Decimal("0.01"),
-            "千": Decimal("0.001"), "": Decimal("0.000001")}
+            "千": Decimal("0.001"), "百": Decimal("0.0001"), "": Decimal("0.000001")}
 
 
 def _contains_number(text: str, token: str) -> bool:

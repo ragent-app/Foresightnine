@@ -15,10 +15,11 @@ from .research_sources import ResearchSource, partial_ascii_token
 
 
 _PERCENT = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.\d+)?))\s*(?:%|％|percent\b)", re.IGNORECASE)
-_ZH_USD_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(万亿|千万|百万|十万|亿|万|千)?\s*(美元|美金)")
-_ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "亿": Decimal("100"), "千万": Decimal("10"),
+_ZH_USD_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:个\s*)?(万亿|千亿|百亿|十亿|千万|百万|十万|亿|万|千|百)?\s*(美元|美金)")
+_ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "千亿": Decimal("100000"), "百亿": Decimal("10000"),
+                       "十亿": Decimal("1000"), "亿": Decimal("100"), "千万": Decimal("10"),
                        "百万": Decimal("1"), "十万": Decimal("0.1"), "万": Decimal("0.01"),
-                       "千": Decimal("0.001"), "": Decimal("0.000001")}
+                       "千": Decimal("0.001"), "百": Decimal("0.0001"), "": Decimal("0.000001")}
 _ZH_PUBLICATION = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*年\s*(1[0-2]|0?[1-9])\s*月(?:\s*(3[01]|[12]\d|0?[1-9])\s*日)?\s*(?:发布|公布|发表|刊登)")
 _EN_PUBLICATION = re.compile(r"\b(?:published|released|issued)\s+(?:on|in)\s+((?:19|20)\d{2})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?(?![-\d])", re.IGNORECASE)
 _RATE_NUMBER = r"\d+(?:-\d+/\d+|\.\d+)?"

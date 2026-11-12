@@ -256,6 +256,9 @@ def test_single_chinese_amount_with_same_number_but_wrong_billion_scale_is_flagg
     result = claim_amount_differences([claim], [item])
     assert result == [{"claim_index": 0, "claimed_amount": "74.4亿美元", "source_fact_ids": ["f"], "status": "requires_review"}]
     assert not claim_amount_differences([{**claim, "text": "个人收入变化为744亿美元。"}], [item])
+    assert not claim_amount_differences([{**claim, "text": "个人收入变化为74.4个十亿美元。"}], [item])
+    paired = claim_amount_differences([{**claim, "text": "个人收入变化为74.4亿美元，即74.4个十亿美元。"}], [item])
+    assert [x["claimed_amount"] for x in paired] == ["74.4亿美元"]
     assert not claim_amount_differences([{**claim, "text": "个人收入变化为75亿美元。"}], [item])
     assert not claim_amount_differences([claim], [item, {**item, "fact_id": "other", "value": "74.4"}])
     assert not claim_amount_differences([claim], [{**item, "currency": "EUR"}])
