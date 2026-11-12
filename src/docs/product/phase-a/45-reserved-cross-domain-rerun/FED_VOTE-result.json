@@ -1,0 +1,157 @@
+{
+  "id": "FED_VOTE",
+  "operation_status": "completed",
+  "manifest_sha256": "330b58770d6b29137181cee685ccb7aa9f9534ec4f1004f8c2189523c4e02a79",
+  "input_sha256": "4fe00d6db7b6205a2e3f72faf7b374cd34ed3f647f78932b7a27da9356183083",
+  "elapsed_seconds_observed": 16.305,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+        "title": "Federal Reserve May 2023 meeting minutes",
+        "url": null,
+        "event_at": null,
+        "published_at": "2023-05-24T18:00:00+00:00",
+        "obtained_at": "2026-11-12T06:08:01.599953+00:00",
+        "revised_at": null,
+        "content_sha256": "438dd6be38ad3f5b43b7e212832d1365e10e8ec571c67be5b6dd02d158a2ab73",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "所附摘录中未出现任何关于2023年5月会议货币政策行动投票或异议的记录，无法确认是否有委员投反对票。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "location": {
+              "character_start": 0,
+              "character_end": 58,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Minutes of the Federal Open Market Committee\nMay 2–3, 2023"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "摘录中唯一明确提及的投票记录是4月11日全票通过3月会议纪要的记录性投票，与5月会议的货币政策行动异议无关。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "location": {
+              "character_start": 55628,
+              "character_end": 55772,
+              "page": 12
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "By notation vote completed on April 11, 2023, the\nCommittee unanimously approved the minutes of the\nCommittee meeting held on March 21–22, 2023."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "不应将摘录中的\"unanimously\"推断为5月货币政策行动无异议——该词描述的是关于3月会议纪要的记录性投票，而非5月会议的利率决定。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "location": {
+              "character_start": 55674,
+              "character_end": 55772,
+              "page": 12
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the\nCommittee unanimously approved the minutes of the\nCommittee meeting held on March 21–22, 2023."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_8e6805c729aa43d887a67011083c1f7a: only character ranges 0–308, 55552–55856 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "提供的来源仅为部分摘录（source_coverage: partial），不包含5月会议货币政策行动的投票部分或任何异议记录。",
+      "无法从摘录中确认是否提及“Voting Action”或“dissented/dissent”等关键词。",
+      "发布日期（declared_published_at 2023-05-24）为声明的元数据，未经独立核实，且不等于会议期间。",
+      "真实纪要中2023年5月加息25个基点决定及异议情况（通常列于投票行动部分）未包含在所附文本中。",
+      "无法仅凭摘录得出“有/无异议”的结论，需提供完整纪要投票部分方可回答。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:1e7067d376fb178c38a7cefc",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1303,
+      "cost_usd": null,
+      "generation_tokens": 1303,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 14.692,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "b71e6140aa680ea9c793ab8e070ff7ae7d973b1e8422ad55fdacf5cf37746f0e",
+      "prompt_characters": 1958,
+      "prompt_bytes": 2054,
+      "selection_method": "ranked_nonoverlapping_windows_v13",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "character_start": 0,
+          "character_end": 308
+        },
+        {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "character_start": 55552,
+          "character_end": 55856
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_8e6805c729aa43d887a67011083c1f7a": "438dd6be38ad3f5b43b7e212832d1365e10e8ec571c67be5b6dd02d158a2ab73"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

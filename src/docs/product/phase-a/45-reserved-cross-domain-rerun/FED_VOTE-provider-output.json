@@ -1,0 +1,58 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "所附摘录中未出现任何关于2023年5月会议货币政策行动投票或异议的记录，无法确认是否有委员投反对票。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "Minutes of the Federal Open Market Committee May 2–3, 2023"
+          }
+        ]
+      },
+      {
+        "text": "摘录中唯一明确提及的投票记录是4月11日全票通过3月会议纪要的记录性投票，与5月会议的货币政策行动异议无关。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "By notation vote completed on April 11, 2023, the Committee unanimously approved the minutes of the Committee meeting held on March 21–22, 2023."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "不应将摘录中的\"unanimously\"推断为5月货币政策行动无异议——该词描述的是关于3月会议纪要的记录性投票，而非5月会议的利率决定。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "the Committee unanimously approved the minutes of the Committee meeting held on March 21–22, 2023."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的来源仅为部分摘录（source_coverage: partial），不包含5月会议货币政策行动的投票部分或任何异议记录。",
+      "无法从摘录中确认是否提及“Voting Action”或“dissented/dissent”等关键词。",
+      "发布日期（declared_published_at 2023-05-24）为声明的元数据，未经独立核实，且不等于会议期间。",
+      "真实纪要中2023年5月加息25个基点决定及异议情况（通常列于投票行动部分）未包含在所附文本中。",
+      "无法仅凭摘录得出“有/无异议”的结论，需提供完整纪要投票部分方可回答。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_notation_vote_date",
+        "label": "notation_vote_completion_date",
+        "value": "April 11, 2023",
+        "unit": "date",
+        "currency": null,
+        "period": "April 2023",
+        "citation": {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "quotation": "By notation vote completed on April 11, 2023, the Committee unanimously approved the minutes"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1303
+}

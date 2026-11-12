@@ -1,0 +1,66 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": " supplied sources only支持 NVIDIA FY2023 Automotive 业务收入为 9.03 亿美元、较 FY2022 增长 60%，未提供 FY2023 与 FY2022 的公司总收入数据。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "Automotive revenue for fiscal year 2023 grew 60% compared to fiscal year 2022 to $903 million."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "由于申报材料摘录不完整，无法确认公司整体 Revenue 的同比增长，任何总体增长结论都可能基于不完整证据。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "Automotive revenue for fiscal year 2023 grew 60% compared to fiscal year 2022 to $903 million."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "所附来源文本未包含 FY2023 与 FY2022 的公司总收入（Revenue）数值，无法列示总体 Revenue、其期间单位或计算同比增长；仅能提取 Automotive 分部数据。",
+      "来源覆盖为 partial，摘录并非完整申报文件，可能遗漏损益表中的收入数据。",
+      "来源未明确说明 NVIDIA 财年期间的起止日期，期间仅能按申报文件中的 fiscal year 2023 / 2022 表述。",
+      "来源未说明 Automotive 收入的币种，尽管 $903 million 暗示为美元，但需以原文核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_auto_rev_fy23",
+        "label": "Automotive revenue FY2023",
+        "value": "$903 million",
+        "unit": "million USD",
+        "currency": "USD",
+        "period": "fiscal year 2023",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "Automotive revenue for fiscal year 2023 grew 60% compared to fiscal year 2022 to $903 million."
+        }
+      },
+      {
+        "fact_id": "fact_auto_growth",
+        "label": "Automotive revenue YoY growth",
+        "value": "60%",
+        "unit": "percent",
+        "currency": null,
+        "period": "FY2023 vs FY2022",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "Automotive revenue for fiscal year 2023 grew 60% compared to fiscal year 2022 to $903 million."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_auto_rev_fy23",
+        "second_fact_id": "fact_auto_rev_fy23"
+      }
+    ]
+  },
+  "reported_tokens": 1200
+}
