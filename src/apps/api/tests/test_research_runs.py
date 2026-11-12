@@ -3090,3 +3090,48 @@ def test_failed_official_fetch_keeps_a_lead_without_fabricating_evidence(monkeyp
     assert not content['claims'] and not content['facts'] and 'Untrusted snippet' not in str(content)
     snapshot = client.get(path + '/runs/' + operation_id + '/inputs', headers=headers).json()
     assert client.get('/v2/research/sources/' + snapshot['planned_official_source_id'], headers=headers).status_code == 404
+
+
+def test_uncited_exact_date_stays_partial_and_is_rechecked_on_edit(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    source_id = ''
+    class Provider:
+        name = 'date-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {'claims': [{'text': 'On January 25, 2024 revenue was 100.', 'citations': [
+                {'source_id': source_id, 'quotation': 'Revenue was 100.'}]}]}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *a, **kw: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *a, **kw: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'date-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Release',
+        'text': 'Published January 25, 2024. Revenue was 100.',
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True}}).json()
+    source_id = source['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'date-test'}, json={
+        'parent_version_id': topic['versions'][-1]['version_id'], 'require_counterarguments': False})
+    operation_id = receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    current = client.get(path, headers=headers).json()['versions'][-1]
+    assert current['content']['run']['status'] == 'partial'
+    assert current['content']['claims'][0]['uncited_exact_dates'] == ['January 25, 2024']
+    edited = deepcopy(current['content'])
+    edited['claims'][0]['text'] += ' Reported.'
+    edited['claims'][0]['uncited_exact_dates'] = []
+    update = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': edited})
+    assert update.status_code == 201, update.text
+    next_version = update.json()['versions'][-1]
+    assert next_version['content']['claims'][0]['uncited_exact_dates'] == ['January 25, 2024']
+    exported = client.get(path + '/versions/' + next_version['version_id'] + '/export', headers=headers)
+    assert exported.status_code == 200 and exported.json()['version']['content']['claims'][0]['uncited_exact_dates']

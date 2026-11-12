@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v25"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v26"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -472,3 +472,9 @@ def test_support_review_does_not_promote_pdf_table_alignment():
     narrative = report.model_copy(update={"text": text})
     item["citations"][0]["location"] = {"character_start": text.index(quote), "character_end": len(text) - 1, "page": 1}
     assert prepare_support_review([item], [narrative], 3000).indexes == [0]
+
+
+def test_model_review_omits_claim_with_uncited_exact_date():
+    item = {**claim(), 'text': 'On January 25, 2024 the report said revenue was 100.', 'uncited_exact_dates': []}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert not batch.indexes and batch.omissions == [{'claim_index': 0, 'reason': 'not_reviewable'}]

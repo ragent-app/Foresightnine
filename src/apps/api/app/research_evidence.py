@@ -59,6 +59,70 @@ def flag_uncited_causal_attribution(claims: list[dict], sources: list[ResearchSo
     return output
 
 
+
+_MONTH_NUMBER = {name.casefold(): index for index, names in enumerate((
+    ("January", "Jan"), ("February", "Feb"), ("March", "Mar"), ("April", "Apr"),
+    ("May",), ("June", "Jun"), ("July", "Jul"), ("August", "Aug"),
+    ("September", "Sep", "Sept"), ("October", "Oct"), ("November", "Nov"), ("December", "Dec")), 1)
+    for name in names}
+_MONTH_PATTERN = "|".join(sorted(_MONTH_NUMBER, key=len, reverse=True))
+_FULL_DATE = re.compile(
+    rf"(?<![A-Za-z0-9_/])(?:(?P<month>{_MONTH_PATTERN})\.?\s+(?P<day>\d{{1,2}}),?\s+(?P<year>(?:19|20)\d{{2}})"
+    rf"|(?P<year2>(?:19|20)\d{{2}})[-年](?P<month2>\d{{1,2}})[-月](?P<day2>\d{{1,2}})日?)(?![A-Za-z0-9_/])",
+    re.IGNORECASE)
+
+
+def _explicit_dates(text: str) -> list[tuple[date, str]]:
+    found: list[tuple[date, str]] = []
+    for match in _FULL_DATE.finditer(text):
+        try:
+            if match.group("month"):
+                value = date(int(match.group("year")), _MONTH_NUMBER[match.group("month").casefold()], int(match.group("day")))
+            else:
+                value = date(int(match.group("year2")), int(match.group("month2")), int(match.group("day2")))
+        except ValueError:
+            continue
+        found.append((value, match.group(0)))
+        if len(found) == 20:
+            break
+    return found
+
+
+def flag_uncited_exact_dates(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag exact calendar dates absent from uniquely located quotations.
+
+    Matching a date is only a cue, not proof of its meaning, event, or source
+    publication date. Source metadata and surrounding uncited text cannot
+    establish that the claim is supported by its quotations.
+    """
+    source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("uncited_exact_dates", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if not isinstance(text, str) or len(text) > 3000:
+            output.append(entry)
+            continue
+        quoted: set[date] = set()
+        if isinstance(citations, list):
+            for citation in citations[:10]:
+                if not isinstance(citation, dict) or citation.get("partial_token"):
+                    continue
+                source = source_map.get(citation.get("source_id")) if isinstance(citation.get("source_id"), str) else None
+                quote, location = citation.get("quotation"), citation.get("location")
+                if source is None or not isinstance(quote, str) or not isinstance(location, dict) or location.get("status") == "ambiguous":
+                    continue
+                start, end = location.get("character_start"), location.get("character_end")
+                if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text) and
+                        source.text[start:end] == quote and not partial_ascii_token(source.text, start, end)):
+                    quoted.update(value for value, _ in _explicit_dates(quote))
+        missing = list(dict.fromkeys(raw for value, raw in _explicit_dates(text) if value not in quoted))[:5]
+        if missing:
+            entry["uncited_exact_dates"] = missing
+        output.append(entry)
+    return output
+
 def _strict_upper_percentages(text: str) -> list[tuple[Decimal, str]]:
     """Extract only explicitly strict upper percentage bounds, not exact values."""
     result = []

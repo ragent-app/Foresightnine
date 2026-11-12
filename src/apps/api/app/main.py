@@ -100,7 +100,7 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
-from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, suggest_percentage_evidence, suggest_related_claim_quotations, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
+from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, suggest_percentage_evidence, suggest_related_claim_quotations, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review)
@@ -1856,7 +1856,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         content.claims = suggest_related_claim_quotations(content.claims, list(citation_sources.values()))
         content.claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(content.claims, list(citation_sources.values())))
         content.claims = flag_component_direction(flag_citation_subject_context(content.claims, list(citation_sources.values())), list(citation_sources.values()))
-        content.claims = flag_uncited_causal_attribution(content.claims, list(citation_sources.values()))
+        content.claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(content.claims, list(citation_sources.values())), list(citation_sources.values()))
         content.evidence_differences = evidence_differences(content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         content.amount_differences = claim_amount_differences(content.claims, content.facts)
@@ -2674,7 +2674,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         claims = suggest_related_claim_quotations(claims, sources)
         claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
         claims = flag_component_direction(flag_citation_subject_context(claims, sources), sources)
-        claims = flag_uncited_causal_attribution(claims, sources)
+        claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(claims, sources), sources)
         # Numeric candidates must be considered before model review. A review
         # verdict cannot clear a known calculation or unit discrepancy.
         pre_review_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
@@ -2978,7 +2978,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
-                        not any(c.get("causal_attribution_unverified") or c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_claim_amounts") or c.get("uncited_dollar_amounts") or c.get("uncited_quarters") or c.get("balance_direction_warnings") or c.get("uncited_percentages") or c.get("uncited_percentage_bounds") or c.get("reused_percentages") or c.get("uncited_basis_points") or c.get("uncited_percentage_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
+                        not any(c.get("causal_attribution_unverified") or c.get("uncited_exact_dates") or c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_claim_amounts") or c.get("uncited_dollar_amounts") or c.get("uncited_quarters") or c.get("balance_direction_warnings") or c.get("uncited_percentages") or c.get("uncited_percentage_bounds") or c.get("reused_percentages") or c.get("uncited_basis_points") or c.get("uncited_percentage_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if not analysis.counterarguments:
@@ -2995,6 +2995,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("A claim amount may not match the cited numeric facts after unit conversion; review the source and wording.")
             if len(amount_differences) == 50:
                 limitations.append("At most 50 amount review candidates are shown; additional candidates may exist.")
+        if any(c.get("uncited_exact_dates") for c in claims):
+            limitations.append("An exact date in a claim is absent from its located quotations; verify the date and its meaning.")
         if any(c.get("publication_date_warnings") for c in claims):
             limitations.append("A claimed publication date may differ from the source's declared date; review both.")
         if any(c.get("rate_unit_warnings") for c in claims):

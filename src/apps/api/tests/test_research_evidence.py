@@ -856,3 +856,24 @@ def test_related_quotation_suggests_percentages_from_table_for_ambiguous_target(
     assert not suggest_related_claim_quotations([donor,target],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[1].get("suggested_related_quotations")
     duplicated=source.model_copy(update={"text":text+" "+table})
     assert not suggest_related_claim_quotations([donor,target],[duplicated])[1].get("suggested_related_quotations")
+
+
+def test_exact_dates_require_located_authorized_quotations_not_source_metadata():
+    from datetime import datetime, timezone
+    from app.research_evidence import flag_uncited_exact_dates
+    text = 'Published January 25, 2024. GDP increased 2.5 percent.'
+    report = ResearchSource(source_id='s', owner_id='owner', title='Release', text=text, kind='user_supplied',
+        published_at=datetime(2024, 1, 25, tzinfo=timezone.utc), obtained_at=datetime.now(timezone.utc),
+        content_sha256='hash', permissions=SourcePermissions(store=True, display=True))
+    def citation(quote):
+        start = text.index(quote)
+        return {'source_id': 's', 'quotation': quote, 'location': {'character_start': start, 'character_end': start + len(quote)}}
+    statement = {'text': "BEA's January 25, 2024 advance estimate reported growth.", 'citations': [citation('GDP increased 2.5 percent.')]}
+    assert flag_uncited_exact_dates([statement], [report])[0]['uncited_exact_dates'] == ['January 25, 2024']
+    supported = {**statement, 'text': '2024年1月25日发布。', 'citations': [citation('Published January 25, 2024.')]}
+    assert not flag_uncited_exact_dates([supported], [report])[0].get('uncited_exact_dates')
+    bad_location = {**supported, 'citations': [{**supported['citations'][0], 'location': {'status': 'ambiguous'}}]}
+    assert flag_uncited_exact_dates([bad_location], [report])[0]['uncited_exact_dates'] == ['2024年1月25日']
+    simulated = report.model_copy(update={'is_simulated': True})
+    assert flag_uncited_exact_dates([supported], [simulated])[0]['uncited_exact_dates']
+    assert not flag_uncited_exact_dates([{'text': 'The period was 2023 Q4.', 'uncited_exact_dates': ['stale']}], [report])[0].get('uncited_exact_dates')

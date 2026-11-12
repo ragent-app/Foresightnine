@@ -422,3 +422,22 @@ def test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_
         assert report.text[loc["character_start"]:loc["character_end"]] == citation["quotation"]
     batch = prepare_support_review([counterargument], [report], 4000)
     assert not batch.indexes and batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]
+
+
+def test_recorded_official_html_claim_flags_date_not_in_its_quotations():
+    from app.research_evidence import flag_uncited_exact_dates
+    from app.research_verification import prepare_support_review
+    folder = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/245-official-auto-live'
+    result = json.loads((folder / 'result.json').read_text())
+    manifest = json.loads((folder / 'manifest.json').read_text())
+    text = (folder / 'source.txt').read_text()
+    assert sha256(text.encode()).hexdigest() == manifest['text_sha256']
+    claim = result['content']['claims'][0]
+    source_id = claim['citations'][0]['source_id']
+    report = ResearchSource(source_id=source_id, owner_id='test', title='BEA release', text=text,
+        kind='official', obtained_at=datetime.now(timezone.utc), content_sha256=manifest['text_sha256'],
+        retrieval_method='official_html', permissions=SourcePermissions(store=True, display=True, model_input=True))
+    checked = flag_uncited_exact_dates([claim], [report])[0]
+    assert checked['uncited_exact_dates'] == ['January 25, 2024']
+    batch = prepare_support_review([claim], [report], 4000)
+    assert not batch.indexes and batch.omissions == [{'claim_index': 0, 'reason': 'not_reviewable'}]

@@ -30,6 +30,7 @@ export interface ResearchClaim {
   balance_direction_warnings?: { source_id: string; citation_index: number; basis?: "trade_deficit" | "operating_profit" | "revision_vs_change"; claimed_text: string; status: string }[];
   uncited_fact_values?: string[];
   rate_unit_warnings?: { claimed_text: string; status: string }[];
+  uncited_exact_dates?: string[];
   publication_date_warnings?: { claimed_text: string; source_id: string; declared_published_at: string; status: string }[];
 }
 export interface ResearchFact { numeric_normalization?: string; currency_context_unverified?: boolean; currency_quote_missing?: boolean; table_alignment_unverified?: boolean; table_period_conflict?: { declared_year: string; column_year: string }; table_confirmation?: { confirmed_by: "user"; fact_sha256: string; confirmed_at: string }; currency_conflict_unverified?: boolean; direction_context_unverified?: boolean; direction_confirmation?: { confirmed_by: "user"; fact_sha256: string; confirmed_at: string }; source_value_warnings?: string[]; fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
