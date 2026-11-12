@@ -1,0 +1,8 @@
+[
+  {
+    "id": "JPM_STRESS_2026",
+    "question": "According to the 2026 Federal Reserve stress test report, what were JPMorgan Chase & Co.'s actual common equity tier 1 capital ratio in 2025 Q4, the projected ratio at the end of the severely adverse scenario in 2028 Q1, and the projected minimum during the scenario? Quote the bank name, row and applicable column headings; distinguish the observed value from hypothetical projections.",
+    "source": "fed-stress-2026.pdf",
+    "source_id": "source_20500000000000000000000000000001"
+  }
+]

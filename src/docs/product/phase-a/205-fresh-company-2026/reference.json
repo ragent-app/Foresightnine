@@ -1,0 +1,11 @@
+{
+  "JPM_STRESS_2026": {
+    "bank": "JPMorgan Chase & Co.",
+    "metric": "common equity tier 1 capital ratio",
+    "actual_2025_Q4_percent": "14.6",
+    "projected_2028_Q1_percent": "15.0",
+    "projected_minimum_percent": "12.6",
+    "scenario": "severely adverse",
+    "projections_are_hypothetical": true
+  }
+}
