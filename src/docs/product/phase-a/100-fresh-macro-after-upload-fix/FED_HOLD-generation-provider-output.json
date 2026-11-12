@@ -1,0 +1,90 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; September 20 2023 FOMC statement.",
+  "payload": {
+    "claims": [
+      {
+        "text": "2023年9月的FOMC声明中，委员会决定将联邦基金利率目标区间维持在5-1/4%至5-1/2%（5.25%–5.50%），即维持不变而非调整。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "the Committee decided to maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent."
+          }
+        ]
+      },
+      {
+        "text": "自2023年9月21日起，委员会指示纽约联储公开市场操作台通过公开市场操作将联邦基金利率维持在目标区间内，这一指令包含在国内政策指令中。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "\"Effective September 21, 2023, the Federal Open Market Committee directs the Desk to:\no Undertake open market operations as necessary to maintain the federal funds rate\nin a target range"
+          }
+        ]
+      },
+      {
+        "text": "声明的目标是长期内实现最大就业和2%的通胀率；提取片段提到“通胀风险”（to inflation risks），但节选文本不完整，后续政策将考虑的具体因素清单（如劳动力市场状况、金融条件等）未在提供的片段中完整出现。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "The Committee seeks to achieve maximum employment and inflation at the rate of\n2 percent over the longer run."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "所提供的来源为节选（source_coverage 为 partial），并非完整声明。片段以“to inflation risks.”开头，暗示前文有关于平衡就业与通胀风险、后续可能进一步收紧政策等表述，但这些内容未被引用，因此不能据提供的片段确认或否定“后续政策考虑因素”的完整清单。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": " to inflation risks."
+          }
+        ]
+      },
+      {
+        "text": "指令文本在“maintain the federal funds rate in a target range”处被截断，未显示具体数值区间，但同一来源另一段明确给出了5-1/4至5-1/2百分点的区间，两处证据相互支持维持不变的决定。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "o Undertake open market operations as necessary to maintain the federal funds rate\nin a target range"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的来源是声明的节选（partial coverage），非完整声明文本。",
+      "后续政策可能考虑的具体因素（如劳动力市场、通胀数据、金融状况、平衡就业与通胀风险）在片段中未完整出现，无法引用。",
+      "声明的发布时间为声明的 declared_published_at（2023-09-20），仅为声明的日期标注，未经独立核实。",
+      "不能从节选文本中证明的内容包括：点阵图/经济预测摘要、主席记者会内容、未来是否加息的明确指引、投票成员构成及异议意见。"
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr_target_range",
+        "label": "联邦基金利率目标区间",
+        "value": "5-1/4 to 5-1/2",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023年9月20日 FOMC 声明（自2023-09-21生效）",
+        "citation": {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "quotation": "the Committee decided to maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent."
+        }
+      },
+      {
+        "fact_id": "inflation_goal",
+        "label": "长期通胀目标",
+        "value": "2",
+        "unit": "percent",
+        "currency": null,
+        "period": "长期（over the longer run）",
+        "citation": {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "quotation": "The Committee seeks to achieve maximum employment and inflation at the rate of\n2 percent over the longer run."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1683,
+  "prompt_sha256": "16e2191b01c3be250cea65902d31bce2924b9c5d9b0000d531f5f81e8c384a4c",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

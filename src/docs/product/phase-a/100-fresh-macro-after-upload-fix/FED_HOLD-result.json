@@ -1,0 +1,288 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; September 20 2023 FOMC statement.",
+  "id": "FED_HOLD",
+  "manifest_sha256": "e311ad096e25e239a95347baed63cf55371c6c21a0bafd7035e8fb30ff363b22",
+  "operation_status": "completed",
+  "operation_id": "operation:7643e1160cb66987433adafe",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 22.179,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "title": "Federal Reserve September 20 2023 FOMC statement (extracted text)",
+        "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20230920a1.pdf",
+        "event_at": null,
+        "published_at": "2023-09-20T18:00:00+00:00",
+        "obtained_at": "2026-11-12T09:56:34.904479+00:00",
+        "revised_at": null,
+        "content_sha256": "586590cd7caa4eae0b3fd8fd2a6d7e28ff4fc6924bc3e246fb3006dfe5b111b2",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ffr_target_range:lower",
+        "value": "5.25",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023年9月20日 FOMC 声明（自2023-09-21生效）",
+        "label": "联邦基金利率目标区间 (lower bound)",
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "quotation": "the Committee decided to maintain the\ntarget range for the federal funds rate at 5-1/4 to 5-1/2 percent.",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_target_range",
+        "location": {
+          "character_start": 675,
+          "character_end": 779
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ffr_target_range:upper",
+        "value": "5.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023年9月20日 FOMC 声明（自2023-09-21生效）",
+        "label": "联邦基金利率目标区间 (upper bound)",
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "quotation": "the Committee decided to maintain the\ntarget range for the federal funds rate at 5-1/4 to 5-1/2 percent.",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_target_range",
+        "location": {
+          "character_start": 675,
+          "character_end": 779
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "inflation_goal",
+        "value": "2",
+        "unit": "percent",
+        "currency": null,
+        "period": "长期（over the longer run）",
+        "label": "长期通胀目标",
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "quotation": "The Committee seeks to achieve maximum employment and inflation at the rate of\n2 percent over the longer run.",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 538,
+          "character_end": 647
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "2023年9月的FOMC声明中，委员会决定将联邦基金利率目标区间维持在5-1/4%至5-1/2%（5.25%–5.50%），即维持不变而非调整。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 675,
+              "character_end": 779
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to maintain the\ntarget range for the federal funds rate at 5-1/4 to 5-1/2 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_fact_values": [
+          "2 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "inflation_goal",
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "value": "2",
+            "unit": "percent",
+            "period": "长期（over the longer run）",
+            "quotation": "The Committee seeks to achieve maximum employment and inflation at the rate of\n2 percent over the longer run.",
+            "location": {
+              "character_start": 538,
+              "character_end": 647
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      },
+      {
+        "text": "自2023年9月21日起，委员会指示纽约联储公开市场操作台通过公开市场操作将联邦基金利率维持在目标区间内，这一指令包含在国内政策指令中。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 3152,
+              "character_end": 3338
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"Effective September 21, 2023, the Federal Open Market Committee directs the Desk to:\no Undertake open market operations as necessary to maintain the federal funds rate\nin a target range"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "声明的目标是长期内实现最大就业和2%的通胀率；提取片段提到“通胀风险”（to inflation risks），但节选文本不完整，后续政策将考虑的具体因素清单（如劳动力市场状况、金融条件等）未在提供的片段中完整出现。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 538,
+              "character_end": 647
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "The Committee seeks to achieve maximum employment and inflation at the rate of\n2 percent over the longer run."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "所提供的来源为节选（source_coverage 为 partial），并非完整声明。片段以“to inflation risks.”开头，暗示前文有关于平衡就业与通胀风险、后续可能进一步收紧政策等表述，但这些内容未被引用，因此不能据提供的片段确认或否定“后续政策考虑因素”的完整清单。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 518,
+              "character_end": 537
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "to inflation risks."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      },
+      {
+        "text": "指令文本在“maintain the federal funds rate in a target range”处被截断，未显示具体数值区间，但同一来源另一段明确给出了5-1/4至5-1/2百分点的区间，两处证据相互支持维持不变的决定。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 3238,
+              "character_end": 3338
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "o Undertake open market operations as necessary to maintain the federal funds rate\nin a target range"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "uncited_fact_values": [
+          "2 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "inflation_goal",
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "value": "2",
+            "unit": "percent",
+            "period": "长期（over the longer run）",
+            "quotation": "The Committee seeks to achieve maximum employment and inflation at the rate of\n2 percent over the longer run.",
+            "location": {
+              "character_start": 538,
+              "character_end": 647
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "rate_unit_warnings": [
+          {
+            "claimed_text": "target range”处被截断，未显示具体数值区间，但同一来源另一段明确给出了5-1/4至5-1/2百分点",
+            "status": "requires_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_d91bb078ea31474fb33f1ff0a9401c93: only character ranges 517–779, 3076–3338 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 提供的来源是声明的节选（partial coverage），非完整声明文本。",
+      "Model-reported limitation (not independently verified): 后续政策可能考虑的具体因素（如劳动力市场、通胀数据、金融状况、平衡就业与通胀风险）在片段中未完整出现，无法引用。",
+      "Model-reported limitation (not independently verified): 声明的发布时间为声明的 declared_published_at（2023-09-20），仅为声明的日期标注，未经独立核实。",
+      "Model-reported limitation (not independently verified): 不能从节选文本中证明的内容包括：点阵图/经济预测摘要、主席记者会内容、未来是否加息的明确指引、投票成员构成及异议意见。",
+      "An interest rate level may be expressed as percentage points; review the unit and context.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:7643e1160cb66987433adafe",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1683,
+      "cost_usd": null,
+      "generation_tokens": 1683,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 20.721,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "16e2191b01c3be250cea65902d31bce2924b9c5d9b0000d531f5f81e8c384a4c",
+      "prompt_characters": 1934,
+      "prompt_bytes": 2054,
+      "selection_method": "ranked_nonoverlapping_windows_v26",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "character_start": 517,
+          "character_end": 779
+        },
+        {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "character_start": 3076,
+          "character_end": 3338
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_d91bb078ea31474fb33f1ff0a9401c93": "586590cd7caa4eae0b3fd8fd2a6d7e28ff4fc6924bc3e246fb3006dfe5b111b2"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}
