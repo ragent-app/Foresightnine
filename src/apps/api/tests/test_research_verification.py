@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v24"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v25"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -457,3 +457,18 @@ def test_model_review_recomputes_rate_unit_and_declared_publication_mismatch():
         assert batch.indexes == []
         assert batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]
     assert prepare_support_review([ok], [report], 3000).indexes == [0]
+
+
+def test_support_review_does_not_promote_pdf_table_alignment():
+    row = "Revenue                     1,200       1,000"
+    report = source().model_copy(update={"text": row, "retrieval_method": "user_pdf", "pdf_text_order": "layout"})
+    quote = "1,200"
+    start = row.index(quote)
+    item = {"text": "Revenue was 1,200.", "citations": [{"source_id": "s", "quotation": quote,
+        "location": {"character_start": start, "character_end": start + len(quote), "page": 1}}]}
+    batch = prepare_support_review([item], [report], 3000)
+    assert not batch.indexes and batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]
+    text = "Revenue was 1,200."
+    narrative = report.model_copy(update={"text": text})
+    item["citations"][0]["location"] = {"character_start": text.index(quote), "character_end": len(text) - 1, "page": 1}
+    assert prepare_support_review([item], [narrative], 3000).indexes == [0]

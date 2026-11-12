@@ -9,6 +9,7 @@ from typing import Any, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource
+from .research_calculations import quotation_is_pdf_layout_row
 from .research_evidence import flag_citation_subject_context, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_uncited_causal_attribution, flag_rate_level_point_warnings, flag_publication_date_mismatches, suggest_percentage_evidence
 
 
@@ -24,7 +25,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v24"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v25"
 ISOLATED_REVIEW_METHOD = REVIEW_METHOD + "_isolated"
 
 
@@ -121,6 +122,12 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             start, end = location.get("character_start"), location.get("character_end")
             if (type(start) is not int or type(end) is not int or start < 0 or end <= start or end > len(source.text) or
                     end - start > 1000 or source.text[start:end] != quotation):
+                break
+            # A PDF layout row may contain multiple periods or measures. A
+            # matching number alone cannot establish the column mapping, and
+            # the model review must not silently promote it to supported.
+            if (source.retrieval_method == "user_pdf" and source.pdf_text_order == "layout" and
+                    quotation_is_pdf_layout_row(source.text, start, quotation)):
                 break
             warnings = context_warnings.get(citation_index, [])
             context_start = min([start, *(warning.get("context_character_start", start) for warning in warnings)])
