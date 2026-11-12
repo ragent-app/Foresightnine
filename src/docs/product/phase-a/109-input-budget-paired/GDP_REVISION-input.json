@@ -1,0 +1,28 @@
+{
+  "id": "GDP_REVISION",
+  "question": "根据提供的两份 BEA 公告，比较 2024 年第三季度美国实际 GDP 的第二次与第三次估计，说明年化口径、修订方向和原因，并指出被抵消的因素与资料局限。",
+  "sources": [
+    {
+      "kind": "pdf",
+      "file": "bea-second.pdf",
+      "text_file": "bea-second-source.txt",
+      "url": "https://www.bea.gov/sites/default/files/2024-11/gdp3q24-2nd.pdf",
+      "title": "BEA GDP Q3 2024 second estimate",
+      "published_at": "2024-11-27T13:30:00Z",
+      "source_id": "source_20bd17ab9d75424aafe5b33229d32d43",
+      "sha256": "b28bd448758916abdabae1cf9500cea2e2180c9259bf428e066bcbad7b8c6ded",
+      "text_sha256": "0a1c30d55e8c5a02d3bea8ed6a8bae26c8bb69bfef86d28e1b273c2e8ecdfd03"
+    },
+    {
+      "kind": "pdf",
+      "file": "bea-third.pdf",
+      "text_file": "bea-third-source.txt",
+      "url": "https://www.bea.gov/sites/default/files/2024-12/gdp3q24-3rd.pdf",
+      "title": "BEA GDP Q3 2024 third estimate",
+      "published_at": "2024-12-19T13:30:00Z",
+      "source_id": "source_308d821886f74e75a89a603716e5e21e",
+      "sha256": "57366fdaba15295c486e8bfa5dd04a60b64a85f803c5f001c0a7b06b38ee182f",
+      "text_sha256": "b31343f592253d0cfa113b3aa66886a8b0cf2c19c61533d9af42c9cbaa29a1d8"
+    }
+  ]
+}
