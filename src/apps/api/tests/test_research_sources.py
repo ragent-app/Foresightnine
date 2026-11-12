@@ -77,7 +77,8 @@ def test_metadata_export_omits_all_research_and_source_text(monkeypatch):
         return {"Authorization": "Bearer " + response.json()["access_token"]}
     first, second = auth("metadata-first@example.test"), auth("metadata-second@example.test")
     source = client.post("/v2/research/sources", headers=first, json={"title": "SECRET_TITLE",
-        "text": "SECRET_TEXT 100", "permissions": {"store": True, "display": True, "export": False}}).json()
+        "text": "SECRET_TEXT 100", "published_at": "2022-01-01T00:00:00Z",
+        "permissions": {"store": True, "display": True, "export": False}}).json()
     topic = client.post("/v2/research/topics", headers=first, json={"question": "SECRET_QUESTION",
         "source_ids": [source["source_id"]], "as_of": "2023-01-01T00:00:00Z"}).json()
     path = "/v2/research/topics/" + topic["topic_id"]
@@ -189,3 +190,77 @@ def test_attach_source_preserves_prior_version_and_rejects_cross_account(monkeyp
     assert client.get(metadata_path, headers=second).status_code == 404
     assert client.post(path + "/sources", headers=first, json={"parent_version_id": parent,
         "source_ids": [source["source_id"]]}).status_code == 409
+
+
+def test_user_citations_are_located_and_cannot_reference_unattached_or_hidden_sources(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    def auth(email):
+        response = client.post("/v1/auth/local/register", json={"email": email, "password": "correct horse battery staple!"})
+        assert response.status_code == 201
+        return {"Authorization": "Bearer " + response.json()["access_token"]}
+    owner, other = auth("citation-owner@example.test"), auth("citation-other@example.test")
+    def create(headers, title, text, display=True):
+        response = client.post("/v2/research/sources", headers=headers, json={"title": title, "text": text,
+            "permissions": {"store": True, "display": display, "export": True}})
+        assert response.status_code == 201
+        return response.json()["source_id"]
+    visible = create(owner, "Report", "Revenue 100. Profit 20. Revenue 100.")
+    hidden = create(owner, "Hidden", "Hidden quote", display=False)
+    unattached = create(owner, "Unattached", "Private quote")
+    other_source = create(other, "Other account", "Other quote")
+    topic = client.post("/v2/research/topics", headers=owner, json={"question": "Review", "source_ids": [visible, hidden]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    parent = topic["versions"][-1]["version_id"]
+    def save(citations):
+        return client.post(path + "/versions", headers=owner, json={"parent_version_id": parent,
+            "content": {"claims": [{"text": "User finding", "citations": citations}]}})
+    for source_id, quote in [(visible, "Not present"), (hidden, "Hidden quote"),
+                             (unattached, "Private quote"), (other_source, "Other quote"), (visible, " ")]:
+        assert save([{"source_id": source_id, "quotation": quote}]).status_code == 422
+    assert len(client.get(path, headers=owner).json()["versions"]) == 1
+    saved = save([{"source_id": visible, "quotation": "Profit 20", "location": {"character_start": 0, "character_end": 2},
+                   "support_status": "verified"}, {"source_id": visible, "quotation": "Revenue 100"}])
+    assert saved.status_code == 201, saved.text
+    version = saved.json()["versions"][-1]
+    claim = version["content"]["claims"][0]
+    assert claim["authorship"] == "user" and claim["support_status"] == "not_independently_verified"
+    one, multiple = claim["citations"]
+    assert one["location"] == {"character_start": 13, "character_end": 22}
+    assert one["support_status"] == "not_independently_verified"
+    assert multiple["location"]["status"] == "ambiguous" and len(multiple["location"]["matches"]) == 2
+    context = client.get("/v2/research/sources/" + visible + "/context", headers=owner,
+                         params={"start": 13, "end": 22})
+    assert context.json()["selected"] == "Profit 20"
+    exported = client.get(path + "/versions/" + version["version_id"] + "/export", headers=owner)
+    assert exported.status_code == 200 and exported.json()["version"]["content"]["claims"][0]["citations"] == claim["citations"]
+    # Editing the finding retains verified positions; removing citations makes the finding unsupported.
+    edited = {**claim, "text": "Revised finding", "citations": []}
+    updated = client.post(path + "/versions", headers=owner,
+        json={"parent_version_id": version["version_id"], "content": {"claims": [edited]}})
+    assert updated.status_code == 201
+    assert updated.json()["versions"][-1]["content"]["claims"][0]["support_status"] == "unsupported"
+
+
+def test_new_user_citations_respect_historical_cutoff(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    reg = client.post("/v1/auth/local/register", json={"email": "citation-cutoff@example.test",
+        "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+    def create(title, **dates):
+        return client.post("/v2/research/sources", headers=headers, json={"title": title, "text": title + " quote",
+            "permissions": {"store": True, "display": True}, **dates}).json()["source_id"]
+    before = create("before", published_at="2023-01-01T00:00:00Z")
+    future = create("future", published_at="2023-03-01T00:00:00Z")
+    revised = create("revised", published_at="2023-01-01T00:00:00Z", revised_at="2023-03-01T00:00:00Z")
+    unknown = create("unknown")
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Before February?",
+        "source_ids": [before, future, revised, unknown], "as_of": "2023-02-01T00:00:00Z"}).json()
+    path = "/v2/research/topics/" + topic["topic_id"] + "/versions"
+    def save(source_id, quote):
+        return client.post(path, headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"],
+            "content": {"claims": [{"text": "Finding", "citations": [{"source_id": source_id, "quotation": quote}]}]}})
+    for source_id, quote in [(future, "future quote"), (revised, "revised quote"), (unknown, "unknown quote")]:
+        assert save(source_id, quote).status_code == 422
+    assert save(before, "before quote").status_code == 201

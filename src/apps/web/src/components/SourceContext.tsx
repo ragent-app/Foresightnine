@@ -30,7 +30,7 @@ export function SourceContext({ sourceId, location, quotation, en, load, candida
   }, [open, valid, start, end, sourceId, load]);
 
   if (location?.status === "ambiguous" && Array.isArray(location.matches)) return <div className="source-context">
-    <p>{en ? "This quotation appears more than once in the analyzed passages. Compare the candidate locations." : "这段引文在已分析片段中出现多次，请对比候选位置。"}</p>
+    <p>{en ? "This quotation has multiple matching locations. Compare the candidates." : "这段引文有多个匹配位置，请对比候选位置。"}</p>
     {location.matches.slice(0, 5).map((match, index) => match && typeof match === "object" ? <SourceContext key={`${match.character_start}:${match.character_end}:${index}`}
       sourceId={sourceId} location={{ ...(typeof match.character_start === "number" ? { character_start: match.character_start } : {}),
         ...(typeof match.character_end === "number" ? { character_end: match.character_end } : {}),

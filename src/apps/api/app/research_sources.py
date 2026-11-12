@@ -88,6 +88,28 @@ class SourcePermissionError(ValueError):
     pass
 
 
+def locate_user_quotation(source: ResearchSource, quotation: str) -> dict:
+    """Locate an exact user-selected passage without asserting it supports a claim."""
+    if not source.permissions.display or not isinstance(quotation, str) or not quotation.strip() or len(quotation) > 1000:
+        raise ValueError("Quotation is unavailable.")
+    matches: list[dict] = []
+    offset = 0
+    while len(matches) < 6:
+        start = source.text.find(quotation, offset)
+        if start < 0:
+            break
+        position = {"character_start": start, "character_end": start + len(quotation)}
+        if source.retrieval_method == "user_pdf":
+            position["page"] = source.text[:start].count("\f") + 1
+        matches.append(position)
+        offset = start + 1  # Include overlapping matches, so uniqueness is not overstated.
+    if not matches:
+        raise ValueError("Quotation is unavailable.")
+    location = matches[0] if len(matches) == 1 else {"status": "ambiguous", "matches": matches[:5], "truncated": len(matches) > 5}
+    return {"source_id": source.source_id, "quotation": quotation, "location": location,
+            "quotation_match": "exact", "support_status": "not_independently_verified"}
+
+
 class ResearchSources:
     def __init__(self, repository: JsonDocumentRepository[ResearchSource]):
         self.repository = repository

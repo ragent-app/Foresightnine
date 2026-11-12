@@ -97,7 +97,7 @@ from .services import (
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences
-from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError
+from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
 from .research_evidence import evidence_differences, suggest_percentage_evidence
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
@@ -1587,6 +1587,12 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         # item must not masquerade as an untouched model extraction. The run
         # receipt and source inventory are server-produced historical records.
         content = request.content.model_copy(deep=True)
+        existing_citations = {json.dumps(citation, sort_keys=True, ensure_ascii=False) for claim in previous.content.claims
+                              for citation in (claim.get("citations") if isinstance(claim.get("citations"), list) else [])
+                              if isinstance(citation, dict)}
+        allowed_sources = set(previous.source_ids)
+        checked_citations: dict[tuple[str, str], dict] = {}
+        citation_sources: dict[str, ResearchSource] = {}
         for claim in content.claims:
             if claim in previous.content.claims:
                 continue
@@ -1601,6 +1607,37 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         ("quotation" in citation and (not isinstance(citation["quotation"], str) or len(citation["quotation"]) > 1000))
                         for citation in citations)):
                 raise ApiProblem(422, "invalid_request", "Research findings or their citations are invalid.")
+            normalized = []
+            for citation in citations:
+                source_id = citation["source_id"]
+                if source_id not in allowed_sources:
+                    raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.")
+                try:
+                    if source_id not in citation_sources:
+                        citation_sources[source_id] = research_sources.get(account.account_id, source_id)
+                    source = citation_sources[source_id]
+                    if (not source.permissions.display or topic.request.as_of is not None and
+                            (source.published_at is None or source.published_at > topic.request.as_of or
+                             (source.revised_at is not None and source.revised_at > topic.request.as_of))):
+                        raise ValueError("Source availability at the research cutoff is not established.")
+                except (SourceNotFound, ValueError) as error:
+                    raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.") from error
+                if json.dumps(citation, sort_keys=True, ensure_ascii=False) in existing_citations:
+                    # Preserve existing citation locations after rechecking access and cutoff.
+                    normalized.append(citation)
+                    continue
+                quotation = citation.get("quotation")
+                if (not isinstance(quotation, str) or not quotation.strip()
+                        or len(checked_citations) >= 200 and (source_id, quotation) not in checked_citations):
+                    raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.")
+                key = (source_id, quotation)
+                if key not in checked_citations:
+                    try:
+                        checked_citations[key] = locate_user_quotation(source, quotation)
+                    except ValueError as error:
+                        raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.") from error
+                normalized.append(deepcopy(checked_citations[key]))
+            claim["citations"] = normalized
         fact_id_counts = Counter(item["fact_id"].strip() for item in content.facts if isinstance(item.get("fact_id"), str))
         for fact in content.facts:
             if fact in previous.content.facts:
@@ -1626,7 +1663,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                     entry["verification"] = "user_edited_not_independently_verified"
                     if field == "claims":
                         entry.pop("support_review", None)
-                        entry["support_status"] = "not_independently_verified"
+                        entry["support_status"] = "not_independently_verified" if entry.get("citations") else "unsupported"
                         if isinstance(entry.get("citations"), list):
                             for citation in entry["citations"]:
                                 if isinstance(citation, dict):
