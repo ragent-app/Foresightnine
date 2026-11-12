@@ -1,0 +1,77 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "2022年第三季度实际GDP按年率增长2.9%，这是BEA发布的\"second\"（第二次）估计。",
+        "citations": [
+          {
+            "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.9 percent in the third quarter of 2022 (table 1), according to the \"second\" estimate released by the Bureau of Economic"
+          }
+        ]
+      },
+      {
+        "text": "此前上个月发布的初次（advance）估计为按年率增长2.6%，第二次估计主要反映了消费支出和非住宅投资的向上修正。",
+        "citations": [
+          {
+            "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+            "quotation": "In the advance estimate, the increase in real GDP was 2.6 percent. The second estimate primarily reflected upward revisions to consumer spending and nonresidential"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该估计基于比初次估计更完整的来源数据，但仍属阶段性估计，后续\"third\"估计可能进一步修订数值。",
+        "citations": [
+          {
+            "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+            "quotation": "The GDP estimate released today is based on more complete source data than were available for the \"advance\" estimate issued last month."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "所提供的摘录为部分内容（source_coverage: partial），未包含完整表格（table 1）数据。",
+      "发布日期为声明值（declared_published_at: 2022-11-30），未经独立核实。",
+      "第二次估计仍基于部分完整的数据，后续估计可能进一步修订。",
+      "摘录在句子处截断，向上修正的具体细节数值未提供。"
+    ],
+    "facts": [
+      {
+        "fact_id": "gdp_q3_2022_second",
+        "label": "实际GDP第二次估计年率增长率",
+        "value": "2.9",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2022年第三季度",
+        "citation": {
+          "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.9 percent in the third quarter of 2022"
+        }
+      },
+      {
+        "fact_id": "gdp_q3_2022_advance",
+        "label": "实际GDP初次（advance）估计年率增长率",
+        "value": "2.6",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2022年第三季度",
+        "citation": {
+          "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+          "quotation": "In the advance estimate, the increase in real GDP was 2.6 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "gdp_q3_2022_second",
+        "second_fact_id": "gdp_q3_2022_advance"
+      }
+    ]
+  },
+  "reported_tokens": 1222,
+  "prompt_sha256": "67a21030832d475c5c8f36c12a052e53b0fd31e7e37d53984f875f8d1c9dd907",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

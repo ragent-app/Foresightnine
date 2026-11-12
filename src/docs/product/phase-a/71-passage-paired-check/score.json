@@ -1,0 +1,42 @@
+{
+  "manifest_sha256": "6ba703d4dbbdf74c2a23ba2164bd4e2119be91b34a47c638d0a6a15d478857fc",
+  "semantic_support": "not established",
+  "independence": "Paired development diagnostic on two previously observed official PDFs; selected passages changed, model and parameters fixed. Nonblind, no independent human review or overall quality claim.",
+  "tasks": {
+    "GDP_ESTIMATE": {
+      "status": "completed",
+      "research_status": "partial",
+      "expected": {
+        "2.9": true,
+        "2.6": true
+      },
+      "citations_located": true,
+      "review_coverage_and_verdicts_ok": true,
+      "warnings": false,
+      "budget_ok": true,
+      "provenance_ok": true,
+      "reported_tokens": 1840,
+      "mechanical_pass": true,
+      "semantic_support": "not established"
+    },
+    "FED_PURCHASES": {
+      "status": "completed",
+      "research_status": "partial",
+      "expected": {
+        "10": false,
+        "20": false,
+        "40": false
+      },
+      "citations_located": true,
+      "review_coverage_and_verdicts_ok": false,
+      "warnings": false,
+      "budget_ok": true,
+      "provenance_ok": true,
+      "reported_tokens": 2049,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    }
+  },
+  "passed": 1,
+  "total": 2
+}
