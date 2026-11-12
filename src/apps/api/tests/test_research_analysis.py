@@ -1762,3 +1762,20 @@ def test_short_model_reference_is_resolved_for_split_quotation_recovery():
     citations=result.claims[0]["citations"]
     assert len(citations)==2 and all(item["source_id"]==source_id for item in citations)
     assert all(item["quotation_match"]=="split_conjunction" for item in citations)
+
+
+def test_quote_initial_case_restores_original_and_preserves_ambiguity():
+    def run(text, quote):
+        report = source("s", text=text)
+        output = {"claims": [{"text": "PCE increased.", "citations": [{"source_id": "s", "quotation": quote}]}]}
+        return analyze("What happened to PCE?", [report], None, lambda _: (output, 10))
+    quote = "Personal consumption increased 0.1 percent."
+    result = run("Income rose and personal consumption increased 0.1 percent.", quote)
+    citation = result.claims[0]["citations"][0]
+    assert citation["quotation"] == "personal consumption increased 0.1 percent."
+    assert citation["quotation_match"] == "initial_case_normalized"
+    assert any("capitalization" in note for note in result.limitations)
+    ambiguous = run("A personal consumption increased 0.1 percent. Another personal consumption increased 0.1 percent.", quote)
+    assert ambiguous.claims[0]["citations"][0]["location"]["status"] == "ambiguous"
+    rejected = run("Income rose and personal consumption increased 0.1 percent.", "PERSonal consumption increased 0.1 percent.")
+    assert not rejected.claims

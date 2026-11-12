@@ -1797,6 +1797,26 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         expanded = False
         table_markup_expanded = False
         trimmed_json_closure = False
+        initial_case_normalized = False
+        if not positions and quotation[0].isascii() and quotation[0].isalpha():
+            # Models sometimes capitalize an excerpt taken from the middle of
+            # a sentence. Only the first ASCII letter may differ in case;
+            # preserve the original and the usual ambiguity checks.
+            rest = r"\s+".join(re.escape(part) for part in re.split(r"\s+", quotation[1:]))
+            initial_pattern = re.compile("(?=((?i:" + re.escape(quotation[0]) + ")" + rest + "))")
+            for offset, passage in model_text[source.source_id]:
+                for match in initial_pattern.finditer(passage):
+                    if match.end(1) - match.start(1) <= 1000:
+                        record(offset, passage, match.start(1), match.end(1))
+                    if len(positions) == 6:
+                        break
+                if len(positions) == 6:
+                    break
+            initial_case_normalized = bool(positions)
+            if initial_case_normalized:
+                note = "A model quotation changed the capitalization of its initial letter; the original text was restored."
+                if note not in limitations:
+                    limitations.append(note)
         if not positions:
             for start, end in _table_markup_rows(source.text, model_text[source.source_id], quotation, should_stop):
                 record(0, source.text, start, end)
@@ -1863,7 +1883,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if not positions:
             raise InvalidAnalysis("Model cited a missing source or quotation.")
         original = originals[0]
-        matching = ("table_markup_expanded" if table_markup_expanded else "trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
+        matching = ("initial_case_normalized" if initial_case_normalized else "table_markup_expanded" if table_markup_expanded else "trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
                     "exact" if original == quotation else "whitespace_normalized")
         if len(positions) == 1 and not scan_truncated:
             return positions[0], original, matching
