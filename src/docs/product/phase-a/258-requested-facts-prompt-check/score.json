@@ -1,0 +1,30 @@
+{
+  "status": "completed",
+  "research_status": "partial",
+  "mechanical_checks": {
+    "gdp": true,
+    "opposing_goods": false,
+    "services": true,
+    "all_claims_located_and_complete": true
+  },
+  "mechanical_pass": false,
+  "model_calls": 1,
+  "reported_tokens": 2089,
+  "review_status": "not_reviewable",
+  "review_omissions": [
+    {
+      "claim_index": 0,
+      "reason": "not_reviewable"
+    },
+    {
+      "claim_index": 1,
+      "reason": "not_reviewable"
+    },
+    {
+      "claim_index": 2,
+      "reason": "not_reviewable"
+    }
+  ],
+  "candidate_count": 0,
+  "semantic_support": "not independently established"
+}
