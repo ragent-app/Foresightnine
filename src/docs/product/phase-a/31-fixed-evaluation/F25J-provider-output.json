@@ -1,0 +1,51 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据美联储2025年1月29日的FOMC声明，委员会决定将联邦基金利率目标区间维持在4-1/4至4-1/2个百分点（4.25%–4.50%），本次决定是维持利率不变，而非调整。",
+        "citations": [
+          {
+            "source_id": "source_4e7c13bc3063427fb6db0af6b62637cc",
+            "quotation": "In support of its goals, the Committee decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent."
+          },
+          {
+            "source_id": "source_4e7c13bc3063427fb6db0af6b62637cc",
+            "quotation": "Effective January 30, 2025, the Federal Open Market Committee directs the Desk to: Undertake open market operations as necessary to maintain the federal funds rate in a target range of 4-1/4 to 4-1/2 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "来源文本提到委员会在考虑未来进一步调整的幅度和时机，说明未来仍可能调整利率，但本次决定本身明确是“维持”。",
+        "citations": [
+          {
+            "source_id": "source_4e7c13bc3063427fb6db0af6b62637cc",
+            "quotation": "In considering the extent and timing of additional adjustm"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源为部分节选（source_coverage: partial），第二个引文在“additional adjustm”处被截断，未包含后续完整文本。",
+      "来源仅提供声明文本片段，未包含完整的会议记录或投票详情。",
+      "发布日期为声明元数据中标注的2025-01-29，未经独立验证。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fed_funds_target_range_20250129",
+        "label": "联邦基金利率目标区间",
+        "value": "4-1/4 to 4-1/2",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2025-01-29（自2025-01-30起生效）",
+        "citation": {
+          "source_id": "source_4e7c13bc3063427fb6db0af6b62637cc",
+          "quotation": "the Committee decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1218
+}

@@ -1,0 +1,67 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "PayPal 2024财年净收入为31,797百万美元（截至2024-12-31），2025财年净收入为33,172百万美元（截至2025-12-31），据此可计算同比增长率约4.32%。",
+        "citations": [
+          {
+            "source_id": "source_111065c50cea42caa99917cfb0107f59",
+            "quotation": "{\"issuer\":\"PayPal Holdings Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2024\":\"2024-12-31\",\"2025\":\"2025-12-31\"},\"net_revenues\":{\"2024\":31797,\"2025\":33172}}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该增长率基于单一来源的\"derived\"（衍生）数据，并非直接引用10-K原文，若原始申报文件存在重述、口径调整或数据压缩误差，增长率可能不同。",
+        "citations": [
+          {
+            "source_id": "source_111065c50cea42caa99917cfb0107f59",
+            "quotation": "PayPal 2025 SEC 10-K: derived net revenue facts"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源标注数据为\"derived\"（衍生/推导）事实，并非10-K原始报表的直接摘录，无法核实与原始申报完全一致。",
+      "财年结束日期为来源声明，未经独立验证。",
+      "未提供2023财年或更长期间数据，无法评估多年趋势或核对基准期。",
+      "缺少分部、货币影响、收购/剥离等背景信息，无法解释增长驱动因素。",
+      "来源未注明发布日期，无法区分期间归属与披露时点。"
+    ],
+    "facts": [
+      {
+        "fact_id": "f_net_revenue_2024",
+        "label": "net_revenues_2024",
+        "value": "31797",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (ended 2024-12-31)",
+        "citation": {
+          "source_id": "source_111065c50cea42caa99917cfb0107f59",
+          "quotation": "\"net_revenues\":{\"2024\":31797,\"2025\":33172}"
+        }
+      },
+      {
+        "fact_id": "f_net_revenue_2025",
+        "label": "net_revenues_2025",
+        "value": "33172",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2025 (ended 2025-12-31)",
+        "citation": {
+          "source_id": "source_111065c50cea42caa99917cfb0107f59",
+          "quotation": "\"net_revenues\":{\"2024\":31797,\"2025\":33172}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "f_net_revenue_2025",
+        "second_fact_id": "f_net_revenue_2024"
+      }
+    ]
+  },
+  "reported_tokens": 1029
+}

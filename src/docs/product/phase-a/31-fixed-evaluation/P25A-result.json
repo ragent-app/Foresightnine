@@ -1,0 +1,175 @@
+{
+  "id": "P25A",
+  "operation_status": "completed",
+  "manifest_sha256": "51ef75b165ed7b73a110a71cdcb541da0eadf168f44d85271a1de24126cbbaad",
+  "input_sha256": "fb5fda4fbd0abcf46bd203d39172b3218db57558953bba434191934f7dd35cc6",
+  "elapsed_seconds_observed": 8.292,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+        "title": "BEA Personal Income and Outlays August 2025",
+        "url": null,
+        "event_at": null,
+        "published_at": "2025-09-26T12:30:00+00:00",
+        "obtained_at": "2026-11-12T04:38:22.413745+00:00",
+        "revised_at": null,
+        "content_sha256": "636171fbb53eab5a44e7b05a0f04a0fdd56cb6b751cfe89c533a1f2444256c8a",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "pce_mom_aug2025",
+        "value": "0.3",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025年8月，较上月",
+        "label": "总体PCE价格指数环比变化",
+        "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+        "quotation": "From the preceding month, the\nPCE price index for August\nincreased 0.3 percent.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 1569,
+          "character_end": 1648,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "pce_yoy_aug2025",
+        "value": "2.7",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025年8月，较上年同期",
+        "label": "总体PCE价格指数同比变化",
+        "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+        "quotation": "same month one year\nago, the PCE price index for\nAugust increased 2.7 percent.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 1728,
+          "character_end": 1806,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "2025年8月总体PCE价格指数环比（较上月）上涨0.3%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+            "location": {
+              "character_start": 1569,
+              "character_end": 1648,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "From the preceding month, the\nPCE price index for August\nincreased 0.3 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "2025年8月总体PCE价格指数同比（较上年同期）上涨2.7%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+            "location": {
+              "character_start": 1728,
+              "character_end": 1806,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "same month one year\nago, the PCE price index for\nAugust increased 2.7 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "无反驳证据；来源为部分覆盖的摘录，但两处数字均直接给出，无矛盾。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_f5d580760a4d443ab51027c685f49f32: only character ranges 1469–1728, 1728–2054 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源为部分摘录，非完整公告全文；发布日期为声明值（2025-09-26），未经核实。",
+      "两种口径已区分：环比为较上月，同比为较上年同期；核心（剔除食品和能源）数据亦在来源中但非问题所问。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:c40db02fc0571d10b2ed58b1",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1127,
+      "cost_usd": null,
+      "generation_tokens": 1127,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 7.755,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "e09d9bda4e9a9299b1390a2d69d2d360ebf48963d8aa45fd65b5eee63d5acae9",
+      "prompt_characters": 1959,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v12",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+          "character_start": 1469,
+          "character_end": 1728
+        },
+        {
+          "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+          "character_start": 1728,
+          "character_end": 2054
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_f5d580760a4d443ab51027c685f49f32": "636171fbb53eab5a44e7b05a0f04a0fdd56cb6b751cfe89c533a1f2444256c8a"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

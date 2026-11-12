@@ -1,0 +1,62 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "2025年8月总体PCE价格指数环比（较上月）上涨0.3%。",
+        "citations": [
+          {
+            "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+            "quotation": "From the preceding month, the PCE price index for August increased 0.3 percent."
+          }
+        ]
+      },
+      {
+        "text": "2025年8月总体PCE价格指数同比（较上年同期）上涨2.7%。",
+        "citations": [
+          {
+            "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+            "quotation": "same month one year ago, the PCE price index for August increased 2.7 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无反驳证据；来源为部分覆盖的摘录，但两处数字均直接给出，无矛盾。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "来源为部分摘录，非完整公告全文；发布日期为声明值（2025-09-26），未经核实。",
+      "两种口径已区分：环比为较上月，同比为较上年同期；核心（剔除食品和能源）数据亦在来源中但非问题所问。"
+    ],
+    "facts": [
+      {
+        "fact_id": "pce_mom_aug2025",
+        "label": "总体PCE价格指数环比变化",
+        "value": "0.3",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025年8月，较上月",
+        "citation": {
+          "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+          "quotation": "From the preceding month, the PCE price index for August increased 0.3 percent."
+        }
+      },
+      {
+        "fact_id": "pce_yoy_aug2025",
+        "label": "总体PCE价格指数同比变化",
+        "value": "2.7",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025年8月，较上年同期",
+        "citation": {
+          "source_id": "source_f5d580760a4d443ab51027c685f49f32",
+          "quotation": "same month one year ago, the PCE price index for August increased 2.7 percent."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1127
+}
