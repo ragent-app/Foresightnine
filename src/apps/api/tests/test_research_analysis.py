@@ -1540,8 +1540,50 @@ def test_generated_table_markup_expands_only_to_a_complete_original_row():
     citation = result.claims[0]['citations'][0]
     assert citation['quotation_match'] == 'table_markup_expanded' and citation['quotation'] == row
     assert text[citation['location']['character_start']:citation['location']['character_end']] == row
-    assert not result.facts
-    assert any('column alignment' in note for note in result.limitations)
+    assert len(result.facts) == 1 and result.facts[0]['quotation'] == row
+    assert result.facts[0]['quotation_match'] == 'table_markup_expanded'
+    assert result.facts[0]['table_alignment_unverified'] is True
+    assert any('excluded from automatic calculations' in note for note in result.limitations)
+    marker_only = analyze('Review cash flow.', [source('s', text=text)], None, lambda _: ({
+        'facts':[{'fact_id':'span','label':'cash','value':'3','unit':'USD million','currency':'USD','period':'2023',
+                  'citation':{'source_id':'s','quotation':quotation}}]}, 1))
+    assert not marker_only.facts
+
+
+def test_joined_table_heading_and_row_keeps_review_candidate_without_calculating():
+    header = 'Annual statements of operations (in millions)'
+    row = '| [colspan=3] Total revenue | [colspan=2] 53,803 | | [colspan=3] | [colspan=2] 56,998 | |'
+    text = header + '\n' + row
+    quote = header + ' ... Total revenue | 53,803'
+    fact = {'fact_id':'current','label':'Revenue','value':'53803','unit':'USD million','currency':'USD','period':'2024',
+            'citation':{'source_id':'s','quotation':quote}}
+    prior = {**fact, 'fact_id':'prior', 'value':'56998', 'period':'2023',
+             'citation':{'source_id':'s','quotation':'Total revenue | 53,803 | 56,998'}}
+    def run(facts):
+        return analyze('Compare revenue.', [source('s', text=text)], None, lambda _: ({'facts':facts,
+            'calculations':[{'formula':'growth_percent','first_fact_id':'current','second_fact_id':'prior'}]}, 1))
+    result = run([fact, prior])
+    assert len(result.facts) == 2 and not result.calculations
+    assert all(f['quotation'] == row and f['quotation_match'] == 'table_markup_expanded' for f in result.facts)
+    assert all(f['table_alignment_unverified'] for f in result.facts)
+    assert not run([{**fact, 'citation':{'source_id':'s','quotation':'fabricated heading ... Total revenue | 53,803'}}]).facts
+    assert not run([{**fact, 'citation':{'source_id':'s','quotation':'Total revenue | 53,803 ... ' + header}}]).facts
+
+
+def test_joined_table_rows_are_separate_incomplete_claim_citations():
+    header = '| [colspan=3] Years Ended | [colspan=3] 2024 | [colspan=3] 2023 |'
+    row = '| [colspan=3] Total revenue | [colspan=3] 100 | [colspan=3] 80 |'
+    quote = 'Years Ended | 2024 | 2023 ... Total revenue | 100 | 80'
+    def run(text, quotation=quote):
+        return analyze('Revenue?', [source('s', text=text)], None, lambda _: ({'claims': [{'text':'Revenue rose',
+            'citations':[{'source_id':'s','quotation':quotation}]}]}, 1))
+    result = run(header + '\n' + row)
+    claim = result.claims[0]
+    assert claim['support_status'] == 'incomplete'
+    assert [c['quotation'] for c in claim['citations']] == [header, row]
+    assert all(c['quotation_match'] == 'table_markup_expanded' for c in claim['citations'])
+    assert not run(header + '\n' + row + '\n' + row).claims
+    assert not run(header + '\n' + row, 'Total revenue | 100 | 80 ... Years Ended | 2024 | 2023').claims
 
 
 def test_recovered_table_rows_with_multiple_matches_remain_ambiguous():

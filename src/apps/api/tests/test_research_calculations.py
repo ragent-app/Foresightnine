@@ -179,6 +179,7 @@ def test_direction_context_blocks_treating_a_saved_calculation_as_verified():
     calculation = calculate(CalculationRequest(formula="difference", first=current, second=prior))
     assert calculation_input_status(calculation, [current, prior]) == "matched"
     assert calculation_input_status(calculation, [current, {**prior, "direction_context_unverified": True}]) == "unverifiable"
+    assert calculation_input_status(calculation, [current, {**prior, "quotation_match": "table_markup_expanded"}]) == "unverifiable"
 
 
 @pytest.mark.parametrize("unit", ["percent (annual rate)", "percent, annualized", "percentage (quarterly rate)", "百分比"])

@@ -2444,6 +2444,50 @@ def test_split_ellipsis_caution_survives_claim_edits(monkeypatch):
     assert saved.json()["versions"][-2]["content"]["claims"][0]["support_status"] == "incomplete"
 
 
+def test_restored_table_fact_cannot_be_calculated_or_clear_warning_by_edit(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "table-fact-edit-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def fact(key, value, period):
+                return {"fact_id": key, "label": "Revenue", "value": value, "unit": "USD million", "currency": "USD",
+                        "period": period, "citation": {"source_id": source_id, "quotation": "Revenue | 100 | 80"}}
+            return {"facts": [fact("current", "100", "2024"), fact("prior", "80", "2023")],
+                    "calculations": [{"formula": "growth_percent", "first_fact_id": "current", "second_fact_id": "prior"}]}, 20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={"email": f"table-{uuid4().hex}@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + reg["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+        "text": "| [colspan=3] Revenue | [colspan=2] 100 | | [colspan=2] 80 | |",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "table-fact-edit"}, json={"parent_version_id": topic["versions"][0]["version_id"]})
+    assert response.status_code == 202
+    operation = response.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + operation, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    version = client.get(path, headers=headers).json()["versions"][-1]
+    assert len(version["content"]["facts"]) == 2 and not version["content"]["calculations"]
+    payload = {"parent_version_id": version["version_id"], "formula": "growth_percent", "first_fact_id": "current", "second_fact_id": "prior"}
+    assert client.post(path + "/calculations", headers=headers, json=payload).status_code == 422
+    edited = deepcopy(version["content"])
+    edited["facts"][0].pop("quotation_match")
+    edited["facts"][0]["label"] = "Edited revenue"
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": version["version_id"], "content": edited})
+    assert saved.status_code == 201, saved.text
+    latest = saved.json()["versions"][-1]
+    assert latest["content"]["facts"][0]["quotation_match"] == "table_markup_expanded"
+    assert client.post(path + "/calculations", headers=headers, json={**payload, "parent_version_id": latest["version_id"]}).status_code == 422
+
+
 def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_after_edit(monkeypatch):
     from uuid import uuid4
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")

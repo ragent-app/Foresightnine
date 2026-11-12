@@ -2163,11 +2163,34 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         try:
             location, quotation, matching = quotation_location(source, item.citation.quotation)
         except InvalidAnalysis:
-            limitations.append("A model-generated fact had an unlocatable quotation and was omitted.")
-            continue
+            # Keep a table row as a review candidate when a model joined a
+            # uniquely located heading and row with an explicit ellipsis.
+            # Do not join source text, infer column alignment, or calculate.
+            fragments = re.split(r"\s*(?:\.{3}|…)\s*", item.citation.quotation)
+            recovered = []
+            if 2 <= len(fragments) <= 3 and all(len(fragment.strip()) >= 4 for fragment in fragments):
+                for fragment in fragments:
+                    try:
+                        loc, original, kind = quotation_location(source, fragment.strip())
+                    except InvalidAnalysis:
+                        recovered = []
+                        break
+                    if loc.get("status") == "ambiguous" or partial_boundary(source, loc):
+                        recovered = []
+                        break
+                    recovered.append((loc, original, kind))
+            rows = [part for part in recovered if part[2] == "table_markup_expanded" and item.value in _quoted_numbers(_TABLE_SPAN_MARKER.sub("", part[1]))]
+            spans = [(part[0]["character_start"], part[0]["character_end"]) for part in recovered]
+            if (len(rows) != 1 or any(a[1] > b[0] for a, b in zip(spans, spans[1:])) or
+                    not any(offset <= spans[0][0] and spans[-1][1] <= offset + len(passage)
+                            for offset, passage in model_text[source.source_id])):
+                limitations.append("A model-generated fact had an unlocatable quotation and was omitted.")
+                continue
+            location, quotation, _ = rows[0]
+            matching = "table_markup_expanded"
+            limitations.append("A joined table fact quotation was separated; the row is a review candidate, not verified context.")
         if matching == "table_markup_expanded":
-            limitations.append("A table-normalized fact was omitted until column alignment is verified.")
-            continue
+            limitations.append("A table-normalized fact was excluded from automatic calculations pending column and source review.")
         if matching == "pdf_line_hyphen_restored":
             note = "A fact with a restored PDF line-break hyphen was excluded from automatic calculations pending review."
             if note not in limitations:
@@ -2175,7 +2198,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if partial_boundary(source, location):
             limitations.append("A model-generated fact quotation cuts through a word or number and was omitted.")
             continue
-        quoted_values = _quoted_numbers(quotation)
+        quoted_values = _quoted_numbers(_TABLE_SPAN_MARKER.sub("", quotation) if matching == "table_markup_expanded" else quotation)
         direction_context = (item.value not in quoted_values and
                              (_directional_negative_percent(item.value, item.unit, quotation) or
                               _directional_negative_amount(item.value, item.unit, quotation, item.currency)))
@@ -2226,7 +2249,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
             ambiguous_fact_noted = True
         if (not currency_context and not currency_conflict and not ambiguous_fact and not direction_context and
-                not period_conflict and matching != "pdf_line_hyphen_restored"):
+                not period_conflict and matching not in {"pdf_line_hyphen_restored", "table_markup_expanded"}):
             numeric_facts[item.fact_id] = numeric
         checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
@@ -2300,12 +2323,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             except InvalidAnalysis:
                                 recovered = []
                                 break
-                            if loc.get("status") == "ambiguous" or match_kind not in {"exact", "whitespace_normalized"}:
+                            allowed_matches = {"exact", "whitespace_normalized"}
+                            if split_kind == "split_ellipsis":
+                                allowed_matches.add("table_markup_expanded")
+                            if loc.get("status") == "ambiguous" or match_kind not in allowed_matches:
                                 recovered = []
                                 break
                             partial = partial_boundary(source, loc)
                             recovered.append({"source_id": source.source_id, "location": loc,
-                                "quotation_match": split_kind, "quotation": original,
+                                "quotation_match": "table_markup_expanded" if match_kind == "table_markup_expanded" else split_kind, "quotation": original,
                                 **({"partial_token": True} if partial else {}),
                                 "support_status": "not_independently_verified"})
                     if recovered and split_kind == "split_ellipsis":

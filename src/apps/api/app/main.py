@@ -1723,6 +1723,10 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                                  prior_fact.get("quotation") != fact.get("quotation"))
             if quotation_changed:
                 fact.pop("quotation_match", None)
+            elif prior_fact and prior_fact.get("quotation_match") in {"table_markup_expanded", "pdf_line_hyphen_restored"}:
+                # The client cannot clear a source-recovery warning while
+                # retaining the same unreviewed quotation.
+                fact["quotation_match"] = prior_fact["quotation_match"]
             # User edits can retain an older source quotation and location.
             # Recompute visible review cues instead of treating that retained
             # provenance as evidence for the edited value.
@@ -1945,8 +1949,8 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
         fact = candidates[0]
         if fact.get("source_value_warnings"):
             raise ApiProblem(422, "invalid_request", "The fact's source quotation requires review before calculation.")
-        if fact.get("quotation_match") == "pdf_line_hyphen_restored":
-            raise ApiProblem(422, "invalid_request", "The restored PDF quotation requires review before calculation.")
+        if fact.get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded"}:
+            raise ApiProblem(422, "invalid_request", "The restored quotation requires review before calculation.")
         location = fact.get("location")
         if isinstance(location, dict) and location.get("status") == "ambiguous":
             raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before calculation.")

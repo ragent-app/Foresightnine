@@ -420,7 +420,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             candidates = by_id.get(snapshot.fact_id, [])
             if len(candidates) != 1:
                 return "missing_or_ambiguous"
-            if candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
+            if candidates[0].get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded"} or candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation")):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})
