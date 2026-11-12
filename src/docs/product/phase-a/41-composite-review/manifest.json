@@ -1,0 +1,33 @@
+{
+  "purpose": "Nonblind paired single-case diagnostic: same claim prompt, citations, source snapshot, budget, model and generation parameters as 40-review-budget; only the review system instructions differ. One stochastic call; model version and infrastructure cannot be locked.",
+  "implementation_commit": "98f9fbc29ffe5a3985c9979df5722db9bd816d43",
+  "input_sha256": {
+    "GDP_REV-result.json": "513c2725341245b9f4392851a35f7b4b6b7513ed442f035d902f074447026f61",
+    "GDP_REV-source.txt": "2e623f2113575dd98376699548184eec919ce0b8313713112440fb8a63ee0f08"
+  },
+  "runner_sha256": "2ce736806dee6fac7ad7dc6846e11593157a3b0ac93d289cbdd2eb8c17073e29",
+  "system_prompt_sha256": "deacbe17348931bf0b8c9d48b8fdff11067001f58b71c50e9ba6e22874662566",
+  "prompt_sha256": "f58df637b56c3a56419360878879ab0621cddb5eabd35d6fb8f2924cb871521d",
+  "max_prompt_bytes": 1739,
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "max_calls": 1,
+  "retry_external_calls": 0,
+  "timeout_seconds": 60,
+  "pass_rule": "Claim indexes 0 and 1 must be supports; index 2 must be does_not_support, contradicts, or uncertain. This expected answer is fixed before the call and is not part of the prompt. Pass only indicates success on this single previously inspected case; it does not establish semantic reliability.",
+  "cost_usd": "unknown",
+  "local_preflight": "No model calls during preparation.",
+  "baseline_manifest_sha256": "732214c27f3cbead619b51af67bd89dbaa7242469a37a4e7fc97358a1bdbb6da",
+  "baseline_result_sha256": "190fe62d70331a9d7bc1b01b4ad8f3ba2a8e553f86d5687672f1a6c1ffe402e7"
+}
