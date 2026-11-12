@@ -1,0 +1,98 @@
+{
+  "source_attribution": "來源：香港特別行政區政府統計處；知識產權屬香港特別行政區政府；輸入為已修改的文字節錄。",
+  "id": "HK_RETAIL",
+  "manifest_sha256": "a22859f84ed5bb25143acbb146b878c9fd009a962ced386023b7c3b53e21a10f",
+  "operation_status": "completed",
+  "operation_id": "operation:02f22a2c139295b99f3a4b86",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 12.394,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+        "title": "香港政府統計處：2024年11月零售業銷貨額按月統計調查報告（節錄）",
+        "url": "https://www.censtatd.gov.hk/tc/wbr.html",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T09:01:30.914250+00:00",
+        "revised_at": null,
+        "content_sha256": "60a89616be5b4481c15c3c717a5b4804774eb8e9c5f18846afbce662d28b8024",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [],
+    "limitations": [
+      "Source source_ccf52e9b0751412e99b20995e9ec2df9: only character ranges 0–372 were analyzed; remaining text was not examined.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 節錄為「修改版本」，省略圖形與部分頁面，未包含「主要數字」或「詳細統計數字」內容，故總銷貨價值、網上銷售價值、同比變化及網上銷售佔比均缺失。",
+      "Model-reported limitation (not independently verified): 來源註明：「臨時統計數字於統計月度約 1 個月後發布，而修訂統計數字會於統計月度約 2個月後發布」，即2024年11月數字屬估計／臨時數字，其後可能修訂。",
+      "Model-reported limitation (not independently verified): 出版日期2025年1月2日為來源聲明，未經驗證；報告期（2024年11月）與出版期須區分。",
+      "Model-reported limitation (not independently verified): 摘錄來源非完整文件，無法核對PDF壓縮欄位中可能遺漏的統計表數字。",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:02f22a2c139295b99f3a4b86",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1059,
+      "cost_usd": null,
+      "generation_tokens": 1059,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 11.012,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "6860427dc6b4e612987690533dea60431b65d9aa6a6fff92e15a3c376602f9fa",
+      "prompt_characters": 1487,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v22",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "character_start": 0,
+          "character_end": 372
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_ccf52e9b0751412e99b20995e9ec2df9": "60a89616be5b4481c15c3c717a5b4804774eb8e9c5f18846afbce662d28b8024"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}
