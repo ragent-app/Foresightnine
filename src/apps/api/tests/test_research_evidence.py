@@ -1,9 +1,29 @@
-from app.research_evidence import claim_amount_differences, evidence_differences, suggest_percentage_evidence
+from datetime import datetime, timezone
+from app.research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, suggest_percentage_evidence
+from app.research_sources import ResearchSource, SourcePermissions
 
 
 def fact(fact_id, source_id, value, *, label="Revenue", period="FY2023", unit="USD million", currency="USD"):
     return {"fact_id": fact_id, "source_id": source_id, "value": value,
             "label": label, "period": period, "unit": unit, "currency": currency}
+
+
+def test_explicit_publication_dates_are_compared_only_with_one_declared_source():
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text="report", kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), published_at=datetime(2023, 10, 27, tzinfo=timezone.utc),
+        content_sha256="test", permissions=SourcePermissions(store=True))
+    claim = {"text": "BEA 2023年9月发布的公告", "citations": [{"source_id": "s"}]}
+    result = flag_publication_date_mismatches([claim], [source])[0]
+    assert result["publication_date_warnings"][0]["claimed_text"] == "2023年9月发布"
+    assert result["publication_date_warnings"][0]["status"] == "requires_review"
+    assert "publication_date_warnings" not in claim
+    for text in ("2023年10月发布", "2023年10月27日发布", "released on 2023-10-27", "2023年9月的数据"):
+        assert not flag_publication_date_mismatches([{**claim, "text": text}], [source])[0].get("publication_date_warnings")
+    for text in ("2023年10月26日发布", "published in 2023-09", "released on 2023-10-26"):
+        assert flag_publication_date_mismatches([{**claim, "text": text}], [source])[0]["publication_date_warnings"]
+    assert not flag_publication_date_mismatches([{**claim, "citations": [{"source_id": "s"}, {"source_id": "other"}]}], [source])[0].get("publication_date_warnings")
+    assert not flag_publication_date_mismatches([claim], [source.model_copy(update={"published_at": None})])[0].get("publication_date_warnings")
+    assert not flag_publication_date_mismatches([{**claim, "text": "2023年10月发布", "publication_date_warnings": [{"fake": True}]}], [source])[0].get("publication_date_warnings")
 
 
 def test_cross_source_differences_are_candidates_not_confirmed_conflicts():

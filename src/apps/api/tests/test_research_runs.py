@@ -870,3 +870,43 @@ def test_mismatched_currency_conversion_is_reviewable_and_recomputed_on_edit(mon
     assert saved.json()["versions"][-1]["content"]["amount_differences"] == []
     assert saved.json()["versions"][-2]["content"]["amount_differences"] == original["content"]["amount_differences"]
     assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
+
+
+def test_publication_date_candidate_persists_and_is_recomputed_after_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    class Provider:
+        name = "publication-date-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+            return {"claims": [{"text": "2023年9月发布的公告报告收入。", "citations": [citation]}],
+                    "counterarguments": [{"text": "收入不能证明利润。", "citations": [citation]}]}, 30
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post("/v1/auth/local/register", json={"email": "date-warning@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100",
+        "published_at": "2023-10-27T12:30:00Z", "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Report?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "date-warning-run"},
+                          json={"parent_version_id": topic["versions"][0]["version_id"]})
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    assert current["content"]["run"]["status"] == "partial"
+    assert current["content"]["claims"][0]["publication_date_warnings"][0]["claimed_text"] == "2023年9月发布"
+    changed = deepcopy(current["content"])
+    changed["claims"][0]["text"] = "2023年10月发布的公告报告收入。"
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
+    assert saved.status_code == 201, saved.text
+    versions = saved.json()["versions"]
+    assert not versions[-1]["content"]["claims"][0].get("publication_date_warnings")
+    assert versions[-2]["content"]["claims"][0]["publication_date_warnings"]

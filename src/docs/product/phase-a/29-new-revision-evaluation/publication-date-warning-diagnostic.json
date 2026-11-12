@@ -1,0 +1,31 @@
+{
+  "kind": "offline candidate diagnostic only; no model call or rescoring",
+  "warnings": [
+    {
+      "claim_index": 0,
+      "warnings": [
+        {
+          "claimed_text": "2023年9月发布",
+          "source_id": "source_c510ddb99ae34ba6853f8cb0101fdafe",
+          "declared_published_at": "2023-10-27T12:30:00+00:00",
+          "status": "requires_review"
+        }
+      ]
+    },
+    {
+      "claim_index": 1,
+      "warnings": [
+        {
+          "claimed_text": "2023年10月发布",
+          "source_id": "source_abaadbf6015d406cbe7b12623de2cb39",
+          "declared_published_at": "2023-11-30T13:30:00+00:00",
+          "status": "requires_review"
+        }
+      ]
+    },
+    {
+      "claim_index": 2,
+      "warnings": []
+    }
+  ]
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from copy import deepcopy
+from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 import re
 
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 
 from .research_calculations import NumericFact, _is_ratio_scale_factor
 from .research_analysis import _quoted_numbers
+from .research_sources import ResearchSource
 
 
 _PERCENT = re.compile(r"(?<![A-Za-z0-9_.])([-−]?\d+(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
@@ -17,6 +19,49 @@ _ZH_USD_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.
 _ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "亿": Decimal("100"), "千万": Decimal("10"),
                        "百万": Decimal("1"), "十万": Decimal("0.1"), "万": Decimal("0.01"),
                        "千": Decimal("0.001"), "": Decimal("0.000001")}
+_ZH_PUBLICATION = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*年\s*(1[0-2]|0?[1-9])\s*月(?:\s*(3[01]|[12]\d|0?[1-9])\s*日)?\s*(?:发布|公布|发表|刊登)")
+_EN_PUBLICATION = re.compile(r"\b(?:published|released|issued)\s+(?:on|in)\s+((?:19|20)\d{2})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?(?![-\d])", re.IGNORECASE)
+
+
+def flag_publication_date_mismatches(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag explicit publication dates that disagree with one cited source's declared date.
+
+    Date declarations are unverified, and the text may refer to another
+    publication. This is a narrow review candidate, not an error verdict.
+    """
+    source_map = {item.source_id: item for item in sources if item.published_at is not None}
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("publication_date_warnings", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
+            output.append(entry)
+            continue
+        cited = {item.get("source_id") for item in citations if isinstance(item, dict) and isinstance(item.get("source_id"), str)}
+        if len(cited) != 1 or (source := source_map.get(next(iter(cited)))) is None:
+            output.append(entry)
+            continue
+        declared = source.published_at.date()
+        warnings = []
+        for pattern in (_ZH_PUBLICATION, _EN_PUBLICATION):
+            for match in pattern.finditer(text):
+                year, month, day = match.groups()
+                try:
+                    actual = date(int(year), int(month), int(day or 1))
+                except ValueError:
+                    continue
+                if (actual.year, actual.month) != (declared.year, declared.month) or (day is not None and actual.day != declared.day):
+                    warnings.append({"claimed_text": match.group(0), "source_id": source.source_id,
+                                     "declared_published_at": source.published_at.isoformat(), "status": "requires_review"})
+                if len(warnings) >= 5:
+                    break
+            if len(warnings) >= 5:
+                break
+        if warnings:
+            entry["publication_date_warnings"] = warnings
+        output.append(entry)
+    return output
 
 
 def claim_amount_differences(claims: list[dict], facts: list[dict]) -> list[dict]:
