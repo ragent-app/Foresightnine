@@ -96,9 +96,9 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_support_review, prepare_support_review)
@@ -1678,8 +1678,13 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                 except (SourceNotFound, ValueError) as error:
                     raise ApiProblem(422, "invalid_request", "Research fact must use an attached real source.") from error
             fact.update(numeric.model_dump(mode="json"))
+            fact.pop("direction_context_unverified", None)
+            quote = fact.get("quotation")
+            if (isinstance(quote, str) and numeric.value not in _quoted_numbers(quote) and
+                    _directional_negative_percent(numeric.value, numeric.unit, quote)):
+                fact["direction_context_unverified"] = True
             fact.pop("currency_context_unverified", None)
-            if numeric.unit.strip().casefold() in {"percent", "percentage", "%"} and numeric.currency is not None:
+            if is_percent_unit(numeric.unit) and numeric.currency is not None:
                 fact["currency_context_unverified"] = True
         for field in ("claims", "facts", "calculations"):
             originals = getattr(previous.content, field)
@@ -1775,7 +1780,9 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
             location = candidates[0].get("location")
             if isinstance(location, dict) and location.get("status") == "ambiguous":
                 raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before recalculation.")
-            if (str(candidates[0].get("unit", "")).strip().casefold() in {"percent", "percentage", "%"}
+            if candidates[0].get("direction_context_unverified"):
+                raise ApiProblem(422, "invalid_request", "Percentage direction and subject require review before recalculation.")
+            if (is_percent_unit(str(candidates[0].get("unit", "")))
                     and candidates[0].get("currency") is not None):
                 raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before recalculation.")
             facts.append({key: candidates[0][key] for key in ("fact_id", "value", "unit", "currency", "period")
@@ -2246,7 +2253,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
             "not processed", "remaining text was not examined", "was omitted", "were omitted",
             "permission is not granted", "not established", "not authorized", "quotation location is ambiguous",
-            "simulated material is excluded", "percentage fact included a model-declared currency"))
+            "simulated material is excluded", "percentage fact included a model-declared currency",
+            "excluded from automatic calculations"))
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)

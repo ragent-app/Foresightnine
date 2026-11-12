@@ -1,0 +1,7 @@
+from pathlib import Path
+from datetime import datetime,timezone
+from hashlib import sha256
+import json
+from app.research_sources import ResearchSource,SourcePermissions
+from app.research_analysis import analyze,SYSTEM_PROMPT
+p=Path('docs/product/phase-a/46-selection-paired');task=json.loads((p/'BEA_Q3-input.json').read_text());old=json.loads((p/'BEA_Q3-result.json').read_text());raw=json.loads((p/'BEA_Q3-provider-output.json').read_text());meta=old['content']['sources'][0];text=(p/'BEA_Q3-source.txt').read_text();source=ResearchSource(source_id=meta['source_id'],owner_id='test',title=task['source_title'],text=text,kind='user_supplied',obtained_at=datetime.now(timezone.utc),published_at=datetime.fromisoformat(task['published_at'].replace('Z','+00:00')),content_sha256=sha256(text.encode()).hexdigest(),retrieval_method='user_pdf',permissions=SourcePermissions(store=True,model_input=True,display=True,export=True));result=analyze(task['question'],[source],None,lambda _: (raw['payload'],raw['reported_tokens']),max_prompt_chars=3000-len(SYSTEM_PROMPT.encode())-512);assert result.prompt_sha256==old['content']['run']['prompt_sha256'];out={'kind':'offline replay of previously saved model output; no new model call, original score unchanged','prompt_sha256_unchanged':True,'facts':result.facts,'calculations':result.calculations,'limitations':result.limitations};print(json.dumps(out,ensure_ascii=False,indent=2))

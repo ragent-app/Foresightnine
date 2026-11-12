@@ -1213,3 +1213,50 @@ def test_omitted_citation_subject_keeps_run_partial_and_recomputes_on_edit(monke
     assert saved.status_code == 201
     assert not saved.json()["versions"][-1]["content"]["claims"][0].get("citation_context_warnings")
     assert current["content"]["claims"][0]["citation_context_warnings"]
+
+
+def test_inferred_negative_percentage_cannot_be_silently_recalculated(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "direction-context-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def item(key, value, period, quotation):
+                return {"fact_id": key, "label": "GDP change", "value": value, "unit": "percent", "period": period,
+                        "citation": {"source_id": source_id, "quotation": quotation}}
+            return {"facts": [item("old", "-0.6", "2022", "decreased 0.6 percent"),
+                               item("new", "3.2", "2023", "increased 3.2 percent")],
+                    "calculations": [{"formula": "difference", "first_fact_id": "new", "second_fact_id": "old"}]}, 10
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register", json={"email": "direction-context@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+        "text": "Real GDP decreased 0.6 percent. It increased 3.2 percent later.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "GDP?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "direction-context-001"},
+        json={"parent_version_id": topic["versions"][0]["version_id"]}).json()
+    op = receipt["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert status == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    content = deepcopy(current["content"])
+    assert content["run"]["status"] == "partial" and not content["calculations"]
+    negative = next(item for item in content["facts"] if item["fact_id"] == "old")
+    assert negative.pop("direction_context_unverified") is True
+    content["calculations"] = [{"formula_id": "difference", "formula_version": "1",
+        "inputs": [{"fact_id": "new"}, {"fact_id": "old"}]}]
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": content})
+    assert saved.status_code == 201
+    latest = saved.json()["versions"][-1]
+    assert next(item for item in latest["content"]["facts"] if item["fact_id"] == "old")["direction_context_unverified"] is True
+    response = client.post(path + "/calculations/recalculate", headers=headers,
+        json={"parent_version_id": latest["version_id"], "calculation_index": 0})
+    assert response.status_code == 422
+    assert "require review" in response.json()["message"]

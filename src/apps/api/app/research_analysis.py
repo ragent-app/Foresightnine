@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit
 
 
 SYSTEM_PROMPT = (
@@ -171,6 +171,30 @@ def _equivalent_scalar(value: str, unit: str) -> Decimal | None:
     if any(len(item) != 1 for item in numbers) or numbers[0] != numbers[1]:
         return None
     return next(iter(numbers[0]))
+
+
+_DECREASE_PERCENT = re.compile(r"\b(?:decreased|declined|fell|dropped|contracted)\s+(?:by\s+)?(\d+(?:\.\d+)?)\s*(?:percent\b|%)", re.IGNORECASE)
+
+
+def _directional_negative_percent(value: Decimal, unit: str, quotation: str) -> bool:
+    """Identify a narrow signed rendering of an explicit percentage decrease.
+
+    This only recognizes a number and direction; it does not establish the
+    subject or whether the number denotes a level, change, or rate.
+    """
+    if (not value.is_finite() or value >= 0 or len(quotation) > 1000 or
+            not is_percent_unit(unit)):
+        return False
+    for match in _DECREASE_PERCENT.finditer(quotation):
+        prefix = quotation[max(0, match.start() - 40):match.start()]
+        if re.search(r"\b(?:not|never|neither|no)\b|didn['’]t", prefix, re.IGNORECASE):
+            continue
+        try:
+            if -Decimal(match.group(1)) == value:
+                return True
+        except InvalidOperation:
+            continue
+    return False
 
 
 def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
@@ -905,6 +929,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     checked_facts: list[dict[str, Any]] = []
     numeric_facts: dict[str, NumericFact] = {}
     currency_context_noted = False
+    directional_context_noted = False
     ambiguous_fact_noted = False
     fact_ids = Counter(item.fact_id for item in result.facts)
     for item in result.facts:
@@ -920,7 +945,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if partial_boundary(source, location):
             limitations.append("A model-generated fact quotation cuts through a word or number and was omitted.")
             continue
-        if item.value not in _quoted_numbers(quotation):
+        quoted_values = _quoted_numbers(quotation)
+        direction_context = (item.value not in quoted_values and
+                             _directional_negative_percent(item.value, item.unit, quotation))
+        if item.value not in quoted_values and not direction_context:
             limitations.append("A model-generated fact value was absent from its quotation and was omitted.")
             continue
         numeric = NumericFact(fact_id=item.fact_id, value=item.value,
@@ -929,20 +957,24 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # neither a numeric match nor a rate quotation proves that context.
         # Keep the located observation for review; do not feed it into any
         # calculation until the user has resolved the metadata.
-        currency_context = item.unit.strip().casefold() in {"percent", "percentage", "%"} and item.currency is not None
+        currency_context = is_percent_unit(item.unit) and item.currency is not None
         ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:
             if not currency_context_noted:
                 limitations.append("During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.")
                 currency_context_noted = True
+        if direction_context and not directional_context_noted:
+            limitations.append("A negative percentage was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
+            directional_context_noted = True
         if ambiguous_fact and not ambiguous_fact_noted:
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
             ambiguous_fact_noted = True
-        if not currency_context and not ambiguous_fact:
+        if not currency_context and not ambiguous_fact and not direction_context:
             numeric_facts[item.fact_id] = numeric
         checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
             **({"currency_context_unverified": True} if currency_context else {}),
+            **({"direction_context_unverified": True} if direction_context else {}),
             **({"numeric_normalization": "thousands_separator"} if item.fact_id in normalized_grouped_ids else {}),
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),
             **({"numeric_normalization": "equivalent_decimal_fraction"} if item.fact_id in normalized_equivalent_ids else {}),

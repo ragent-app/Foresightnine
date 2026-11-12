@@ -1,0 +1,96 @@
+{
+  "kind": "offline replay of previously saved model output; no new model call, original score unchanged",
+  "prompt_sha256_unchanged": true,
+  "facts": [
+    {
+      "fact_id": "q3_2022_third_estimate",
+      "value": "3.2",
+      "unit": "percent (annual rate)",
+      "currency": null,
+      "period": "2022 年第三季度",
+      "label": "实际 GDP 折年增长率（第三次估计）",
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the third quarter of\n2022 (table 1)",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 384,
+        "character_end": 499,
+        "page": 1
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "q3_2022_second_estimate",
+      "value": "2.9",
+      "unit": "percent (annual rate)",
+      "currency": null,
+      "period": "2022 年第三季度",
+      "label": "实际 GDP 折年增长率（第二次估计）",
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "quotation": "In the second estimate, the increase in real GDP was 2.9\npercent.",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 781,
+        "character_end": 846,
+        "page": 1
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "q2_2022_growth",
+      "value": "-0.6",
+      "unit": "percent",
+      "currency": null,
+      "period": "2022 年第二季度",
+      "label": "2022 年第二季度实际 GDP 变化",
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "quotation": "In the\nsecond quarter, real GDP decreased 0.6 percent.",
+      "quotation_match": "whitespace_normalized",
+      "direction_context_unverified": true,
+      "location": {
+        "character_start": 580,
+        "character_end": 634,
+        "page": 1
+      },
+      "verification": "model_extraction_not_independently_verified"
+    }
+  ],
+  "calculations": [
+    {
+      "formula_id": "difference",
+      "formula_version": "2",
+      "expression": "first - second",
+      "input_verification": "not_verified_by_calculator",
+      "inputs": [
+        {
+          "fact_id": "q3_2022_third_estimate",
+          "value": "3.2",
+          "unit": "percent (annual rate)",
+          "currency": null,
+          "period": "2022 年第三季度"
+        },
+        {
+          "fact_id": "q3_2022_second_estimate",
+          "value": "2.9",
+          "unit": "percent (annual rate)",
+          "currency": null,
+          "period": "2022 年第三季度"
+        }
+      ],
+      "value": "0.30",
+      "unit": "percentage points",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2
+    }
+  ],
+  "limitations": [
+    "Source source_50bc8202c2d84f0d9ca7599367f17b0b: only character ranges 225–526, 543–846 were analyzed; remaining text was not examined.",
+    "A negative percentage was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "来源文本为部分节选（coverage: partial），未包含完整表格或所有细节。",
+    "发布日期为声明的 2022-12-22，未经独立验证。",
+    "文中未说明 0.3 个百分点上调的具体原因或各分项修订细节。",
+    "节选未包含第三次估计与最终修订（如有）之间的进一步比较信息。"
+  ]
+}

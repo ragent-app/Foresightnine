@@ -167,3 +167,27 @@ def test_year_ended_dates_check_order_without_changing_fiscal_identity():
     assert result["value"] == "0.22"
     assert result["period_order_check"] == "recognized_formats_only"
     assert result["input_verification"] == "not_verified_by_calculator"
+
+
+def test_direction_context_blocks_treating_a_saved_calculation_as_verified():
+    current, prior = fact("current", "3.2", "2023", unit="percent", currency=None), fact("prior", "-0.6", "2022", unit="percent", currency=None)
+    calculation = calculate(CalculationRequest(formula="difference", first=current, second=prior))
+    assert calculation_input_status(calculation, [current, prior]) == "matched"
+    assert calculation_input_status(calculation, [current, {**prior, "direction_context_unverified": True}]) == "unverifiable"
+
+
+@pytest.mark.parametrize("unit", ["percent (annual rate)", "percent, annualized", "percentage (quarterly rate)", "百分比"])
+def test_qualified_percentage_difference_is_percentage_points(unit):
+    current = fact("current", "3.2", "2023", unit=unit, currency=None)
+    prior = fact("prior", "2.9", "2023", unit=unit, currency=None)
+    result = calculate(CalculationRequest(formula="difference", first=current, second=prior))
+    assert result["value"] == "0.30" and result["unit"] == "percentage points" and result["formula_version"] == "2"
+    with pytest.raises(CalculationError, match="cannot have a currency"):
+        calculate(CalculationRequest(formula="difference", first={**current, "currency": "USD"}, second={**prior, "currency": "USD"}))
+
+
+def test_percentage_point_inputs_remain_points_without_becoming_percentage_levels():
+    current = fact("current", "2", "2023", unit="percentage points", currency=None)
+    prior = fact("prior", "1", "2022", unit="percentage points", currency=None)
+    result = calculate(CalculationRequest(formula="difference", first=current, second=prior))
+    assert result["unit"] == "percentage points" and result["formula_version"] == "1"

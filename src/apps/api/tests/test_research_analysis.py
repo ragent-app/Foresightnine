@@ -785,3 +785,38 @@ def test_bounded_non_schema_annotations_are_discarded_without_using_their_conten
         bad = {"claims": [{"text": "Revenue", "citations": [citation], **extra}]}
         with pytest.raises(InvalidAnalysis):
             analyze("Revenue?", [report], None, lambda _: (bad, 1))
+
+
+def test_explicit_decrease_can_be_retained_as_unverified_signed_observation():
+    report = source("s", text="Real GDP decreased 0.6 percent. It increased 3.2 percent later.")
+    def raw(quotation, value="-0.6", unit="percent"):
+        return {"facts": [{"fact_id": "old", "label": "GDP change", "value": value, "unit": unit,
+                           "period": "2022", "citation": {"source_id": "s", "quotation": quotation}},
+                          {"fact_id": "new", "label": "GDP change", "value": "3.2", "unit": "percent",
+                           "period": "2023", "citation": {"source_id": "s", "quotation": "increased 3.2 percent"}}],
+                "calculations": [{"formula": "difference", "first_fact_id": "new", "second_fact_id": "old"}]}
+    output = analyze("GDP?", [report], None, lambda _: (raw("decreased 0.6 percent"), 1))
+    old = next(item for item in output.facts if item["fact_id"] == "old")
+    assert old["value"] == "-0.6" and old["direction_context_unverified"] is True
+    assert not output.calculations
+    assert any("excluded from automatic calculations" in note for note in output.limitations)
+    assert not any(item["fact_id"] == "old" for item in analyze("GDP?", [report], None,
+        lambda _: (raw("decreased 0.6 percent", value="-0.7"), 1)).facts)
+    assert not any(item["fact_id"] == "old" for item in analyze("GDP?", [report], None,
+        lambda _: (raw("decreased 0.6 percent", unit="USD"), 1)).facts)
+    negated = source("s", text="Real GDP did not decrease 0.6 percent.")
+    negative_raw = {"facts": [{"fact_id": "n", "label": "GDP", "value": "-0.6", "unit": "percent", "period": "2022",
+                               "citation": {"source_id": "s", "quotation": "did not decrease 0.6 percent"}}]}
+    assert not analyze("GDP?", [negated], None, lambda _: (negative_raw, 1)).facts
+
+
+def test_qualified_percent_currency_is_not_used_for_automatic_calculation():
+    report = source("s", text="The annualized rate was 3.2 percent, previously 2.9 percent.")
+    def item(fact_id, value):
+        return {"fact_id": fact_id, "label": "rate", "value": value, "unit": "percent (annual rate)",
+                "currency": "USD", "period": "2022", "citation": {"source_id": "s", "quotation": value + " percent"}}
+    raw = {"facts": [item("current", "3.2"), item("previous", "2.9")],
+           "calculations": [{"formula": "difference", "first_fact_id": "current", "second_fact_id": "previous"}]}
+    result = analyze("Rate?", [report], None, lambda _: (raw, 1))
+    assert len(result.facts) == 2 and all(item["currency_context_unverified"] for item in result.facts)
+    assert not result.calculations

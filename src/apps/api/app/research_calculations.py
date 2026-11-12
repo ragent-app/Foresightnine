@@ -43,6 +43,14 @@ class CalculationError(ValueError):
     """The available inputs do not support the requested calculation."""
 
 
+def is_percent_unit(unit: str) -> bool:
+    """Recognize percentage levels, excluding percentage-point differences."""
+    normalized = " ".join(unit.strip().casefold().split())
+    if re.search(r"\bpoints?\b|百分点", normalized):
+        return False
+    return bool(re.fullmatch(r"(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|,\s*(?:annualized|annual rate))?", normalized))
+
+
 def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
     """Parse only unambiguous matching period formats, without guessing fiscal calendars."""
     value = period.strip()
@@ -113,6 +121,8 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             candidates = by_id.get(snapshot.fact_id, [])
             if len(candidates) != 1:
                 return "missing_or_ambiguous"
+            if candidates[0].get("direction_context_unverified"):
+                return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})
             if actual != snapshot:
                 return "changed"
@@ -162,7 +172,7 @@ def calculate(request: CalculationRequest) -> dict:
             else:
                 result = a.value - b.value
                 expression = "first - second"
-                if a.unit.strip().casefold() in {"percent", "percentage", "%"}:
+                if is_percent_unit(a.unit):
                     if a.currency is not None:
                         raise CalculationError("Percentage inputs cannot have a currency.")
                     unit = "percentage points"
