@@ -1,9 +1,10 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: 86537a5d8def1d0f61b4f4f6845089b883c92f85b89442be652c08a4e3437219
+ * SHA-256: c084c6c383810d063f26b98e94a0e9b89c0103aa9cc48deb7d1f3c9262978f32
  */
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
 export type CalculationRequest = { readonly "decimal_places"?: number; readonly "first": NumericFact; readonly "formula": "growth_percent" | "margin_percent" | "difference"; readonly "second": NumericFact; };
 export type ConfirmDirectionRequest = { readonly "fact_id": string; readonly "parent_version_id": string; };
+export type CreateResearchCalculationRequest = { readonly "decimal_places"?: number; readonly "first_fact_id": string; readonly "formula": "growth_percent" | "margin_percent" | "difference"; readonly "parent_version_id": string; readonly "second_fact_id": string; };
 export type FetchSourceRequest = { readonly "event_at"?: string | null; readonly "is_simulated"?: boolean; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "revised_at"?: string | null; readonly "title": string; readonly "url": string; };
 export type FocusCitation = { readonly "citation_index": number; readonly "claim_index": number; };
 export type HTTPValidationError = { readonly "detail"?: readonly (ValidationError)[]; };

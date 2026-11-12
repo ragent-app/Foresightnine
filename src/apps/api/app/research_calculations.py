@@ -41,6 +41,15 @@ class RecalculateRequest(BaseModel):
     calculation_index: int = Field(ge=0, le=1999, strict=True)
 
 
+class CreateResearchCalculationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    parent_version_id: str = Field(min_length=1, max_length=100)
+    formula: Literal["growth_percent", "margin_percent", "difference"]
+    first_fact_id: str = Field(min_length=1, max_length=200)
+    second_fact_id: str = Field(min_length=1, max_length=200)
+    decimal_places: int = Field(default=2, ge=0, le=8, strict=True)
+
+
 class ConfirmDirectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     parent_version_id: str = Field(min_length=1, max_length=100)

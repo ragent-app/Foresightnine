@@ -84,6 +84,53 @@
         "title": "ConfirmDirectionRequest",
         "type": "object"
       },
+      "CreateResearchCalculationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decimal_places": {
+            "default": 2,
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Decimal Places",
+            "type": "integer"
+          },
+          "first_fact_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "First Fact Id",
+            "type": "string"
+          },
+          "formula": {
+            "enum": [
+              "growth_percent",
+              "margin_percent",
+              "difference"
+            ],
+            "title": "Formula",
+            "type": "string"
+          },
+          "parent_version_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Parent Version Id",
+            "type": "string"
+          },
+          "second_fact_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Second Fact Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_version_id",
+          "formula",
+          "first_fact_id",
+          "second_fact_id"
+        ],
+        "title": "CreateResearchCalculationRequest",
+        "type": "object"
+      },
       "FetchSourceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1985,6 +2032,71 @@
           }
         },
         "summary": "Get Research Topic"
+      }
+    },
+    "/v2/research/topics/{topic_id}/calculations": {
+      "post": {
+        "operationId": "create_research_calculation_v2_research_topics__topic_id__calculations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResearchCalculationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Research Calculation"
       }
     },
     "/v2/research/topics/{topic_id}/calculations/recalculate": {

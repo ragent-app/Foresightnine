@@ -336,3 +336,35 @@ def test_edited_table_fragment_preserves_currency_warning(monkeypatch):
     assert third.status_code == 201, third.text
     assert not third.json()['versions'][-1]['content']['facts'][0].get('currency_quote_missing')
     assert third.json()['versions'][-1]['content']['facts'][0]['table_alignment_unverified'] is True
+
+
+def test_create_calculation_from_saved_facts_validates_inputs_and_preserves_history(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")
+    client=TestClient(app)
+    account=client.post("/v1/auth/local/register",json={"email":f"create-calc-{uuid4().hex}@example.test",
+        "password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+account["access_token"]}
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Compare revenue"}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    facts=[{"fact_id":"old","label":"Old revenue","value":"100","unit":"USD million","currency":"USD","period":"2023"},
+           {"fact_id":"new","label":"New revenue","value":"125","unit":"USD million","currency":"USD","period":"2024"},
+           {"fact_id":"zero","label":"Zero","value":"0","unit":"USD million","currency":"USD","period":"2022"},
+           {"fact_id":"other","label":"Other","value":"5","unit":"EUR million","currency":"EUR","period":"2024"}]
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":topic["versions"][0]["version_id"],"content":{"facts":facts}})
+    assert saved.status_code==201
+    parent=saved.json()["versions"][-1]["version_id"]
+    spec={"parent_version_id":parent,"formula":"growth_percent","first_fact_id":"new","second_fact_id":"old"}
+    for invalid in ({**spec,"first_fact_id":"missing"},{**spec,"second_fact_id":"new"},{**spec,"second_fact_id":"zero"},
+                    {**spec,"second_fact_id":"other"},{**spec,"formula":"unknown"}):
+        assert client.post(path+"/calculations",headers=headers,json=invalid).status_code==422
+    assert client.get(path,headers=headers).json()["versions"][-1]["version_id"]==parent
+    result=client.post(path+"/calculations",headers=headers,json=spec)
+    assert result.status_code==201, result.text
+    previous,current=result.json()["versions"][-2:]
+    assert not previous["content"]["calculations"]
+    calc=current["content"]["calculations"][0]
+    assert calc["value"]=="25.00" and calc["unit"]=="percent" and calc["input_status"]=="matched"
+    assert [x["fact_id"] for x in calc["inputs"]]==["new","old"]
+    assert calc["authorship"]=="calculation_engine" and current["review"]=="draft"
+    assert client.post(path+"/calculations",headers=headers,json=spec).status_code==409

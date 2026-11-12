@@ -12,6 +12,14 @@ describe("research operation polling", () => {
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("/topics/topic%2Fone/facts/confirm-direction");
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({parent_version_id:"version-1",fact_id:"fact-2"});
   });
+  it("creates a calculation using saved fact identifiers", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 201 }));
+    vi.stubGlobal("fetch", fetcher);
+    await researchClient("https://api.example.com").createCalculation("topic", "version-1", "difference", "first", "second");
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("/topics/topic/calculations");
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({parent_version_id:"version-1",formula:"difference",first_fact_id:"first",second_fact_id:"second"});
+  });
   it("sends an input limit only when explicitly selected", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 202 }));

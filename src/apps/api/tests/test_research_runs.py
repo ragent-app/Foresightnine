@@ -2408,6 +2408,8 @@ def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_afte
     assert next(item for item in latest["content"]["facts"] if item["fact_id"]=="goods")["direction_context_unverified"] is True
     recalculated=client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":latest["version_id"],"calculation_index":0})
     assert recalculated.status_code==422 and "direction and subject require review" in recalculated.json()["message"]
+    spec={"parent_version_id":latest["version_id"],"formula":"difference","first_fact_id":"services","second_fact_id":"goods"}
+    assert client.post(path+"/calculations",headers=headers,json=spec).status_code==422
     assert client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":latest["version_id"],"fact_id":"services"}).status_code==422
     confirmed=client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":latest["version_id"],"fact_id":"goods"})
     assert confirmed.status_code==201, confirmed.text
@@ -2421,7 +2423,15 @@ def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_afte
     assert client.post(path+"/facts/confirm-direction",headers=other_headers,json={"parent_version_id":reviewed["version_id"],"fact_id":"goods"}).status_code==404
     assert not next(item for item in confirmed.json()["versions"][-2]["content"]["facts"] if item["fact_id"]=="goods").get("direction_confirmation")
     assert client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":latest["version_id"],"fact_id":"goods"}).status_code==409
-    recalculated=client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":reviewed["version_id"],"calculation_index":0})
+    spec["parent_version_id"]=reviewed["version_id"]
+    assert client.post(path+"/calculations",headers=other_headers,json=spec).status_code==404
+    created=client.post(path+"/calculations",headers=headers,json=spec)
+    assert created.status_code==201, created.text
+    created_version=created.json()["versions"][-1]
+    assert created_version["content"]["calculations"][-1]["value"]=="81.60"
+    assert created_version["content"]["calculations"][-1]["input_status"]=="matched"
+    assert client.post(path+"/calculations",headers=headers,json=spec).status_code==409
+    recalculated=client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":created_version["version_id"],"calculation_index":0})
     assert recalculated.status_code==201, recalculated.text
     calculated=recalculated.json()["versions"][-1]
     assert calculated["content"]["calculations"][0]["input_status"]=="matched"

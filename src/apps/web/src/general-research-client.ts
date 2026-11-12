@@ -172,6 +172,8 @@ export function researchClient(baseUrl: string) {
       `/v2/research/topics/${encodeURIComponent(topicId)}/sources`, { parent_version_id: parent, source_ids: sourceIds }),
     confirmDirection: (topicId: string, parent: string, factId: string) => request<ResearchTopic>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/facts/confirm-direction`, { parent_version_id: parent, fact_id: factId }),
+    createCalculation: (topicId: string, parent: string, formula: "growth_percent" | "margin_percent" | "difference", firstFactId: string, secondFactId: string) => request<ResearchTopic>(
+      `/v2/research/topics/${encodeURIComponent(topicId)}/calculations`, { parent_version_id: parent, formula, first_fact_id: firstFactId, second_fact_id: secondFactId }),
     recalculate: (topicId: string, parent: string, index: number) => request<ResearchTopic>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/calculations/recalculate`, { parent_version_id: parent, calculation_index: index }),
     run: (topicId: string, parent: string, key: string, budget: RunBudget) => request<{ operation: ResearchOperation }>(

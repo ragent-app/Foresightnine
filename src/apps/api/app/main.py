@@ -96,7 +96,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
@@ -1911,6 +1911,60 @@ def confirm_research_direction(topic_id: str, request: ConfirmDirectionRequest,
         raise ApiProblem(422, "invalid_request", "The directional fact or its source requires further review.") from error
 
 
+def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) -> list[dict]:
+    """Resolve version-owned inputs and apply the same checks for both actions."""
+    facts = []
+    for fact_id in fact_ids:
+        candidates = [fact for fact in content.facts if fact.get("fact_id") == fact_id]
+        if len(candidates) != 1:
+            raise ApiProblem(422, "invalid_request", "Calculation input facts are missing or ambiguous.")
+        fact = candidates[0]
+        location = fact.get("location")
+        if isinstance(location, dict) and location.get("status") == "ambiguous":
+            raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before calculation.")
+        if fact.get("table_period_conflict"):
+            raise ApiProblem(422, "invalid_request", "Table period and column require review before calculation.")
+        if fact.get("direction_context_unverified") and not direction_user_confirmed(fact):
+            raise ApiProblem(422, "invalid_request", "Value direction and subject require review before calculation.")
+        if currency_value_conflict(fact.get("currency"), fact.get("value"), fact.get("quotation")):
+            raise ApiProblem(422, "invalid_request", "Currency and quoted value require review before calculation.")
+        if is_percent_unit(str(fact.get("unit", ""))) and fact.get("currency") is not None:
+            raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before calculation.")
+        facts.append({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})
+    return facts
+
+
+@app.post("/v2/research/topics/{topic_id}/calculations", response_model=ResearchTopic,
+          status_code=201, include_in_schema=False)
+def create_research_calculation(topic_id: str, request: CreateResearchCalculationRequest,
+                                authorization: str | None = Header(default=None)) -> ResearchTopic:
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        previous = topic.versions[-1]
+        if previous.version_id != request.parent_version_id:
+            raise TopicVersionConflict()
+        if len(previous.content.calculations) >= 2000:
+            raise ApiProblem(422, "invalid_request", "The research calculation limit has been reached.")
+        facts = _research_calculation_inputs(previous.content, [request.first_fact_id, request.second_fact_id])
+        spec = CalculationRequest.model_validate({"formula": request.formula, "first": facts[0], "second": facts[1],
+                                                  "decimal_places": request.decimal_places})
+        result = calculate(spec)
+        result.update({"input_status": "matched", "authorship": "calculation_engine"})
+        content = previous.content.model_copy(deep=True)
+        content.calculations.append(result)
+        content.claims = suggest_percentage_calculations(content.claims, content.calculations, content.facts)
+        content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
+        return research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=previous.version_id, content=content, note=previous.note))
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    except TopicVersionConflict as error:
+        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before calculating.") from error
+    except (ValidationError, CalculationError) as error:
+        raise ApiProblem(422, "invalid_request", "Calculation cannot be performed with the current facts.") from error
+
+
 @app.post("/v2/research/topics/{topic_id}/calculations/recalculate", response_model=ResearchTopic,
           status_code=201, include_in_schema=False)
 def recalculate_research(topic_id: str, request: RecalculateRequest,
@@ -1928,25 +1982,7 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
         if (old.get("formula_version") not in {"1", "2"} or not isinstance(inputs, list) or len(inputs) != 2 or
                 any(not isinstance(item, dict) or not isinstance(item.get("fact_id"), str) for item in inputs)):
             raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
-        facts = []
-        for item in inputs:
-            candidates = [fact for fact in previous.content.facts if fact.get("fact_id") == item["fact_id"]]
-            if len(candidates) != 1:
-                raise ApiProblem(422, "invalid_request", "Calculation input facts are missing or ambiguous.")
-            location = candidates[0].get("location")
-            if isinstance(location, dict) and location.get("status") == "ambiguous":
-                raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before recalculation.")
-            if candidates[0].get("table_period_conflict"):
-                raise ApiProblem(422, "invalid_request", "Table period and column require review before recalculation.")
-            if candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0]):
-                raise ApiProblem(422, "invalid_request", "Value direction and subject require review before recalculation.")
-            if currency_value_conflict(candidates[0].get("currency"), candidates[0].get("value"), candidates[0].get("quotation")):
-                raise ApiProblem(422, "invalid_request", "Currency and quoted value require review before recalculation.")
-            if (is_percent_unit(str(candidates[0].get("unit", "")))
-                    and candidates[0].get("currency") is not None):
-                raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before recalculation.")
-            facts.append({key: candidates[0][key] for key in ("fact_id", "value", "unit", "currency", "period")
-                          if key in candidates[0]})
+        facts = _research_calculation_inputs(previous.content, [item["fact_id"] for item in inputs])
         spec = CalculationRequest.model_validate({"formula": old.get("formula_id"), "first": facts[0],
             "second": facts[1], "decimal_places": old.get("decimal_places", 2)})
         result = calculate(spec)
