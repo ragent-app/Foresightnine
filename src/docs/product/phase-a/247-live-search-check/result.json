@@ -1,0 +1,55 @@
+{
+  "status": "completed",
+  "candidates": [
+    {
+      "title": "Gross Domestic Product, Fourth Quarter and Year 2023",
+      "url": "https://www.bea.gov/news/2024/gross-domestic-product-fourth-quarter-and-year-2023-advance-estimate",
+      "publisher": null,
+      "published_at": null,
+      "excerpt_sha256": "d9fadb07dd2e19d1bdaefdba79efd1eafe85cf1e46323338a91a58ed7b5a1b3a",
+      "eligible_official_host": true
+    },
+    {
+      "title": "Gross Domestic Product, Fourth Quarter and Year 2023 (",
+      "url": "https://www.bea.gov/sites/default/files/2024-01/tech4q23-adv.pdf",
+      "publisher": null,
+      "published_at": null,
+      "excerpt_sha256": "3cce8f0d23f4ba0a1babc936a598f7597ff157d7365928ee7347d46e4d5f842d",
+      "eligible_official_host": true
+    },
+    {
+      "title": "Gross Domestic Product, Fourth Quarter and Year 2023 (",
+      "url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv-fax.pdf",
+      "publisher": null,
+      "published_at": null,
+      "excerpt_sha256": "397566ccff3ddbe40f4ee69a8a2b745b16b07de167a73722b1e66d38c7d407d8",
+      "eligible_official_host": true
+    },
+    {
+      "title": "Gross Domestic Product, Fourth Quarter and Year 2023",
+      "url": "https://www.bea.gov/news/2024/gross-domestic-product-fourth-quarter-and-year-2023-second-estimate",
+      "publisher": null,
+      "published_at": null,
+      "excerpt_sha256": "d29aca05cb28900fbf20a2b90e668461f9c2c3320d664019b74d0f3416930f24",
+      "eligible_official_host": true
+    },
+    {
+      "title": "Gross Domestic Product, Fourth Quarter and Year 2023 (",
+      "url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+      "publisher": null,
+      "published_at": null,
+      "excerpt_sha256": "278a445a4d08527060a5118c20a33a6640df6ed7fb8d209d9b2ef0ffe356392a",
+      "eligible_official_host": true
+    }
+  ],
+  "http_methods": [
+    "initialize",
+    "notifications/initialized",
+    "tools/list",
+    "tools/call"
+  ],
+  "elapsed_seconds": 5.572,
+  "checked_at": "2026-11-12T18:57:29.830315+00:00",
+  "model_calls": 0,
+  "cost_usd": "unknown"
+}

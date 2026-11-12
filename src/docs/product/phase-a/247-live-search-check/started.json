@@ -1,0 +1,10 @@
+{
+  "query": "BEA gross domestic product fourth quarter 2023 advance estimate",
+  "limit": 5,
+  "search_calls": 1,
+  "max_attempts_per_http": 1,
+  "per_http_timeout_seconds": 15,
+  "deadline_seconds": 30,
+  "model_calls": 0,
+  "cost_usd": "unknown"
+}
