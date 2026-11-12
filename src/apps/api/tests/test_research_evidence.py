@@ -591,21 +591,61 @@ def test_quarter_formats_are_distinct_and_ranges_do_not_produce_false_quarters()
 
 
 def test_trade_deficit_direction_warning_requires_matching_located_components():
-    from app.research_evidence import flag_trade_balance_direction
+    from app.research_evidence import flag_component_direction
     text = "The deficit reflected a decrease in the goods deficit of $0.3 billion and a decrease in the services surplus of $1.6 billion."
     source = ResearchSource(source_id="s", owner_id="owner", title="Trade report", text=text, kind="user_supplied",
         obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
     citation={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
     claim={"text":"The goods deficit and services surplus fell, both of which would narrow the deficit.","citations":[citation]}
-    flagged=flag_trade_balance_direction([claim],[source])[0]
+    flagged=flag_component_direction([claim],[source])[0]
     assert flagged["balance_direction_warnings"][0]["status"]=="requires_review"
     assert "balance_direction_warnings" not in claim
     for statement in ("The goods deficit narrowed and the smaller services surplus widened the combined deficit.",
                       "It is not true that both changes would narrow the deficit.",
                       "Both changes widened the deficit."):
-        assert not flag_trade_balance_direction([{**claim,"text":statement}],[source])[0].get("balance_direction_warnings")
-    assert not flag_trade_balance_direction([claim],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("balance_direction_warnings")
-    assert not flag_trade_balance_direction([{**claim,"citations":[{**citation,"partial_token":True}]}],[source])[0].get("balance_direction_warnings")
-    assert not flag_trade_balance_direction([{**claim,"citations":[{**citation,"location":{"status":"ambiguous"}}]}],[source])[0].get("balance_direction_warnings")
+        assert not flag_component_direction([{**claim,"text":statement}],[source])[0].get("balance_direction_warnings")
+    assert not flag_component_direction([claim],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("balance_direction_warnings")
+    assert not flag_component_direction([{**claim,"citations":[{**citation,"partial_token":True}]}],[source])[0].get("balance_direction_warnings")
+    assert not flag_component_direction([{**claim,"citations":[{**citation,"location":{"status":"ambiguous"}}]}],[source])[0].get("balance_direction_warnings")
     omitted={**claim,"citations":[{**citation,"quotation":"invented"}]}
-    assert not flag_trade_balance_direction([omitted],[source])[0].get("balance_direction_warnings")
+    assert not flag_component_direction([omitted],[source])[0].get("balance_direction_warnings")
+
+
+def test_component_direction_flags_chinese_trade_claims_against_english_or_chinese_sources():
+    from app.research_evidence import flag_component_direction
+    quotes=["A decrease in the goods deficit and a decrease in the services surplus.",
+            "商品逆差下降，服务顺差下降。"]
+    for text in quotes:
+        report = ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+            obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
+        citation={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
+        item={"text":"两项变化均会缩小总贸易逆差。","citations":[citation]}
+        warning=flag_component_direction([item],[report])[0]["balance_direction_warnings"][0]
+        assert warning["basis"]=="trade_deficit"
+        assert not flag_component_direction([{**item,"text":"并非两项变化均会缩小总贸易逆差。"}],[report])[0].get("balance_direction_warnings")
+
+
+def test_component_direction_handles_operating_profit_with_conservative_scope():
+    from app.research_evidence import flag_component_direction
+    for text,claim in (("Revenue fell and operating expenses fell.", "Both changes would increase operating profit."),
+                       ("收入下降，营业费用下降。", "两项变化均会提升营业利润。"),
+                       ("營收下降，營業費用下降。", "兩項變化均會提升營業利潤。")):
+        report=ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+            obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
+        cite={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
+        result=flag_component_direction([{"text":claim,"citations":[cite]}],[report])[0]
+        assert result["balance_direction_warnings"][0]["basis"]=="operating_profit"
+        good="Revenue fell, which lowered operating profit, while lower expenses increased it."
+        assert not flag_component_direction([{"text":good,"citations":[cite]}],[report])[0].get("balance_direction_warnings")
+        assert not flag_component_direction([{"text":"It is not true that both changes would increase operating profit.","citations":[cite]}],[report])[0].get("balance_direction_warnings")
+
+
+def test_component_direction_accepts_common_english_movement_word_orders():
+    from app.research_evidence import flag_component_direction
+    pairs=[("The goods deficit narrowed and the services surplus shrank.","Both changes would narrow the deficit.","trade_deficit"),
+           ("A decline in revenue and a decrease in operating expenses.","Both changes would increase operating profit.","operating_profit")]
+    for text,claim,basis in pairs:
+        report=ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+            obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
+        citation={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
+        assert flag_component_direction([{"text":claim,"citations":[citation]}],[report])[0]["balance_direction_warnings"][0]["basis"]==basis

@@ -450,18 +450,32 @@ def flag_uncited_quarters(claims: list[dict], sources: list[ResearchSource]) -> 
 
 _BOTH_NARROW_DEFICIT = re.compile(
     r"\bboth(?:\s+of\s+which|\s+changes?)?\s+(?:(?:would|will|should|can|could)\s+)?"
-    r"(?:narrow|reduce|shrink|decrease)\s+(?:the\s+)?(?:overall\s+|total\s+)?deficit\b", re.IGNORECASE)
-_GOODS_DEFICIT_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?goods\s+deficit\b", re.IGNORECASE)
-_SERVICES_SURPLUS_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?services\s+surplus\b", re.IGNORECASE)
+    r"(?:narrow|reduce|shrink|decrease)\s+(?:the\s+)?(?:overall\s+|total\s+)?deficit\b"
+    r"|(?:两者|兩者|二者|两项|兩項)(?:变化|變化|变动|變動)?(?:均|都|皆|都会|都會|均会|均會)?"
+    r"[^。！？；;]{0,14}?(?:(?:缩小|縮小|收窄|减少|減少)[^。！？；;]{0,8}?(?:总|總|总体|總體|整体|整體)?(?:贸易|貿易)?逆差"
+    r"|(?:总|總|总体|總體|整体|整體)?(?:贸易|貿易)?逆差[^。！？；;]{0,8}?(?:缩小|縮小|收窄|减少|減少))", re.IGNORECASE)
+_GOODS_DEFICIT_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?goods\s+deficit\b|\bgoods\s+deficit\s+(?:fell|decreased|declined|narrowed)\b|(?:商品|货物|貨物)逆差(?:下降|减少|減少|收窄)", re.IGNORECASE)
+_SERVICES_SURPLUS_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?services\s+surplus\b|\bservices\s+surplus\s+(?:fell|decreased|declined|shrank)\b|(?:服务|服務)顺差(?:下降|减少|減少|收窄)", re.IGNORECASE)
+_BOTH_RAISE_PROFIT = re.compile(
+    r"\bboth(?:\s+of\s+which|\s+changes?)?\s+(?:(?:would|will|should|can|could)\s+)?"
+    r"(?:increase|raise|improve|boost)\s+(?:the\s+)?operating\s+(?:profit|income)\b"
+    r"|(?:两者|兩者|二者|两项|兩項)(?:变化|變化|变动|變動)?(?:均|都|皆|都会|都會|均会|均會)?"
+    r"[^。！？；;]{0,14}?(?:(?:提高|提升|增加|推动|推動)[^。！？；;]{0,8}?(?:营业|營業|经营|經營)(?:利润|利潤)"
+    r"|(?:营业|營業|经营|經營)(?:利润|利潤)[^。！？；;]{0,8}?(?:上升|增长|增長|增加|提高))", re.IGNORECASE)
+_REVENUE_FALL = re.compile(r"\b(?:revenues?|sales)\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?(?:revenues?|sales)\b|(?:营收|營收|收入)(?:下降|减少|減少|下滑)", re.IGNORECASE)
+_OPERATING_EXPENSE_FALL = re.compile(r"\boperating\s+expenses?\s+(?:fell|decreased|declined|dropped)\b|\b(?:decrease|decline|fall|reduction)\s+in\s+(?:the\s+)?operating\s+expenses?\b|(?:营业|營業|经营|經營)费用(?:下降|减少|減少|下滑)|(?:營業|經營)費用(?:下降|減少|下滑)", re.IGNORECASE)
+_COMPONENT_NEGATION = re.compile(r"\b(?:not|neither|incorrect|false|deny|denies)\b|并非|並非|并不|並不|不认为|不認為|不是|没有|沒有|不能|未必|无法|無法|并未|並未", re.IGNORECASE)
 
 
-def flag_trade_balance_direction(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
-    """Flag a narrow sign inconsistency for goods deficit minus services surplus.
+def flag_component_direction(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag narrow sign inconsistencies in two common accounting identities.
 
-    This is a deterministic accounting cue, not proof of claim support. It
-    requires both components and their decreases in the same located quote.
+    A warning is a review cue, not proof of claim support or accounting basis.
+    Both component movements must occur in the same located quotation.
     """
     source_map = {s.source_id:s for s in sources if s.permissions.display and not s.is_simulated}
+    rules = (("trade_deficit", _BOTH_NARROW_DEFICIT, _GOODS_DEFICIT_FALL, _SERVICES_SURPLUS_FALL),
+             ("operating_profit", _BOTH_RAISE_PROFIT, _REVENUE_FALL, _OPERATING_EXPENSE_FALL))
     output=[]
     for claim in claims:
         entry=deepcopy(claim)
@@ -469,9 +483,11 @@ def flag_trade_balance_direction(claims: list[dict], sources: list[ResearchSourc
         text,citations=entry.get("text"),entry.get("citations")
         if not isinstance(text,str) or len(text)>3000 or not isinstance(citations,list):
             output.append(entry);continue
-        matches=list(_BOTH_NARROW_DEFICIT.finditer(text))[:5]
-        matches=[m for m in matches if not re.search(r"\b(?:not|neither|incorrect|false|deny|denies)\b", text[max(0,m.start()-50):m.start()], re.IGNORECASE)]
-        if matches:
+        for basis,claim_pattern,component_one,component_two in rules:
+            matches=list(claim_pattern.finditer(text))[:5]
+            matches=[m for m in matches if not _COMPONENT_NEGATION.search(text[max(0,m.start()-50):m.start()])]
+            if not matches:
+                continue
             for index,citation in enumerate(citations[:10]):
                 if not isinstance(citation,dict) or citation.get("partial_token"):
                     continue
@@ -481,10 +497,10 @@ def flag_trade_balance_direction(claims: list[dict], sources: list[ResearchSourc
                     continue
                 a,b=loc.get("character_start"),loc.get("character_end")
                 if (type(a) is int and type(b) is int and 0<=a<b<=len(source.text) and source.text[a:b]==quote
-                        and not partial_ascii_token(source.text,a,b) and _GOODS_DEFICIT_FALL.search(quote)
-                        and _SERVICES_SURPLUS_FALL.search(quote)):
-                    entry["balance_direction_warnings"]=[{"source_id":source.source_id,"citation_index":index,
-                        "claimed_text":matches[0].group(0),"status":"requires_review"}]
+                        and not partial_ascii_token(source.text,a,b) and component_one.search(quote)
+                        and component_two.search(quote)):
+                    entry.setdefault("balance_direction_warnings",[]).append({"source_id":source.source_id,"citation_index":index,
+                        "basis":basis,"claimed_text":matches[0].group(0),"status":"requires_review"})
                     break
         output.append(entry)
     return output

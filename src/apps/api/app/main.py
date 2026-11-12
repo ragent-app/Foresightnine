@@ -99,7 +99,7 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
-from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_trade_balance_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
+from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
@@ -1818,7 +1818,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         content.claims = suggest_usd_amount_evidence(content.claims, content.facts, list(citation_sources.values()))
         content.claims = suggest_uncited_numeric_facts(content.claims, content.facts, list(citation_sources.values()))
         content.claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(content.claims, list(citation_sources.values())))
-        content.claims = flag_trade_balance_direction(flag_citation_subject_context(content.claims, list(citation_sources.values())), list(citation_sources.values()))
+        content.claims = flag_component_direction(flag_citation_subject_context(content.claims, list(citation_sources.values())), list(citation_sources.values()))
         content.evidence_differences = evidence_differences(content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         content.amount_differences = claim_amount_differences(content.claims, content.facts)
@@ -2292,7 +2292,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         claims = suggest_usd_amount_evidence(claims, analysis.facts, sources)
         claims = suggest_uncited_numeric_facts(claims, analysis.facts, sources)
         claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
-        claims = flag_trade_balance_direction(flag_citation_subject_context(claims, sources), sources)
+        claims = flag_component_direction(flag_citation_subject_context(claims, sources), sources)
         # Numeric candidates must be considered before model review. A review
         # verdict cannot clear a known calculation or unit discrepancy.
         pre_review_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
@@ -2449,7 +2449,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if any(c.get("uncited_quarters") for c in claims):
             limitations.append("An explicit quarter and year could not be matched in the attached quotations; check the period and source context.")
         if any(c.get("balance_direction_warnings") for c in claims):
-            limitations.append("A claimed trade-deficit direction may conflict with the goods-deficit minus services-surplus identity; check definitions, signs and periods.")
+            limitations.append("A claimed component direction may conflict with an accounting identity; check definitions, signs and periods.")
         if any(c.get("uncited_fact_values") for c in claims):
             limitations.append("A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.")
         if any(c.get("uncited_percentages") for c in claims):
