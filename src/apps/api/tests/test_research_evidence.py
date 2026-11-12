@@ -29,6 +29,25 @@ def test_absence_claim_requires_full_source_coverage_before_generalizing():
     assert not flag_partial_source_absence([{**claim, 'authorship':'user'}], [source], partial)[0].get('source_scope_absence_unverified')
 
 
+def test_plural_source_absence_requires_coverage_of_all_sources_not_only_cited_one():
+    from app.research_evidence import flag_partial_source_absence
+    first = ResearchSource(source_id='s1', owner_id='owner', title='One', text='First source.', kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+        permissions=SourcePermissions(store=True, display=True, model_input=True))
+    second = first.model_copy(update={'source_id':'s2', 'text':'Second source has more information.'})
+    full_first = {'source_id':'s1', 'character_start':0, 'character_end':len(first.text)}
+    full_second = {'source_id':'s2', 'character_start':0, 'character_end':len(second.text)}
+    claim = {'text':'No opposing evidence exists in the sources for the claim.', 'citations':[{'source_id':'s1'}]}
+    assert flag_partial_source_absence([claim], [first, second], [full_first])[0]['source_scope_absence_unverified']
+    assert not flag_partial_source_absence([claim], [first, second], [full_first, full_second])[0].get('source_scope_absence_unverified')
+    withheld = second.model_copy(update={'permissions':SourcePermissions(store=True, display=True, model_input=False)})
+    assert flag_partial_source_absence([claim], [first, withheld], [full_first, full_second])[0]['source_scope_absence_unverified']
+    none = {**claim, 'text':'None of the documents mention an opposing view.'}
+    assert flag_partial_source_absence([none], [first, second], [full_first])[0]['source_scope_absence_unverified']
+    singular = {**claim, 'text':'The source does not mention an opposing view.'}
+    assert not flag_partial_source_absence([singular], [first, second], [full_first])[0].get('source_scope_absence_unverified')
+
+
 def test_causal_wording_requires_located_permitted_quotation_cue():
     from app.research_evidence import flag_uncited_causal_attribution
     text = 'Consumption fell. Costs fell because demand weakened.'

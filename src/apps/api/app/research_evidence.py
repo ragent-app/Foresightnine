@@ -68,8 +68,14 @@ _SOURCE_ABSENCE = re.compile(
     r"\bno\s+(?:(?:opposing|contrary|supporting|relevant|additional)\s+){0,2}"
     r"(?:evidence|information|data|details?)\s+(?:exists?|is\s+(?:found|available|present|provided))\s+"
     r"(?:in|within|from)\s+(?:the\s+|these\s+)?(?:sources?|documents?|reports?|filings?|releases?)\b|"
+    r"\bnone\s+of\s+(?:the\s+|these\s+)?(?:sources|documents|reports|filings|releases)\s+"
+    r"(?:provides?|includes?|contains?|mentions?|states?|shows?|discloses?)\b|"
     r"(?:来源|來源|资料|資料|文件|报告|報告|原文|公告)(?:中)?(?:并|並)?(?:没有|沒有|未|不曾|不)"
     r"(?:提供|包含|提及|说明|說明|披露|列出|展示|给出|給出)", re.IGNORECASE)
+
+_PLURAL_SOURCE_SCOPE = re.compile(
+    r"\b(?:sources|documents|reports|filings|releases)\b|"
+    r"(?:所有|全部|这些|這些|各个|各個)(?:来源|來源|资料|資料|文件|报告|報告|原文|公告)", re.IGNORECASE)
 
 
 def flag_partial_source_absence(claims: list[dict], sources: list[ResearchSource], segments: list[dict]) -> list[dict]:
@@ -79,7 +85,9 @@ def flag_partial_source_absence(claims: list[dict], sources: list[ResearchSource
     model statement. The warning does not prove that the missing information
     exists; it only prohibits generalizing beyond examined text.
     """
-    source_map = {s.source_id: s for s in sources if s.permissions.model_input and not s.is_simulated}
+    # A source withheld from the model is also unexamined; excluding it would
+    # incorrectly permit a claim about all of the supplied sources.
+    source_map = {s.source_id: s for s in sources if not s.is_simulated}
     coverage: dict[str, bool] = {}
     for source_id, source in source_map.items():
         intervals = sorted((part.get('character_start'), part.get('character_end')) for part in segments
@@ -91,7 +99,7 @@ def flag_partial_source_absence(claims: list[dict], sources: list[ResearchSource
             if start > end:
                 break
             end = max(end, stop)
-        coverage[source_id] = end >= len(source.text)
+        coverage[source_id] = source.permissions.model_input and end >= len(source.text)
     result = []
     for claim in claims:
         entry = deepcopy(claim)
@@ -99,7 +107,8 @@ def flag_partial_source_absence(claims: list[dict], sources: list[ResearchSource
         text = entry.get('text')
         citations = entry.get('citations')
         ids = {item.get('source_id') for item in citations if isinstance(item, dict) and isinstance(item.get('source_id'), str)} if isinstance(citations, list) else set()
-        relevant = ids & source_map.keys() if ids else source_map.keys()
+        relevant = (source_map.keys() if isinstance(text, str) and _PLURAL_SOURCE_SCOPE.search(text)
+                    else (ids & source_map.keys()) or source_map.keys())
         if (entry.get('authorship') != 'user' and isinstance(text, str) and len(text) <= 3000 and
                 _SOURCE_ABSENCE.search(text) and any(not coverage[source_id] for source_id in relevant)):
             entry['source_scope_absence_unverified'] = True
