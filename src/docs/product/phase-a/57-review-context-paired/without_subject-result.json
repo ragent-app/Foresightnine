@@ -1,0 +1,23 @@
+{
+  "status": "completed",
+  "raw": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 1,
+        "verdict": "supports"
+      }
+    ]
+  },
+  "verdicts": [
+    "supports",
+    "supports"
+  ],
+  "target_pass": false,
+  "reported_tokens": 602,
+  "elapsed_seconds": 5.58,
+  "cost_usd": "unknown"
+}
