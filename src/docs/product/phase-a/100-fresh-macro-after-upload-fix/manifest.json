@@ -1,0 +1,82 @@
+{
+  "implementation_commit": "f38e13272c24042fd5a889291e02a96a29ddeefb",
+  "assessment": "Previously unused public official sources; prepared and assessed by same developer; nonblind and not a formal independent human quality assessment.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "GDP_REVISION",
+      "input_sha256": "60915dcb0f94bfbc2c6f0ce585990afc843ef5a2d7c190c47e8f0278439f06a3"
+    },
+    {
+      "id": "FED_HOLD",
+      "input_sha256": "16722b6aaa7876507a9249354fbcb32d21a683ccd982250e4c9af1edc9143eb5"
+    }
+  ],
+  "source_attributions": {
+    "GDP_REVISION": "U.S. Bureau of Economic Analysis; third-quarter 2024 second and third official GDP estimates.",
+    "FED_HOLD": "Board of Governors of the Federal Reserve System; September 20 2023 FOMC statement."
+  },
+  "script_sha256": {
+    "prepare.py": "44dcbadd15fa172d3730662eee21da48b82da6d49b7e9abe26014138c2c12105",
+    "run.py": "366f953af28dd7d71732230dc66df2b103da06c10848738e7c7fccff5dc80bda",
+    "score.py": "e1d9bb4b4d3bf1d876260fb22ed88d39834374abd4689c07e12ffe4581fa1de0",
+    "validate_scorer.py": "2013af57f913aa97e1a015c80bcb71f7c1ac9713bd865a5aa059542e688fb266"
+  },
+  "references_sha256": "b3dbb8e518a160f4b2fe44b862be36846b8a101aacb3c38157ffaf5e01a46a2e",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v11",
+  "prompt_sha256_by_task": {
+    "GDP_REVISION": "29b8c2ac2433e67732c4a8ed526a700f39ba4bafa2ec56edcb65a1dd1cf0b1b5",
+    "FED_HOLD": "16e2191b01c3be250cea65902d31bce2924b9c5d9b0000d531f5f81e8c384a4c"
+  },
+  "preselected_segments": {
+    "GDP_REVISION": [
+      {
+        "source_id": "source_20bd17ab9d75424aafe5b33229d32d43",
+        "character_start": 365,
+        "character_end": 653
+      },
+      {
+        "source_id": "source_308d821886f74e75a89a603716e5e21e",
+        "character_start": 549,
+        "character_end": 834
+      }
+    ],
+    "FED_HOLD": [
+      {
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "character_start": 517,
+        "character_end": 779
+      },
+      {
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "character_start": 3076,
+        "character_end": 3338
+      }
+    ]
+  },
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 20000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "pass_rule": "All pre-registered expected evidence, provenance, no numeric warnings and completed research; narrow mechanical result, not semantic proof."
+}
