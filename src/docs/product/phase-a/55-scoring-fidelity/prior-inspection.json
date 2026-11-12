@@ -1,0 +1,14 @@
+{
+  "kind": "post-run textual inspection only; not a rescoring and not independent acceptance",
+  "original_score_sha256": {
+    "baseline": "3cd2bf50af092db7ff45a79a442767bcada93789ac51d7395188b706dc9daadf",
+    "variant": "b5f7b32dea59ee579b75feb9c9f28250d0fea017ca6a4393533da0d91700722a"
+  },
+  "cases": {
+    "usd_2023_conversion": true,
+    "usd_2022_conversion": true,
+    "bea_decrease_magnitude": true,
+    "fed_no_dissent_phrase": true
+  },
+  "limitations": "Textual matches do not prove source support, period identity or overall task correctness."
+}
