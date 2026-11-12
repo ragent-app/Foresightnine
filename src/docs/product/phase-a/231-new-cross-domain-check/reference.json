@@ -1,0 +1,5 @@
+{
+  "BANK_2020": {"source":"Federal Reserve December 2020 Stress Test Results, Table B.18.A", "bank":"JPMorgan Chase & Co.","actual_q2_2020_percent":"12.4","projected_ending_percent":"10.8","projected_minimum_percent":"10.0","scenario":"severely adverse"},
+  "BEA_2020": {"source":"BEA February 2021 historical comparisons, page 2", "year":2020,"pce_current_dollar_percent_change":"-2.7","pce_chained_dollar_percent_change":"-3.9","personal_saving_rate_percent":"16.3"},
+  "FOMC_2016": {"source":"Federal Reserve FOMC statement 2016-12-14", "target_lower_percent":"0.50","target_upper_percent":"0.75","chair":"Janet L. Yellen","inflation_objective_percent":"2"}
+}
