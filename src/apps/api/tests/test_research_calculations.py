@@ -242,3 +242,40 @@ def test_currency_conflict_requires_explicit_cue_on_same_value():
     assert not currency_value_conflict('USD', '100', 'Revenue was EUR 200 million and total was 100.')
     assert not currency_value_conflict('USD', '100', 'Revenue was EUR 100 and USD 100.')
     assert not currency_value_conflict(None, '100', 'Revenue was EUR 100.')
+
+
+@pytest.mark.parametrize('current,baseline', [
+    ('FY2024', '2023-Q4'), ('2024-Q1', '2023'),
+    ('2024-02', '2023-Q4'), ('2024-Q1', '2023-12'),
+    ('Year ended January 30, 2024', '2023-Q1'),
+])
+def test_growth_flags_different_period_grains_without_assuming_stock_or_flow(current, baseline):
+    result = calculate(CalculationRequest(formula='growth_percent', first=fact('a', '100', current),
+                                          second=fact('b', '80', baseline)))
+    assert result['value'] == '25.00'
+    assert result['period_granularity_check'] == 'different_labels_verify_stock_or_flow'
+    assert result['period_order_check'] == 'not_checked'
+    assert calculation_input_status(result, result['inputs']) == 'matched'
+
+
+def test_growth_keeps_unknown_period_grain_and_does_not_guess_fiscal_calendar():
+    for current, baseline in [('FY2024', '2023-12-31'), ('FY2024', 'prior quarter as described'),
+                              ('FY2024', '2023'), ('Year ended June 30, 2024', '2023')]:
+        result = calculate(CalculationRequest(formula='growth_percent', first=fact('a', '100', current),
+                                              second=fact('b', '80', baseline)))
+        assert result['value'] == '25.00' and result['period_order_check'] == 'not_checked'
+
+
+def test_different_period_labels_do_not_become_claim_correction_or_suggestion():
+    from app.research_calculations import suggest_percentage_calculations
+    current = {**fact('current', '100', 'FY2024'), 'verification':'model_extraction_not_independently_verified',
+               'source_id':'s', 'quotation':'Current 100', 'location':{'character_start':0,'character_end':11}}
+    prior = {**fact('prior', '80', '2023-Q4'), 'verification':'model_extraction_not_independently_verified',
+             'source_id':'s', 'quotation':'Prior 80', 'location':{'character_start':20,'character_end':28}}
+    calculation = calculate(CalculationRequest(formula='growth_percent', first=fact('current','100','FY2024'),
+                                                second=fact('prior','80','2023-Q4')))
+    claim = {'text':'Using 80 as baseline, growth was 26%.', 'citations':[
+        {'source_id':'s','location':current['location']}, {'source_id':'s','location':prior['location']}]}
+    assert not claim_calculation_differences([claim], [calculation], [current, prior])
+    claim['text'] = 'Growth was 25%.'
+    assert not suggest_percentage_calculations([claim], [calculation], [current, prior])[0].get('suggested_calculations')

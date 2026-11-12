@@ -136,6 +136,24 @@ def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
     return None
 
 
+def _period_granularity(period: str) -> str | None:
+    """Return only explicit, recognized annual, quarterly or monthly grains.
+
+    A bare date does not establish a reporting duration. Matching grains do
+    not establish comparable fiscal calendars or accounting definitions.
+    """
+    parsed = _comparable_period(period)
+    if parsed is None:
+        return None
+    return {"fiscal_year": "year", "calendar_year": "year", "year_ended_date": "year",
+            "calendar_quarter": "quarter", "calendar_month": "month"}.get(parsed[0])
+
+
+def _growth_granularity_conflict(first: str, second: str) -> bool:
+    a, b = _period_granularity(first), _period_granularity(second)
+    return a is not None and b is not None and a != b
+
+
 _TEXT_NUMBER = re.compile(r"(?<![A-Za-z0-9_.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
 _TEXT_PERCENT = re.compile(r"(?<![A-Za-z0-9_.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
 _RATIO_SCALE_PREFIX = re.compile(r"(?:/|÷)\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)*\s*[×*]\s*$")
@@ -242,7 +260,9 @@ def calculate(request: CalculationRequest) -> dict:
     return {"formula_id": request.formula, "formula_version": formula_version, "expression": expression,
             "input_verification": "not_verified_by_calculator",
             "input_precision_status": "not_established",
-            **({"period_order_check": period_order_check} if request.formula == "growth_percent" else {}),
+            **({"period_order_check": period_order_check,
+                "period_granularity_check": "different_labels_verify_stock_or_flow" if _growth_granularity_conflict(a.period, b.period)
+                    else "not_established"} if request.formula == "growth_percent" else {}),
             "inputs": [a.model_dump(mode="json"), b.model_dump(mode="json")],
             "value": str(rounded), "unit": unit,
             "currency": None if unit in {"percent", "percentage points"} else a.currency,
@@ -270,7 +290,8 @@ def claim_calculation_differences(claims: list[dict], calculations: list[dict], 
             request = CalculationRequest.model_validate({"formula": item["formula_id"], "first": inputs[0],
                 "second": inputs[1], "decimal_places": item.get("decimal_places", 2)})
             recomputed = calculate(request)
-            if Decimal(str(item.get("value"))) != Decimal(recomputed["value"]):
+            if (recomputed.get("period_granularity_check") == "different_labels_verify_stock_or_flow" or
+                    Decimal(str(item.get("value"))) != Decimal(recomputed["value"])):
                 continue
         except (ValidationError, CalculationError, InvalidOperation, TypeError, ValueError, KeyError, IndexError):
             continue
@@ -340,7 +361,9 @@ def suggest_percentage_calculations(claims: list[dict], calculations: list[dict]
             inputs = item["inputs"]
             request = CalculationRequest.model_validate({"formula": item["formula_id"], "first": inputs[0],
                 "second": inputs[1], "decimal_places": item.get("decimal_places", 2)})
-            if Decimal(str(item.get("value"))) != Decimal(calculate(request)["value"]):
+            recomputed = calculate(request)
+            if (recomputed.get("period_granularity_check") == "different_labels_verify_stock_or_flow" or
+                    Decimal(str(item.get("value"))) != Decimal(recomputed["value"])):
                 continue
             source_facts = [facts_by_id[fact.fact_id][0] for fact in (request.first, request.second)]
         except (ValidationError, CalculationError, InvalidOperation, TypeError, ValueError, KeyError, IndexError):

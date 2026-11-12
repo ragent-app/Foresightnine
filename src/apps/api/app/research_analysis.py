@@ -1410,7 +1410,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append("A requested calculation was omitted because its input facts were unavailable.")
             continue
         try:
-            checked_calculations.append(calculate(CalculationRequest(formula=plan.formula, first=first, second=second)))
+            calculated = calculate(CalculationRequest(formula=plan.formula, first=first, second=second))
+            checked_calculations.append(calculated)
+            if calculated.get("period_granularity_check") == "different_labels_verify_stock_or_flow":
+                note = "Period comparability is not established: different year, quarter or month labels may refer to stock or flow figures."
+                if note not in limitations:
+                    limitations.append(note)
         except CalculationError as error:
             limitations.append(f"A requested calculation was omitted: {error}")
 

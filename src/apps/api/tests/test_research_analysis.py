@@ -1266,3 +1266,15 @@ def test_mixed_counterargument_absence_does_not_discard_opposing_evidence():
     assert not _counterargument_absence_only('No counterarguments, but inventory fell.')
     assert not _counterargument_absence_only('没有反方观点，但是支出下降了 3%。')
     assert not _counterargument_absence_only('反方指出库存投资下修。')
+
+
+def test_model_growth_with_different_period_labels_is_explicitly_flagged():
+    text = 'Annual revenue was 100. Quarterly revenue was 80.'
+    raw = {'facts': [
+        {'fact_id':'annual', 'label':'Annual revenue', 'value':'100', 'unit':'USD', 'currency':'USD', 'period':'FY2024', 'citation':{'source_id':'s', 'quotation':'Annual revenue was 100'}},
+        {'fact_id':'quarter', 'label':'Quarter revenue', 'value':'80', 'unit':'USD', 'currency':'USD', 'period':'2023-Q4', 'citation':{'source_id':'s', 'quotation':'Quarterly revenue was 80'}}],
+        'calculations':[{'formula':'growth_percent', 'first_fact_id':'annual', 'second_fact_id':'quarter'}]}
+    result = analyze('Compare revenue.', [source('s', text=text)], None, lambda _:(raw,1))
+    assert len(result.facts) == 2 and len(result.calculations) == 1
+    assert result.calculations[0]['period_granularity_check'] == 'different_labels_verify_stock_or_flow'
+    assert any('Period comparability is not established' in note for note in result.limitations)

@@ -1610,3 +1610,37 @@ def test_conflicting_currency_is_rechecked_on_edit_and_recalculation(monkeypatch
     recalc = client.post(path + '/calculations/recalculate', headers=headers,
                          json={'parent_version_id': latest['version_id'], 'calculation_index': 0})
     assert recalc.status_code == 201 and recalc.json()['versions'][-1]['content']['calculations'][0]['value'] == '25.00'
+
+
+def test_unverified_period_comparability_keeps_automatic_research_partial(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    class Provider:
+        name = 'period-grain-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def item(fid, val, period, quote):
+                return {'fact_id':fid, 'label':'Metric', 'value':val, 'unit':'USD', 'currency':'USD', 'period':period,
+                        'citation':{'source_id':source_id, 'quotation':quote}}
+            return {'claims':[{'text':'Two values were reported.', 'citations':[{'source_id':source_id,'quotation':'Annual revenue was 100'}]}],
+                    'facts':[item('annual','100','FY2024','Annual revenue was 100'), item('quarter','80','2023-Q4','Quarterly revenue was 80')],
+                    'calculations':[{'formula':'growth_percent','first_fact_id':'annual','second_fact_id':'quarter'}]}, 10
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    account=client.post('/v1/auth/local/register',json={'email':'period-grain@example.test','password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+account['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Annual revenue was 100. Quarterly revenue was 80.',
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Compare values','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'period-grain-test'},
+        json={'parent_version_id':topic['versions'][0]['version_id'],'require_counterarguments':False}).json()
+    op=receipt['operation']['operation_id']
+    for _ in range(100):
+        status=client.get(path+'/runs/'+op,headers=headers).json()['operation']['status']
+        if status in {'completed','failed'}: break
+        time.sleep(.02)
+    assert status=='completed'
+    content=client.get(path,headers=headers).json()['versions'][-1]['content']
+    assert content['run']['status']=='partial'
+    assert content['calculations'][0]['period_granularity_check']=='different_labels_verify_stock_or_flow'
+    assert any('Period comparability is not established' in x for x in content['limitations'])
