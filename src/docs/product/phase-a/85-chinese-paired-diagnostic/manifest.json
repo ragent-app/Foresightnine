@@ -1,0 +1,68 @@
+{
+  "implementation_commit": "c45275b4f3a2070a6480f7b523333a9933c432b1",
+  "baseline_implementation_commit": "6f6aba2",
+  "assessment": "Nonblind single-task paired development diagnostic using attributed and modified official statistics; source selection changes, including segment count. Not independent, causal proof, or stage B acceptance.",
+  "original_pdf_url": "https://www.censtatd.gov.hk/wbr/B1080003/B10800032024MM11/att/tc/B10800032024MM11.pdf",
+  "original_pdf_sha256": "9682991414e26dce9295c7f7f34a418d786c75fff2fc2a012e62ab7656218cf6",
+  "extract_sha256": "60a89616be5b4481c15c3c717a5b4804774eb8e9c5f18846afbce662d28b8024",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "HK_RETAIL",
+      "input_sha256": "a3201398ea5df2c13e6743401ce6c3bae1d40eca411a5335290f8f396cc08050"
+    }
+  ],
+  "script_sha256": {
+    "prepare.py": "b487c19cc64d8e5018e6a889077fe6e11cf6e39f312d4682762a367933d1c803",
+    "run.py": "4afdc55e4ef7e1df68e46f0d39639a8ee2b9edc8fb4d56266f92239bbb3cb094",
+    "score.py": "306748761a60d013a2dfbe2a7fef94a9fbf0ff7326b03396753f629989a28958"
+  },
+  "references_sha256": "2258344b037c3b90c69556f048d16bbb30ad06b9faf0263d165780898afdfaad",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v11",
+  "old_prompt_sha256": "6860427dc6b4e612987690533dea60431b65d9aa6a6fff92e15a3c376602f9fa",
+  "new_prompt_sha256": "7787c7a782d9666993897e295d25bb021d01aa16f7742b14ed5ff659efe7d7d7",
+  "old_segments": [
+    {
+      "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+      "character_start": 0,
+      "character_end": 372
+    }
+  ],
+  "new_segments": [
+    {
+      "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+      "character_start": 330,
+      "character_end": 485
+    },
+    {
+      "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+      "character_start": 8369,
+      "character_end": 8524
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 1,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 10000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "pass_rule": "All previously fixed mechanical checks in score.py must pass; this does not establish semantic support or stage B acceptance."
+}
