@@ -270,6 +270,44 @@ def _directional_negative_percent(value: Decimal, unit: str, quotation: str) -> 
     return False
 
 
+_MONEY_SCALE = r"(?:thousand|million|billion|trillion)s?"
+_MONEY_VALUE = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+_NEGATIVE_DOLLAR_AMOUNT = re.compile(
+    rf"\b(?:decrease|decreased|decline|declined|fell|fall|drop|dropped|reduction)\s+(?:(?:of|by)\s+)?"
+    rf"(?:US\s*)?\$\s*(?P<before>{_MONEY_VALUE})\s*(?P<before_scale>{_MONEY_SCALE})?\b"
+    rf"|(?:US\s*)?\$\s*(?P<after>{_MONEY_VALUE})\s*(?P<after_scale>{_MONEY_SCALE})?\s+"
+    rf"(?:decrease|decline|fall|drop|reduction)\b", re.IGNORECASE)
+
+
+def _directional_negative_amount(value: Decimal, unit: str, quotation: str, currency: str | None = None) -> bool:
+    """Identify a signed rendering of a quoted dollar decrease as a review cue.
+
+    Preserve only the same magnitude and scale; a bare dollar sign does not
+    establish currency, subject, period, or whether a level is negative.
+    """
+    if not value.is_finite() or value >= 0 or len(quotation) > 1000 or is_percent_unit(unit):
+        return False
+    if not re.search(r"\b(?:usd|dollars?)\b", unit, re.IGNORECASE) and str(currency or "").upper() != "USD":
+        return False
+    unit_scales = {word.casefold().rstrip("s") for word in re.findall(rf"\b{_MONEY_SCALE}\b", unit, re.IGNORECASE)}
+    if len(unit_scales) > 1:
+        return False
+    for match in _NEGATIVE_DOLLAR_AMOUNT.finditer(quotation):
+        prefix = quotation[max(0, match.start() - 40):match.start()]
+        if re.search(r"\b(?:not|never|neither|no)\b|didn['’]t", prefix, re.IGNORECASE):
+            continue
+        quoted_scale = (match.group("before_scale") or match.group("after_scale") or "").casefold().rstrip("s")
+        if quoted_scale != next(iter(unit_scales), ""):
+            continue
+        try:
+            magnitude = Decimal((match.group("before") or match.group("after")).replace(",", ""))
+            if -magnitude == value:
+                return True
+        except InvalidOperation:
+            continue
+    return False
+
+
 
 
 _TABLE_SPAN_MARKER = re.compile(r"\[(?:colspan|rowspan)=(?:[2-9]|[1-9]\d)\]")
@@ -1971,7 +2009,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             continue
         quoted_values = _quoted_numbers(quotation)
         direction_context = (item.value not in quoted_values and
-                             _directional_negative_percent(item.value, item.unit, quotation))
+                             (_directional_negative_percent(item.value, item.unit, quotation) or
+                              _directional_negative_amount(item.value, item.unit, quotation, item.currency)))
         if item.value not in quoted_values and not direction_context:
             limitations.append("A model-generated fact value was absent from its quotation and was omitted.")
             continue
@@ -2013,7 +2052,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append("A fact's currency conflicts with an explicit currency cue on the same quoted value; it was excluded from automatic calculations pending review.")
             currency_conflict_noted = True
         if direction_context and not directional_context_noted:
-            limitations.append("A negative percentage was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
+            limitations.append("A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
             directional_context_noted = True
         if ambiguous_fact and not ambiguous_fact_noted:
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")

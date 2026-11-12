@@ -2364,3 +2364,47 @@ def test_pdf_line_hyphen_caution_survives_claim_edits(monkeypatch):
     assert latest["content"]["claims"][0]["citations"][0]["quotation"]==original
     assert latest["content"]["claims"][0]["authorship"]=="user"
     assert saved.json()["versions"][-2]["content"]["claims"][0]["support_status"]=="incomplete"
+
+
+def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_after_edit(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "amount-direction-test"
+        policy = SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            def item(key,value,quote):
+                return {"fact_id":key,"label":"spending change","value":value,"unit":"billions of dollars",
+                    "currency":"USD","period":"2023-03","citation":{"source_id":source_id,"quotation":quote}}
+            return {"facts":[item("goods","-36.7","a $36.7 billion decrease"),
+                             item("services","44.9","increased $44.9 billion")],
+                    "calculations":[{"formula":"difference","first_fact_id":"services","second_fact_id":"goods"}]},10
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    account=client.post("/v1/auth/local/register",json={"email":f"amount-direction-{uuid4().hex}@example.test",
+        "password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+account["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report",
+        "text":"Goods had a $36.7 billion decrease. Services increased $44.9 billion.",
+        "permissions":{"store":True,"model_input":True,"display":True}}).json()["source_id"]
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Spending?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"amount-direction"},json={
+        "parent_version_id":topic["versions"][0]["version_id"]}).json()["operation"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+receipt["operation_id"],headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed"
+    current=client.get(path,headers=headers).json()["versions"][-1];content=deepcopy(current["content"])
+    goods=next(item for item in content["facts"] if item["fact_id"]=="goods")
+    assert goods.pop("direction_context_unverified") is True
+    assert not content["calculations"] and content["run"]["status"]=="partial"
+    content["calculations"]=[{"formula_id":"difference","formula_version":"1","inputs":[{"fact_id":"services"},{"fact_id":"goods"}]}]
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":current["version_id"],"content":content})
+    assert saved.status_code==201, saved.text
+    latest=saved.json()["versions"][-1]
+    assert next(item for item in latest["content"]["facts"] if item["fact_id"]=="goods")["direction_context_unverified"] is True
+    recalculated=client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":latest["version_id"],"calculation_index":0})
+    assert recalculated.status_code==422 and "direction and subject require review" in recalculated.json()["message"]

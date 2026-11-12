@@ -98,7 +98,7 @@ from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
@@ -1714,7 +1714,8 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
             fact.pop("direction_context_unverified", None)
             quote = fact.get("quotation")
             if (isinstance(quote, str) and numeric.value not in _quoted_numbers(quote) and
-                    _directional_negative_percent(numeric.value, numeric.unit, quote)):
+                    (_directional_negative_percent(numeric.value, numeric.unit, quote) or
+                     _directional_negative_amount(numeric.value, numeric.unit, quote, numeric.currency))):
                 fact["direction_context_unverified"] = True
             fact.pop("currency_context_unverified", None)
             if is_percent_unit(numeric.unit) and numeric.currency is not None:
@@ -1881,7 +1882,7 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
             if candidates[0].get("table_period_conflict"):
                 raise ApiProblem(422, "invalid_request", "Table period and column require review before recalculation.")
             if candidates[0].get("direction_context_unverified"):
-                raise ApiProblem(422, "invalid_request", "Percentage direction and subject require review before recalculation.")
+                raise ApiProblem(422, "invalid_request", "Value direction and subject require review before recalculation.")
             if currency_value_conflict(candidates[0].get("currency"), candidates[0].get("value"), candidates[0].get("quotation")):
                 raise ApiProblem(422, "invalid_request", "Currency and quoted value require review before recalculation.")
             if (is_percent_unit(str(candidates[0].get("unit", "")))

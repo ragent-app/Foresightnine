@@ -1802,3 +1802,25 @@ def test_pdf_line_hyphen_restores_original_continuous_quotation_and_keeps_review
     assert not run("These are hypothetical estimates that may change.").claims
     plain=report.model_copy(update={"retrieval_method":"user_supplied"})
     assert not run("These are hypothetical estimates that may differ.",plain).claims
+
+
+def test_negative_dollar_change_is_retained_only_as_unverified_direction():
+    from app.research_analysis import _directional_negative_amount
+    for text in ("a decrease of $36.7 billion in spending", "a $36.7 billion decrease in spending",
+                 "spending fell by $36.7 billion"):
+        assert _directional_negative_amount(Decimal("-36.7"), "billions of dollars", text, "USD")
+    for text in ("spending did not decrease by $36.7 billion", "spending increased $36.7 billion",
+                 "a $36.7 million decrease", "a decrease of $36.8 billion"):
+        assert not _directional_negative_amount(Decimal("-36.7"), "billions of dollars", text, "USD")
+    assert not _directional_negative_amount(Decimal("-36.7"), "percent", "a $36.7 billion decrease", "USD")
+    text = "Goods spending had a $36.7 billion decrease. Services increased $44.9 billion."
+    quote = "a $36.7 billion decrease"
+    raw = {"facts": [
+        {"fact_id":"goods","label":"goods spending change","value":"-36.7","unit":"billions of dollars","currency":"USD","period":"2023-03","citation":{"source_id":"s","quotation":quote}},
+        {"fact_id":"services","label":"services spending change","value":"44.9","unit":"billions of dollars","currency":"USD","period":"2023-03","citation":{"source_id":"s","quotation":"increased $44.9 billion"}}],
+        "calculations":[{"formula":"difference","first_fact_id":"services","second_fact_id":"goods"}]}
+    result = analyze("How did spending change?",[source("s",text=text)],None,lambda _:(raw,10))
+    goods = next(item for item in result.facts if item["fact_id"]=="goods")
+    assert goods["value"]=="-36.7" and goods["direction_context_unverified"] is True
+    assert goods["quotation"]==quote and not result.calculations
+    assert any("excluded from automatic calculations" in note for note in result.limitations)
