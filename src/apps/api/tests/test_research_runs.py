@@ -2451,3 +2451,48 @@ def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_afte
     attempted=client.post(path+"/versions",headers=headers,json={"parent_version_id":edited["version_id"],"content":forged})
     assert attempted.status_code==201
     assert not next(item for item in attempted.json()["versions"][-1]["content"]["facts"] if item["fact_id"]=="goods").get("direction_confirmation")
+
+
+def test_negative_change_candidate_can_be_attached_to_counterargument(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")
+    source_id=""
+    source_text="Services increased $33.3 billion. Goods had a decrease of $9.6 billion in spending."
+    support="Services increased $33.3 billion"
+    counter_quote="a decrease of $9.6 billion in spending"
+    class Provider:
+        name="negative-candidate-test"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {"claims":[{"text":"Services increased $33.3 billion.","citations":[{"source_id":source_id,"quotation":support}]}],
+                "counterarguments":[{"text":"Goods spending fell in nominal terms ($9.6 billion).","citations":[{"source_id":source_id,"quotation":support}]}],
+                "facts":[{"fact_id":"goods","label":"Goods spending change","value":"-9.6","unit":"billion USD","currency":"USD","period":"2022-07",
+                          "citation":{"source_id":source_id,"quotation":counter_quote}}]},20
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    account=client.post("/v1/auth/local/register",json={"email":f"negative-candidate-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+account["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Release","text":source_text,
+        "permissions":{"store":True,"model_input":True,"display":True}}).json()["source_id"]
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Spending?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"negative-candidate"},json={
+        "parent_version_id":topic["versions"][0]["version_id"]}).json()["operation"]
+    for _ in range(100):
+        state=client.get(path+"/runs/"+receipt["operation_id"],headers=headers).json()["operation"]["status"]
+        if state in {"completed","failed"}:break
+        time.sleep(.02)
+    assert state=="completed"
+    version=client.get(path,headers=headers).json()["versions"][-1];content=version["content"]
+    counter=next(c for c in content["claims"] if c["role"]=="counterargument")
+    assert counter["suggested_fact_evidence"][0]["quotation"]==counter_quote
+    assert counter["suggested_fact_evidence"][0]["status"]=="requires_semantic_review"
+    assert counter.get("uncited_dollar_amounts") and content["run"]["status"]=="partial"
+    edited=deepcopy(content)
+    next(c for c in edited["claims"] if c["role"]=="counterargument")["citations"].append({"source_id":source_id,"quotation":counter_quote})
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
+    assert saved.status_code==201,saved.text
+    after=next(c for c in saved.json()["versions"][-1]["content"]["claims"] if c["role"]=="counterargument")
+    assert not after.get("uncited_dollar_amounts") and not after.get("uncited_fact_values")
+    assert after["authorship"]=="user" and after["support_status"]=="not_independently_verified"
+    assert counter.get("uncited_dollar_amounts")

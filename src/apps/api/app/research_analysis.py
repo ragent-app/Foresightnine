@@ -274,7 +274,7 @@ _MONEY_SCALE = r"(?:thousand|million|billion|trillion)s?"
 _MONEY_VALUE = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 _NEGATIVE_DOLLAR_AMOUNT = re.compile(
     rf"\b(?:decrease|decreased|decline|declined|fell|fall|drop|dropped|reduction)\s+(?:(?:of|by)\s+)?"
-    rf"(?:US\s*)?\$\s*(?P<before>{_MONEY_VALUE})\s*(?P<before_scale>{_MONEY_SCALE})?\b"
+    rf"(?:in\s+(?:nominal|real|current-dollar)\s+terms\s*)?(?:\(\s*)?(?:US\s*)?\$\s*(?P<before>{_MONEY_VALUE})\s*(?P<before_scale>{_MONEY_SCALE})?\b"
     rf"|(?:US\s*)?\$\s*(?P<after>{_MONEY_VALUE})\s*(?P<after_scale>{_MONEY_SCALE})?\s+"
     rf"(?:decrease|decline|fall|drop|reduction)\b", re.IGNORECASE)
 

@@ -10,7 +10,7 @@ import re
 from pydantic import ValidationError
 
 from .research_calculations import NumericFact, _is_ratio_scale_factor, quotation_is_inside_table_row
-from .research_analysis import _quoted_numbers
+from .research_analysis import _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_sources import ResearchSource, partial_ascii_token
 
 
@@ -975,7 +975,10 @@ def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources
             continue
         try:
             value = Decimal(str(fact.get("value")))
-            if not value.is_finite() or value not in _quoted_numbers(quote):
+            direction_cue = (fact.get("direction_context_unverified") is True and
+                             (_directional_negative_percent(value, str(fact.get("unit") or ""), quote) or
+                              _directional_negative_amount(value, str(fact.get("unit") or ""), quote, fact.get("currency"))))
+            if not value.is_finite() or value not in _quoted_numbers(quote) and not direction_cue:
                 continue
         except (InvalidOperation, ValueError):
             continue
@@ -1001,7 +1004,10 @@ def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources
                     source.text[a:b] == quote and not partial_ascii_token(source.text, a, b)):
                 existing[sid].append((a, b))
         numbers = _quoted_numbers(text)
-        candidates = [(sid, value, fact) for sid, value, fact in usable if sid in existing and value in numbers
+        candidates = [(sid, value, fact) for sid, value, fact in usable if sid in existing and
+                      (value in numbers or fact.get("direction_context_unverified") is True and
+                       (_directional_negative_percent(value, str(fact.get("unit") or ""), text) or
+                        _directional_negative_amount(value, str(fact.get("unit") or ""), text, fact.get("currency"))))
                       and not _only_strict_upper_percentage(text, value)]
         counts = Counter((sid, value) for sid, value, _ in candidates)
         previous = entry.get("suggested_fact_evidence")

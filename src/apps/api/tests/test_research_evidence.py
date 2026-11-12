@@ -725,3 +725,27 @@ def test_percentage_upper_bound_is_not_the_same_as_an_exact_fact():
     for negated in ("PCE increased not less than 0.1 percent.", "PCE increased no less than 0.1 percent.", "PCE 增长不少于 0.1%。"):
         assert not suggest_percentage_evidence([{**claim,"text":negated,"citations":[{"quotation":second}]}],[])[0].get("uncited_percentage_bounds")
         assert suggest_uncited_numeric_facts([{**claim,"text":negated}],[fact],[src])[0].get("uncited_fact_values")
+
+
+def test_uncited_negative_change_can_be_suggested_without_proving_semantic_support():
+    from app.research_evidence import suggest_uncited_numeric_facts
+    text="Services increased $33.3 billion. Goods had a decrease of $9.6 billion in spending."
+    source=ResearchSource(source_id="s",owner_id="owner",title="Release",text=text,kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc),content_sha256="hash",permissions=SourcePermissions(store=True,display=True))
+    quoted="a decrease of $9.6 billion in spending"; start=text.index(quoted)
+    candidate={"fact_id":"goods","source_id":"s","value":"-9.6","unit":"billion USD","currency":"USD",
+        "period":"2022-07","quotation":quoted,"location":{"character_start":start,"character_end":start+len(quoted)},
+        "verification":"model_extraction_not_independently_verified","direction_context_unverified":True}
+    other="Services increased $33.3 billion"; start_other=text.index(other)
+    claim={"text":"Goods spending fell in nominal terms ($9.6 billion).","role":"counterargument",
+        "citations":[{"source_id":"s","quotation":other,"location":{"character_start":start_other,"character_end":start_other+len(other)}}]}
+    found=suggest_uncited_numeric_facts([claim],[candidate],[source])[0]
+    assert found["uncited_fact_values"]==["-9.6 billion USD"]
+    assert found["suggested_fact_evidence"][0]["fact_id"]=="goods"
+    assert found["suggested_fact_evidence"][0]["status"]=="requires_semantic_review"
+    assert len(found["citations"])==1 and found["citations"][0]["quotation"]==other
+    for changed in ("Goods did not fall in nominal terms ($9.6 billion).", "Goods fell in nominal terms ($9.7 billion)."):
+        assert not suggest_uncited_numeric_facts([{**claim,"text":changed}],[candidate],[source])[0].get("suggested_fact_evidence")
+    assert not suggest_uncited_numeric_facts([claim],[{**candidate,"direction_context_unverified":False}],[source])[0].get("suggested_fact_evidence")
+    assert not suggest_uncited_numeric_facts([claim],[candidate,{**candidate,"fact_id":"other"}],[source])[0].get("suggested_fact_evidence")
+    assert not suggest_uncited_numeric_facts([claim],[candidate],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("suggested_fact_evidence")
