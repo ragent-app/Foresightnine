@@ -1,0 +1,135 @@
+{
+  "id": "GDP_ESTIMATE",
+  "manifest_sha256": "b20293e18717d9505ab2a58db2678e98bbbd4d44872e956b1a8e99709651f63c",
+  "operation_status": "completed",
+  "operation_id": "operation:bd716f79c4884cc48c16427a",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 18.423,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+        "title": "BEA GDP third quarter 2022 second estimate",
+        "url": null,
+        "event_at": null,
+        "published_at": "2022-11-30T13:30:00+00:00",
+        "obtained_at": "2026-11-12T07:55:36.446973+00:00",
+        "revised_at": null,
+        "content_sha256": "329d343112be15712a767742cd110c3906a05b3331e897b1f410714dab3bd78c",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "提供的摘录仅包含发布标题、技术联系信息和图表标题片段，未包含 2022 年第三季度实际 GDP 第二次估计或初次估计的具体数值，无法据此回答数值问题。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+            "location": {
+              "character_start": 266,
+              "character_end": 368,
+              "page": 1
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Gross Domestic Product (Second Estimate),\nCorporate Profits (Preliminary Estimate),\nThird Quarter 2022"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_4e54ed4e0d914756b2641cff6be275ad: only character ranges 74–374, 1528–1830 were analyzed; remaining text was not examined.",
+      "2 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源摘录为部分覆盖（source_coverage: partial），未包含第二次估计的实际 GDP 增长率数值。",
+      "来源未包含 2022 年第三季度初次估计（advance estimate）的数值或其发布公告。",
+      "来源未提供估计口径细节（如折年率的具体数值、季节调整说明），仅图表标题提及 'Seasonally adjusted annual rates'。",
+      "来源未说明估计局限（如基于更完整数据的后续修正）。",
+      "发布日期为声明日期（declared_published_at），未经独立验证。",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:bd716f79c4884cc48c16427a",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 1639,
+      "cost_usd": null,
+      "generation_tokens": 1079,
+      "support_review_tokens": 560,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "failed",
+      "support_review_error": "review_unavailable",
+      "support_review_method": "bounded_quotation_context_model_review_v8",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": "86c506a4b182b4ef90e904a5d0baad6b7e4dbb7b656afc22264b6a0397ad2b80",
+      "support_review_indexes": [
+        0
+      ],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [
+        0
+      ],
+      "support_review_segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+          "character_start": 86,
+          "character_end": 548,
+          "context_radius": 180
+        }
+      ],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 16.919,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "94e465c5d78697660b0028bfb53c86d64301e1d10af1f79c62e156c9f533a3cb",
+      "prompt_characters": 1964,
+      "prompt_bytes": 2054,
+      "selection_method": "ranked_nonoverlapping_windows_v17",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+          "character_start": 74,
+          "character_end": 374
+        },
+        {
+          "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+          "character_start": 1528,
+          "character_end": 1830
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_4e54ed4e0d914756b2641cff6be275ad": "329d343112be15712a767742cd110c3906a05b3331e897b1f410714dab3bd78c"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Walmart FY2024 总收入为 648,125 百万美元，FY2023 为 611,289 百万美元，可据此请求计算同比增长率。",
+        "citations": [
+          {
+            "source_id": "source_1da5607402944bdbb603c2d4047f67a9",
+            "quotation": "\"fiscal_year_end\":\"January 31\",\"FY2023\":{\"total_revenues\":611289},\"FY2024\":{\"total_revenues\":648125}"
+          }
+        ]
+      },
+      {
+        "text": "Coca-Cola 2024 年净营业收入为 47,061 百万美元，2023 年为 45,754 百万美元，可据此请求计算同比增长率。",
+        "citations": [
+          {
+            "source_id": "source_7e04856831c643078c0ff6d78bdc67b9",
+            "quotation": "\"fiscal_year_end\":\"December 31\",\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}"
+          }
+        ]
+      },
+      {
+        "text": "两家公司的财年并不覆盖完全相同的期间：Walmart 财年截至 1 月 31 日，Coca-Cola 财年截至 12 月 31 日。",
+        "citations": [
+          {
+            "source_id": "source_1da5607402944bdbb603c2d4047f67a9",
+            "quotation": "\"fiscal_year_end\":\"January 31\""
+          },
+          {
+            "source_id": "source_7e04856831c643078c0ff6d78bdc67b9",
+            "quotation": "\"fiscal_year_end\":\"December 31\""
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "有人可能认为两家公司都是“2024 财年”因此可比；但 Walmart FY2024 截至 1 月 31 日（即涵盖至 2024 年 1 月的 12 个月），而 Coca-Cola 2024 截至 12 月 31 日，两者的日历期间相差约 11 个月，收入增长率不完全对应同一经济期间。",
+        "citations": [
+          {
+            "source_id": "source_1da5607402944bdbb603c2d4047f67a9",
+            "quotation": "\"fiscal_year_end\":\"January 31\""
+          },
+          {
+            "source_id": "source_7e04856831c643078c0ff6d78bdc67b9",
+            "quotation": "\"fiscal_year_end\":\"December 31\""
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源仅声明 fiscal_year_end 为 January 31 和 December 31，未明确给出各自财年的完整起止日期；日期为申报信息，未经独立核验。",
+      "Walmart 报告 total_revenues（含 net_sales 与 membership_and_other_income），Coca-Cola 报告 net_operating_revenues，两者收入口径定义不同，直接比较增长率存在口径差异。",
+      "来源未提供 Walmart FY2024 所对应的起止月份（如 2023-02-01 至 2024-01-31），需查阅原始 SEC 文件确认。",
+      "来源未说明数据是否经审计或披露日期（publication date），无法区分披露时点与期间。",
+      "两家公司规模差异巨大（648,125 vs 47,061 百万美元），增长率比较不反映绝对规模或汇率影响，来源未提供汇率或地区拆分。"
+    ],
+    "facts": [
+      {
+        "fact_id": "wmt_rev_fy2024",
+        "label": "total_revenues",
+        "value": "648125",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (ended January 31)",
+        "citation": {
+          "source_id": "source_1da5607402944bdbb603c2d4047f67a9",
+          "quotation": "\"FY2024\":{\"total_revenues\":648125}"
+        }
+      },
+      {
+        "fact_id": "wmt_rev_fy2023",
+        "label": "total_revenues",
+        "value": "611289",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2023 (ended January 31)",
+        "citation": {
+          "source_id": "source_1da5607402944bdbb603c2d4047f67a9",
+          "quotation": "\"FY2023\":{\"total_revenues\":611289}"
+        }
+      },
+      {
+        "fact_id": "ko_rev_2024",
+        "label": "net_operating_revenues",
+        "value": "47061",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "2024 (ended December 31)",
+        "citation": {
+          "source_id": "source_7e04856831c643078c0ff6d78bdc67b9",
+          "quotation": "\"2024\":47061"
+        }
+      },
+      {
+        "fact_id": "ko_rev_2023",
+        "label": "net_operating_revenues",
+        "value": "45754",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "2023 (ended December 31)",
+        "citation": {
+          "source_id": "source_7e04856831c643078c0ff6d78bdc67b9",
+          "quotation": "\"2023\":45754"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "wmt_rev_fy2024",
+        "second_fact_id": "wmt_rev_fy2023"
+      },
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "ko_rev_2024",
+        "second_fact_id": "ko_rev_2023"
+      }
+    ]
+  },
+  "reported_tokens": 1676,
+  "prompt_sha256": "3861550363b95f98eb098008a03e3c9c262917e7c6147e3e9a62c0a5a569204b",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

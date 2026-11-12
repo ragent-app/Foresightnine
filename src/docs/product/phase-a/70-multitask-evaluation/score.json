@@ -1,0 +1,59 @@
+{
+  "manifest_sha256": "b20293e18717d9505ab2a58db2678e98bbbd4d44872e956b1a8e99709651f63c",
+  "semantic_support": "not established",
+  "independence": "Nonblind evaluation on two previously used derived company snapshots and two public PDFs. BEA source is related to previously tested GDP data. No independent human review or general accuracy claim.",
+  "tasks": {
+    "FISCAL_COMPARE": {
+      "status": "completed",
+      "research_status": "partial",
+      "expected": {
+        "different_fiscal_end_dates_with_both_quotes": false,
+        "walmart_growth": false,
+        "coca_cola_growth": true
+      },
+      "citations_located": true,
+      "review_coverage_and_verdicts_ok": true,
+      "warnings": false,
+      "budget_ok": true,
+      "provenance_ok": true,
+      "reported_tokens": 2374,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    },
+    "GDP_ESTIMATE": {
+      "status": "completed",
+      "research_status": "partial",
+      "expected": {
+        "2.9": false,
+        "2.6": false
+      },
+      "citations_located": false,
+      "review_coverage_and_verdicts_ok": false,
+      "warnings": false,
+      "budget_ok": true,
+      "provenance_ok": true,
+      "reported_tokens": 1639,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    },
+    "FED_PURCHASES": {
+      "status": "completed",
+      "research_status": "partial",
+      "expected": {
+        "10": false,
+        "20": false,
+        "40": false
+      },
+      "citations_located": false,
+      "review_coverage_and_verdicts_ok": false,
+      "warnings": false,
+      "budget_ok": true,
+      "provenance_ok": true,
+      "reported_tokens": 823,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    }
+  },
+  "passed": 0,
+  "total": 3
+}

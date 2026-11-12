@@ -1,0 +1,103 @@
+{
+  "id": "FED_PURCHASES",
+  "manifest_sha256": "b20293e18717d9505ab2a58db2678e98bbbd4d44872e956b1a8e99709651f63c",
+  "operation_status": "completed",
+  "operation_id": "operation:f03869fdf63466de92ab2a19",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 12.144,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_1a84b0bf99f64453afcf735ceb9f5685",
+        "title": "Federal Reserve FOMC statement December 2021",
+        "url": null,
+        "event_at": null,
+        "published_at": "2021-12-15T19:00:00+00:00",
+        "obtained_at": "2026-11-12T07:55:54.735131+00:00",
+        "revised_at": null,
+        "content_sha256": "dbf306180131c25ed9d8c3f6f89eafe6a9d06287ed8e818818e78d6b27030eac",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [],
+    "limitations": [
+      "Source source_1a84b0bf99f64453afcf735ceb9f5685: only character ranges 0–289, 3650–3937 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "提供的来源文本仅为2021年12月15日FOMC声明的片段，未包含关于缩减资产购买（taper）的具体内容，因此无法从来源中提取国债和机构抵押贷款支持证券的月度购买减幅或2022年1月的购买速度。",
+      "来源标注为 'partial'（部分覆盖），所引文本不完整，声明中关于'自1月起每月减少购买200亿美元国债和100亿美元机构抵押贷款支持证券'等关键段落未在提供的文本中出现。",
+      "来源片段仅涉及委员会对充分就业和价格稳定目标的承诺以及准备金利率（0.15%）的决议，与月度购买速度无关。",
+      "本回答不自行计算或引用外部知识，需提供包含资产购买时间表段落的完整声明文本才能作答。",
+      "来源发布日期为声明声明值（declared），未经独立核实。",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:f03869fdf63466de92ab2a19",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 823,
+      "cost_usd": null,
+      "generation_tokens": 823,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "not_reviewable",
+      "support_review_error": null,
+      "support_review_method": "bounded_quotation_context_model_review_v8",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 10.102,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "882024c36613d68d78ec5a23d6291250f108acc3668cacd92bb7a9aa6faf9a41",
+      "prompt_characters": 1941,
+      "prompt_bytes": 2053,
+      "selection_method": "ranked_nonoverlapping_windows_v17",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_1a84b0bf99f64453afcf735ceb9f5685",
+          "character_start": 0,
+          "character_end": 289
+        },
+        {
+          "source_id": "source_1a84b0bf99f64453afcf735ceb9f5685",
+          "character_start": 3650,
+          "character_end": 3937
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_1a84b0bf99f64453afcf735ceb9f5685": "dbf306180131c25ed9d8c3f6f89eafe6a9d06287ed8e818818e78d6b27030eac"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}
