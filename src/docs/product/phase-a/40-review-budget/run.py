@@ -27,7 +27,7 @@ assert len(batch.prompt.encode()) <= m['max_prompt_bytes']
 env = json.loads(subprocess.check_output(['docker', 'inspect', '--format', '{{json .Config.Env}}', 'docker-api-1']))
 for line in env:
     key, sep, value = line.partition('=')
-    if sep and key.startswith('FORESIGHTNINE_'):
+    if sep and (key.startswith('FORESIGHTNINE_LLM_') or key == 'FORESIGHTNINE_GLM_CODING_API_KEY'):
         os.environ[key] = value
 os.environ.update(FORESIGHTNINE_LOCAL_AUTH_MODE='mock', FORESIGHTNINE_STORAGE_MODE='memory', FORESIGHTNINE_LLM_TIMEOUT_SECONDS='60')
 import app.main as api
