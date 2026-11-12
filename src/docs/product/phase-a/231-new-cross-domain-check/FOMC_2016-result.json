@@ -1,0 +1,296 @@
+{
+  "task": "FOMC_2016",
+  "status": "completed",
+  "operation_id": "operation:394f8023855374e5dbf44f2e",
+  "manifest_sha256": "ae6738fa71dfaed2c72a3e2a4813b091459ed687de53ad842cacfd5e04e15581",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_23100000000000000000000000000003",
+        "title": "fomc-2016.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T17:48:17.291584+00:00",
+        "revised_at": null,
+        "content_sha256": "330dad9b81b6b137096c25d9b63f864dbca0ecb05bd57a998f0837adf15ca827",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ffr-range",
+        "value": "0.75",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective December 15, 2016",
+        "label": "federal funds target range (upper bound)",
+        "source_id": "source_23100000000000000000000000000003",
+        "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 1671,
+          "character_end": 1767,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "inflation-objective",
+        "value": "2",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "longer-run objective as stated December 14, 2016",
+        "label": "inflation objective",
+        "source_id": "source_23100000000000000000000000000003",
+        "quotation": "objectives of maximum employment and 2 percent inflation",
+        "quotation_match": "exact",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 2128,
+          "character_end": 2184,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The FOMC raised the target range for the federal funds rate to 1/2 to 3/4 percent on December 14, 2016.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 1671,
+              "character_end": 1767,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "The policy rate (federal funds target range of 1/2 to 3/4 percent) is distinct from the Committee's 2 percent inflation objective, which is a goal, not the policy rate.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 2044,
+              "character_end": 2184,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee will assess realized and expected economic conditions relative to its\nobjectives of maximum employment and 2 percent inflation"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_percentages": [
+          "3/4 percent"
+        ],
+        "uncited_fact_values": [
+          "0.75 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "ffr-range",
+            "source_id": "source_23100000000000000000000000000003",
+            "value": "0.75",
+            "unit": "percent",
+            "period": "effective December 15, 2016",
+            "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent",
+            "location": {
+              "character_start": 1671,
+              "character_end": 1767,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "suggested_related_quotations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 1/2 to 3/4 percent",
+            "location": {
+              "character_start": 1671,
+              "character_end": 1767,
+              "page": 1
+            },
+            "matched_amounts": [
+              "3/4 percent"
+            ],
+            "from_claim_index": 0,
+            "status": "requires_semantic_review"
+          }
+        ]
+      },
+      {
+        "text": "The statement notes inflation was below the 2 percent objective at the time.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 2629,
+              "character_end": 2784,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In light of the current shortfall of inflation from 2 percent, the Committee will\ncarefully monitor actual and expected progress toward its inflation goal."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_fact_values": [
+          "2 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "inflation-objective",
+            "source_id": "source_23100000000000000000000000000003",
+            "value": "2",
+            "unit": "percent",
+            "period": "longer-run objective as stated December 14, 2016",
+            "quotation": "objectives of maximum employment and 2 percent inflation",
+            "location": {
+              "character_start": 2128,
+              "character_end": 2184,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      },
+      {
+        "text": "The supplied excerpts do not explicitly name the committee chair, so any identification of the chair would be inference, not direct evidence from the source text.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000003",
+            "location": {
+              "character_start": 3796,
+              "character_end": 3931,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Brainard; James Bullard; Stanley Fischer; Esther L. George;\nLoretta J. Mester; Jerome H. Powell; Eric Rosengren; and Daniel K. Tarullo."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_23100000000000000000000000000003: only character ranges 1599–2946, 3796–5133, 5756–7000 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "A requested calculation was omitted because its input facts were unavailable.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The supplied excerpts do not state the name of the FOMC chair; only a partial list of participants appears (e.g., Stanley Fischer, Jerome H. Powell), so the chair's identity cannot be confirmed from the sources.",
+      "Model-reported limitation (not independently verified): Excerpts are partial; the full participant list and full statement are not provided.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:394f8023855374e5dbf44f2e",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1729,
+      "cost_usd": null,
+      "generation_tokens": 1729,
+      "support_review_tokens": null,
+      "require_counterarguments": false,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 9.063,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "8dc42083550a132c76432c853e54f60f2e49e0242843841403d180e3922d1e39",
+      "prompt_characters": 4918,
+      "prompt_bytes": 4936,
+      "selection_method": "ranked_nonoverlapping_windows_v44",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_23100000000000000000000000000003",
+          "character_start": 1599,
+          "character_end": 2946,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_23100000000000000000000000000003",
+          "character_start": 3796,
+          "character_end": 5133,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_23100000000000000000000000000003",
+          "character_start": 5756,
+          "character_end": 7000,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_23100000000000000000000000000003": "330dad9b81b6b137096c25d9b63f864dbca0ecb05bd57a998f0837adf15ca827"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_e20aa17e172446e0907e87af00000cd3",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_b60a79a2f2774688b1f1159982c3c5c3",
+      "parent_version_id": "version_e20aa17e172446e0907e87af00000cd3",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 10.416
+}

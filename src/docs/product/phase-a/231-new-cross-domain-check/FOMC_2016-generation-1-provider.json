@@ -1,0 +1,86 @@
+{
+  "manifest_sha256": "ae6738fa71dfaed2c72a3e2a4813b091459ed687de53ad842cacfd5e04e15581",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC raised the target range for the federal funds rate to 1/2 to 3/4 percent on December 14, 2016.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 1/2 to 3/4 percent"
+          }
+        ]
+      },
+      {
+        "text": "The policy rate (federal funds target range of 1/2 to 3/4 percent) is distinct from the Committee's 2 percent inflation objective, which is a goal, not the policy rate.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee will assess realized and expected economic conditions relative to its objectives of maximum employment and 2 percent inflation"
+          }
+        ]
+      },
+      {
+        "text": "The statement notes inflation was below the 2 percent objective at the time.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "In light of the current shortfall of inflation from 2 percent, the Committee will carefully monitor actual and expected progress toward its inflation goal."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The supplied excerpts do not explicitly name the committee chair, so any identification of the chair would be inference, not direct evidence from the source text.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Brainard; James Bullard; Stanley Fischer; Esther L. George; Loretta J. Mester; Jerome H. Powell; Eric Rosengren; and Daniel K. Tarullo."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The supplied excerpts do not state the name of the FOMC chair; only a partial list of participants appears (e.g., Stanley Fischer, Jerome H. Powell), so the chair's identity cannot be confirmed from the sources.",
+      "Excerpts are partial; the full participant list and full statement are not provided."
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr-range",
+        "label": "federal funds target range (upper bound)",
+        "value": "0.75",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective December 15, 2016",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to raise the target range for the federal funds rate to 1/2 to 3/4 percent"
+        }
+      },
+      {
+        "fact_id": "inflation-objective",
+        "label": "inflation objective",
+        "value": "2",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "longer-run objective as stated December 14, 2016",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "objectives of maximum employment and 2 percent inflation"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "ffr-range",
+        "second_fact_id": "inflation-objective"
+      }
+    ]
+  },
+  "reported_tokens": 1729,
+  "prompt_sha256": "8dc42083550a132c76432c853e54f60f2e49e0242843841403d180e3922d1e39",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

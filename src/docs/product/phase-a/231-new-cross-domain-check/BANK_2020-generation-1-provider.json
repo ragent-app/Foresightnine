@@ -1,0 +1,94 @@
+{
+  "manifest_sha256": "ae6738fa71dfaed2c72a3e2a4813b091459ed687de53ad842cacfd5e04e15581",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "According to Table B.18.A of the December 2020 Stress Test Results, JPMorgan Chase & Co.'s actual common equity tier 1 capital ratio in 2020:Q2 was 12.4 percent; under the severely adverse scenario, its projected ending ratio (2022:Q3) was 10.8 percent and its projected minimum was 10.0 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Table B.18.A. JPMorgan Chase & Co.\nProjected stressed capital ratios, risk-weighted assets, losses, revenues, net income before\ntaxes, and loan losses\nFederal Reserve estimates: Severely adverse scenario"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Stressed capital ratios1\tActual\tProjected\n\tActual\tItem\n\tRegulatory ratio\t2020:Q2\t2022:Q3\n\t2020:Q2\n\tEnding\tMinimum"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Common equity tier 1 capital ratio\t12.4\t10.8\t10.0"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Capital ratios, actual 2020:Q2 and projected\tRisk-weighted assets, actual 2020:Q2 and projected\n 2020:Q3–2022:Q3\t2022:Q3\n Percent"
+          }
+        ]
+      },
+      {
+        "text": "The projections are hypothetical Fed estimates under a severely adverse scenario, with minimum ratios covering 2020:Q3 to 2022:Q3, not actual outcomes.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "These\nprojections represent hypothetical estimates that involve an economic outcome that is more adverse than expected. The minimum capital ratios are for the period 2020:Q3 to\n2022:Q3."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One could question whether the values are actual versus hypothetical: the 12.4 percent figure is the actual regulatory 2020:Q2 ratio, while the 10.8 and 10.0 percent figures are Fed projections under the severely adverse scenario, not observed results.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "These\nprojections represent hypothetical estimates that involve an economic outcome that is more adverse than expected."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The excerpt shows compressed PDF columns; the row 'Common equity tier 1 capital ratio 12.4 10.8 10.0' aligns with columns Actual 2020:Q2, Projected Ending 2022:Q3, and Projected Minimum, per the pattern in Table B.3.A for Bank of America.",
+      "The Table 5.B excerpt (Category IV firms) is truncated before JPMorgan's row; JPMorgan's figures come only from Table B.18.A.",
+      "Dates are as declared in the source; publication date vs. reporting period is not independently verified.",
+      "Excerpts are not the whole source document."
+    ],
+    "facts": [
+      {
+        "fact_id": "jpm_cet1_actual_2020q2",
+        "label": "JPMorgan Chase & Co. common equity tier 1 capital ratio, actual",
+        "value": "12.4",
+        "unit": "percent",
+        "period": "2020:Q2",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio\t12.4\t10.8\t10.0"
+        }
+      },
+      {
+        "fact_id": "jpm_cet1_projected_ending",
+        "label": "JPMorgan Chase & Co. projected ending common equity tier 1 capital ratio, severely adverse scenario",
+        "value": "10.8",
+        "unit": "percent",
+        "period": "2022:Q3",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio\t12.4\t10.8\t10.0"
+        }
+      },
+      {
+        "fact_id": "jpm_cet1_projected_minimum",
+        "label": "JPMorgan Chase & Co. projected minimum common equity tier 1 capital ratio, severely adverse scenario",
+        "value": "10.0",
+        "unit": "percent",
+        "period": "2020:Q3–2022:Q3 (minimum)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio\t12.4\t10.8\t10.0"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2523,
+  "prompt_sha256": "e4c421d59657b7dbc4ee2690e41fd10c4bb3fe69b164933a5f05ef4f590c5eab",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

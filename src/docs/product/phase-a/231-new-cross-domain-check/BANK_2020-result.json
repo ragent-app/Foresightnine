@@ -1,0 +1,370 @@
+{
+  "task": "BANK_2020",
+  "status": "completed",
+  "operation_id": "operation:dafefd7fb03ca8acecb6bda5",
+  "manifest_sha256": "ae6738fa71dfaed2c72a3e2a4813b091459ed687de53ad842cacfd5e04e15581",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_23100000000000000000000000000001",
+        "title": "fed-stress-2020.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T17:47:40.091067+00:00",
+        "revised_at": null,
+        "content_sha256": "1239ef35065bdc9ce4eca7d6c6fe2ed85ba44df91642d50e61308180b57aead0",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "jpm_cet1_actual_2020q2",
+        "value": "12.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020:Q2",
+        "label": "JPMorgan Chase & Co. common equity tier 1 capital ratio, actual",
+        "source_id": "source_23100000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 699178,
+          "character_end": 699259,
+          "page": 108
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "jpm_cet1_projected_ending",
+        "value": "10.8",
+        "unit": "percent",
+        "currency": null,
+        "period": "2022:Q3",
+        "label": "JPMorgan Chase & Co. projected ending common equity tier 1 capital ratio, severely adverse scenario",
+        "source_id": "source_23100000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 699178,
+          "character_end": 699259,
+          "page": 108
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "jpm_cet1_projected_minimum",
+        "value": "10.0",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020:Q3–2022:Q3 (minimum)",
+        "label": "JPMorgan Chase & Co. projected minimum common equity tier 1 capital ratio, severely adverse scenario",
+        "source_id": "source_23100000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 699178,
+          "character_end": 699259,
+          "page": 108
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "According to Table B.18.A of the December 2020 Stress Test Results, JPMorgan Chase & Co.'s actual common equity tier 1 capital ratio in 2020:Q2 was 12.4 percent; under the severely adverse scenario, its projected ending ratio (2022:Q3) was 10.8 percent and its projected minimum was 10.0 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000001",
+            "location": {
+              "character_start": 697851,
+              "character_end": 698054,
+              "page": 108
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Table B.18.A. JPMorgan Chase & Co.\nProjected stressed capital ratios, risk-weighted assets, losses, revenues, net income before\ntaxes, and loan losses\nFederal Reserve estimates: Severely adverse scenario"
+          },
+          {
+            "source_id": "source_23100000000000000000000000000001",
+            "location": {
+              "status": "ambiguous",
+              "matches": [
+                {
+                  "character_start": 406102,
+                  "character_end": 406640,
+                  "page": 78
+                },
+                {
+                  "character_start": 698467,
+                  "character_end": 699005,
+                  "page": 108
+                }
+              ],
+              "truncated": false
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Stressed capital ratios1                                                             Actual           Projected\n                                               Actual                                                             Item\n              Regulatory ratio                                                                                                                   2020:Q2           2022:Q3\n                                              2020:Q2\n                                                              Ending       Minimum"
+          },
+          {
+            "source_id": "source_23100000000000000000000000000001",
+            "location": {
+              "character_start": 699178,
+              "character_end": 699259,
+              "page": 108
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0"
+          },
+          {
+            "source_id": "source_23100000000000000000000000000001",
+            "location": {
+              "status": "ambiguous",
+              "matches": [
+                {
+                  "character_start": 405692,
+                  "character_end": 405938,
+                  "page": 78
+                },
+                {
+                  "character_start": 698057,
+                  "character_end": 698303,
+                  "page": 108
+                }
+              ],
+              "truncated": false
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Capital ratios, actual 2020:Q2 and projected                                             Risk-weighted assets, actual 2020:Q2 and projected\n 2020:Q3–2022:Q3                                                                          2022:Q3\n Percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_quarters": [
+          "2020:Q2",
+          "2022:Q3"
+        ]
+      },
+      {
+        "text": "The projections are hypothetical Fed estimates under a severely adverse scenario, with minimum ratios covering 2020:Q3 to 2022:Q3, not actual outcomes.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000001",
+            "location": {
+              "character_start": 188661,
+              "character_end": 188846,
+              "page": 41
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "These\nprojections represent hypothetical estimates that involve an economic outcome that is more adverse than expected. The minimum capital ratios are for the period 2020:Q3 to\n2022:Q3."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "One could question whether the values are actual versus hypothetical: the 12.4 percent figure is the actual regulatory 2020:Q2 ratio, while the 10.8 and 10.0 percent figures are Fed projections under the severely adverse scenario, not observed results.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000001",
+            "location": {
+              "character_start": 188661,
+              "character_end": 188780,
+              "page": 41
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "These\nprojections represent hypothetical estimates that involve an economic outcome that is more adverse than expected."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "jpm_cet1_actual_2020q2",
+            "source_id": "source_23100000000000000000000000000001",
+            "value": "12.4",
+            "unit": "percent",
+            "period": "2020:Q2",
+            "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0",
+            "location": {
+              "character_start": 699178,
+              "character_end": 699259,
+              "page": 108
+            },
+            "status": "requires_semantic_review"
+          },
+          {
+            "fact_id": "jpm_cet1_projected_minimum",
+            "source_id": "source_23100000000000000000000000000001",
+            "value": "10.0",
+            "unit": "percent",
+            "period": "2020:Q3–2022:Q3 (minimum)",
+            "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0",
+            "location": {
+              "character_start": 699178,
+              "character_end": 699259,
+              "page": 108
+            },
+            "status": "requires_semantic_review"
+          },
+          {
+            "fact_id": "jpm_cet1_projected_ending",
+            "source_id": "source_23100000000000000000000000000001",
+            "value": "10.8",
+            "unit": "percent",
+            "period": "2022:Q3",
+            "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0",
+            "location": {
+              "character_start": 699178,
+              "character_end": 699259,
+              "page": 108
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "uncited_percentages": [
+          "12.4 percent",
+          "10.0 percent"
+        ],
+        "uncited_quarters": [
+          "2020:Q2"
+        ],
+        "uncited_fact_values": [
+          "12.4 percent",
+          "10.8 percent",
+          "10.0 percent"
+        ],
+        "suggested_related_quotations": [
+          {
+            "source_id": "source_23100000000000000000000000000001",
+            "quotation": "Common equity tier 1 capital ratio             12.4           10.8           10.0",
+            "location": {
+              "character_start": 699178,
+              "character_end": 699259,
+              "page": 108
+            },
+            "matched_amounts": [
+              "10.0 percent",
+              "12.4 percent"
+            ],
+            "from_claim_index": 0,
+            "status": "requires_semantic_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_23100000000000000000000000000001: only character ranges 188496–190567, 404126–407141, 697019–699665 were analyzed; remaining text was not examined.",
+      "Source source_23100000000000000000000000000001: quotation location is ambiguous in the analyzed passages.",
+      "Source source_23100000000000000000000000000001: quotation location is ambiguous in the analyzed passages.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The excerpt shows compressed PDF columns; the row 'Common equity tier 1 capital ratio 12.4 10.8 10.0' aligns with columns Actual 2020:Q2, Projected Ending 2022:Q3, and Projected Minimum, per the pattern in Table B.3.A for Bank of America.",
+      "Model-reported limitation (not independently verified): The Table 5.B excerpt (Category IV firms) is truncated before JPMorgan's row; JPMorgan's figures come only from Table B.18.A.",
+      "Model-reported limitation (not independently verified): Dates are as declared in the source; publication date vs. reporting period is not independently verified.",
+      "Model-reported limitation (not independently verified): Excerpts are not the whole source document.",
+      "An explicit quarter and year could not be matched in the attached quotations; check the period and source context.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:dafefd7fb03ca8acecb6bda5",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 2523,
+      "cost_usd": null,
+      "generation_tokens": 2523,
+      "support_review_tokens": null,
+      "require_counterarguments": false,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 19.896,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "e4c421d59657b7dbc4ee2690e41fd10c4bb3fe69b164933a5f05ef4f590c5eab",
+      "prompt_characters": 5044,
+      "prompt_bytes": 5053,
+      "selection_method": "ranked_nonoverlapping_windows_v44",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_23100000000000000000000000000001",
+          "character_start": 188496,
+          "character_end": 190567,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_23100000000000000000000000000001",
+          "character_start": 404126,
+          "character_end": 407141,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_23100000000000000000000000000001",
+          "character_start": 697019,
+          "character_end": 699665,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_23100000000000000000000000000001": "1239ef35065bdc9ce4eca7d6c6fe2ed85ba44df91642d50e61308180b57aead0"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_c9602d1e8300414fa0e9c5a3c6e0f3d3",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_591bbf871489480f8a71a5d870b05688",
+      "parent_version_id": "version_c9602d1e8300414fa0e9c5a3c6e0f3d3",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 22.099
+}
