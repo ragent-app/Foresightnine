@@ -1,0 +1,347 @@
+{
+  "task": "budget_10000",
+  "status": "completed",
+  "operation_id": "operation:d13e8cda5787a58324a97e2f",
+  "manifest_sha256": "8f4dec4da0160de0cf8f2b0871f40bf5dbdba3812636c2402a1951acf5257349",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_26300000000000000000000000000002",
+        "title": "bea-gdp4q22.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": "2023-02-23T13:30:00+00:00",
+        "obtained_at": "2026-11-12T20:43:52.852535+00:00",
+        "revised_at": null,
+        "content_sha256": "c406849a85069216c9fe5afbc1e77826e8b6a34ae2c0aa1dcf81cabefd6e16b9",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "value": "2.7",
+        "unit": "percent (seasonally adjusted annual rate)",
+        "currency": null,
+        "period": "2022 Q4",
+        "label": "Real GDP annualized growth, Q4 2022 (second estimate)",
+        "source_id": "source_26300000000000000000000000000002",
+        "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of\n2022",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 412,
+          "character_end": 518,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "f2",
+        "value": "3.2",
+        "unit": "percent (seasonally adjusted annual rate)",
+        "currency": null,
+        "period": "2022 Q3",
+        "label": "Real GDP annualized growth, Q3 2022",
+        "source_id": "source_26300000000000000000000000000002",
+        "quotation": "In the\nthird quarter, real GDP increased 3.2 percent.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 610,
+          "character_end": 663,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "f3",
+        "value": "2.9",
+        "unit": "percent (seasonally adjusted annual rate)",
+        "currency": null,
+        "period": "2022 Q4",
+        "label": "Real GDP annualized growth, Q4 2022 (advance estimate, revised)",
+        "source_id": "source_26300000000000000000000000000002",
+        "quotation": "In the advance estimate, the increase in real GDP was 2.9\npercent.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 801,
+          "character_end": 867,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "difference",
+        "formula_version": "2",
+        "expression": "first - second",
+        "input_verification": "not_verified_by_calculator",
+        "input_precision_status": "not_established",
+        "inputs": [
+          {
+            "fact_id": "f2",
+            "value": "3.2",
+            "unit": "percent (seasonally adjusted annual rate)",
+            "currency": null,
+            "period": "2022 Q3"
+          },
+          {
+            "fact_id": "f1",
+            "value": "2.7",
+            "unit": "percent (seasonally adjusted annual rate)",
+            "currency": null,
+            "period": "2022 Q4"
+          }
+        ],
+        "value": "0.50",
+        "unit": "percentage points",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2,
+        "input_status": "matched"
+      },
+      {
+        "formula_id": "difference",
+        "formula_version": "2",
+        "expression": "first - second",
+        "input_verification": "not_verified_by_calculator",
+        "input_precision_status": "not_established",
+        "inputs": [
+          {
+            "fact_id": "f3",
+            "value": "2.9",
+            "unit": "percent (seasonally adjusted annual rate)",
+            "currency": null,
+            "period": "2022 Q4"
+          },
+          {
+            "fact_id": "f1",
+            "value": "2.7",
+            "unit": "percent (seasonally adjusted annual rate)",
+            "currency": null,
+            "period": "2022 Q4"
+          }
+        ],
+        "value": "0.20",
+        "unit": "percentage points",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2,
+        "input_status": "matched"
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Real GDP increased at an annual rate of 2.7 percent in Q4 2022, compared with 3.2 percent in Q3 2022 — a slowdown of 0.5 percentage points.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000002",
+            "location": {
+              "character_start": 412,
+              "character_end": 663,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of\n2022 (table 1), according to the \"second\" estimate released by the Bureau of Economic Analysis. In the\nthird quarter, real GDP increased 3.2 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_percentage_points": [
+          "0.5 percentage points"
+        ],
+        "uncited_quarters": [
+          "Q3 2022"
+        ]
+      },
+      {
+        "text": "Both goods and services consumption did NOT increase in Q4 2022. Services spending increased, but goods spending decreased (services were partly offset by a decrease in goods), with the leading goods decline in 'other' durable goods (mainly jewelry).",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000002",
+            "location": {
+              "character_start": 2149,
+              "character_end": 2448,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The increase in\nconsumer spending reflected an increase in services that was partly offset by a decrease in goods.\nWithin services, the increase was led by health care as well as housing and utilities. Within goods, the\nleading contributor to the decrease was \"other\" durable goods (mainly jewelry)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_quarters": [
+          "Q4 2022"
+        ]
+      },
+      {
+        "text": "The 2.7 percent Q4 figure is a downward revision of an estimate (from the 2.9 percent advance estimate) based on more complete source data, not an actual change in economic activity.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000002",
+            "location": {
+              "character_start": 665,
+              "character_end": 1030,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The GDP estimate released today is based on more complete source data than were available for the\n\"advance\" estimate issued last month. In the advance estimate, the increase in real GDP was 2.9\npercent. The updated estimates primarily reflected a downward revision to consumer spending that was\npartly offset by an upward revision to nonresidential fixed investment"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "f1",
+            "source_id": "source_26300000000000000000000000000002",
+            "value": "2.7",
+            "unit": "percent (seasonally adjusted annual rate)",
+            "period": "2022 Q4",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of\n2022",
+            "location": {
+              "character_start": 412,
+              "character_end": 518,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "uncited_percentages": [
+          "2.7 percent"
+        ],
+        "uncited_fact_values": [
+          "2.7 percent (seasonally adjusted annual rate)"
+        ],
+        "suggested_related_quotations": [
+          {
+            "source_id": "source_26300000000000000000000000000002",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of\n2022 (table 1), according to the \"second\" estimate released by the Bureau of Economic Analysis. In the\nthird quarter, real GDP increased 3.2 percent.",
+            "location": {
+              "character_start": 412,
+              "character_end": 663,
+              "page": 1
+            },
+            "matched_amounts": [
+              "2.7 percent"
+            ],
+            "from_claim_index": 0,
+            "status": "requires_semantic_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_26300000000000000000000000000002: only character ranges 145–1527, 1528–2673, 9335–11497 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): No opposing evidence exists in the sources; the text explicitly states goods consumption decreased in Q4 2022, so the premise that both goods and services increased is contradicted rather than merely unsupported.",
+      "Model-reported limitation (not independently verified): Source text is a partial excerpt; the labeled table 1 with page numbers is not available, so source_page is null for the quotations.",
+      "Model-reported limitation (not independently verified): Publication date (2023-02-23) is declared, not independently verified.",
+      "Model-reported limitation (not independently verified): Third-quarter 3.2 percent figure cited is per the current release; any third-quarter revision history is not included in the excerpt.",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "An explicit quarter and year could not be matched in the attached quotations; check the period and source context.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "A claim percentage-point figure is absent from its quotations; check the source and any calculation.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:d13e8cda5787a58324a97e2f",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 2479,
+      "cost_usd": null,
+      "generation_tokens": 2479,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "budget_exhausted",
+      "support_review_error": null,
+      "support_review_mode": "batch",
+      "support_review_method": "bounded_quotation_context_model_review_v29",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [
+        {
+          "claim_index": 0,
+          "reason": "token_budget"
+        },
+        {
+          "claim_index": 1,
+          "reason": "token_budget"
+        },
+        {
+          "claim_index": 2,
+          "reason": "token_budget"
+        }
+      ],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "official_fetch_calls": 0,
+      "official_fetch_status": "not_requested",
+      "elapsed_seconds": 17.026,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "b01ea78f7b4632156cb50fa11ffaa7a94bf47944bd8eed374e389e29bba35e64",
+      "prompt_characters": 5045,
+      "prompt_bytes": 5049,
+      "selection_method": "ranked_nonoverlapping_windows_v48",
+      "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+      "selected_segments": [
+        {
+          "source_id": "source_26300000000000000000000000000002",
+          "character_start": 145,
+          "character_end": 1527,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_26300000000000000000000000000002",
+          "character_start": 1528,
+          "character_end": 2673,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_26300000000000000000000000000002",
+          "character_start": 9335,
+          "character_end": 11497,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_26300000000000000000000000000002": "c406849a85069216c9fe5afbc1e77826e8b6a34ae2c0aa1dcf81cabefd6e16b9"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "elapsed_seconds": 18.678
+}

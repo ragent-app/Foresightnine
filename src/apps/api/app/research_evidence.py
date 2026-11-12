@@ -65,6 +65,9 @@ _SOURCE_ABSENCE = re.compile(
     r"(?:explicitly\s+)?(?:provide|include|contain|mention|state|show|give|describe|disclose|detail|break\s+down)\b|"
     r"\b(?:the\s+|this\s+)?(?:source|document|report|filing|release)\s+"
     r"(?:provides?|includes?|contains?|mentions?|states?|shows?)\s+no\b|"
+    r"\bno\s+(?:(?:opposing|contrary|supporting|relevant|additional)\s+){0,2}"
+    r"(?:evidence|information|data|details?)\s+(?:exists?|is\s+(?:found|available|present|provided))\s+"
+    r"(?:in|within|from)\s+(?:the\s+|these\s+)?(?:sources?|documents?|reports?|filings?|releases?)\b|"
     r"(?:来源|來源|资料|資料|文件|报告|報告|原文|公告)(?:中)?(?:并|並)?(?:没有|沒有|未|不曾|不)"
     r"(?:提供|包含|提及|说明|說明|披露|列出|展示|给出|給出)", re.IGNORECASE)
 

@@ -1,0 +1,101 @@
+{
+  "manifest_sha256": "8f4dec4da0160de0cf8f2b0871f40bf5dbdba3812636c2402a1951acf5257349",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Real GDP increased at an annual rate of 2.7 percent in Q4 2022, compared with 3.2 percent in Q3 2022 — a slowdown of 0.5 percentage points.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of 2022 (table 1), according to the \"second\" estimate released by the Bureau of Economic Analysis. In the third quarter, real GDP increased 3.2 percent.",
+            "source_page": null
+          }
+        ]
+      },
+      {
+        "text": "Both goods and services consumption did NOT increase in Q4 2022. Services spending increased, but goods spending decreased (services were partly offset by a decrease in goods), with the leading goods decline in 'other' durable goods (mainly jewelry).",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The increase in consumer spending reflected an increase in services that was partly offset by a decrease in goods. Within services, the increase was led by health care as well as housing and utilities. Within goods, the leading contributor to the decrease was \"other\" durable goods (mainly jewelry).",
+            "source_page": null
+          }
+        ]
+      },
+      {
+        "text": "The 2.7 percent Q4 figure is a downward revision of an estimate (from the 2.9 percent advance estimate) based on more complete source data, not an actual change in economic activity.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The GDP estimate released today is based on more complete source data than were available for the \"advance\" estimate issued last month. In the advance estimate, the increase in real GDP was 2.9 percent. The updated estimates primarily reflected a downward revision to consumer spending that was partly offset by an upward revision to nonresidential fixed investment",
+            "source_page": null
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "No opposing evidence exists in the sources; the text explicitly states goods consumption decreased in Q4 2022, so the premise that both goods and services increased is contradicted rather than merely unsupported.",
+      "Source text is a partial excerpt; the labeled table 1 with page numbers is not available, so source_page is null for the quotations.",
+      "Publication date (2023-02-23) is declared, not independently verified.",
+      "Third-quarter 3.2 percent figure cited is per the current release; any third-quarter revision history is not included in the excerpt."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "Real GDP annualized growth, Q4 2022 (second estimate)",
+        "value": 2.7,
+        "unit": "percent (seasonally adjusted annual rate)",
+        "currency": null,
+        "period": "2022 Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of 2022",
+          "source_page": null
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "Real GDP annualized growth, Q3 2022",
+        "value": 3.2,
+        "unit": "percent (seasonally adjusted annual rate)",
+        "currency": null,
+        "period": "2022 Q3",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "In the third quarter, real GDP increased 3.2 percent.",
+          "source_page": null
+        }
+      },
+      {
+        "fact_id": "f3",
+        "label": "Real GDP annualized growth, Q4 2022 (advance estimate, revised)",
+        "value": 2.9,
+        "unit": "percent (seasonally adjusted annual rate)",
+        "currency": null,
+        "period": "2022 Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "In the advance estimate, the increase in real GDP was 2.9 percent.",
+          "source_page": null
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "f2",
+        "second_fact_id": "f1"
+      },
+      {
+        "formula": "difference",
+        "first_fact_id": "f3",
+        "second_fact_id": "f1"
+      }
+    ]
+  },
+  "reported_tokens": 2479,
+  "prompt_sha256": "b01ea78f7b4632156cb50fa11ffaa7a94bf47944bd8eed374e389e29bba35e64",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}
