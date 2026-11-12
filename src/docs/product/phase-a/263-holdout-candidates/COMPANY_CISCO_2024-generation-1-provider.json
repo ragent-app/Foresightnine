@@ -1,0 +1,94 @@
+{
+  "manifest_sha256": "cea6fb40b961257612a0f699de24c0bf1dfcf720b740160be1d73934118add5e",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Cisco FY2024（截至2024年7月27日的财年）总收入为 53,803 百万美元，FY2023（截至2023年7月29日的财年）总收入为 56,998 百万美元，单位为百万美元（\"in millions, except per-share amounts\"）。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "(in millions, except per-share amounts)"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Years Ended | July 27, 2024 | July 29, 2023 | July 30, 2022"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Total revenue | 53,803 | 56,998 | 51,557"
+          }
+        ]
+      },
+      {
+        "text": "收入构成：FY2024 产品收入 39,253、服务收入 14,550；FY2023 产品收入 43,142、服务收入 13,856（单位：百万美元）。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Product | $ | 39,253 | $ | 43,142 | $ | 38,018"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Services | 14,550 | 13,856 | 13,539"
+          }
+        ]
+      },
+      {
+        "text": "同比变化（基于所引两期总收入数据请求计算）：FY2024 总收入较 FY2023 下降。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Total revenue | 53,803 | 56,998 | 51,557"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无 opposing evidence：所提供的节选未包含任何关于收入变化原因或反方观点的文字，无法形成有引用的反论。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "所提供文本仅为年报的部分节选（source_coverage: partial），未包含管理层讨论与分析（MD&A）等解释收入同比变化的原文段落，因此无法引用原文说明收入变化的驱动因素或相关限制；此为证据缺口，不构成任何结论的证明。",
+      "压缩的表格列已核对，但日期（财年结束日 2024年7月27日、2023年7月29日）为报表声明，未经独立验证。",
+      "同比变化百分比未由助手自行计算；已在 calculations 中请求基于所引数值的计算。"
+    ],
+    "facts": [
+      {
+        "fact_id": "rev-fy2024-total",
+        "label": "Total revenue FY2024",
+        "value": "53,803",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2024 (year ended July 27, 2024)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Total revenue | 53,803 | 56,998 | 51,557"
+        }
+      },
+      {
+        "fact_id": "rev-fy2023-total",
+        "label": "Total revenue FY2023",
+        "value": "56,998",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2023 (year ended July 29, 2023)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Total revenue | 53,803 | 56,998 | 51,557"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "rev-fy2024-total",
+        "second_fact_id": "rev-fy2023-total"
+      }
+    ]
+  },
+  "reported_tokens": 3189,
+  "prompt_sha256": "41c91088538ab09ef6cb7bbbc88359724794ad025f8311a9ba1b8fc8efa0faea",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

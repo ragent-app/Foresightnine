@@ -1,0 +1,63 @@
+{
+  "manifest_sha256": "cea6fb40b961257612a0f699de24c0bf1dfcf720b740160be1d73934118add5e",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent, effective June 15, 2017.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent"
+          }
+        ]
+      },
+      {
+        "text": "The dissenting voter was Neel Kashkari, who preferred to maintain the existing target range for the federal funds rate.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting against the action was Neel Kashkari, who preferred at this meeting to maintain the existing target range for the federal funds rate."
+          }
+        ]
+      },
+      {
+        "text": "One uncertainty about the future policy path: near-term risks to the economic outlook appear roughly balanced, but the Committee is monitoring inflation developments closely, with inflation expected to remain somewhat below 2 percent in the near term.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Near-term risks to the economic outlook appear roughly balanced, but the Committee is monitoring inflation developments closely."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Inflation on a 12-month basis is expected to remain somewhat below 2 percent in the near term but to stabilize around the Committee’s 2 percent objective over the medium term."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "The source excerpts are partial; the balance sheet normalization discussion is cut off and the domestic policy directive is incomplete.",
+      "The Committee's balance sheet plans are explicitly conditional: it expects to begin normalization this year 'provided that the economy evolves broadly as anticipated,' which is an additional uncertainty about the policy path.",
+      "Dates are as declared in the source metadata, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "fedfunds_range",
+        "label": "federal funds target range",
+        "value": 1,
+        "unit": "to 1-1/4 percent",
+        "currency": "USD",
+        "period": "June 14, 2017 FOMC decision, effective June 15, 2017",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1739,
+  "prompt_sha256": "76562237740b708dda6af64f94e3b7191d1d48e32a435ca96691e1ad157477bd",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}
