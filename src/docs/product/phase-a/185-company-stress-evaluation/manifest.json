@@ -1,0 +1,71 @@
+{
+  "implementation_commit": "fe2ce321c92def35f69467c85ff4414f1bd50e23",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_method": "bounded_quotation_context_model_review_v23",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "38029012d0f7abead993cfcd818763abc4184b245fad9e5228f731199ae84070",
+    "prepare.py": "054ac53d8bc28252b8c7b276b0485563c8daab5febd627393971dca7c1c6d792",
+    "run.py": "714e6eef0dc00f9d86839fca391732d6355a4b1ce5cda6e884345680cdd48bcb",
+    "score.py": "6f4c1447f56b8c722af6db0e0685f801c46b1536370d32c52c41b01f0962565e"
+  },
+  "source_files": {
+    "tasks.json": "45fc7ccf065382bfc07a8f390918d9ac6ef2ae5d48d4713a70d4174dac9103b4",
+    "reference.json": "3d25ac34af43c5c65c0294bc81e22e661f1ee0bee299ca9f2ee77e570b629833",
+    "fed-stress-2024.pdf": "e1cadb37fc33a7937aa87b9c610381dd296f68f8aa8734793ba6a5ece4bfbe02"
+  },
+  "conditions": [
+    {
+      "task": "JPM_STRESS_2024",
+      "prompt_sha256": "88df2fa406c74a771e5b0b62986d488c5e55c95943efeba765e1546d0cdbb705",
+      "prompt_bytes": 4952,
+      "segments": [
+        {
+          "source_id": "source_18500000000000000000000000000001",
+          "character_start": 9863,
+          "character_end": 10960,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18500000000000000000000000000001",
+          "character_start": 34800,
+          "character_end": 35953,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18500000000000000000000000000001",
+          "character_start": 130504,
+          "character_end": 131599,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_18500000000000000000000000000001": "9ee4d4225c872a710bbddc9cf089c603a777c4fba7152cd56bd30458251fbc50"
+      }
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 4,
+  "max_calls_per_task": 4,
+  "max_total_tokens": 20000,
+  "run_elapsed_seconds": 120,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 216561
+}
