@@ -1,0 +1,87 @@
+{
+  "implementation_commit": "0a15cde53804131eb66559cbb7cdc2f55724bc5d",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_method": "bounded_quotation_context_model_review_v20",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "17838d9b5fb9ddaa14aa03224982a4edf0cbaf89673c81437d24a38bcfe4fc1a",
+    "prepare.py": "6cf3e45b1ac54369777adf13bbe12bfa7aa967f1dca1c42f6c462db7721365c2",
+    "run.py": "b7d54ed83a55181c4d62e5bd6e515a6f88bad62cb87da4b8f76deec1ac04c9e4",
+    "score.py": "6ec0940899c038324610203b6dcadfcd688c931344ef8eb1cc63223fd5424e61",
+    "tasks.json": "e3c96d73bab1f5c1ac0c849e312c6fbb6dce82fe9ea3cfe7e42e0f9b6ea47cc0",
+    "reference.json": "76bf591f6b8c7315546f1f6be795047ec118cb7697e6720b39ce8ed6f05c73b5",
+    "bea-2022-07.pdf": "4afb1bf8ddacd6526104b6897b4b8c24e5c7366479f749ad1eb9c05838473e1e",
+    "fed-2022-06.pdf": "a883f6d7a6761822c48e9416fb6ee65815405e4ca6002e2a192edcb31691da65"
+  },
+  "conditions": [
+    {
+      "task": "PCE_2022_07",
+      "prompt_sha256": "c7f628eb0fa9ee1f76e244f2f6b957f2ffa54d92bff701195b59fec1d4086c2e",
+      "prompt_bytes": 1961,
+      "segments": [
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 924,
+          "character_end": 1213,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 2690,
+          "character_end": 2978,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_16100000000000000000000000000001": "62f9844d79c63ed4d75120e7c7b7905a62224bc8dc83d387c60b71b76e750181"
+      }
+    },
+    {
+      "task": "FOMC_2022_06",
+      "prompt_sha256": "5eb85a85f648989afb61f82f2ffe74ab94322b1c4319cfce4eecedf5fdc87c30",
+      "prompt_bytes": 1956,
+      "segments": [
+        {
+          "source_id": "source_16100000000000000000000000000002",
+          "character_start": 807,
+          "character_end": 1116,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000002",
+          "character_start": 2185,
+          "character_end": 2502,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_16100000000000000000000000000002": "8a8138ddbcfe5048f9e6c21c760839a2d8968ba496b09660c3f63671f53d6259"
+      }
+    }
+  ],
+  "input_limit": 3000,
+  "output_limit": 4000,
+  "max_model_calls_per_task": 2,
+  "max_calls": 4,
+  "per_task_token_budget": 10000,
+  "max_total_tokens": 20000,
+  "run_elapsed_seconds": 120,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 174518
+}
