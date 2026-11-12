@@ -1,0 +1,84 @@
+{
+  "manifest_sha256": "96f24ae8cb5c514fbfcc97014a55d3171ae25908f2c3d63666066a116c5dc942",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Current-dollar PCE increased $32.7 billion in May 2022; real goods decreased 1.6 percent while real services increased 0.3 percent, so both did NOT decrease.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Disposable personal income (DPI) increased $96.5 billion (0.5 percent) and personal consumption expenditures (PCE) increased $32.7 billion (0.2 percent)."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Real DPI decreased 0.1 percent in May and Real PCE decreased 0.4 percent; goods decreased 1.6 percent and services increased 0.3 percent (tables 5 and 7)."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "A possible confusion: in current dollars, goods spending decreased ($43.5 billion) while services increased ($76.2 billion), which might be misread as real changes; the real percentage changes are stated separately.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The $32.7 billion increase in current-dollar PCE in May reflected an increase of $76.2 billion in spending for services that was partly offset by a decrease of $43.5 billion in spending for goods (table 3)."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The sources are partial excerpts of the BEA release; underlying tables 5 and 7 values are not shown directly.",
+      "The release is the June 30, 2022 publication covering May 2022 data; the dates are declared by the source and not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "pce_change",
+        "label": "current-dollar PCE change",
+        "value": "32.7",
+        "unit": "billions",
+        "currency": "USD",
+        "period": "May 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "personal consumption expenditures (PCE) increased $32.7 billion (0.2 percent)."
+        }
+      },
+      {
+        "fact_id": "real_goods",
+        "label": "real PCE goods percent change",
+        "value": "-1.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "May 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "goods decreased 1.6 percent"
+        }
+      },
+      {
+        "fact_id": "real_services",
+        "label": "real PCE services percent change",
+        "value": "0.3",
+        "unit": "percent",
+        "currency": null,
+        "period": "May 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "services increased 0.3 percent"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "real_goods",
+        "second_fact_id": "real_services"
+      }
+    ]
+  },
+  "reported_tokens": 1889,
+  "prompt_sha256": "5d9a1aef8dd54a87705b2669a15bb11a0ec97d36d163efcd9b3befbd02932677",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

@@ -1866,6 +1866,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     normalized_fraction_ids: set[str] = set()
     normalized_equivalent_ids: set[str] = set()
     normalized_range_ids: dict[str, str] = {}
+    stripped_unit_ids: set[str] = set()
     text_observations: list[Claim] = []
     if isinstance(raw, dict) and isinstance(raw.get("facts"), list) and len(raw["facts"]) <= 100:
         valid_facts = []
@@ -1877,8 +1878,17 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if isinstance(fact, dict) and isinstance(fact.get("value"), str) and isinstance(fact.get("unit"), str):
                 value = fact["value"].strip()
                 unit = fact["unit"].strip()
+                # Some providers annotate a range in the unit field. Only
+                # normalize this exact percentage spelling; never infer a
+                # percentage from an unrelated or missing unit.
+                if unit.casefold() == "percent (range)" and _rate_bounds(re.sub(r"\s+percent$", "", value, flags=re.IGNORECASE)) is not None:
+                    unit = "percent"
+                    fact = {**fact, "unit": unit}
                 if value.casefold().endswith(" " + unit.casefold()):
                     value = value[:-(len(unit) + 1)].strip()
+                    fact = {**fact, "value": value}
+                    if isinstance(fact.get("fact_id"), str):
+                        stripped_unit_ids.add(fact["fact_id"])
                 split = _split_rate_range(fact, value, unit)
                 if split is not None:
                     if len(valid_facts) + 2 <= 100:
@@ -1918,7 +1928,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     omitted_facts += 1
                 else:
                     text_observations.append(observation)
-        if omitted_facts or text_observations or normalized_grouped_ids or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids:
+        if omitted_facts or text_observations or normalized_grouped_ids or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids or stripped_unit_ids:
             raw = {**raw, "facts": valid_facts}
         if omitted_facts:
             limitations.append(f"{omitted_facts} model-generated numeric fact(s) were omitted because their format was invalid.")

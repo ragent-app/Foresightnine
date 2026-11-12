@@ -1,0 +1,101 @@
+{
+  "manifest_sha256": "96f24ae8cb5c514fbfcc97014a55d3171ae25908f2c3d63666066a116c5dc942",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC raised the target range for the federal funds rate to 2-1/4 to 2-1/2 percent at its December 19, 2018 meeting.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 2-1/4 to 2-1/2 percent."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Effective December 20, 2018, the Federal Open Market Committee directs the Desk to undertake open market operations as necessary to maintain the federal funds rate in a target range of 2-1/4 to 2-1/2 percent"
+          }
+        ]
+      },
+      {
+        "text": "Jerome H. Powell chaired the committee, voting as Chairman for the FOMC monetary policy action.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting for the FOMC monetary policy action were: Jerome H. Powell, Chairman; John C. Williams, Vice Chairman; Thomas I. Barkin; Raphael W. Bostic; Michelle W. Bowman; Lael Brainard; Richard H. Clarida; Mary C. Daly; Loretta J. Mester; and Randal K. Quarles."
+          }
+        ]
+      },
+      {
+        "text": "The policy rate (federal funds target range) is distinct from the Committee's symmetric 2 percent inflation objective; the 2 percent figure is an inflation objective, not the policy rate.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee seeks to foster maximum employment and price stability. The Committee judges that some further gradual increases in the target range for the federal funds rate will be consistent with sustained expansion of economic activity, strong labor market conditions, and inflation near the Committee’s symmetric 2 percent objective over the medium term."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee will assess realized and expected economic conditions relative to its maximum employment objective and its symmetric 2 percent inflation objective."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "A separate administrative rate—the interest on required and excess reserve balances raised to 2.40 percent—could be confused with the policy rate, but the statement explains it is set 10 basis points below the top of the target range to foster trading within the range, not as the federal funds target itself.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the interest rate paid on required and excess reserve balances to 2.40 percent, effective December 20, 2018. Setting the interest rate paid on required and excess reserve balances 10 basis points below the top of the target range for the federal funds rate is intended to foster trading in the federal funds market at rates well within the FOMC’s target range."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The supplied excerpts are partial; the opening paragraph of the statement is truncated, so the rationale sentence completed by the raise decision is not fully visible.",
+      "The excerpts do not include the target range in numeric decimal form (2.25 to 2.50 percent); the range appears only in fraction form ('2-1/4 to 2-1/2 percent').",
+      "The document declares its release date of December 19, 2018; the date is not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr-range",
+        "label": "federal funds target range",
+        "value": "2-1/4 to 2-1/2 percent",
+        "unit": "percent (range)",
+        "currency": "USD",
+        "period": "effective December 20, 2018 (announced December 19, 2018)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to raise the target range for the federal funds rate to 2-1/4 to 2-1/2 percent."
+        }
+      },
+      {
+        "fact_id": "inflation-objective",
+        "label": "symmetric inflation objective",
+        "value": "2 percent",
+        "unit": "percent",
+        "currency": null,
+        "period": "medium term",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "inflation near the Committee’s symmetric 2 percent objective over the medium term"
+        }
+      },
+      {
+        "fact_id": "powell-chair",
+        "label": "FOMC Chairman",
+        "value": "Jerome H. Powell",
+        "unit": null,
+        "currency": null,
+        "period": "December 19, 2018 meeting",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Voting for the FOMC monetary policy action were: Jerome H. Powell, Chairman;"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2317,
+  "prompt_sha256": "d631da89fdf32cd56e712b295318c6ebf6213886463ccfe1aa126c0114edc48a",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

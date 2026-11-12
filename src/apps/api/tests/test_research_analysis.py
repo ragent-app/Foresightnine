@@ -127,6 +127,25 @@ def test_explicit_rate_range_is_split_into_source_checked_bounds():
     assert [fact["value"] for fact in analyze("Target?", [report], None, lambda _: (bad_quote, 10)).facts] == ["4.25"]
 
 
+def test_numeric_unit_suffix_and_explicit_range_unit_are_normalized():
+    report = source("s", text="The target was 4-1/4 to 4-1/2 percent; the objective was 2 percent.")
+    facts = [
+        {"fact_id": "range", "label": "target", "value": "4-1/4 to 4-1/2 percent", "unit": "percent (range)",
+         "currency": None, "period": "2024", "citation": {"source_id": "s", "quotation": "4-1/4 to 4-1/2 percent"}},
+        {"fact_id": "objective", "label": "objective", "value": "2 percent", "unit": "percent",
+         "currency": None, "period": "2024", "citation": {"source_id": "s", "quotation": "objective was 2 percent"}},
+    ]
+    def run(items):
+        return analyze("Target and objective?", [report], None, lambda _: ({"facts": items}, 1))
+    result = run(facts)
+    assert [(f["fact_id"], f["value"]) for f in result.facts] == [
+        ("range:lower", "4.25"), ("range:upper", "4.5"), ("objective", "2")]
+    assert [f["value"] for f in run(facts[1:]).facts] == ["2"]
+    assert not run([{**facts[0], "value": "4-1/2 to 4-1/4 percent"}]).facts
+    assert not run([{**facts[0], "unit": "dollars (range)"}]).facts
+    assert not run([{**facts[1], "value": "2 dollars"}]).facts
+
+
 def test_rate_range_currency_context_is_retained_but_cannot_feed_calculations():
     report = source("s", text="The target range was 4-1/4 to 4-1/2 percent.")
     citation = {"source_id": "s", "quotation": "4-1/4 to 4-1/2 percent"}

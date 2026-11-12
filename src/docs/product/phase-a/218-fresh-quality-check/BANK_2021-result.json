@@ -1,0 +1,235 @@
+{
+  "task": "BANK_2021",
+  "status": "completed",
+  "operation_id": "operation:534d9ca7d7e3dda123fbb337",
+  "manifest_sha256": "96f24ae8cb5c514fbfcc97014a55d3171ae25908f2c3d63666066a116c5dc942",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_21800000000000000000000000000001",
+        "title": "fed-stress-2021.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T16:59:59.050694+00:00",
+        "revised_at": null,
+        "content_sha256": "3001282b05df8b82a85c4e3dd4094a5ef03c3988f2806d7d2d11506ac6dc0ab3",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "jpm-cet1-actual",
+        "value": "13.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020:Q4",
+        "label": "actual CET1 ratio 2020:Q4",
+        "source_id": "source_21800000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio             13.1           11.9           10.7",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 342687,
+          "character_end": 342768,
+          "page": 64
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "jpm-cet1-ending",
+        "value": "11.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023:Q1",
+        "label": "projected ending CET1 ratio, severely adverse",
+        "source_id": "source_21800000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio             13.1           11.9           10.7",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 342687,
+          "character_end": 342768,
+          "page": 64
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "jpm-cet1-minimum",
+        "value": "10.7",
+        "unit": "percent",
+        "currency": null,
+        "period": "2021:Q1–2023:Q1",
+        "label": "projected minimum CET1 ratio, severely adverse",
+        "source_id": "source_21800000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio             13.1           11.9           10.7",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 342687,
+          "character_end": 342768,
+          "page": 64
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "One might confuse the projected ending ratio (11.9%) with actual values; the table distinguishes 'Actual 2020:Q4' from 'Projected 2023:Q1' columns, and the report explicitly labels the scenario projections as hypothetical.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_21800000000000000000000000000001",
+            "location": {
+              "status": "ambiguous",
+              "matches": [
+                {
+                  "character_start": 240963,
+                  "character_end": 241501,
+                  "page": 54
+                },
+                {
+                  "character_start": 341975,
+                  "character_end": 342513,
+                  "page": 64
+                }
+              ],
+              "truncated": false
+            },
+            "quotation_match": "expanded_ellipsis",
+            "support_status": "not_independently_verified",
+            "quotation": "Stressed capital ratios1                                                              Actual          Projected\n                                               Actual                                                             Item\n              Regulatory ratio                                                                                                                    2020:Q4          2023:Q1\n                                              2020:Q4\n                                                              Ending       Minimum"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "jpm-cet1-ending",
+            "source_id": "source_21800000000000000000000000000001",
+            "value": "11.9",
+            "unit": "percent",
+            "period": "2023:Q1",
+            "quotation": "Common equity tier 1 capital ratio             13.1           11.9           10.7",
+            "location": {
+              "character_start": 342687,
+              "character_end": 342768,
+              "page": 64
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "uncited_percentages": [
+          "11.9%"
+        ],
+        "uncited_quarters": [
+          "2020:Q4",
+          "2023:Q1"
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_21800000000000000000000000000001: only character ranges 143715–146003, 239898–242190, 340514–343165 were analyzed; remaining text was not examined.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Source source_21800000000000000000000000000001: quotation location is ambiguous in the analyzed passages.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The source excerpts are partial; surrounding table content (e.g., loan losses, revenue rows) is not fully visible.",
+      "Model-reported limitation (not independently verified): The minimum ratio period is stated as 2021:Q1–2023:Q1 per the note, inferred from the report note quoted, not from a JPMorgan-specific row.",
+      "Model-reported limitation (not independently verified): Publication date (June 2021) is declared in the document but not independently verified.",
+      "An explicit quarter and year could not be matched in the attached quotations; check the period and source context.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:534d9ca7d7e3dda123fbb337",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 2247,
+      "cost_usd": null,
+      "generation_tokens": 2247,
+      "support_review_tokens": null,
+      "require_counterarguments": false,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 15.019,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "70f0ff976414d147eb668e5011bce1659fc6a74b34ff6a519bc2ef2ea1cc5e26",
+      "prompt_characters": 4941,
+      "prompt_bytes": 4950,
+      "selection_method": "ranked_nonoverlapping_windows_v43",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_21800000000000000000000000000001",
+          "character_start": 143715,
+          "character_end": 146003,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_21800000000000000000000000000001",
+          "character_start": 239898,
+          "character_end": 242190,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_21800000000000000000000000000001",
+          "character_start": 340514,
+          "character_end": 343165,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_21800000000000000000000000000001": "3001282b05df8b82a85c4e3dd4094a5ef03c3988f2806d7d2d11506ac6dc0ab3"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_100ca4ec96d84b65b08ab317c7f5d4ef",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_f719af600917475c90dfa7ab723c605d",
+      "parent_version_id": "version_100ca4ec96d84b65b08ab317c7f5d4ef",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 17.32
+}

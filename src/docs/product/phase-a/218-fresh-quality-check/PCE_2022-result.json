@@ -1,0 +1,226 @@
+{
+  "task": "PCE_2022",
+  "status": "completed",
+  "operation_id": "operation:7fb6bad1b0a8ad4bdc3779de",
+  "manifest_sha256": "96f24ae8cb5c514fbfcc97014a55d3171ae25908f2c3d63666066a116c5dc942",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_21800000000000000000000000000002",
+        "title": "bea-pce-2022.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T17:00:16.031479+00:00",
+        "revised_at": null,
+        "content_sha256": "f00ee87cc929c6abe2ac89aa7c668ffadcc2828d3b6802536d0403f8f7171740",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "pce_change",
+        "value": "32.7",
+        "unit": "billions",
+        "currency": "USD",
+        "period": "May 2022",
+        "label": "current-dollar PCE change",
+        "source_id": "source_21800000000000000000000000000002",
+        "quotation": "personal consumption expenditures (PCE) increased $32.7 billion (0.2 percent).",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 737,
+          "character_end": 815,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "real_goods",
+        "value": "-1.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "May 2022",
+        "label": "real PCE goods percent change",
+        "source_id": "source_21800000000000000000000000000002",
+        "quotation": "goods decreased 1.6\npercent",
+        "quotation_match": "whitespace_normalized",
+        "direction_context_unverified": true,
+        "location": {
+          "character_start": 891,
+          "character_end": 918,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "real_services",
+        "value": "0.3",
+        "unit": "percent",
+        "currency": null,
+        "period": "May 2022",
+        "label": "real PCE services percent change",
+        "source_id": "source_21800000000000000000000000000002",
+        "quotation": "services increased 0.3 percent",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 923,
+          "character_end": 953,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Current-dollar PCE increased $32.7 billion in May 2022; real goods decreased 1.6 percent while real services increased 0.3 percent, so both did NOT decrease.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_21800000000000000000000000000002",
+            "location": {
+              "character_start": 662,
+              "character_end": 815,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Disposable personal income (DPI) increased $96.5 billion (0.5 percent) and\npersonal consumption expenditures (PCE) increased $32.7 billion (0.2 percent)."
+          },
+          {
+            "source_id": "source_21800000000000000000000000000002",
+            "location": {
+              "character_start": 817,
+              "character_end": 971,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real DPI decreased 0.1 percent in May and Real PCE decreased 0.4 percent; goods decreased 1.6\npercent and services increased 0.3 percent (tables 5 and 7)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "A possible confusion: in current dollars, goods spending decreased ($43.5 billion) while services increased ($76.2 billion), which might be misread as real changes; the real percentage changes are stated separately.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_21800000000000000000000000000002",
+            "location": {
+              "character_start": 3149,
+              "character_end": 3355,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The $32.7 billion increase in current-dollar PCE in May reflected an increase of $76.2 billion in spending\nfor services that was partly offset by a decrease of $43.5 billion in spending for goods (table 3)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_21800000000000000000000000000002: only character ranges 0–1772, 3021–4155, 10757–12384 were analyzed; remaining text was not examined.",
+      "A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.",
+      "A requested calculation was omitted because its input facts were unavailable.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The sources are partial excerpts of the BEA release; underlying tables 5 and 7 values are not shown directly.",
+      "Model-reported limitation (not independently verified): The release is the June 30, 2022 publication covering May 2022 data; the dates are declared by the source and not independently verified.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:7fb6bad1b0a8ad4bdc3779de",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1889,
+      "cost_usd": null,
+      "generation_tokens": 1889,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 14.135,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "5d9a1aef8dd54a87705b2669a15bb11a0ec97d36d163efcd9b3befbd02932677",
+      "prompt_characters": 4999,
+      "prompt_bytes": 5009,
+      "selection_method": "ranked_nonoverlapping_windows_v43",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_21800000000000000000000000000002",
+          "character_start": 0,
+          "character_end": 1772,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_21800000000000000000000000000002",
+          "character_start": 3021,
+          "character_end": 4155,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_21800000000000000000000000000002",
+          "character_start": 10757,
+          "character_end": 12384,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_21800000000000000000000000000002": "f00ee87cc929c6abe2ac89aa7c668ffadcc2828d3b6802536d0403f8f7171740"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_b909dcd28aed4a22be020901c27d6ff2",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_13d2f8304c224eb9bc235d88758e8a91",
+      "parent_version_id": "version_b909dcd28aed4a22be020901c27d6ff2",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 14.739
+}

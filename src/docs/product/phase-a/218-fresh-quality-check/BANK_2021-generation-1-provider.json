@@ -1,0 +1,84 @@
+{
+  "manifest_sha256": "96f24ae8cb5c514fbfcc97014a55d3171ae25908f2c3d63666066a116c5dc942",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "JPMorgan Chase & Co.'s actual common equity tier 1 capital ratio at 2020:Q4 was 13.1%, per Table B.11, row 'Common equity tier 1 capital ratio', column 'Actual 2020:Q4'. This is an actual reported value, not a projection.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Table B.11. JPMorgan Chase & Co. ... Common equity tier 1 capital ratio\t13.1\t11.9\t10.7"
+          }
+        ]
+      },
+      {
+        "text": "Under the Federal Reserve's hypothetical severely adverse scenario, JPMorgan Chase & Co.'s projected ending CET1 ratio was 11.9% (column 'Projected 2023:Q1 Ending') and the projected minimum was 10.7% (column 'Projected 2023:Q1 Minimum'). These are hypothetical projections, not actual results.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Federal Reserve estimates: Severely adverse scenario ... These projections represent hypothetical estimates that involve an economic outcome that is more adverse than expected. The minimum capital ratio presented is for the period 2021:Q1 to 2023:Q1."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One might confuse the projected ending ratio (11.9%) with actual values; the table distinguishes 'Actual 2020:Q4' from 'Projected 2023:Q1' columns, and the report explicitly labels the scenario projections as hypothetical.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Stressed capital ratios1\tActual\tProjected ... Regulatory ratio\t2020:Q4 ... Ending\tMinimum"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source excerpts are partial; surrounding table content (e.g., loan losses, revenue rows) is not fully visible.",
+      "The minimum ratio period is stated as 2021:Q1–2023:Q1 per the note, inferred from the report note quoted, not from a JPMorgan-specific row.",
+      "Publication date (June 2021) is declared in the document but not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "jpm-cet1-actual",
+        "label": "actual CET1 ratio 2020:Q4",
+        "value": "13.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020:Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio\t13.1\t11.9\t10.7"
+        }
+      },
+      {
+        "fact_id": "jpm-cet1-ending",
+        "label": "projected ending CET1 ratio, severely adverse",
+        "value": "11.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio\t13.1\t11.9\t10.7"
+        }
+      },
+      {
+        "fact_id": "jpm-cet1-minimum",
+        "label": "projected minimum CET1 ratio, severely adverse",
+        "value": "10.7",
+        "unit": "percent",
+        "currency": null,
+        "period": "2021:Q1–2023:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio\t13.1\t11.9\t10.7"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2247,
+  "prompt_sha256": "70f0ff976414d147eb668e5011bce1659fc6a74b34ff6a519bc2ef2ea1cc5e26",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

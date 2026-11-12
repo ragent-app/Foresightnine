@@ -1,0 +1,81 @@
+{
+  "results": [
+    {
+      "task": "BANK_2021",
+      "status": "completed",
+      "research_status": "partial",
+      "mechanical_checks": {
+        "bank": false,
+        "metric": false,
+        "actual": false,
+        "ending": false,
+        "minimum": false,
+        "actual_label": false,
+        "ending_label": false,
+        "minimum_label": false,
+        "scenario": false,
+        "all_claims_located": false,
+        "no_known_claim_warnings": false,
+        "no_known_fact_warnings": true,
+        "required_counterargument": true,
+        "no_omitted_content": false,
+        "bounded_call": true,
+        "partial_disclosed": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 2247,
+      "semantic_support": "not established by mechanical checks"
+    },
+    {
+      "task": "PCE_2022",
+      "status": "completed",
+      "research_status": "partial",
+      "mechanical_checks": {
+        "total": true,
+        "goods": true,
+        "goods_value": true,
+        "services": true,
+        "services_value": true,
+        "real": true,
+        "increased": true,
+        "decreased": true,
+        "all_claims_located": true,
+        "no_known_claim_warnings": true,
+        "no_known_fact_warnings": false,
+        "required_counterargument": true,
+        "no_omitted_content": false,
+        "bounded_call": true,
+        "partial_disclosed": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 1889,
+      "semantic_support": "not established by mechanical checks"
+    },
+    {
+      "task": "FOMC_2018",
+      "status": "completed",
+      "research_status": "partial",
+      "mechanical_checks": {
+        "lower": true,
+        "upper": true,
+        "chair": true,
+        "target": true,
+        "inflation": true,
+        "all_claims_located": true,
+        "no_known_claim_warnings": false,
+        "no_known_fact_warnings": true,
+        "required_counterargument": true,
+        "no_omitted_content": false,
+        "bounded_call": true,
+        "partial_disclosed": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 2317,
+      "semantic_support": "not established by mechanical checks"
+    }
+  ],
+  "mechanical_pass": false,
+  "total_reported_tokens": 6453,
+  "unknown_usage": false,
+  "semantic_support": "requires separate assessment; matching numbers and terms is insufficient"
+}
