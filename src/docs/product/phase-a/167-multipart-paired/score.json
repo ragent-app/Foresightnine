@@ -1,0 +1,24 @@
+{
+  "baseline": {
+    "mechanical_signals": {
+      "requested_numbers_in_claims_and_quotes": false,
+      "goods_and_services_named": false
+    },
+    "all_claims_located": true,
+    "research_status": null,
+    "model_calls": null,
+    "reported_tokens": null,
+    "semantic_support": "not independently established"
+  },
+  "candidate": {
+    "mechanical_signals": {
+      "requested_numbers_in_claims_and_quotes": true,
+      "goods_and_services_named": true
+    },
+    "all_claims_located": true,
+    "research_status": null,
+    "model_calls": null,
+    "reported_tokens": null,
+    "semantic_support": "not independently established"
+  }
+}
