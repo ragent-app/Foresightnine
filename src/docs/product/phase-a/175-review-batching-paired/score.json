@@ -1,0 +1,23 @@
+{
+  "batched": {
+    "valid": true,
+    "verdicts": {
+      "0": "supports",
+      "1": "supports",
+      "2": "supports",
+      "3": "does_not_support"
+    },
+    "missing_indexes": [],
+    "target_verdict": "supports",
+    "target_uncertain_or_unsupported": false
+  },
+  "isolated": {
+    "valid": true,
+    "verdicts": {
+      "0": "does_not_support"
+    },
+    "missing_indexes": [],
+    "target_verdict": "does_not_support",
+    "target_uncertain_or_unsupported": true
+  }
+}

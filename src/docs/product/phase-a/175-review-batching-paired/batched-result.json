@@ -1,0 +1,29 @@
+{
+  "condition": "batched",
+  "manifest_sha256": "895a290aee1fb236782e2036fc7bb662f7d08c716759c9d55240a8306219a859",
+  "prompt_sha256": "a335f882cdc27fc316fe537cfe535453e99351b13a65a2ac59f9a085f1eee7da",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 658,
+  "raw": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 1,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 2,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 3,
+        "verdict": "does_not_support"
+      }
+    ]
+  },
+  "elapsed_seconds": 3.54
+}
