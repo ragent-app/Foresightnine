@@ -33,8 +33,18 @@ QUARTER_QUOTE = "Real gross domestic product (GDP) increased at an annual rate o
                     reason="retained official document or PDF tools unavailable")
 def test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf():
     text = _extract_text(FED_PDF.read_bytes())
-    windows = _select_windows(text, "2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？", 508, 2)
-    assert any("1/2 percentage point to 4-3/4 to 5 percent" in passage for _, passage in windows)
+    report = ResearchSource(source_id="fed", owner_id="test", title="Federal Reserve 2024 September decision", text=text,
+        kind="user_supplied", obtained_at=datetime.now(timezone.utc), content_sha256="test", retrieval_method="user_pdf",
+        permissions=SourcePermissions(store=True, model_input=True, display=True))
+    quotation = "1/2 percentage point to 4-3/4 to 5 percent"
+    def model(prompt):
+        assert any(quotation in part["text"] for part in json.loads(prompt)["sources"])
+        return {"claims": [{"text": "The target range was lowered.", "citations": [
+            {"source_id": "fed", "quotation": quotation}]}]}, 1
+    result = analyze("2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？", [report], None, model,
+                     max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+    citation = result.claims[0]["citations"][0]
+    assert text[citation["location"]["character_start"]:citation["location"]["character_end"]] == quotation
 
 
 @pytest.mark.skipif(not BEA_2022_PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
