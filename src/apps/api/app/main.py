@@ -2222,6 +2222,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 # subsequent reservations then use the per-call bound.
                 usage = reported_usage if type(reported_usage) is int and reported_usage >= 0 else None
                 return payload, usage
+            except ProviderFailure as error:
+                usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                raise
             finally:
                 # An attempted remote request can incur charges even if the
                 # response is lost. Unknown token usage settles the reserved
@@ -2361,6 +2364,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
                                     timeout_seconds=min(float(timeout), remaining))
                                 review_usage = reported_review_usage if type(reported_review_usage) is int and reported_review_usage >= 0 else None
+                            except ProviderFailure as error:
+                                review_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                raise
                             finally:
                                 _settle_model_call(http_request, review_call_id, review_usage)
                             claims = apply_support_review(claims, batch, raw_review)

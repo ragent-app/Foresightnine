@@ -42,10 +42,11 @@ _INJECTION = re.compile(
 class ProviderFailure(RuntimeError):
     """A safe, user-facing provider failure; never carries raw provider output."""
 
-    def __init__(self, code: str, message: str, *, retryable: bool) -> None:
+    def __init__(self, code: str, message: str, *, retryable: bool, reported_tokens: int | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+        self.reported_tokens = reported_tokens if type(reported_tokens) is int and reported_tokens >= 0 else None
 
 
 class PromptInjectionDetected(ProviderFailure):

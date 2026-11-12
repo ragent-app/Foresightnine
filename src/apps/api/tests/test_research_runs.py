@@ -1518,3 +1518,37 @@ def test_source_discovery_only_sends_scope_when_explicitly_selected(monkeypatch)
     assert 'include_scope_in_search' not in client.get(path + '/runs/' + first + '/inputs', headers=headers).json()['budget']
     bounded = discovery_query('问' * 80, '🌏' * 80, True)
     assert len(bounded) == 70 and bounded == '问' * 45 + ' ' + '🌏' * 24
+
+@pytest.mark.parametrize('reported', [123, None])
+def test_invalid_model_output_preserves_reported_usage_and_settles_budget(monkeypatch, reported):
+    from app.phase3 import ProviderFailure
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    settlements = []
+    class Provider:
+        name = 'invalid-usage-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            raise ProviderFailure('invalid_provider_output', 'Invalid output.', retryable=False, reported_tokens=reported)
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda request, op, usage: settlements.append(usage))
+    client = TestClient(api.app)
+    account = client.post('/v1/auth/local/register', json={'email': f'invalid-usage-{reported}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + account['access_token']}
+    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': 'Revenue was 100.',
+        'permissions': {'store': True, 'model_input': True, 'display': True}}).json()
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source['source_id']]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    response = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'invalid-usage'},
+        json={'parent_version_id': topic['versions'][0]['version_id']})
+    op = response.json()['operation']['operation_id']
+    for _ in range(100):
+        state = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if state in {'completed', 'failed'}: break
+        time.sleep(0.02)
+    assert state == 'completed'
+    run = client.get(path, headers=headers).json()['versions'][-1]['content']['run']
+    assert run['error'] == 'invalid_provider_output' and run['status'] == 'partial'
+    assert run['total_tokens'] == reported and run['generation_tokens'] == reported
+    assert settlements == [reported]

@@ -723,3 +723,16 @@ def test_transport_falls_back_before_submission_only(monkeypatch: pytest.MonkeyP
         assert openai_compatible._default_transport("POST", "https://models.example.test/v1/chat/completions", {}, b'{}', 10).status_code == 200
     assert [item for item in calls if item[0] == "request"] == [("request", "1.1.1.1")]
     assert ("close", "2606:4700::1111") in calls
+
+@pytest.mark.parametrize("reported,expected", [(123, 123), (None, None), (-1, None), (True, None), ("123", None)])
+def test_invalid_structured_output_retains_only_valid_reported_usage(monkeypatch, reported, expected):
+    secret_in_output = "private-invalid-content"
+    body = json.dumps({"choices": [{"message": {"content": secret_in_output}}],
+                       "usage": {"total_tokens": reported}})
+    instance = provider(monkeypatch, lambda *_: HttpResponse(200, body))
+    with pytest.raises(ProviderFailure) as raised:
+        instance.generate_structured("prompt")
+    assert raised.value.code == "invalid_provider_output"
+    assert raised.value.reported_tokens == expected
+    assert secret_in_output not in str(raised.value)
+    assert raised.value.__cause__ is None

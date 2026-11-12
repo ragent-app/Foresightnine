@@ -893,7 +893,15 @@ class OpenAICompatibleLlmProvider(LlmProvider):
             raise ProviderFailure("provider_cancelled", "Provider request was cancelled; result discarded.", retryable=True)
         if not 200 <= response.status_code < 300:
             raise ProviderFailure("provider_unavailable" if response.status_code in _RETRYABLE_STATUS_CODES else "provider_request_rejected", "Provider returned no usable structured result.", retryable=response.status_code in _RETRYABLE_STATUS_CODES)
-        payload = self._completion_payload(response.body)
+        try:
+            payload = self._completion_payload(response.body)
+        except ProviderFailure as error:
+            # Preserve only validated transport usage, never raw invalid model
+            # content. Oversized responses are not parsed a second time.
+            if len(response.body.encode("utf-8")) <= _MAX_RESPONSE_BYTES:
+                usage = self._completion_usage(response.body)
+                error.reported_tokens = usage[0] if usage else None
+            raise
         usage = self._completion_usage(response.body)
         return payload, usage[0] if usage else None
 
