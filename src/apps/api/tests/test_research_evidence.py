@@ -259,3 +259,31 @@ def test_single_chinese_amount_with_same_number_but_wrong_billion_scale_is_flagg
     assert not claim_amount_differences([{**claim, "text": "个人收入变化为75亿美元。"}], [item])
     assert not claim_amount_differences([claim], [item, {**item, "fact_id": "other", "value": "74.4"}])
     assert not claim_amount_differences([claim], [{**item, "currency": "EUR"}])
+
+
+def test_suggest_uncited_numeric_facts_stays_with_cited_unique_sources():
+    from app.research_evidence import suggest_uncited_numeric_facts
+    def make_source(sid, value):
+        text = f"September revision. Personal income {value}."
+        src = ResearchSource(source_id=sid, owner_id="owner", title="Release", text=text, kind="user_supplied",
+            obtained_at=datetime.now(timezone.utc), content_sha256="hash", permissions=SourcePermissions(store=True, display=True))
+        quote = f"Personal income {value}"; start = text.index(quote)
+        item = {**fact(sid, sid, value, unit="billions of dollars", currency="USD"), "quotation": quote,
+                "location": {"character_start": start, "character_end": start + len(quote)},
+                "verification": "model_extraction_not_independently_verified"}
+        heading = {"source_id": sid, "quotation": "September revision", "location": {"character_start": 0, "character_end": 18}}
+        return src, item, heading
+    a, fa, ca = make_source("a", "74.4")
+    b, fb, cb = make_source("b", "88.2")
+    claim = {"text": "从74.4修订为88.2。", "citations": [ca, cb]}
+    result = suggest_uncited_numeric_facts([claim], [fa, fb], [a, b])[0]
+    assert len(result["uncited_fact_values"]) == 2
+    assert {x["fact_id"] for x in result["suggested_fact_evidence"]} == {"a", "b"}
+    assert all(x["status"] == "requires_semantic_review" for x in result["suggested_fact_evidence"])
+    assert "uncited_fact_values" not in claim
+    covered = {**claim, "citations": [ca, cb, {"source_id": "a", "quotation": fa["quotation"], "location": fa["location"]}]}
+    assert len(suggest_uncited_numeric_facts([covered], [fa, fb], [a, b])[0]["uncited_fact_values"]) == 1
+    assert not suggest_uncited_numeric_facts([{**claim, "citations": []}], [fa, fb], [a, b])[0].get("uncited_fact_values")
+    assert not suggest_uncited_numeric_facts([claim], [{**fa, "authorship": "user"}, {**fb, "authorship": "user"}], [a, b])[0].get("uncited_fact_values")
+    assert not suggest_uncited_numeric_facts([claim], [fa, {**fa, "fact_id": "duplicate"}], [a, b])[0].get("uncited_fact_values")
+    assert not suggest_uncited_numeric_facts([claim], [fa], [a.model_copy(update={"permissions": SourcePermissions(store=True)})])[0].get("uncited_fact_values")

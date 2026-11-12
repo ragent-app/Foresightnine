@@ -453,6 +453,80 @@ def suggest_usd_amount_evidence(claims: list[dict], facts: list[dict], sources: 
     return output
 
 
+def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Suggest uniquely located fact passages for uncited numbers, without asserting support."""
+    source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
+    ids = Counter(f.get("fact_id") for f in facts if isinstance(f.get("fact_id"), str))
+    usable: list[tuple[str, Decimal, dict]] = []
+    for fact in facts:
+        sid, fid, quote, loc = fact.get("source_id"), fact.get("fact_id"), fact.get("quotation"), fact.get("location")
+        source = source_map.get(sid) if isinstance(sid, str) else None
+        if (source is None or not isinstance(fid, str) or ids[fid] != 1 or fact.get("authorship") == "user" or
+                fact.get("verification") != "model_extraction_not_independently_verified" or
+                not isinstance(quote, str) or not quote or len(quote) > 1000 or not isinstance(loc, dict) or
+                loc.get("status") == "ambiguous"):
+            continue
+        a, b = loc.get("character_start"), loc.get("character_end")
+        if (type(a) is not int or type(b) is not int or not 0 <= a < b <= len(source.text) or
+                source.text[a:b] != quote or source.text.find(quote) != a or source.text.find(quote, a + 1) >= 0 or
+                partial_ascii_token(source.text, a, b)):
+            continue
+        try:
+            value = Decimal(str(fact.get("value")))
+            if not value.is_finite() or value not in _quoted_numbers(quote):
+                continue
+        except (InvalidOperation, ValueError):
+            continue
+        usable.append((sid, value, fact))
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("uncited_fact_values", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
+            output.append(entry)
+            continue
+        existing: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        for citation in citations:
+            if not isinstance(citation, dict) or citation.get("partial_token"):
+                continue
+            sid, quote, loc = citation.get("source_id"), citation.get("quotation"), citation.get("location")
+            source = source_map.get(sid) if isinstance(sid, str) else None
+            if source is None or not isinstance(quote, str) or not isinstance(loc, dict) or loc.get("status") == "ambiguous":
+                continue
+            a, b = loc.get("character_start"), loc.get("character_end")
+            if (type(a) is int and type(b) is int and 0 <= a < b <= len(source.text) and
+                    source.text[a:b] == quote and not partial_ascii_token(source.text, a, b)):
+                existing[sid].append((a, b))
+        numbers = _quoted_numbers(text)
+        candidates = [(sid, value, fact) for sid, value, fact in usable if sid in existing and value in numbers]
+        counts = Counter((sid, value) for sid, value, _ in candidates)
+        previous = entry.get("suggested_fact_evidence")
+        suggestions = [s for s in previous if isinstance(s, dict)] if isinstance(previous, list) else []
+        seen = {s.get("fact_id") for s in suggestions}
+        missing = []
+        for sid, value, fact in candidates:
+            if counts[(sid, value)] != 1:
+                continue
+            loc = fact["location"]
+            if any(a <= loc["character_start"] and loc["character_end"] <= b for a, b in existing[sid]):
+                continue
+            label = f'{fact["value"]} {fact.get("unit", "")}'.strip()
+            if label not in missing and len(missing) < 5:
+                missing.append(label)
+            if fact["fact_id"] not in seen and len(suggestions) < 5:
+                seen.add(fact["fact_id"])
+                suggestions.append({key: deepcopy(fact[key]) for key in
+                    ("fact_id", "source_id", "value", "unit", "period", "quotation", "location") if key in fact} |
+                    {"status": "requires_semantic_review"})
+        if missing:
+            entry["uncited_fact_values"] = missing
+        if suggestions:
+            entry["suggested_fact_evidence"] = suggestions
+        output.append(entry)
+    return output
+
+
 def evidence_differences(facts: list[dict]) -> list[dict]:
     """Flag matching labels/periods/units with different cross-source values.
 

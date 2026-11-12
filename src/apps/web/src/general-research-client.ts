@@ -16,6 +16,7 @@ export interface ResearchClaim {
   uncited_percentages?: string[];
   suggested_calculations?: { calculation_index: number; claimed_percentage: string; formula_id: string; input_fact_ids: string[]; status: string }[];
   uncited_amounts?: string[];
+  uncited_fact_values?: string[];
   rate_unit_warnings?: { claimed_text: string; status: string }[];
   publication_date_warnings?: { claimed_text: string; source_id: string; declared_published_at: string; status: string }[];
 }
