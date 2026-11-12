@@ -62,7 +62,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     for index, claim in enumerate(claims):
         citations = claim.get("citations")
         text = claim.get("text")
-        if (not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
+        if (claim.get("support_status") == "incomplete" or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)
             continue

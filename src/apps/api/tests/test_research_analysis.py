@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _select_window, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, analyze, _select_window, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions
 
@@ -73,11 +73,42 @@ def test_rejects_fabricated_citations_and_respects_display_permission():
         return lambda _: ({"claims": [{"text": "Claim", "citations": [
             {"source_id": "hidden", "quotation": quote}]}],
             "counterarguments": [], "limitations": []}, None)
-    with pytest.raises(InvalidAnalysis):
-        analyze("Question", [visible], None, model("invented"))
+    rejected = analyze("Question", [visible], None, model("invented"))
+    assert rejected.claims == []
+    assert any("quotation" in item and "omitted" in item for item in rejected.limitations)
+    assert "invented" not in str(rejected)
     result = analyze("Question", [hidden], None, model("100 million"))
     assert result.claims == []
     assert any("display permission" in item for item in result.limitations)
+
+
+def test_keeps_verified_portions_but_marks_partially_invalid_citations():
+    report = source("s", text="Revenue 100. Profit 20.")
+    def model(_):
+        return {"claims": [{"text": "Revenue", "citations": [{"source_id": "s", "quotation": "Revenue 100"}]},
+                           {"text": "Profit", "citations": [{"source_id": "s", "quotation": "Profit 20"},
+                                                                {"source_id": "s", "quotation": "invented"}]}],
+                "facts": [{"fact_id": "r", "label": "Revenue", "value": "100", "unit": "USD", "period": "2023",
+                           "citation": {"source_id": "s", "quotation": "Revenue 100"}}]}, 10
+    result = analyze("Revenue and profit?", [report], None, model)
+    assert len(result.claims) == 2 and len(result.facts) == 1
+    assert result.claims[0]["support_status"] == "not_independently_verified"
+    assert result.claims[1]["support_status"] == "incomplete" and len(result.claims[1]["citations"]) == 1
+    assert "invented" not in str(result)
+    assert any("quotation" in item and "omitted" in item for item in result.limitations)
+
+
+def test_duplicate_model_fact_ids_cannot_feed_a_calculation():
+    report = source("s", text="Revenue 100. Profit 20.")
+    def model(_):
+        def item(value, quote):
+            return {"fact_id": "same", "label": "Value", "value": value, "unit": "USD", "period": "2023",
+                    "citation": {"source_id": "s", "quotation": quote}}
+        return {"facts": [item("100", "Revenue 100"), item("20", "Profit 20")],
+                "calculations": [{"formula": "difference", "first_fact_id": "same", "second_fact_id": "same"}]}, 10
+    result = analyze("Report?", [report], None, model)
+    assert result.facts == [] and result.calculations == []
+    assert any("ambiguous identifier" in item for item in result.limitations)
 
 
 def test_pdf_line_wrap_matches_only_whitespace_and_preserves_original():
@@ -90,8 +121,9 @@ def test_pdf_line_wrap_matches_only_whitespace_and_preserves_original():
     assert citation["quotation"] == "GDP increased 3.3 percent in the fourth quarter of\n2023"
     assert citation["quotation_match"] == "whitespace_normalized"
     assert report.text[citation["location"]["character_start"]:citation["location"]["character_end"]] == citation["quotation"]
-    with pytest.raises(InvalidAnalysis):
-        analyze("GDP 2023", [report], None, generate("GDP increased 3.4 percent in the fourth quarter of 2023"))
+    rejected = analyze("GDP 2023", [report], None, generate("GDP increased 3.4 percent in the fourth quarter of 2023"))
+    assert rejected.claims == []
+    assert any("quotation" in item and "omitted" in item for item in rejected.limitations)
 
 
 def test_future_or_unknown_publication_is_not_sent():
@@ -123,8 +155,10 @@ def test_model_facts_are_quoted_and_calculations_are_deterministic():
         payload, count = model(prompt)
         payload["facts"][0]["value"] = "123"
         return payload, count
-    with pytest.raises(InvalidAnalysis, match="absent"):
-        analyze("Revenue growth?", [report], None, fabricated)
+    rejected = analyze("Revenue growth?", [report], None, fabricated)
+    assert [item["fact_id"] for item in rejected.facts] == ["current"]
+    assert rejected.calculations == []
+    assert any("absent from its quotation" in item for item in rejected.limitations)
 
 
 def test_negative_parenthetical_value_is_not_treated_as_positive():
@@ -132,8 +166,9 @@ def test_negative_parenthetical_value_is_not_treated_as_positive():
     def model(_prompt):
         return {"facts": [{"fact_id": "loss", "label": "Loss", "value": "1000", "unit": "USD million",
                  "currency": "USD", "period": "FY2023", "citation": {"source_id": "s", "quotation": "Loss was (1,000) million."}}]}, None
-    with pytest.raises(InvalidAnalysis):
-        analyze("Loss?", [report], None, model)
+    rejected = analyze("Loss?", [report], None, model)
+    assert rejected.facts == []
+    assert any("absent from its quotation" in item for item in rejected.limitations)
 
 
 def test_long_source_uses_relevant_window_with_exact_original_offsets_and_budget():
@@ -215,8 +250,9 @@ def test_separate_passages_cannot_be_stitched_into_a_fake_quotation():
         quote = parts[0]["text"][-30:] + parts[1]["text"][:30]
         assert quote not in report.text
         return {"claims": [{"text": "Invented join", "citations": [{"source_id": "s", "quotation": quote}]}]}, 10
-    with pytest.raises(InvalidAnalysis):
-        analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
+    rejected = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
+    assert rejected.claims == []
+    assert any("quotation" in item and "omitted" in item for item in rejected.limitations)
 
 
 def test_long_document_uses_two_windows_under_a_thousand_character_allowance():

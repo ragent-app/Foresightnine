@@ -33,6 +33,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     (claim(), source(model=False)), (claim(), source(display=False)),
     (claim(quotation="invented"), source()),
     (claim(location={"status": "ambiguous", "matches": []}), source()),
+    ({**claim(), "support_status": "incomplete"}, source()),
     ({"text": "No citation", "citations": []}, source()),
 ])
 def test_review_omits_unauthorized_unlocated_or_unsupported_claims(item, src):

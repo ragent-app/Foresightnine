@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -395,18 +396,20 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
 
     checked_facts: list[dict[str, Any]] = []
     numeric_facts: dict[str, NumericFact] = {}
+    fact_ids = Counter(item.fact_id for item in result.facts)
     for item in result.facts:
         source = source_map.get(item.citation.source_id)
-        if source is None:
-            raise InvalidAnalysis("Model fact cited a missing source or quotation.")
+        if source is None or fact_ids[item.fact_id] != 1:
+            limitations.append("A model-generated fact had an invalid source or ambiguous identifier and was omitted.")
+            continue
         try:
             location, quotation, matching = quotation_location(source, item.citation.quotation)
-        except InvalidAnalysis as error:
-            raise InvalidAnalysis("Model fact cited a missing source or quotation.") from error
+        except InvalidAnalysis:
+            limitations.append("A model-generated fact had an unlocatable quotation and was omitted.")
+            continue
         if item.value not in _quoted_numbers(quotation):
-            raise InvalidAnalysis("Model fact value is absent from the cited quotation.")
-        if item.fact_id in numeric_facts:
-            raise InvalidAnalysis("Model fact identifiers must be unique.")
+            limitations.append("A model-generated fact value was absent from its quotation and was omitted.")
+            continue
         numeric_facts[item.fact_id] = NumericFact(fact_id=item.fact_id, value=item.value,
             unit=item.unit, currency=item.currency, period=item.period)
         checked_facts.append({**numeric_facts[item.fact_id].model_dump(mode="json"), "label": item.label,
@@ -430,19 +433,33 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         checked = []
         for item in items:
             citations = []
+            omitted = False
             for citation in item.citations:
                 source = source_map.get(citation.source_id)
                 if source is None:
-                    raise InvalidAnalysis("Model cited a missing source or quotation.")
-                location, quotation, matching = quotation_location(source, citation.quotation)
+                    omitted = True
+                    continue
+                try:
+                    location, quotation, matching = quotation_location(source, citation.quotation)
+                except InvalidAnalysis:
+                    omitted = True
+                    continue
                 entry = {"source_id": citation.source_id,
                          "location": location, "quotation_match": matching,
                          "support_status": "not_independently_verified"}
                 if source.permissions.display:
                     entry["quotation"] = quotation
                 citations.append(entry)
+            if omitted:
+                limitations.append("A model-generated quotation did not match the supplied source and was omitted.")
+                # A claim presented with only fabricated or unlocatable
+                # citations is not retained as a finding.
+                if not citations:
+                    limitations.append("A model-generated claim without a valid quotation was omitted.")
+                    continue
             checked.append({"text": item.text, "kind": "model_interpretation", "citations": citations,
-                            "support_status": "not_independently_verified" if citations else "unsupported"})
+                            "support_status": "incomplete" if omitted and citations else
+                                "not_independently_verified" if citations else "unsupported"})
         return checked
 
     return AnalysisResult(check_claims(result.claims), check_claims(result.counterarguments),

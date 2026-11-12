@@ -327,6 +327,44 @@ def test_invalid_model_output_retains_prompt_provenance_without_output(monkeypat
     assert "sensitive model output" not in str(content)
 
 
+def test_unlocatable_quote_preserves_valid_work_as_partial(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "partial-citation-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def cite(quote): return {"source_id": source_id, "quotation": quote}
+            return {"claims": [{"text": "Revenue is 100", "citations": [cite("Revenue 100")]},
+                               {"text": "Unsupported assertion", "citations": [cite("invented quotation")]}],
+                    "counterarguments": [{"text": "Revenue is not profit", "citations": [cite("Revenue 100")]}],
+                    "facts": [{"fact_id": "r", "label": "Revenue", "value": "100", "unit": "USD", "period": "2023",
+                               "citation": cite("Revenue 100")}], "calculations": [], "limitations": []}, 20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    registered = client.post("/v1/auth/local/register", json={"email": "partial-quotation@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue 100",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "partial-citation-001"},
+        json={"parent_version_id": topic["versions"][0]["version_id"]}).json()
+    operation_id = receipt["operation"]["operation_id"]
+    for _ in range(100):
+        state = client.get(path + "/runs/" + operation_id, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert state == "completed"
+    content = client.get(path, headers=headers).json()["versions"][-1]["content"]
+    assert content["run"]["status"] == "partial" and len(content["facts"]) == 1
+    assert len(content["claims"]) == 2 and "Unsupported assertion" not in str(content)
+    assert "invented quotation" not in str(content)
+    assert any("quotation" in item and "omitted" in item for item in content["limitations"])
+
+
 def test_research_marks_cross_source_differences_for_review_and_recomputes_them(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     ids = []
