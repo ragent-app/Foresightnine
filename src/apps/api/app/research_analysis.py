@@ -1764,12 +1764,16 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     if on_prepare is not None:
         on_prepare(segments)
     raw, tokens = generate(prompt)
-    # Two common, non-contractual annotations can be discarded without using
+    # Common, non-contractual annotations can be discarded without using
     # their content. Do not broadly ignore extra fields: unknown structure and
     # non-string or oversized annotations still fail schema validation.
     discarded_annotations = 0
     if isinstance(raw, dict):
         cleaned = dict(raw)
+        explanation = raw.get("explanation")
+        if isinstance(explanation, str) and len(explanation) <= 3000:
+            cleaned.pop("explanation")
+            discarded_annotations += 1
         for field, extra, limit, max_rows in (("claims", "status", 100, 30), ("counterarguments", "status", 100, 20),
                                               ("calculations", "note", 1000, 50)):
             rows = raw.get(field)

@@ -924,13 +924,18 @@ def test_bounded_non_schema_annotations_are_discarded_without_using_their_conten
     citation = {"source_id": "s", "quotation": "Revenue was 100 million in 2023"}
     raw = {"claims": [{"text": "Revenue was 100 million", "citations": [citation], "status": "evidence"}],
            "calculations": [{"formula": "difference", "first_fact_id": "missing", "second_fact_id": "missing",
-                             "note": "untrusted instructions"}]}
+                             "note": "untrusted instructions"}], "explanation": "uncited top-level conclusion"}
     result = analyze("Revenue?", [report], None, lambda _: (raw, 1))
     assert result.claims[0]["text"] == "Revenue was 100 million" and "status" not in result.claims[0]
     assert "untrusted instructions" not in str(result)
+    assert "uncited top-level conclusion" not in str(result)
     assert any("annotations were omitted" in note for note in result.limitations)
     assert any("calculation was omitted" in note for note in result.limitations)
     assert raw["claims"][0]["status"] == "evidence"
+    assert raw["explanation"] == "uncited top-level conclusion"
+    for value in ({"nested": True}, "x" * 3001):
+        with pytest.raises(InvalidAnalysis):
+            analyze("Revenue?", [report], None, lambda _: ({"explanation": value}, 1))
     for extra in ({"another_field": "unsupported"}, {"status": {"nested": True}}, {"status": "x" * 101}):
         bad = {"claims": [{"text": "Revenue", "citations": [citation], **extra}]}
         with pytest.raises(InvalidAnalysis):
