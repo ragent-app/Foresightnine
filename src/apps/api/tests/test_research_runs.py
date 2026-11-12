@@ -3595,3 +3595,97 @@ def test_counterpoint_followup_never_overwrites_concurrent_edit(monkeypatch):
         assert latest['summary']=='User revision' and not any(x.get('role')=='counterargument' for x in latest['claims'])
     finally:
         release.set()
+
+
+@pytest.mark.parametrize('warned', [True, False])
+def test_counterpoint_followup_respects_existing_evidence_warnings(monkeypatch, warned):
+    import json
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    source_id=''; calls=[]
+    class Provider:
+        name='counterpoint-warning-test'
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            payload=json.loads(prompt);calls.append(payload)
+            cite=lambda q:{'source_id':source_id,'quotation':q}
+            if 'counterpoint_request' in payload:
+                return {'counterarguments':[{'text':'Costs increased.','citations':[cite('Costs increased.')]}]}, 15
+            text='Costs increased because of a supplier.' if warned else 'Costs increased.'
+            return {'claims':[{'text':'Revenue increased.','citations':[cite('Revenue increased.')]}],
+                    'counterarguments':[{'text':text,'citations':[cite('Costs increased.')]}]}, 20
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    reg=client.post('/v1/auth/local/register',json={'email':f'warn-counter-{uuid4().hex}@example.test','password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+reg['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue increased. Costs increased.',
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Assess revenue.','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'warn-counterpoint'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'counterpoint_followup':True,'max_model_calls':2,
+        'max_total_tokens':10000}).json()['operation']
+    for _ in range(100):
+        state=client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'):break
+        time.sleep(.02)
+    assert state=='completed'
+    content=client.get(path,headers=headers).json()['versions'][-1]['content']
+    assert content['run']['counterpoint_status']==('completed' if warned else 'not_needed')
+    assert len(calls)==(2 if warned else 1)
+    counterpoints=[item for item in content['claims'] if item['role']=='counterargument']
+    if warned:
+        assert len(counterpoints)==2 and counterpoints[0]['causal_attribution_unverified']
+        assert not counterpoints[1].get('causal_attribution_unverified')
+        assert content['run']['status']=='partial'
+    else:
+        assert len(counterpoints)==1 and not counterpoints[0].get('causal_attribution_unverified')
+
+
+@pytest.mark.parametrize('existing,expected_calls,expected_status', [(20,1,'capacity_reached'),(19,2,'partial')])
+def test_counterpoint_followup_respects_counterargument_capacity(monkeypatch,existing,expected_calls,expected_status):
+    import json
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    source_id='';calls=[]
+    class Provider:
+        name='counterpoint-capacity-test'
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            data=json.loads(prompt); calls.append(data)
+            cite=lambda q:{'source_id':source_id,'quotation':q}
+            if 'counterpoint_request' in data:
+                return {'counterarguments':[{'text':'Costs increased.','citations':[cite('Costs increased.')]} for _ in range(2)]},15
+            return {'claims':[{'text':'Revenue increased.','citations':[cite('Revenue increased.')]}],
+                    'counterarguments':[{'text':'Costs increased because of a supplier.','citations':[cite('Costs increased.')]} for _ in range(existing)]},20
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    reg=client.post('/v1/auth/local/register',json={'email':f'capacity-counter-{uuid4().hex}@example.test','password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+reg['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue increased. Costs increased.',
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Assess revenue.','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'capacity-counterpoint'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'counterpoint_followup':True,'max_model_calls':2,'max_total_tokens':10000}).json()['operation']
+    for _ in range(100):
+        state=client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'):break
+        time.sleep(.02)
+    assert state=='completed'
+    content=client.get(path,headers=headers).json()['versions'][-1]['content']
+    assert len(calls)==expected_calls and content['run']['counterpoint_status']==expected_status
+    assert len([x for x in content['claims'] if x['role']=='counterargument'])==20
+    if expected_status=='partial':
+        assert any('result limit was reached' in item for item in content['limitations'])
+        assert content['run']['status']=='partial'
+
+
+def test_usable_counterpoint_excludes_separate_numeric_discrepancies():
+    from app.research_runs import CLAIM_EVIDENCE_WARNINGS, has_usable_counterpoint
+    item={'role':'counterargument','citations':[{'source_id':'s'}], 'support_status':'not_independently_verified'}
+    assert has_usable_counterpoint([item])
+    assert not has_usable_counterpoint([item],{0})
+    for warning in CLAIM_EVIDENCE_WARNINGS:
+        assert not has_usable_counterpoint([{**item,warning:True}])
+    assert not has_usable_counterpoint([{**item,'support_status':'incomplete'}])

@@ -106,7 +106,7 @@ from .research_evidence import claim_amount_differences, evidence_differences, f
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
-from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
+from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_counterpoint import prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -2775,9 +2775,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         counterpoint_error: str | None = None
         if request.counterpoint_followup:
             counterpoint_status = "not_needed" if calls and analysis.claims else "unavailable"
-            has_cited_counterpoint = any(item.get('citations') and item.get('support_status') != 'incomplete'
-                                         for item in analysis.counterarguments)
-            if calls and analysis.claims and not has_cited_counterpoint and base_prompt_text is not None:
+            initial_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                   *claim_amount_differences(claims, analysis.facts)]
+            has_cited_counterpoint = has_usable_counterpoint(claims, {item['claim_index'] for item in initial_differences})
+            if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) >= 20:
+                counterpoint_status = 'capacity_reached'
+            if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) < 20 and base_prompt_text is not None:
                 policy = getattr(provider, 'policy', None)
                 input_limit = getattr(policy, 'max_input_tokens', None)
                 output_limit = getattr(policy, 'max_output_tokens', None)
@@ -2865,10 +2868,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
                                 if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
                                     raise InvalidAnalysis('Counterpoint source selection changed.')
-                                analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *checked.counterarguments][:20],
+                                room = 20 - len(analysis.counterarguments)
+                                retained_counterpoints = checked.counterarguments[:room]
+                                truncated_counterpoints = len(checked.counterarguments) > room
+                                analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *retained_counterpoints],
                                     limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
-                                        'Counterpoint follow-up uses a model and is not independent verification.'])))
-                                counterpoint_status = 'completed' if any(item.get('citations') for item in checked.counterarguments) else 'no_evidence'
+                                        'Counterpoint follow-up uses a model and is not independent verification.',
+                                        *(['Some follow-up counterpoints were omitted because the result limit was reached.'] if truncated_counterpoints else [])])))
+                                counterpoint_status = ('partial' if truncated_counterpoints else 'completed') if any(item.get('citations') for item in retained_counterpoints) else 'no_evidence'
                                 claims = prepare_claims()
                             except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
                                 _raise_if_operation_cancelled(operation_id)
@@ -3188,7 +3195,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not unverified_calculations and not differences and not calculation_differences and not amount_differences and
-                        not any(c.get("source_scope_absence_unverified") or c.get("causal_attribution_unverified") or c.get("uncited_exact_dates") or c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_claim_amounts") or c.get("uncited_dollar_amounts") or c.get("uncited_quarters") or c.get("balance_direction_warnings") or c.get("uncited_percentages") or c.get("uncited_percentage_bounds") or c.get("reused_percentages") or c.get("uncited_basis_points") or c.get("uncited_percentage_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
+                        not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if any(c.get("source_scope_absence_unverified") for c in claims):

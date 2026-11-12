@@ -9,6 +9,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .research_topics import ResearchContent
 
 
+CLAIM_EVIDENCE_WARNINGS = (
+    'source_scope_absence_unverified', 'causal_attribution_unverified', 'uncited_exact_dates',
+    'publication_date_warnings', 'rate_unit_warnings', 'uncited_amounts', 'uncited_claim_amounts',
+    'uncited_dollar_amounts', 'uncited_quarters', 'balance_direction_warnings', 'uncited_percentages',
+    'uncited_percentage_bounds', 'reused_percentages', 'uncited_basis_points',
+    'uncited_percentage_points', 'uncited_fact_values', 'citation_context_warnings',
+)
+
+
+def has_usable_counterpoint(claims: list[dict], excluded_indexes: set[int] | None = None) -> bool:
+    """Identify a cited candidate with no known evidence warnings, not proof of relevance."""
+    excluded = excluded_indexes or set()
+    return any(index not in excluded and isinstance(item, dict) and item.get('role') == 'counterargument' and item.get('citations') and
+               item.get('support_status') != 'incomplete' and
+               not any(item.get(warning) for warning in CLAIM_EVIDENCE_WARNINGS) for index, item in enumerate(claims))
+
+
 class FocusCitation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     claim_index: int = Field(ge=0)
