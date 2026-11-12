@@ -2080,12 +2080,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             calls = 1
             # Retain non-sensitive prompt provenance even if the provider
             # returns invalid output or fails after accepting the request.
-            prompt_data = json.loads(prompt)
             attempted_prompt.update({"prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
-                "prompt_characters": len(prompt), "prompt_bytes": len(prompt.encode("utf-8")),
-                "segments": [{"source_id": item["source_id"], "character_start": item["range"][0],
-                              "character_end": item["range"][1]}
-                             for item in prompt_data["sources"]]})
+                "prompt_characters": len(prompt), "prompt_bytes": len(prompt.encode("utf-8"))})
             try:
                 payload, usage = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
                     system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
@@ -2102,7 +2098,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             # byte length is a conservative approximation, not a provider tokenizer.
             max_prompt_chars = max(1, min(48000, int(max_input_tokens) - len(RESEARCH_SYSTEM_PROMPT.encode("utf-8")) - 512))
             analysis = analyze(topic.request.question, sources, topic.request.as_of, generate,
-                               max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline)
+                               max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
+                               on_prepare=lambda segments: attempted_prompt.update({"segments": segments}))
         except AnalysisInterrupted:
             unavailable_reason = "provider_budget_exhausted"
             from .research_analysis import AnalysisResult

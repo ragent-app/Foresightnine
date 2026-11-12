@@ -16,6 +16,22 @@ def source(source_id, *, text="Revenue was 100 million.", url=None, model_input=
         permissions=SourcePermissions(store=True, model_input=model_input, display=display))
 
 
+def test_selected_source_offsets_survive_generation_failure():
+    report = source("s", text="Revenue was 100 million.")
+    prepared = []
+
+    def fail(prompt):
+        assert "range" not in json.loads(prompt)["sources"][0]
+        raise RuntimeError("provider failed")
+
+    with pytest.raises(RuntimeError, match="provider failed"):
+        analyze("Revenue?", [report], None, fail, on_prepare=prepared.extend)
+    assert len(prepared) == 1
+    segment = prepared[0]
+    assert segment["source_id"] == "s"
+    assert report.text[segment["character_start"]:segment["character_end"]] == report.text
+
+
 def test_fractional_rate_notation_is_converted_exactly():
     values = _quoted_numbers("lower by 1/2 percentage point to 4-3/4 to 5 percent")
     assert Decimal("0.5") in values and Decimal("4.75") in values and Decimal("5") in values
@@ -87,6 +103,8 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
         example = payload["output_schema"]["counterarguments"][0]
         assert example["citations"][0]["quotation"] == "quote"
         assert "missing evidence in limitations" in payload["evidence_guidance"]
+        assert "one continuous source passage" in payload["evidence_guidance"]
+        assert "never join passages or quote metadata" in payload["evidence_guidance"]
         return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
 
     result = analyze("What would contradict this?", [source("s")], None, model)
@@ -99,7 +117,6 @@ def test_prompt_distinguishes_full_source_from_partial_excerpts():
         def generate(prompt):
             payload = json.loads(prompt)
             assert all(entry["source_coverage"] == expected for entry in payload["sources"])
-            assert all(entry["range"][1] - entry["range"][0] >= len(entry["text"]) for entry in payload["sources"])
             assert "not the whole source" in payload["evidence_guidance"]
             return {"claims": []}, 10
         return generate
@@ -119,7 +136,7 @@ def test_prompt_exposes_declared_source_times_separately_from_reporting_period()
         assert item["declared_published_at"] == published.isoformat()
         assert item["declared_revised_at"] == revised.isoformat()
         assert item["declared_event_at"] == event.isoformat()
-        assert "Source dates are declared, not verified" in payload["evidence_guidance"]
+        assert "Dates are declared, not verified" in payload["evidence_guidance"]
         return {}, 1
 
     analyze("What happened?", [report], None, model)
@@ -416,7 +433,6 @@ def test_pdf_horizontal_spacing_is_compacted_only_in_prompt_and_offsets_stay_ori
     def model(prompt):
         item = json.loads(prompt)["sources"][0]
         assert item["text"] == "Personal income:\nCurrent dollars\t74.4\t88.2"
-        assert item["range"] == [0, len(quote)]
         return {"claims": [{"text": "Personal income was revised.", "citations": [
             {"source_id": "pdf", "quotation": item["text"]}]}]}, 10
 

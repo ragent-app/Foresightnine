@@ -410,7 +410,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
 
 def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None,
             generate: Callable[[str], tuple[dict[str, Any], int | None]], *,
-            max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None) -> AnalysisResult:
+            max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
+            on_prepare: Callable[[list[dict[str, Any]]], None] | None = None) -> AnalysisResult:
     eligible, limitations = prepare_sources(sources, as_of)
     if not eligible:
         return AnalysisResult([], [], limitations + ["No permitted, time-eligible source was available for model analysis."], [], None)
@@ -424,8 +425,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                            "citation": {"source_id": "id", "quotation": "quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]},
-            "evidence_guidance": "Cite exact quotes; put missing evidence in limitations. Partial excerpts are not the whole source. "
-                "PDF gaps may be compressed; check columns. Source dates are declared, not verified; distinguish publication from period."}
+            "evidence_guidance": "Quote one continuous source passage; never join passages or quote metadata. "
+                "Put missing evidence in limitations. Excerpts are not the whole source. "
+                "PDF gaps may be compressed; check columns. Dates are declared, not verified; distinguish publication from period."}
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
@@ -462,7 +464,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         def source_payload(parts: list[tuple[int, str]]) -> list[dict[str, Any]]:
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
             return [{"source_id": source.source_id, "title": source.title,
-                     "range": [start, start + len(passage)], "source_coverage": coverage,
+                     "source_coverage": coverage,
                      **({"declared_published_at": source.published_at.isoformat()} if source.published_at else {}),
                      **({"declared_revised_at": source.revised_at.isoformat()} if source.revised_at else {}),
                      **({"declared_event_at": source.event_at.isoformat()} if source.event_at else {}),
@@ -515,6 +517,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     if should_stop is not None and should_stop():
         raise AnalysisInterrupted()
     prompt = serialize()
+    segments = [{"source_id": s.source_id, "character_start": start, "character_end": start + len(passage)}
+                for s in processed for start, passage in model_text[s.source_id]]
+    if on_prepare is not None:
+        on_prepare(segments)
     raw, tokens = generate(prompt)
     # A nonnumeric or incomplete fact cannot be used by the deterministic
     # calculator. Drop only those facts, disclose the omission, and continue
@@ -732,6 +738,4 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                           limitations + ["Matching a quotation does not independently establish that it supports a claim."]
                           + result.limitations, [s.source_id for s in processed], tokens,
                           checked_facts, checked_calculations, sha256(prompt.encode("utf-8")).hexdigest(),
-                          len(prompt), len(prompt.encode("utf-8")), [{"source_id": s.source_id, "character_start": start,
-                                         "character_end": start + len(passage)}
-                                        for s in processed for start, passage in model_text[s.source_id]])
+                          len(prompt), len(prompt.encode("utf-8")), segments)
