@@ -1,0 +1,60 @@
+{
+  "implementation_commit": "e8a3df8ed0ee6855caedab1a7855b1f4a1a344ce",
+  "task": "MACRO_GDP_2022Q4",
+  "source_sha256": "314b1a39f0b701c2b3239b5a9fbe406c31bdcd2b5282d0ee79fae3694f7e6a50",
+  "text_sha256": "c406849a85069216c9fe5afbc1e77826e8b6a34ae2c0aa1dcf81cabefd6e16b9",
+  "segments": [
+    {
+      "source_id": "source_26300000000000000000000000000002",
+      "character_start": 145,
+      "character_end": 1527,
+      "model_source_id": "ref-1"
+    },
+    {
+      "source_id": "source_26300000000000000000000000000002",
+      "character_start": 1528,
+      "character_end": 2673,
+      "model_source_id": "ref-1"
+    },
+    {
+      "source_id": "source_26300000000000000000000000000002",
+      "character_start": 9335,
+      "character_end": 11497,
+      "model_source_id": "ref-1"
+    }
+  ],
+  "baseline": "../270-review-budget-comparison/budget_20000-generation-1-provider.json",
+  "baseline_sha256": "338b6e53e2e5383db16ef83320cdc97b7b0294de5bde962480d6296841dcc649",
+  "baseline_prompt_sha256": "b01ea78f7b4632156cb50fa11ffaa7a94bf47944bd8eed374e389e29bba35e64",
+  "candidate_prompt_sha256": "5a6e860da3efbb3da6f21d4042baf782143b960b040d37aadf084b9dc387c5b7",
+  "change": "replace evidence guidance only",
+  "old_guidance": "Quote continuous passages; never join passages or quote metadata. Cite table headers, units and rows separately. Put all requested facts in claims; put gaps in limitations. Excerpts are partial. Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period. PDF p=[first,last] pages; form feed breaks pages. Cite integer source_page only for a labeled PDF.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 1,
+  "max_tokens": 10000,
+  "timeout_seconds": 60,
+  "search": false,
+  "retries": 0,
+  "previous_known_tokens": 297677,
+  "cost_usd": "unknown",
+  "files": {
+    "common.py": "650a55db76e4c2fbb93176f61060a429bff1ccade452936f32770cdaad36633e",
+    "prepare.py": "888fbc7b158388d0745ce022fbc3492573fab1c8f3211aeed84ef4f17ed31760",
+    "run.py": "751d5e777cc80b26d5df4c17b471fe660aa0c4be7e95ce25ea49de183a25dc9e"
+  }
+}
