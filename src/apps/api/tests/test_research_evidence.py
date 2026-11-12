@@ -562,3 +562,29 @@ def test_dollar_amount_normalization_compares_scale_and_sign_not_currency():
     assert len(flag_uncited_dollar_amounts([changed],[source])[0]["uncited_dollar_amounts"])==2
     # A prefixed dollar symbol is not automatically treated as unqualified $.
     assert not flag_uncited_dollar_amounts([{**claim,"text":"C$4 billion","citations":[]}],[source])[0].get("uncited_dollar_amounts")
+
+
+def test_explicit_quarter_labels_are_rechecked_against_located_quotes():
+    from app.research_evidence import flag_uncited_quarters
+    text = "The result starts in the fourth quarter of 2022. The horizon ends in 2025:Q1."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    def cite(quote):
+        start=text.index(quote)
+        return {"source_id":"s","quotation":quote,"location":{"character_start":start,"character_end":start+len(quote)}}
+    claim={"text":"The 2022:Q4 actual value projects to 2025:Q1.", "citations":[cite("The result starts in the fourth quarter of 2022.")]}
+    result=flag_uncited_quarters([claim],[source])[0]
+    assert result["uncited_quarters"]==["2025:Q1"] and "uncited_quarters" not in claim
+    added={**claim,"citations":claim["citations"]+[cite("The horizon ends in 2025:Q1.")]}
+    assert not flag_uncited_quarters([added],[source])[0].get("uncited_quarters")
+    assert flag_uncited_quarters([added],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0]["uncited_quarters"]
+    stale={**added,"citations":[{**added["citations"][-1],"partial_token":True}]}
+    assert flag_uncited_quarters([stale],[source])[0]["uncited_quarters"]==["2022:Q4","2025:Q1"]
+
+
+def test_quarter_formats_are_distinct_and_ranges_do_not_produce_false_quarters():
+    from app.research_evidence import _explicit_quarters
+    assert [x[1] for x in _explicit_quarters("2022:Q4-2025:Q1")] == [(2022,4),(2025,1)]
+    for text in ("2022:Q4", "Q4 2022", "fourth quarter of 2022", "2022年第四季度"):
+        assert _explicit_quarters(text)[0][1] == (2022,4)
+    assert _explicit_quarters("2025 and 4.5 percent") == []

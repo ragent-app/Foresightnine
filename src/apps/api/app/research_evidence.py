@@ -376,8 +376,8 @@ def _dollar_amounts(text: str) -> list[tuple[str, Decimal]]:
     return result
 
 
-def _flag_uncited_amounts(claims: list[dict], sources: list[ResearchSource], key: str, parse) -> list[dict]:
-    """Compare bounded monetary expressions against located quotations, not entailment."""
+def _flag_uncited_expressions(claims: list[dict], sources: list[ResearchSource], key: str, parse) -> list[dict]:
+    """Compare bounded expressions against located quotations, not entailment."""
     source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
     output = []
     for claim in claims:
@@ -414,12 +414,38 @@ def _flag_uncited_amounts(claims: list[dict], sources: list[ResearchSource], key
 
 def flag_uncited_usd_amounts(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
     """Flag explicit USD amounts absent from located quotations, not semantic support."""
-    return _flag_uncited_amounts(claims, sources, "uncited_claim_amounts", _explicit_usd_amounts)
+    return _flag_uncited_expressions(claims, sources, "uncited_claim_amounts", _explicit_usd_amounts)
 
 
 def flag_uncited_dollar_amounts(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
     """Compare bare dollar expressions without deciding their currency or meaning."""
-    return _flag_uncited_amounts(claims, sources, "uncited_dollar_amounts", _dollar_amounts)
+    return _flag_uncited_expressions(claims, sources, "uncited_dollar_amounts", _dollar_amounts)
+
+
+_QUARTER_YEAR_FIRST = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*[:/\-]\s*[Qq]([1-4])(?!\d)")
+_QUARTER_Q_FIRST = re.compile(r"(?i)\bQ([1-4])\s*[- /]?\s*((?:19|20)\d{2})(?!\d)")
+_QUARTER_ENGLISH = re.compile(r"(?i)\b(first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter\s+(?:of\s+)?((?:19|20)\d{2})(?!\d)")
+_QUARTER_CHINESE = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*年\s*第?\s*([一二三四1-4])\s*季(?:度)?")
+_QUARTER_VALUES = {"first":1,"1st":1,"second":2,"2nd":2,"third":3,"3rd":3,"fourth":4,"4th":4,"一":1,"二":2,"三":3,"四":4}
+
+
+def _explicit_quarters(text: str) -> list[tuple[str, tuple[int, int]]]:
+    matches = []
+    for pattern in (_QUARTER_YEAR_FIRST, _QUARTER_Q_FIRST, _QUARTER_ENGLISH, _QUARTER_CHINESE):
+        for match in pattern.finditer(text):
+            if any(match.start() < existing_end and existing_start < match.end()
+                   for existing_start, existing_end, _, _ in matches):
+                continue
+            a,b=match.group(1).casefold(),match.group(2).casefold()
+            year, quarter = (a,b) if len(a)==4 and a.isdigit() else (b,a)
+            number = int(quarter) if quarter.isdigit() else _QUARTER_VALUES[quarter]
+            matches.append((match.start(),match.end(),match.group(0),(int(year),number)))
+    return [(raw,value) for _,_,raw,value in sorted(matches)]
+
+
+def flag_uncited_quarters(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag explicit quarter/year labels absent from located quotations, not support."""
+    return _flag_uncited_expressions(claims, sources, "uncited_quarters", _explicit_quarters)
 
 
 def flag_uncited_percentage_points(claims: list[dict]) -> list[dict]:

@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v15"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v16"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -284,5 +284,11 @@ def test_review_preserves_amount_subject_as_context_not_quotation():
 
 def test_review_omits_dollar_amount_missing_from_exact_quote():
     item={**claim(),"text":"Revenue rose $7.1 billion", "uncited_dollar_amounts":[]}
+    batch=prepare_support_review([item],[source()],3000)
+    assert not batch.indexes and batch.omitted==[0]
+
+
+def test_review_omits_a_quarter_absent_from_quotations():
+    item={**claim(),"text":"Revenue was 100 in 2025:Q1", "uncited_quarters":[]}
     batch=prepare_support_review([item],[source()],3000)
     assert not batch.indexes and batch.omitted==[0]
