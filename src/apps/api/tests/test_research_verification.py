@@ -30,14 +30,18 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v26"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v27"
     assert len(batch.prompt_sha256) == 64
 
 
 def test_review_cannot_clear_an_uncited_causal_assertion():
     item = {**claim(), 'text':'Revenue was 100 due to a pandemic.'}
     batch = prepare_support_review([item], [source()], 3000)
-    assert batch.indexes == [] and batch.omissions == [{'claim_index':0, 'reason':'not_reviewable'}]
+    assert batch.indexes == [0] and batch.guarded == {0: ['causal_attribution_unverified']}
+    result = apply_support_review([item], batch, {'reviews': [{'claim_index': 0, 'verdict': 'supports'}]})
+    assert result[0]['support_review']['verdict'] == 'uncertain'
+    assert result[0]['support_review']['reported_verdict'] == 'supports'
+    assert result[0]['support_review']['diagnostic_only'] is True
 
 
 @pytest.mark.parametrize("item,src", [
@@ -309,10 +313,13 @@ def test_review_omits_dollar_amount_missing_from_exact_quote():
     assert not batch.indexes and batch.omitted==[0]
 
 
-def test_review_omits_a_quarter_absent_from_quotations():
+def test_review_diagnoses_but_cannot_clear_a_quarter_absent_from_quotations():
     item={**claim(),"text":"Revenue was 100 in 2025:Q1", "uncited_quarters":[]}
     batch=prepare_support_review([item],[source()],3000)
-    assert not batch.indexes and batch.omitted==[0]
+    assert batch.indexes == [0] and batch.guarded == {0: ['uncited_quarters']}
+    checked = apply_support_review([item],batch,{'reviews':[{'claim_index':0,'verdict':'supports'}]})
+    assert checked[0]['support_review']['verdict'] == 'uncertain'
+    assert checked[0]['support_review']['diagnostic_only'] is True
 
 
 def test_review_omits_trade_balance_direction_conflict():

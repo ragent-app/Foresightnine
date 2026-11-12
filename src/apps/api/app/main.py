@@ -104,7 +104,7 @@ from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTIO
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, suggest_percentage_evidence, suggest_related_claim_quotations, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
-                                    prepare_isolated_support_reviews, parse_isolated_support_review)
+                                    prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -2913,8 +2913,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 usage = generation_usage + review_usage if generation_usage is not None and review_usage is not None else None
                             _raise_if_operation_cancelled(operation_id)
                             mapped_index, verdict = parse_isolated_support_review(batch, raw_review)
-                            claims[mapped_index] = {**claims[mapped_index], "support_review": {
-                                "verdict": verdict, "method": ISOLATED_REVIEW_METHOD, "independently_verified": False}}
+                            claims[mapped_index] = {**claims[mapped_index], "support_review":
+                                review_record(batch, mapped_index, verdict, ISOLATED_REVIEW_METHOD)}
                             isolated_records[position].update(status="completed", reported_tokens=reported)
                             isolated_omission(index, None)
                             if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):

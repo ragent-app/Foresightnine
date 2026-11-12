@@ -1,7 +1,7 @@
 """Bounded model review of claim support; never treats a model as an oracle."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 from typing import Any, Callable, Literal
@@ -25,7 +25,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v26"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v27"
 ISOLATED_REVIEW_METHOD = REVIEW_METHOD + "_isolated"
 
 
@@ -51,6 +51,7 @@ class ReviewBatch:
     omitted: list[int]
     segments: list[dict[str, int | str]]
     omissions: list[dict[str, int | str | bool]]
+    guarded: dict[int, list[str]] = field(default_factory=dict)
 
     @property
     def prompt_sha256(self) -> str:
@@ -91,6 +92,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     indexes: list[int] = []
     omitted: list[int] = []
     omissions: list[dict[str, int | str | bool]] = []
+    guarded: dict[int, list[str]] = {}
     accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int, int, int]]]] = []
     def serialize() -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -101,7 +103,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         citations = claim.get("citations")
         text = claim.get("text")
         if (any(warning.get("context_metric") == "related unquoted sentence" for warning in claim.get("citation_context_warnings", [])) or
-                claim.get("support_status") == "incomplete" or claim.get("causal_attribution_unverified") or claim.get("uncited_exact_dates") or claim.get("rate_unit_warnings") or claim.get("publication_date_warnings") or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_dollar_amounts") or claim.get("uncited_quarters") or claim.get("balance_direction_warnings") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or claim.get("reused_percentages") or claim.get("uncited_percentage_bounds") or
+                claim.get("support_status") == "incomplete" or claim.get("uncited_exact_dates") or claim.get("rate_unit_warnings") or claim.get("publication_date_warnings") or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_dollar_amounts") or claim.get("balance_direction_warnings") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or claim.get("reused_percentages") or claim.get("uncited_percentage_bounds") or
                 claim.get("numeric_discrepancy_for_review") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)
@@ -148,6 +150,9 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             omissions.append({"claim_index": index, "reason": "input_budget", "required_subject_context": bool(context_warnings)})
             continue
         indexes.append(index)
+        reasons = [name for name in ("causal_attribution_unverified", "uncited_quarters") if claim.get(name)]
+        if reasons:
+            guarded[index] = reasons
         accepted.append((index, text, located))
     # Preserve original claim order in the prompt and audit records.
     payload["claims"].sort(key=lambda item: item["claim_index"])
@@ -174,7 +179,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     # source segment metadata and omissions always use original indexes.
     for local_index, item in enumerate(payload["claims"]):
         item["claim_index"] = local_index
-    return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions)
+    return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions, guarded=guarded)
 
 
 def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchSource], max_bytes: int,
@@ -195,7 +200,8 @@ def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchS
             omissions.extend({**item, "claim_index": original_index} for item in single.omissions)
             continue
         batches.append(ReviewBatch(prompt=single.prompt, indexes=[original_index], omitted=[],
-            segments=[{**segment, "claim_index": original_index} for segment in single.segments], omissions=[]))
+            segments=[{**segment, "claim_index": original_index} for segment in single.segments], omissions=[],
+            guarded={original_index: single.guarded[0]} if 0 in single.guarded else {}))
     return IsolatedReviewPlan(batches=batches, omissions=sorted(omissions, key=lambda item: int(item["claim_index"])))
 
 
@@ -225,10 +231,19 @@ def _validated_review_verdicts(batch: ReviewBatch, raw: dict[str, Any]) -> dict[
     return {batch.indexes[local]: verdict for local, verdict in local_verdicts.items()}
 
 
-def _apply_verdicts(claims: list[dict], verdicts: dict[int, str]) -> list[dict]:
+def review_record(batch: ReviewBatch, index: int, verdict: str, method: str = REVIEW_METHOD) -> dict:
+    """Preserve diagnostics while never allowing a flagged claim to pass review."""
+    reasons = batch.guarded.get(index, [])
+    if reasons:
+        return {"verdict": "uncertain" if verdict == "supports" else verdict, "reported_verdict": verdict,
+                "diagnostic_only": True, "guard_reasons": reasons,
+                "method": method, "independently_verified": False}
+    return {"verdict": verdict, "method": method, "independently_verified": False}
+
+
+def _apply_verdicts(claims: list[dict], batch: ReviewBatch, verdicts: dict[int, str]) -> list[dict]:
     return [{**{key: value for key, value in claim.items() if key != "support_review"},
-             **({"support_review": {"verdict": verdicts[index], "method": REVIEW_METHOD,
-                                               "independently_verified": False}}
+             **({"support_review": review_record(batch, index, verdicts[index])}
                          if index in verdicts else {})} for index, claim in enumerate(claims)]
 
 
@@ -244,11 +259,11 @@ def apply_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, 
     verdicts = _validated_review_verdicts(batch, raw)
     if set(verdicts) != set(batch.indexes):
         raise InvalidReview("Review must cover exactly the submitted claims once.")
-    return _apply_verdicts(claims, verdicts)
+    return _apply_verdicts(claims, batch, verdicts)
 
 
 def apply_partial_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> tuple[list[dict], list[int]]:
     """Retain well-formed returned assessments while explicitly reporting omissions."""
     verdicts = _validated_review_verdicts(batch, raw)
     missing = [index for index in batch.indexes if index not in verdicts]
-    return _apply_verdicts(claims, verdicts), missing
+    return _apply_verdicts(claims, batch, verdicts), missing

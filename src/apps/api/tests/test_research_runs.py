@@ -15,6 +15,48 @@ from app.research_analysis import AnalysisInterrupted
 from app.research_verification import REVIEW_SYSTEM_PROMPT
 
 
+@pytest.mark.parametrize('mode', ['batch', 'isolated'])
+def test_review_of_flagged_claim_is_diagnostic_only_even_if_model_says_supports(monkeypatch, mode):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    source_id = ''
+    class Provider:
+        name = 'guarded-review'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                return {'reviews': [{'claim_index': 0, 'verdict': 'supports'}]}, 5
+            return {'claims': [{'text': 'Revenue was 100 in Q1 2025 due to a pandemic.',
+                'citations': [{'source_id': source_id, 'quotation': 'Revenue was 100.'}]}]}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    reg = client.post('/v1/auth/local/register', json={'email': f'guarded-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + reg['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title': 'Report',
+        'text': 'Revenue was 100.', 'permissions': {'store': True, 'display': True, 'model_input': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    run = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'guarded-review'}, json={
+        'parent_version_id': topic['versions'][0]['version_id'], 'require_counterarguments': False,
+        'support_review': True, 'support_review_mode': mode, 'max_model_calls': 2})
+    assert run.status_code == 202
+    op = run.json()['operation']['operation_id']
+    for _ in range(100):
+        status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    content = client.get(path, headers=headers).json()['versions'][-1]['content']
+    assert content['run']['status'] == 'partial' and content['run']['model_calls'] == 2
+    claim = content['claims'][0]
+    assert claim['uncited_quarters'] and claim['causal_attribution_unverified']
+    assert claim['support_review']['verdict'] == 'uncertain'
+    assert claim['support_review']['reported_verdict'] == 'supports'
+    assert claim['support_review']['diagnostic_only'] is True
+    assert set(claim['support_review']['guard_reasons']) == {'uncited_quarters', 'causal_attribution_unverified'}
+
+
 def test_legacy_annual_rate_difference_is_warned_without_rewriting_history(monkeypatch):
     from uuid import uuid4
     from app.research_topics import VersionInput
