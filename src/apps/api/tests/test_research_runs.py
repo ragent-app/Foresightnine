@@ -2884,7 +2884,9 @@ def test_related_percentage_candidate_can_replace_ambiguous_quotation(monkeypatc
 
 
 def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(monkeypatch):
+    import base64
     import json
+    from hashlib import sha256
     from uuid import uuid4
     from app.research_fetch import FetchedText
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
@@ -2903,7 +2905,9 @@ def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(mon
         assert str(request.url) == "https://www.bea.gov/news/report"
         assert request.permissions.model_input and request.permissions.display and request.permissions.export
         assert 0 < timeout_seconds <= 15
-        return FetchedText(text="Revenue was 100 million.", response_sha256="f" * 64, content_type="text/html")
+        raw = b"<html><p>Revenue was 100 million.</p></html>"
+        return FetchedText(text="Revenue was 100 million.", response_sha256=sha256(raw).hexdigest(),
+                           content_type="text/html", original_html_base64=base64.b64encode(raw).decode())
     class Provider:
         name = "test-model"
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
@@ -2942,6 +2946,8 @@ def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(mon
     assert source_id in current['source_ids'] and current['content']['run']['official_fetch_calls'] == 1, (seen, current['content'])
     assert current['content']['claims'][0]['citations'][0]['source_id'] == source_id
     assert client.get('/v2/research/sources/' + source_id, headers=headers).status_code == 200
+    original = client.get('/v2/research/sources/' + source_id + '/original', headers=headers)
+    assert original.status_code == 200 and original.content == b"<html><p>Revenue was 100 million.</p></html>"
     exported = client.get(path + '/versions/' + current['version_id'] + '/export', headers=headers)
     assert exported.status_code == 200, exported.text
     assert exported.json()['version']['content']['claims'][0]['citations'][0]['source_id'] == source_id

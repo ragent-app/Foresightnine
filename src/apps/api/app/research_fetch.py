@@ -1,6 +1,7 @@
 """Bounded retrieval of selected official HTML, with no redirects or cookies."""
 from __future__ import annotations
 
+import base64
 from html.parser import HTMLParser
 from dataclasses import dataclass
 from hashlib import sha256
@@ -112,6 +113,7 @@ class FetchedText:
     text: str
     response_sha256: str
     content_type: str
+    original_html_base64: str | None = None
 
 
 def fetch_official_text(request: FetchSourceRequest,
@@ -150,5 +152,6 @@ def fetch_official_text(request: FetchSourceRequest,
         text = "\n".join(line.strip() for line in "".join(parser.parts).splitlines() if line.strip())
     if not text or len(text) > 200000:
         raise FetchFailure("source_empty_or_too_large")
-    return FetchedText(text=text, response_sha256=sha256(response.body.encode("utf-8")).hexdigest(),
-                       content_type=content_type)
+    original = response.body.encode("utf-8")
+    return FetchedText(text=text, response_sha256=sha256(original).hexdigest(), content_type=content_type,
+                       original_html_base64=base64.b64encode(original).decode("ascii") if content_type == "text/html" else None)

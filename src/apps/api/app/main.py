@@ -1507,7 +1507,7 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
         metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
         if source.retrieval_method == "user_pdf":
             metadata["original_pdf_available"] = bool(source.original_pdf_base64)
-        if source.retrieval_method in {"user_html", "sec_filing_html"}:
+        if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
             metadata["original_html_available"] = bool(source.original_html_base64)
         if pdf_text_spacing_suspect(source):
             metadata["pdf_text_spacing_warning"] = True
@@ -2107,7 +2107,7 @@ def _visible_research_source(source: ResearchSource) -> dict:
     result = source.model_dump(mode="json", exclude={"original_pdf_base64", "original_html_base64"})
     if source.retrieval_method == "user_pdf":
         result["original_pdf_available"] = bool(source.original_pdf_base64)
-    if source.retrieval_method in {"user_html", "sec_filing_html"}:
+    if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
         result["original_html_available"] = bool(source.original_html_base64)
     if pdf_text_spacing_suspect(source):
         result["pdf_text_spacing_warning"] = True
@@ -2238,7 +2238,7 @@ def get_research_source_original(source_id: str, authorization: str | None = Hea
     if not raw or not source.permissions.display or not source.permissions.export:
         raise ApiProblem(403, "invalid_request", "The original document is not available for download.")
     import base64
-    is_html = source.retrieval_method in {"user_html", "sec_filing_html"}
+    is_html = source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}
     return Response(content=base64.b64decode(raw), media_type="application/octet-stream" if is_html else "application/pdf",
                     headers={"Content-Disposition": 'attachment; filename="source.html"' if is_html else 'attachment; filename="source.pdf"',
                              "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
@@ -2308,7 +2308,7 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
             published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at,
             is_simulated=request.is_simulated),
             retrieval_method="official_html", response_sha256=fetched.response_sha256,
-            response_content_type=fetched.content_type)
+            response_content_type=fetched.content_type, original_html_base64=fetched.original_html_base64)
         return _visible_research_source(source)
     except FetchFailure as error:
         if error.code == "source_rate_limited":
@@ -2561,7 +2561,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     source = research_sources.create(account.account_id, SourceInput(title=source_request.title,
                         text=fetched.text, url=source_request.url, kind="official", permissions=permissions),
                         retrieval_method="official_html", response_sha256=fetched.response_sha256,
-                        response_content_type=fetched.content_type, source_id=source_id)
+                        response_content_type=fetched.content_type, original_html_base64=fetched.original_html_base64, source_id=source_id)
                     sources.append(source)
                     source_ids.append(source.source_id)
                     official_fetch_status = "completed"

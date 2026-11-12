@@ -20,6 +20,11 @@ def test_extracts_visible_text_without_scripts_and_records_source_hash():
     assert "Report" in result.text and "GDP 2.5%" in result.text
     assert "navigation" not in result.text and "bad()" not in result.text
     assert len(result.response_sha256) == 64
+    import base64
+    from hashlib import sha256
+    original = base64.b64decode(result.original_html_base64)
+    assert b'<script>bad()</script>' in original
+    assert sha256(original).hexdigest() == result.response_sha256
 
 
 def test_table_extraction_preserves_cell_order_empty_cells_and_bounded_spans():

@@ -333,3 +333,36 @@ def test_research_text_upload_has_scoped_bounded_body_limit(monkeypatch):
     assert oversized.status_code == 413
     unrelated = client.post("/v2/research/sources/fetch", headers=headers, json={"text": "x" * 300_000})
     assert unrelated.status_code == 413
+
+
+def test_fetched_official_html_original_is_private_permission_gated_attachment(monkeypatch):
+    import base64
+    from hashlib import sha256
+    from uuid import uuid4
+    from app.research_fetch import FetchedText
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setattr(api, '_reserve_search_call', lambda request: None)
+    raw = b'<html><p>Official text</p><script>do_not_execute()</script></html>'
+    monkeypatch.setattr(api, 'fetch_official_text', lambda request: FetchedText('Official text', sha256(raw).hexdigest(),
+        'text/html', base64.b64encode(raw).decode()))
+    client = TestClient(app)
+    def account():
+        result = client.post('/v1/auth/local/register', json={'email': f'official-{uuid4().hex}@example.test',
+            'password': 'correct horse battery staple!'}).json()
+        return {'Authorization': 'Bearer ' + result['access_token']}
+    owner, other = account(), account()
+    def fetch(export):
+        response = client.post('/v2/research/sources/fetch', headers=owner, json={'title': 'Official report',
+            'url': 'https://www.bea.gov/news/example', 'permissions': {'store': True, 'display': True, 'export': export}})
+        assert response.status_code == 201, response.text
+        assert response.json()['original_html_available'] is True
+        assert 'original_html_base64' not in response.json()
+        return response.json()['source_id']
+    available, restricted = fetch(True), fetch(False)
+    download = client.get('/v2/research/sources/' + available + '/original', headers=owner)
+    assert download.status_code == 200 and download.content == raw
+    assert download.headers['content-type'].startswith('application/octet-stream')
+    assert download.headers['content-disposition'].startswith('attachment;')
+    assert download.headers['x-content-type-options'] == 'nosniff'
+    assert client.get('/v2/research/sources/' + restricted + '/original', headers=owner).status_code == 403
+    assert client.get('/v2/research/sources/' + available + '/original', headers=other).status_code == 404
