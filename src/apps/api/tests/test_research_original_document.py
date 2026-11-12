@@ -15,12 +15,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as api
-from app.research_analysis import _select_windows
+from app.research_analysis import SYSTEM_PROMPT, _select_windows, analyze
+from app.research_sources import ResearchSource, SourcePermissions
+from datetime import datetime, timezone
 from app.research_uploads import _extract_text
 
 
 PDF = Path(__file__).resolve().parents[3] / "docs/product/phase-a/source-snapshots/bea-gdp-2023-q4-advance.pdf"
 FED_PDF = PDF.with_name("fed-fomc-2024-09-18.pdf")
+BEA_2022_PDF = PDF.with_name("bea-gdp-2022-q4-advance.pdf")
 HASH = "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d"
 QUOTE = "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared"
 QUARTER_QUOTE = "Real gross domestic product (GDP) increased at an annual rate of 3.3 percent in the fourth quarter of\n2023"
@@ -32,6 +35,29 @@ def test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf():
     text = _extract_text(FED_PDF.read_bytes())
     windows = _select_windows(text, "2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？", 508, 2)
     assert any("1/2 percentage point to 4-3/4 to 5 percent" in passage for _, passage in windows)
+
+
+@pytest.mark.skipif(not BEA_2022_PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                    reason="retained official document or PDF tools unavailable")
+def test_annual_and_quarterly_question_selects_both_distinct_passages():
+    text = _extract_text(BEA_2022_PDF.read_bytes())
+    question = ("According to the BEA advance estimate for 2022, report the full-year 2022 real GDP growth "
+                "and the fourth-quarter annualized real GDP growth; distinguish their periods and note relevant limitations.")
+    windows = _select_windows(text, question, 468, 2)
+    assert len(windows) == 2
+    assert any("2.9 percent in the fourth quarter" in passage for _, passage in windows)
+    assert any("Real GDP increased 2.1 percent in 2022" in passage for _, passage in windows)
+    report = ResearchSource(source_id="bea-dev", owner_id="test", title="BEA GDP 2022 advance estimate", text=text,
+        kind="user_supplied", obtained_at=datetime.now(timezone.utc), content_sha256="test",
+        permissions=SourcePermissions(store=True, model_input=True, display=True))
+    def fixed_model(prompt):
+        parts = json.loads(prompt)["sources"]
+        assert any("2.9 percent in the fourth quarter" in part["text"] for part in parts)
+        assert any("Real GDP increased 2.1 percent in 2022" in part["text"] for part in parts)
+        return {}, 10
+    result = analyze(question, [report], None, fixed_model,
+                     max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+    assert len(result.segments) == 2
 
 
 @pytest.mark.skipif(not PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),

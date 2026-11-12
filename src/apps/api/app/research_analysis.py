@@ -32,7 +32,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v4"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v5"
 
 
 class Citation(BaseModel):
@@ -175,7 +175,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
         return [(0, text)]
     lower = question.casefold()
     terms = set(re.findall(r"[a-z]{3,}|(?<!\d)(?:19|20)\d{2}(?!\d)", lower)) - {
-        "the", "and", "for", "what", "how", "was", "were", "compare", "report", "from", "with", "that", "this", "does", "differ"}
+        "the", "and", "for", "what", "how", "was", "were", "compare", "report", "from", "with", "that", "this", "does", "differ",
+        "according", "distinguish", "their", "periods", "note", "relevant", "limitations", "provided", "supplied", "using"}
     for chinese, english in {
         "收入": ("revenue", "sales"), "营收": ("revenue", "sales"),
         "利润": ("income", "profit", "margin"), "增长": ("growth", "increase"),
@@ -200,6 +201,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
                 "annual": ("annual", "yearly"), "annualized": ("annual", "yearly"),
                 "quarterly": ("quarter",), "profit": ("profit", "income")}
     groups = list(dict.fromkeys(synonyms.get(term, (term,)) for term in words))
+    wants_annual_levels = ("full-year" in lower or "full year" in lower or "全年" in lower or
+                           bool(re.search(r"\bannual\s+(?:real\s+)?(?:gdp|growth|revenue|income)\b", lower)))
     ranked: list[tuple[int, int]] = []
     seen: set[int] = set()
     # Cap scanning work for multi-megabyte material; unexamined ranges remain
@@ -227,6 +230,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
         year_counts = [passage.count(year) for year in years]
         score = (sum(100 + min(count, 4) * 3 for count in counts if count) +
                  sum(25 + min(count, 4) * 5 for count in year_counts if count))
+        if wants_annual_levels and re.search(r"\b(?:annual (?:level|average)|calendar year|full[- ]year|year ended)\b", passage):
+            score += 350
         ranked.append((score, start))
     ranked.sort(key=lambda item: (-item[0], item[1]))
     selected: list[tuple[int, str]] = []
