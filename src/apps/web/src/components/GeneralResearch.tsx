@@ -87,6 +87,21 @@ function statusLabel(status: string, en: boolean): string {
   return ({ pending: "等待中", running: "进行中", completed: "已结束", failed: "失败", cancelled: "已取消", partial: "部分完成" } as Record<string, string>)[status] ?? status;
 }
 
+function factSourceWarning(value: string, en: boolean): string {
+  const messages: Record<string, [string, string]> = {
+    source_unavailable: ["Source is unavailable for this cutoff or display.", "资料不可展示或不符合截止时间。"],
+    source_missing: ["The quotation has no source attached.", "引文未关联来源。"],
+    quotation_missing: ["No source quotation is saved.", "未保存来源引文。"],
+    quotation_unlocated: ["The quotation was not found in the source.", "无法在资料中定位该引文。"],
+    quotation_ambiguous: ["The quotation occurs in multiple locations.", "该引文有多个可能位置。"],
+    quotation_partial: ["The quotation cuts through a word or number.", "该引文截断了单词或数字。"],
+    location_mismatch: ["The saved location does not match the quotation.", "保存的位置与引文不一致。"],
+    value_missing: ["The edited value is not present in the quotation.", "编辑后的数值未出现在引文中。"],
+    not_checked: ["The quotation was not checked because the review limit was reached.", "达到检查数量上限，未核对该引文。"],
+  };
+  return (messages[value] ?? ["Source details require review.", "来源详情需要核查。"])[en ? 0 : 1];
+}
+
 function safeCitationUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
@@ -593,7 +608,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         {editingFacts && isLatest && !running ? <p>{en ? "The original quotation is retained as context. An edited figure is not independently verified." : "原引文将作为上下文保留；修改后的数值尚未独立核验。"}</p> : null}
         {facts.map((fact, index) => <article className="general-claim" key={`${fact.fact_id}:${index}`}>
           <strong>{fact.label}</strong>
-          {fact.authorship === "user" || !originalFacts.has(JSON.stringify(fact)) ? <small> {en ? "User-edited; not independently verified." : "用户编辑，尚未独立核验。"}</small> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.currency_quote_missing ? <p role="status">{en ? "This table quotation does not identify the currency. Check the original source and currency before relying on the calculation." : "该表格引文未标明币种；使用计算结果前请核对原文及币种。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.direction_context_unverified ? <p role="status">{en ? "The negative sign was inferred from a decrease in the quotation. Check the subject and whether this is a change or a level before calculating." : "负号根据引文中的下降表述推断；计算前请核对指标对象以及它表示变化还是水平。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.numeric_normalization === "equivalent_decimal_fraction" ? <small> {en ? "Equivalent decimal and fraction were checked exactly." : "小数与分数已按精确数值核对。"}</small> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.numeric_normalization === "exact_range_bound" ? <small> {en ? "This figure is a bound extracted from a range." : "该数值是从区间中提取的端点。"}</small> : null}
+          {fact.authorship === "user" || !originalFacts.has(JSON.stringify(fact)) ? <small> {en ? "User-edited; not independently verified." : "用户编辑，尚未独立核验。"}</small> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.source_value_warnings?.length ? <div role="status"><p>{en ? "Check this edited figure against its source:" : "请核对编辑后的数值与来源："}</p><ul>{fact.source_value_warnings.map((warning, warningIndex) => <li key={warningIndex}>{factSourceWarning(warning, en)}</li>)}</ul></div> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.currency_quote_missing ? <p role="status">{en ? "This table quotation does not identify the currency. Check the original source and currency before relying on the calculation." : "该表格引文未标明币种；使用计算结果前请核对原文及币种。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.direction_context_unverified ? <p role="status">{en ? "The negative sign was inferred from a decrease in the quotation. Check the subject and whether this is a change or a level before calculating." : "负号根据引文中的下降表述推断；计算前请核对指标对象以及它表示变化还是水平。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.numeric_normalization === "equivalent_decimal_fraction" ? <small> {en ? "Equivalent decimal and fraction were checked exactly." : "小数与分数已按精确数值核对。"}</small> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.numeric_normalization === "exact_range_bound" ? <small> {en ? "This figure is a bound extracted from a range." : "该数值是从区间中提取的端点。"}</small> : null}
           {editingFacts && isLatest && !running ? <>
             <Field label={`${en ? "Metric" : "指标"} ${index + 1}`}><Input value={fact.label ?? ""} maxLength={300} disabled={busy} onChange={(event) => updateFact(index, { label: event.target.value })} /></Field>
             <Field label={`${en ? "Value" : "数值"} ${index + 1}`}><Input value={fact.value ?? ""} inputMode="decimal" maxLength={64} disabled={busy} onChange={(event) => updateFact(index, { value: event.target.value })} /></Field>

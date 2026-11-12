@@ -238,3 +238,63 @@ def test_full_export_discloses_input_precision_for_existing_versions(monkeypatch
     assert exported['request']['scope'] == '2024'
     assert exported['calculation_disclosure'] == 'Calculations use the recorded inputs; their source precision and prior rounding are not established.'
     assert 'calculation_disclosure' not in client.get(path + '/export/metadata', headers=headers).json()
+
+
+def test_edited_source_fact_reports_stale_value_and_untrusted_location(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'fact-source-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': 'Revenue 100. Revenue 200.', 'permissions': {'store': True, 'display': True, 'model_input': True}}).json()
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source['source_id']]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    fact = {'fact_id': 'revenue', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': '2024', 'source_id': source['source_id'], 'quotation': 'Revenue 100', 'location': {'character_start': 0, 'character_end': 11}}
+    first = client.post(path + '/versions', headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': [fact]}})
+    assert first.status_code == 201, first.text
+    old = first.json()['versions'][-1]
+    assert not old['content']['facts'][0].get('source_value_warnings')
+    changed = deepcopy(old['content']);changed['facts'][0]['value'] = '200';changed['facts'][0]['source_value_warnings'] = []
+    second = client.post(path + '/versions', headers=headers, json={'parent_version_id': old['version_id'], 'content': changed})
+    assert second.status_code == 201, second.text
+    current = second.json()['versions'][-1]
+    assert current['content']['facts'][0]['source_value_warnings'] == ['value_missing']
+    assert current['content']['facts'][0]['verification'] == 'user_edited_not_independently_verified'
+    assert not second.json()['versions'][-2]['content']['facts'][0].get('source_value_warnings')
+    corrected = deepcopy(current['content']);corrected['facts'][0]['quotation'] = 'Revenue 200';corrected['facts'][0]['location'] = {'character_start': 13, 'character_end': 24}
+    third = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': corrected})
+    assert third.status_code == 201, third.text
+    assert not third.json()['versions'][-1]['content']['facts'][0].get('source_value_warnings')
+    invalid = deepcopy(third.json()['versions'][-1]['content']);invalid['facts'][0]['location'] = {'character_start': True, 'character_end': 24}
+    fourth = client.post(path + '/versions', headers=headers, json={'parent_version_id': third.json()['versions'][-1]['version_id'], 'content': invalid})
+    assert fourth.status_code == 201, fourth.text
+    assert fourth.json()['versions'][-1]['content']['facts'][0]['source_value_warnings'] == ['location_mismatch']
+    detached = deepcopy(fourth.json()['versions'][-1]['content']);detached['facts'][0]['source_id'] = None
+    fifth = client.post(path + '/versions', headers=headers, json={'parent_version_id': fourth.json()['versions'][-1]['version_id'], 'content': detached})
+    assert fifth.status_code == 201, fifth.text
+    assert fifth.json()['versions'][-1]['content']['facts'][0]['source_value_warnings'] == ['source_missing']
+
+
+def test_edited_fact_source_checks_bound_failed_lookups(monkeypatch):
+    from uuid import uuid4
+    import app.main as api
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    calls = []
+    original = api.locate_user_quotation
+    def bounded(source, quotation):
+        calls.append(quotation)
+        return original(source, quotation)
+    monkeypatch.setattr(api, 'locate_user_quotation', bounded)
+    client = TestClient(app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'fact-budget-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': 'Revenue 100.', 'permissions': {'store': True, 'display': True}}).json()
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source['source_id']]}).json()
+    facts = [{'fact_id': f'f{i}', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'period': '2024', 'source_id': source['source_id'], 'quotation': f'not found {i}'} for i in range(201)]
+    path = '/v2/research/topics/' + topic['topic_id'] + '/versions'
+    result = client.post(path, headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': facts}})
+    assert result.status_code == 201, result.text
+    saved = result.json()['versions'][-1]['content']['facts']
+    assert len(calls) == 200
+    assert saved[199]['source_value_warnings'] == ['quotation_unlocated']
+    assert saved[200]['source_value_warnings'] == ['not_checked']
