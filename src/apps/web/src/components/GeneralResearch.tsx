@@ -660,8 +660,10 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
             <p>{en ? "SEC access requires a server-configured contact. Filing dates do not prove the exact public availability time." : "SEC 访问需要服务端配置联系信息。提交日期不能证明资料的精确公开时刻。"}</p>
           </> : sourceMode === "file" ? <>
             <Field label={en ? "PDF or UTF-8 HTML file (maximum 5 MB)" : "PDF 或 UTF-8 HTML 文件（最大 5 MB）"}><Input key={fileInputKey} type="file" accept="application/pdf,text/html,.pdf,.html,.htm" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field>
-            <Field label={en ? "PDF text order" : "PDF 文字读取方式"}><select className="text-input select-input" value={pdfTextOrder} onChange={(event) => setPdfTextOrder(event.target.value as "layout" | "reading")}><option value="layout">{en ? "Preserve layout (tables)" : "保留版式（表格）"}</option><option value="reading">{en ? "Reading order (prose)" : "阅读顺序（正文）"}</option></select></Field>
-            <p>{en ? "Extraction order can change table or paragraph meaning. Check the original PDF; choosing another order creates a separate source." : "读取方式可能改变表格或段落顺序，请对照原 PDF；更换方式会创建一份独立资料。"}</p>
+            {!file || !/\.html?$/i.test(file.name) ? <>
+              <Field label={en ? "PDF text order" : "PDF 文字读取方式"}><select className="text-input select-input" value={pdfTextOrder} onChange={(event) => setPdfTextOrder(event.target.value as "layout" | "reading")}><option value="layout">{en ? "Preserve layout (tables)" : "保留版式（表格）"}</option><option value="reading">{en ? "Reading order (prose)" : "阅读顺序（正文）"}</option></select></Field>
+              <p>{en ? "Extraction order can change table or paragraph meaning. Check the original PDF; choosing another order creates a separate source." : "读取方式可能改变表格或段落顺序，请对照原 PDF；更换方式会创建一份独立资料。"}</p>
+            </> : null}
             <Field label={en ? "Title (optional)" : "资料标题（可选）"}><Input value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
             <Field label={en ? "Publication time (if known)" : "公开时间（如已知）"}><Input type="datetime-local" value={publishedAt} onChange={(event) => setPublishedAt(event.target.value)} /></Field>
             <p>{en ? "Text-based PDFs and UTF-8 HTML are supported. Scanned PDFs require text recognition before upload." : "支持含文本的 PDF 和 UTF-8 HTML；扫描 PDF 需要先识别文字。"}</p>
