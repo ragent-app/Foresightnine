@@ -210,3 +210,17 @@ def test_review_rechecks_usd_amount_without_fact_or_trusting_saved_warning():
     item = {**claim(), "text": "Revenue was 100万美元", "uncited_claim_amounts": []}
     batch = prepare_support_review([item], [source()], 3000)
     assert batch.indexes == [] and batch.omitted == [0]
+
+
+def test_review_does_not_clear_percentage_missing_from_quotations():
+    item = {**claim(), "text": "Revenue increased 12 percent", "uncited_percentages": []}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omitted == [0]
+    present = {**claim(), "text": "Revenue increased 100 percent", "uncited_percentages": ["stale"]}
+    assert prepare_support_review([present], [source()], 3000).indexes == [0]
+
+
+def test_review_omits_uncited_percentage_point_amount():
+    item = {**claim(), "text": "Revenue increased 0.2 percentage points"}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omitted == [0]

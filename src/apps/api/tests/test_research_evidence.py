@@ -450,3 +450,14 @@ def test_usd_amount_comparison_is_exact_and_dollar_sign_alone_is_ambiguous():
     citation = {"source_id": "s", "quotation": text, "location": {"character_start": 0, "character_end": len(text)}}
     result = flag_uncited_usd_amounts([{"text": "800亿美元。", "citations": [citation]}], [source])[0]
     assert result["uncited_claim_amounts"] == ["800亿美元"]
+
+
+def test_percentage_points_require_quotation_or_exact_basis_point_equivalent():
+    from app.research_evidence import flag_uncited_percentage_points
+    item = {"text": "净上修约0.2个百分点。", "citations": [{"quotation": "Revision was upward."}]}
+    assert flag_uncited_percentage_points([item])[0]["uncited_percentage_points"] == ["0.2个百分点"]
+    for quote in ("0.2 percentage points", "20 basis points", "20个基点"):
+        assert not flag_uncited_percentage_points([{**item, "citations": [{"quotation": quote}]}])[0].get("uncited_percentage_points")
+    for quote in ("0.2 percent", "2 basis points", "increased 0.2"):
+        assert flag_uncited_percentage_points([{**item, "citations": [{"quotation": quote}]}])[0]["uncited_percentage_points"]
+    assert not flag_uncited_percentage_points([{**item, "text": "No amount", "uncited_percentage_points": ["stale"]}])[0].get("uncited_percentage_points")

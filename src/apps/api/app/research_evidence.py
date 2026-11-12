@@ -295,6 +295,42 @@ def flag_uncited_usd_amounts(claims: list[dict], sources: list[ResearchSource]) 
     return output
 
 
+def flag_uncited_percentage_points(claims: list[dict]) -> list[dict]:
+    """Flag percentage-point amounts absent from quotations, not entailment."""
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("uncited_percentage_points", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
+            output.append(entry)
+            continue
+        quoted: set[Decimal] = set()
+        for citation in citations:
+            quote = citation.get("quotation") if isinstance(citation, dict) else None
+            if not isinstance(quote, str):
+                continue
+            for match in _POINTS.finditer(quote):
+                if len(match.group(1)) <= 20:
+                    values = _quoted_numbers(match.group(1).replace("−", "-"))
+                    if len(values) == 1:
+                        quoted.add(next(iter(values)))
+            for match in _BASIS_POINTS.finditer(quote):
+                if len(match.group(1)) <= 20:
+                    quoted.add(Decimal(match.group(1).replace("−", "-")) / 100)
+        missing = []
+        for match in _POINTS.finditer(text):
+            values = _quoted_numbers(match.group(1).replace("−", "-")) if len(match.group(1)) <= 20 else set()
+            if (len(values) != 1 or next(iter(values)) not in quoted) and match.group(0) not in missing:
+                missing.append(match.group(0))
+                if len(missing) == 5:
+                    break
+        if missing:
+            entry["uncited_percentage_points"] = missing
+        output.append(entry)
+    return output
+
+
 def flag_uncited_basis_points(claims: list[dict]) -> list[dict]:
     """Flag basis-point figures missing from quotations, not semantic support."""
     output = []
