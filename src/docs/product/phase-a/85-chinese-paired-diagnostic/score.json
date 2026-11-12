@@ -1,0 +1,18 @@
+{
+  "status": "completed",
+  "research_status": "partial",
+  "reported_tokens": 1992,
+  "checks": {
+    "total_317": true,
+    "total_change_7_3": true,
+    "online_29": true,
+    "online_change_7": true,
+    "online_share_9_3": true,
+    "provisional_estimate": true,
+    "all_claim_citations": true,
+    "no_numeric_or_context_warnings": true,
+    "budget_and_provenance": true
+  },
+  "mechanical_pass": true,
+  "semantic_support": "not established"
+}

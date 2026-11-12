@@ -1,0 +1,245 @@
+{
+  "source_attribution": "來源：香港特別行政區政府統計處網站 https://www.censtatd.gov.hk/；知識產權屬香港特別行政區政府；輸入為已修改的文字節錄。",
+  "id": "HK_RETAIL",
+  "manifest_sha256": "9758802dde2b4e23154597780e71ef60481659b7924e043e9556d5da4534d979",
+  "operation_status": "completed",
+  "operation_id": "operation:afdf7b655ddee7fa28591a47",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 22.3,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+        "title": "香港政府統計處：2024年11月零售業銷貨額按月統計調查報告（節錄）",
+        "url": "https://www.censtatd.gov.hk/tc/wbr.html",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T09:05:48.393000+00:00",
+        "revised_at": null,
+        "content_sha256": "60a89616be5b4481c15c3c717a5b4804774eb8e9c5f18846afbce662d28b8024",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_total_value",
+        "value": "317",
+        "unit": "億港元",
+        "currency": "HKD",
+        "period": "2024年11月",
+        "label": "retail_total_sales_value",
+        "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+        "quotation": "2024年11月的零售業總銷貨價值為317億元（臨時估計），較2023年同月下跌7.3%。",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 424,
+          "character_end": 469
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_online_value",
+        "value": "29",
+        "unit": "億港元",
+        "currency": "HKD",
+        "period": "2024年11月",
+        "label": "online_sales_value",
+        "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+        "quotation": "零售業網上銷售價值在2024年11月為29億元（臨時估計），較2023年同月下跌7.0%。",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 8432,
+          "character_end": 8477
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_online_share",
+        "value": "9.3",
+        "unit": "%",
+        "currency": null,
+        "period": "2024年11月",
+        "label": "online_sales_share_of_total",
+        "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+        "quotation": "2024年11月的零售業網上銷售佔零售業總銷貨價值的9.3%。",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 8482,
+          "character_end": 8513
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "margin_percent",
+        "formula_version": "1",
+        "expression": "first / second * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fact_online_value",
+            "value": "29",
+            "unit": "億港元",
+            "currency": "HKD",
+            "period": "2024年11月"
+          },
+          {
+            "fact_id": "fact_total_value",
+            "value": "317",
+            "unit": "億港元",
+            "currency": "HKD",
+            "period": "2024年11月"
+          }
+        ],
+        "value": "9.15",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [
+      {
+        "claim_index": 0,
+        "calculation_index": 0,
+        "claimed_value": "7.3",
+        "calculated_value": "9.1",
+        "unit": "percent",
+        "status": "requires_review"
+      }
+    ],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "2024年11月香港零售業總銷貨價值的臨時估計為317億元，較2023年同月下跌7.3%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+            "location": {
+              "character_start": 424,
+              "character_end": 469
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "2024年11月的零售業總銷貨價值為317億元（臨時估計），較2023年同月下跌7.3%。"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "2024年11月零售業網上銷售價值的臨時估計為29億元，較2023年同月下跌7.0%，佔總銷貨價值的9.3%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+            "location": {
+              "character_start": 8432,
+              "character_end": 8513
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "零售業網上銷售價值在2024年11月為29億元（臨時估計），較2023年同月下跌7.0%。\n    2024年11月的零售業網上銷售佔零售業總銷貨價值的9.3%。"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "來源為節錄且覆蓋不完整，數字標明為臨時估計，日後修訂可能改變跌幅與比率的結論。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+            "location": {
+              "character_start": 424,
+              "character_end": 453
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "2024年11月的零售業總銷貨價值為317億元（臨時估計）"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_ccf52e9b0751412e99b20995e9ec2df9: only character ranges 330–485, 8369–8524 were analyzed; remaining text was not examined.",
+      "A model-generated fact value was absent from its quotation and was omitted.",
+      "A model-generated fact value was absent from its quotation and was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 所有數字均為臨時估計，可能會被政府統計處日後修訂。",
+      "Model-reported limitation (not independently verified): 來源為報告節錄（source_coverage 標示為 partial），未必涵蓋報告全部內容（如詳細統計表及方法說明）。",
+      "Model-reported limitation (not independently verified): 來源文本未說明網上銷售的統計方法或涵蓋範圍（例如是否包括部分線上下單線下取貨）。",
+      "Model-reported limitation (not independently verified): 文本未提供2023年同月的絕對數值基準，無法直接驗證同比變化的計算。",
+      "Model-reported limitation (not independently verified): 報告的發布日期與統計期間的對應僅按來源標示，未能獨立核實。",
+      "A claim percentage may differ from a deterministic calculation; review the wording and calculation.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:afdf7b655ddee7fa28591a47",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1992,
+      "cost_usd": null,
+      "generation_tokens": 1992,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 21.963,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "7787c7a782d9666993897e295d25bb021d01aa16f7742b14ed5ff659efe7d7d7",
+      "prompt_characters": 1562,
+      "prompt_bytes": 2050,
+      "selection_method": "ranked_nonoverlapping_windows_v23",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "character_start": 330,
+          "character_end": 485
+        },
+        {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "character_start": 8369,
+          "character_end": 8524
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_ccf52e9b0751412e99b20995e9ec2df9": "60a89616be5b4481c15c3c717a5b4804774eb8e9c5f18846afbce662d28b8024"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}

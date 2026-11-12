@@ -1,0 +1,115 @@
+{
+  "source_attribution": "來源：香港特別行政區政府統計處網站 https://www.censtatd.gov.hk/；知識產權屬香港特別行政區政府；輸入為已修改的文字節錄。",
+  "payload": {
+    "claims": [
+      {
+        "text": "2024年11月香港零售業總銷貨價值的臨時估計為317億元，較2023年同月下跌7.3%。",
+        "citations": [
+          {
+            "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+            "quotation": "2024年11月的零售業總銷貨價值為317億元（臨時估計），較2023年同月下跌7.3%。"
+          }
+        ]
+      },
+      {
+        "text": "2024年11月零售業網上銷售價值的臨時估計為29億元，較2023年同月下跌7.0%，佔總銷貨價值的9.3%。",
+        "citations": [
+          {
+            "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+            "quotation": "零售業網上銷售價值在2024年11月為29億元（臨時估計），較2023年同月下跌7.0%。 2024年11月的零售業網上銷售佔零售業總銷貨價值的9.3%。"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "來源為節錄且覆蓋不完整，數字標明為臨時估計，日後修訂可能改變跌幅與比率的結論。",
+        "citations": [
+          {
+            "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+            "quotation": "2024年11月的零售業總銷貨價值為317億元（臨時估計）"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "所有數字均為臨時估計，可能會被政府統計處日後修訂。",
+      "來源為報告節錄（source_coverage 標示為 partial），未必涵蓋報告全部內容（如詳細統計表及方法說明）。",
+      "來源文本未說明網上銷售的統計方法或涵蓋範圍（例如是否包括部分線上下單線下取貨）。",
+      "文本未提供2023年同月的絕對數值基準，無法直接驗證同比變化的計算。",
+      "報告的發布日期與統計期間的對應僅按來源標示，未能獨立核實。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_total_value",
+        "label": "retail_total_sales_value",
+        "value": "317",
+        "unit": "億港元",
+        "currency": "HKD",
+        "period": "2024年11月",
+        "citation": {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "quotation": "2024年11月的零售業總銷貨價值為317億元（臨時估計），較2023年同月下跌7.3%。"
+        }
+      },
+      {
+        "fact_id": "fact_total_yoy",
+        "label": "retail_total_sales_yoy_change",
+        "value": "-7.3",
+        "unit": "%",
+        "currency": null,
+        "period": "2024年11月同比",
+        "citation": {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "quotation": "較2023年同月下跌7.3%。"
+        }
+      },
+      {
+        "fact_id": "fact_online_value",
+        "label": "online_sales_value",
+        "value": "29",
+        "unit": "億港元",
+        "currency": "HKD",
+        "period": "2024年11月",
+        "citation": {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "quotation": "零售業網上銷售價值在2024年11月為29億元（臨時估計），較2023年同月下跌7.0%。"
+        }
+      },
+      {
+        "fact_id": "fact_online_yoy",
+        "label": "online_sales_yoy_change",
+        "value": "-7.0",
+        "unit": "%",
+        "currency": null,
+        "period": "2024年11月同比",
+        "citation": {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "quotation": "較2023年同月下跌7.0%。"
+        }
+      },
+      {
+        "fact_id": "fact_online_share",
+        "label": "online_sales_share_of_total",
+        "value": "9.3",
+        "unit": "%",
+        "currency": null,
+        "period": "2024年11月",
+        "citation": {
+          "source_id": "source_ccf52e9b0751412e99b20995e9ec2df9",
+          "quotation": "2024年11月的零售業網上銷售佔零售業總銷貨價值的9.3%。"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "margin_percent",
+        "first_fact_id": "fact_online_value",
+        "second_fact_id": "fact_total_value"
+      }
+    ]
+  },
+  "reported_tokens": 1992,
+  "prompt_sha256": "7787c7a782d9666993897e295d25bb021d01aa16f7742b14ed5ff659efe7d7d7",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
