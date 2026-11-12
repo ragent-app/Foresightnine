@@ -124,6 +124,58 @@ def _unfinished_quote_context(source: ResearchSource, end: int, quotation: str) 
     return end + last_space if last_space > 0 else None
 
 
+_RELATED_PHRASE = re.compile(r"(?=\b([A-Za-z]{4,})\s+([A-Za-z]{4,})\b)")
+_RELATED_COMMON = {"about", "after", "before", "between", "committee", "could", "during", "federal",
+                   "following", "from", "have", "into", "more", "only", "other", "policy", "reported",
+                   "said", "source", "statement", "than", "that", "their", "these", "they", "this",
+                   "those", "under", "using", "were", "when", "which", "will", "with", "would"}
+
+
+def _following_related_sentence(source: ResearchSource, end: int, claim: str, citations: list[dict]) -> tuple[int, int] | None:
+    """Find a nearby unquoted sentence sharing a distinctive exact phrase.
+
+    This is a source-navigation cue only, not a claim-support judgment.
+    """
+    if len(claim) > 3000 or end >= len(source.text):
+        return None
+    tail = source.text[end:min(len(source.text), end + 600)]
+    leading = len(tail) - len(tail.lstrip())
+    if leading > 80 or "\f" in tail[:leading] or leading >= len(tail):
+        return None
+    body = tail[leading:]
+    boundary = _SENTENCE_END.search(body)
+    if boundary is None or boundary.end() > 450 or "\f" in body[:boundary.end()]:
+        return None
+    left, right = end + leading, end + leading + boundary.end()
+    sentence = source.text[left:right]
+    # Only exact, authorized, source-aligned quotations can clear a cue.
+    quoted = []
+    for citation in citations:
+        if not isinstance(citation, dict) or citation.get("source_id") != source.source_id or citation.get("partial_token"):
+            continue
+        loc, quote = citation.get("location"), citation.get("quotation")
+        if not isinstance(loc, dict) or loc.get("status") == "ambiguous" or not isinstance(quote, str):
+            continue
+        a, b = loc.get("character_start"), loc.get("character_end")
+        if (type(a) is int and type(b) is int and 0 <= a < b <= len(source.text) and
+                source.text[a:b] == quote and not partial_ascii_token(source.text, a, b)):
+            quoted.append(quote)
+    seen = set()
+    matched = 0
+    for match in _RELATED_PHRASE.finditer(claim):
+        a, b = match.group(1).casefold(), match.group(2).casefold()
+        pair = (a, b)
+        if pair in seen or a in _RELATED_COMMON or b in _RELATED_COMMON or len(a) + len(b) < 11:
+            continue
+        seen.add(pair)
+        pattern = re.compile(r"(?<![A-Za-z])" + re.escape(a) + r"\s+" + re.escape(b) + r"(?![A-Za-z])", re.IGNORECASE)
+        if pattern.search(sentence) and not any(pattern.search(q) for q in quoted):
+            matched += 1
+            if matched >= 2:
+                return left, right
+    return None
+
+
 def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
     """Flag selected quotations that omit a recognizable surrounding subject.
 
@@ -170,6 +222,16 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
                 if len(warnings) >= 5:
                     break
                 continue
+            claim_text = entry.get("text")
+            related = (_following_related_sentence(source, end, claim_text, citations)
+                       if isinstance(claim_text, str) else None)
+            if related is not None:
+                warnings.append({"source_id": source_id, "citation_index": index,
+                                 "context_metric": "related unquoted sentence",
+                                 "context_character_start": related[0], "context_character_end": related[1],
+                                 "status": "requires_review"})
+                if len(warnings) >= 5:
+                    break
             # A relative clause can contain another metric (e.g. GDP) while
             # still omitting the subject it describes (e.g. imports). Check
             # this before the metric shortcut so a later noun cannot hide the

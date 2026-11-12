@@ -1878,3 +1878,43 @@ def test_larger_provider_input_limit_requires_matching_research_budget(monkeypat
         if not expected_calls: assert result["content"]["run"]["error"] == "provider_budget_exhausted"
         parent = result["version_id"]
     assert reservations == [10000]
+
+
+def test_related_source_sentence_is_reviewable_and_recomputed_after_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    text = "Officials may adjust policy. They monitor labor market conditions and inflation pressures."
+    first, second = "Officials may adjust policy.", "They monitor labor market conditions and inflation pressures."
+    class Provider:
+        name = "related-context-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {"claims":[{"text":"Officials may adjust policy and monitor labor market conditions.",
+                    "citations":[{"source_id":source_id,"quotation":first}]}]}, 10
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    user = client.post("/v1/auth/local/register", json={"email":"related-context@example.test", "password":"correct horse battery staple!"}).json()
+    headers = {"Authorization":"Bearer "+user["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title":"Report", "text":text,
+        "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question":"What do officials monitor?", "source_ids":[source_id]}).json()
+    path = "/v2/research/topics/"+topic["topic_id"]
+    response = client.post(path+"/runs", headers={**headers,"Idempotency-Key":"related-context-run"},
+        json={"parent_version_id":topic["versions"][0]["version_id"], "require_counterarguments":False})
+    assert response.status_code == 202
+    op = response.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    version = client.get(path,headers=headers).json()["versions"][-1]
+    content = version["content"]
+    assert content["run"]["status"] == "partial"
+    assert content["claims"][0]["citation_context_warnings"][0]["context_metric"] == "related unquoted sentence"
+    edited = deepcopy(content)
+    edited["claims"][0]["citations"].append({"source_id":source_id,"quotation":second})
+    saved = client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
+    assert saved.status_code == 201
+    latest = saved.json()["versions"][-1]["content"]["claims"][0]
+    assert not latest.get("citation_context_warnings") and latest["authorship"] == "user"
+    assert content["claims"][0]["citation_context_warnings"]

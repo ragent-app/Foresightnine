@@ -461,3 +461,36 @@ def test_percentage_points_require_quotation_or_exact_basis_point_equivalent():
     for quote in ("0.2 percent", "2 basis points", "increased 0.2"):
         assert flag_uncited_percentage_points([{**item, "citations": [{"quotation": quote}]}])[0]["uncited_percentage_points"]
     assert not flag_uncited_percentage_points([{**item, "text": "No amount", "uncited_percentage_points": ["stale"]}])[0].get("uncited_percentage_points")
+
+
+def test_related_next_sentence_is_a_review_candidate_and_clears_when_cited():
+    from app.research_evidence import flag_citation_subject_context
+    text = "Officials may adjust policy. They monitor labor market conditions and inflation pressures."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Statement", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    first = "Officials may adjust policy."
+    second = "They monitor labor market conditions and inflation pressures."
+    def cite(quote):
+        start = text.index(quote)
+        return {"source_id":"s", "quotation":quote, "location":{"character_start":start,"character_end":start+len(quote)}}
+    claim = {"text":"Officials may adjust policy and monitor labor market conditions.", "citations":[cite(first)]}
+    result = flag_citation_subject_context([claim], [source])[0]
+    cue = result["citation_context_warnings"][0]
+    assert cue["context_metric"] == "related unquoted sentence"
+    assert text[cue["context_character_start"]:cue["context_character_end"]] == second
+    assert cue["status"] == "requires_review"
+    assert "citation_context_warnings" not in claim
+    assert not flag_citation_subject_context([{**claim,"citations":[cite(first),cite(second)]}], [source])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([claim], [source.model_copy(update={"permissions": SourcePermissions(store=True)})])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([{**claim,"citations":[{**cite(first),"partial_token":True}]}], [source])[0].get("citation_context_warnings")
+
+
+def test_related_sentence_detection_does_not_assume_unrelated_or_ambiguous_content():
+    from app.research_evidence import flag_citation_subject_context
+    text = "Policy was maintained. Another unrelated sentence follows."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Statement", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    quote = "Policy was maintained."
+    citation = {"source_id":"s", "quotation":quote, "location":{"character_start":0,"character_end":len(quote)}}
+    claim = {"text":"Policy remained unchanged.", "citations":[citation]}
+    assert not flag_citation_subject_context([claim], [source])[0].get("citation_context_warnings")

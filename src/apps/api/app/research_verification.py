@@ -24,7 +24,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v11"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v12"
 
 
 class ReviewEntry(BaseModel):
@@ -76,13 +76,16 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     for index, claim in enumerate(review_claims):
         citations = claim.get("citations")
         text = claim.get("text")
-        if (claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or
+        if (any(warning.get("context_metric") == "related unquoted sentence" for warning in claim.get("citation_context_warnings", [])) or
+                claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or
                 claim.get("numeric_discrepancy_for_review") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)
             omissions.append({"claim_index": index, "reason": "not_reviewable"})
             continue
-        context_warnings = {item["citation_index"]: item for item in claim.get("citation_context_warnings", [])}
+        context_warnings: dict[int, list[dict]] = {}
+        for warning in claim.get("citation_context_warnings", []):
+            context_warnings.setdefault(warning["citation_index"], []).append(warning)
         located = []
         for citation_index, citation in enumerate(citations):
             if not isinstance(citation, dict):
@@ -96,9 +99,9 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             if (type(start) is not int or type(end) is not int or start < 0 or end <= start or end > len(source.text) or
                     end - start > 1000 or source.text[start:end] != quotation):
                 break
-            warning = context_warnings.get(citation_index, {})
-            context_start = min(start, warning.get("context_character_start", start))
-            context_end = max(end, warning.get("context_character_end", end))
+            warnings = context_warnings.get(citation_index, [])
+            context_start = min([start, *(warning.get("context_character_start", start) for warning in warnings)])
+            context_end = max([end, *(warning.get("context_character_end", end) for warning in warnings)])
             if not 0 <= context_start <= start < end <= context_end <= len(source.text):
                 break
             located.append((source, start, end, context_start, context_end))

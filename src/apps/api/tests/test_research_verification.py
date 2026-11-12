@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v11"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v12"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -224,3 +224,29 @@ def test_review_omits_uncited_percentage_point_amount():
     item = {**claim(), "text": "Revenue increased 0.2 percentage points"}
     batch = prepare_support_review([item], [source()], 3000)
     assert batch.indexes == [] and batch.omitted == [0]
+
+
+
+def test_review_omits_claim_when_related_sentence_is_unquoted():
+    text = "Officials may adjust policy. They monitor labor market conditions and inflation pressures."
+    quotation = "Officials may adjust policy."
+    item = {"text":"Officials may adjust policy and monitor labor market conditions.",
+            "citations":[{"source_id":"s","quotation":quotation,"location":{"character_start":0,"character_end":len(quotation)}}]}
+    report = source().model_copy(update={"text":text})
+    batch = prepare_support_review([item],[report],2000)
+    assert not batch.indexes and batch.omitted == [0]
+    assert batch.omissions[0]["reason"] == "not_reviewable"
+    assert "labor market conditions" not in batch.prompt
+
+
+def test_subject_and_related_context_remain_visible_together():
+    from app.research_evidence import flag_citation_subject_context
+    text = "Personal saving rate declined. Officials monitor labor market conditions."
+    quotation = "declined."
+    start = text.index(quotation)
+    item = {"text":"GDP fell and labor market conditions are monitored.", "citations":[
+        {"source_id":"s", "quotation":quotation, "location":{"character_start":start,"character_end":start+len(quotation)}}]}
+    report = source().model_copy(update={"text":text})
+    warnings = flag_citation_subject_context([item],[report])[0]["citation_context_warnings"]
+    assert {w["context_metric"] for w in warnings} == {"personal saving rate", "related unquoted sentence"}
+    assert prepare_support_review([item],[report],2000).omitted == [0]
