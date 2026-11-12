@@ -1,5 +1,5 @@
 {
-  "assessment": "New held-out public source snapshots and tasks not used in prior model debugging, but evaluator knows references and no independent human review was performed. Three tasks cannot establish overall quality.",
+  "assessment": "Single previously observed task; fixed source, generation system prompt, model, parameters and scoring references, changed retrieval selection. No model review. Nonblind diagnostic only.",
   "cost_usd": "unknown; no monetary cap asserted",
   "generation_parameters": {
     "do_sample": false,
@@ -13,39 +13,29 @@
       "type": "enabled"
     }
   },
-  "implementation_commit": "b0ed4092300aea9bdc1c78d5b6d6d5fb773abf99",
+  "implementation_commit": "d02aea2f4791be54c2aec51f49b3fe71007249d2",
   "inputs": [
     {
       "id": "CISCO_REV",
       "source_id": "source_30347234ff284541b06000413c5c083c",
       "sha256": "d9f6eefae1640021ff1a00c149a4cd73e03b6188eacbb225da853b9ccd1a8f9c"
-    },
-    {
-      "id": "BEA_Q1",
-      "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
-      "sha256": "84d043c0134ea89cccdd0e4da346e71e8260063a06bdfe77a86b0bd3817d3bda"
-    },
-    {
-      "id": "FED_DISS",
-      "source_id": "source_74635c2e24064be5b5e31d5a9d980376",
-      "sha256": "99706054faaeb6181bd93f96107f77908cdeee2c983a1b43509622687f20429e"
     }
   ],
-  "max_calls_per_task": 2,
-  "max_calls_total": 6,
+  "max_calls_per_task": 1,
+  "max_calls_total": 1,
   "max_elapsed_seconds_per_task": 120,
   "max_tokens_per_task": 10000,
   "model": "glm-5.3-flash",
-  "pass_rule": "All 3 tasks must satisfy the frozen mechanical scorer, including two calls, complete model-review coverage, all review verdicts supports, expected facts, source locations and budget. This narrow gate cannot establish independent semantic correctness or full stage-B acceptance.",
+  "pass_rule": "Record input segments, extracted FY revenue facts, cited claims, deterministic calculation and limitations. No full quality or acceptance claim.",
   "provider_input_token_limit": 3000,
   "provider_timeout_seconds": 60,
   "references_sha256": "f0ec993a008d90be2c523cfdbd9fc6af38e6a01c2318081f4da50eba326bc280",
   "retry_external_calls": 0,
-  "review_calls": 3,
-  "runner_sha256": "22ae638a7a882be37998d23e5ef7898ebd22242ea9c74f4472ca8161c816c471",
+  "review_calls": 0,
+  "runner_sha256": "d420014371a13c76174adb5bc8fb3548e21daca618dce72a0951cb3d5f70de94",
   "scorer_sha256": "ddb3407fda57a0376d15e30403a4500b7df897d0661ffebb04932cddc4bcf267",
   "search_calls": 0,
-  "max_tokens_total": 30000,
+  "max_tokens_total": 10000,
   "source_html_sha256": "2cf482f78cce5038a1e750ca7b53ba96409854cb56e21eb2081532dcaa04ecf6",
   "source_html_gzip_sha256": "4e17fedd70baad966b5cf631e2f918ab7ef96647bc38b746f0ed21828561a9c3",
   "prior_attempt_manifest_sha256": "11c815d9250f366c33da4a2b4fb42a1afb7f6a17d619dee77e174ebde41d893b",
@@ -53,6 +43,6 @@
   "matching_sha256": "98643665cf09d14a53dcd4749a3094caf72d84b55bbb0937766e4fa027c93c16",
   "prepare_sha256": "493453675b18092c2939f338ba31af6a1851b35e7ac16d57ad1fc4d6ee0528f4",
   "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
-  "review_system_prompt_sha256": "deacbe17348931bf0b8c9d48b8fdff11067001f58b71c50e9ba6e22874662566",
-  "review_method": "bounded_quotation_context_model_review_v5"
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v6"
 }
