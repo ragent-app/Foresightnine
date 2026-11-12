@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v22"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v23"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 
@@ -535,8 +535,13 @@ def _select_windows(text: str, question: str, length: int, count: int,
         if should_stop is not None and should_stop():
             raise AnalysisInterrupted()
         added = 0
-        for run in chinese_runs:
-            for position in range(min(max(0, len(run) - size + 1), 128)):
+        # Spread the limited candidates across question phrases before taking
+        # more from any one phrase. A long source name at the beginning must
+        # not consume every slot before the requested metric is considered.
+        for position in range(128):
+            for run in chinese_runs[:32]:
+                if position + size > len(run):
+                    continue
                 term = run[position:position + size]
                 if term not in chinese_terms:
                     chinese_terms.append(term)
@@ -886,7 +891,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             # Tiny fragments rarely provide enough context. Structured table
             # or vote retrieval may intentionally use unequal spans, however:
             # a short total row must not discard its longer identifying header.
-            if split and lo < 400:
+            sample = selection_text[:4096]
+            # CJK text consumes more serialized bytes per character; retain
+            # two useful short windows when a 400-character threshold would
+            # otherwise collapse them solely due to UTF-8 encoding.
+            split_minimum = max(160, 400 * len(sample) // max(1, len(sample.encode("utf-8"))))
+            if split and lo < split_minimum:
                 split = False
                 lo = budget_for(False)
             selected = portions(lo, split) if lo else []

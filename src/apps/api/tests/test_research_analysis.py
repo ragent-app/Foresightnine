@@ -1038,3 +1038,25 @@ def test_chinese_question_retrieves_matching_chinese_source_with_original_offset
     assert any(target in item['text'] for item in calls[0]['sources'])
     assert result.claims[0]['citations'][0]['location']['character_start'] == text.index(target)
     assert result.prompt_bytes <= 2500
+
+
+def test_chinese_multitopic_question_balances_phrases_and_utf8_windows():
+    text = ('資料來源：星島研究院，星島研究院發布的財務報告。\n' +
+            '其他事項說明沒有相關收入與支出的數字。' * 60 +
+            '2024年倉儲物流收入為123億元，按年上升5%。' +
+            '其他事項說明沒有相關收入與支出的數字。' * 220 +
+            '2024年雲端支出為47億元，按年下降3%。' + '其他事項說明。' * 300)
+    report = source('s', text=text).model_copy(update={'title': '財務報告'})
+    captured = []
+    def generate(prompt):
+        captured.append(json.loads(prompt))
+        return {}, 1
+    result = analyze('根據星島研究院2024年報告，倉儲物流收入及雲端支出分別是多少？',
+                     [report], None, generate, max_prompt_chars=2055)
+    passages = [item['text'] for item in captured[0]['sources']]
+    assert len(passages) == 2
+    assert any('倉儲物流收入為123億元' in part for part in passages)
+    assert any('雲端支出為47億元' in part for part in passages)
+    assert result.prompt_bytes <= 2055
+    assert all(text[s['character_start']:s['character_end']] == passage
+               for s, passage in zip(result.segments, passages))
