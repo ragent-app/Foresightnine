@@ -760,3 +760,71 @@ def test_discovery_keeps_safe_leads_when_another_candidate_is_malformed(monkeypa
     assert "No eligible search candidates remained after validation." in no_safe["limitations"]
     assert "SECRET_INVALID" not in str(no_safe) and len(calls) == 2
     assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
+
+
+def test_simulated_source_is_not_sent_to_real_research_or_saved_as_evidence(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    seen = []
+    class Provider:
+        name = "simulation-boundary-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            seen.append(prompt)
+            import json
+            data = json.loads(prompt)
+            assert len(data["sources"]) == 1 and "SIMULATED_VALUE" not in prompt
+            citation = {"source_id": data["sources"][0]["source_id"], "quotation": "Revenue was 100"}
+            return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
+                    "counterarguments": [{"text": "Revenue is not profit", "citations": [citation]}]}, 55
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={"email": "simulation-boundary@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+    def create(title, text, simulated):
+        response = client.post("/v2/research/sources", headers=headers, json={"title": title, "text": text,
+            "is_simulated": simulated, "permissions": {"store": True, "display": True, "model_input": True, "export": True}})
+        assert response.status_code == 201
+        return response.json()
+    real = create("Report", "Revenue was 100.", False)
+    simulated = create("Scenario", "SIMULATED_VALUE 900", True)
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?",
+        "source_ids": [real["source_id"], simulated["source_id"]]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    # Marked simulated material cannot be promoted by manual citations or facts either.
+    for content in ({"claims": [{"text": "A finding", "citations": [{"source_id": simulated["source_id"], "quotation": "SIMULATED_VALUE 900"}]}]},
+                    {"facts": [{"fact_id": "sim", "label": "Revenue", "value": "900", "unit": "USD", "period": "2024", "source_id": simulated["source_id"]}]}):
+        assert client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"], "content": content}).status_code == 422
+    started = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "simulation-boundary-run"},
+        json={"parent_version_id": topic["versions"][0]["version_id"]}).json()["operation"]["operation_id"]
+    for _ in range(100):
+        state = client.get(path + "/runs/" + started, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert state == "completed" and len(seen) == 1
+    version = client.get(path, headers=headers).json()["versions"][-1]
+    content = version["content"]
+    assert content["run"]["status"] == "partial"
+    assert [item["source_id"] for item in content["sources"]] == [real["source_id"]]
+    assert any("simulated material is excluded" in item for item in content["limitations"])
+    assert "SIMULATED_VALUE" not in str(content)
+    snapshot = client.get(path + "/runs/" + started + "/inputs", headers=headers).json()
+    assert next(item for item in snapshot["sources"] if item["source_id"] == simulated["source_id"])["is_simulated"] is True
+    metadata = client.get(path + "/versions/" + version["version_id"] + "/sources", headers=headers).json()
+    assert next(item for item in metadata if item["source_id"] == simulated["source_id"])["is_simulated"] is True
+    export = client.get(path + "/versions/" + version["version_id"] + "/export", headers=headers).json()
+    assert next(item for item in export["source_provenance"] if item["source_id"] == simulated["source_id"])["is_simulated"] is True
+    assert "SIMULATED_VALUE" not in str(export)
+    only_sim = client.post("/v2/research/topics", headers=headers, json={"question": "Scenario?",
+        "source_ids": [simulated["source_id"]]}).json()
+    sim_path = "/v2/research/topics/" + only_sim["topic_id"]
+    sim_op = client.post(sim_path + "/runs", headers={**headers, "Idempotency-Key": "only-simulation-run"},
+        json={"parent_version_id": only_sim["versions"][0]["version_id"]}).json()["operation"]["operation_id"]
+    for _ in range(100):
+        sim_status = client.get(sim_path + "/runs/" + sim_op, headers=headers).json()["operation"]["status"]
+        if sim_status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert sim_status == "completed" and len(seen) == 1
+    sim_content = client.get(sim_path, headers=headers).json()["versions"][-1]["content"]
+    assert sim_content["run"]["model_calls"] == 0 and sim_content["run"]["status"] == "partial"
+    assert any("simulated material is excluded" in item for item in sim_content["limitations"])
+    assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200

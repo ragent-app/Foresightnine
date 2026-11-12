@@ -50,12 +50,13 @@ def test_official_fetch_keeps_provenance_and_declared_permissions(monkeypatch):
     headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
     fetched = client.post("/v2/research/sources/fetch", headers=headers, json={
         "title": "BEA release", "url": "https://www.bea.gov/news/example",
-        "event_at": "2023-12-31T00:00:00Z", "published_at": "2024-01-01T00:00:00Z",
+        "event_at": "2023-12-31T00:00:00Z", "published_at": "2024-01-01T00:00:00Z", "is_simulated": True,
         "revised_at": "2024-02-01T00:00:00Z",
         "permissions": {"store": True, "display": True}})
     assert fetched.status_code == 201, fetched.text
     data = fetched.json()
     assert data["retrieval_method"] == "official_html"
+    assert data["is_simulated"] is True
     assert data["response_sha256"] == "a" * 64
     assert data["verification"] == "user_declared_not_verified"
     assert data["event_at"].startswith("2023-12-31")

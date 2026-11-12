@@ -13,7 +13,7 @@ interface Props {
 export function CitationEditor({ sources, disabled, en, onAdd }: Props) {
   const [sourceId, setSourceId] = useState("");
   const [quotation, setQuotation] = useState("");
-  const available = sources.filter((source) => source.status === "available" && source.permissions?.display);
+  const available = sources.filter((source) => source.status === "available" && source.permissions?.display && !source.is_simulated);
   if (!available.length) return <p>{en ? "Attach displayable material before adding a quotation." : "请先关联允许展示的资料，再添加引文。"}</p>;
   return <details className="general-source">
     <summary>{en ? "Add a source quotation" : "添加来源引文"}</summary>

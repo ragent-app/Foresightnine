@@ -76,6 +76,11 @@
             ],
             "title": "Event At"
           },
+          "is_simulated": {
+            "default": false,
+            "title": "Is Simulated",
+            "type": "boolean"
+          },
           "permissions": {
             "$ref": "#/components/schemas/SourcePermissions"
           },
@@ -314,6 +319,11 @@
               }
             ],
             "title": "Event At"
+          },
+          "is_simulated": {
+            "default": false,
+            "title": "Is Simulated",
+            "type": "boolean"
           },
           "pdf_base64": {
             "maxLength": 2000000,
@@ -926,6 +936,11 @@
               }
             ],
             "title": "Event At"
+          },
+          "is_simulated": {
+            "default": false,
+            "title": "Is Simulated",
+            "type": "boolean"
           },
           "kind": {
             "default": "user_supplied",

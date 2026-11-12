@@ -25,6 +25,7 @@ class SourceInput(BaseModel):
     text: str = Field(min_length=1, max_length=2_000_000)
     url: HttpUrl | None = None
     kind: Literal["user_supplied", "official"] = "user_supplied"
+    is_simulated: bool = False
     published_at: datetime | None = None
     event_at: datetime | None = None
     revised_at: datetime | None = None
@@ -68,6 +69,7 @@ class ResearchSource(BaseModel):
     text: str
     url: HttpUrl | None = None
     kind: Literal["user_supplied", "official"]
+    is_simulated: bool = False
     published_at: datetime | None = None
     event_at: datetime | None = None
     revised_at: datetime | None = None
@@ -90,7 +92,7 @@ class SourcePermissionError(ValueError):
 
 def locate_user_quotation(source: ResearchSource, quotation: str) -> dict:
     """Locate an exact user-selected passage without asserting it supports a claim."""
-    if not source.permissions.display or not isinstance(quotation, str) or not quotation.strip() or len(quotation) > 1000:
+    if source.is_simulated or not source.permissions.display or not isinstance(quotation, str) or not quotation.strip() or len(quotation) > 1000:
         raise ValueError("Quotation is unavailable.")
     matches: list[dict] = []
     offset = 0

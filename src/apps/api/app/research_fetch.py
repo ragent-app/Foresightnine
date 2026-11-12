@@ -22,6 +22,7 @@ class FetchSourceRequest(BaseModel):
     url: HttpUrl
     title: str = Field(min_length=1, max_length=500)
     permissions: SourcePermissions
+    is_simulated: bool = False
     published_at: datetime | None = None
     event_at: datetime | None = None
     revised_at: datetime | None = None

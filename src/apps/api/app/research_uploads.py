@@ -26,6 +26,7 @@ class PdfUploadRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=500)
     pdf_base64: str = Field(min_length=1, max_length=2_000_000)
+    is_simulated: bool = False
     published_at: datetime | None = None
     event_at: datetime | None = None
     revised_at: datetime | None = None

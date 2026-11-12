@@ -1616,7 +1616,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                     if source_id not in citation_sources:
                         citation_sources[source_id] = research_sources.get(account.account_id, source_id)
                     source = citation_sources[source_id]
-                    if (not source.permissions.display or topic.request.as_of is not None and
+                    if (source.is_simulated or not source.permissions.display or topic.request.as_of is not None and
                             (source.published_at is None or source.published_at > topic.request.as_of or
                              (source.revised_at is not None and source.revised_at > topic.request.as_of))):
                         raise ValueError("Source availability at the research cutoff is not established.")
@@ -1653,6 +1653,17 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                     "source_id" in fact and fact["source_id"] is not None and (not isinstance(fact["source_id"], str) or not fact["source_id"].strip() or len(fact["source_id"]) > 100) or
                     "quotation" in fact and fact["quotation"] is not None and (not isinstance(fact["quotation"], str) or len(fact["quotation"]) > 1000)):
                 raise ApiProblem(422, "invalid_request", "Research fact provenance is invalid.")
+            if fact.get("source_id") is not None:
+                source_id = fact["source_id"]
+                if source_id not in allowed_sources:
+                    raise ApiProblem(422, "invalid_request", "Research fact must use an attached real source.")
+                try:
+                    if source_id not in citation_sources:
+                        citation_sources[source_id] = research_sources.get(account.account_id, source_id)
+                    if citation_sources[source_id].is_simulated:
+                        raise ValueError("Simulated source cannot be used as real evidence.")
+                except (SourceNotFound, ValueError) as error:
+                    raise ApiProblem(422, "invalid_request", "Research fact must use an attached real source.") from error
             fact.update(numeric.model_dump(mode="json"))
         for field in ("claims", "facts", "calculations"):
             originals = getattr(previous.content, field)
@@ -1780,6 +1791,7 @@ def upload_research_pdf(request: PdfUploadRequest, authorization: str | None = H
         document = extract_pdf(request)
         source = research_sources.create(account.account_id, SourceInput(title=request.title, text=document.text,
             published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at,
+            is_simulated=request.is_simulated,
             permissions=request.permissions), retrieval_method="user_pdf",
             response_sha256=document.original_sha256, response_content_type="application/pdf",
             original_pdf_base64=document.original_base64)
@@ -1844,7 +1856,8 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
         fetched = fetch_official_text(request)
         source = research_sources.create(account.account_id, SourceInput(title=request.title,
             text=fetched.text, url=request.url, kind="official", permissions=request.permissions,
-            published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at),
+            published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at,
+            is_simulated=request.is_simulated),
             retrieval_method="official_html", response_sha256=fetched.response_sha256,
             response_content_type=fetched.content_type)
         return _visible_research_source(source)
@@ -1932,7 +1945,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                  "published_at": s.published_at.isoformat() if s.published_at else None,
                  "obtained_at": s.obtained_at.isoformat(),
                  "revised_at": s.revised_at.isoformat() if s.revised_at else None,
-                 "content_sha256": s.content_sha256, "verification": "user_declared_not_verified"}
+                 "content_sha256": s.content_sha256, "is_simulated": s.is_simulated,
+                 "verification": "user_declared_not_verified"}
                 for s in sources if s.source_id in analyzed_ids]
 
     def build(operation_id: str) -> tuple[ResearchRunResult, str]:
@@ -2176,7 +2190,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
         processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
             "not processed", "remaining text was not examined", "was omitted", "were omitted",
-            "permission is not granted", "not established", "not authorized", "quotation location is ambiguous"))
+            "permission is not granted", "not established", "not authorized", "quotation location is ambiguous",
+            "simulated material is excluded"))
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and analysis.counterarguments and all(c["citations"] for c in claims)
@@ -2268,7 +2283,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                          "published_at": item.published_at.isoformat() if item.published_at else None,
                          "obtained_at": item.obtained_at.isoformat(),
                          "revised_at": item.revised_at.isoformat() if item.revised_at else None,
-                         "permissions": item.permissions.model_dump(mode="json")}
+                         "is_simulated": item.is_simulated, "permissions": item.permissions.model_dump(mode="json")}
                         for item in sources],
             "budget": _request_payload(request),
             "model": getattr(getattr(provider, "settings", None), "model", None),

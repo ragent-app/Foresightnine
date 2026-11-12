@@ -144,7 +144,9 @@ def prepare_sources(sources: list[ResearchSource], as_of: datetime | None) -> tu
         is_fred = (host in {"fred.stlouisfed.org", "alfred.stlouisfed.org"} or
                    host.endswith(".fred.stlouisfed.org") or
                    (host == "api.stlouisfed.org" and parsed is not None and parsed.path.lower().startswith("/fred")))
-        if is_fred:
+        if source.is_simulated:
+            limitations.append(f"Source {source.source_id}: simulated material is excluded from real research.")
+        elif is_fred:
             limitations.append(f"Source {source.source_id}: FRED use is not authorized for this experiment.")
         elif not source.permissions.model_input:
             limitations.append(f"Source {source.source_id}: model processing permission is not granted.")

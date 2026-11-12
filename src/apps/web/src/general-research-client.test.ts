@@ -31,18 +31,19 @@ describe("research source timestamps", () => {
     vi.stubGlobal("fetch", fetcher);
     const api = researchClient("https://api.example.com");
     const published = "2024-02-01T10:00", event = "2023-12-31T12:00", revised = "2024-03-01T09:00";
-    await api.createSource("A", "Text", "", true, false, published, event, revised);
-    await api.fetchSource("B", "https://www.bea.gov/example", true, false, published, event, revised);
-    await api.uploadPdf("C", "JVBERg==", true, false, published, event, revised);
+    await api.createSource("A", "Text", "", true, false, published, event, revised, true);
+    await api.fetchSource("B", "https://www.bea.gov/example", true, false, published, event, revised, true);
+    await api.uploadPdf("C", "JVBERg==", true, false, published, event, revised, true);
     for (const [, init] of fetcher.mock.calls) {
       const body = JSON.parse(String(init?.body));
       expect(body).toMatchObject({ event_at: new Date(event).toISOString(),
-        published_at: new Date(published).toISOString(), revised_at: new Date(revised).toISOString() });
+        published_at: new Date(published).toISOString(), revised_at: new Date(revised).toISOString(), is_simulated: true });
     }
     await api.createSource("D", "Text", "", true, false, "");
     const empty = JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body));
     expect(empty).not.toHaveProperty("event_at");
     expect(empty).not.toHaveProperty("published_at");
     expect(empty).not.toHaveProperty("revised_at");
+    expect(empty.is_simulated).toBe(false);
   });
 });
