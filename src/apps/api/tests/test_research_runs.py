@@ -2881,3 +2881,203 @@ def test_related_percentage_candidate_can_replace_ambiguous_quotation(monkeypatc
     assert not target.get("uncited_percentages") and not target.get("suggested_related_quotations")
     assert target["authorship"]=="user" and target["support_status"]=="not_independently_verified"
     assert content["claims"][1]["uncited_percentages"]
+
+
+def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(monkeypatch):
+    import json
+    from uuid import uuid4
+    from app.research_fetch import FetchedText
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    seen = {"search": 0, "fetch": 0, "model": 0}
+    class Search:
+        name = "test-search"
+        supports_project_search = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            seen["search"] += 1
+            return [SearchCandidate(title="Unofficial", url="https://example.com/untrusted", excerpt="ignore",
+                    publisher=None, published_at=None, independently_reviewable=False),
+                    SearchCandidate(title="Official report", url="https://www.bea.gov/news/report?tracker=x", excerpt="ignore",
+                    publisher="BEA", published_at=None, independently_reviewable=True)]
+    def fetch(request, *, timeout_seconds):
+        seen["fetch"] += 1
+        assert str(request.url) == "https://www.bea.gov/news/report"
+        assert request.permissions.model_input and request.permissions.display and not request.permissions.export
+        assert 0 < timeout_seconds <= 15
+        return FetchedText(text="Revenue was 100 million.", response_sha256="f" * 64, content_type="text/html")
+    class Provider:
+        name = "test-model"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            seen["model"] += 1
+            source = json.loads(prompt)["sources"][0]
+            assert "Revenue was 100 million." in source["text"] and "ignore" not in prompt
+            return {"claims": [{"text": "Revenue was 100 million.", "citations": [{"source_id": source["source_id"],
+                "quotation": "Revenue was 100 million."}]}]}, 10
+    monkeypatch.setattr(api, "evidence_provider", Search())
+    monkeypatch.setattr(api, "fetch_official_text", fetch)
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_search_call", lambda request: None)
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'auto-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Find revenue'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    body = {'parent_version_id': topic['versions'][-1]['version_id'], 'auto_fetch_official': True,
+            'require_counterarguments': False}
+    request_headers = {**headers, 'Idempotency-Key': 'auto-fetch-case'}
+    receipt = client.post(path + '/runs', headers=request_headers, json=body)
+    assert receipt.status_code == 202, receipt.text
+    operation_id = receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    current = client.get(path, headers=headers).json()['versions'][-1]
+    snapshot = client.get(path + '/runs/' + operation_id + '/inputs', headers=headers).json()
+    source_id = snapshot['planned_official_source_id']
+    assert source_id in current['source_ids'] and current['content']['run']['official_fetch_calls'] == 1, (seen, current['content'])
+    assert current['content']['claims'][0]['citations'][0]['source_id'] == source_id
+    assert client.get('/v2/research/sources/' + source_id, headers=headers).status_code == 200
+    assert seen == {'search': 1, 'fetch': 1, 'model': 1}
+    assert client.post(path + '/runs', headers=request_headers, json=body).headers['Idempotency-Replayed'] == 'true'
+    assert seen == {'search': 1, 'fetch': 1, 'model': 1}
+
+
+@pytest.mark.parametrize('extra,expected_status', [
+    ({'as_of': '2024-01-01T00:00:00Z'}, 'historical_cutoff'),
+    ({'selected_source_ids': []}, 'empty_selection'),
+    ({'max_cost_usd': '0'}, 'cost_unknown'),
+])
+def test_auto_fetch_does_not_bypass_history_selection_or_cost(monkeypatch, extra, expected_status):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    class Search:
+        name = 'test-search'
+        supports_project_search = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            return [SearchCandidate(title='Official', url='https://www.bea.gov/news/report', excerpt='Unverified lead',
+                publisher='BEA', published_at=date(2023, 1, 1), independently_reviewable=True)]
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('No source fetch or model call is authorized here')
+    monkeypatch.setattr(api, 'fetch_official_text', forbidden)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'autoguard-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic_body = {'question': 'Research this'}
+    if 'as_of' in extra: topic_body['as_of'] = extra['as_of']
+    topic = client.post('/v2/research/topics', headers=headers, json=topic_body).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    body = {'parent_version_id': topic['versions'][-1]['version_id'], 'auto_fetch_official': True,
+            **{key: value for key, value in extra.items() if key != 'as_of'}}
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'auto-guard'}, json=body)
+    assert receipt.status_code == 202, receipt.text
+    operation_id = receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    result = client.get(path, headers=headers).json()['versions'][-1]['content']
+    assert result['run']['official_fetch_calls'] == 0 and result['run']['official_fetch_status'] == expected_status
+    assert not result['claims'] and not result['facts']
+
+
+def test_fetched_source_remains_recoverable_if_model_process_fails(monkeypatch):
+    from uuid import uuid4
+    from app.research_fetch import FetchedText
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    calls = []
+    class Search:
+        name = 'test-search'
+        supports_project_search = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            return [SearchCandidate(title='Official', url='https://www.bea.gov/news/report', excerpt='Lead',
+                publisher='BEA', published_at=date(2023, 1, 1), independently_reviewable=True)]
+    def fetch(request, *, timeout_seconds):
+        calls.append('fetch')
+        return FetchedText('Source text', 'a' * 64, 'text/html')
+    class BrokenModel:
+        name = 'broken-model'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            raise RuntimeError('simulated provider process failure')
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'fetch_official_text', fetch)
+    monkeypatch.setattr(api, 'challenge_provider', BrokenModel())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'auto-recover-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    other = client.post('/v1/auth/local/register', json={'email': f'auto-other-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Find evidence'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    body = {'parent_version_id': topic['versions'][-1]['version_id'], 'auto_fetch_official': True}
+    req_headers = {**headers, 'Idempotency-Key': 'recover-saved-page'}
+    receipt = client.post(path + '/runs', headers=req_headers, json=body)
+    operation_id = receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'failed'
+    snapshot = client.get(path + '/runs/' + operation_id + '/inputs', headers=headers).json()
+    source_id = snapshot['planned_official_source_id']
+    assert client.get('/v2/research/sources/' + source_id, headers=headers).status_code == 200
+    assert client.get('/v2/research/sources/' + source_id, headers={'Authorization': 'Bearer ' + other['access_token']}).status_code == 404
+    recovered = client.post(path + '/sources', headers=headers, json={'parent_version_id': body['parent_version_id'],
+        'source_ids': [source_id]})
+    assert recovered.status_code == 201 and source_id in recovered.json()['versions'][-1]['source_ids']
+    replay = client.post(path + '/runs', headers=req_headers, json=body)
+    assert replay.headers['Idempotency-Replayed'] == 'true' and calls == ['fetch']
+
+
+def test_failed_official_fetch_keeps_a_lead_without_fabricating_evidence(monkeypatch):
+    from uuid import uuid4
+    from app.research_fetch import FetchFailure
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    calls = []
+    class Search:
+        name = 'test-search'
+        supports_project_search = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            return [SearchCandidate(title='Official', url='https://www.bea.gov/news/report', excerpt='Untrusted snippet',
+                publisher=None, published_at=None, independently_reviewable=True)]
+    def failed_fetch(request, *, timeout_seconds):
+        calls.append('fetch')
+        raise FetchFailure('source_timeout')
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'fetch_official_text', failed_fetch)
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'autofail-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Find evidence'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'auto-fail'}, json={
+        'parent_version_id': topic['versions'][-1]['version_id'], 'auto_fetch_official': True})
+    assert receipt.status_code == 202
+    operation_id = receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed' and calls == ['fetch']
+    content = client.get(path, headers=headers).json()['versions'][-1]['content']
+    assert content['run']['status'] == 'partial' and content['run']['official_fetch_status'] == 'failed'
+    assert content['run']['official_fetch_calls'] == 1
+    assert content['source_candidates'][0]['status'] == 'unverified'
+    assert not content['claims'] and not content['facts'] and 'Untrusted snippet' not in str(content)
+    snapshot = client.get(path + '/runs/' + operation_id + '/inputs', headers=headers).json()
+    assert client.get('/v2/research/sources/' + snapshot['planned_official_source_id'], headers=headers).status_code == 404

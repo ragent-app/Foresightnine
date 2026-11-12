@@ -69,7 +69,7 @@ export interface ResearchOperation {
 export interface SourceMetadata { original_pdf_available?: boolean; original_html_available?: boolean; derived_from_source_id?: string | null; pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string; published_at?: string | null }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
-export interface RunBudget { selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean }
+export interface RunBudget { selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean; autoFetchOfficial?: boolean }
 
 export function sourceDiscoveryQuery(question: string, scope: string, includeScope: boolean): string {
   const q = Array.from(question.trim()), s = Array.from(scope.trim());
@@ -92,6 +92,7 @@ export interface RunInputSnapshot {
   captured_at: string;
   parent_version_id: string;
   as_of: string | null;
+  planned_official_source_id?: string;
   budget: ResearchV2.ResearchRunRequest;
   sources: { source_id: string; content_sha256: string; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; permissions: ResearchV2.SourcePermissions }[];
   model: string | null;
@@ -197,6 +198,7 @@ export function researchClient(baseUrl: string) {
         ...(budget.selectedSourceIds !== undefined ? { selected_source_ids: budget.selectedSourceIds } : {}),
         ...(budget.questionOverride ? { question_override: budget.questionOverride } : {}),
         ...(budget.includeScopeInSearch ? { include_scope_in_search: true } : {}),
+        ...(budget.autoFetchOfficial ? { auto_fetch_official: true } : {}),
         ...(budget.focusCitation ? { focus_citation: budget.focusCitation } : {}),
         ...(budget.maxCostUsd ? { max_cost_usd: budget.maxCostUsd } : {}) } satisfies ResearchV2.ResearchRunRequest, key),
     operation: (topicId: string, operationId: string) => request<{ operation: ResearchOperation }>(

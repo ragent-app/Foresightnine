@@ -28,6 +28,7 @@ class ResearchRunRequest(BaseModel):
     support_review_mode: Literal["batch", "isolated"] = "batch"
     require_counterarguments: bool = True
     include_scope_in_search: bool = False
+    auto_fetch_official: bool = Field(default=False, strict=True)
     focus_citation: FocusCitation | None = None
     max_search_calls: int = Field(default=1, ge=0, le=1)
     max_elapsed_seconds: int = Field(default=60, ge=1, le=180)

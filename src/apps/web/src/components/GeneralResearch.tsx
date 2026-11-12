@@ -11,6 +11,12 @@ import { canUseCitationSource } from "../source-text-search";
 interface Props { baseUrl: string | null; accountId: string | null; language: Language }
 
 function localizeLimitation(value: string, en: boolean): string {
+  if (value === "Search candidates are unverified leads, not evidence; only an explicitly authorized retrieved source can be analyzed.")
+    return en ? value : "搜索结果只是待核验线索，只有经授权获取的资料才能用于分析。";
+  if (value === "The official page was retrieved with user-granted model permission; its content and dates remain unverified.")
+    return en ? value : "已按授权获取官方网页供模型处理；内容与日期仍未经核验。";
+  if (value === "The official source could not be retrieved; the search result remains an unverified lead.")
+    return en ? value : "无法获取官方资料，搜索结果仍只是待核验线索。";
   if (value === "No counterarguments were provided; this does not establish that none exist.")
     return en ? "The last model run provided no counterarguments; this does not establish that none exist." : "上次模型运行未提供反方材料；这不代表不存在反方意见。";
   if (value === "The research is partial: supported claims or counterarguments are incomplete.")
@@ -209,6 +215,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [runInputs, setRunInputs] = useState<RunInputSnapshot | null>(null);
   const [runQuestion, setRunQuestion] = useState("");
   const [allowSearch, setAllowSearch] = useState(true);
+  const [autoFetchOfficial, setAutoFetchOfficial] = useState(false);
   const [supportReview, setSupportReview] = useState(false);
   const [reviewMode, setReviewMode] = useState<"batch" | "isolated">("batch");
   const [maxModelCalls, setMaxModelCalls] = useState("4");
@@ -259,6 +266,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setEditingClaims(false);
     setEditingFacts(false);
   }, [current?.version_id]);
+
+  useEffect(() => { setAutoFetchOfficial(false); }, [topic?.topic_id]);
 
   useEffect(() => {
     let active = true;
@@ -488,6 +497,19 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     }
     finally { setBusy(false); }
   }
+  async function recoverOfficialSource() {
+    const sourceId = runInputs?.planned_official_source_id;
+    if (!api || !topic || !current || !sourceId || !isLatest || running || busy) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before recovering material." : "请先保存修改，再恢复资料。"); return; }
+    setBusy(true); setNotice("");
+    try {
+      const updated = await api.attach(topic.topic_id, current.version_id, [sourceId]);
+      setTopic(updated); setSelectedVersionId("");
+      setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+      setNotice(en ? "The saved source was attached. Run research to analyze it." : "已恢复保存的资料，可运行研究进行分析。");
+    } catch { setNotice(en ? "No saved source is available from this run." : "此运行没有可恢复的已保存资料。"); }
+    finally { setBusy(false); }
+  }
   async function openTopic(topicId: string) {
     if (!api) return;
     if (hasUnsavedReview) { setNotice(en ? "Save your edits before reopening research." : "请先保存当前修改，再打开研究。"); return; }
@@ -525,7 +547,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { ...(excludedSourceIds.length ? { selectedSourceIds: Array.from(new Set([...topic.request.source_ids, ...(current.source_ids ?? [])])).filter((id) => !excludedSourceIds.includes(id)) } : {}), ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, ...(supportReview && reviewMode === "isolated" ? { supportReviewMode: "isolated", maxModelCalls: Number(maxModelCalls) } : {}), requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxInputTokens ? { maxInputTokensPerCall: Number(maxInputTokens) } : {}), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { ...(excludedSourceIds.length ? { selectedSourceIds: Array.from(new Set([...topic.request.source_ids, ...(current.source_ids ?? [])])).filter((id) => !excludedSourceIds.includes(id)) } : {}), ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, ...(allowSearch && autoFetchOfficial && !topic.request.as_of ? { autoFetchOfficial: true } : {}), supportReview, ...(supportReview && reviewMode === "isolated" ? { supportReviewMode: "isolated", maxModelCalls: Number(maxModelCalls) } : {}), requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxInputTokens ? { maxInputTokensPerCall: Number(maxInputTokens) } : {}), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -723,10 +745,11 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <p><strong>{en ? "Previous figures" : "原数值"}</strong></p><ul>{parent.content.facts.map((fact, index) => <li key={index}>{fact.label}: {fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</li>)}</ul>
         <p><strong>{en ? "Current figures" : "当前数值"}</strong></p><ul>{facts.map((fact, index) => <li key={index}>{fact.label}: {fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</li>)}</ul>
       </details> : null}
-      <p>{en ? "Only provided material with model permission can be analyzed. A question alone may return a clear information gap." : "目前仅分析你提供且允许模型处理的资料。只输入问题时，系统可能先返回资料缺口。"}</p>
+      <p>{en ? "Only material authorized for model processing can be analyzed. You can supply a source or allow retrieval from supported official sites." : "系统仅分析允许模型处理的资料；你可提供资料，或授权获取受支持的官方网页。"}</p>
       {typeof current.content.run.question_override === "string" ? <p><strong>{en ? "Question for this version: " : "本版本的研究问题："}</strong>{current.content.run.question_override}</p> : null}
       {isLatest ? <Field label={en ? "Question for the next run (optional)" : "下次运行的研究问题（可选）"} helper={en ? "Leave blank to use the topic's original question. The new question is saved with its run." : "留空使用主题创建时的问题；填写后将随本次运行保存。"}><Textarea value={runQuestion} maxLength={10000} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRunQuestion(event.target.value)} /></Field> : null}
       <label><input type="checkbox" checked={allowSearch} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setAllowSearch(event.target.checked)} /> {en ? "When no material is attached, send the question to the configured search provider to find leads." : "未关联资料时，将问题发送给已配置的搜索服务以查找线索。"}</label>
+      {allowSearch && !topic.request.as_of ? <label><input type="checkbox" checked={autoFetchOfficial} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setAutoFetchOfficial(event.target.checked)} /> {en ? "I authorize storing, displaying and sending up to one BEA or Federal Reserve webpage found by search to the model; I have the rights to process its contents. The original text is not exported automatically." : "我授权保存、展示并将搜索到的最多一份 BEA 或美联储网页发送给模型，且有权处理其中内容；原文不会自动导出。"}</label> : null}
       {allowSearch && topic.request.scope ? <label><input type="checkbox" checked={runSearchScope} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRunSearchScope(event.target.checked)} /> {en ? "Include part of the saved scope in source search (sent to the search provider)." : "搜索来源时包含部分已保存的研究范围（将发送给搜索服务）。"}</label> : null}
       {allowSearch && (runQuestion.trim() || topic.request.question) ? <p><small>{en ? "If source search runs, its query is: " : "如需搜索来源，发送的内容："}{sourceDiscoveryQuery(runQuestion.trim() || topic.request.question, topic.request.scope ?? "", runSearchScope)}</small></p> : null}
       <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (additional paid calls; not independent verification)." : "请求模型复查引用是否支持结论（会产生额外付费调用；不等于独立核验）。"}</label>
@@ -746,6 +769,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <p>{en ? "Time limit" : "时间上限"}: {runInputs.budget.max_elapsed_seconds} s · {en ? "Token limit" : "Token 上限"}: {runInputs.budget.max_total_tokens} · {en ? "Cost limit (USD)" : "费用上限（美元）"}: {runInputs.budget.max_cost_usd ?? (en ? "not set" : "未设置")}</p>
         <p>{en ? "Input limit per call" : "每次调用输入上限"}: {runInputs.provider_limits?.max_input_tokens ?? (en ? "unknown" : "未知")}</p>
         <p>{en ? "Model" : "模型"}: {runInputs.model ?? (en ? "unknown" : "未知")} · {en ? "Provider" : "服务方"}: {runInputs.provider ?? (en ? "unknown" : "未知")}</p>
+        {runInputs.planned_official_source_id && operation && ["failed", "cancelled"].includes(operation.status) && isLatest ? <p>{en ? "If a retrieved page was saved before interruption, you can attach it without fetching again." : "如果中断前已保存网页，可直接恢复，无需再次获取。"} <Button disabled={busy || running} onClick={() => void recoverOfficialSource()}>{en ? "Recover saved page" : "恢复已保存网页"}</Button></p> : null}
         <ul>{runInputs.sources.map((source) => <li key={source.source_id}>{source.source_id} · SHA-256: {source.content_sha256} · {source.is_simulated ? (en ? "Simulated; excluded from real research" : "模拟资料，排除于真实研究") : (en ? "Model processing" : "模型处理") + ": " + (source.permissions.model_input ? (en ? "allowed" : "允许") : (en ? "not allowed" : "未允许"))}</li>)}</ul>
       </details> : null}
       {operation && ["failed", "cancelled"].includes(operation.status) ? <p role="status">{en ? "This run cannot resume from a checkpoint. Saved versions remain available. Starting another run makes new external requests; previous requests may still be billed." : "此运行无法从检查点续跑，已保存的版本仍可查看。再次运行会发起新的外部请求，之前的请求仍可能产生费用。"}</p> : null}
@@ -753,7 +777,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.content.run.checkpoint === "generation" ? <p role="status">{en ? "Generation checkpoint: citation review had not finished when this draft was saved." : "生成阶段草稿：保存此版本时，引文复查尚未完成。"}</p> : null}
       {current.content.run.support_review_requested ? <p>{en ? "Review during this run: " : "本次运行的模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
       <h3>{en ? "Sources" : "资料来源"}</h3>
-      {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><CandidateDate publishedAt={candidate.published_at} cutoff={topic.request.as_of} en={en} /><Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Attach source" : "添加此来源"}</Button></article>)}</section> : null}
+      {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><CandidateDate publishedAt={candidate.published_at} cutoff={topic.request.as_of} en={en} />{candidate.status === "retrieved_unverified" ? <small>{en ? "Retrieved for this run; content remains unverified." : "本次已获取，内容仍需核验。"}</small> : <Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Attach source" : "添加此来源"}</Button>}</article>)}</section> : null}
       {sourceMetadata.length ? <><p>{en ? "Attached material (declared dates are not independently verified). Unchecking only excludes a source from the next run; history is preserved." : "已关联资料（声明的时间尚未独立核验）。取消勾选只影响下次研究，历史记录保留。"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}><label><input type="checkbox" checked={!excludedSourceIds.includes(source.source_id)} disabled={busy || running || !isLatest || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => { const included = event.target.checked; setExcludedSourceIds((items) => included ? items.filter((id) => id !== source.source_id) : [...items, source.source_id]); setFocusChoice(""); }} /> {en ? "Use in next run" : "本次研究使用"}</label>{" "}{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.is_simulated ? <strong>{en ? "(simulated; excluded from real research)" : "（模拟，未用于真实研究）"}</strong> : null} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : <><br /><SourceTimes source={source} en={en} /></>}{["official_html", "user_html", "sec_filing_html"].includes(source.retrieval_method ?? "") ? <p><small>{en ? "Extracted HTML text; table markers are generated and browser rendering is not reproduced. Check the original document for layout and visibility." : "HTML 提取文本；表格标记由系统生成，提取结果不等同于浏览器呈现，请查阅原文件确认排版与可见内容。"}</small></p> : null}{source.retrieval_method === "user_pdf" ? <p><small>{en ? "PDF text order: " : "PDF 文字读取方式："}{source.pdf_text_order === "layout" ? (en ? "preserve layout" : "保留版式") : source.pdf_text_order === "reading" ? (en ? "reading order" : "阅读顺序") : (en ? "not recorded for this older source" : "旧资料未记录")}</small></p> : null}{source.pdf_text_spacing_warning ? <p role="status">{en ? "Extracted text may be missing spaces between words. Check the original PDF and consider adding it again using the other text order; the warning is not a complete quality check." : "提取文本可能缺少词间空格。请核对原 PDF，并考虑使用另一种读取方式重新添加；此提示不能全面检查提取质量。"}</p> : null}{source.retrieval_method === "user_pdf" && source.original_pdf_available && isLatest ? <Button disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onClick={() => void reextractSource(source)}>{source.pdf_text_order === "layout" ? (en ? "Try reading order" : "尝试阅读顺序") : (en ? "Try preserving layout" : "尝试保留版式")}</Button> : null}{(source.retrieval_method === "user_pdf" && source.original_pdf_available || ["user_html", "sec_filing_html"].includes(source.retrieval_method ?? "") && source.original_html_available) && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id, ["user_html", "sec_filing_html"].includes(source.retrieval_method ?? ""))}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
       {current.content.sources.length ? <ul>{current.content.sources.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} <SourceTimes source={source} en={en} /></li>; })}</ul> : <p>{en ? "No source analyzed." : "尚无已分析来源。"}</p>}
       {facts.length ? <>

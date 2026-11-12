@@ -65,6 +65,18 @@ describe("research operation polling", () => {
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)).max_input_tokens_per_call).toBe(2500);
   });
 
+  it("only requests official retrieval with explicit authorization", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 202 }));
+    vi.stubGlobal("fetch", fetcher);
+    const api = researchClient("https://api.example.com");
+    const budget = { search: true, supportReview: false, requireCounterarguments: false, maxElapsedSeconds: 60, maxTotalTokens: 10000 };
+    await api.run("topic", "version", "without", budget);
+    await api.run("topic", "version", "with", {...budget, autoFetchOfficial: true});
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty("auto_fetch_official");
+    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)).auto_fetch_official).toBe(true);
+  });
+
   it("sends isolated review mode and its explicit total call cap", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 202 }));

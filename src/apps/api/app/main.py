@@ -98,7 +98,7 @@ from .services import (
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
-from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect
+from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, suggest_percentage_evidence, suggest_related_claim_quotations, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
@@ -750,8 +750,8 @@ def _candidate_response(raw: object, provider_name: str) -> SearchCandidate:
         title=title,
         url=url,
         excerpt=excerpt,
-        publisher=publisher,
-        published_at=published_at,
+        **({"publisher": publisher} if publisher is not None else {}),
+        **({"published_at": published_at} if published_at is not None else {}),
         retrieved_at=retrieved_at,
         independently_reviewable=independently_reviewable,
     )
@@ -2396,6 +2396,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         run_request_payload.pop("require_counterarguments", None)
     if not request.include_scope_in_search:
         run_request_payload.pop("include_scope_in_search", None)
+    if not request.auto_fetch_official:
+        run_request_payload.pop("auto_fetch_official", None)
     if request.support_review_mode == "batch":
         run_request_payload.pop("support_review_mode", None)
     if request.focus_citation is None:
@@ -2451,6 +2453,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         deadline = started + request.max_elapsed_seconds
         calls = 0
         search_calls = 0
+        official_fetch_calls = 0
+        official_fetch_status = "not_requested" if not request.auto_fetch_official else "no_eligible_source"
         discovered: list[dict[str, Any]] = []
         discovery_notes: list[str] = []
         search_status = "not_requested"
@@ -2513,13 +2517,71 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     if invalid_candidates:
                         discovery_notes.append("Some search candidates could not be validated and were omitted." if discovered
                                                else "No eligible search candidates remained after validation.")
-                    discovery_notes.append("Search candidates are unverified leads, not evidence. Attach and authorize material before analysis.")
+                    discovery_notes.append("Search candidates are unverified leads, not evidence. Attach and authorize material before analysis." if not request.auto_fetch_official else
+                                           "Search candidates are unverified leads, not evidence; only an explicitly authorized retrieved source can be analyzed.")
                     if topic.request.as_of is not None:
                         discovery_notes.append("Historical search publication dates are not independently verified.")
                 except (ProviderFailure, ApiProblem):
                     search_status = "failed"
                     discovery_notes.append("Source discovery failed or was rate limited; attach source material manually.")
         _raise_if_operation_cancelled(operation_id)
+        # The optional batch permission applies only to the two official
+        # hosts in this bounded path; discovered snippets are never evidence.
+        # Historical content may have changed since its published date, so no
+        # automatic source is attached to a cutoff-constrained research run.
+        if (request.auto_fetch_official and not sources and request.selected_source_ids != [] and
+                topic.request.as_of is None and request.max_cost_usd is None):
+            for candidate in discovered:
+                parts = urlsplit(candidate["url"])
+                if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov"}
+                        or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
+                    continue
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    official_fetch_status = "time_budget"
+                    discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
+                    break
+                try:
+                    _reserve_search_call(http_request)
+                    permissions = SourcePermissions(store=True, display=True, model_input=True, export=False)
+                    source_request = FetchSourceRequest(url=candidate["url"], title=candidate["title"][:500],
+                                                        permissions=permissions)
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        official_fetch_status = "time_budget"
+                        discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
+                        break
+                    official_fetch_calls = 1
+                    fetched = fetch_official_text(source_request, timeout_seconds=min(15.0, remaining))
+                    _raise_if_operation_cancelled(operation_id)
+                    # This planned ID is part of the immutable run-input
+                    # receipt before the request, so a saved source remains
+                    # retrievable even if the process dies before version save.
+                    source_id = "source_" + sha256((operation_id + ":official-source:0").encode()).hexdigest()[:32]
+                    source = research_sources.create(account.account_id, SourceInput(title=source_request.title,
+                        text=fetched.text, url=source_request.url, kind="official", permissions=permissions),
+                        retrieval_method="official_html", response_sha256=fetched.response_sha256,
+                        response_content_type=fetched.content_type, source_id=source_id)
+                    sources.append(source)
+                    source_ids.append(source.source_id)
+                    official_fetch_status = "completed"
+                    candidate["status"] = "retrieved_unverified"
+                    candidate["source_id"] = source.source_id
+                    discovery_notes.append("The official page was retrieved with user-granted model permission; its content and dates remain unverified.")
+                except (FetchFailure, ValidationError, ValueError, ApiProblem):
+                    _raise_if_operation_cancelled(operation_id)
+                    official_fetch_status = "failed"
+                    discovery_notes.append("The official source could not be retrieved; the search result remains an unverified lead.")
+                break  # One bounded retrieval attempt, with no hidden retries.
+        elif request.auto_fetch_official and topic.request.as_of is not None:
+            official_fetch_status = "historical_cutoff"
+            discovery_notes.append("Automatic retrieval is unavailable for historical cutoffs because revision history is not established.")
+        elif request.auto_fetch_official and request.max_cost_usd is not None:
+            official_fetch_status = "cost_unknown"
+        elif request.auto_fetch_official and request.selected_source_ids == []:
+            official_fetch_status = "empty_selection"
+        elif request.auto_fetch_official and sources:
+            official_fetch_status = "not_needed"
 
         attempted_prompt: dict[str, Any] = {}
         analysis_error_detail: str | None = None
@@ -2691,6 +2753,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "support_review_status": "pending", "support_review_method": ISOLATED_REVIEW_METHOD,
                                      "support_review_indexes": list(review_indexes), "support_review_omissions": list(review_omissions),
                                      "support_review_calls": list(isolated_records), "search_calls": search_calls,
+                                     "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
                                      "require_counterarguments": request.require_counterarguments,
                                      "model": getattr(getattr(provider, "settings", None), "model", None),
                                      "provider": getattr(provider, "name", None), "prompt_sha256": analysis.prompt_sha256,
@@ -2853,6 +2916,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "support_review_method": REVIEW_METHOD, "support_review_prompt_sha256": batch.prompt_sha256,
                                          "support_review_segments": batch.segments,
                                          "support_review_omissions": batch.omissions, "search_calls": search_calls,
+                                         "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
                                          "model": getattr(getattr(provider, "settings", None), "model", None),
                                          "provider": getattr(provider, "name", None),
                                          "prompt_sha256": analysis.prompt_sha256,
@@ -2993,6 +3057,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      **({"support_review_calls": isolated_records} if request.support_review and request.support_review_mode == "isolated" else {}),
                      "support_review_system_sha256": sha256(REVIEW_SYSTEM_PROMPT.encode("utf-8")).hexdigest() if request.support_review else None,
                      "search_calls": search_calls, "search_status": search_status,
+                     "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
                      "elapsed_seconds": round(monotonic() - started, 3),
                      "cost_status": "unknown" if calls or search_calls else "no_external_call",
                      "model": getattr(getattr(provider, "settings", None), "model", None),
@@ -3050,6 +3115,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                          "is_simulated": item.is_simulated, "permissions": item.permissions.model_dump(mode="json")}
                         for item in sources],
             "budget": {key: value for key, value in run_request_payload.items() if key != "question_override"},
+            **({"planned_official_source_id": "source_" + sha256((operation_id + ":official-source:0").encode()).hexdigest()[:32]}
+               if request.auto_fetch_official else {}),
             "model": getattr(getattr(provider, "settings", None), "model", None),
             "provider": getattr(provider, "name", None),
             "provider_limits": {key: getattr(policy, key, None) for key in

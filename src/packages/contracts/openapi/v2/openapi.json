@@ -909,6 +909,11 @@
       "ResearchRunRequest": {
         "additionalProperties": false,
         "properties": {
+          "auto_fetch_official": {
+            "default": false,
+            "title": "Auto Fetch Official",
+            "type": "boolean"
+          },
           "focus_citation": {
             "anyOf": [
               {

@@ -115,14 +115,17 @@ class FetchedText:
 
 
 def fetch_official_text(request: FetchSourceRequest,
-                        transport: Callable[..., HttpResponse] = _default_transport) -> FetchedText:
+                        transport: Callable[..., HttpResponse] = _default_transport, *,
+                        timeout_seconds: float = 15.0) -> FetchedText:
     if not request.permissions.store:
         raise FetchFailure("source_permission_unknown")
+    if not 0 < timeout_seconds <= 15:
+        raise FetchFailure("source_timeout")
     if urlsplit(str(request.url)).hostname == "www.sec.gov":
         raise FetchFailure("source_unavailable")
     try:
         response = transport("GET", str(request.url), {"Accept": "text/html, text/plain",
-            "User-Agent": "ForesightNine-Research/1.0"}, b"", 15.0)
+            "User-Agent": "ForesightNine-Research/1.0"}, b"", timeout_seconds)
     except _TransportTimeout as error:
         raise FetchFailure("source_timeout") from error
     except (_TransportFailure, OSError) as error:

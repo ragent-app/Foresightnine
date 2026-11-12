@@ -53,3 +53,16 @@ def test_redirects_and_timeouts_fail_without_fallback():
         raise _TransportTimeout()
     with pytest.raises(FetchFailure, match="source_timeout"):
         fetch_official_text(request(), timeout)
+
+
+def test_official_fetch_respects_caller_timeout_budget():
+    seen = []
+    def transport(method, url, headers, body, timeout):
+        seen.append(timeout)
+        return HttpResponse(200, 'Official text', {'content-type': 'text/plain'})
+    assert fetch_official_text(request(), transport, timeout_seconds=2.5).text == 'Official text'
+    assert seen == [2.5]
+    for timeout in (0, -1, 16):
+        with pytest.raises(FetchFailure, match='source_timeout'):
+            fetch_official_text(request(), transport, timeout_seconds=timeout)
+    assert seen == [2.5]
