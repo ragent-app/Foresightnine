@@ -1,0 +1,80 @@
+{
+  "CISCO_REV": {
+    "facts": [
+      {
+        "value": "53803",
+        "period": "2024",
+        "unit": "million",
+        "literal": "53,803"
+      },
+      {
+        "value": "56998",
+        "period": "2023",
+        "unit": "million",
+        "literal": "56,998"
+      }
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "53803",
+        "56998"
+      ],
+      "value": "-5.61"
+    },
+    "allowed_percentages": [
+      "-5.61",
+      "-6",
+      "64.7",
+      "62.7"
+    ]
+  },
+  "BEA_Q1": {
+    "facts": [
+      {
+        "value": "2.0",
+        "period": "2023",
+        "unit": "percent",
+        "literal": "2.0"
+      },
+      {
+        "value": "1.3",
+        "period": "2023",
+        "unit": "percent",
+        "literal": "1.3"
+      }
+    ],
+    "allowed_percentages": [
+      "2.0",
+      "1.3",
+      "0.7",
+      "2.6"
+    ]
+  },
+  "FED_DISS": {
+    "facts": [],
+    "name_checks": [
+      {
+        "claim_aliases": [
+          "george",
+          "乔治"
+        ],
+        "quote_term": "Esther L. George"
+      },
+      {
+        "claim_aliases": [
+          "rosengren",
+          "罗森格伦",
+          "罗森格林"
+        ],
+        "quote_term": "Rosengren"
+      }
+    ],
+    "allowed_percentages": [
+      "0.25",
+      "2",
+      "2.25",
+      "2.5"
+    ]
+  }
+}
