@@ -1,0 +1,58 @@
+{
+  "PCE_2023_03": {
+    "status": "completed",
+    "research_status": "partial",
+    "mechanical_checks": {
+      "nominal_change": true,
+      "goods_change": true,
+      "services_change": true,
+      "saving_rate": true,
+      "real_less_than": true,
+      "all_claims_uniquely_located": true
+    },
+    "mechanical_pass": true,
+    "model_calls": 3,
+    "reported_tokens": 3935,
+    "review_status": "partial",
+    "review_omissions": [
+      {
+        "claim_index": 0,
+        "reason": "not_reviewable"
+      },
+      {
+        "claim_index": 3,
+        "reason": "not_reviewable"
+      },
+      {
+        "claim_index": 4,
+        "reason": "not_reviewable"
+      }
+    ],
+    "claim_count": 5,
+    "counterargument_count": 1,
+    "semantic_support": "not independently established"
+  },
+  "FOMC_2023_02": {
+    "status": "completed",
+    "research_status": "partial",
+    "mechanical_checks": {
+      "target_range": true,
+      "reserve_rate": true,
+      "reserve_effective_date": true,
+      "all_claims_uniquely_located": true
+    },
+    "mechanical_pass": true,
+    "model_calls": 4,
+    "reported_tokens": 3411,
+    "review_status": "partial",
+    "review_omissions": [
+      {
+        "claim_index": 3,
+        "reason": "not_reviewable"
+      }
+    ],
+    "claim_count": 4,
+    "counterargument_count": 1,
+    "semantic_support": "not independently established"
+  }
+}

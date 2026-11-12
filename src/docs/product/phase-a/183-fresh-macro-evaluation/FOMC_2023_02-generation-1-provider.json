@@ -1,0 +1,86 @@
+{
+  "manifest_sha256": "28cd39cb0e7de875d00184de55f5d83294e46fa9306aa2e651ce7c4df02193f4",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC raised the target range for the federal funds rate to 4-1/2 to 4-3/4 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 4-1/2 to 4-3/4 percent."
+          }
+        ]
+      },
+      {
+        "text": "The Board of Governors voted unanimously to raise the interest rate paid on reserve balances to 4.65 percent, effective February 2, 2023.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the interest rate paid on reserve balances to 4.65 percent, effective February 2, 2023."
+          }
+        ]
+      },
+      {
+        "text": "The two rates are distinct: the federal funds rate target range is a policy target corridor (4-1/2 to 4-3/4 percent), while the interest on reserve balances is a specific administered rate (4.65 percent) used to help keep the effective federal funds rate within that range.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 4-1/2 to 4-3/4 percent."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "raise the interest rate paid on reserve balances to 4.65 percent, effective February 2, 2023."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One might conflate the reserve balance rate (4.65 percent) with the upper bound of the target range (4-3/4 percent) or the primary credit rate (4.75 percent); the sources show they are separate decisions — the IORB is set by the Board of Governors at 4.65 percent, while the discount (primary credit) rate was separately raised to 4.75 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "voted unanimously to approve a 1/4 percentage point increase in the primary credit rate to 4.75 percent, effective February 2, 2023."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Sources are partial excerpts of the February 1, 2023 statement and implementation note; the full documents are not provided.",
+      "Publication dates are declared, not independently verified.",
+      "The effective federal funds rate itself is not reported in the sources.",
+      "No calculation is needed since the question asks only to identify and distinguish the two rates."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "federal funds rate target range",
+        "value": "4-1/2 to 4-3/4",
+        "unit": "percent (range)",
+        "currency": "USD",
+        "period": "announced 2023-02-01, effective 2023-02-02",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to raise the target range for the federal funds rate to 4-1/2 to 4-3/4 percent."
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "interest rate paid on reserve balances",
+        "value": 4.65,
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective 2023-02-02",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "raise the interest rate paid on reserve balances to 4.65 percent, effective February 2, 2023."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2017,
+  "prompt_sha256": "1bf3e0402814effcc403f4f39430fd8a4ccbf9060fa314bd3dbc0dc840456172",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

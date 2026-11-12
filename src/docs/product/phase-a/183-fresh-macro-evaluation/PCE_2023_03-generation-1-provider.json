@@ -1,0 +1,180 @@
+{
+  "manifest_sha256": "28cd39cb0e7de875d00184de55f5d83294e46fa9306aa2e651ce7c4df02193f4",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Current-dollar PCE increased $8.2 billion, a change described as 'less than 0.1 percent' (a less-than amount, not an exact percentage).",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "personal consumption expenditures (PCE) increased $8.2 billion (less than 0.1 percent)."
+          }
+        ]
+      },
+      {
+        "text": "The current-dollar PCE increase reflected a $44.9 billion rise in services spending partly offset by a $36.7 billion decrease in goods spending.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The $8.2 billion increase in current-dollar PCE in March reflected a $44.9 billion increase in spending for services that was partly offset by a $36.7 billion decrease in spending for goods (table 3)."
+          }
+        ]
+      },
+      {
+        "text": "Personal saving was $1.00 trillion and the personal saving rate was 5.1 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal saving was $1.00 trillion in March and the personal saving rate—personal saving as a percentage of disposable personal income—was 5.1 percent (table 1)."
+          }
+        ]
+      },
+      {
+        "text": "Real PCE decreased less than 0.1 percent (a less-than amount); real goods spending fell 0.4 percent while real services rose 0.1 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real PCE decreased less than 0.1 percent; goods decreased 0.4 percent and services increased 0.1 percent (tables 5 and 7)."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One might read the nominal PCE monthly change as exactly 0.1 percent, but the source explicitly labels it 'less than 0.1 percent,' so it should be reported as a less-than amount, unlike DPI (0.4 percent) which is exact. The revised February table, by contrast, lists exact figures (0.1 percent current-dollar, -0.2 percent chained) for February, not March.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal consumption expenditures:\nCurrent dollars 360.8 349.3 2.0 2.0 27.9 10.2 0.2 0.1\nChained (2012) dollars 206.0 192.4 1.5 1.4 -15.7 -35.0 -0.1 -0.2"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Excerpts are partial; the full monthly percent-change table for PCE current dollars is truncated mid-row ('Current '), so the exact March percent figure for current-dollar PCE is not shown beyond 'less than 0.1 percent'.",
+      "Publication date (2023-04-28) is declared, not independently verified.",
+      "Real PCE's 'less than 0.1 percent' decline is not given as an exact percentage, and no precise saving-rate decimal beyond 5.1 percent is provided."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "current-dollar PCE change, March 2023",
+        "value": "8.2",
+        "unit": "billions of dollars",
+        "currency": "USD",
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "personal consumption expenditures (PCE) increased $8.2 billion (less than 0.1 percent)."
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "current-dollar PCE percent change (less-than amount)",
+        "value": "less than 0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "(less\nthan 0.1 percent)"
+        }
+      },
+      {
+        "fact_id": "f3",
+        "label": "services spending increase",
+        "value": "44.9",
+        "unit": "billions of dollars",
+        "currency": "USD",
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "a $44.9 billion increase in spending for services"
+        }
+      },
+      {
+        "fact_id": "f4",
+        "label": "goods spending decrease",
+        "value": "-36.7",
+        "unit": "billions of dollars",
+        "currency": "USD",
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "a $36.7 billion decrease in spending for goods"
+        }
+      },
+      {
+        "fact_id": "f5",
+        "label": "personal saving",
+        "value": "1.00",
+        "unit": "trillions of dollars",
+        "currency": "USD",
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Personal saving was $1.00 trillion in March"
+        }
+      },
+      {
+        "fact_id": "f6",
+        "label": "personal saving rate",
+        "value": "5.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the personal saving rate—personal saving as a percentage of disposable personal income—was 5.1\npercent"
+        }
+      },
+      {
+        "fact_id": "f7",
+        "label": "real PCE percent change (less-than amount)",
+        "value": "less than -0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real PCE decreased less than 0.1 percent"
+        }
+      },
+      {
+        "fact_id": "f8",
+        "label": "real PCE goods percent change",
+        "value": "-0.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "goods decreased 0.4 percent"
+        }
+      },
+      {
+        "fact_id": "f9",
+        "label": "real PCE services percent change",
+        "value": "0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "services increased 0.1 percent"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "f3",
+        "second_fact_id": "f4"
+      }
+    ]
+  },
+  "reported_tokens": 3127,
+  "prompt_sha256": "87b0328dd5286213be24eeb442f75c583cd03a04c59d1dbc05c1d40d8ec2a67d",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

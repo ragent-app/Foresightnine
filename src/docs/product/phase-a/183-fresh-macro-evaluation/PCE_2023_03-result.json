@@ -1,0 +1,480 @@
+{
+  "task": "PCE_2023_03",
+  "status": "completed",
+  "operation_id": "operation:12403361ea3e3601ab9402e5",
+  "manifest_sha256": "28cd39cb0e7de875d00184de55f5d83294e46fa9306aa2e651ce7c4df02193f4",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_18300000000000000000000000000001",
+        "title": "bea-pi0323.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": "2023-04-28T12:30:00+00:00",
+        "obtained_at": "2026-11-12T14:41:08.229414+00:00",
+        "revised_at": null,
+        "content_sha256": "e12e466f41cf10494ed97edbc0d33db46e370f81b7fcaf7d4e9601f7bb158ef4",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "value": "8.2",
+        "unit": "billions of dollars",
+        "currency": "USD",
+        "period": "2023-03",
+        "label": "current-dollar PCE change, March 2023",
+        "source_id": "source_18300000000000000000000000000001",
+        "quotation": "personal consumption expenditures (PCE) increased $8.2 billion (less\nthan 0.1 percent).",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 579,
+          "character_end": 666,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "f3",
+        "value": "44.9",
+        "unit": "billions of dollars",
+        "currency": "USD",
+        "period": "2023-03",
+        "label": "services spending increase",
+        "source_id": "source_18300000000000000000000000000001",
+        "quotation": "a $44.9 billion increase in spending for\nservices",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 2474,
+          "character_end": 2523,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "f5",
+        "value": "1.00",
+        "unit": "trillions of dollars",
+        "currency": "USD",
+        "period": "2023-03",
+        "label": "personal saving",
+        "source_id": "source_18300000000000000000000000000001",
+        "quotation": "Personal saving was $1.00 trillion in March",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 2968,
+          "character_end": 3011,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "f6",
+        "value": "5.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "label": "personal saving rate",
+        "source_id": "source_18300000000000000000000000000001",
+        "quotation": "the personal saving rate—personal saving as a percentage of disposable personal income—was 5.1\npercent",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 3016,
+          "character_end": 3118,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "f8",
+        "value": "-0.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "label": "real PCE goods percent change",
+        "source_id": "source_18300000000000000000000000000001",
+        "quotation": "goods decreased 0.4 percent",
+        "quotation_match": "exact",
+        "direction_context_unverified": true,
+        "location": {
+          "character_start": 876,
+          "character_end": 903,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "f9",
+        "value": "0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023-03",
+        "label": "real PCE services percent change",
+        "source_id": "source_18300000000000000000000000000001",
+        "quotation": "services increased 0.1 percent",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 908,
+          "character_end": 938,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Current-dollar PCE increased $8.2 billion, a change described as 'less than 0.1 percent' (a less-than amount, not an exact percentage).",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_18300000000000000000000000000001",
+            "location": {
+              "character_start": 579,
+              "character_end": 666,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "personal consumption expenditures (PCE) increased $8.2 billion (less\nthan 0.1 percent)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_fact_values": [
+          "0.1 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "f9",
+            "source_id": "source_18300000000000000000000000000001",
+            "value": "0.1",
+            "unit": "percent",
+            "period": "2023-03",
+            "quotation": "services increased 0.1 percent",
+            "location": {
+              "character_start": 908,
+              "character_end": 938,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      },
+      {
+        "text": "The current-dollar PCE increase reflected a $44.9 billion rise in services spending partly offset by a $36.7 billion decrease in goods spending.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_18300000000000000000000000000001",
+            "location": {
+              "character_start": 2407,
+              "character_end": 2607,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The $8.2 billion increase in current-dollar PCE in March reflected a $44.9 billion increase in spending for\nservices that was partly offset by a $36.7 billion decrease in spending for goods (table 3)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v23_isolated",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "Personal saving was $1.00 trillion and the personal saving rate was 5.1 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_18300000000000000000000000000001",
+            "location": {
+              "character_start": 2968,
+              "character_end": 3129,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Personal saving was $1.00 trillion in March\nand the personal saving rate—personal saving as a percentage of disposable personal income—was 5.1\npercent (table 1)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v23_isolated",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "Real PCE decreased less than 0.1 percent (a less-than amount); real goods spending fell 0.4 percent while real services rose 0.1 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_18300000000000000000000000000001",
+            "location": {
+              "character_start": 834,
+              "character_end": 956,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real PCE decreased less than 0.1 percent;\ngoods decreased 0.4 percent and services increased 0.1 percent (tables 5 and 7)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "reused_percentages": [
+          "0.1 percent"
+        ]
+      },
+      {
+        "text": "One might read the nominal PCE monthly change as exactly 0.1 percent, but the source explicitly labels it 'less than 0.1 percent,' so it should be reported as a less-than amount, unlike DPI (0.4 percent) which is exact. The revised February table, by contrast, lists exact figures (0.1 percent current-dollar, -0.2 percent chained) for February, not March.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_18300000000000000000000000000001",
+            "location": {
+              "character_start": 5022,
+              "character_end": 5175,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Personal consumption\nexpenditures:\nCurrent dollars 360.8 349.3 2.0 2.0 27.9 10.2 0.2 0.1\nChained (2012) dollars 206.0 192.4 1.5 1.4 -15.7 -35.0 -0.1 -0.2"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "reused_percentages": [
+          "0.1 percent"
+        ],
+        "uncited_percentages": [
+          "0.4 percent"
+        ],
+        "uncited_fact_values": [
+          "0.1 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "f9",
+            "source_id": "source_18300000000000000000000000000001",
+            "value": "0.1",
+            "unit": "percent",
+            "period": "2023-03",
+            "quotation": "services increased 0.1 percent",
+            "location": {
+              "character_start": 908,
+              "character_end": 938,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_18300000000000000000000000000001: only character ranges 151–1237, 2346–3428, 4268–5354 were analyzed; remaining text was not examined.",
+      "2 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "A model-generated fact value was absent from its quotation and was omitted.",
+      "A negative percentage was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.",
+      "A requested calculation was omitted because its input facts were unavailable.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): Excerpts are partial; the full monthly percent-change table for PCE current dollars is truncated mid-row ('Current '), so the exact March percent figure for current-dollar PCE is not shown beyond 'less than 0.1 percent'.",
+      "Model-reported limitation (not independently verified): Publication date (2023-04-28) is declared, not independently verified.",
+      "Model-reported limitation (not independently verified): Real PCE's 'less than 0.1 percent' decline is not given as an exact percentage, and no precise saving-rate decimal beyond 5.1 percent is provided.",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "A percentage repeats within a claim; check that each measure has its own supporting evidence.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:12403361ea3e3601ab9402e5",
+      "status": "partial",
+      "model_calls": 3,
+      "total_tokens": 3935,
+      "cost_usd": null,
+      "generation_tokens": 3127,
+      "support_review_tokens": 808,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "partial",
+      "support_review_error": null,
+      "support_review_mode": "isolated",
+      "support_review_method": "bounded_quotation_context_model_review_v23_isolated",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [
+        1,
+        2
+      ],
+      "support_review_omissions": [
+        {
+          "claim_index": 0,
+          "reason": "not_reviewable"
+        },
+        {
+          "claim_index": 3,
+          "reason": "not_reviewable"
+        },
+        {
+          "claim_index": 4,
+          "reason": "not_reviewable"
+        }
+      ],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [
+        {
+          "claim_index": 1,
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 2227,
+          "character_end": 2787,
+          "context_radius": 180
+        },
+        {
+          "claim_index": 2,
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 2788,
+          "character_end": 3309,
+          "context_radius": 180
+        }
+      ],
+      "support_review_calls": [
+        {
+          "claim_index": 1,
+          "prompt_sha256": "31ea268c08ef9f1e43417e7091962248e1dc5eb42fba715dc6e5d62047980bcb",
+          "segments": [
+            {
+              "claim_index": 1,
+              "source_id": "source_18300000000000000000000000000001",
+              "character_start": 2227,
+              "character_end": 2787,
+              "context_radius": 180
+            }
+          ],
+          "status": "completed",
+          "reported_tokens": 403
+        },
+        {
+          "claim_index": 2,
+          "prompt_sha256": "0a51a3c439ed40d9d854556f77f48a24e105550ba4dd4b59730697c39e634b73",
+          "segments": [
+            {
+              "claim_index": 2,
+              "source_id": "source_18300000000000000000000000000001",
+              "character_start": 2788,
+              "character_end": 3309,
+              "context_radius": 180
+            }
+          ],
+          "status": "completed",
+          "reported_tokens": 405
+        }
+      ],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 30.342,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "87b0328dd5286213be24eeb442f75c583cd03a04c59d1dbc05c1d40d8ec2a67d",
+      "prompt_characters": 4887,
+      "prompt_bytes": 4893,
+      "selection_method": "ranked_nonoverlapping_windows_v39",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 151,
+          "character_end": 1237,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 2346,
+          "character_end": 3428,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 4268,
+          "character_end": 5354,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_18300000000000000000000000000001": "e12e466f41cf10494ed97edbc0d33db46e370f81b7fcaf7d4e9601f7bb158ef4"
+      },
+      "max_model_calls": 4,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 20000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_246f0ca3d14f4b7896d910eed0cb81b9",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_f6f1ce2a7de349ba86cdf350ae820774",
+      "parent_version_id": "version_246f0ca3d14f4b7896d910eed0cb81b9",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_02a9748ac4504f649085953abeb5507d",
+      "parent_version_id": "version_f6f1ce2a7de349ba86cdf350ae820774",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_d0b5cc91986640818bc386aaed050347",
+      "parent_version_id": "version_02a9748ac4504f649085953abeb5507d",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_265f4cd49ea94d64874233bc0811a6c3",
+      "parent_version_id": "version_d0b5cc91986640818bc386aaed050347",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_994f9cf0efa54765b5c37d97c7d8e636",
+      "parent_version_id": "version_265f4cd49ea94d64874233bc0811a6c3",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_df27359770b544ac9b32c52b105c99d1",
+      "parent_version_id": "version_994f9cf0efa54765b5c37d97c7d8e636",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 30.641
+}
