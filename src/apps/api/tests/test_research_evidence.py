@@ -231,3 +231,17 @@ def test_table_row_warning_requires_header_context_unless_header_and_unit_are_ci
     moved = separated.text.index(row["quotation"])
     changed = {**claim, "citations": [{**row, "location": {"character_start": moved, "character_end": moved + len(row["quotation"])}}]}
     assert not flag_citation_subject_context([changed], [separated])[0].get("citation_context_warnings")
+
+
+def test_truncated_conflict_keeps_different_sources_and_values_visible():
+    first = [fact(str(i), "source-a", "100") for i in range(20)]
+    case_one = first + [fact("different", "source-b", "110")]
+    # Here the differing value belongs to the original source; the only
+    # other source matches the first value and appears beyond the cap.
+    case_two = first + [fact("other-source", "source-b", "100"), fact("different", "source-a", "110")]
+    for case in (case_one, case_two):
+        candidate = evidence_differences(case)[0]
+        assert candidate["truncated"] and len(candidate["facts"]) == 20
+        assert any(a["source_id"] != b["source_id"] and a["value"] != b["value"]
+                   for a in candidate["facts"] for b in candidate["facts"])
+        assert candidate["status"] == "requires_entity_and_method_review"

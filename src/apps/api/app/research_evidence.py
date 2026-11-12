@@ -470,11 +470,25 @@ def evidence_differences(facts: list[dict]) -> list[dict]:
     for entries in groups.values():
         if len({item["source_id"] for _, item in entries}) < 2 or len({fact.value for fact, _ in entries}) < 2:
             continue
+        visible = entries[:20]
+        if len(entries) > 20 and not any(
+                first_item["source_id"] != second_item["source_id"] and first_fact.value != second_fact.value
+                for first_fact, first_item in visible for second_fact, second_item in visible):
+            # Keep an actually divergent cross-source pair visible even if
+            # one source contributed the first twenty observations.
+            first_fact, first_item = entries[0]
+            other = next(((fact, item) for fact, item in entries
+                          if item["source_id"] != first_item["source_id"] and fact.value != first_fact.value), None)
+            if other is None:
+                other = next((entry for entry in entries if entry[1]["source_id"] != first_item["source_id"]), None)
+                first_fact, first_item = next((fact, item) for fact, item in entries if fact.value != other[0].value)
+            selected_ids = {first_fact.fact_id, other[0].fact_id}
+            visible = [(first_fact, first_item), other] + [entry for entry in entries if entry[0].fact_id not in selected_ids][:18]
         result.append({"label": entries[0][1]["label"], "period": entries[0][0].period,
             "unit": entries[0][0].unit, "currency": entries[0][0].currency,
             "status": "requires_entity_and_method_review", "truncated": len(entries) > 20,
             "facts": [{"fact_id": fact.fact_id, "source_id": item["source_id"], "value": str(fact.value)}
-                      for fact, item in entries[:20]]})
+                      for fact, item in visible]})
         if len(result) == 50:
             break
     return result
