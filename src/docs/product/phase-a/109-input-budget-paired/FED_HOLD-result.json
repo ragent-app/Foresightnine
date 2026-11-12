@@ -1,0 +1,228 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; September 20 2023 FOMC statement.",
+  "id": "FED_HOLD",
+  "manifest_sha256": "c6593e9d8cf942407784054dcfc9ab2bd1abc3131c0ebd9cf8f43b0fb2af8dea",
+  "operation_status": "completed",
+  "operation_id": "operation:82e57307ff1a460e43dd0af1",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 20.322,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "title": "Federal Reserve September 20 2023 FOMC statement (extracted text)",
+        "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20230920a1.pdf",
+        "event_at": null,
+        "published_at": "2023-09-20T18:00:00+00:00",
+        "obtained_at": "2026-11-12T10:27:47.796293+00:00",
+        "revised_at": null,
+        "content_sha256": "586590cd7caa4eae0b3fd8fd2a6d7e28ff4fc6924bc3e246fb3006dfe5b111b2",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "根据2023年9月20日FOMC声明，委员会决定维持联邦基金利率目标区间在5-1/4至5-1/2个百分点（即5.25%–5.50%），本次决定为维持而非调整。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 675,
+              "character_end": 778
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to maintain the\ntarget range for the federal funds rate at 5-1/4 to 5-1/2 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "rate_unit_warnings": [
+          {
+            "claimed_text": "联邦基金利率目标区间在5-1/4至5-1/2个百分点",
+            "status": "requires_review"
+          }
+        ]
+      },
+      {
+        "text": "后续政策若进一步收紧，委员会将考虑的因素包括：货币政策的累积收紧程度、货币政策影响经济活动和通胀的滞后性、以及经济和金融形势的发展。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 1006,
+              "character_end": 1205
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the\nCommittee will take into account the cumulative tightening of monetary policy, the lags with\nwhich monetary policy affects economic activity and inflation, and economic and financial\ndevelopments"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "在评估货币政策立场时，委员会将考虑广泛的信息，包括劳动力市场状况、通胀压力和通胀预期、以及金融和国际形势发展，并准备在目标达成需要时调整货币政策立场。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 1908,
+              "character_end": 2037
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "readings on labor market conditions,\ninflation pressures and inflation expectations, and financial and international developments"
+          }
+        ],
+        "support_status": "incomplete",
+        "role": "support"
+      },
+      {
+        "text": "声明文本为部分摘录，第二页末尾文字中断，后续完整表述未包含在所提供的来源中。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 1645,
+              "character_end": 1665
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The Committee\n(more)"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "尽管本次维持利率不变，声明强调委员会仍高度关注通胀风险，并强烈承诺将通胀回归2%目标，暗示未来仍可能进一步收紧，不能解读为紧缩周期结束。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 479,
+              "character_end": 537
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "The Committee remains highly attentive to inflation risks."
+          },
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 883,
+              "character_end": 1004
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In determining the extent\nof additional policy firming that may be appropriate to return inflation to 2 percent over time"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      },
+      {
+        "text": "声明同时指出信贷条件收紧可能拖累经济、就业和通胀，这构成与继续加息相反的另一面考量。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 311,
+              "character_end": 431
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Tighter credit conditions for households\nand businesses are likely to weigh on economic activity, hiring, and inflation."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_d91bb078ea31474fb33f1ff0a9401c93: only character ranges 0–1731, 1781–3520 were analyzed; remaining text was not examined.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 所提供的来源为声明部分摘录，声明结尾句（'prepared to adjust the stance of monetary policy as…'）在来源中被截断，完整措辞未能核验。",
+      "Model-reported limitation (not independently verified): 声明本身不包含利率点阵图、经济预测摘要（SEP）或未来加息具体时点与次数的信息，本次维持利率的具体投票分歧（如有反对票）虽列出全部赞成者名单，但来源文本未显示有反对票的表述。",
+      "Model-reported limitation (not independently verified): 来源中的发布日期为声明标注时间（2023-09-20），未独立核验实际发布时间。",
+      "Model-reported limitation (not independently verified): 声明不能证明未来政策路径：未来是否加息、降息或维持，以及具体时间和幅度，均不在声明文本中确定。",
+      "Model-reported limitation (not independently verified): 来源未提供各委员内部讨论细节或经济预测数值，无法据此推断委员会内部对未来政策的具体分歧。",
+      "An interest rate level may be expressed as percentage points; review the unit and context.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:82e57307ff1a460e43dd0af1",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 2062,
+      "cost_usd": null,
+      "generation_tokens": 2062,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 19.258,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "74f1df0fda979791753486bfa868ff3eab901537c71ee31aac265c714c94f2c3",
+      "prompt_characters": 4919,
+      "prompt_bytes": 5047,
+      "selection_method": "ranked_nonoverlapping_windows_v28",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "character_start": 0,
+          "character_end": 1731
+        },
+        {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "character_start": 1781,
+          "character_end": 3520
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_d91bb078ea31474fb33f1ff0a9401c93": "586590cd7caa4eae0b3fd8fd2a6d7e28ff4fc6924bc3e246fb3006dfe5b111b2"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}
