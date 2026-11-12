@@ -107,7 +107,7 @@ from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_quer
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, search_sec_identities, reserve_sec_request, validate_user_agent
-from .research_uploads import PdfFailure, PdfUploadRequest, extract_pdf
+from .research_uploads import PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -1504,6 +1504,8 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
             result.append({"source_id": source_id, "status": "unavailable"})
             continue
         metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64"})
+        if source.retrieval_method == "user_pdf":
+            metadata["original_pdf_available"] = bool(source.original_pdf_base64)
         if pdf_text_spacing_suspect(source):
             metadata["pdf_text_spacing_warning"] = True
         if source.url:
@@ -2036,6 +2038,8 @@ def calculate_research(request: CalculationRequest, authorization: str | None = 
 
 def _visible_research_source(source: ResearchSource) -> dict:
     result = source.model_dump(mode="json", exclude={"original_pdf_base64"})
+    if source.retrieval_method == "user_pdf":
+        result["original_pdf_available"] = bool(source.original_pdf_base64)
     if pdf_text_spacing_suspect(source):
         result["pdf_text_spacing_warning"] = True
     if not source.permissions.display:
@@ -2074,6 +2078,39 @@ def upload_research_pdf(request: PdfUploadRequest, authorization: str | None = H
         if error.code in {"pdf_extractor_unavailable", "pdf_timeout", "pdf_busy"}:
             raise ApiProblem(503, "internal_error", "PDF extraction is unavailable or timed out.", retryable=True) from error
         raise ApiProblem(422, "invalid_request", "PDF is invalid, too large, encrypted, or has no extractable text.") from error
+
+
+@app.post("/v2/research/sources/{source_id}/reextract", status_code=201, include_in_schema=False)
+def reextract_research_pdf(source_id: str, request: PdfReextractRequest, authorization: str | None = Header(default=None)) -> dict:
+    """Create a separate source from the owner's retained PDF and its original permissions."""
+    account = _authenticated_account(authorization)
+    try:
+        original = research_sources.get(account.account_id, source_id)
+    except SourceNotFound as error:
+        raise ApiProblem(404, "not_found", "Research source not found.") from error
+    if original.retrieval_method != "user_pdf" or not original.original_pdf_base64:
+        raise ApiProblem(422, "invalid_request", "The retained original PDF is unavailable.")
+    title = original.title[:470] + (" — layout" if request.text_order == "layout" else " — reading")
+    try:
+        document = extract_pdf(PdfUploadRequest(title=title, pdf_base64=original.original_pdf_base64,
+            text_order=request.text_order, permissions=original.permissions))
+        if original.response_sha256 and original.response_sha256 != document.original_sha256:
+            raise ApiProblem(422, "invalid_request", "The retained original PDF does not match its recorded hash.")
+        source = research_sources.create(account.account_id, SourceInput(title=title, text=document.text,
+            url=original.url, kind=original.kind, is_simulated=original.is_simulated,
+            published_at=original.published_at, event_at=original.event_at, revised_at=original.revised_at,
+            permissions=original.permissions), retrieval_method="user_pdf", response_sha256=document.original_sha256,
+            response_content_type="application/pdf", original_pdf_base64=document.original_base64,
+            pdf_text_order=request.text_order, derived_from_source_id=original.source_id)
+        metadata = _visible_research_source(source)
+        metadata.pop("text", None)
+        return metadata
+    except PdfFailure as error:
+        if error.code in {"pdf_extractor_unavailable", "pdf_timeout", "pdf_busy"}:
+            raise ApiProblem(503, "internal_error", "PDF extraction is unavailable or timed out.", retryable=True) from error
+        raise ApiProblem(422, "invalid_request", "The retained PDF could not be extracted.") from error
+    except SourcePermissionError as error:
+        raise ApiProblem(422, "invalid_request", str(error)) from error
 
 
 @app.get("/v2/research/sources/{source_id}/original", include_in_schema=False)
@@ -2199,9 +2236,16 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     account = _authenticated_account(http_request.headers.get("Authorization"))
     try:
         topic = research_topics.get(account.account_id, topic_id)
-        source_ids = list(dict.fromkeys([*topic.request.source_ids, *topic.versions[-1].source_ids, *request.source_ids]))
-        if len(source_ids) > 100:
+        available_ids = list(dict.fromkeys([*topic.request.source_ids, *topic.versions[-1].source_ids, *request.source_ids]))
+        if len(available_ids) > 100:
             raise ApiProblem(422, "invalid_request", "A research version can include at most 100 sources.")
+        if request.selected_source_ids is not None and not set(request.selected_source_ids).issubset(available_ids):
+            raise ApiProblem(422, "invalid_request", "Selected sources must belong to this research request.")
+        source_ids = available_ids if request.selected_source_ids is None else list(request.selected_source_ids)
+        # Additional IDs have always required account ownership, even if a
+        # selection excludes them from this particular model input.
+        for source_id in request.source_ids:
+            research_sources.get(account.account_id, source_id)
         sources = [research_sources.get(account.account_id, source_id) for source_id in source_ids]
     except (TopicNotFound, SourceNotFound) as error:
         raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
@@ -2257,6 +2301,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                  "revised_at": s.revised_at.isoformat() if s.revised_at else None,
                  "content_sha256": s.content_sha256, "is_simulated": s.is_simulated,
                  "pdf_text_order": s.pdf_text_order,
+                 "derived_from_source_id": s.derived_from_source_id,
                  "verification": "user_declared_not_verified"}
                 for s in sources if s.source_id in analyzed_ids]
 
@@ -2854,6 +2899,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "as_of": topic.request.as_of.isoformat() if topic.request.as_of else None,
             "sources": [{"source_id": item.source_id, "content_sha256": item.content_sha256,
                          "pdf_text_order": item.pdf_text_order,
+                         "derived_from_source_id": item.derived_from_source_id,
                          "event_at": item.event_at.isoformat() if item.event_at else None,
                          "published_at": item.published_at.isoformat() if item.published_at else None,
                          "obtained_at": item.obtained_at.isoformat(),

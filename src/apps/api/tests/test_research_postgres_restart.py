@@ -418,3 +418,72 @@ assert client.delete("/v1/auth/local/account",headers=headers).status_code==200
     for script in (start,recover):
         result=subprocess.run([sys.executable,"-c",script],cwd=root,env=env,capture_output=True,text=True,timeout=60)
         assert result.returncode==0,result.stderr
+
+
+@pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
+def test_reextraction_and_selected_sources_survive_process_restart(tmp_path):
+    """Source provenance and a filtered run remain durable across processes."""
+    env=dict(os.environ,FORESIGHTNINE_STORAGE_MODE="postgres",FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
+             FORESIGHTNINE_POSTGRES_DSN=os.environ["FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"],
+             STAGEB_TEST_STATE=str(tmp_path/"source-selection.json"), STAGEB_PROVIDER_CALLS=str(tmp_path/"provider-calls"))
+    root=Path(__file__).resolve().parents[3]
+    start=r'''
+import base64,json,os,sys,time
+from pathlib import Path
+from types import SimpleNamespace
+from uuid import uuid4
+sys.path.insert(0,"apps/api")
+from fastapi.testclient import TestClient
+import app.main as api
+client=TestClient(api.app)
+r=client.post("/v1/auth/local/register",json={"email":f"persist-pdf-{uuid4().hex}@example.test","password":"correct horse battery staple!"})
+assert r.status_code==201,r.text
+headers={"Authorization":"Bearer "+r.json()["access_token"]}
+raw=Path("docs/product/phase-a/209-cross-domain-frozen/bea-2021-may.pdf").read_bytes()
+r=client.post("/v2/research/sources/pdf",headers=headers,json={"title":"Report","text_order":"reading","pdf_base64":base64.b64encode(raw).decode(),
+ "permissions":{"store":True,"display":True,"model_input":True,"export":True}});assert r.status_code==201,r.text
+old=r.json()["source_id"]
+r=client.post("/v2/research/sources/"+old+"/reextract",headers=headers,json={"text_order":"layout"});assert r.status_code==201,r.text
+new=r.json()["source_id"];assert r.json()["derived_from_source_id"]==old
+t=client.post("/v2/research/topics",headers=headers,json={"question":"Consumer spending?","source_ids":[old,new]});assert t.status_code==201,t.text
+topic=t.json();path="/v2/research/topics/"+topic["topic_id"];parent=topic["versions"][0]["version_id"]
+class Provider:
+ name="persist-source-selection";policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+ def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+  with open(os.environ["STAGEB_PROVIDER_CALLS"],"a") as f:f.write("called\n")
+  assert "Current-dollar consumer spending" in prompt
+  return {"claims":[],"counterarguments":[],"facts":[],"calculations":[],"limitations":["Synthetic test result."]},10
+api.challenge_provider=Provider()
+payload={"parent_version_id":parent,"selected_source_ids":[new],"max_search_calls":0,"require_counterarguments":False}
+r=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"persist-selection"},json=payload);assert r.status_code==202,r.text
+op=r.json()["operation"]["operation_id"]
+for _ in range(200):
+ status=client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+ if status in {"completed","failed","cancelled"}:break
+ time.sleep(.05)
+assert status=="completed",status
+with open(os.environ["STAGEB_TEST_STATE"],"w") as f:json.dump({"token":headers["Authorization"],"path":path,"old":old,"new":new,"op":op,"payload":payload},f)
+'''
+    recover=r'''
+import json,os,sys
+sys.path.insert(0,"apps/api")
+from fastapi.testclient import TestClient
+import app.main as api
+with open(os.environ["STAGEB_TEST_STATE"]) as f:s=json.load(f)
+client=TestClient(api.app);headers={"Authorization":s["token"]};path=s["path"]
+r=client.get("/v2/research/sources/"+s["new"],headers=headers);assert r.status_code==200,r.text
+assert r.json()["derived_from_source_id"]==s["old"] and r.json()["pdf_text_order"]=="layout"
+old=client.get("/v2/research/sources/"+s["old"],headers=headers);assert old.status_code==200 and old.json()["pdf_text_order"]=="reading"
+assert client.get("/v2/research/sources/"+s["new"]+"/original",headers=headers).status_code==200
+topic=client.get(path,headers=headers).json();assert set(topic["versions"][-1]["source_ids"])=={s["old"],s["new"]}
+inputs=client.get(path+"/runs/"+s["op"]+"/inputs",headers=headers).json()
+assert [item["source_id"] for item in inputs["sources"]]==[s["new"]]
+assert inputs["sources"][0]["derived_from_source_id"]==s["old"]
+r=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"persist-selection"},json=s["payload"])
+assert r.status_code==202 and r.headers.get("Idempotency-Replayed")=="true"
+with open(os.environ["STAGEB_PROVIDER_CALLS"]) as f:assert f.read().splitlines()==["called"]
+assert client.delete("/v1/auth/local/account",headers=headers).status_code==200
+'''
+    for script in (start,recover):
+        result=subprocess.run([sys.executable,"-c",script],cwd=root,env=env,capture_output=True,text=True,timeout=60)
+        assert result.returncode==0,result.stderr

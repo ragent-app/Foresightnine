@@ -4,6 +4,27 @@ import { researchClient, researchPollingDelay, ResearchRequestError } from "./ge
 afterEach(() => vi.unstubAllGlobals());
 
 describe("research operation polling", () => {
+  it("requests an alternative PDF extraction without sending or changing source permissions", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 201 }));
+    vi.stubGlobal("fetch", fetcher);
+    await researchClient("https://api.example.com").reextractPdf("source/one", "layout");
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("/sources/source%2Fone/reextract");
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({text_order:"layout"});
+  });
+  it("distinguishes default sources from an explicit empty or filtered selection", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 202 }));
+    vi.stubGlobal("fetch", fetcher);
+    const api = researchClient("https://api.example.com");
+    const budget = {search:false,supportReview:false,requireCounterarguments:false,maxElapsedSeconds:60,maxTotalTokens:10000};
+    await api.run("topic","version","one",budget);
+    await api.run("topic","version","two",{...budget,selectedSourceIds:[]});
+    await api.run("topic","version","three",{...budget,selectedSourceIds:["s2"]});
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty("selected_source_ids");
+    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)).selected_source_ids).toEqual([]);
+    expect(JSON.parse(String(fetcher.mock.calls[2]?.[1]?.body)).selected_source_ids).toEqual(["s2"]);
+  });
   it("confirms a specific fact against the current version", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 201 }));

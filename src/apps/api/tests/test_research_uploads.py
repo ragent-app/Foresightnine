@@ -156,6 +156,43 @@ def test_pdf_spacing_warning_is_visible_and_marks_research_partial(monkeypatch):
     assert exported["source_provenance"][0]["pdf_text_spacing_warning"] is True
 
 
+@pytest.mark.skipif(not shutil.which("prlimit") or not shutil.which("pdftotext"), reason="PDF extraction tools unavailable")
+def test_reextract_pdf_preserves_original_permissions_and_account_boundary(monkeypatch):
+    import app.main as api
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client=TestClient(app)
+    def auth():
+        reg=client.post("/v1/auth/local/register",json={"email":f"reextract-{uuid4().hex}@example.test","password":"correct horse battery staple!"})
+        return {"Authorization":"Bearer "+reg.json()["access_token"]}
+    owner,other=auth(),auth()
+    raw=(Path(__file__).resolve().parents[3]/"docs/product/phase-a/209-cross-domain-frozen/bea-2021-may.pdf").read_bytes()
+    uploaded=client.post("/v2/research/sources/pdf",headers=owner,json={**body(raw,export=False),"text_order":"reading",
+        "published_at":"2021-06-25T12:30:00Z","event_at":"2021-05-31T00:00:00Z","is_simulated":True})
+    assert uploaded.status_code==201
+    original=uploaded.json();sid=original["source_id"]
+    assert original["original_pdf_available"] and original["pdf_text_spacing_warning"]
+    path="/v2/research/sources/"+sid+"/reextract"
+    assert client.post(path,headers=other,json={"text_order":"layout"}).status_code==404
+    assert client.post(path,headers=owner,json={"text_order":"unknown"}).status_code==422
+    response=client.post(path,headers=owner,json={"text_order":"layout"})
+    assert response.status_code==201,response.text
+    changed=response.json()
+    assert changed["source_id"]!=sid and changed["derived_from_source_id"]==sid
+    assert changed["pdf_text_order"]=="layout" and not changed.get("pdf_text_spacing_warning")
+    assert changed["response_sha256"]==original["response_sha256"]
+    assert changed["published_at"]==original["published_at"] and changed["event_at"]==original["event_at"]
+    assert changed["permissions"]==original["permissions"] and changed["is_simulated"] is True
+    assert "text" not in changed and "original_pdf_base64" not in changed
+    assert client.get("/v2/research/sources/"+sid,headers=owner).json()["pdf_text_order"]=="reading"
+    assert client.get("/v2/research/sources/"+changed["source_id"]+"/original",headers=owner).status_code==403
+    ordinary=client.post("/v2/research/sources",headers=owner,json={"title":"Text","text":"text",
+        "permissions":{"store":True}}).json()["source_id"]
+    assert client.post("/v2/research/sources/"+ordinary+"/reextract",headers=owner,json={"text_order":"layout"}).status_code==422
+    stored=api.research_sources.repository.get(sid)
+    api.research_sources.repository.put(sid,stored.model_copy(update={"response_sha256":"0"*64}))
+    assert client.post(path,headers=owner,json={"text_order":"layout"}).status_code==422
+
+
 def test_pdf_rejects_missing_rights_and_invalid_content():
     with pytest.raises(PdfFailure, match="source_permission_unknown"):
         extract_pdf(PdfUploadRequest(title="x", pdf_base64="eA==", permissions={"store": False}))

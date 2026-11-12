@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .research_topics import ResearchContent
 
@@ -20,6 +20,8 @@ class ResearchRunRequest(BaseModel):
     question_override: str | None = Field(default=None, min_length=1, max_length=10000)
     parent_version_id: str = Field(min_length=1, max_length=100)
     source_ids: list[str] = Field(default_factory=list, max_length=100)
+    # None preserves the historical behavior; [] explicitly selects no source.
+    selected_source_ids: list[str] | None = Field(default=None, max_length=100)
     max_model_calls: int = Field(default=1, ge=0, le=10)
     max_input_tokens_per_call: int | None = Field(default=None, ge=1, le=12000, strict=True)
     support_review: bool = False
@@ -31,6 +33,13 @@ class ResearchRunRequest(BaseModel):
     max_elapsed_seconds: int = Field(default=60, ge=1, le=180)
     max_total_tokens: int = Field(default=10000, ge=0, le=20000)
     max_cost_usd: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+    @field_validator("selected_source_ids")
+    @classmethod
+    def selected_sources_unique_and_nonblank(cls, values: list[str] | None) -> list[str] | None:
+        if values is not None and (any(not value for value in values) or len(values) != len(set(values))):
+            raise ValueError("Selected source IDs must be nonblank and unique.")
+        return values
 
 
 def discovery_query(question: str, scope: str, include_scope: bool) -> str:

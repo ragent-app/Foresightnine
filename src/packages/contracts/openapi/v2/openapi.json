@@ -396,6 +396,24 @@
         "title": "OperationResponse",
         "type": "object"
       },
+      "PdfReextractRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "text_order": {
+            "enum": [
+              "layout",
+              "reading"
+            ],
+            "title": "Text Order",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text_order"
+        ],
+        "title": "PdfReextractRequest",
+        "type": "object"
+      },
       "PdfUploadRequest": {
         "additionalProperties": false,
         "properties": {
@@ -918,6 +936,21 @@
             "default": true,
             "title": "Require Counterarguments",
             "type": "boolean"
+          },
+          "selected_source_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Source Ids"
           },
           "source_ids": {
             "items": {
@@ -1873,6 +1906,74 @@
           }
         },
         "summary": "Get Research Source Original"
+      }
+    },
+    "/v2/research/sources/{source_id}/reextract": {
+      "post": {
+        "description": "Create a separate source from the owner's retained PDF and its original permissions.",
+        "operationId": "reextract_research_pdf_v2_research_sources__source_id__reextract_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PdfReextractRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reextract Research Pdf V2 Research Sources  Source Id  Reextract Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reextract Research Pdf"
       }
     },
     "/v2/research/topics": {

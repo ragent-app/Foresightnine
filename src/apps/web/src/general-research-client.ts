@@ -46,6 +46,7 @@ export interface ResearchContent {
   run: Record<string, unknown>;
 }
 export interface ResearchVersion {
+  source_ids?: string[];
   version_id: string;
   created_by?: "user" | "agent" | "unknown";
   parent_version_id?: string | null;
@@ -64,10 +65,10 @@ export interface ResearchOperation {
   status: string;
   cancel_token: string;
 }
-export interface SourceMetadata { pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
+export interface SourceMetadata { original_pdf_available?: boolean; derived_from_source_id?: string | null; pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string; published_at?: string | null }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
-export interface RunBudget { questionOverride?: string; search: boolean; supportReview: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean }
+export interface RunBudget { selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean }
 
 export function sourceDiscoveryQuery(question: string, scope: string, includeScope: boolean): string {
   const q = Array.from(question.trim()), s = Array.from(scope.trim());
@@ -164,6 +165,8 @@ export function researchClient(baseUrl: string) {
       request<{ source_id: string }>("/v2/research/sources/pdf", { title, pdf_base64: pdfBase64,
         ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated, text_order: textOrder,
         permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
+    reextractPdf: (sourceId: string, textOrder: "layout" | "reading") => request<{ source_id: string }>(
+      `/v2/research/sources/${encodeURIComponent(sourceId)}/reextract`, { text_order: textOrder }),
     search: (query: string) => request<{ project_search_available: boolean; candidates: DiscoveryCandidate[] }>(
       `/v1/search/candidates?query=${encodeURIComponent(Array.from(query).slice(0, 70).join(""))}&limit=5`),
     create: (question: string, sourceIds: string[], asOf: string, scope = "") => request<ResearchTopic>("/v2/research/topics", { question, source_ids: sourceIds,
@@ -184,6 +187,7 @@ export function researchClient(baseUrl: string) {
         ...(budget.supportReview && budget.supportReviewMode === "isolated" ? { support_review_mode: "isolated" } : {}),
         require_counterarguments: budget.requireCounterarguments,
         ...(budget.maxInputTokensPerCall !== undefined ? { max_input_tokens_per_call: budget.maxInputTokensPerCall } : {}),
+        ...(budget.selectedSourceIds !== undefined ? { selected_source_ids: budget.selectedSourceIds } : {}),
         ...(budget.questionOverride ? { question_override: budget.questionOverride } : {}),
         ...(budget.includeScopeInSearch ? { include_scope_in_search: true } : {}),
         ...(budget.focusCitation ? { focus_citation: budget.focusCitation } : {}),

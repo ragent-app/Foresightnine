@@ -2629,6 +2629,67 @@ def test_related_claim_candidate_can_fill_a_missing_counterargument_quote(monkey
     assert counter["uncited_dollar_amounts"]
 
 
+def test_run_can_select_sources_without_changing_history_or_leaking_others(monkeypatch):
+    import json
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")
+    observed=[]
+    class Provider:
+        name="selected-sources-test"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            observed.append(json.loads(prompt))
+            ref=observed[-1]["sources"][0]["source_id"]
+            return {"claims":[{"text":"Selected document says revenue was 200.","citations":[{"source_id":ref,"quotation":"Revenue was 200."}]}]},10
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    def auth():
+        account=client.post("/v1/auth/local/register",json={"email":f"selected-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
+        return {"Authorization":"Bearer "+account["access_token"]}
+    headers,other=auth(),auth()
+    def make(text,h=headers):
+        return client.post("/v2/research/sources",headers=h,json={"title":"Report","text":text,
+            "permissions":{"store":True,"display":True,"model_input":True,"export":True}}).json()["source_id"]
+    first,second,foreign=make("Revenue was 100."),make("Revenue was 200."),make("Secret third source.",other)
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Revenue?","source_ids":[first,second]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    parent=topic["versions"][0]["version_id"]
+    request={"parent_version_id":parent,"selected_source_ids":[second],"require_counterarguments":False,"max_search_calls":0}
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"select-one"},json=request)
+    assert receipt.status_code==202,receipt.text
+    op=receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed" and len(observed)==1
+    prompt=json.dumps(observed[0]);assert "Revenue was 200" in prompt and "Revenue was 100" not in prompt and "Secret third" not in prompt
+    inputs=client.get(path+"/runs/"+op+"/inputs",headers=headers).json()
+    assert [s["source_id"] for s in inputs["sources"]]==[second]
+    updated=client.get(path,headers=headers).json()
+    assert set(updated["versions"][-1]["source_ids"])=={first,second}
+    assert set(updated["versions"][0]["source_ids"])=={first,second}
+    replay=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"select-one"},json=request)
+    assert replay.status_code==202 and replay.headers["Idempotency-Replayed"]=="true" and len(observed)==1
+    conflict=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"select-one"},json={**request,"selected_source_ids":[first]})
+    assert conflict.status_code==409
+    new_parent=updated["versions"][-1]["version_id"]
+    for selection in ([foreign],[first,first],[""]):
+        rejected=client.post(path+"/runs",headers={**headers,"Idempotency-Key":uuid4().hex},json={"parent_version_id":new_parent,"selected_source_ids":selection})
+        assert rejected.status_code==422
+    none=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"select-none"},json={"parent_version_id":new_parent,
+        "selected_source_ids":[],"max_search_calls":0,"require_counterarguments":False})
+    assert none.status_code==202
+    op2=none.json()["operation"]["operation_id"]
+    for _ in range(100):
+        state=client.get(path+"/runs/"+op2,headers=headers).json()["operation"]["status"]
+        if state in {"completed","failed"}:break
+        time.sleep(.02)
+    assert state=="completed" and len(observed)==1
+    assert client.get(path+"/runs/"+op2+"/inputs",headers=headers).json()["sources"]==[]
+    assert client.get(path,headers=headers).json()["versions"][-1]["content"]["run"]["status"]=="partial"
+
+
 def test_related_percentage_candidate_can_replace_ambiguous_quotation(monkeypatch):
     from uuid import uuid4
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")

@@ -42,6 +42,11 @@ class PdfUploadRequest(BaseModel):
         return value
 
 
+class PdfReextractRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text_order: Literal["layout", "reading"]
+
+
 class PdfFailure(ValueError):
     def __init__(self, code: str):
         super().__init__(code)

@@ -219,20 +219,22 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [maxInputTokens, setMaxInputTokens] = useState("");
   const [maxCost, setMaxCost] = useState("");
   const [sourceMetadata, setSourceMetadata] = useState<SourceMetadata[]>([]);
+  const [excludedSourceIds, setExcludedSourceIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [pollNotice, setPollNotice] = useState("");
   const pendingRun = useRef<{ topicId: string; versionId: string; key: string; budget: RunBudget } | null>(null);
   const pendingSource = useRef<{ fingerprint: string; sourceId: string; file: File | null } | null>(null);
+  const pendingReextract = useRef<{ topicId: string; sourceId: string; textOrder: "layout" | "reading"; newSourceId: string } | null>(null);
   const sourceDetails = useRef<HTMLDetailsElement>(null);
   const latest = topic?.versions[topic.versions.length - 1];
   const current = topic?.versions.find((item) => item.version_id === selectedVersionId) ?? latest;
   const isLatest = current?.version_id === latest?.version_id;
   useEffect(() => { setFocusChoice(""); }, [current?.version_id]);
-  useEffect(() => { setRunSearchScope(false); setRunQuestion(""); setCalculationFirst(""); setCalculationSecond(""); }, [accountId, topic?.topic_id]);
+  useEffect(() => { setRunSearchScope(false); setRunQuestion(""); setCalculationFirst(""); setCalculationSecond(""); setExcludedSourceIds([]); }, [accountId, topic?.topic_id]);
   const focusOptions = (current?.content.claims ?? []).flatMap((claim, claimIndex) => (claim.citations ?? []).flatMap((citation, citationIndex) => {
     const source = sourceMetadata.find((item) => item.source_id === citation.source_id);
-    if (!source || !source.permissions?.model_input || !canUseCitationSource(source, topic?.request.as_of) || !citation.quotation || citation.partial_token || citation.location?.status === "ambiguous" || citation.location?.character_start === undefined) return [];
+    if (!source || excludedSourceIds.includes(source.source_id) || !source.permissions?.model_input || !canUseCitationSource(source, topic?.request.as_of) || !citation.quotation || citation.partial_token || citation.location?.status === "ambiguous" || citation.location?.character_start === undefined) return [];
     return [{ value: `${claimIndex}:${citationIndex}`, label: `${source.title || source.source_id}: ${citation.quotation.slice(0, 100)}`, claim_index: claimIndex, citation_index: citationIndex }];
   }));
   const parent = reviewedAncestor(topic, current?.parent_version_id);
@@ -399,6 +401,33 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     }
     finally { setBusy(false); }
   }
+  async function reextractSource(source: SourceMetadata) {
+    if (!api || !topic || !current || !isLatest || running || busy) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before changing material." : "请先保存当前修改，再调整资料。"); return; }
+    const textOrder = source.pdf_text_order === "layout" ? "reading" : "layout";
+    setBusy(true); setNotice("");
+    try {
+      let pending = pendingReextract.current;
+      if (!pending || pending.topicId !== topic.topic_id || pending.sourceId !== source.source_id || pending.textOrder !== textOrder) {
+        const result = await api.reextractPdf(source.source_id, textOrder);
+        pending = { topicId: topic.topic_id, sourceId: source.source_id, textOrder, newSourceId: result.source_id };
+        pendingReextract.current = pending;
+      }
+      const newSourceId = pending.newSourceId;
+      const updated = await api.attach(topic.topic_id, current.version_id, [newSourceId]);
+      pendingReextract.current = null;
+      setTopic(updated); setSelectedVersionId("");
+      setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+      setExcludedSourceIds((items) => Array.from(new Set([...items, source.source_id])).filter((id) => id !== newSourceId));
+      setFocusChoice("");
+      setNotice(en ? "Alternative extraction added and selected for the next run. The original remains in history." : "已添加另一种提取结果并用于下次研究，原资料仍保留在历史中。");
+    } catch {
+      setNotice(pendingReextract.current?.sourceId === source.source_id
+        ? (en ? "Extraction was created but could not be attached. Reload the research and retry." : "提取结果已创建但未能添加，请刷新研究后重试。")
+        : (en ? "Could not extract the retained PDF. Check the original and try again." : "无法重新提取已保存的 PDF，请核对原文件后重试。"));
+    } finally { setBusy(false); }
+  }
+
   async function attachMaterial() {
     if (!api || !topic || !current || !isLatest || !hasMaterial) return;
     if (hasUnsavedReview) {
@@ -453,7 +482,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, ...(supportReview && reviewMode === "isolated" ? { supportReviewMode: "isolated", maxModelCalls: Number(maxModelCalls) } : {}), requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxInputTokens ? { maxInputTokensPerCall: Number(maxInputTokens) } : {}), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { ...(excludedSourceIds.length ? { selectedSourceIds: Array.from(new Set([...topic.request.source_ids, ...(current.source_ids ?? [])])).filter((id) => !excludedSourceIds.includes(id)) } : {}), ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, ...(supportReview && reviewMode === "isolated" ? { supportReviewMode: "isolated", maxModelCalls: Number(maxModelCalls) } : {}), requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxInputTokens ? { maxInputTokensPerCall: Number(maxInputTokens) } : {}), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -667,7 +696,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.content.run.support_review_requested ? <p>{en ? "Review during this run: " : "本次运行的模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
       <h3>{en ? "Sources" : "资料来源"}</h3>
       {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><CandidateDate publishedAt={candidate.published_at} cutoff={topic.request.as_of} en={en} /><Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Attach source" : "添加此来源"}</Button></article>)}</section> : null}
-      {sourceMetadata.length ? <><p>{en ? "Attached material (declared dates are not independently verified)" : "已关联资料（声明的时间尚未独立核验）"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.is_simulated ? <strong>{en ? "(simulated; excluded from real research)" : "（模拟，未用于真实研究）"}</strong> : null} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : <><br /><SourceTimes source={source} en={en} /></>}{source.retrieval_method === "official_html" ? <p><small>{en ? "Extracted webpage text; table separators and span markers, when present, are generated. Check the original webpage for layout." : "网页提取文本；表格中的分隔符和合并单元格标记（如有）由系统生成，请查阅原网页确认排版。"}</small></p> : null}{source.retrieval_method === "user_pdf" ? <p><small>{en ? "PDF text order: " : "PDF 文字读取方式："}{source.pdf_text_order === "layout" ? (en ? "preserve layout" : "保留版式") : source.pdf_text_order === "reading" ? (en ? "reading order" : "阅读顺序") : (en ? "not recorded for this older source" : "旧资料未记录")}</small></p> : null}{source.pdf_text_spacing_warning ? <p role="status">{en ? "Extracted text may be missing spaces between words. Check the original PDF and consider adding it again using the other text order; the warning is not a complete quality check." : "提取文本可能缺少词间空格。请核对原 PDF，并考虑使用另一种读取方式重新添加；此提示不能全面检查提取质量。"}</p> : null}{source.retrieval_method === "user_pdf" && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id)}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
+      {sourceMetadata.length ? <><p>{en ? "Attached material (declared dates are not independently verified). Unchecking only excludes a source from the next run; history is preserved." : "已关联资料（声明的时间尚未独立核验）。取消勾选只影响下次研究，历史记录保留。"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}><label><input type="checkbox" checked={!excludedSourceIds.includes(source.source_id)} disabled={busy || running || !isLatest || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => { const included = event.target.checked; setExcludedSourceIds((items) => included ? items.filter((id) => id !== source.source_id) : [...items, source.source_id]); setFocusChoice(""); }} /> {en ? "Use in next run" : "本次研究使用"}</label>{" "}{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.is_simulated ? <strong>{en ? "(simulated; excluded from real research)" : "（模拟，未用于真实研究）"}</strong> : null} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : <><br /><SourceTimes source={source} en={en} /></>}{source.retrieval_method === "official_html" ? <p><small>{en ? "Extracted webpage text; table separators and span markers, when present, are generated. Check the original webpage for layout." : "网页提取文本；表格中的分隔符和合并单元格标记（如有）由系统生成，请查阅原网页确认排版。"}</small></p> : null}{source.retrieval_method === "user_pdf" ? <p><small>{en ? "PDF text order: " : "PDF 文字读取方式："}{source.pdf_text_order === "layout" ? (en ? "preserve layout" : "保留版式") : source.pdf_text_order === "reading" ? (en ? "reading order" : "阅读顺序") : (en ? "not recorded for this older source" : "旧资料未记录")}</small></p> : null}{source.pdf_text_spacing_warning ? <p role="status">{en ? "Extracted text may be missing spaces between words. Check the original PDF and consider adding it again using the other text order; the warning is not a complete quality check." : "提取文本可能缺少词间空格。请核对原 PDF，并考虑使用另一种读取方式重新添加；此提示不能全面检查提取质量。"}</p> : null}{source.retrieval_method === "user_pdf" && source.original_pdf_available && isLatest ? <Button disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onClick={() => void reextractSource(source)}>{source.pdf_text_order === "layout" ? (en ? "Try reading order" : "尝试阅读顺序") : (en ? "Try preserving layout" : "尝试保留版式")}</Button> : null}{source.retrieval_method === "user_pdf" && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id)}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
       {current.content.sources.length ? <ul>{current.content.sources.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} <SourceTimes source={source} en={en} /></li>; })}</ul> : <p>{en ? "No source analyzed." : "尚无已分析来源。"}</p>}
       {facts.length ? <>
         <h3>{en ? "Extracted figures" : "提取的数值"}</h3>
