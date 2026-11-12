@@ -1,0 +1,4 @@
+{
+  "PCE_2023_03": {"nominal_pce_change_usd_billion": "8.2", "services_change_usd_billion": "44.9", "goods_change_usd_billion": "-36.7", "saving_rate_percent": "5.1", "real_pce_direction": "decrease less than 0.1 percent"},
+  "FOMC_2023_02": {"target_lower_percent": "4.5", "target_upper_percent": "4.75", "reserve_balances_percent": "4.65", "reserve_balances_effective_date": "2023-02-02"}
+}

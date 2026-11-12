@@ -1,0 +1,100 @@
+{
+  "implementation_commit": "01ce12c02be887d148a62cce0088df9251018557",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_method": "bounded_quotation_context_model_review_v23",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "4d7c2b8b31757fa9cede46504185ffd5b2ba277218a4b07984771c6602f37cd5",
+    "prepare.py": "71e6281f795425613d3a38d9e68982303e4eef1c1b1cb6ee47b945ff0caee97d",
+    "run.py": "56e2ffc9526c999678bd734585147deb1a0e11cf2bde1833284c0163b84a956b",
+    "score.py": "3aebc14b5364daebc5b21911ff99b6b2b8840b055b03ba9f28e849309847b8e6"
+  },
+  "source_files": {
+    "tasks.json": "c6e58cb422a1033e3aa9f5bb0e34a0fdd71a15847dcc916383d868e205970b47",
+    "reference.json": "3488f52f7ba3696a5187b46ee6974747b7f3e55cecf56a1301b5ff2ed96b6063",
+    "bea-pi0323.pdf": "b00f5cd80fae7bf21da32bd4aac345a7882cd080071cd24f7fc1730a369a4d9c",
+    "fed-20230201.pdf": "f6332f3880121bcbd2a235fbc83e8548a6298131264f558ccd56fd10af8b9956"
+  },
+  "conditions": [
+    {
+      "task": "PCE_2023_03",
+      "prompt_sha256": "87b0328dd5286213be24eeb442f75c583cd03a04c59d1dbc05c1d40d8ec2a67d",
+      "prompt_bytes": 4893,
+      "segments": [
+        {
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 151,
+          "character_end": 1237,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 2346,
+          "character_end": 3428,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18300000000000000000000000000001",
+          "character_start": 4268,
+          "character_end": 5354,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_18300000000000000000000000000001": "e12e466f41cf10494ed97edbc0d33db46e370f81b7fcaf7d4e9601f7bb158ef4"
+      }
+    },
+    {
+      "task": "FOMC_2023_02",
+      "prompt_sha256": "1bf3e0402814effcc403f4f39430fd8a4ccbf9060fa314bd3dbc0dc840456172",
+      "prompt_bytes": 4898,
+      "segments": [
+        {
+          "source_id": "source_18300000000000000000000000000002",
+          "character_start": 0,
+          "character_end": 1108,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18300000000000000000000000000002",
+          "character_start": 2345,
+          "character_end": 3459,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_18300000000000000000000000000002",
+          "character_start": 4184,
+          "character_end": 5286,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_18300000000000000000000000000002": "702901ad65f69a0f52fa6cca1891313dea21fd474a873e83b40dd05e43f77182"
+      }
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 8,
+  "max_calls_per_task": 4,
+  "max_total_tokens": 40000,
+  "run_elapsed_seconds": 120,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 209215
+}

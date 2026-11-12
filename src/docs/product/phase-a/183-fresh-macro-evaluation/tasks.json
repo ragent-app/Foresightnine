@@ -1,0 +1,4 @@
+[
+  {"id":"PCE_2023_03","question":"According to the March 2023 BEA release, how did current-dollar personal consumption expenditure change from the preceding month, how did goods and services contribute, what was the personal saving rate, and what happened to real PCE? Quote the original passages and distinguish less-than amounts from exact percentages.","source":"bea-pi0323.pdf","source_id":"source_18300000000000000000000000000001","published_at":"2023-04-28T12:30:00+00:00"},
+  {"id":"FOMC_2023_02","question":"According to the February 1, 2023 Federal Reserve statement and implementation note, what target range was set for the federal funds rate and what interest rate was paid on reserve balances and from what date? Cite the relevant passages and distinguish the two rates.","source":"fed-20230201.pdf","source_id":"source_18300000000000000000000000000002","published_at":"2023-02-01T19:00:00+00:00"}
+]
