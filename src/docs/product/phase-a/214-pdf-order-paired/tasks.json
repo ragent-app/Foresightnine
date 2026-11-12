@@ -1,0 +1,16 @@
+[
+  {
+    "id": "READING",
+    "question": "Using the BEA May 2021 release, evaluate the claim that both goods and services consumer spending rose in May. State the current-dollar change in total consumer spending, cite the relevant source passages, and explain what the aggregate change alone cannot establish.",
+    "source": "bea-2021-may.pdf",
+    "source_id": "source_21400000000000000000000000000001",
+    "order": "reading"
+  },
+  {
+    "id": "LAYOUT",
+    "question": "Using the BEA May 2021 release, evaluate the claim that both goods and services consumer spending rose in May. State the current-dollar change in total consumer spending, cite the relevant source passages, and explain what the aggregate change alone cannot establish.",
+    "source": "bea-2021-may.pdf",
+    "source_id": "source_21400000000000000000000000000002",
+    "order": "layout"
+  }
+]
