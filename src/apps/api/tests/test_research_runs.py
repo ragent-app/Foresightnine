@@ -179,6 +179,9 @@ def test_legacy_monetary_calculation_requires_currency_without_rewriting_history
     read=client.get(path,headers=headers).json()['versions'][-1]
     assert all(f['currency_unspecified'] for f in read['content']['facts'])
     assert read['content']['calculations'][0]['input_status']=='unverifiable'
+    exported=client.get(path+'/versions/'+version.version_id+'/export',headers=headers)
+    assert exported.status_code==200
+    assert exported.json()['version']['content']['calculations'][0]['input_status']=='unverifiable'
     original=api.research_topics.get(topic['owner_id'],topic['topic_id']).versions[-1].content
     assert not original.facts[0].get('currency_unspecified') and original.calculations[0]['input_status']=='matched'
     assert client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':version.version_id,'calculation_index':0}).status_code==422
