@@ -96,6 +96,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [revisedAt, setRevisedAt] = useState("");
   const [sourceMode, setSourceMode] = useState<"text" | "sec" | "file">("text");
   const [file, setFile] = useState<File | null>(null);
+  const [pdfTextOrder, setPdfTextOrder] = useState<"layout" | "reading">("layout");
   const [fileInputKey, setFileInputKey] = useState(0);
   const [cik, setCik] = useState("");
   const [issuerQuery, setIssuerQuery] = useState("");
@@ -215,7 +216,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
 
   async function uploadMaterial(): Promise<string> {
     if (!api || !hasMaterial || !confirmRights) throw new Error("rights_required");
-    const fingerprint = JSON.stringify([sourceMode, title, text, url, publishedAt, eventAt, revisedAt, cik, taxonomy, concept, unit, filingBefore, modelInput, allowExport, isSimulated]);
+    const fingerprint = JSON.stringify([sourceMode, title, text, url, publishedAt, eventAt, revisedAt, cik, taxonomy, concept, unit, filingBefore, modelInput, allowExport, isSimulated, pdfTextOrder]);
     if (pendingSource.current?.fingerprint === fingerprint && pendingSource.current.file === file) return pendingSource.current.sourceId;
     const sourceTitle = title.trim() || (en ? "Provided material" : "用户提供的资料");
     const source = sourceMode === "sec" ? await api.fetchSecConcept(cik.trim(), taxonomy, concept.trim(), unit.trim(), filingBefore, modelInput, allowExport)
@@ -225,7 +226,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
           const bytes = new Uint8Array(await file.arrayBuffer());
           let binary = "";
           for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-          return api.uploadPdf(title.trim() || file.name, btoa(binary), modelInput, allowExport, publishedAt, eventAt, revisedAt, isSimulated);
+          return api.uploadPdf(title.trim() || file.name, btoa(binary), modelInput, allowExport, publishedAt, eventAt, revisedAt, isSimulated, pdfTextOrder);
         })()
       : text.trim() ? await api.createSource(sourceTitle, text, url.trim(), modelInput, allowExport, publishedAt, eventAt, revisedAt, isSimulated)
       : await api.fetchSource(sourceTitle, url.trim(), modelInput, allowExport, publishedAt, eventAt, revisedAt, isSimulated);
@@ -235,7 +236,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   function clearMaterial() {
     pendingSource.current = null;
     setTitle(""); setText(""); setUrl(""); setPublishedAt(""); setEventAt(""); setRevisedAt(""); setCik(""); setFilingBefore(""); setFile(null); setFileInputKey((value) => value + 1);
-    setConfirmRights(false); setModelInput(false); setAllowExport(false); setIsSimulated(false);
+    setConfirmRights(false); setModelInput(false); setAllowExport(false); setIsSimulated(false); setPdfTextOrder("layout");
     setIssuerQuery(""); setIssuerCandidates([]); setIssuerRetrievedAt("");
   }
 
@@ -436,6 +437,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
             <p>{en ? "SEC access requires a server-configured contact. Filing dates do not prove the exact public availability time." : "SEC 访问需要服务端配置联系信息。提交日期不能证明资料的精确公开时刻。"}</p>
           </> : sourceMode === "file" ? <>
             <Field label={en ? "PDF file (maximum 1.5 MB)" : "PDF 文件（最大 1.5 MB）"}><Input key={fileInputKey} type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field>
+            <Field label={en ? "PDF text order" : "PDF 文字读取方式"}><select className="text-input select-input" value={pdfTextOrder} onChange={(event) => setPdfTextOrder(event.target.value as "layout" | "reading")}><option value="layout">{en ? "Preserve layout (tables)" : "保留版式（表格）"}</option><option value="reading">{en ? "Reading order (prose)" : "阅读顺序（正文）"}</option></select></Field>
+            <p>{en ? "Extraction order can change table or paragraph meaning. Check the original PDF; choosing another order creates a separate source." : "读取方式可能改变表格或段落顺序，请对照原 PDF；更换方式会创建一份独立资料。"}</p>
             <Field label={en ? "Title (optional)" : "资料标题（可选）"}><Input value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
             <Field label={en ? "Publication time (if known)" : "公开时间（如已知）"}><Input type="datetime-local" value={publishedAt} onChange={(event) => setPublishedAt(event.target.value)} /></Field>
             <p>{en ? "Text-based PDFs are supported; scanned pages require text recognition before upload." : "支持含文本的 PDF；扫描件需要先识别文字。"}</p>
@@ -497,7 +500,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.content.run.support_review_requested ? <p>{en ? "Model support review: " : "模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
       <h3>{en ? "Sources" : "资料来源"}</h3>
       {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.published_at || (en ? "Publication date unknown" : "公开时间未知")}</p><Button onClick={() => { setTitle(candidate.title); setUrl(candidate.url); setSourceMode("text"); if (sourceDetails.current) { sourceDetails.current.open = true; sourceDetails.current.scrollIntoView({ behavior: "smooth", block: "start" }); } }}>{en ? "Attach source" : "添加此来源"}</Button></article>)}</section> : null}
-      {sourceMetadata.length ? <><p>{en ? "Attached material (declared dates are not independently verified)" : "已关联资料（声明的时间尚未独立核验）"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.is_simulated ? <strong>{en ? "(simulated; excluded from real research)" : "（模拟，未用于真实研究）"}</strong> : null} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : <><br /><SourceTimes source={source} en={en} /></>}{source.retrieval_method === "official_html" ? <p><small>{en ? "Extracted webpage text; table separators and span markers, when present, are generated. Check the original webpage for layout." : "网页提取文本；表格中的分隔符和合并单元格标记（如有）由系统生成，请查阅原网页确认排版。"}</small></p> : null}{source.retrieval_method === "user_pdf" && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id)}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
+      {sourceMetadata.length ? <><p>{en ? "Attached material (declared dates are not independently verified)" : "已关联资料（声明的时间尚未独立核验）"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.is_simulated ? <strong>{en ? "(simulated; excluded from real research)" : "（模拟，未用于真实研究）"}</strong> : null} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : <><br /><SourceTimes source={source} en={en} /></>}{source.retrieval_method === "official_html" ? <p><small>{en ? "Extracted webpage text; table separators and span markers, when present, are generated. Check the original webpage for layout." : "网页提取文本；表格中的分隔符和合并单元格标记（如有）由系统生成，请查阅原网页确认排版。"}</small></p> : null}{source.retrieval_method === "user_pdf" ? <p><small>{en ? "PDF text order: " : "PDF 文字读取方式："}{source.pdf_text_order === "layout" ? (en ? "preserve layout" : "保留版式") : source.pdf_text_order === "reading" ? (en ? "reading order" : "阅读顺序") : (en ? "not recorded for this older source" : "旧资料未记录")}</small></p> : null}{source.retrieval_method === "user_pdf" && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id)}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
       {current.content.sources.length ? <ul>{current.content.sources.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} <SourceTimes source={source} en={en} /></li>; })}</ul> : <p>{en ? "No source analyzed." : "尚无已分析来源。"}</p>}
       {facts.length ? <>
         <h3>{en ? "Extracted figures" : "提取的数值"}</h3>

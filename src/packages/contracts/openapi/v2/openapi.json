@@ -358,6 +358,15 @@
             ],
             "title": "Revised At"
           },
+          "text_order": {
+            "default": "layout",
+            "enum": [
+              "layout",
+              "reading"
+            ],
+            "title": "Text Order",
+            "type": "string"
+          },
           "title": {
             "maxLength": 500,
             "minLength": 1,

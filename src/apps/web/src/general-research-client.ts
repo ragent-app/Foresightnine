@@ -18,7 +18,7 @@ export interface ResearchClaim {
 export interface ResearchFact { fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
 export interface ResearchContent {
   summary: string;
-  sources: { source_id: string; title?: string; url?: string | null; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null }[];
+  sources: { source_id: string; title?: string; url?: string | null; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null }[];
   source_candidates: { title: string; url: string; status: string; published_at?: string | null }[];
   facts: ResearchFact[];
   evidence_differences?: { label: string; period: string; unit: string; currency: string | null; status: string; truncated: boolean; facts: { fact_id: string; source_id: string; value: string }[] }[];
@@ -48,7 +48,7 @@ export interface ResearchOperation {
   status: string;
   cancel_token: string;
 }
-export interface SourceMetadata { source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; permissions?: { display: boolean; export: boolean } }
+export interface SourceMetadata { source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
 export interface RunBudget { search: boolean; supportReview: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxCostUsd?: string }
@@ -57,7 +57,7 @@ export interface RunInputSnapshot {
   parent_version_id: string;
   as_of: string | null;
   budget: ResearchV2.ResearchRunRequest;
-  sources: { source_id: string; content_sha256: string; is_simulated?: boolean; permissions: ResearchV2.SourcePermissions }[];
+  sources: { source_id: string; content_sha256: string; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; permissions: ResearchV2.SourcePermissions }[];
   model: string | null;
   provider: string | null;
 }
@@ -123,9 +123,9 @@ export function researchClient(baseUrl: string) {
         permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
     searchSecIssuers: (query: string) => request<{ candidates: IssuerCandidate[]; retrieved_at: string; source_url: string; limitation: string }>(
       "/v2/research/identities/sec-search", { query }),
-    uploadPdf: (title: string, pdfBase64: string, modelInput: boolean, allowExport: boolean, publishedAt: string, eventAt = "", revisedAt = "", isSimulated = false) =>
+    uploadPdf: (title: string, pdfBase64: string, modelInput: boolean, allowExport: boolean, publishedAt: string, eventAt = "", revisedAt = "", isSimulated = false, textOrder: "layout" | "reading" = "layout") =>
       request<{ source_id: string }>("/v2/research/sources/pdf", { title, pdf_base64: pdfBase64,
-        ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated,
+        ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated, text_order: textOrder,
         permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
     search: (query: string) => request<{ project_search_available: boolean; candidates: DiscoveryCandidate[] }>(
       `/v1/search/candidates?query=${encodeURIComponent(query.slice(0, 70))}&limit=5`),

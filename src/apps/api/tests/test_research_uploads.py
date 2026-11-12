@@ -1,4 +1,5 @@
 import base64
+from pathlib import Path
 import shutil
 
 import pytest
@@ -48,6 +49,7 @@ def test_pdf_upload_preserves_original_and_citation_pages(monkeypatch):
     assert uploaded.status_code == 201, uploaded.text
     item = uploaded.json()
     assert item["retrieval_method"] == "user_pdf"
+    assert item["pdf_text_order"] == "layout"
     assert item["is_simulated"] is True
     assert item["event_at"].startswith("2023-12-31")
     assert item["published_at"].startswith("2024-01-01")
@@ -72,6 +74,35 @@ def test_pdf_upload_preserves_original_and_citation_pages(monkeypatch):
     assert "Revenue 100" not in context.json()["before"]
     hidden = client.post("/v2/research/sources/pdf", headers=headers, json=body(raw, export=False)).json()
     assert client.get("/v2/research/sources/" + hidden["source_id"] + "/original", headers=headers).status_code == 403
+
+
+@pytest.mark.skipif(not shutil.which("prlimit") or not shutil.which("pdftotext"), reason="PDF extraction tools unavailable")
+def test_pdf_reading_order_is_explicit_and_keeps_original_evidence(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    reg = client.post("/v1/auth/local/register", json={"email": "pdf-reading@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+    raw = (Path(__file__).resolve().parents[3] / "docs/product/phase-a/30-cross-domain-evaluation/bea-july-2025.pdf").read_bytes()
+    uploaded = client.post("/v2/research/sources/pdf", headers=headers, json={**body(raw), "text_order": "reading"})
+    assert uploaded.status_code == 201, uploaded.text
+    item = uploaded.json()
+    assert item["pdf_text_order"] == "reading"
+    source = client.get("/v2/research/sources/" + item["source_id"], headers=headers).json()
+    assert client.get("/v2/research/sources/" + item["source_id"] + "/original", headers=headers).content == raw
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "PCE?", "source_ids": [item["source_id"]]}).json()
+    path = f"/v2/research/topics/{topic['topic_id']}/versions/{topic['versions'][0]['version_id']}"
+    assert client.get(path + "/sources", headers=headers).json()[0]["pdf_text_order"] == "reading"
+    assert client.get(path + "/export", headers=headers).json()["source_provenance"][0]["pdf_text_order"] == "reading"
+    document = ResearchSource.model_validate({**source, "owner_id": "owner"})
+    quote = "From the preceding month, the PCE price index for July increased 0.2 percent."
+    result = analyze("2025年7月PCE价格指数较上月和较上年同期变化？", [document], None,
+        lambda _: ({"claims": [{"text": "Monthly PCE rose", "citations": [{"source_id": item["source_id"], "quotation": quote}]}]}, 1),
+        max_prompt_chars=2055)
+    citation = result.claims[0]["citations"][0]
+    location = citation["location"]
+    assert citation["quotation_match"] == "whitespace_normalized"
+    assert source["text"][location["character_start"]:location["character_end"]] == citation["quotation"]
+    assert location["page"] == 2
 
 
 def test_pdf_rejects_missing_rights_and_invalid_content():

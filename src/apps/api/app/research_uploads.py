@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 from threading import BoundedSemaphore
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -26,6 +27,7 @@ class PdfUploadRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=500)
     pdf_base64: str = Field(min_length=1, max_length=2_000_000)
+    text_order: Literal["layout", "reading"] = "layout"
     is_simulated: bool = False
     published_at: datetime | None = None
     event_at: datetime | None = None
@@ -65,14 +67,16 @@ def extract_pdf(request: PdfUploadRequest) -> ExtractedPdf:
     if not _PDF_WORKERS.acquire(blocking=False):
         raise PdfFailure("pdf_busy")
     try:
-        text = _extract_text(raw)
+        text = _extract_text(raw, text_order=request.text_order)
     finally:
         _PDF_WORKERS.release()
     return ExtractedPdf(text=text, original_base64=base64.b64encode(raw).decode("ascii"),
                         original_sha256=sha256(raw).hexdigest())
 
 
-def _extract_text(raw: bytes) -> str:
+def _extract_text(raw: bytes, *, text_order: Literal["layout", "reading"] = "layout") -> str:
+    if text_order not in {"layout", "reading"}:
+        raise PdfFailure("pdf_extraction_mode_invalid")
     extractor = shutil.which("pdftotext")
     limiter = shutil.which("prlimit")
     if not extractor or not limiter:
@@ -83,7 +87,7 @@ def _extract_text(raw: bytes) -> str:
         input_file.write_bytes(raw)
         try:
             result = subprocess.run([limiter, "--as=536870912", "--cpu=10", f"--fsize={MAX_TEXT_BYTES + 1}",
-                "--", extractor, "-layout", "-enc", "UTF-8", str(input_file), str(output_file)],
+                "--", extractor, "-layout" if text_order == "layout" else "-raw", "-enc", "UTF-8", str(input_file), str(output_file)],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 timeout=15, check=False)
         except subprocess.TimeoutExpired as error:

@@ -1813,7 +1813,7 @@ def upload_research_pdf(request: PdfUploadRequest, authorization: str | None = H
             is_simulated=request.is_simulated,
             permissions=request.permissions), retrieval_method="user_pdf",
             response_sha256=document.original_sha256, response_content_type="application/pdf",
-            original_pdf_base64=document.original_base64)
+            original_pdf_base64=document.original_base64, pdf_text_order=request.text_order)
         metadata = _visible_research_source(source)
         metadata.pop("text", None)
         return metadata
@@ -1965,6 +1965,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                  "obtained_at": s.obtained_at.isoformat(),
                  "revised_at": s.revised_at.isoformat() if s.revised_at else None,
                  "content_sha256": s.content_sha256, "is_simulated": s.is_simulated,
+                 "pdf_text_order": s.pdf_text_order,
                  "verification": "user_declared_not_verified"}
                 for s in sources if s.source_id in analyzed_ids]
 
@@ -2308,6 +2309,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "question_sha256": sha256(topic.request.question.encode("utf-8")).hexdigest(),
             "as_of": topic.request.as_of.isoformat() if topic.request.as_of else None,
             "sources": [{"source_id": item.source_id, "content_sha256": item.content_sha256,
+                         "pdf_text_order": item.pdf_text_order,
                          "event_at": item.event_at.isoformat() if item.event_at else None,
                          "published_at": item.published_at.isoformat() if item.published_at else None,
                          "obtained_at": item.obtained_at.isoformat(),
