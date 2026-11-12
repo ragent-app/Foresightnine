@@ -1,0 +1,213 @@
+{
+  "source_attribution": "NVIDIA 2023 Form 10-K, SEC EDGAR HTML extraction; table separators are generated.",
+  "id": "CASH_FLOW",
+  "manifest_sha256": "bfe5cf1fb82220232edd48913e8a4e0990b4a3835cc06175c84f9c37e1309980",
+  "operation_status": "completed",
+  "operation_id": "operation:341a3ac95592647ab25ceb76",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 14.199,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "title": "NVIDIA 2023 Form 10-K SEC HTML text extraction; table separators generated",
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581023000017/nvda-20230129.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T10:41:40.251530+00:00",
+        "revised_at": null,
+        "content_sha256": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_ocf_fy2023",
+        "value": "5641",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 29, 2023",
+        "label": "Net cash provided by operating activities",
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "quotation": "Net cash provided by operating activities | $ | 5,641",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 216409,
+          "character_end": 216462
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_ocf_fy2022",
+        "value": "9108",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 30, 2022",
+        "label": "Net cash provided by operating activities",
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "quotation": "Net cash provided by operating activities | $ | 5,641  |  | [colspan=3]  | $ | 9,108",
+        "quotation_match": "expanded_ellipsis",
+        "location": {
+          "character_start": 216409,
+          "character_end": 216493
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "difference",
+        "formula_version": "1",
+        "expression": "first - second",
+        "input_verification": "not_verified_by_calculator",
+        "input_precision_status": "not_established",
+        "inputs": [
+          {
+            "fact_id": "fact_ocf_fy2023",
+            "value": "5641",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year Ended January 29, 2023"
+          },
+          {
+            "fact_id": "fact_ocf_fy2022",
+            "value": "9108",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year Ended January 30, 2022"
+          }
+        ],
+        "value": "-3467.00",
+        "unit": "millions",
+        "currency": "USD",
+        "rounding": "half_up",
+        "decimal_places": 2
+      },
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "input_precision_status": "not_established",
+        "period_order_check": "recognized_formats_only",
+        "period_granularity_check": "not_established",
+        "inputs": [
+          {
+            "fact_id": "fact_ocf_fy2023",
+            "value": "5641",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year Ended January 29, 2023"
+          },
+          {
+            "fact_id": "fact_ocf_fy2022",
+            "value": "9108",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year Ended January 30, 2022"
+          }
+        ],
+        "value": "-38.07",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "两个期间的金额均以百万美元为单位列示。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "location": {
+              "character_start": 216379,
+              "character_end": 216392
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "(In millions)"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      }
+    ],
+    "limitations": [
+      "Source source_7983b37ad1234c49bf8294bc486ba4d6: only character ranges 215930–216732 were analyzed; remaining text was not examined.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 摘录未明确标注金额对应的币种（未出现美元符号外的币种说明），仅可推断为美元",
+      "Model-reported limitation (not independently verified): 摘录为部分文本，未包含完整现金流量表及其附注",
+      "Model-reported limitation (not independently verified): 无法从摘录核实申报文件发布日期与期间截止日的关系",
+      "Model-reported limitation (not independently verified): 同比变化的具体数值未由来源直接给出，需按公式计算",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:341a3ac95592647ab25ceb76",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1415,
+      "cost_usd": null,
+      "generation_tokens": 1415,
+      "support_review_tokens": null,
+      "require_counterarguments": false,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 13.006,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "c6114007e78ad1dbdb5101055efad41d5d7e477e0d39221599faab47e7dd09ce",
+      "prompt_characters": 1943,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v29",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "character_start": 215930,
+          "character_end": 216732
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_7983b37ad1234c49bf8294bc486ba4d6": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}

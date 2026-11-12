@@ -1,0 +1,92 @@
+{
+  "source_attribution": "NVIDIA 2023 Form 10-K, SEC EDGAR HTML extraction; table separators are generated.",
+  "payload": {
+    "claims": [
+      {
+        "text": "2023财年(截至2023年1月29日)经营活动产生的现金流为5,641百万美元，2022财年(截至2022年1月30日)为9,108百万美元。",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "quotation": "Net cash provided by operating activities | $ | 5,641 | | $ | 9,108"
+          }
+        ]
+      },
+      {
+        "text": "两个期间的金额均以百万美元为单位列示。",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "quotation": "(In millions)"
+          }
+        ]
+      },
+      {
+        "text": "各年度截止日分别为2023年1月29日和2022年1月30日。",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "quotation": "January 29, 2023 | | January 30, 2022"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "若上下文中的列对应关系有误（PDF表格提取可能错位），5,641与9,108的归属年份可能被颠倒；应结合完整申报文件核对。",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "quotation": "Net cash provided by operating activities | $ | 5,641 | | $ | 9,108"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "摘录未明确标注金额对应的币种（未出现美元符号外的币种说明），仅可推断为美元",
+      "摘录为部分文本，未包含完整现金流量表及其附注",
+      "无法从摘录核实申报文件发布日期与期间截止日的关系",
+      "同比变化的具体数值未由来源直接给出，需按公式计算"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_ocf_fy2023",
+        "label": "Net cash provided by operating activities",
+        "value": "5641",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 29, 2023",
+        "citation": {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "quotation": "Net cash provided by operating activities | $ | 5,641"
+        }
+      },
+      {
+        "fact_id": "fact_ocf_fy2022",
+        "label": "Net cash provided by operating activities",
+        "value": "9108",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 30, 2022",
+        "citation": {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "quotation": "Net cash provided by operating activities … $ | 9,108"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact_ocf_fy2023",
+        "second_fact_id": "fact_ocf_fy2022"
+      },
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_ocf_fy2023",
+        "second_fact_id": "fact_ocf_fy2022"
+      }
+    ]
+  },
+  "reported_tokens": 1415,
+  "prompt_sha256": "c6114007e78ad1dbdb5101055efad41d5d7e477e0d39221599faab47e7dd09ce",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
