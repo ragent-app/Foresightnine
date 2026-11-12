@@ -514,6 +514,23 @@ def test_pronoun_quotation_exposes_same_sentence_antecedent_without_claiming_sup
     assert not flag_citation_subject_context([original],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("citation_context_warnings")
 
 
+def test_amount_starting_quote_exposes_its_preceding_subject_and_period():
+    from app.research_evidence import flag_citation_subject_context
+    text = "The total deficit was $68.9 billion in February, up $1.3 billion from $67.6 billion in January, revised."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    def cite(quote):
+        start = text.index(quote)
+        return {"source_id":"s", "quotation":quote, "location":{"character_start":start,"character_end":start+len(quote)}}
+    claim = {"text":"The January deficit was $67.6 billion.", "citations":[cite("$67.6 billion in January, revised.")]}
+    cue = flag_citation_subject_context([claim],[source])[0]["citation_context_warnings"][0]
+    assert cue["context_metric"] == "numeric quotation subject"
+    assert "total deficit" in text[cue["context_character_start"]:cue["context_character_end"]]
+    assert cue["status"] == "requires_review"
+    assert not flag_citation_subject_context([{**claim, "citations":[cite(text)]}],[source])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([claim],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("citation_context_warnings")
+
+
 def test_dollar_amounts_without_structured_facts_require_located_quotations():
     from app.research_evidence import flag_uncited_dollar_amounts
     text = "Goods deficit narrowed $0.3 billion. Exports increased $5.8 billion; imports rose $7.1 billion."

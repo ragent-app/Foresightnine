@@ -232,9 +232,12 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
                                  "status": "requires_review"})
                 if len(warnings) >= 5:
                     break
-            # A quotation beginning with a personal pronoun may omit the
-            # subject and date in the preceding part of the same sentence.
-            if re.match(r"(?i)^\s*(?:it|they|he|she|its|their)\b", quote):
+            # A pronoun or leading amount can omit the subject and period in
+            # the preceding part of the same sentence. This is a context cue,
+            # never a conclusion that the citation supports a claim.
+            pronoun_start = bool(re.match(r"(?i)^\s*(?:it|they|he|she|its|their)\b", quote))
+            amount_start = bool(re.match(r"(?i)^\s*(?:US\$|[$€£¥])\s*[-−]?\d", quote))
+            if pronoun_start or amount_start:
                 prefix_start = max(0, start - 250)
                 prefix = source.text[prefix_start:start]
                 boundaries = list(_SENTENCE_END.finditer(prefix))
@@ -258,7 +261,7 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
                         len(re.findall(r"[A-Za-z]{3,}", antecedent)) >= 2 and
                         antecedent[-1:].isspace()):
                     warnings.append({"source_id": source_id, "citation_index": index,
-                                     "context_metric": "personal-pronoun antecedent",
+                                     "context_metric": "personal-pronoun antecedent" if pronoun_start else "numeric quotation subject",
                                      "context_character_start": left, "context_character_end": start,
                                      "status": "requires_review"})
                     if len(warnings) >= 5:
