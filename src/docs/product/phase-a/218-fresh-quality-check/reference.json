@@ -1,0 +1,23 @@
+{
+  "BANK_2021": {
+    "bank": "JPMorgan Chase & Co.",
+    "actual_2020_q4_percent": "13.1",
+    "projected_ending_percent": "11.9",
+    "projected_minimum_percent": "10.7",
+    "scenario": "severely adverse"
+  },
+  "PCE_2022": {
+    "current_dollar_pce_increase_billions": "32.7",
+    "real_goods_decrease_percent": "1.6",
+    "real_services_increase_percent": "0.3",
+    "real_total_pce_decrease_percent": "0.4"
+  },
+  "FOMC_2018": {
+    "target_range_percent": [
+      "2.25",
+      "2.5"
+    ],
+    "chair": "Jerome H. Powell",
+    "inflation_objective_percent": "2"
+  }
+}

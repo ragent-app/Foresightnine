@@ -1,0 +1,23 @@
+[
+  {
+    "id": "BANK_2021",
+    "question": "According to the 2021 Federal Reserve stress test report, what were JPMorgan Chase & Co.'s actual common equity tier 1 capital ratio in 2020 Q4, the ending ratio and the minimum under the severely adverse scenario? Quote the bank name, row and column headings and distinguish actual values from hypothetical projections.",
+    "source": "fed-stress-2021.pdf",
+    "source_id": "source_21800000000000000000000000000001",
+    "require_counterarguments": false
+  },
+  {
+    "id": "PCE_2022",
+    "question": "According to the BEA May 2022 release, what was the total current-dollar change in personal consumption expenditures, and did real goods and real services both decrease? Report the total dollar change and both real percentage changes, and cite the supporting and contrary passages.",
+    "source": "bea-pce-2022.pdf",
+    "source_id": "source_21800000000000000000000000000002",
+    "require_counterarguments": true
+  },
+  {
+    "id": "FOMC_2018",
+    "question": "According to the Federal Reserve statement dated December 19, 2018, what was the new federal funds target range and who chaired the committee? Cite the supporting passages and distinguish the policy rate from the inflation objective.",
+    "source": "fed-fomc-2018.pdf",
+    "source_id": "source_21800000000000000000000000000003",
+    "require_counterarguments": false
+  }
+]
