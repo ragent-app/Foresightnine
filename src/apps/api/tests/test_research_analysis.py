@@ -1883,3 +1883,16 @@ def test_model_fact_can_cite_number_at_end_of_sentence():
     result=analyze("What was the capital ratio?",[source("s",text=text)],None,lambda _:(raw,1))
     assert len(result.facts)==1 and result.facts[0]["value"]=="12.6"
     assert result.facts[0]["quotation"]==text
+
+
+def test_early_total_summary_is_bounded_and_relevant_to_multiple_query_terms():
+    from app.research_analysis import _early_total_summary
+    text="Quarterly report\n\nTotal revenue increased $10 million and operating expenses fell $2 million.\n\nOther context."
+    found=_early_total_summary(text,"Evaluate total revenue and operating expenses.")
+    assert found is not None and text[found[0]:found[0]+len(found[1])]==found[1]
+    assert "$10 million" in found[1] and "$2 million" in found[1]
+    assert _early_total_summary(text,"Evaluate revenue and operating expenses.") is None
+    assert _early_total_summary(text,"Evaluate total employment and interest rates.") is None
+    assert _early_total_summary("Total revenue increased while expenses fell.","Evaluate total revenue and expenses.") is None
+    with pytest.raises(AnalysisInterrupted):
+        _early_total_summary(text,"Evaluate total revenue and operating expenses.",lambda:True)

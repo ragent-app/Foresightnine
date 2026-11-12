@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v42"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v43"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1018,6 +1018,44 @@ def _structured_observation_windows(text: str, question: str, size: int,
         return None
 
 
+def _early_total_summary(text: str, question: str, should_stop: Callable[[], bool] | None = None) -> tuple[int, str] | None:
+    """Find an early quantitative summary for an explicitly aggregate question.
+
+    The overlap is a retrieval cue only. The sentence may describe a different
+    entity, period or unit, and must be verified just like every other excerpt.
+    """
+    intent = _query_intent(question[:2000])
+    if not re.search(r"\b(?:total|overall|aggregate)\b|总额|總額|总量|總量|合计|合計", intent):
+        return None
+    ignored = {"using", "report", "claim", "both", "source", "evaluate", "state", "change", "total", "aggregate",
+               "overall", "current", "dollar", "increase", "decrease", "that", "this", "from", "their", "these",
+               "those", "were", "what", "with", "please", "about", "explain", "amount", "figure", "which"}
+    terms = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", intent) if word not in ignored}
+    if len(terms) < 2:
+        return None
+    head = text[:12_000]
+    start = 0
+    for index, boundary in enumerate(re.finditer(r"\n\s*\n|(?<!\d)[.!?。！？](?=\s|$)|\f", head)):
+        if index >= 128:
+            break
+        if index % 16 == 0 and should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        end = boundary.start() if "\n" in boundary.group() or boundary.group() == "\f" else boundary.end()
+        left = start
+        start = boundary.end()
+        while left < end and head[left].isspace():
+            left += 1
+        while end > left and head[end-1].isspace():
+            end -= 1
+        if not 30 <= end-left <= 500:
+            continue
+        sentence = head[left:end]
+        words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", sentence.casefold())}
+        if len(terms & words) >= 2 and re.search(r"\d", sentence) and re.search(r"[$€£¥%％]|\b(?:percent|million|billion|trillion)\b", sentence, re.IGNORECASE):
+            return left, sentence
+    return None
+
+
 def _additional_query_sentences(text: str, question: str, selected: list[tuple[int, str]],
                                 should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
     """Return bounded original sentences that add a query term to existing coverage.
@@ -1540,6 +1578,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         multi_part = bool(re.search(r"\b(?:and|including|compare|both)\b|,|以及|同时|同時|分别|分別", intent))
         asks_counterpoint = bool(re.search(r"\b(?:counterarguments?|counterpoints?|counterevidence|risks?)\b|反方|反证|反證|风险|風險", intent))
         generic_window_count = 3 if (source_budget_limit - current_bytes >= 2600 and max_size >= 1200 and multi_part and not asks_counterpoint) else 2
+        early_total = _early_total_summary(selection_text, question, should_stop)
         structured_parts = (_structured_observation_windows(selection_text, question, max_size, should_stop)
                             if source.retrieval_method != "user_pdf" else None)
         revision_parts = _revision_summary_windows(selection_text, question, max_size, should_stop)
@@ -1569,6 +1608,14 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             windows = _replace_empty_table_with_counterpoint(selection_text, question, windows, should_stop)
                         windows = sorted(windows, key=lambda item: item[0])
                         generic_selection = True
+                        if early_total and size - len(early_total[1]) >= 600 and not any(
+                                early_total[0] < start + len(part) and start < early_total[0] + len(early_total[1])
+                                for start, part in windows):
+                            remainder = _select_windows(selection_text, question, (size - len(early_total[1])) // generic_window_count,
+                                                        generic_window_count, should_stop, source_title=source.title)
+                            if remainder and not any(early_total[0] < start + len(part) and start < early_total[0] + len(early_total[1])
+                                                     for start, part in remainder):
+                                windows = sorted([early_total, *remainder], key=lambda item: item[0])
                 else:
                     windows = [_select_window(selection_text, question, size, should_stop, source_title=source.title)]
             windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
