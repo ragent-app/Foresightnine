@@ -31,6 +31,67 @@ _RATE_CHANGE = re.compile(r"上调|下调|上升|下降|扩大|缩小|增加|减
                           r"\b(?:adjust|increase|decrease|narrow|widen|change|cut|rise|raise|lower)\w*\b", re.IGNORECASE)
 
 
+_METRIC_SUBJECTS = {
+    "GDP": re.compile(r"\b(?:GDP|gross\s+domestic\s+product)\b|国内生产总值", re.IGNORECASE),
+    "GDI": re.compile(r"\b(?:GDI|gross\s+domestic\s+income)\b|国内生产总收入", re.IGNORECASE),
+    "personal saving rate": re.compile(r"\b(?:personal\s+)?savings?\s+rate\b|(?:个人)?储蓄率", re.IGNORECASE),
+    "PCE price index": re.compile(r"\b(?:PCE|personal\s+consumption\s+expenditures)\s+price\s+index\b|个人消费支出物价指数", re.IGNORECASE),
+}
+_SENTENCE_END = re.compile(r"[.!?。！？](?=\s|$)")
+
+
+def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag selected quotations that omit a recognizable surrounding subject.
+
+    This is a review cue, not a verdict about any claim. Only exact, unique,
+    display-authorized source positions are inspected. Ambiguous sentences or
+    unrecognized measures are deliberately not classified.
+    """
+    source_map = {source.source_id: source for source in sources if source.permissions.display and not source.is_simulated}
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("citation_context_warnings", None)
+        citations = entry.get("citations")
+        if not isinstance(citations, list):
+            output.append(entry)
+            continue
+        warnings = []
+        for index, citation in enumerate(citations[:10]):
+            if not isinstance(citation, dict) or citation.get("partial_token"):
+                continue
+            source_id = citation.get("source_id")
+            source = source_map.get(source_id) if isinstance(source_id, str) else None
+            location, quote = citation.get("location"), citation.get("quotation")
+            if (source is None or not isinstance(location, dict) or location.get("status") == "ambiguous" or
+                    not isinstance(quote, str) or not quote):
+                continue
+            start, end = location.get("character_start"), location.get("character_end")
+            if (type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text) or
+                    source.text[start:end] != quote or end - start > 1000):
+                continue
+            if any(pattern.search(quote) for pattern in _METRIC_SUBJECTS.values()):
+                continue
+            before = source.text[max(0, start - 400):start]
+            sentence_ends = list(_SENTENCE_END.finditer(before))
+            left = max(0, start - 400) + (sentence_ends[-1].end() if sentence_ends else 0)
+            before = source.text[left:start]
+            # A page break or distant sentence start is insufficient context.
+            if "\f" in before or len(before) >= 400:
+                continue
+            subject_matches = [name for name, pattern in _METRIC_SUBJECTS.items() if pattern.search(before)]
+            if len(subject_matches) != 1:
+                continue
+            warnings.append({"source_id": source.source_id, "citation_index": index,
+                             "context_metric": subject_matches[0], "status": "requires_review"})
+            if len(warnings) >= 5:
+                break
+        if warnings:
+            entry["citation_context_warnings"] = warnings
+        output.append(entry)
+    return output
+
+
 def flag_rate_level_point_warnings(claims: list[dict]) -> list[dict]:
     """Flag a narrow possible level-versus-change unit confusion, not a verdict."""
     output = []

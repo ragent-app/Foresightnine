@@ -1174,3 +1174,42 @@ def test_discarded_model_annotations_keep_research_partial(monkeypatch):
     assert content["run"]["status"] == "partial" and content["run"]["error"] is None
     assert content["claims"][0]["text"] == "Revenue was 100"
     assert any("annotations were omitted" in note for note in content["limitations"])
+
+
+def test_omitted_citation_subject_keeps_run_partial_and_recomputes_on_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    text = "Personal saving rate was 2.7 percent in the third quarter, a downward revision of 0.1 percentage point."
+    quote = "quarter, a downward revision of 0.1 percentage point."
+    class Provider:
+        name = "subject-context-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {"claims": [{"text": "GDP 向下修订 0.1 个百分点。", "citations": [
+                {"source_id": source_id, "quotation": quote}]}], "counterarguments": []}, 10
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register", json={"email": "context-subject@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": text,
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "GDP?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "subject-context-001"},
+        json={"parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": False}).json()
+    op = receipt["operation"]["operation_id"]
+    for _ in range(100):
+        state = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert state == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    content = current["content"]
+    assert content["run"]["status"] == "partial"
+    assert content["claims"][0]["citation_context_warnings"][0]["context_metric"] == "personal saving rate"
+    revised = deepcopy(content)
+    revised["claims"][0]["citations"] = [{"source_id": source_id, "quotation": text}]
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": revised})
+    assert saved.status_code == 201
+    assert not saved.json()["versions"][-1]["content"]["claims"][0].get("citation_context_warnings")
+    assert current["content"]["claims"][0]["citation_context_warnings"]

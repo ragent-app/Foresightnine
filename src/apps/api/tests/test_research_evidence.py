@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from app.research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence, suggest_usd_amount_evidence
+from app.research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence
 from app.research_sources import ResearchSource, SourcePermissions
 
 
@@ -171,3 +171,26 @@ def test_chinese_usd_conversion_flags_only_anchored_unmatched_amounts():
     assert claim_amount_differences([{**claim, "text": "金额57,070.63亿美元。"}], facts) == []
     assert claim_amount_differences([{**claim, "citations": [{"source_id": "other"}]}], facts) == []
     assert claim_amount_differences([claim], [{**f, "authorship": "user"} for f in facts]) == []
+
+
+def test_citation_subject_context_is_an_explicit_bounded_review_hint():
+    text = "Personal saving rate was 2.7 percent in the third quarter, a downward revision of 0.1 percentage point."
+    quote = "quarter, a downward revision of 0.1 percentage point."
+    start = text.index(quote)
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="hash",
+        permissions=SourcePermissions(store=True, display=True, model_input=True))
+    claim = {"text": "GDP was revised down", "citations": [{"source_id": "s", "quotation": quote,
+        "location": {"character_start": start, "character_end": start + len(quote)}}]}
+    result = flag_citation_subject_context([claim], [source])[0]
+    assert result["citation_context_warnings"] == [{"source_id": "s", "citation_index": 0,
+        "context_metric": "personal saving rate", "status": "requires_review"}]
+    assert "citation_context_warnings" not in claim
+    full = {**claim, "citations": [{"source_id": "s", "quotation": text,
+        "location": {"character_start": 0, "character_end": len(text)}}], "citation_context_warnings": [{"fake": True}]}
+    assert "citation_context_warnings" not in flag_citation_subject_context([full], [source])[0]
+    denied = source.model_copy(update={"permissions": SourcePermissions(store=True, display=False)})
+    assert not flag_citation_subject_context([claim], [denied])[0].get("citation_context_warnings")
+    bad = {**claim, "citations": [{**claim["citations"][0], "location": {"status": "ambiguous"}}]}
+    assert not flag_citation_subject_context([bad], [source])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([{**claim, "citations": [{"source_id": [], "quotation": quote}]}], [source])[0].get("citation_context_warnings")

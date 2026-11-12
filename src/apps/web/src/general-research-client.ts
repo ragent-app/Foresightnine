@@ -12,6 +12,7 @@ export interface ResearchClaim {
   support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false };
   citations?: { source_id: string; quotation?: string; quotation_match?: string; partial_token?: boolean; support_status?: string; location?: SourceLocation }[];
   suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];
+  citation_context_warnings?: { source_id: string; citation_index: number; context_metric: string; status: string }[];
   uncited_percentages?: string[];
   suggested_calculations?: { calculation_index: number; claimed_percentage: string; formula_id: string; input_fact_ids: string[]; status: string }[];
   uncited_amounts?: string[];
