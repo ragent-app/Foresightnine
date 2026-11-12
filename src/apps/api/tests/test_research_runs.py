@@ -3436,7 +3436,7 @@ def test_auto_sec_filing_respects_shared_rate_limit(monkeypatch):
     assert not result['claims'] and not result['facts']
 
 
-@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields'])
+@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields', 'warning'])
 def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeypatch, mode):
     import json
     from uuid import uuid4
@@ -3465,6 +3465,9 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
                     return {'counterarguments':[{'text':'Costs increased.','citations':[
                         {'source_id':source_id,'quotation':'Costs increased.'}]}],
                         'answer':{'secret':'untrusted extra'}, 'claims':[{'text':'Discard me'}]}, 70
+                if mode == 'warning':
+                    return {'counterarguments':[{'text':'Costs increased because of a supplier.', 'citations':[
+                        {'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
                 return {'counterarguments':[{'text':'Costs also increased.', 'citations':[
                     {'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
             return {'claims':[{'text':'Revenue increased.', 'citations':[
@@ -3510,11 +3513,14 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
     elif mode == 'unlocated':
         assert len(prompts)==2 and run['counterpoint_status']=='no_evidence' and run['total_tokens']==120
         assert all(x.get('role')!='counterargument' for x in content['claims'])
-    else:
+    elif mode == 'extra_fields':
         assert len(prompts)==2 and run['counterpoint_status']=='completed' and run['counterpoint_discarded_fields']==2
         assert 'Discard me' not in str(content) and 'untrusted extra' not in str(content)
         assert any(x.get('role')=='counterargument' and x['text']=='Costs increased.' for x in content['claims'])
         assert any('Extra fields from the counterpoint response' in x for x in content['limitations'])
+    else:
+        assert run['counterpoint_status']=='needs_review' and run['status']=='partial'
+        assert any(x.get('role')=='counterargument' and x.get('causal_attribution_unverified') for x in content['claims'])
     replay = client.post(path+'/runs',headers={**headers,'Idempotency-Key':'counterpoint-run'},json=body)
     assert replay.status_code==202 and replay.json()['operation']['operation_id']==op
 

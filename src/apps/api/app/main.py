@@ -2874,6 +2874,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
                                 if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
                                     raise InvalidAnalysis('Counterpoint source selection changed.')
+                                first_followup_index = len(analysis.claims) + len(analysis.counterarguments)
                                 room = 20 - len(analysis.counterarguments)
                                 retained_counterpoints = checked.counterarguments[:room]
                                 truncated_counterpoints = len(checked.counterarguments) > room
@@ -2882,8 +2883,20 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         'Counterpoint follow-up uses a model and is not independent verification.',
                                         *(['Extra fields from the counterpoint response were discarded.'] if counterpoint_discarded_fields else []),
                                         *(['Some follow-up counterpoints were omitted because the result limit was reached.'] if truncated_counterpoints else [])])))
-                                counterpoint_status = ('partial' if truncated_counterpoints else 'completed') if any(item.get('citations') for item in retained_counterpoints) else 'no_evidence'
                                 claims = prepare_claims()
+                                followup_claims = claims[first_followup_index:]
+                                followup_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                                        *claim_amount_differences(claims, analysis.facts)]
+                                excluded = {item['claim_index'] - first_followup_index for item in followup_differences
+                                            if item['claim_index'] >= first_followup_index}
+                                if not any(item.get('citations') for item in retained_counterpoints):
+                                    counterpoint_status = 'no_evidence'
+                                elif truncated_counterpoints:
+                                    counterpoint_status = 'partial'
+                                elif not has_usable_counterpoint(followup_claims, excluded):
+                                    counterpoint_status = 'needs_review'
+                                else:
+                                    counterpoint_status = 'completed'
                             except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
                                 _raise_if_operation_cancelled(operation_id)
                                 counterpoint_status = 'failed'
