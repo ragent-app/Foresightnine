@@ -12,7 +12,7 @@ for name in tasks:
   conditions.append({'task':name,'input_limit':budget,'prompt_sha256':digest(prompts[0].encode()),
     'prompt_bytes':len(prompts[0].encode()),'segments':result.segments,
     'source_hashes':{s.source_id:s.content_sha256 for s in sources}})
-files=['common.py','prepare.py','run.py','score.py','FED_PURCHASES-input.json','variant.txt','inspect.py']
+files=['common.py','prepare.py','run.py','score.py','FED_PURCHASES-input.json','variant.txt','compare_claims.py']
 manifest={'implementation_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
  'model':prior['model'],'generation_parameters':prior['generation_parameters'],'system_sha256':digest(SYSTEM_PROMPT.encode()),
  'files':{name:digest((HERE/name).read_bytes()) for name in files},'conditions':conditions,

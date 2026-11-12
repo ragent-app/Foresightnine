@@ -1,0 +1,60 @@
+{
+  "implementation_commit": "c75991e0c44333c42f4402ff0a547be285dcbae4",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "files": {
+    "common.py": "23faa7a7e33e12e78af03b5aaaf8eab454b4f83807e524e60a37e2679a0ada02",
+    "prepare.py": "117bbfa26f1bf0270e4bdc14fd941665e3523c0b44f5c972e67dc0c6133373ca",
+    "run.py": "e27a0f757e08ac15e642c3b239b347e8b34303db7d4a02ebbce3c87f37c36bab",
+    "score.py": "e11c7e7436f87160b6bc57f4102686a447b6fadf667fa4e4c6816296ce4e4631",
+    "FED_PURCHASES-input.json": "0877769a3f0a3ca19c986e946d32b0d2fb085516faa55a4fad05022797af5c1e",
+    "variant.txt": "b6d37844a7d487124284a9a23edf17bb0be3cf8312fd6fd9f3d2cbad11fb23f9",
+    "compare_claims.py": "f367291ea63f35586b984dad5a0494d3944a0f45f04580b395af9ce62d47c798"
+  },
+  "conditions": [
+    {
+      "task": "FED_PURCHASES",
+      "input_limit": 6000,
+      "prompt_sha256": "41be9a55ce94ff9709873e21a0c264e2c70092ad68339706b48481bb2f2d6d71",
+      "prompt_bytes": 5055,
+      "segments": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 2758,
+          "character_end": 6468
+        },
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 6575,
+          "character_end": 8344
+        }
+      ],
+      "source_hashes": {
+        "source_8a668505f5fe4d16b9694d2dfce28713": "0c5f6b1144bf337a31807a20b0d8e12200684d079ce14f95e28c949ac7470e0a"
+      }
+    }
+  ],
+  "prior_result_sha256": "eff2fe650e9264c6756de363a3f38303ddc7187b9fde74d3f09dc3fdc439e302",
+  "prior_score_sha256": "3688f68d7086fe7454a6cdd24e0fdac967f784580490adac5d38682c1475d69f",
+  "variant_system_sha256": "b6d37844a7d487124284a9a23edf17bb0be3cf8312fd6fd9f3d2cbad11fb23f9",
+  "max_calls": 1,
+  "per_call_max_total_tokens": 10000,
+  "max_total_tokens": 10000,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 145455
+}
