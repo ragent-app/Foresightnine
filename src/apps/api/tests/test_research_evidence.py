@@ -206,3 +206,28 @@ def test_fractional_percentage_is_not_misread_as_its_denominator():
     assert not suggest_percentage_evidence([fraction], [])[0].get("uncited_percentages")
     inexact = {"text": "增加1/3 percent。", "citations": [{"quotation": "increase 1/3 percent"}]}
     assert suggest_percentage_evidence([inexact], [])[0]["uncited_percentages"] == ["1/3 percent"]
+
+
+def test_table_row_warning_requires_header_context_unless_header_and_unit_are_cited():
+    text = ("ACME Corp\nConsolidated Statements of Operations\n(in millions)\n"
+            "| Years Ended | 2024 | 2023 |\n| Product | 80 | 90 |\n| Total revenue | 100 | 110 |\n")
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="hash",
+        permissions=SourcePermissions(store=True, display=True, model_input=True))
+    def citation(quote):
+        start = text.index(quote)
+        return {"source_id": "s", "quotation": quote, "location": {"character_start": start, "character_end": start + len(quote)}}
+    row = citation("| Total revenue | 100 | 110 |")
+    claim = {"text": "Revenue was 100 million in 2024", "citations": [row]}
+    result = flag_citation_subject_context([claim], [source])[0]
+    warning = result["citation_context_warnings"][0]
+    assert warning["context_metric"] == "financial table header"
+    assert "Years Ended" in text[warning["context_character_start"]:warning["context_character_end"]]
+    assert "millions" in text[warning["context_character_start"]:warning["context_character_end"]]
+    header, unit = citation("| Years Ended | 2024 | 2023 |"), citation("(in millions)")
+    assert not flag_citation_subject_context([{**claim, "citations": [row, header, unit]}], [source])[0].get("citation_context_warnings")
+    assert flag_citation_subject_context([{**claim, "citations": [row, header]}], [source])[0].get("citation_context_warnings")
+    separated = source.model_copy(update={"text": text.replace("| Product |", "Other narrative\n| Product |")})
+    moved = separated.text.index(row["quotation"])
+    changed = {**claim, "citations": [{**row, "location": {"character_start": moved, "character_end": moved + len(row["quotation"])}}]}
+    assert not flag_citation_subject_context([changed], [separated])[0].get("citation_context_warnings")

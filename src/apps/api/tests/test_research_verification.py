@@ -119,3 +119,25 @@ def test_review_ignores_caller_supplied_context_warning_and_excludes_simulation(
     simulated = source().model_copy(update={"is_simulated": True})
     blocked = prepare_support_review([item], [simulated], 3000)
     assert not blocked.indexes and blocked.omitted == [0]
+
+
+def test_review_keeps_required_table_header_or_omits_the_claim():
+    text = ("ACME Corp\nStatements of Operations\n(in millions)\n"
+            "| Years Ended | 2024 | 2023 |\n" + "| Item | 10 | 20 |\n" * 10 + "| Revenue | 100 | 90 |")
+    quote = "| Revenue | 100 | 90 |"
+    start = text.index(quote)
+    report = source().model_copy(update={"text": text})
+    item = claim(quotation=quote, location={"character_start": start, "character_end": start + len(quote)})
+    batch = prepare_support_review([item], [report], 2000)
+    assert batch.indexes == [0]
+    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
+    assert "Years Ended" in excerpt["preceding_context"] and "millions" in excerpt["preceding_context"]
+    assert excerpt["quotation"] == quote
+    neutral = report.model_copy(update={"text": text.replace("Years Ended", "xxxxxxxxxxx")})
+    for budget in range(180, 1200):
+        if prepare_support_review([item], [neutral], budget).indexes and not prepare_support_review([item], [report], budget).indexes:
+            break
+    else:
+        pytest.fail("expected the required table context to exceed some budget")
+    limited = prepare_support_review([item], [report], budget)
+    assert limited.omissions == [{"claim_index": 0, "reason": "input_budget", "required_subject_context": True}]

@@ -40,6 +40,49 @@ _METRIC_SUBJECTS = {
 _SENTENCE_END = re.compile(r"[.!?。！？](?=\s|$)")
 
 
+def _table_header_context(source: ResearchSource, start: int, quotation: str,
+                          citations: list[dict]) -> tuple[int, int] | None:
+    """Find a nearby fiscal table header omitted from a cited numeric row.
+
+    This is a bounded cue, not validation of column alignment or table units.
+    Only consecutive extracted table lines are considered part of the table.
+    """
+    if not quotation.lstrip().startswith("|") or not re.search(r"\d", quotation):
+        return None
+    if re.search(r"(?<!\d)(?:19|20)\d{2}(?!\d)", quotation):
+        return None
+    left = max(0, start - 1200)
+    before = source.text[left:start]
+    headers = list(re.finditer(r"(?im)^[ \t]*\|[^\n]*\byears?\s+ended\b[^\n]*", before))
+    if not headers:
+        return None
+    header = headers[-1]
+    if len(set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", header.group()))) < 2:
+        return None
+    if any(line.strip() and not line.lstrip().startswith("|") for line in before[header.end():].splitlines()):
+        return None
+    header_start, header_end = left + header.start(), left + header.end()
+    unit_before = source.text[max(0, header_start - 250):header_start]
+    units = list(re.finditer(r"\b(?:millions?|billions?|thousands?)\b", unit_before, re.IGNORECASE))
+    unit_start = max(0, header_start - 250) + units[-1].start() if units else header_start
+    def covered(a: int, b: int) -> bool:
+        for citation in citations:
+            if not isinstance(citation, dict) or citation.get("source_id") != source.source_id or citation.get("partial_token"):
+                continue
+            loc, quote = citation.get("location"), citation.get("quotation")
+            if not isinstance(loc, dict) or loc.get("status") == "ambiguous" or not isinstance(quote, str):
+                continue
+            x, y = loc.get("character_start"), loc.get("character_end")
+            if type(x) is int and type(y) is int and 0 <= x <= a < b <= y <= len(source.text) and source.text[x:y] == quote:
+                return True
+        return False
+    if covered(header_start, header_end) and (not units or covered(unit_start, unit_start + len(units[-1].group()))):
+        return None
+    # Include a little preceding title context when the unit is present;
+    # the caller still treats it as context, not as an attached quotation.
+    return max(left, unit_start - 100) if units else header_start, header_end
+
+
 def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
     """Flag selected quotations that omit a recognizable surrounding subject.
 
@@ -69,6 +112,14 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
             start, end = location.get("character_start"), location.get("character_end")
             if (type(start) is not int or type(end) is not int or not 0 <= start < end <= len(source.text) or
                     source.text[start:end] != quote or end - start > 1000):
+                continue
+            table_context = _table_header_context(source, start, quote, citations)
+            if table_context:
+                warnings.append({"source_id": source_id, "citation_index": index, "context_metric": "financial table header",
+                                 "context_character_start": table_context[0], "context_character_end": table_context[1],
+                                 "status": "requires_review"})
+                if len(warnings) >= 5:
+                    break
                 continue
             if any(pattern.search(quote) for pattern in _METRIC_SUBJECTS.values()):
                 continue
