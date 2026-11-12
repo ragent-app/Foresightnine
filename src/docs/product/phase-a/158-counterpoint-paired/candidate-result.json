@@ -1,0 +1,256 @@
+{
+  "condition": "candidate",
+  "manifest_sha256": "f26a24f6a56b31bd13ab624ce3e0a90afb10ccc5ce4f16c9b0e62fccb5876e65",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 1313,
+  "prompt_sha256": "1a381e23b20fea40c1b208dba332de8f2b3ffce63c7edcfd74d52bff95d8a1f7",
+  "segments": [
+    {
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "character_start": 10175,
+      "character_end": 10646,
+      "model_source_id": "ref-1"
+    },
+    {
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "character_start": 11840,
+      "character_end": 12000,
+      "model_source_id": "ref-1"
+    }
+  ],
+  "claims": [
+    {
+      "text": "Under the 2023 severely adverse scenario, the aggregate CET1 capital ratio of the 23 tested banks fell from an actual 12.4 percent in Q4 2022 to a projected minimum of 9.9 percent, then rose to a projected 10.5 percent at the end of the projection horizon.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 10384,
+            "character_end": 10646,
+            "page": 9
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from\nan actual 12.4 percent in the fourth quarter of 2022 to its minimum of 9.9 percent, before rising\nto 10.5 percent at the end of the projection horizon (see table 1)."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "Aggregate and individual bank post-stress CET1 ratios remained well above required minimum levels throughout the projection horizon.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 10214,
+            "character_end": 10383,
+            "page": 9
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "The aggregate and individual bank post-stress\ncommon equity tier 1 (CET1) capital ratios remain well above the required minimum levels\nthroughout the projection horizon."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "counterarguments": [
+    {
+      "text": "Despite overall capital strength, banks with concentrations in mortgages, credit cards, and commercial real estate saw larger post-stress capital declines, indicating uneven resilience across the sector.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 11840,
+            "character_end": 12000,
+            "page": 10
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "However, banks with concentrations in mortgages, credit cards, and\ncommercial real estate generally had larger declines in post-stress capital ratios this year."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "f1",
+      "value": "12.4",
+      "unit": "percent",
+      "currency": null,
+      "period": "Q4 2022",
+      "label": "aggregate CET1 ratio, actual, Q4 2022",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "falls from\nan actual 12.4 percent in the fourth quarter of 2022",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 10470,
+        "character_end": 10533,
+        "page": 9
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "f2",
+      "value": "9.9",
+      "unit": "percent",
+      "currency": null,
+      "period": "projection horizon (minimum)",
+      "label": "aggregate CET1 ratio, projected minimum under severely adverse scenario",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "to its minimum of 9.9 percent",
+      "quotation_match": "exact",
+      "location": {
+        "character_start": 10534,
+        "character_end": 10563,
+        "page": 9
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "f3",
+      "value": "10.5",
+      "unit": "percent",
+      "currency": null,
+      "period": "end of projection horizon",
+      "label": "aggregate CET1 ratio, projected end of projection horizon",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "before rising\nto 10.5 percent at the end of the projection horizon",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 10565,
+        "character_end": 10631,
+        "page": 9
+      },
+      "verification": "model_extraction_not_independently_verified"
+    }
+  ],
+  "calculations": [
+    {
+      "formula_id": "difference",
+      "formula_version": "2",
+      "expression": "first - second",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "f1",
+          "value": "12.4",
+          "unit": "percent",
+          "currency": null,
+          "period": "Q4 2022"
+        },
+        {
+          "fact_id": "f2",
+          "value": "9.9",
+          "unit": "percent",
+          "currency": null,
+          "period": "projection horizon (minimum)"
+        }
+      ],
+      "value": "2.50",
+      "unit": "percentage points",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2
+    }
+  ],
+  "limitations": [
+    "Source source_ce54ed6136754051baf2406f5be2a98c: only character ranges 10175–10646, 11840–12000 were analyzed; remaining text was not examined.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "Model-reported limitation (not independently verified): The source is partial; the specific required minimum CET1 levels are not quoted in the excerpt.",
+    "Model-reported limitation (not independently verified): Only aggregate figures are provided; individual bank results are not included in the excerpt.",
+    "Model-reported limitation (not independently verified): Excerpts are not the whole source; the referenced table 1 is not supplied.",
+    "Model-reported limitation (not independently verified): Actual vs. projected distinction is derived from the source's own labeling ('actual' for Q4 2022; the minimum and end-of-horizon values are projections under the hypothetical scenario)."
+  ],
+  "raw": {
+    "claims": [
+      {
+        "text": "Under the 2023 severely adverse scenario, the aggregate CET1 capital ratio of the 23 tested banks fell from an actual 12.4 percent in Q4 2022 to a projected minimum of 9.9 percent, then rose to a projected 10.5 percent at the end of the projection horizon.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from an actual 12.4 percent in the fourth quarter of 2022 to its minimum of 9.9 percent, before rising to 10.5 percent at the end of the projection horizon (see table 1)."
+          }
+        ]
+      },
+      {
+        "text": "Aggregate and individual bank post-stress CET1 ratios remained well above required minimum levels throughout the projection horizon.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The aggregate and individual bank post-stress common equity tier 1 (CET1) capital ratios remain well above the required minimum levels throughout the projection horizon."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Despite overall capital strength, banks with concentrations in mortgages, credit cards, and commercial real estate saw larger post-stress capital declines, indicating uneven resilience across the sector.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "However, banks with concentrations in mortgages, credit cards, and commercial real estate generally had larger declines in post-stress capital ratios this year."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source is partial; the specific required minimum CET1 levels are not quoted in the excerpt.",
+      "Only aggregate figures are provided; individual bank results are not included in the excerpt.",
+      "Excerpts are not the whole source; the referenced table 1 is not supplied.",
+      "Actual vs. projected distinction is derived from the source's own labeling ('actual' for Q4 2022; the minimum and end-of-horizon values are projections under the hypothetical scenario)."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "aggregate CET1 ratio, actual, Q4 2022",
+        "value": "12.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "Q4 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "falls from an actual 12.4 percent in the fourth quarter of 2022"
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "aggregate CET1 ratio, projected minimum under severely adverse scenario",
+        "value": "9.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "projection horizon (minimum)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "to its minimum of 9.9 percent"
+        }
+      },
+      {
+        "fact_id": "f3",
+        "label": "aggregate CET1 ratio, projected end of projection horizon",
+        "value": "10.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "end of projection horizon",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "before rising to 10.5 percent at the end of the projection horizon"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "f1",
+        "second_fact_id": "f2"
+      }
+    ]
+  },
+  "elapsed_seconds": 15.519
+}
