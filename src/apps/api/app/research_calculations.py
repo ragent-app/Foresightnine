@@ -95,7 +95,7 @@ def xbrl_source_consistent(fact: dict) -> bool:
     if (not isinstance(proof, dict) or proof.get('method') != 'inline_xbrl_source_consistency_v1' or
             not re.fullmatch(r'[0-9a-f]{64}', str(proof.get('source_sha256', ''))) or
             not re.fullmatch(r'\d{10}', str(proof.get('entity_cik', ''))) or
-            not re.fullmatch(r'us-gaap:[A-Za-z][A-Za-z0-9]{0,120}', str(proof.get('concept', ''))) or
+            not re.fullmatch(r'(?:us-gaap|ifrs-full):[A-Za-z][A-Za-z0-9]{0,120}', str(proof.get('concept', ''))) or
             proof.get('currency') != fact.get('currency') or not isinstance(alignment, dict) or alignment.get('status') != 'matched'):
         return False
     try:

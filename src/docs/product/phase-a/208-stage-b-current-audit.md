@@ -68,3 +68,5 @@
 [267 号记录](267-consumption-context-and-rate-unit.md)针对消费语境和 `percent annual rate` 差值单位进行了修复；旧成绩不变，尚无修复后的真实模型质量结果。
 
 [268 号记录](268-inline-xbrl-source-consistency.md)增加对原件内嵌 XBRL 标签、年度期间、实体和单位的来源一致性检查；Cisco 离线重放的计算输入可与原件标签匹配，但源文件和模型结论仍未独立核验，不改变阶段 B 的质量验收状态。
+
+[269 号记录](269-inline-xbrl-currency-and-taxonomy.md)扩展原件标签核对的币种、IFRS 分类和其他表格行，仅经合成资料验证；不证明原件真实性、分类语义或跨领域真实任务质量，也不改变阶段验收状态。

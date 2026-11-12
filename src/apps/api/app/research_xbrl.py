@@ -12,17 +12,21 @@ import re
 
 _METRICS = {
     'revenue': ({'revenue', 'total revenue', 'net revenue', 'net sales', 'total net sales'},
-                {'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:Revenues', 'us-gaap:SalesRevenueNet'}),
+                {'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:Revenues', 'us-gaap:SalesRevenueNet', 'ifrs-full:Revenue'}),
     'net income': ({'net income', 'net income loss', 'net income attributable to common shareholders'},
                    {'us-gaap:NetIncomeLoss', 'us-gaap:ProfitLoss'}),
     'operating income': ({'operating income', 'operating income loss'}, {'us-gaap:OperatingIncomeLoss'}),
 }
-_SCALED_UNITS = {
-    0: {'usd', 'us dollar', 'us dollars', 'dollar', 'dollars'},
-    3: {'thousand', 'thousands', 'thousand usd', 'thousands usd', 'usd thousand', 'usd thousands', 'thousands of usd'},
-    6: {'million', 'millions', 'million usd', 'millions usd', 'usd million', 'usd millions', 'millions of usd'},
-    9: {'billion', 'billions', 'billion usd', 'billions usd', 'usd billion', 'usd billions', 'billions of usd'},
-}
+_SCALE_WORDS = {3: ('thousand', 'thousands'), 6: ('million', 'millions'),
+                9: ('billion', 'billions'), 12: ('trillion', 'trillions')}
+
+
+def _unit_matches(unit: str, currency: str, scale: int) -> bool:
+    code = currency.casefold()
+    if scale == 0:
+        return unit == code or currency == 'USD' and unit in {'us dollar', 'us dollars', 'dollar', 'dollars'}
+    return any(unit in {word, f'{word} {code}', f'{code} {word}', f'{word} of {code}'}
+               for word in _SCALE_WORDS.get(scale, ()))
 
 
 class _HeaderReader(HTMLParser):
@@ -45,6 +49,7 @@ class _HeaderReader(HTMLParser):
         self.units: dict[str, str | None] = {}
         self.bad = False
         self.root_seen = False
+        self.concept_prefixes: set[str] = set()
         self.header_depth = 0
         self.active: dict | None = None
 
@@ -57,7 +62,17 @@ class _HeaderReader(HTMLParser):
             mapping = dict(attrs)
             if any(mapping.get('xmlns:' + key) != value for key, value in self._namespaces.items()):
                 self.bad = True
-            if not re.fullmatch(r'https?://fasb\.org/us-gaap/20\d{2}', mapping.get('xmlns:us-gaap') or ''):
+            for prefix, pattern in {
+                'us-gaap': r'https?://fasb\.org/us-gaap/20\d{2}',
+                'ifrs-full': r'https://xbrl\.ifrs\.org/taxonomy/20\d{2}-\d{2}-\d{2}/ifrs-full',
+            }.items():
+                uri = mapping.get('xmlns:' + prefix)
+                if uri is not None:
+                    if re.fullmatch(pattern, uri):
+                        self.concept_prefixes.add(prefix)
+                    else:
+                        self.bad = True
+            if not self.concept_prefixes:
                 self.bad = True
         elif any(name == 'xmlns' or name.startswith('xmlns:') for name in names):
             # A local namespace redefinition can change the meaning of a tag
@@ -146,7 +161,8 @@ def resolve_inline_annual_facts(html: str, rows: list[dict]) -> list[dict]:
     result = []
     for cell, item in raw_facts:
         if (len(cell.get('inline_facts', [])) != 1 or item.get('text') != cell.get('text') or
-                not re.fullmatch(r'us-gaap:[A-Za-z][A-Za-z0-9]{0,120}', item.get('name', '')) or
+                not re.fullmatch(r'(?:us-gaap|ifrs-full):[A-Za-z][A-Za-z0-9]{0,120}', item.get('name', '')) or
+                item['name'].split(':', 1)[0] not in parser.concept_prefixes or
                 item.get('format') != 'ixt:num-dot-decimal' or item.get('sign') not in (None, '+') or
                 not re.fullmatch(r'\d{1,2}', item.get('scale', '')) or not re.fullmatch(r'-?\d{1,2}', item.get('decimals', '')) or
                 not re.fullmatch(r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?', item.get('text', ''))):
@@ -183,7 +199,8 @@ def match_inline_fact(trace: dict, alignment: dict | None, *, value: Decimal, la
     the source independently.
     """
     if (trace.get('status') != 'available' or not alignment or alignment.get('status') != 'matched' or
-            currency != 'USD' or not isinstance(label, str) or not isinstance(unit, str)):
+            not isinstance(currency, str) or not re.fullmatch(r'[A-Z]{3}', currency) or
+            not isinstance(label, str) or not isinstance(unit, str)):
         return None
     rows = trace.get('rows')
     if not isinstance(rows, list) or not rows or not isinstance(rows[-1].get('cells'), list):
@@ -201,12 +218,19 @@ def match_inline_fact(trace: dict, alignment: dict | None, *, value: Decimal, la
             continue
         metric = next((name for name, (labels, concepts) in _METRICS.items()
                        if normalized_label in labels and row_label in labels and item.get('concept') in concepts), None)
+        known_label = any(normalized_label in labels or row_label in labels for labels, _ in _METRICS.values())
+        if (metric is None and not known_label and normalized_label == row_label and
+                len(row_label) >= 3 and re.search(r'[a-z]', row_label) and
+                row_label not in {'total', 'amount', 'value', 'net'}):
+            # This records the exact row and its tag; it does not infer that
+            # the taxonomy concept's accounting meaning matches the row.
+            metric = row_label
         try:
             same_value = Decimal(str(item.get('value'))) == value
         except InvalidOperation:
             continue
         scale = item.get('scale')
-        if (metric and same_value and type(scale) is int and normalized_unit in _SCALED_UNITS.get(scale, set()) and
+        if (metric and same_value and type(scale) is int and _unit_matches(normalized_unit, currency, scale) and
                 item.get('decimals') == -scale and item.get('currency') == currency and
                 item.get('period_end') == alignment.get('column_date') and
                 item.get('cell_start') == alignment.get('value_column_start') and

@@ -31,13 +31,13 @@ def xbrl_fixture():
       <td colspan="2"><ix:nonFraction name="us-gaap:Revenues" contextRef="c2" unitRef="usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">90</ix:nonFraction></td></tr></table></html>''')
 
 
-def analyze_xbrl(source):
+def analyze_xbrl(source, *, label='Total revenue', currency='USD'):
     from app.research_analysis import analyze
     source.permissions.model_input = True
     def fact(key, value, year, date):
-        return {'fact_id': key, 'label': 'Total revenue FY' + year, 'value': value, 'unit': 'USD million', 'currency': 'USD',
+        return {'fact_id': key, 'label': label + ' FY' + year, 'value': value, 'unit': currency + ' million', 'currency': currency,
                 'period': 'FY' + year + ' (year ended ' + date + ')',
-                'citation': {'source_id': 's', 'quotation': 'Total revenue | 100 | 90'}}
+                'citation': {'source_id': 's', 'quotation': label + ' | 100 | 90'}}
     payload = {'facts': [fact('a', '100', '2024', 'July 27, 2024'), fact('b', '90', '2023', 'July 29, 2023')],
                'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'a', 'second_fact_id': 'b'}]}
     return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
@@ -118,6 +118,45 @@ def test_inline_consistency_requires_correct_metric_currency_and_scale():
     assert match(unit='USD billion') is None
     assert match(currency='CAD') is None
     assert match(value=Decimal('101')) is None
+
+
+def test_inline_consistency_supports_ifrs_currency_and_exact_other_row():
+    from app.research_calculations import xbrl_source_consistent
+    html = (xbrl_fixture()
+            .replace('xmlns:us-gaap="http://fasb.org/us-gaap/2024"',
+                     'xmlns:ifrs-full="https://xbrl.ifrs.org/taxonomy/2024-03-27/ifrs-full"')
+            .replace('us-gaap:Revenues', 'ifrs-full:OperatingExpenses')
+            .replace('iso4217:USD', 'iso4217:EUR')
+            .replace('Total revenue', 'Operating expenses'))
+    result = analyze_xbrl(source_for(html), label='Operating expenses', currency='EUR')
+    assert all(xbrl_source_consistent(item) for item in result.facts)
+    assert result.calculations[0]['input_status'] == 'matched'
+    assert all(item['verification'] == 'model_extraction_not_independently_verified' for item in result.facts)
+    for bad in (html.replace('https://xbrl.ifrs.org/taxonomy/', 'https://example.test/taxonomy/'),
+                html.replace('xmlns:ifrs-full=', 'xmlns:other='),
+                html.replace('iso4217:EUR', 'iso4217:GBP')):
+        result = analyze_xbrl(source_for(bad), label='Operating expenses', currency='EUR')
+        assert result.calculations[0]['input_status'] == 'unverifiable'
+
+
+def test_currency_units_require_matching_code_or_unambiguous_magnitude():
+    from decimal import Decimal
+    from app.research_xbrl import match_inline_fact
+    source = source_for(xbrl_fixture().replace('iso4217:USD', 'iso4217:EUR'))
+    raw = {'status': 'available', **trace(source)}
+    alignment = annual_table_value_alignment(raw, Decimal('100'), 'FY2024 (year ended July 27, 2024)')
+    def match(unit):
+        return match_inline_fact(raw, alignment, value=Decimal('100'), label='Total revenue FY2024',
+                                 unit=unit, currency='EUR')
+    assert match('EUR million') and match('millions of EUR') and match('millions')
+    assert match('USD million') is None and match('million dollars') is None
+    assert match('million percent') is None and match('EUR billion') is None
+
+
+def test_inline_consistency_never_uses_generic_match_to_bypass_known_metric_mapping():
+    html = xbrl_fixture().replace('us-gaap:Revenues', 'us-gaap:OperatingIncomeLoss')
+    result = analyze_xbrl(source_for(html))
+    assert result.calculations[0]['input_status'] == 'unverifiable'
 
 
 def test_original_trace_fails_closed_for_forgery_or_ambiguous_markup():
