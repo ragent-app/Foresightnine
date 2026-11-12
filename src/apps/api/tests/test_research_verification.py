@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v7"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v8"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -42,6 +42,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     ({**claim(), "support_status": "incomplete"}, source()),
     ({**claim(), "uncited_amounts": ["100万美元"]}, source()),
     ({**claim(), "uncited_fact_values": ["100 million"]}, source()),
+    ({**claim(), "numeric_discrepancy_for_review": True}, source()),
     ({"text": "No citation", "citations": []}, source()),
 ])
 def test_review_omits_unauthorized_unlocated_or_unsupported_claims(item, src):

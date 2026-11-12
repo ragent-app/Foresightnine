@@ -2168,6 +2168,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         claims = suggest_uncited_numeric_facts(claims, analysis.facts, sources)
         claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
         claims = flag_citation_subject_context(claims, sources)
+        # Numeric candidates must be considered before model review. A review
+        # verdict cannot clear a known calculation or unit discrepancy.
+        pre_review_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                  *claim_amount_differences(claims, analysis.facts)]
+        discrepancy_indexes = {item["claim_index"] for item in pre_review_differences}
         generation_usage = usage
         review_usage: int | None = None
         review_status = "not_requested"
@@ -2201,7 +2206,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     # Only sources already admitted by the first analysis can
                     # be reviewed; no extra retrieval or permission escalation.
                     review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
-                    batch = prepare_support_review(claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
+                    review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if index in discrepancy_indexes else {})}
+                                     for index, claim in enumerate(claims)]
+                    batch = prepare_support_review(review_claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
                     review_omissions = batch.omissions
                     if batch.indexes:
                         def save_generation_checkpoint() -> None:

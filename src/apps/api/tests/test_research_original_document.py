@@ -158,3 +158,69 @@ def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
     normalized = [" ".join(part.split()) for part in captured]
     assert all(any(needle in part for part in normalized) for needle in needles)
     assert all(text[segment["character_start"]:segment["character_end"]] for segment in result.segments)
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+def test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissions(monkeypatch):
+    """Replay a saved response; this tests the pipeline, not model quality."""
+    folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/67-two-source-selection-check"
+    manifest = json.loads((folder / "manifest.json").read_text())
+    recorded = json.loads((folder / "result.json").read_text())
+    raw = json.loads((folder / "provider-output.json").read_text())["payload"]
+    old_ids = recorded["source_ids"]
+    ids = []
+    review_indexes = []
+    class Provider:
+        name = "saved-two-source-response"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == api.REVIEW_SYSTEM_PROMPT:
+                review_indexes.extend(item["claim_index"] for item in json.loads(prompt)["claims"])
+                assert not {0, 2, 3}.intersection(review_indexes)
+                return {"reviews": [{"claim_index": index, "verdict": "supports"} for index in review_indexes]}, 20
+            parts = json.loads(prompt)["sources"]
+            assert any("74.4" in item["text"] for item in parts)
+            assert any("88.2" in item["text"] for item in parts)
+            serialized = json.dumps(raw, ensure_ascii=False)
+            for old, new in zip(old_ids, ids):
+                serialized = serialized.replace(old, new)
+            return json.loads(serialized), 100
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post("/v1/auth/local/register", json={"email": "two-doc-replay@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    for item in manifest["sources"]:
+        pdf = (folder / item["pdf"]).read_bytes()
+        assert sha256(pdf).hexdigest() == item["pdf_sha256"]
+        response = client.post("/v2/research/sources/pdf", headers=headers, json={"title": item["title"],
+            "pdf_base64": base64.b64encode(pdf).decode("ascii"), "published_at": item["published_at"],
+            "text_order": "layout", "permissions": {"store": True, "display": True, "model_input": True}})
+        assert response.status_code == 201, response.text
+        ids.append(response.json()["source_id"])
+    task = json.loads((folder / "input.json").read_text())
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": task["question"], "source_ids": ids}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "two-doc-replay"}, json={
+        "parent_version_id": topic["versions"][0]["version_id"], "max_model_calls": 2,
+        "max_total_tokens": 10000, "support_review": True})
+    assert receipt.status_code == 202, receipt.text
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(300):
+        state = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert state == "completed"
+    content = client.get(path, headers=headers).json()["versions"][-1]["content"]
+    assert content["run"]["status"] == "partial"
+    assert content["amount_differences"][0]["claimed_amount"] == "74.4亿美元"
+    assert content["claims"][2]["uncited_fact_values"] and content["claims"][3]["uncited_fact_values"]
+    assert not any(content["claims"][i].get("support_review") for i in (0, 2, 3))
+    assert {entry["claim_index"] for entry in content["run"]["support_review_omissions"]} >= {0, 2, 3}
+    difference = content["evidence_differences"][0]
+    assert difference["matching_basis"] == "release_qualifiers_ignored"
+    assert [fact["value"] for fact in difference["facts"]] == ["74.4", "88.2"]
+    assert {fact["source_id"] for fact in difference["facts"]} == set(ids)
+    assert all("发布于" in fact["period"] for fact in difference["facts"])
