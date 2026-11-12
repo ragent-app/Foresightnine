@@ -431,6 +431,24 @@ class OperationManager:
         if claim.error is not None: raise _problem(claim.error)
         return OperationResponse.model_validate(claim.response) if claim.response is not None else None
 
+    def replay_async(self, *, endpoint: str, idempotency_key: str, owner_subject: str,
+                     request_payload: dict[str, Any]) -> OperationResponse | None:
+        """Read an existing asynchronous receipt without revalidating provider configuration."""
+        try:
+            claim = self.store.get_claim(endpoint, self._scoped_key_hash(owner_subject, idempotency_key), content_hash(request_payload))
+        except OperationStoreConflict as error:
+            raise ApiProblem(409, "idempotency_conflict", str(error)) from error
+        if claim is None:
+            return None
+        if claim.error is not None:
+            raise _problem(claim.error)
+        if claim.mode != "async" or claim.response is None:
+            raise ApiProblem(500, "internal_error", "The existing operation receipt is unavailable.", retryable=True)
+        response_document = dict(claim.response)
+        if isinstance(response_document.get("operation"), dict):
+            response_document["operation"] = _operation_for_model(response_document["operation"])
+        return OperationResponse.model_validate(response_document)
+
     def _store_control(self, endpoint: str, idempotency_key: str, owner_subject: str, payload: dict[str, Any], response: OperationResponse) -> tuple[OperationResponse, bool]:
         key_hash = self._scoped_key_hash(owner_subject, idempotency_key); request_hash = content_hash(payload)
         try:

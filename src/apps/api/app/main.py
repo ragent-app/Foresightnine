@@ -2085,6 +2085,19 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     except (TopicNotFound, SourceNotFound) as error:
         raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
     effective_question = request.question_override if request.question_override is not None else topic.request.question
+    # Preserve idempotency keys issued before this optional field existed.
+    run_request_payload = _request_payload(request)
+    if request.require_counterarguments:
+        run_request_payload.pop("require_counterarguments", None)
+    if not request.include_scope_in_search:
+        run_request_payload.pop("include_scope_in_search", None)
+    if request.focus_citation is None:
+        run_request_payload.pop("focus_citation", None)
+    existing = operations.replay_async(endpoint=f"/v1/research/topics/{topic_id}/runs", idempotency_key=idempotency_key,
+        owner_subject=f"account:{account.account_id}", request_payload=run_request_payload)
+    if existing is not None:
+        _mark_replay(response, True)
+        return existing
     provider, _personal = _model_provider_for_request(http_request)
     if isinstance(provider, OpenAICompatibleLlmProvider):
         try:
@@ -2095,16 +2108,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         raise ApiProblem(422, "invalid_request", "The selected provider does not support a per-run input limit.")
     generate_structured = getattr(provider, "generate_structured", None)
     checkpoint_parent: str | None = None
-    # Preserve idempotency keys issued before this optional field existed.
-    run_request_payload = _request_payload(request)
-    if request.require_counterarguments:
-        run_request_payload.pop("require_counterarguments", None)
-    if not request.include_scope_in_search:
-        run_request_payload.pop("include_scope_in_search", None)
     focus = None
-    if request.focus_citation is None:
-        run_request_payload.pop("focus_citation", None)
-    else:
+    if request.focus_citation is not None:
         try:
             parent = next(v for v in topic.versions if v.version_id == request.parent_version_id)
             citation = parent.content.claims[request.focus_citation.claim_index]["citations"][request.focus_citation.citation_index]

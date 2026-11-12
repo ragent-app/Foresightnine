@@ -1924,6 +1924,16 @@ def test_per_run_input_limit_is_bounded_recorded_and_reserved(monkeypatch):
     replay = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json=payload)
     assert replay.status_code == 202 and replay.headers["Idempotency-Replayed"] == "true"
     assert calls == [2500]
+    # A subsequent configuration change must not hide an already accepted
+    # operation or cause a duplicate provider request.
+    monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", "2000")
+    replay = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json=payload)
+    assert replay.status_code == 202 and replay.headers["Idempotency-Replayed"] == "true"
+    assert replay.json()["operation"]["operation_id"] == op and calls == [2500]
+    conflict = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json={**payload,"max_input_tokens_per_call":2000})
+    assert conflict.status_code == 409 and calls == [2500]
+    fresh = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"new-over-cap"}, json=payload)
+    assert fresh.status_code == 422 and calls == [2500]
 
 
 def test_related_source_sentence_is_reviewable_and_recomputed_after_edit(monkeypatch):
