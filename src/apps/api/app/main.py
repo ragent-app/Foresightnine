@@ -1793,6 +1793,7 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
         result.update({"input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
         content.calculations[request.calculation_index] = result
+        content.claims = suggest_percentage_calculations(content.claims, content.calculations, content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         return research_topics.add_version(account.account_id, topic_id, VersionInput(
             parent_version_id=previous.version_id, content=content, note=previous.note))

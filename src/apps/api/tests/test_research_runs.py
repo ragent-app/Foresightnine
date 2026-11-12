@@ -1260,3 +1260,51 @@ def test_inferred_negative_percentage_cannot_be_silently_recalculated(monkeypatc
         json={"parent_version_id": latest["version_id"], "calculation_index": 0})
     assert response.status_code == 422
     assert "require review" in response.json()["message"]
+
+
+def test_recalculation_refreshes_claim_calculation_candidates_without_changing_history(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "recalculation-candidate-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def cite(quotation): return {"source_id": source_id, "quotation": quotation}
+            current, prior = "Revenue was 100 in 2023", "Revenue was 80 in 2022"
+            return {"claims": [{"text": "Revenue grew 25%", "citations": [cite(current), cite(prior)]}],
+                    "facts": [{"fact_id": "current", "label": "Revenue", "value": "100", "unit": "USD million", "currency": "USD", "period": "2023", "citation": cite(current)},
+                              {"fact_id": "prior", "label": "Revenue", "value": "80", "unit": "USD million", "currency": "USD", "period": "2022", "citation": cite(prior)}],
+                    "calculations": [{"formula": "growth_percent", "first_fact_id": "current", "second_fact_id": "prior"}]}, 10
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register", json={"email": "recalc-candidates@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+        "text": "Revenue was 100 in 2023. Revenue was 80 in 2022.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue growth?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "recalc-candidates-001"},
+        json={"parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": False}).json()
+    op = receipt["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert status == "completed"
+    original = client.get(path, headers=headers).json()["versions"][-1]
+    assert original["content"]["claims"][0]["suggested_calculations"][0]["calculation_index"] == 0
+    edited = deepcopy(original["content"])
+    edited["calculations"][0]["value"] = "30"
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": original["version_id"], "content": edited})
+    assert saved.status_code == 201
+    changed = saved.json()["versions"][-1]
+    assert not changed["content"]["claims"][0].get("suggested_calculations")
+    recalculated = client.post(path + "/calculations/recalculate", headers=headers,
+        json={"parent_version_id": changed["version_id"], "calculation_index": 0})
+    assert recalculated.status_code == 201
+    versions = recalculated.json()["versions"]
+    assert versions[-1]["content"]["calculations"][0]["value"] == "25.00"
+    assert versions[-1]["content"]["claims"][0]["suggested_calculations"][0]["status"] == "requires_semantic_review"
+    assert not versions[-2]["content"]["claims"][0].get("suggested_calculations")
+    assert versions[-3]["content"]["claims"][0]["suggested_calculations"]
