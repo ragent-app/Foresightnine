@@ -30,7 +30,7 @@ export interface ResearchClaim {
   uncited_claim_amounts?: string[];
   uncited_dollar_amounts?: string[];
   uncited_quarters?: string[];
-  balance_direction_warnings?: { source_id: string; citation_index: number; basis?: "trade_deficit" | "operating_profit" | "revision_vs_change"; claimed_text: string; status: string }[];
+  balance_direction_warnings?: { source_id: string; citation_index: number; basis?: "trade_deficit" | "operating_profit" | "revision_vs_change" | "period_rate_comparison"; claimed_text: string; status: string }[];
   uncited_fact_values?: string[];
   rate_unit_warnings?: { claimed_text: string; status: string }[];
   uncited_exact_dates?: string[];

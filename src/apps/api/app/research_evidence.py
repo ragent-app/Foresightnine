@@ -727,6 +727,15 @@ _QUARTER_Q_FIRST = re.compile(r"(?i)\bQ([1-4])\s*[- /]?\s*((?:19|20)\d{2})(?!\d)
 _QUARTER_ENGLISH = re.compile(r"(?i)\b(first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter\s+(?:of\s+)?((?:19|20)\d{2})(?!\d)")
 _QUARTER_CHINESE = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*年\s*第?\s*([一二三四1-4])\s*季(?:度)?")
 _QUARTER_VALUES = {"first":1,"1st":1,"second":2,"2nd":2,"third":3,"3rd":3,"fourth":4,"4th":4,"一":1,"二":2,"三":3,"四":4}
+_RATE_QUARTER_PAIR = re.compile(
+    r"(?P<first>\d+(?:\.\d+)?)\s*percent\s+in\s+the\s+"
+    r"(?P<first_quarter>first|second|third|fourth)\s+quarter\s+of\s+(?P<first_year>20\d{2})"
+    r"\s*,?\s*compared\s+with\s+(?:an?\s+)?(?P<second_direction>increase|decrease)\s+of\s+"
+    r"(?P<second>\d+(?:\.\d+)?)\s*percent\s+in\s+the\s+"
+    r"(?P<second_quarter>first|second|third|fourth)\s+quarter\s+of\s+(?P<second_year>20\d{2})", re.IGNORECASE)
+_PERIOD_RELATIVE_RATE = re.compile(
+    r"\b(?P<quarter>Q[1-4]\s*[- /]?\s*20\d{2})\s+(?P<metric>GDP|GDI)\s+"
+    r"(?:was|grew)\s+(?P<direction>slower|faster)\b", re.IGNORECASE)
 
 
 def _explicit_quarters(text: str) -> list[tuple[str, tuple[int, int]]]:
@@ -787,6 +796,59 @@ def flag_component_direction(claims: list[dict], sources: list[ResearchSource]) 
         text,citations=entry.get("text"),entry.get("citations")
         if not isinstance(text,str) or len(text)>3000 or not isinstance(citations,list):
             output.append(entry);continue
+        # Compare only a fully specified, adjacent two-quarter passage and an
+        # explicit period/metric relative claim. This is a cue for checking
+        # metric, annualization and wording, not a semantic verdict.
+        periods = {value for _, value in _explicit_quarters(text)}
+        for relative in list(_PERIOD_RELATIVE_RATE.finditer(text))[:5]:
+            if _COMPONENT_NEGATION.search(text[max(0, relative.start()-30):relative.start()]):
+                continue
+            subject_quarters = _explicit_quarters(relative.group('quarter'))
+            if len(subject_quarters) != 1 or len(periods) != 2:
+                continue
+            subject = subject_quarters[0][1]
+            for index, citation in enumerate(citations[:10]):
+                if not isinstance(citation, dict) or citation.get('partial_token'):
+                    continue
+                sid = citation.get('source_id')
+                source = source_map.get(sid) if isinstance(sid, str) else None
+                quote, loc = citation.get('quotation'), citation.get('location')
+                if source is None or not isinstance(quote, str) or not isinstance(loc, dict) or loc.get('status') == 'ambiguous':
+                    continue
+                a, b = loc.get('character_start'), loc.get('character_end')
+                if (type(a) is not int or type(b) is not int or not 0 <= a < b <= len(source.text) or
+                        source.text[a:b] != quote or partial_ascii_token(source.text, a, b)):
+                    continue
+                # The first rate's sign and metric must be in the same
+                # immediately preceding sentence, not guessed from a table.
+                context = source.text[max(0, a - 180):a]
+                boundary = list(_SENTENCE_END.finditer(context))
+                if boundary:
+                    context = context[boundary[-1].end():]
+                if not re.search(r'\bincreased\s*$', context, re.IGNORECASE):
+                    continue
+                metric = relative.group('metric').upper()
+                found_metrics = {name for name in ('GDP', 'GDI') if _METRIC_SUBJECTS[name].search(context)}
+                if found_metrics != {metric}:
+                    continue
+                pair = _RATE_QUARTER_PAIR.search(quote)
+                if not pair:
+                    continue
+                first_period = (int(pair.group('first_year')), _QUARTER_VALUES[pair.group('first_quarter').lower()])
+                second_period = (int(pair.group('second_year')), _QUARTER_VALUES[pair.group('second_quarter').lower()])
+                if {first_period, second_period} != periods:
+                    continue
+                first = Decimal(pair.group('first'))
+                second = Decimal(pair.group('second')) * (-1 if pair.group('second_direction').lower() == 'decrease' else 1)
+                rates = {first_period:first, second_period:second}
+                other = next(period for period in periods if period != subject)
+                direction = relative.group('direction').lower()
+                if (direction == 'slower' and rates[subject] > rates[other] or
+                        direction == 'faster' and rates[subject] < rates[other]):
+                    entry.setdefault('balance_direction_warnings', []).append({
+                        'source_id':source.source_id, 'citation_index':index,
+                        'basis':'period_rate_comparison', 'claimed_text':relative.group(0), 'status':'requires_review'})
+                    break
         revision = _REVISION_DIRECTION.search(text)
         contrary = _REVISION_CONTRADICTION.search(text)
         if revision and contrary and not _COMPONENT_NEGATION.search(text[max(0,contrary.start()-24):contrary.start()]):

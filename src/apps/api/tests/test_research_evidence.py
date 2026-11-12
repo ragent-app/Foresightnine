@@ -1031,3 +1031,24 @@ def test_counterpoint_agreement_is_a_review_cue_not_a_verdict():
     assert [bool(item.get('counterpoint_relevance_unverified')) for item in result] == [True, False, False, True]
     result[0]['text'] = 'Costs increased.'
     assert not flag_counterpoint_agreement(result)[0].get('counterpoint_relevance_unverified')
+
+
+def test_rate_comparison_flags_reversed_period_direction_only_with_usable_source():
+    from app.research_evidence import flag_component_direction
+    quote = ('0.9 percent in the first quarter of 2026, compared with an increase of '
+             '1.6 percent in the fourth quarter of 2025.')
+    text = 'Real gross domestic income (GDI) increased ' + quote
+    source = ResearchSource(source_id='s', owner_id='owner', title='Report', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+        permissions=SourcePermissions(store=True, display=True, model_input=True))
+    start = text.index(quote)
+    citation = {'source_id':'s', 'quotation':quote, 'location':{'character_start':start,'character_end':start+len(quote)}}
+    claim = {'text':'Q1 2026 GDI was 0.9 percent, and Q4 2025 GDI was slower.', 'citations':[citation]}
+    result = flag_component_direction([claim],[source])[0]
+    assert result['balance_direction_warnings'][0]['basis'] == 'period_rate_comparison'
+    assert not flag_component_direction([{**claim,'text':claim['text'].replace('slower','faster')}],[source])[0].get('balance_direction_warnings')
+    negated = 'Q1 2026 GDI was 0.9 percent; it is not true that Q4 2025 GDI was slower.'
+    assert not flag_component_direction([{**claim,'text':negated}],[source])[0].get('balance_direction_warnings')
+    assert not flag_component_direction([{**claim,'text':claim['text'].replace('GDI was slower','GDP was slower')}],[source])[0].get('balance_direction_warnings')
+    assert not flag_component_direction([{**claim,'citations':[{**citation,'location':{'status':'ambiguous'}}]}],[source])[0].get('balance_direction_warnings')
+    assert not flag_component_direction([claim],[source.model_copy(update={'permissions':SourcePermissions(store=True)})])[0].get('balance_direction_warnings')

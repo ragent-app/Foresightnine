@@ -1,0 +1,18 @@
+{
+  "model_calls": 0,
+  "findings": [
+    {
+      "claim_index": 4,
+      "warnings": [
+        {
+          "source_id": "source_29200000000000000000000000000001",
+          "citation_index": 0,
+          "basis": "period_rate_comparison",
+          "claimed_text": "Q4 2025 GDI was slower",
+          "status": "requires_review"
+        }
+      ]
+    }
+  ],
+  "note": "Narrow cue; the original output and score remain unchanged. Metric and context still require review."
+}
