@@ -277,3 +277,25 @@ def test_contrary_evidence_selection_keeps_nominal_components_and_original_offse
     for segment, sent in zip(result.segments,captured[0]["sources"]):
         original=text[segment["character_start"]:segment["character_end"]]
         assert _prompt_source_text(original,True)==sent["text"]
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+def test_contrary_evidence_selection_keeps_qualitative_component_comparison():
+    from app.research_analysis import _prompt_source_text
+    folder=Path(__file__).resolve().parents[3]/"docs/product/phase-a/199-fresh-gdp-counterevidence"
+    task=json.loads((folder/"tasks.json").read_text())[0]
+    raw=(folder/task["source"]).read_bytes()
+    manifest=json.loads((folder/"manifest.json").read_text())
+    assert sha256(raw).hexdigest()==manifest["source_files"][task["source"]]
+    text=_extract_text(raw,text_order="layout")
+    report=ResearchSource(source_id=task["source_id"],owner_id="test",title=task["source"],text=text,
+        kind="user_supplied",obtained_at=datetime.now(timezone.utc),published_at=datetime.fromisoformat(task["published_at"]),
+        content_sha256=sha256(text.encode()).hexdigest(),retrieval_method="user_pdf",pdf_text_order="layout",
+        permissions=SourcePermissions(store=True,model_input=True,display=True))
+    captured=[]
+    result=analyze(task["question"],[report],None,lambda prompt:(captured.append(json.loads(prompt)) or {},0),
+                   max_prompt_chars=6000-len(SYSTEM_PROMPT.encode())-512)
+    normalized=[" ".join(part["text"].split()) for part in captured[0]["sources"]]
+    assert any("increase in services that was partly offset by a decrease in goods" in part for part in normalized)
+    for segment, sent in zip(result.segments,captured[0]["sources"]):
+        assert _prompt_source_text(text[segment["character_start"]:segment["character_end"]],True)==sent["text"]

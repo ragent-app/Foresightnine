@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v40"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v41"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1160,8 +1160,6 @@ def _contrast_sentence_spans(text: str, question: str, should_stop: Callable[[],
         sentence = text[start:end]
         start = end
         if not 20 <= len(sentence) <= 1000 or not positive.search(sentence) or not negative.search(sentence):
-            continue
-        if len(re.findall(r"(?<![A-Za-z0-9_])\d+(?:\.\d+)?", sentence)) < 2:
             continue
         folded = sentence.casefold()
         words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", folded)}
