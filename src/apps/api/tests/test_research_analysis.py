@@ -375,6 +375,26 @@ def test_comparison_windows_keep_unequal_extracted_passages_within_budget():
     assert _comparison_windows(text, "价格指数较上月和较上年同期分别多少？", 100) is None
 
 
+def test_comparison_windows_prefer_requested_indicator_over_earlier_pair():
+    unrelated = ("From the preceding month, unemployment rose 1.0 percent. "
+                 "From the same month one year ago unemployment rose 2.0 percent.")
+    relevant = ("From the preceding month, the PCE price index increased 0.3 percent. "
+                "From the same month one year ago the PCE price index increased 2.6 percent.")
+    text = unrelated + ("\nUnrelated appendix. " * 60) + relevant + ("\nOther text. " * 60)
+    result = _comparison_windows(text, "PCE价格指数较上月和较上年同期的变化？", 300)
+    assert result is not None
+    assert "0.3 percent" in result[0][1] and "2.6 percent" in result[1][1]
+    assert all(text[start:start + len(part)] == part for start, part in result)
+
+
+def test_comparison_windows_do_not_substitute_shorter_unrelated_pair():
+    short = ("From the preceding month, price increased 1.0 percent. "
+             "From the same month one year ago price increased 2.0 percent.")
+    long = ("From the preceding month, PCE price index " + " " * 150 + "increased 0.3 percent. "
+            "From the same month one year ago PCE price index " + " " * 150 + "increased 2.6 percent.")
+    assert _comparison_windows(short + "\n" * 100 + long, "PCE价格指数较上月和较上年同期？", 180) is None
+
+
 def test_chinese_year_and_relevance_outrank_unrelated_numeric_density():
     target = "Revenue increased in 2023 to 200 million."
     text = ("Generic discussion. " * 500 + target + " Context. " * 200 +
