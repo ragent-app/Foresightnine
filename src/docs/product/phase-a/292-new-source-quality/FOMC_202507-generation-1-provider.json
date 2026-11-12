@@ -1,0 +1,95 @@
+{
+  "manifest_sha256": "5e7862eec1a5cea1117305309a082c9147f72a0d16fc12e15d2fc1138c707366",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC maintained the target range for the federal funds rate at 4-1/4 to 4-1/2 percent at its July 30, 2025 meeting.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent"
+          }
+        ]
+      },
+      {
+        "text": "Michelle W. Bowman and Christopher J. Waller voted against the action.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting against this action were Michelle W. Bowman and Christopher J. Waller"
+          }
+        ]
+      },
+      {
+        "text": "Both dissenters stated they preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting"
+          }
+        ]
+      },
+      {
+        "text": "One uncertainty relevant to the future policy path is that uncertainty about the economic outlook remains elevated, which the Committee will weigh in assessing the extent and timing of additional adjustments.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Uncertainty about the economic outlook remains elevated."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "In considering the extent and timing of additional adjustments to the target range for the federal funds rate, the Committee will carefully assess incoming data, the evolving outlook, and the balance of risks."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Inference: the dissenters' stated preference was a 25-basis-point cut; any motive (e.g., concern about labor market weakening) is not stated in the source and cannot be asserted. No opposing evidence exists in the supplied text to support any motive claim.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source is a partial excerpt; the statement text is truncated mid-sentence, so no voting-related content beyond what is quoted is available.",
+      "The source does not state any rationale or motive for the dissents; motives would be inference, not evidence.",
+      "The July 30, 2025 date is the declared publication date, not independently verified.",
+      "No counterargument evidence against the majority decision is present in the supplied sources beyond the dissenters' stated preference."
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr_range_low",
+        "label": "federal funds target range lower bound",
+        "value": 4.25,
+        "unit": "percent",
+        "currency": null,
+        "period": "July 30, 2025 FOMC decision",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent"
+        }
+      },
+      {
+        "fact_id": "ffr_range_high",
+        "label": "federal funds target range upper bound",
+        "value": 4.5,
+        "unit": "percent",
+        "currency": null,
+        "period": "July 30, 2025 FOMC decision",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2087,
+  "prompt_sha256": "a630eec56b955dd8f588be3e6c3569364ac745c2b94764afedd60205a62cef0c",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

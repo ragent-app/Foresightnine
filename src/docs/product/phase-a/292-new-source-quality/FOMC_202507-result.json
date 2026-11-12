@@ -1,0 +1,317 @@
+{
+  "task": "FOMC_202507",
+  "status": "completed",
+  "operation_id": "operation:b1df25536abe8627136953dc",
+  "manifest_sha256": "5e7862eec1a5cea1117305309a082c9147f72a0d16fc12e15d2fc1138c707366",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_29200000000000000000000000000002",
+        "title": "fomc-20250730.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": "2025-07-30T18:00:00+00:00",
+        "obtained_at": "2026-11-12T22:07:45.654477+00:00",
+        "revised_at": null,
+        "content_sha256": "c626d77289241b75d542e515e30d9786446c994c702be1241dc52a36f543336b",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ffr_range_low",
+        "value": "4.25",
+        "unit": "percent",
+        "currency": null,
+        "period": "July 30, 2025 FOMC decision",
+        "label": "federal funds target range lower bound",
+        "source_id": "source_29200000000000000000000000000002",
+        "quotation": "the Committee decided to maintain the target range for the federal\n\nfunds rate at 4-1/4 to 4-1/2 percent",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 673,
+          "character_end": 777,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ffr_range_high",
+        "value": "4.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "July 30, 2025 FOMC decision",
+        "label": "federal funds target range upper bound",
+        "source_id": "source_29200000000000000000000000000002",
+        "quotation": "the Committee decided to maintain the target range for the federal\n\nfunds rate at 4-1/4 to 4-1/2 percent",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 673,
+          "character_end": 777,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The FOMC maintained the target range for the federal funds rate at 4-1/4 to 4-1/2 percent at its July 30, 2025 meeting.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 673,
+              "character_end": 777,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to maintain the target range for the federal\n\nfunds rate at 4-1/4 to 4-1/2 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_exact_dates": [
+          "July 30, 2025"
+        ]
+      },
+      {
+        "text": "Michelle W. Bowman and Christopher J. Waller voted against the action.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 2157,
+              "character_end": 2234,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this action were Michelle\n\nW. Bowman and Christopher J. Waller"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Both dissenters stated they preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 2236,
+              "character_end": 2343,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "who preferred to lower the target range for the federal\n\nfunds rate by 1/4 percentage point at this meeting"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "One uncertainty relevant to the future policy path is that uncertainty about the economic outlook remains elevated, which the Committee will weigh in assessing the extent and timing of additional adjustments.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 506,
+              "character_end": 562,
+              "page": 1
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Uncertainty about the economic outlook remains elevated."
+          },
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 779,
+              "character_end": 990,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In considering the extent and timing of additional\n\nadjustments to the target range for the federal funds rate, the Committee will carefully assess\n\nincoming data, the evolving outlook, and the balance of risks."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Inference: the dissenters' stated preference was a 25-basis-point cut; any motive (e.g., concern about labor market weakening) is not stated in the source and cannot be asserted. No opposing evidence exists in the supplied text to support any motive claim.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 2236,
+              "character_end": 2343,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "who preferred to lower the target range for the federal\n\nfunds rate by 1/4 percentage point at this meeting"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "source_scope_absence_unverified": true
+      },
+      {
+        "text": "Prior findings are consistent with the source: the Committee 'decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent,' and 'Voting against this action were Michelle W. Bowman and Christopher J. Waller, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting.' Any motive beyond this stated preference (e.g., political pressure or positioning for a future Chair role) is NOT stated in the source and should not be asserted. One stated uncertainty relevant to the future path: 'Uncertainty about the economic outlook remains elevated,' with the Committee to 'carefully assess incoming data, the evolving outlook, and the balance of risks' in considering 'the extent and timing of additional adjustments.'",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 673,
+              "character_end": 777,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to maintain the target range for the federal\n\nfunds rate at 4-1/4 to 4-1/2 percent"
+          },
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 2157,
+              "character_end": 2343,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this action were Michelle\n\nW. Bowman and Christopher J. Waller, who preferred to lower the target range for the federal\n\nfunds rate by 1/4 percentage point at this meeting"
+          },
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 506,
+              "character_end": 561,
+              "page": 1
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Uncertainty about the economic outlook remains elevated"
+          },
+          {
+            "source_id": "source_29200000000000000000000000000002",
+            "location": {
+              "character_start": 779,
+              "character_end": 989,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In considering the extent and timing of additional\n\nadjustments to the target range for the federal funds rate, the Committee will carefully assess\n\nincoming data, the evolving outlook, and the balance of risks"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_29200000000000000000000000000002: only character ranges 0–1742, 1754–3847 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The source is a partial excerpt; the statement text is truncated mid-sentence, so no voting-related content beyond what is quoted is available.",
+      "Model-reported limitation (not independently verified): The source does not state any rationale or motive for the dissents; motives would be inference, not evidence.",
+      "Model-reported limitation (not independently verified): The July 30, 2025 date is the declared publication date, not independently verified.",
+      "Model-reported limitation (not independently verified): No counterargument evidence against the majority decision is present in the supplied sources beyond the dissenters' stated preference.",
+      "Model-reported limitation (not independently verified): Answer: target range 4-1/4 to 4-1/2 percent (ref-1); dissenters Michelle W. Bowman and Christopher J. Waller, each preferring a 1/4 percentage point cut (ref-1); stated uncertainty: elevated uncertainty about the economic outlook amid attentiveness to 'risks to both sides of its dual mandate' (ref-1).",
+      "Model-reported limitation (not independently verified): The dissenters' preference is stated verbatim; the source provides no evidence of their motives, so no motive claim can be supported.",
+      "Model-reported limitation (not independently verified): Source coverage is declared partial; the text appears truncated mid-sentence in the assessment paragraph, so no conclusions should be drawn about content beyond the supplied excerpts.",
+      "Model-reported limitation (not independently verified): No numeric calculations were performed, per instructions.",
+      "Counterpoint follow-up uses a model and is not independent verification.",
+      "A claim says a source lacks information, but only excerpts were analyzed; the full-source absence is not established.",
+      "An exact date in a claim is absent from its located quotations; verify the date and its meaning.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:b1df25536abe8627136953dc",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 4017,
+      "cost_usd": null,
+      "generation_tokens": 2087,
+      "support_review_tokens": null,
+      "counterpoint_requested": true,
+      "counterpoint_status": "completed",
+      "counterpoint_tokens": 1930,
+      "counterpoint_prompt_sha256": "8e005762ec28207a055fe6d1b84e254873f868939d7545343f864153324160c4",
+      "counterpoint_discarded_fields": 0,
+      "counterpoint_omitted_rows": 0,
+      "counterpoint_error": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "official_fetch_calls": 0,
+      "official_fetch_status": "not_requested",
+      "elapsed_seconds": 24.106,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "a630eec56b955dd8f588be3e6c3569364ac745c2b94764afedd60205a62cef0c",
+      "prompt_characters": 4946,
+      "prompt_bytes": 4956,
+      "selection_method": "ranked_nonoverlapping_windows_v49",
+      "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+      "selected_segments": [
+        {
+          "source_id": "source_29200000000000000000000000000002",
+          "character_start": 0,
+          "character_end": 1742,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_29200000000000000000000000000002",
+          "character_start": 1754,
+          "character_end": 3847,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_29200000000000000000000000000002": "c626d77289241b75d542e515e30d9786446c994c702be1241dc52a36f543336b"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 20000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "elapsed_seconds": 24.194
+}

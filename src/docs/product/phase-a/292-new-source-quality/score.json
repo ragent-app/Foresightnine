@@ -1,0 +1,44 @@
+{
+  "results": [
+    {
+      "task": "BEA_2026Q1",
+      "status": "completed",
+      "checks": {
+        "claims_located": true,
+        "no_known_claim_warnings": false,
+        "cited_counterpoint": true,
+        "research_completed": false,
+        "within_budget": true,
+        "q1_value": true,
+        "q4_value": true,
+        "revision_value": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 4606,
+      "semantic_support": "requires separate source-level assessment"
+    },
+    {
+      "task": "FOMC_202507",
+      "status": "completed",
+      "checks": {
+        "claims_located": true,
+        "no_known_claim_warnings": false,
+        "cited_counterpoint": true,
+        "research_completed": false,
+        "within_budget": true,
+        "lower_target": true,
+        "upper_target": true,
+        "bowman": true,
+        "waller": true,
+        "cut_preference": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 4017,
+      "semantic_support": "requires separate source-level assessment"
+    }
+  ],
+  "mechanical_pass": false,
+  "known_tokens": 8623,
+  "unknown_usage": false,
+  "note": "Lexical matching and model self-review do not establish semantic support."
+}
