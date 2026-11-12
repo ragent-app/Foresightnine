@@ -1,0 +1,6 @@
+{
+  "manifest_sha256": "06fbe3408fb001ee3b691fa98d91cd5bca78bd311c2c1f5993c41369ecddc635",
+  "prompt_sha256": "a991d7c272cb0cfb07b9d1070c74c28a82e6f04826e0ac3ac4c2815b9de23eba",
+  "status": "started_once",
+  "retry_external_calls": 0
+}
