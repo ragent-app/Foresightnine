@@ -1556,6 +1556,25 @@ def test_financial_metric_table_selects_matching_single_metric_and_nearby_units(
     assert _financial_table_windows(distant_unit, 'Compare 2024 and 2023 net income', 1000) is None
 
 
+def test_financial_comparison_can_reserve_original_narrative_without_losing_table():
+    from app.research_analysis import _financial_table_and_context_windows
+    paragraph = ('In fiscal 2024, total revenue decreased compared with fiscal 2023. '
+                 'Product sales declined while services increased, partly offsetting the decrease.')
+    header = '| Year Ended |\n| January 29, 2024 | January 30, 2023 |\n| (in millions) |\n'
+    row = '| Total revenue | 200 | 190 |\n'
+    text = paragraph + '\n' + 'Unrelated discussion.\n' * 150 + header + row + 'Other material.\n' * 50
+    question = 'Compare revenue in 2024 and 2023 and explain a limitation.'
+    selected = _financial_table_and_context_windows(text, question, 2200)
+    assert selected and len(selected) >= 2
+    assert any(paragraph == part for _, part in selected)
+    assert any('Total revenue' in part and '200' in part for _, part in selected)
+    assert all(text[start:start+len(part)] == part for start,part in selected)
+    assert sum(len(part) for _,part in selected) <= 2200
+    assert _financial_table_and_context_windows(text, 'Compare revenue in 2024 and 2023.', 2200) is None
+    assert _financial_table_and_context_windows(text, question, 1000) is None
+    assert _financial_table_and_context_windows(text.replace('fiscal 2023', 'fiscal 2022'), question, 2200) is None
+
+
 def test_generated_table_markup_expands_only_to_a_complete_original_row():
     from app.research_analysis import _table_markup_rows
     row = '| [colspan=3] Net cash provided by operating activities | $ | 5,641 | | [colspan=3] | $ | 9,108 |'

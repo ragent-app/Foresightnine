@@ -38,7 +38,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v48"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v49"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1004,6 +1004,52 @@ def _financial_table_windows(text: str, question: str, size: int,
     return [(start, text[start:end])]
 
 
+def _financial_table_and_context_windows(text: str, question: str, size: int,
+                                         should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
+    """Reserve room for a comparable narrative when a financial question asks for context.
+
+    Years, metric and directional wording are retrieval cues only. The
+    resulting paragraph may not answer the question or support any claim.
+    """
+    intent = _query_intent(question[:2000])
+    if size < 1800 or not re.search(
+            r'\b(?:risk|risks|limit(?:ation|ations)?|caveat|counterargument|counterevidence|drivers?|reason|explain|why)\b'
+            r'|限制|风险|風險|反方|反证|反證|原因|因素|解释|解釋', intent):
+        return None
+    years = list(dict.fromkeys(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', intent)))
+    if len(years) != 2:
+        return None
+    metrics = [pattern for cues, pattern in (
+        (('revenue','sales','收入','营收'), r'\b(?:revenue|sales)\b|收入|营收'),
+        (('operating income','operating profit','营业利润','经营利润'), r'\boperating\s+(?:income|profit)\b|营业利润|经营利润'),
+        (('net income','net profit','净利润','净收益'), r'\bnet\s+(?:income|profit)\b|净利润|净收益'),
+        (('gross profit','毛利润','毛利'), r'\bgross\s+profit\b|毛利润|毛利'),
+    ) if any(cue in intent for cue in cues)]
+    if len(metrics) != 1:
+        return None
+    candidates = []
+    for index, match in enumerate(re.finditer(r'(?m)^[^\n]{60,800}$', text[:1_000_000])):
+        if index >= 10000:
+            break
+        if should_stop is not None and index % 32 == 0 and should_stop():
+            raise AnalysisInterrupted()
+        paragraph = match.group().strip()
+        if (not paragraph or paragraph.startswith('|') or not all(re.search(r'(?<!\d)' + year + r'(?!\d)', paragraph) for year in years) or
+                not re.search(metrics[0], paragraph, re.IGNORECASE) or
+                not re.search(r'\b(?:increas\w*|decreas\w*|declin\w*|growth|grew|fell|rose|higher|lower)\b|增长|增長|增加|下降|减少|減少', paragraph, re.IGNORECASE)):
+            continue
+        start = match.start() + len(match.group()) - len(match.group().lstrip())
+        direction_count = len(set(re.findall(r'\b(?:increas\w*|decreas\w*|declin\w*|grew|fell|rose|higher|lower)\b', paragraph.casefold())))
+        candidates.append((-min(direction_count, 2), start, paragraph))
+    for _, start, paragraph in sorted(candidates)[:20]:
+        if len(paragraph) > min(800, size // 3):
+            continue
+        table = _financial_table_windows(text, question, size - len(paragraph), should_stop)
+        if table and not any(start < offset + len(part) and offset < start + len(paragraph) for offset, part in table):
+            return sorted([*table, (start, paragraph)], key=lambda part: part[0])
+    return None
+
+
 def _structured_observation_windows(text: str, question: str, size: int,
                                     should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
     """Retain unambiguous annual JSON observations and their source metadata.
@@ -1701,6 +1747,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         windows = _policy_rate_purchase_risk_windows(selection_text, question, size, should_stop)
                     if windows is None:
                         windows = _asset_purchase_window(selection_text, question, size, should_stop)
+                    if windows is None:
+                        windows = _financial_table_and_context_windows(selection_text, question, size, should_stop)
                     if windows is None:
                         windows = _financial_table_windows(selection_text, question, size, should_stop)
                     if windows is None:
