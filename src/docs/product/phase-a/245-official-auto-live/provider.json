@@ -1,0 +1,55 @@
+{
+  "manifest_sha256": "7ba79fccb514446ff28da679369ea0d19c8ea3368298d54b61047ac1fbcb2949",
+  "payload": {
+    "claims": [
+      {
+        "text": "BEA's January 25, 2024 advance estimate reported real GDP increased 2.5 percent for full-year 2023 and 3.3 percent at an annual rate for Q4 2023.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.3 percent in the fourth quarter of 2023 (table 1), according to the \"advance\" estimate released by the Bureau of Economic Analysis."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared with an increase of 1.9 percent in 2022 (table 1)."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "These are advance estimates based on incomplete source data and subject to revision; a second estimate was scheduled for February 28, 2024, per the release.",
+      "No opposing evidence in the sources disputes these figures.",
+      "Excerpts are partial and do not include table 1 itself."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "real GDP growth, full-year 2023 (advance estimate)",
+        "value": 2.5,
+        "unit": "percent",
+        "currency": null,
+        "period": "annual 2023 (2022 annual level to 2023 annual level)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared with an increase of 1.9 percent in 2022 (table 1)."
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "real GDP growth, Q4 2023 (advance estimate)",
+        "value": 3.3,
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "fourth quarter of 2023, annualized",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.3 percent in the fourth quarter of 2023 (table 1), according to the \"advance\" estimate released by the Bureau of Economic Analysis."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1924,
+  "prompt_sha256": "3aae297bb919d63958322261866d95ac9ed42c41565db053a58358891bd1145f"
+}

@@ -1,0 +1,18 @@
+{
+  "status": "completed",
+  "checks": {
+    "annual_value": true,
+    "quarterly_value": true,
+    "year": true,
+    "quarter": true,
+    "all_claims_located": true,
+    "no_known_warnings": true,
+    "no_omissions": true,
+    "one_call": true,
+    "official_fetch": true,
+    "partial_disclosed": true
+  },
+  "mechanical_pass": true,
+  "reported_tokens": 1924,
+  "semantic_support": "not established by mechanical checks"
+}
