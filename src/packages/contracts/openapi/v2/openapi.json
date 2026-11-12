@@ -914,6 +914,11 @@
             "title": "Auto Fetch Official",
             "type": "boolean"
           },
+          "counterpoint_followup": {
+            "default": false,
+            "title": "Counterpoint Followup",
+            "type": "boolean"
+          },
           "focus_citation": {
             "anyOf": [
               {
@@ -2123,6 +2128,85 @@
           }
         },
         "summary": "Reextract Research Pdf"
+      }
+    },
+    "/v2/research/sources/{source_id}/table-structure": {
+      "get": {
+        "operationId": "get_research_table_structure_v2_research_sources__source_id__table_structure_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "maximum": 2000000,
+              "minimum": 0,
+              "title": "Start",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "maximum": 2000000,
+              "minimum": 1,
+              "title": "End",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Table Structure V2 Research Sources  Source Id  Table Structure Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Table Structure"
       }
     },
     "/v2/research/topics": {
