@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v22"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v23"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -355,3 +355,17 @@ def test_batch_local_indexes_map_to_original_claims_and_omissions():
     assert "support_review" not in partial[1]
     with pytest.raises(InvalidReview):
         apply_partial_support_review(items, batch, {"reviews": [{"claim_index": 3, "verdict": "supports"}]})
+
+
+def test_review_includes_possessive_entity_context_without_treating_it_as_quote():
+    text = "River is a subsidiary. River's revenue increased 5 percent."
+    quotation = "revenue increased 5 percent"
+    start = text.index(quotation)
+    report = source().model_copy(update={"text":text})
+    item = {"text":"Harbor revenue increased 5 percent.", "citations":[{"source_id":"s","quotation":quotation,
+        "location":{"character_start":start,"character_end":start+len(quotation)}}]}
+    batch = prepare_support_review([item], [report], 3000)
+    assert batch.indexes == [0]
+    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
+    assert excerpt["quotation"] == quotation and excerpt["preceding_context"].endswith("River's ")
+    assert batch.segments[0]["required_context_start"] == text.index("River's")

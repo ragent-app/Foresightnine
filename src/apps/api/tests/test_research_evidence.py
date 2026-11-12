@@ -658,3 +658,31 @@ def test_directional_parenthesized_percentage_is_not_marked_uncited():
     assert suggest_percentage_evidence([opposite], [])[0]["uncited_percentages"] == ["0.1 percent"]
     ambiguous = {**claim, "citations": [{"quotation": "The change was (0.1 percent)."}]}
     assert suggest_percentage_evidence([ambiguous], [])[0]["uncited_percentages"] == ["0.1 percent"]
+
+
+def test_possessive_entity_before_a_quoted_metric_is_retained_as_context():
+    text = "River is a subsidiary. River's revenue increased 5 percent."
+    quote = "revenue increased 5 percent"
+    start = text.index(quote)
+    report = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True,display=True))
+    citation = {"source_id":"s", "quotation":quote, "location":{"character_start":start, "character_end":start+len(quote)}}
+    item = {"text":"Harbor revenue increased 5 percent.", "citations":[citation]}
+    warning = flag_citation_subject_context([item], [report])[0]["citation_context_warnings"][0]
+    assert warning["context_metric"] == "possessive entity"
+    assert text[warning["context_character_start"]:warning["context_character_end"]] == "River's "
+    original = text.index("River's")
+    full = {"source_id":"s", "quotation":text[original:start], "location":{"character_start":original,"character_end":start}}
+    assert not flag_citation_subject_context([{**item, "citations":[citation, full]}], [report])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([item], [report.model_copy(update={"permissions":SourcePermissions(store=True,display=False)})])[0].get("citation_context_warnings")
+
+
+def test_possessive_context_does_not_include_previous_sentence():
+    text = "A report by Harbor Labs. River's revenue increased 5 percent."
+    quote = "revenue increased 5 percent"; start = text.index(quote)
+    report = ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
+    item = {"text":"Revenue rose 5 percent.","citations":[{"source_id":"s","quotation":quote,
+            "location":{"character_start":start,"character_end":start+len(quote)}}]}
+    warning = flag_citation_subject_context([item],[report])[0]["citation_context_warnings"][0]
+    assert text[warning["context_character_start"]:warning["context_character_end"]] == "River's "

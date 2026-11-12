@@ -286,6 +286,36 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
                     if len(warnings) >= 5:
                         break
                     continue
+            # The metric may be present while the entity owning it is cut
+            # off, e.g. "River's revenue" quoted from "revenue" onward.
+            # Preserve that possessive only as context, not as quoted proof.
+            if re.match(r"(?i)^\s*(?:revenue|sales|income|profit|earnings|assets|liabilities|cash|debt)\b", quote):
+                prefix_start = max(0, start - 160)
+                prefix = source.text[prefix_start:start]
+                prior_boundaries = list(_SENTENCE_END.finditer(prefix))
+                if prior_boundaries:
+                    prefix_start += prior_boundaries[-1].end()
+                    prefix = source.text[prefix_start:start]
+                entity = re.search(r"(?<![\w])([A-Z][A-Za-z0-9&.'-]*(?:\s+[A-Z][A-Za-z0-9&.'-]*){0,4}['’]s)\s+$", prefix)
+                if entity and "\f" not in prefix[entity.start():]:
+                    entity_start = prefix_start + entity.start(1)
+                    entity_end = prefix_start + entity.end(1)
+                    covered = any(
+                        isinstance(other, dict) and other.get("source_id") == source_id and not other.get("partial_token") and
+                        isinstance(other.get("location"), dict) and other["location"].get("status") != "ambiguous" and
+                        type(other["location"].get("character_start")) is int and type(other["location"].get("character_end")) is int and
+                        0 <= other["location"]["character_start"] <= entity_start < entity_end <= other["location"]["character_end"] <= len(source.text) and
+                        isinstance(other.get("quotation"), str) and
+                        source.text[other["location"]["character_start"]:other["location"]["character_end"]] == other["quotation"] and
+                        not partial_ascii_token(source.text, other["location"]["character_start"], other["location"]["character_end"])
+                        for other in citations)
+                    if not covered:
+                        warnings.append({"source_id": source_id, "citation_index": index, "context_metric": "possessive entity",
+                                         "context_character_start": entity_start, "context_character_end": start,
+                                         "status": "requires_review"})
+                        if len(warnings) >= 5:
+                            break
+                        continue
             if any(pattern.search(quote) for pattern in _METRIC_SUBJECTS.values()):
                 continue
             before = source.text[max(0, start - 400):start]
