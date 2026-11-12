@@ -1,0 +1,30 @@
+{
+  "purpose": "Nonblind diagnostic of one existing GDP revision output; no claim of independent validation. A single model review is allowed; no retries.",
+  "implementation_commit": "ea3a4b0",
+  "input_sha256": {
+    "GDP_REV-result.json": "513c2725341245b9f4392851a35f7b4b6b7513ed442f035d902f074447026f61",
+    "GDP_REV-source.txt": "2e623f2113575dd98376699548184eec919ce0b8313713112440fb8a63ee0f08"
+  },
+  "runner_sha256": "0db3ea9d3f160d8c315e2dfec780fbf41c5e77d134467bf2b7f509e9d1c8fe2a",
+  "system_prompt_sha256": "6cfeeb7386c0dfe763a547d5933872bd10caafbdc2987428ef079b889a3f5edb",
+  "prompt_sha256": "f58df637b56c3a56419360878879ab0621cddb5eabd35d6fb8f2924cb871521d",
+  "max_prompt_bytes": 1739,
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "max_calls": 1,
+  "retry_external_calls": 0,
+  "timeout_seconds": 60,
+  "pass_rule": "Claim indexes 0 and 1 must be supports; index 2 must be does_not_support, contradicts, or uncertain. This expected answer is fixed before the call and is not part of the prompt. Pass only indicates success on this single previously inspected case; it does not establish semantic reliability.",
+  "cost_usd": "unknown"
+}
