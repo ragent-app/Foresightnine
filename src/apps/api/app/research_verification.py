@@ -25,8 +25,12 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v27"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v28"
 ISOLATED_REVIEW_METHOD = REVIEW_METHOD + "_isolated"
+_DIAGNOSTIC_GUIDANCE = {
+    "uncited_quarters": "A quarter stated in the claim was not matched in the cited passages. Check whether the cited text explicitly supports the period.",
+    "causal_attribution_unverified": "An explicit causal cue was not found in the cited passages. Check the claimed cause and relationship; absence of a cue alone does not disprove it.",
+}
 
 
 class ReviewEntry(BaseModel):
@@ -143,14 +147,17 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             continue
         # Reserve exact quotations and any recognized subject context before
         # spending the remaining budget on optional surrounding text.
-        payload["claims"].append(_review_item(index, text, located, 0)[0])
+        reasons = [name for name in ("causal_attribution_unverified", "uncited_quarters") if claim.get(name)]
+        candidate = _review_item(index, text, located, 0)[0]
+        if reasons:
+            candidate["diagnostic_warnings"] = [_DIAGNOSTIC_GUIDANCE[name] for name in reasons]
+        payload["claims"].append(candidate)
         if len(serialize().encode("utf-8")) > max_bytes:
             payload["claims"].pop()
             omitted.append(index)
             omissions.append({"claim_index": index, "reason": "input_budget", "required_subject_context": bool(context_warnings)})
             continue
         indexes.append(index)
-        reasons = [name for name in ("causal_attribution_unverified", "uncited_quarters") if claim.get(name)]
         if reasons:
             guarded[index] = reasons
         accepted.append((index, text, located))
@@ -166,7 +173,10 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     for radius in (90, 180):
         for position, (index, text, located) in enumerate(accepted):
             previous = payload["claims"][position]
-            payload["claims"][position] = _review_item(index, text, located, radius)[0]
+            candidate = _review_item(index, text, located, radius)[0]
+            if index in guarded:
+                candidate["diagnostic_warnings"] = [_DIAGNOSTIC_GUIDANCE[name] for name in guarded[index]]
+            payload["claims"][position] = candidate
             if len(serialize().encode("utf-8")) <= max_bytes:
                 radii[position] = radius
             else:

@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v27"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v28"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -38,6 +38,7 @@ def test_review_cannot_clear_an_uncited_causal_assertion():
     item = {**claim(), 'text':'Revenue was 100 due to a pandemic.'}
     batch = prepare_support_review([item], [source()], 3000)
     assert batch.indexes == [0] and batch.guarded == {0: ['causal_attribution_unverified']}
+    assert 'absence of a cue alone does not disprove it' in json.loads(batch.prompt)['claims'][0]['diagnostic_warnings'][0]
     result = apply_support_review([item], batch, {'reviews': [{'claim_index': 0, 'verdict': 'supports'}]})
     assert result[0]['support_review']['verdict'] == 'uncertain'
     assert result[0]['support_review']['reported_verdict'] == 'supports'
@@ -317,6 +318,7 @@ def test_review_diagnoses_but_cannot_clear_a_quarter_absent_from_quotations():
     item={**claim(),"text":"Revenue was 100 in 2025:Q1", "uncited_quarters":[]}
     batch=prepare_support_review([item],[source()],3000)
     assert batch.indexes == [0] and batch.guarded == {0: ['uncited_quarters']}
+    assert 'explicitly supports the period' in json.loads(batch.prompt)['claims'][0]['diagnostic_warnings'][0]
     checked = apply_support_review([item],batch,{'reviews':[{'claim_index':0,'verdict':'supports'}]})
     assert checked[0]['support_review']['verdict'] == 'uncertain'
     assert checked[0]['support_review']['diagnostic_only'] is True
