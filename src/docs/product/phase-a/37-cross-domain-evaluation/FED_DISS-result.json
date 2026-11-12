@@ -1,0 +1,175 @@
+{
+  "id": "FED_DISS",
+  "operation_status": "completed",
+  "manifest_sha256": "8099afb5d66883d094145fbf76aafacf3308b308ee4a063b3bb61de24d9956e3",
+  "input_sha256": "a1026d832260ea2e851f84e9793eacce1e6670399884c1843b3bd597a8b2960d",
+  "elapsed_seconds_observed": 12.149,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+        "title": "Federal Reserve FOMC statement December 10 2025",
+        "url": null,
+        "event_at": null,
+        "published_at": "2025-12-10T19:00:00+00:00",
+        "obtained_at": "2026-11-12T05:22:45.073570+00:00",
+        "revised_at": null,
+        "content_sha256": "b0fa15c7c62a2700ca4715a196709b700cea49e4994efd6d116fe3cb5617fa6b",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_iorb_cut",
+        "value": "3.65",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective December 11, 2025",
+        "label": "interest on reserve balances rate",
+        "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+        "quotation": "voted unanimously to lower the\n         interest rate paid on reserve balances to 3.65 percent, effective December 11, 2025.",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 3276,
+          "character_end": 3400,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_discount_cut",
+        "value": "0.25",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "effective December 11, 2025",
+        "label": "primary credit rate decrease",
+        "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+        "quotation": "approve a 1/4 percentage point decrease in the primary credit rate to 3.75\n           percent, effective December 11, 2025.",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_fraction",
+        "location": {
+          "character_start": 4984,
+          "character_end": 5107,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The provided source excerpts do not identify any dissenting voter or any dissent preferring a half-point cut in the December 10, 2025 FOMC statement.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+            "location": {
+              "character_start": 3223,
+              "character_end": 3400,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to lower the\n         interest rate paid on reserve balances to 3.65 percent, effective December 11, 2025."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "The excerpts are marked partial, so the full statement may contain dissent information (e.g., a 'Voting against' paragraph) that is not included in the supplied text.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+            "location": {
+              "character_start": 4977,
+              "character_end": 5107,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "partial_token": true,
+            "quotation": "sly to approve a 1/4 percentage point decrease in the primary credit rate to 3.75\n           percent, effective December 11, 2025."
+          }
+        ],
+        "support_status": "incomplete",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_72327ed52a22419183fecbbe61ab6b8b: only character ranges 3116–3429, 4977–5300 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "A model-generated quotation cuts through a word or number; review the surrounding source.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "The supplied excerpts are partial and do not include any paragraph listing dissenting FOMC voters or preferred alternative actions.",
+      "No source text supports identifying a specific dissenting voter or a preferred 0.5 percentage point cut; answering would require the full statement.",
+      "The publication date (December 10, 2025) is declared in metadata, not independently verified.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:4223c8fda0daec34a3a53801",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1233,
+      "cost_usd": null,
+      "generation_tokens": 1233,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 10.419,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "86a965f81bef6a8051d25787cc0772785ee1fad9e5fd6c0fadbb2b6af0657bea",
+      "prompt_characters": 2051,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v12",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "character_start": 3116,
+          "character_end": 3429
+        },
+        {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "character_start": 4977,
+          "character_end": 5300
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_72327ed52a22419183fecbbe61ab6b8b": "b0fa15c7c62a2700ca4715a196709b700cea49e4994efd6d116fe3cb5617fa6b"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

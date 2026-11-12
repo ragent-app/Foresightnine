@@ -1,0 +1,66 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Meta Platforms 2025 财年收入为 200,966 百万美元，营业利润（income from operations）为 83,276 百万美元，两者均为截至 2025-12-31 的财年数据。",
+        "citations": [
+          {
+            "source_id": "source_83d2f9a3be4f43c2bdf8a8ce4b5d3745",
+            "quotation": "{\"issuer\":\"Meta Platforms, Inc.\",\"unit\":\"USD millions\""
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "来源标题为“derived revenue and operating income facts”，表明这些数字可能是从原始报表推导/汇总而来，而非直接引用的报表行项目，可能存在汇总口径差异。",
+        "citations": [
+          {
+            "source_id": "source_83d2f9a3be4f43c2bdf8a8ce4b5d3745",
+            "quotation": "Meta 2025 SEC 10-K: derived revenue and operating income facts"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "数据由来源标注为“derived”（推导所得），无法核实其与 SEC 10-K 原始报表的精确对应关系。",
+      "财年截止日期（2025-12-31）为来源声明值，未经独立核实；来源未提供发布日期，无法区分发布时间与报告期间。",
+      "单位仅为“USD millions”（百万美元），未见原文报表上下文（如会计准则、分部口径）。",
+      "2024 年对比数据（收入 164,501、营业利润 69,380）虽在来源中给出，但本题计算仅涉及 2025 年。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_revenue_2025",
+        "label": "revenue",
+        "value": "200966",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2025 (2025-01-01 to 2025-12-31)",
+        "citation": {
+          "source_id": "source_83d2f9a3be4f43c2bdf8a8ce4b5d3745",
+          "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+        }
+      },
+      {
+        "fact_id": "fact_op_income_2025",
+        "label": "income_from_operations",
+        "value": "83276",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2025 (2025-01-01 to 2025-12-31)",
+        "citation": {
+          "source_id": "source_83d2f9a3be4f43c2bdf8a8ce4b5d3745",
+          "quotation": "\"income_from_operations\":{\"2024\":69380,\"2025\":83276}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "margin_percent",
+        "first_fact_id": "fact_op_income_2025",
+        "second_fact_id": "fact_revenue_2025"
+      }
+    ]
+  },
+  "reported_tokens": 1085
+}

@@ -1,0 +1,47 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据 BEA 第二次估计，2025 年全年实际 GDP 增长 2.1%（2024 年年度水平至 2025 年年度水平），较此前估计下调 0.1 个百分点。",
+        "citations": [
+          {
+            "source_id": "source_851b830823de44a293832f28526cf99f",
+            "quotation": "Real GDP increased 2.1 percent in 2025 (from the 2024 annual level to the 2025 annual level), revised down 0.1 percentage point from the previous estimate."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无反方论点；但摘要文本以 'Real gross domestic product (GDP) increased at an a…' 截断，第四季度季度环比折年率的数字未包含在提供的摘录中，无法确认。",
+        "citations": [
+          {
+            "source_id": "source_851b830823de44a293832f28526cf99f",
+            "quotation": "Real gross domestic product (GDP) increased at an a"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的摘录为部分覆盖（partial），第四季度季度环比折年增长率的具体数字未出现在摘录中，无法据此回答该口径的问题。",
+      "来源日期为申报发布日期（2026-03-13），未经验证。",
+      "摘录不是来源全文，PDF 可能存在压缩截断。"
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "2025年全年实际GDP增长率（年度口径）",
+        "value": "2.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025 annual (2024 annual level to 2025 annual level)",
+        "citation": {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "quotation": "Real GDP increased 2.1 percent in 2025 (from the 2024 annual level to the 2025 annual level), revised down 0.1 percentage point from the previous estimate."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1080
+}

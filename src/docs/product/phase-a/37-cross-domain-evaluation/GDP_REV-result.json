@@ -1,0 +1,116 @@
+{
+  "id": "GDP_REV",
+  "operation_status": "completed",
+  "manifest_sha256": "8099afb5d66883d094145fbf76aafacf3308b308ee4a063b3bb61de24d9956e3",
+  "input_sha256": "63ddb5f9638a83cad3be2870d94fbad99d92a67be629902f31b95c0a480087de",
+  "elapsed_seconds_observed": 8.378,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+        "title": "BEA GDP second estimate fourth quarter and year 2025",
+        "url": null,
+        "event_at": null,
+        "published_at": "2026-03-13T12:30:00+00:00",
+        "obtained_at": "2026-11-12T05:22:22.671989+00:00",
+        "revised_at": null,
+        "content_sha256": "2e623f2113575dd98376699548184eec919ce0b8313713112440fb8a63ee0f08",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_purchases_price",
+        "value": "2.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025 annual",
+        "label": "gross_domestic_purchases_price_index_2025",
+        "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+        "quotation": "The price index for gross domestic purchases increased 2.6 percent in 2025, the same as previously\nestimated.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 3822,
+          "character_end": 3931,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [],
+    "limitations": [
+      "Source source_9ed81bc67bfb4ca5b203a6ba0ee08490: only character ranges 0–292, 3639–3931 were analyzed; remaining text was not examined.",
+      "A model-generated fact value was absent from its quotation and was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "源文本中未提供2025年第四季度实际GDP环比折年增长率的具体数值（文本在'increased at an annu'处截断）。",
+      "源文本中未提供第四季度相对初次估计（advance estimate）的修订幅度；文本中提到的'0.1个百分点下调'修订是针对2025年全年估计，而非第四季度环比增速。",
+      "摘录为部分节选（partial），PDF压缩可能遗漏关键数字列。",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:ba648b4fbbe240e232de5fa3",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 978,
+      "cost_usd": null,
+      "generation_tokens": 978,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 7.531,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "cfde63729d26b592c07d31406183f6bf04729dc5350fef971eb681b0bdc3e9b6",
+      "prompt_characters": 1954,
+      "prompt_bytes": 2054,
+      "selection_method": "ranked_nonoverlapping_windows_v12",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "character_start": 0,
+          "character_end": 292
+        },
+        {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "character_start": 3639,
+          "character_end": 3931
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_9ed81bc67bfb4ca5b203a6ba0ee08490": "2e623f2113575dd98376699548184eec919ce0b8313713112440fb8a63ee0f08"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

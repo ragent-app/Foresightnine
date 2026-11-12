@@ -1,0 +1,79 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "美联储2025年12月10日声明宣布，将联邦基金利率目标区间下调1/4个百分点（0.25个百分点），至3-1/2至3-3/4%（3.50%–3.75%）。",
+        "citations": [
+          {
+            "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+            "quotation": "r the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to\n\n3-3/4 percent."
+          }
+        ]
+      },
+      {
+        "text": "自2025年12月11日起，FOMC指示纽约联储执行公开市场操作，以维持联邦基金利率在3-1/2至3-3/4%的目标区间。",
+        "citations": [
+          {
+            "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+            "quotation": "Effective December 11, 2025, the Federal Open Market Committee directs the Desk to:\n\t Undertake open market operations as necessary to maintain the federal funds rate\n\t in a target range of 3-1/2 to 3-3/4 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无明显反驳证据；来源文本与问题直接一致。",
+        "citations": [
+          {
+            "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+            "quotation": "Effective December 11, 2025, the Federal Open Market Committee directs the Desk to:\n\t Undertake open market operations as necessary to maintain the federal funds rate\n\t in a target range of 3-1/2 to 3-3/4 percent."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源文本为节选（source_coverage: partial），前文（如\"lower the target range\"的开头）不完整，下调幅度由\"by 1/4 percentage point\"直接给出，无需计算。",
+      "声明日期为声明发布日期（declared_published_at），未经独立验证。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_rate_cut",
+        "label": "利率下调幅度",
+        "value": "1/4",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2025年12月10日FOMC声明",
+        "citation": {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "quotation": "r the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to\n\n3-3/4 percent."
+        }
+      },
+      {
+        "fact_id": "fact_target_range",
+        "label": "联邦基金利率目标区间",
+        "value": "3-1/2 to 3-3/4",
+        "unit": "percent",
+        "currency": null,
+        "period": "自2025年12月11日起",
+        "citation": {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "quotation": "Undertake open market operations as necessary to maintain the federal funds rate\n\t in a target range of 3-1/2 to 3-3/4 percent."
+        }
+      },
+      {
+        "fact_id": "fact_ond_rp_rate",
+        "label": "常备隔夜回购操作利率",
+        "value": "3.75",
+        "unit": "percent",
+        "currency": null,
+        "period": "自2025年12月11日起",
+        "citation": {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "quotation": "Conduct standing overnight repurchase agreement operations at a rate of\n\t3.75 percent."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1381
+}

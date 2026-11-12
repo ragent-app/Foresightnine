@@ -1,0 +1,84 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Meta 2024 财年收入为 164,501（单位：百万美元），期间截至 2024-12-31。",
+        "citations": [
+          {
+            "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+            "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+          }
+        ]
+      },
+      {
+        "text": "Meta 2025 财年收入为 200,966（单位：百万美元），期间截至 2025-12-31。",
+        "citations": [
+          {
+            "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+            "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+          }
+        ]
+      },
+      {
+        "text": "两期收入可直接用于同比增长率计算（growth_percent）。",
+        "citations": [
+          {
+            "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+            "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该来源标题标注为 \"derived revenue and operating income facts\"，即数据为衍生/摘录数据而非 10-K 原文引用，金额应与原始申报文件核对。",
+        "citations": [
+          {
+            "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+            "quotation": "Meta 2025 SEC 10-K: derived revenue and operating income facts"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源标注数据为 \"derived\"（衍生数据），未提供 10-K 原文段落直接引用，无法核实原始披露列。",
+      "财年截止日期为来源声明，未经独立验证。",
+      "未提供货币口径以外的会计准则、分部拆分或任何重述信息；若 2024 数据经重述，增长率口径可能不同。",
+      "未提供 2025 10-K 发布日期，无法区分期间归属与披露时间。"
+    ],
+    "facts": [
+      {
+        "fact_id": "rev_2024",
+        "label": "Meta 2024 财年收入",
+        "value": "164501",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2024 (截至 2024-12-31)",
+        "citation": {
+          "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+          "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+        }
+      },
+      {
+        "fact_id": "rev_2025",
+        "label": "Meta 2025 财年收入",
+        "value": "200966",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2025 (截至 2025-12-31)",
+        "citation": {
+          "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+          "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "rev_2025",
+        "second_fact_id": "rev_2024"
+      }
+    ]
+  },
+  "reported_tokens": 1181
+}

@@ -1,0 +1,39 @@
+{
+  "payload": {
+    "claims": [],
+    "counterarguments": [],
+    "limitations": [
+      "源文本中未提供2025年第四季度实际GDP环比折年增长率的具体数值（文本在'increased at an annu'处截断）。",
+      "源文本中未提供第四季度相对初次估计（advance estimate）的修订幅度；文本中提到的'0.1个百分点下调'修订是针对2025年全年估计，而非第四季度环比增速。",
+      "摘录为部分节选（partial），PDF压缩可能遗漏关键数字列。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_annual_revision",
+        "label": "annual_2025_real_gdp_revision",
+        "value": "-0.1",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2025 annual (second estimate revision)",
+        "citation": {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "quotation": "2025 annual level), revised down 0.1 percentage point from the previous estimate."
+        }
+      },
+      {
+        "fact_id": "fact_purchases_price",
+        "label": "gross_domestic_purchases_price_index_2025",
+        "value": "2.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025 annual",
+        "citation": {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "quotation": "The price index for gross domestic purchases increased 2.6 percent in 2025, the same as previously estimated."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 978
+}

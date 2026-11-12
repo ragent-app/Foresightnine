@@ -1,0 +1,59 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "The provided source excerpts do not identify any dissenting voter or any dissent preferring a half-point cut in the December 10, 2025 FOMC statement.",
+        "citations": [
+          {
+            "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to lower the interest rate paid on reserve balances to 3.65 percent, effective December 11, 2025."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The excerpts are marked partial, so the full statement may contain dissent information (e.g., a 'Voting against' paragraph) that is not included in the supplied text.",
+        "citations": [
+          {
+            "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+            "quotation": "sly to approve a 1/4 percentage point decrease in the primary credit rate to 3.75 percent, effective December 11, 2025."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The supplied excerpts are partial and do not include any paragraph listing dissenting FOMC voters or preferred alternative actions.",
+      "No source text supports identifying a specific dissenting voter or a preferred 0.5 percentage point cut; answering would require the full statement.",
+      "The publication date (December 10, 2025) is declared in metadata, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_iorb_cut",
+        "label": "interest on reserve balances rate",
+        "value": "3.65",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective December 11, 2025",
+        "citation": {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "quotation": "voted unanimously to lower the interest rate paid on reserve balances to 3.65 percent, effective December 11, 2025."
+        }
+      },
+      {
+        "fact_id": "fact_discount_cut",
+        "label": "primary credit rate decrease",
+        "value": "1/4 percentage point",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "effective December 11, 2025",
+        "citation": {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "quotation": "approve a 1/4 percentage point decrease in the primary credit rate to 3.75 percent, effective December 11, 2025."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1233
+}

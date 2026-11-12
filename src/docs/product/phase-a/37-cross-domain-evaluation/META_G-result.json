@@ -1,0 +1,211 @@
+{
+  "id": "META_G",
+  "operation_status": "completed",
+  "manifest_sha256": "8099afb5d66883d094145fbf76aafacf3308b308ee4a063b3bb61de24d9956e3",
+  "input_sha256": "cbacc2e41e371b3fe94002379c17a89d7a481493a1e2ec165bd93634e8dca950",
+  "elapsed_seconds_observed": 14.114,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+        "title": "Meta 2025 SEC 10-K: derived revenue and operating income facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/1326801/000162828026025534/meta-12312025x10kars.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T05:21:45.803919+00:00",
+        "revised_at": null,
+        "content_sha256": "00f2165fa433aebe4b2c9fab8213ce0a1a0632f33359db048cbfc92a26d8a578",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "rev_2024",
+        "value": "164501",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2024 (截至 2024-12-31)",
+        "label": "Meta 2024 财年收入",
+        "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+        "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 121,
+          "character_end": 160
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "rev_2025",
+        "value": "200966",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2025 (截至 2025-12-31)",
+        "label": "Meta 2025 财年收入",
+        "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+        "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 121,
+          "character_end": 160
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "period_order_check": "not_checked",
+        "inputs": [
+          {
+            "fact_id": "rev_2025",
+            "value": "200966",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "FY2025 (截至 2025-12-31)"
+          },
+          {
+            "fact_id": "rev_2024",
+            "value": "164501",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "FY2024 (截至 2024-12-31)"
+          }
+        ],
+        "value": "22.17",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Meta 2024 财年收入为 164,501（单位：百万美元），期间截至 2024-12-31。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+            "location": {
+              "character_start": 121,
+              "character_end": 160
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Meta 2025 财年收入为 200,966（单位：百万美元），期间截至 2025-12-31。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+            "location": {
+              "character_start": 121,
+              "character_end": 160
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "两期收入可直接用于同比增长率计算（growth_percent）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+            "location": {
+              "character_start": 121,
+              "character_end": 160
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"revenue\":{\"2024\":164501,\"2025\":200966}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      }
+    ],
+    "limitations": [
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源标注数据为 \"derived\"（衍生数据），未提供 10-K 原文段落直接引用，无法核实原始披露列。",
+      "财年截止日期为来源声明，未经独立验证。",
+      "未提供货币口径以外的会计准则、分部拆分或任何重述信息；若 2024 数据经重述，增长率口径可能不同。",
+      "未提供 2025 10-K 发布日期，无法区分期间归属与披露时间。",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:af5fed3c1f6abdfcfd880c21",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1181,
+      "cost_usd": null,
+      "generation_tokens": 1181,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 13.823,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "12c33fdd53e5f850a666c921816785c2885daf73cc0a2cf3705e4dc88e2b12f2",
+      "prompt_characters": 1348,
+      "prompt_bytes": 1424,
+      "selection_method": "ranked_nonoverlapping_windows_v12",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_c2eff968fe8d4bf4866063886e5b7e27",
+          "character_start": 0,
+          "character_end": 214
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_c2eff968fe8d4bf4866063886e5b7e27": "00f2165fa433aebe4b2c9fab8213ce0a1a0632f33359db048cbfc92a26d8a578"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}
