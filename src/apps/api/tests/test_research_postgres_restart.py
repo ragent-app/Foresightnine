@@ -88,7 +88,7 @@ api._reserve_model_call = hold_before_reservation
         recover = recover.replace('assert reservation is not None and reservation.status == "reserved"',
                                   'assert reservation is None')
     elif phase == "review":
-        start = start.replace('        entered.set()\n', '''        if "reviewing whether supplied evidence" not in system:
+        start = start.replace('        entered.set()\n', '''        if system != api.REVIEW_SYSTEM_PROMPT:
             citation = {"source_id": source_id, "quotation": "Revenue was 100"}
             return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
                     "counterarguments": [{"text": "Revenue alone does not establish profit", "citations": [citation]}],

@@ -255,7 +255,8 @@ def test_user_citations_are_located_and_cannot_reference_unattached_or_hidden_so
     assert saved.status_code == 201, saved.text
     version = saved.json()["versions"][-1]
     claim = version["content"]["claims"][0]
-    assert claim["authorship"] == "user" and claim["support_status"] == "not_independently_verified"
+    # The second quotation has two positions, so the overall claim remains incomplete.
+    assert claim["authorship"] == "user" and claim["support_status"] == "incomplete"
     one, multiple = claim["citations"]
     assert one["location"] == {"character_start": 13, "character_end": 22}
     assert one["support_status"] == "not_independently_verified"
