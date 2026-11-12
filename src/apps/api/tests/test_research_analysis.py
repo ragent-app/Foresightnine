@@ -1110,6 +1110,15 @@ def test_structured_annual_observations_keep_period_value_and_issuer_within_budg
     assert _structured_observation_windows(json.dumps(mismatch), question, 1000) is None
     quarter = {**data, 'records': [data['records'][0], {**data['records'][1], 'start': '2023-04-01'}]}
     assert _structured_observation_windows(json.dumps(quarter), question, 1000) is None
+    # Root metadata must not be attributed to nested records whose parent
+    # can override it, even when the individual leaf repeats no unit.
+    grouped = {k: v for k, v in data.items() if k != 'records'} | {
+        'groups': [{'unit': 'EUR', 'records': data['records']}]}
+    assert _structured_observation_windows(json.dumps(grouped), question, 1000) is None
+    mixed = {**data, 'nested': {'unit': 'EUR', 'records': data['records']}}
+    assert _structured_observation_windows(json.dumps(mixed), question, 1000) is None
+    root_records_with_nested = {**data, 'records': [{**data['records'][0], 'dimensions': {'unit': 'EUR'}}, data['records'][1]]}
+    assert _structured_observation_windows(json.dumps(root_records_with_nested), question, 1000) is None
     duplicate_key = text.replace('"issuer": "Example Corp"', '"issuer": "Example Corp", "issuer": "Other"')
     assert _structured_observation_windows(duplicate_key, question, 1000) is None
     assert _structured_observation_windows(text[:-2], question, 1000) is None

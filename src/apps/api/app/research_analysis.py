@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v25"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v26"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -566,16 +566,26 @@ def _structured_observation_windows(text: str, question: str, size: int,
         root = json.loads(text, parse_float=Decimal, parse_constant=reject_constant, object_pairs_hook=unique_pairs)
         if not isinstance(root, dict) or not all(isinstance(root.get(k), str) and root[k] for k in ("issuer", "concept", "unit")):
             return None
+        # Metadata applies only to direct, flat records. A nested group may
+        # override unit, issuer or concept even when its leaf does not repeat
+        # that field; pairing those leaves with root metadata would mislead.
+        records = root.get("records")
+        if (not isinstance(records, list) or not 1 <= len(records) <= 256 or
+                any(not isinstance(record, dict) or any(isinstance(v, (dict, list)) for v in record.values())
+                    for record in records)):
+            return None
         leaves = list(islice(re.finditer(r"\{[^{}]{1,1000}\}", text), 257))
-        if not leaves or len(leaves) > 256:
+        if len(leaves) != len(records):
             return None
         found: dict[str, list[tuple[int, int]]] = {year: [] for year in years}
         field_pattern = re.compile(r'"(start|end|val|fy)"\s*:\s*("(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)')
-        for leaf in leaves:
+        for leaf, record in zip(leaves, records):
             if should_stop is not None and should_stop():
                 raise AnalysisInterrupted()
             item = json.loads(leaf.group(), parse_float=Decimal, parse_constant=reject_constant, object_pairs_hook=unique_pairs)
-            if not isinstance(item, dict) or not isinstance(item.get("start"), str) or not isinstance(item.get("end"), str):
+            if item != record:
+                return None
+            if not isinstance(item.get("start"), str) or not isinstance(item.get("end"), str):
                 continue
             if any(key in item and item[key] != root[key] for key in ("issuer", "concept", "unit")):
                 return None
