@@ -1,0 +1,105 @@
+{
+  "source_attribution": "NVIDIA 2023 Form 10-K, SEC EDGAR HTML extraction; table separators are generated.",
+  "payload": {
+    "claims": [
+      {
+        "text": "2023财年(截至2023年1月29日)经营活动产生的现金净额为5,641百万美元，2022财年(截至2022年1月30日)为9,108百万美元，同比减少约38.1%。",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "quotation": "| [colspan=3] Net cash provided by operating activities | $ | 5,641  |  | [colspan=3]  | $ | 9,108  |  |"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "摘录为表格片段，标题显示为NVIDIA 2023 Form 10-K的文本抽取，若原始PDF列对齐有误，数值归属可能需要核对原文。",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "quotation": "| [colspan=3]   | [colspan=9] Year Ended |"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "摘录未包含报表完整标题（如合并现金流量表名称），出处性质基于来源标题推断。",
+      "日期为申报材料中声明的期末日，未经独立核实；发布日期与报告期不可混淆。",
+      "同比变化为基于摘录数值的计算结果，未含来源中其他可能的调整或重述信息。",
+      "单位'(In millions)'推断适用于经营活动现金流行，但摘录未逐行重复标注单位。"
+    ],
+    "facts": [
+      {
+        "fact_id": "ocf_fy2023",
+        "label": "Net cash provided by operating activities (FY2023)",
+        "value": "5641",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended January 29, 2023",
+        "citation": {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "quotation": "| [colspan=3] Net cash provided by operating activities | $ | 5,641"
+        }
+      },
+      {
+        "fact_id": "ocf_fy2022",
+        "label": "Net cash provided by operating activities (FY2022)",
+        "value": "9108",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended January 30, 2022",
+        "citation": {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "quotation": "$ | 9,108  |  |"
+        }
+      },
+      {
+        "fact_id": "period_end_2023",
+        "label": "FY2023 period end date",
+        "value": "January 29, 2023",
+        "unit": "date",
+        "currency": null,
+        "period": "Year Ended",
+        "citation": {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "quotation": "| [colspan=3] January 29, 2023 |"
+        }
+      },
+      {
+        "fact_id": "period_end_2022",
+        "label": "FY2022 period end date",
+        "value": "January 30, 2022",
+        "unit": "date",
+        "currency": null,
+        "period": "Year Ended",
+        "citation": {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "quotation": "| [colspan=3] January 30, 2022 |"
+        }
+      },
+      {
+        "fact_id": "units",
+        "label": "Reporting units",
+        "value": "In millions",
+        "unit": "unit declaration",
+        "currency": null,
+        "period": "Both years",
+        "citation": {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "quotation": "| [colspan=3]  | [colspan=9] (In millions) |"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "ocf_fy2023",
+        "second_fact_id": "ocf_fy2022"
+      }
+    ]
+  },
+  "reported_tokens": 1573,
+  "prompt_sha256": "c6114007e78ad1dbdb5101055efad41d5d7e477e0d39221599faab47e7dd09ce",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

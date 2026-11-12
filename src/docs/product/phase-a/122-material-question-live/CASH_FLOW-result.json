@@ -1,0 +1,276 @@
+{
+  "source_attribution": "NVIDIA 2023 Form 10-K, SEC EDGAR HTML extraction; table separators are generated.",
+  "id": "CASH_FLOW",
+  "manifest_sha256": "ab11c5933aee9baa198adf36f2d9dd770559e1c3e5049a6b0b8e0f16a14702d5",
+  "operation_status": "completed",
+  "operation_id": "operation:1c64964cd33820c8202def6a",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 16.225,
+  "cost_usd": "unknown",
+  "topic_question": "",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "title": "NVIDIA 2023 Form 10-K SEC HTML text extraction; table separators generated",
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581023000017/nvda-20230129.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T11:14:21.220632+00:00",
+        "revised_at": null,
+        "content_sha256": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ocf_fy2023",
+        "value": "5641",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended January 29, 2023",
+        "label": "Net cash provided by operating activities (FY2023)",
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "quotation": "| [colspan=3] Net cash provided by operating activities | $ | 5,641",
+        "quotation_match": "exact",
+        "currency_quote_missing": true,
+        "table_alignment_unverified": true,
+        "location": {
+          "character_start": 216395,
+          "character_end": 216462
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ocf_fy2022",
+        "value": "9108",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended January 30, 2022",
+        "label": "Net cash provided by operating activities (FY2022)",
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "quotation": "$ | 9,108  |  |",
+        "quotation_match": "exact",
+        "currency_quote_missing": true,
+        "table_alignment_unverified": true,
+        "location": {
+          "character_start": 216484,
+          "character_end": 216499
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "input_precision_status": "not_established",
+        "period_order_check": "recognized_formats_only",
+        "period_granularity_check": "not_established",
+        "inputs": [
+          {
+            "fact_id": "ocf_fy2023",
+            "value": "5641",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year ended January 29, 2023"
+          },
+          {
+            "fact_id": "ocf_fy2022",
+            "value": "9108",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year ended January 30, 2022"
+          }
+        ],
+        "value": "-38.07",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [
+      {
+        "claim_index": 0,
+        "calculation_index": 0,
+        "claimed_value": "38.1",
+        "calculated_value": "-38.1",
+        "unit": "percent",
+        "status": "requires_review"
+      }
+    ],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "2023财年(截至2023年1月29日)经营活动产生的现金净额为5,641百万美元，2022财年(截至2022年1月30日)为9,108百万美元，同比减少约38.1%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "location": {
+              "character_start": 216395,
+              "character_end": 216499
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Net cash provided by operating activities | $ | 5,641  |  | [colspan=3]  | $ | 9,108  |  |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_percentages": [
+          "38.1%"
+        ],
+        "citation_context_warnings": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "citation_index": 0,
+            "context_metric": "financial table header",
+            "context_character_start": 216150,
+            "context_character_end": 216391,
+            "status": "requires_review"
+          }
+        ]
+      },
+      {
+        "text": "摘录为表格片段，标题显示为NVIDIA 2023 Form 10-K的文本抽取，若原始PDF列对齐有误，数值归属可能需要核对原文。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+            "location": {
+              "character_start": 216150,
+              "character_end": 216192
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3]   | [colspan=9] Year Ended |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_7983b37ad1234c49bf8294bc486ba4d6: only character ranges 215930–216732 were analyzed; remaining text was not examined.",
+      "3 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "A table fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.",
+      "Table column alignment is not established; verify each value, period and unit against the source before relying on calculations.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 摘录未包含报表完整标题（如合并现金流量表名称），出处性质基于来源标题推断。",
+      "Model-reported limitation (not independently verified): 日期为申报材料中声明的期末日，未经独立核实；发布日期与报告期不可混淆。",
+      "Model-reported limitation (not independently verified): 同比变化为基于摘录数值的计算结果，未含来源中其他可能的调整或重述信息。",
+      "Model-reported limitation (not independently verified): 单位'(In millions)'推断适用于经营活动现金流行，但摘录未逐行重复标注单位。",
+      "A claim percentage may differ from a deterministic calculation; review the wording and calculation.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "A quotation may omit relevant context; review the source and claim.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:1c64964cd33820c8202def6a",
+      "status": "partial",
+      "question_override": "根据所附申报材料，列出2023年和2022年经营活动现金流、各年度截止日及单位，并计算同比变化。指出这份摘录中尚不能确定的内容。",
+      "model_calls": 1,
+      "total_tokens": 1573,
+      "cost_usd": null,
+      "generation_tokens": 1573,
+      "support_review_tokens": null,
+      "require_counterarguments": false,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 14.49,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "c6114007e78ad1dbdb5101055efad41d5d7e477e0d39221599faab47e7dd09ce",
+      "prompt_characters": 1943,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v29",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+          "character_start": 215930,
+          "character_end": 216732
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_7983b37ad1234c49bf8294bc486ba4d6": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "snapshot": {
+    "schema_version": "1",
+    "operation_id": "operation:1c64964cd33820c8202def6a",
+    "topic_id": "topic_ac22673150da46eeaf2ddad6f461c7fe",
+    "parent_version_id": "version_b10673b4aec545258385c6484ed43dde",
+    "captured_at": "2026-11-12T11:14:21.255875+00:00",
+    "question_sha256": "bea597c41dbaad10c26c4398ddec317d4dc4976fbe7840fb56957cca496ea2c0",
+    "as_of": null,
+    "sources": [
+      {
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "content_sha256": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a",
+        "pdf_text_order": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T11:14:21.220632+00:00",
+        "revised_at": null,
+        "is_simulated": false,
+        "permissions": {
+          "store": true,
+          "model_input": true,
+          "display": true,
+          "export": true
+        }
+      }
+    ],
+    "budget": {
+      "parent_version_id": "version_b10673b4aec545258385c6484ed43dde",
+      "source_ids": [],
+      "max_model_calls": 1,
+      "support_review": false,
+      "require_counterarguments": false,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000
+    },
+    "model": "glm-5.3-flash",
+    "provider": "openai-compatible",
+    "provider_limits": {
+      "max_input_tokens": 3000,
+      "max_output_tokens": 4000,
+      "timeout_seconds": 60.0
+    },
+    "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+    "selection_method": "ranked_nonoverlapping_windows_v29"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "manifest_sha256": "ab11c5933aee9baa198adf36f2d9dd770559e1c3e5049a6b0b8e0f16a14702d5",
+  "semantic_support": "not independently established",
+  "result": {
+    "operation_status": "completed",
+    "research_status": "partial",
+    "reported_tokens": 1573,
+    "expected_detail": {
+      "fact_2023": true,
+      "fact_2022": true,
+      "header_dates_and_units": false,
+      "cash_flow_row": true,
+      "growth_calculation": true
+    },
+    "checks": {
+      "expected": false,
+      "all_claim_citations_located": true,
+      "no_system_warnings": false,
+      "question_entry": true,
+      "budget_and_provenance": true
+    },
+    "narrow_mechanical_pass": false
+  }
+}
