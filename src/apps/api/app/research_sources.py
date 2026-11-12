@@ -91,6 +91,46 @@ class SourcePermissionError(ValueError):
     pass
 
 
+def partial_ascii_token(text: str, start: int, end: int) -> bool:
+    """Detect selected fragments inside ASCII words or numeric literals.
+
+    This is a boundary warning, not a semantic support check. Do not apply
+    ASCII word assumptions to languages that do not separate words by spaces.
+    """
+    if not 0 <= start < end <= len(text):
+        return True
+    def word(char: str) -> bool:
+        return char.isascii() and (char.isalnum() or char == "_")
+    first, last = text[start], text[end - 1]
+    if start and word(first) and word(text[start - 1]):
+        return True
+    if end < len(text) and word(last) and word(text[end]):
+        return True
+    if (first.isascii() and first.isdigit() and last.isascii() and last.isdigit() and start and end < len(text)
+            and text[start - 1] == "(" and text[end] == ")"):
+        return True
+    if first.isascii() and first.isdigit() and start and text[start - 1] == "(" and last == ")":
+        return True
+    if (first == "(" and last.isascii() and last.isdigit() and end < len(text) and text[end] == ")"):
+        return True
+    if (first in {"-", "−"} and start and start + 1 < end and text[start - 1].isascii()
+            and text[start - 1].isdigit() and text[start + 1].isascii() and text[start + 1].isdigit()):
+        return True
+    if (last in {".", ",", "/"} and end < len(text) and text[end].isascii() and text[end].isdigit()
+            and end - start >= 2 and text[end - 2].isascii() and text[end - 2].isdigit()):
+        return True
+    if first.isascii() and first.isdigit() and start:
+        previous = text[start - 1]
+        if previous in {"-", "−"}:
+            return True
+        if previous in {".", ",", "/"} and start >= 2 and text[start - 2].isascii() and text[start - 2].isdigit():
+            return True
+    if (last.isascii() and last.isdigit() and end + 1 < len(text) and text[end] in {".", ",", "/", "-"}
+            and text[end + 1].isascii() and text[end + 1].isdigit()):
+        return True
+    return False
+
+
 def locate_user_quotation(source: ResearchSource, quotation: str) -> dict:
     """Locate an exact user-selected passage without asserting it supports a claim."""
     if source.is_simulated or not source.permissions.display or not isinstance(quotation, str) or not quotation.strip() or len(quotation) > 1000:
@@ -110,7 +150,8 @@ def locate_user_quotation(source: ResearchSource, quotation: str) -> dict:
         raise ValueError("Quotation is unavailable.")
     location = matches[0] if len(matches) == 1 else {"status": "ambiguous", "matches": matches[:5], "truncated": len(matches) > 5}
     return {"source_id": source.source_id, "quotation": quotation, "location": location,
-            "quotation_match": "exact", "support_status": "not_independently_verified"}
+            "quotation_match": "exact", "support_status": "not_independently_verified",
+            **({"partial_token": True} if any(partial_ascii_token(source.text, pos["character_start"], pos["character_end"]) for pos in matches) else {})}
 
 
 class ResearchSources:

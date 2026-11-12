@@ -5,7 +5,7 @@ import pytest
 
 from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _select_window, _select_windows, _quoted_numbers
 from decimal import Decimal
-from app.research_sources import ResearchSource, SourcePermissions
+from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
 
 def source(source_id, *, text="Revenue was 100 million.", url=None, model_input=True,
@@ -40,6 +40,50 @@ def test_fractional_rate_notation_is_converted_exactly():
     assert _quoted_numbers("- 1/2") == {Decimal("-0.5")}
     assert Decimal("0.3333333333333333333333333333") not in _quoted_numbers("1/3")
     assert Decimal("2.6") in _quoted_numbers("同比2.6%，环比0.3%")
+
+
+def test_partial_number_cannot_be_promoted_to_a_source_fact_or_calculation():
+    report = source("s", text="The target rate is 4-1/4 percent. Revenue is 1000 dollars. Loss was (85).")
+    def item(id, value, quote):
+        return {"fact_id": id, "label": "Metric", "value": value, "unit": "number", "period": "2024",
+                "citation": {"source_id": "s", "quotation": quote}}
+    raw = {"claims": [{"text": "Target rate is one quarter.", "citations": [{"source_id": "s", "quotation": "1/4"}]}],
+           "facts": [item("rate", "0.25", "1/4"), item("negative_rate", "-0.25", "-1/4"),
+                     item("revenue", "100", "100"), item("loss", "85", "85")],
+           "calculations": [{"formula": "difference", "first_fact_id": "rate", "second_fact_id": "revenue"}]}
+    result = analyze("What happened?", [report], None, lambda _: (raw, 10))
+    assert not result.facts and not result.calculations
+    assert result.claims[0]["support_status"] == "incomplete"
+    assert result.claims[0]["citations"][0]["partial_token"] is True
+    assert any("cuts through a word or number" in item for item in result.limitations)
+    assert locate_user_quotation(report, "85)")["partial_token"]
+    assert locate_user_quotation(report, "(85")["partial_token"]
+    assert "partial_token" not in locate_user_quotation(report, "(85)")
+
+
+def test_partial_word_is_marked_but_a_complete_word_and_chinese_text_are_not():
+    report = source("s", text="Additional adjustments remain possible. 同比增长百分之二。")
+    def run(quote):
+        return analyze("Question?", [report], None, lambda _: ({"claims": [{"text": "Claim", "citations": [
+            {"source_id": "s", "quotation": quote}]}]}, 1))
+    assert run("Additional adjustm").claims[0]["support_status"] == "incomplete"
+    assert run("Additional adjustments").claims[0]["support_status"] == "not_independently_verified"
+    assert run("同比增长").claims[0]["support_status"] == "not_independently_verified"
+    assert locate_user_quotation(report, "Additional adjustm")["partial_token"] is True
+    assert "partial_token" not in locate_user_quotation(report, "Additional adjustments")
+
+
+def test_ambiguous_quotation_is_retained_for_review_but_not_used_for_calculation():
+    report = source("s", text="Revenue 100. Revenue 100. Revenue 80.")
+    def item(id, value, period):
+        return {"fact_id": id, "label": "Revenue", "value": value, "unit": "USD", "currency": "USD", "period": period,
+                "citation": {"source_id": "s", "quotation": "Revenue " + value}}
+    raw = {"facts": [item("current", "100", "2024"), item("prior", "80", "2023")],
+           "calculations": [{"formula": "growth_percent", "first_fact_id": "current", "second_fact_id": "prior"}]}
+    result = analyze("Revenue?", [report], None, lambda _: (raw, 1))
+    assert len(result.facts) == 2 and result.facts[0]["location"]["status"] == "ambiguous"
+    assert not result.calculations
+    assert any("ambiguous quotation location" in item and "excluded" in item for item in result.limitations)
 
 
 def test_invalid_numeric_fact_is_omitted_without_discarding_grounded_claims():

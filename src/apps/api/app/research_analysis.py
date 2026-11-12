@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .research_sources import ResearchSource
+from .research_sources import ResearchSource, partial_ascii_token
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate
 
 
@@ -137,6 +137,7 @@ def _quoted_numbers(quotation: str) -> set[Decimal]:
             number = Decimal(whole) + Decimal(numerator) / Decimal(denominator)
             values.add(-number if sign else number)
     return values
+
 
 
 def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
@@ -641,9 +642,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             ambiguous.add(identity)
         return {"status": "ambiguous", "matches": positions[:5], "truncated": len(positions) > 5 or scan_truncated}, original, matching
 
+    def partial_boundary(source: ResearchSource, location: dict[str, Any]) -> bool:
+        positions = location.get("matches", []) if location.get("status") == "ambiguous" else [location]
+        return any(partial_ascii_token(source.text, item["character_start"], item["character_end"])
+                   for item in positions)
+
     checked_facts: list[dict[str, Any]] = []
     numeric_facts: dict[str, NumericFact] = {}
     currency_context_noted = False
+    ambiguous_fact_noted = False
     fact_ids = Counter(item.fact_id for item in result.facts)
     for item in result.facts:
         source = source_map.get(item.citation.source_id)
@@ -655,6 +662,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         except InvalidAnalysis:
             limitations.append("A model-generated fact had an unlocatable quotation and was omitted.")
             continue
+        if partial_boundary(source, location):
+            limitations.append("A model-generated fact quotation cuts through a word or number and was omitted.")
+            continue
         if item.value not in _quoted_numbers(quotation):
             limitations.append("A model-generated fact value was absent from its quotation and was omitted.")
             continue
@@ -665,11 +675,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Keep the located observation for review; do not feed it into any
         # calculation until the user has resolved the metadata.
         currency_context = item.unit.strip().casefold() in {"percent", "percentage", "%"} and item.currency is not None
+        ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:
             if not currency_context_noted:
                 limitations.append("During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.")
                 currency_context_noted = True
-        else:
+        if ambiguous_fact and not ambiguous_fact_noted:
+            limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
+            ambiguous_fact_noted = True
+        if not currency_context and not ambiguous_fact:
             numeric_facts[item.fact_id] = numeric
         checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
@@ -696,6 +710,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         for item in items:
             citations = []
             omitted = False
+            incomplete_boundary = False
             for citation_index, citation in enumerate(item.citations):
                 source = source_map.get(citation.source_id)
                 if source is None:
@@ -721,17 +736,25 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             if loc.get("status") == "ambiguous" or match_kind not in {"exact", "whitespace_normalized"}:
                                 recovered = []
                                 break
+                            partial = partial_boundary(source, loc)
                             recovered.append({"source_id": citation.source_id, "location": loc,
                                 "quotation_match": "split_conjunction", "quotation": original,
+                                **({"partial_token": True} if partial else {}),
                                 "support_status": "not_independently_verified"})
                     if recovered and len({(part["location"]["character_start"], part["location"]["character_end"]) for part in recovered}) == len(recovered):
                         citations.extend(recovered)
                         limitations.append("A joined quotation was split into separately located passages; support requires review.")
+                        if any(part.get("partial_token") for part in recovered):
+                            limitations.append("A model-generated quotation cuts through a word or number; review the surrounding source.")
                     omitted = True
                     continue
                 entry = {"source_id": citation.source_id,
                          "location": location, "quotation_match": matching,
                          "support_status": "not_independently_verified"}
+                if partial_boundary(source, location):
+                    entry["partial_token"] = True
+                    incomplete_boundary = True
+                    limitations.append("A model-generated quotation cuts through a word or number; review the surrounding source.")
                 if source.permissions.display:
                     entry["quotation"] = quotation
                 citations.append(entry)
@@ -743,7 +766,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     limitations.append("A model-generated claim without a valid quotation was omitted.")
                     continue
             checked.append({"text": item.text, "kind": "model_interpretation", "citations": citations,
-                            "support_status": "incomplete" if omitted and citations else
+                            "support_status": "incomplete" if (omitted or incomplete_boundary) and citations else
                                 "not_independently_verified" if citations else "unsupported"})
         return checked
 

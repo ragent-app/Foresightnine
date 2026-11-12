@@ -1,3 +1,4 @@
+from copy import deepcopy
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -150,3 +151,52 @@ def test_account_scoped_research_version_history_and_conflicts(monkeypatch):
     assert client.post(path + "/versions", headers=first, json=payload).status_code == 409
     assert client.get(path, headers=first).json()["versions"][-1]["content"]["summary"] == "Reviewed"
     assert client.delete("/v1/auth/local/account", headers=first).status_code == 200
+
+
+def test_partial_user_quotation_stays_incomplete_until_replaced(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    registration = client.post("/v1/auth/local/register", json={"email": "partial-word@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+    source = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 1000.",
+        "permissions": {"store": True, "display": True}}).json()
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source["source_id"]]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    content = {"claims": [{"text": "Revenue", "citations": [{"source_id": source["source_id"], "quotation": "100"}]}]}
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][-1]["version_id"], "content": content})
+    assert saved.status_code == 201, saved.text
+    current = saved.json()["versions"][-1]
+    assert current["content"]["claims"][0]["support_status"] == "incomplete"
+    assert current["content"]["claims"][0]["citations"][0]["partial_token"]
+    changed = deepcopy(current["content"])
+    changed["claims"][0]["text"] = "Revenue changed"
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
+    assert saved.status_code == 201, saved.text
+    current = saved.json()["versions"][-1]
+    assert current["content"]["claims"][0]["support_status"] == "incomplete"
+    changed = deepcopy(current["content"])
+    changed["claims"][0]["citations"] = [{"source_id": source["source_id"], "quotation": "1000"}]
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["versions"][-1]["content"]["claims"][0]["support_status"] == "not_independently_verified"
+
+
+def test_recalculation_rejects_an_explicitly_ambiguous_fact_location(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    registration = client.post("/v1/auth/local/register", json={"email": "ambiguous-calc@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Growth?"}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    current = {"fact_id": "current", "label": "Revenue", "value": "100", "unit": "USD", "currency": "USD", "period": "2024",
+               "location": {"status": "ambiguous", "matches": []}}
+    previous = {"fact_id": "prior", "label": "Revenue", "value": "80", "unit": "USD", "currency": "USD", "period": "2023"}
+    inputs = [{key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period")} for fact in (current, previous)]
+    content = {"facts": [current, previous], "calculations": [{"formula_id": "growth_percent", "formula_version": "1",
+                "inputs": inputs, "value": "25", "unit": "percent"}]}
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][-1]["version_id"], "content": content})
+    assert saved.status_code == 201, saved.text
+    version = saved.json()["versions"][-1]
+    response = client.post(path + "/calculations/recalculate", headers=headers,
+                           json={"parent_version_id": version["version_id"], "calculation_index": 0})
+    assert response.status_code == 422

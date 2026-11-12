@@ -97,7 +97,7 @@ from .services import (
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences
-from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation
+from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
@@ -1627,7 +1627,17 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                     raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.") from error
                 if json.dumps(citation, sort_keys=True, ensure_ascii=False) in existing_citations:
                     # Preserve existing citation locations after rechecking access and cutoff.
-                    normalized.append(citation)
+                    retained_citation = deepcopy(citation)
+                    location = retained_citation.get("location")
+                    positions = (location.get("matches", []) if location.get("status") == "ambiguous" else [location]) if isinstance(location, dict) else []
+                    for position in positions:
+                        if not isinstance(position, dict):
+                            continue
+                        start, end = position.get("character_start"), position.get("character_end")
+                        if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text)
+                                and source.text[start:end] == retained_citation.get("quotation") and partial_ascii_token(source.text, start, end)):
+                            retained_citation["partial_token"] = True
+                    normalized.append(retained_citation)
                     continue
                 quotation = citation.get("quotation")
                 if (not isinstance(quotation, str) or not quotation.strip()
@@ -1680,7 +1690,8 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                     entry["verification"] = "user_edited_not_independently_verified"
                     if field == "claims":
                         entry.pop("support_review", None)
-                        entry["support_status"] = "not_independently_verified" if entry.get("citations") else "unsupported"
+                        entry["support_status"] = ("incomplete" if any(c.get("partial_token") for c in entry.get("citations", []) if isinstance(c, dict))
+                                                   else "not_independently_verified" if entry.get("citations") else "unsupported")
                         if isinstance(entry.get("citations"), list):
                             for citation in entry["citations"]:
                                 if isinstance(citation, dict):
@@ -1758,6 +1769,9 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
             candidates = [fact for fact in previous.content.facts if fact.get("fact_id") == item["fact_id"]]
             if len(candidates) != 1:
                 raise ApiProblem(422, "invalid_request", "Calculation input facts are missing or ambiguous.")
+            location = candidates[0].get("location")
+            if isinstance(location, dict) and location.get("status") == "ambiguous":
+                raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before recalculation.")
             if (str(candidates[0].get("unit", "")).strip().casefold() in {"percent", "percentage", "%"}
                     and candidates[0].get("currency") is not None):
                 raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before recalculation.")
