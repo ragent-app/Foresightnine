@@ -1,0 +1,217 @@
+{
+  "id": "CISCO_REV",
+  "operation_status": "completed",
+  "manifest_sha256": "7574bb3203ee3aa19f09748a2572da0c0480ab9edb9de1ecae02a48933c82b69",
+  "input_sha256": "d9f6eefae1640021ff1a00c149a4cd73e03b6188eacbb225da853b9ccd1a8f9c",
+  "elapsed_seconds_observed": 20.271,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_30347234ff284541b06000413c5c083c",
+        "title": "Cisco FY2024 Form 10-K, filed 2024-09-05, SEC HTML text extraction; table separators generated",
+        "url": "https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T07:15:46.725859+00:00",
+        "revised_at": null,
+        "content_sha256": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_total_revenue_fy2024",
+        "value": "53803",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Fiscal year ended July 27, 2024",
+        "label": "Total revenue",
+        "source_id": "source_30347234ff284541b06000413c5c083c",
+        "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |",
+        "quotation_match": "exact",
+        "numeric_normalization": "thousands_separator",
+        "location": {
+          "character_start": 343589,
+          "character_end": 343723
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_total_revenue_fy2023",
+        "value": "56998",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Fiscal year ended July 29, 2023",
+        "label": "Total revenue",
+        "source_id": "source_30347234ff284541b06000413c5c083c",
+        "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |",
+        "quotation_match": "exact",
+        "numeric_normalization": "thousands_separator",
+        "location": {
+          "character_start": 343589,
+          "character_end": 343723
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "period_order_check": "not_checked",
+        "inputs": [
+          {
+            "fact_id": "fact_total_revenue_fy2024",
+            "value": "53803",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Fiscal year ended July 27, 2024"
+          },
+          {
+            "fact_id": "fact_total_revenue_fy2023",
+            "value": "56998",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Fiscal year ended July 29, 2023"
+          }
+        ],
+        "value": "-5.61",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Cisco FY2024 总收入为 538.03 亿美元，FY2023 总收入为 569.98 亿美元，均来自 FY2024 Form 10-K 合并利润表。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 343589,
+              "character_end": 343723
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "两期比较的期间分别为截至 2024 年 7 月 27 日与 2023 年 7 月 29 日的财年。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 343112,
+              "character_end": 343253
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Years Ended | [colspan=3] July 27, 2024 | [colspan=3]  | [colspan=3] July 29, 2023 | [colspan=3]  | [colspan=3] July 30, 2022 |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "反方/限制：来源为部分抽取的 SEC HTML 文本，表格列与分隔为生成所得，列对位可能被压缩或错位，FY2022 列（51,557）亦出现于同一行，需核对完整 10-K 以确认数字归属期间无误。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 342958,
+              "character_end": 343055
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "CISCO SYSTEMS, INC.\nConsolidated Statements of Operations\n(in millions, except per-share amounts)"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_30347234ff284541b06000413c5c083c: only character ranges 342924–343254, 343589–343723 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源为 partial 抽取文本，未包含总收入按产品/服务或地域的分项，无法解释收入下降原因。",
+      "来源未直接给出同比变化百分比，变化率需基于两期数字计算，建议以引用的原始数字进行支持性计算复核。",
+      "未验证 FY2024 与 FY2023 是否存在会计政策或重组（如收购）导致的可比性问题。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:b1920a21fe08fe62865bfdae",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1706,
+      "cost_usd": null,
+      "generation_tokens": 1706,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 19.996,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "ebeb51abdc1914ee1293ee2151ad34069426ca012302c6ecff290926c7e6dbf4",
+      "prompt_characters": 1823,
+      "prompt_bytes": 1921,
+      "selection_method": "ranked_nonoverlapping_windows_v16",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "character_start": 342924,
+          "character_end": 343254
+        },
+        {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "character_start": 343589,
+          "character_end": 343723
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_30347234ff284541b06000413c5c083c": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

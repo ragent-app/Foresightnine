@@ -1,0 +1,76 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Cisco FY2024 总收入为 538.03 亿美元，FY2023 总收入为 569.98 亿美元，均来自 FY2024 Form 10-K 合并利润表。",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+          }
+        ]
+      },
+      {
+        "text": "两期比较的期间分别为截至 2024 年 7 月 27 日与 2023 年 7 月 29 日的财年。",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "quotation": "| [colspan=3] Years Ended | [colspan=3] July 27, 2024 | [colspan=3]  | [colspan=3] July 29, 2023 | [colspan=3]  | [colspan=3] July 30, 2022 |"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "反方/限制：来源为部分抽取的 SEC HTML 文本，表格列与分隔为生成所得，列对位可能被压缩或错位，FY2022 列（51,557）亦出现于同一行，需核对完整 10-K 以确认数字归属期间无误。",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "quotation": "CISCO SYSTEMS, INC.\nConsolidated Statements of Operations\n(in millions, except per-share amounts)"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源为 partial 抽取文本，未包含总收入按产品/服务或地域的分项，无法解释收入下降原因。",
+      "来源未直接给出同比变化百分比，变化率需基于两期数字计算，建议以引用的原始数字进行支持性计算复核。",
+      "未验证 FY2024 与 FY2023 是否存在会计政策或重组（如收购）导致的可比性问题。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_total_revenue_fy2024",
+        "label": "Total revenue",
+        "value": "53,803",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Fiscal year ended July 27, 2024",
+        "citation": {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+        }
+      },
+      {
+        "fact_id": "fact_total_revenue_fy2023",
+        "label": "Total revenue",
+        "value": "56,998",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Fiscal year ended July 29, 2023",
+        "citation": {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_total_revenue_fy2024",
+        "second_fact_id": "fact_total_revenue_fy2023"
+      }
+    ]
+  },
+  "reported_tokens": 1706,
+  "prompt_sha256": "ebeb51abdc1914ee1293ee2151ad34069426ca012302c6ecff290926c7e6dbf4",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

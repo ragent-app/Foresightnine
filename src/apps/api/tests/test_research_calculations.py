@@ -106,6 +106,7 @@ def test_nonfinite_values_rejected():
     ("2024-01", "2024-02"), ("2024-12-30", "2024-12-31"), ("FY2024", "fy2024"),
     ("Year Ended January 30, 2022", "Year Ended January 29, 2023"),
     ("Year ended January 29 2023", "YEAR ENDED JANUARY 29, 2023"),
+    ("Fiscal year ended July 29, 2023", "Fiscal year ended July 27, 2024"),
 ])
 def test_growth_rejects_reversed_or_equivalent_recognized_periods(current, baseline):
     with pytest.raises(CalculationError, match="later than its baseline"):
@@ -167,6 +168,10 @@ def test_year_ended_dates_check_order_without_changing_fiscal_identity():
     assert result["value"] == "0.22"
     assert result["period_order_check"] == "recognized_formats_only"
     assert result["input_verification"] == "not_verified_by_calculator"
+    fiscal = calculate(CalculationRequest(formula="growth_percent",
+        first=fact("current", "53803", "Fiscal year ended July 27, 2024"),
+        second=fact("prior", "56998", "Fiscal year ended July 29, 2023")))
+    assert fiscal["value"] == "-5.61" and fiscal["period_order_check"] == "recognized_formats_only"
 
 
 def test_direction_context_blocks_treating_a_saved_calculation_as_verified():

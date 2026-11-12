@@ -63,7 +63,7 @@ def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
     # Financial filings commonly spell out the end date of each annual period.
     # Keep this distinct from bare dates and FY labels: matching dates alone do
     # not establish that two companies use comparable fiscal calendars.
-    match = re.fullmatch(r"year\s+ended\s+([A-Za-z]+)\s+(\d{1,2}),?\s+((?:19|20)\d{2})", value, re.IGNORECASE)
+    match = re.fullmatch(r"(?:fiscal\s+)?year\s+ended\s+([A-Za-z]+)\s+(\d{1,2}),?\s+((?:19|20)\d{2})", value, re.IGNORECASE)
     if match:
         months = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
         try:
