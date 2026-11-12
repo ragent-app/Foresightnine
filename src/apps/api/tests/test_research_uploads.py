@@ -240,8 +240,8 @@ def test_larger_pdf_upload_is_bounded_and_original_is_recoverable(monkeypatch):
     client = TestClient(app)
     account = client.post('/v1/auth/local/register', json={'email': 'pdf-large@example.test', 'password': 'correct horse battery staple!'}).json()
     headers = {'Authorization': 'Bearer ' + account['access_token']}
-    # Preserve a valid PDF and inflate it without bringing in external data.
-    raw = tiny_pdf() + b' ' * 1_510_000
+    # Exercise the exact allowed binary boundary through the JSON body limit.
+    raw = tiny_pdf() + b' ' * (MAX_PDF_BYTES - len(tiny_pdf()))
     response = client.post('/v2/research/sources/pdf', headers=headers, json=body(raw))
     assert response.status_code == 201, response.text
     source_id = response.json()['source_id']
@@ -249,3 +249,23 @@ def test_larger_pdf_upload_is_bounded_and_original_is_recoverable(monkeypatch):
     too_large = tiny_pdf() + b' ' * MAX_PDF_BYTES
     response = client.post('/v2/research/sources/pdf', headers=headers, json=body(too_large))
     assert response.status_code in (413, 422)
+
+
+@pytest.mark.skipif(not shutil.which('prlimit') or not shutil.which('pdftotext'), reason='PDF extraction tools unavailable')
+def test_real_bank_report_above_previous_limit_keeps_original_and_extracts_text(monkeypatch):
+    from hashlib import sha256
+    from app.research_uploads import MAX_PDF_BYTES
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    raw=(Path(__file__).resolve().parents[3]/'docs/product/phase-a/217-large-bank-report/fed-stress-2022.pdf').read_bytes()
+    assert 3_000_000 < len(raw) <= MAX_PDF_BYTES
+    assert sha256(raw).hexdigest()=='5977cfb80bb216a84568fa067393746e13c4b49df3b05eff9c64d6336228ea87'
+    client=TestClient(app)
+    account=client.post('/v1/auth/local/register',json={'email':f'large-bank-{uuid4().hex}@example.test','password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+account['access_token']}
+    uploaded=client.post('/v2/research/sources/pdf',headers=headers,json=body(raw))
+    assert uploaded.status_code==201,uploaded.text
+    source=uploaded.json();assert source['response_sha256']==sha256(raw).hexdigest()
+    fetched=client.get('/v2/research/sources/'+source['source_id'],headers=headers).json()
+    assert 'JPMorgan Chase' in fetched['text']
+    original=client.get('/v2/research/sources/'+source['source_id']+'/original',headers=headers)
+    assert original.status_code==200 and original.content==raw

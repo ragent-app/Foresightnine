@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .research_sources import SourcePermissions
 
 
-MAX_PDF_BYTES = 3_000_000
+MAX_PDF_BYTES = 5_000_000
 MAX_TEXT_BYTES = 2_000_000
 _PDF_WORKERS = BoundedSemaphore(2)
 

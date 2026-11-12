@@ -1,7 +1,7 @@
 import { sameOriginOAuthFetcher } from "./api-runtime";
 import type { ResearchV2 } from "@foresightnine/contracts";
 
-export const MAX_RESEARCH_PDF_BYTES = 3_000_000;
+export const MAX_RESEARCH_PDF_BYTES = 5_000_000;
 
 export interface SourcePosition { page?: number; character_start?: number; character_end?: number }
 export interface SourceLocation extends SourcePosition { status?: string; matches?: SourcePosition[]; truncated?: boolean }

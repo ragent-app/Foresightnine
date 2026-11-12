@@ -435,7 +435,7 @@
             "type": "boolean"
           },
           "pdf_base64": {
-            "maxLength": 4000000,
+            "maxLength": 6666668,
             "minLength": 1,
             "title": "Pdf Base64",
             "type": "string"

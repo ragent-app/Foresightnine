@@ -39,6 +39,19 @@ def test_rate_limit_uses_peer_when_forwarded_header_is_untrusted(monkeypatch: py
     assert "198.51.100.2" not in second.text
 
 
+def test_pdf_upload_body_limit_has_bounded_default_and_configurable_lower_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.research_uploads import MAX_PDF_BYTES
+    monkeypatch.delenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES",raising=False)
+    assert build_security_config().max_pdf_body_bytes==6_800_000
+    assert build_security_config().max_pdf_body_bytes >= 4*((MAX_PDF_BYTES+2)//3)+5000
+    monkeypatch.setenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES","9000000")
+    assert build_security_config().max_pdf_body_bytes==6_800_000
+    monkeypatch.setenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES","4100000")
+    assert build_security_config().max_pdf_body_bytes==4_100_000
+    monkeypatch.setenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES","bad")
+    assert build_security_config().max_pdf_body_bytes==6_800_000
+
+
 def test_browser_oauth_routes_share_the_ip_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(app_main.abuse_control.ip, "limit", 1)
     first = CLIENT.get("/oauth/callback", params={"code": "code", "state": "state"})
