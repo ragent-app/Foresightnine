@@ -51,6 +51,18 @@ def is_percent_unit(unit: str) -> bool:
     return bool(re.fullmatch(r"(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|,\s*(?:annualized|annual rate))?", normalized))
 
 
+def quotation_is_inside_table_row(source_text: str, start: object, quotation: object) -> bool:
+    """Identify a located single-line quotation inside a pipe-delimited row.
+
+    This is a formatting cue, not validation of any table cell or period.
+    """
+    if (type(start) is not int or not isinstance(quotation, str) or not quotation or
+            "\n" in quotation or start < 0 or source_text[start:start + len(quotation)] != quotation):
+        return False
+    line_start = source_text.rfind("\n", 0, start) + 1
+    return source_text[line_start:start].lstrip().startswith("|")
+
+
 def table_currency_quote_missing(currency: str | None, quotation: str | None) -> bool:
     """Flag a table-row quotation without an explicit currency identifier.
 

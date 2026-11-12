@@ -298,3 +298,37 @@ def test_edited_fact_source_checks_bound_failed_lookups(monkeypatch):
     assert len(calls) == 200
     assert saved[199]['source_value_warnings'] == ['quotation_unlocated']
     assert saved[200]['source_value_warnings'] == ['not_checked']
+
+
+def test_edited_table_fragment_preserves_currency_warning(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'currency-fragment-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    text = '| Revenue | $ | 100 |\n| Revenue | USD 200 |'
+    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': text, 'permissions': {'store': True, 'display': True, 'model_input': True}}).json()
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source['source_id']]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    quote = 'Revenue | $ | 100'
+    start = text.index(quote)
+    fact = {'fact_id': 'revenue', 'label': 'Revenue', 'value': '100', 'unit': 'million', 'currency': 'USD', 'period': '2024', 'source_id': source['source_id'], 'quotation': quote, 'location': {'character_start': start, 'character_end': start + len(quote)}}
+    first = client.post(path + '/versions', headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': [fact]}})
+    assert first.status_code == 201, first.text
+    original = first.json()['versions'][-1]
+    assert original['content']['facts'][0]['currency_quote_missing'] is True
+    edited = deepcopy(original['content'])
+    edited['facts'][0]['period'] = '2023'
+    edited['facts'][0]['currency_quote_missing'] = False
+    second = client.post(path + '/versions', headers=headers, json={'parent_version_id': original['version_id'], 'content': edited})
+    assert second.status_code == 201, second.text
+    current = second.json()['versions'][-1]
+    assert current['content']['facts'][0]['currency_quote_missing'] is True
+    assert client.get(path, headers=headers).json()['versions'][-1]['content']['facts'][0]['currency_quote_missing'] is True
+    corrected = deepcopy(current['content'])
+    quote = 'Revenue | USD 200'
+    start = text.index(quote)
+    corrected['facts'][0].update(value='200', quotation=quote, location={'character_start': start, 'character_end': start + len(quote)})
+    third = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': corrected})
+    assert third.status_code == 201, third.text
+    assert not third.json()['versions'][-1]['content']['facts'][0].get('currency_quote_missing')

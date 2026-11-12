@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row
 
 
 SYSTEM_PROMPT = (
@@ -1459,10 +1459,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # pipe. Inspect the original line solely to identify table context;
         # the currency cue must still occur in the actual quotation.
         quote_start = location.get("character_start")
-        table_substring = False
-        if isinstance(quote_start, int) and "\n" not in quotation:
-            line_start = source.text.rfind("\n", 0, quote_start) + 1
-            table_substring = source.text[line_start:quote_start].lstrip().startswith("|")
+        table_substring = quotation_is_inside_table_row(source.text, quote_start, quotation)
         currency_quote_missing = (not is_percent_unit(item.unit) and
                                   table_currency_quote_missing(item.currency,
                                       ("|" + quotation) if table_substring else quotation))
