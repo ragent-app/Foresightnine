@@ -1223,3 +1223,23 @@ def test_revision_excerpts_require_opposing_drivers_and_retain_context():
     assert _revision_summary_windows(text.replace('downward revision', 'upward revision'), q, 1000) is None
     assert _revision_summary_windows(text.replace('that were partly offset', '. Other information was partly offset'), q, 1000) is None
     assert _revision_summary_windows(text, 'Explain annual GDP.', 1000) is None
+
+
+def test_percent_marked_hyphenated_range_is_source_checked_and_currency_guarded():
+    from app.research_analysis import _rate_bounds
+    assert _rate_bounds('5.25%-5.50%') == (Decimal('5.25'), Decimal('5.50'))
+    assert _rate_bounds('-1%--0.5%') == (Decimal('-1'), Decimal('-0.5'))
+    assert _rate_bounds('5-1/4% - 5-1/2%') == (Decimal('5.25'), Decimal('5.5'))
+    assert _rate_bounds('5.25-5.50') is None
+    assert _rate_bounds('5.50%-5.25%') is None
+    assert _rate_bounds('5.25%-5.50') is None
+    text = 'The Committee decided to maintain the target range at 5-1/4 to 5-1/2 percent.'
+    report = source('s', text=text)
+    fact = {'fact_id': 'target', 'label': 'target', 'value': '5.25%-5.50%', 'unit': 'percent',
+            'currency': 'USD', 'period': '2023', 'citation': {'source_id':'s', 'quotation':'5-1/4 to 5-1/2 percent'}}
+    raw = {'facts':[fact], 'calculations':[{'formula':'difference', 'first_fact_id':'target:upper', 'second_fact_id':'target:lower'}]}
+    result = analyze('What is the target?', [report], None, lambda _: (raw, 1))
+    assert [f['value'] for f in result.facts] == ['5.25', '5.50']
+    assert all(f['currency_context_unverified'] for f in result.facts) and not result.calculations
+    raw['facts'][0]['citation']['quotation'] = '5-1/4'
+    assert [f['value'] for f in analyze('What is the target?', [report], None, lambda _: (raw, 1)).facts] == ['5.25']

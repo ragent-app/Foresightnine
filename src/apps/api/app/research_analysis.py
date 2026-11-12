@@ -158,7 +158,11 @@ def _quoted_numbers(quotation: str) -> set[Decimal]:
 def _rate_bounds(value: str) -> tuple[Decimal, Decimal] | None:
     if len(value) > 160:
         return None
-    match = _RATE_RANGE.fullmatch(value)
+    # A hyphen also denotes negative numbers and mixed fractions. Interpret it
+    # as a range delimiter only when both endpoints carry explicit percent
+    # signs; all other hyphenated forms retain the original strict behavior.
+    match = (_RATE_RANGE.fullmatch(value) or
+             re.fullmatch(rf"({_RATE_PART})\s*%\s*-\s*({_RATE_PART})\s*%", value))
     if match is None:
         return None
     parts = [_quoted_numbers(part) for part in match.groups()]
