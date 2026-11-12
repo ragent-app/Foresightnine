@@ -10,6 +10,7 @@ from .research_topics import ResearchContent
 
 
 CLAIM_EVIDENCE_WARNINGS = (
+    'counterpoint_relevance_unverified',
     'source_scope_absence_unverified', 'causal_attribution_unverified', 'uncited_exact_dates',
     'publication_date_warnings', 'rate_unit_warnings', 'uncited_amounts', 'uncited_claim_amounts',
     'uncited_dollar_amounts', 'uncited_quarters', 'balance_direction_warnings', 'uncited_percentages',

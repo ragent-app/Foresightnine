@@ -45,6 +45,12 @@ def test_review_cannot_clear_an_uncited_causal_assertion():
     assert result[0]['support_review']['diagnostic_only'] is True
 
 
+def test_review_does_not_promote_agreement_into_an_opposing_argument():
+    item = {**claim(), 'role':'counterargument', 'text':'Prior findings are consistent with the source: revenue was 100.'}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omitted == [0]
+
+
 def test_review_cannot_clear_an_unquoted_dissent_motive():
     item = {**claim(), 'text':"Revenue was the concern behind the member's dissent."}
     batch = prepare_support_review([item], [source()], 3000)

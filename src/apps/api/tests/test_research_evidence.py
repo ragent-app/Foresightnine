@@ -1017,3 +1017,17 @@ def test_exact_dates_require_located_authorized_quotations_not_source_metadata()
     simulated = report.model_copy(update={'is_simulated': True})
     assert flag_uncited_exact_dates([supported], [simulated])[0]['uncited_exact_dates']
     assert not flag_uncited_exact_dates([{'text': 'The period was 2023 Q4.', 'uncited_exact_dates': ['stale']}], [report])[0].get('uncited_exact_dates')
+
+
+def test_counterpoint_agreement_is_a_review_cue_not_a_verdict():
+    from app.research_evidence import flag_counterpoint_agreement
+    items = [
+        {'role':'counterargument','text':'Prior findings are consistent with the source: costs increased.'},
+        {'role':'support','text':'Prior findings are consistent with the source.'},
+        {'role':'counterargument','text':'Costs increased, limiting the benefit of revenue growth.'},
+        {'role':'counterargument','text':'原结论与资料一致，但成本可能上升。'},
+    ]
+    result = flag_counterpoint_agreement(items)
+    assert [bool(item.get('counterpoint_relevance_unverified')) for item in result] == [True, False, False, True]
+    result[0]['text'] = 'Costs increased.'
+    assert not flag_counterpoint_agreement(result)[0].get('counterpoint_relevance_unverified')

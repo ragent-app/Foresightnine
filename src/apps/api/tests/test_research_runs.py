@@ -3436,7 +3436,7 @@ def test_auto_sec_filing_respects_shared_rate_limit(monkeypatch):
     assert not result['claims'] and not result['facts']
 
 
-@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields', 'warning', 'extra_citation_leads', 'malformed_row'])
+@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields', 'warning', 'extra_citation_leads', 'malformed_row', 'agreement'])
 def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeypatch, mode):
     import json
     from uuid import uuid4
@@ -3479,6 +3479,9 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
                     return {'counterarguments':[{'text':'Costs increased.', 'citations':[
                         {'source_id':source_id,'quotation':'Costs increased.'}]},
                         {'text':'secret malformed', 'citations':'invalid'}]}, 70
+                if mode == 'agreement':
+                    return {'counterarguments':[{'text':'Prior findings are consistent with the source: costs increased.',
+                        'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
                 return {'counterarguments':[{'text':'Costs also increased.', 'citations':[
                     {'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
             text = 'Revenue increased and inflation was below 2 percent.' if mode == 'extra_citation_leads' else 'Revenue increased.'
@@ -3540,11 +3543,14 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
         assert claim['suggested_related_quotations'][0]['from_claim_index'] == -1
         assert len(claim['citations']) == 1 and run['status'] == 'partial'
         assert 'Untrusted extra assertion' not in str(content) and 'Must not persist' not in str(content)
-    else:
+    elif mode == 'malformed_row':
         assert run['counterpoint_status']=='partial' and run['counterpoint_omitted_rows']==1
         assert run['status']=='partial' and 'secret malformed' not in str(content)
         assert any(item.get('role')=='counterargument' and item['text']=='Costs increased.' for item in content['claims'])
         assert any('malformed counterpoints were omitted' in item for item in content['limitations'])
+    else:
+        assert run['counterpoint_status']=='needs_review' and run['status']=='partial'
+        assert any(item.get('counterpoint_relevance_unverified') for item in content['claims'])
     replay = client.post(path+'/runs',headers={**headers,'Idempotency-Key':'counterpoint-run'},json=body)
     assert replay.status_code==202 and replay.json()['operation']['operation_id']==op
     if mode == 'extra_citation_leads':

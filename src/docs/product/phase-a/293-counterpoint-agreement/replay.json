@@ -1,0 +1,11 @@
+{
+  "checks": {
+    "original_supplement_was_reported_completed": true,
+    "supplement_explicit_agreement_is_flagged": true,
+    "supplement_no_longer_considered_usable_by_cue": true,
+    "old_result_unchanged": true
+  },
+  "all_checks_pass": true,
+  "model_calls": 0,
+  "limitation": "This lexical cue does not establish relevance or irrelevance and does not catch all paraphrases."
+}

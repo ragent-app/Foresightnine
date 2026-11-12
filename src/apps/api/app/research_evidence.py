@@ -18,6 +18,27 @@ _PERCENT = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.
 _STRICT_UPPER_BOUND = re.compile(r"(?:\bless\s+than|\bbelow|\bunder|<|小于|小於|低于|低於|少于|少於)\s*$", re.IGNORECASE)
 _DECIMAL_TOKEN = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?![\w.])")
 _RELATED_DECIMAL = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?!\w|\.\d)")
+_COUNTERPOINT_AGREEMENT = re.compile(
+    r"^\s*(?:the\s+)?(?:prior|previous|original|earlier)\s+(?:findings?|conclusions?|claims?)\s+"
+    r"(?:are|is|remain|remains)\s+(?:consistent\s+with|supported\s+by|confirmed\s+by)\b|"
+    r"^\s*(?:原|此前|先前)(?:结论|結論|观点|觀點|发现|發現)(?:与|與).{0,30}(?:一致|相符)", re.IGNORECASE)
+
+
+def flag_counterpoint_agreement(claims: list[dict]) -> list[dict]:
+    """Flag explicit agreement in a counterpoint for relevance review.
+
+    A lexical cue cannot decide relevance; a passage may also contain a
+    genuine limitation, and absence of the cue does not establish one.
+    """
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop('counterpoint_relevance_unverified', None)
+        if (entry.get('role') == 'counterargument' and isinstance(entry.get('text'), str) and
+                _COUNTERPOINT_AGREEMENT.search(entry['text'])):
+            entry['counterpoint_relevance_unverified'] = True
+        output.append(entry)
+    return output
 _CAUSAL_CUE = re.compile(
     r"\b(?:because|due\s+to|attributable\s+to|driven\s+by|contingent\s+on|dependent\s+on|result(?:ed|s|ing)?\s+from|"
     r"result(?:ed|s|ing)?\s+in|caus(?:e|es|ed|ing)|led\s+to|leads?\s+to)\b|"
