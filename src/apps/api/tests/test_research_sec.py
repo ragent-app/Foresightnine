@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 import json
 
 import pytest
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 import app.main as api
 from app.openai_compatible import HttpResponse
 from app.research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, SecResult, fetch_sec_concept, search_sec_identities, reserve_sec_request
+from app.research_analysis import _quoted_numbers
 from app.storage import InMemoryDocumentRepository
 
 
@@ -44,6 +46,33 @@ def test_sec_requires_configured_contact_and_valid_paths():
         request(tag="../../private")
     with pytest.raises(ValidationError):
         request(cik="0")
+
+
+def test_sec_decimal_observations_are_not_rounded_through_binary_float():
+    # Deliberately provide JSON bytes rather than first constructing a Python
+    # float, which would already have lost the information being tested.
+    raw = ('{"cik":789019,"taxonomy":"us-gaap","tag":"Revenues","entityName":"Example",'
+           '"units":{"USD":[{"val":1.0000000000000001,"filed":"2024-02-01",'
+           '"end":"2023-12-31"},{"val":-0.000000000000000123456789,"filed":"2023-02-01",'
+           '"end":"2022-12-31"}]}}')
+    result = fetch_sec_concept(request(), "Team test@example.test",
+        lambda *_args: HttpResponse(200, raw, {"content-type": "application/json"}))
+    rows = [json.loads(line, parse_float=Decimal) for line in result.text.splitlines()[2:]]
+    assert rows[0]["val"] == Decimal("1.0000000000000001")
+    assert rows[1]["val"] == Decimal("-0.000000000000000123456789")
+    assert all(isinstance(row["val"], Decimal) for row in rows)
+    assert '"val":-0.000000000000000123456789' in result.text
+    assert Decimal("-0.000000000000000123456789") in _quoted_numbers(result.text.splitlines()[-1])
+
+
+def test_sec_extreme_decimal_exponents_are_bounded_and_disclosed():
+    raw = ('{"cik":789019,"taxonomy":"us-gaap","tag":"Revenues",'
+           '"units":{"USD":[{"val":1e-1001,"filed":"2024-02-01"},'
+           '{"val":1.25,"filed":"2023-02-01"}]}}')
+    result = fetch_sec_concept(request(), "Team test@example.test",
+        lambda *_args: HttpResponse(200, raw, {"content-type": "application/json"}))
+    assert "1 observations exceeded supported numeric precision and were omitted" in result.text
+    assert '"val":1.25' in result.text and "1E-1001" not in result.text
 
 
 def test_shared_gate_reserves_only_one_call_per_second():

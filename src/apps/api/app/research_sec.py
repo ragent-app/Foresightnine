@@ -6,6 +6,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Callable, Literal
 
@@ -140,7 +141,10 @@ def fetch_sec_concept(request: SecConceptRequest, user_agent: str | None,
     if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "application/json":
         raise SecFailure("source_format_unsupported")
     try:
-        payload = json.loads(response.body)
+        # XBRL decimals must not pass through binary floating point: even
+        # ordinary JSON decimals can otherwise be silently rounded before
+        # they become source text and evidence.
+        payload = json.loads(response.body, parse_float=Decimal)
         if not isinstance(payload, dict) or int(payload["cik"]) != int(request.cik):
             raise ValueError("CIK mismatch")
         if payload.get("taxonomy") != request.taxonomy or payload.get("tag") != request.tag:
@@ -153,6 +157,7 @@ def fetch_sec_concept(request: SecConceptRequest, user_agent: str | None,
         if not isinstance(entity, str) or not isinstance(label, str):
             raise ValueError("Invalid metadata")
         records = []
+        unsupported_precision = 0
         for unit, entries in units.items():
             if not isinstance(unit, str) or not isinstance(entries, list) or (request.unit is not None and unit != request.unit):
                 continue
@@ -163,20 +168,34 @@ def fetch_sec_concept(request: SecConceptRequest, user_agent: str | None,
                 if request.filing_before is not None and filed >= request.filing_before:
                     continue
                 value = item.get("val")
-                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+                if (not isinstance(value, (int, float, Decimal)) or isinstance(value, bool) or
+                        (isinstance(value, Decimal) and not value.is_finite()) or
+                        (isinstance(value, float) and not math.isfinite(value))):
+                    continue
+                if isinstance(value, Decimal) and (len(value.as_tuple().digits) > 1000 or abs(value.as_tuple().exponent) > 1000):
+                    unsupported_precision += 1
                     continue
                 records.append((filed, str(item.get("end", "")), unit, item))
         records.sort(key=lambda item: (item[0], item[1]), reverse=True)
-    except (ValueError, TypeError, KeyError, OverflowError, json.JSONDecodeError) as error:
+    except (ValueError, TypeError, KeyError, OverflowError, InvalidOperation, json.JSONDecodeError) as error:
         raise SecFailure("source_invalid") from error
     if not records:
         raise SecFailure("source_no_matching_facts")
     lines = [f"SEC company concept: {entity}; CIK {request.cik}; taxonomy {request.taxonomy}; tag {request.tag}; label {label}.",
              f"Most recent {min(len(records), request.max_records)} of {len(records)} matching observations; filing date is not exact public availability time."]
+    if unsupported_precision:
+        lines.append(f"{unsupported_precision} observations exceeded supported numeric precision and were omitted.")
     for filed, _end, unit, item in records[:request.max_records]:
         fields = {key: item.get(key) for key in ("val", "start", "end", "fy", "fp", "form", "filed", "accn", "frame") if item.get(key) is not None}
         fields["unit"] = unit
-        lines.append(json.dumps(fields, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        # Serialize Decimal values as JSON numbers, not quoted strings, and
+        # preserve their exact decimal value. The remaining upstream metadata
+        # is informational and cannot supply raw JSON syntax.
+        lines.append("{" + ",".join(
+            json.dumps(key, ensure_ascii=False) + ":" +
+            (format(fields[key], "f") if key == "val" and isinstance(fields[key], Decimal)
+             else json.dumps(fields[key], ensure_ascii=False, separators=(",", ":"), default=str))
+            for key in sorted(fields)) + "}")
     return SecResult(url=url, title=f"{entity}: {label}", text="\n".join(lines),
                      response_sha256=sha256(response.body.encode("utf-8")).hexdigest())
 
