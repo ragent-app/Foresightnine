@@ -3245,6 +3245,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         limitations = [*discovery_notes, *analysis.limitations]
         if any(c.get('counterpoint_relevance_unverified') for c in claims):
             limitations.append('A counterpoint explicitly agrees with prior findings; review whether it provides a relevant opposing argument or limitation.')
+        if any(c.get('percentage_unit_unverified') for c in claims):
+            limitations.append('A percentage matches a quoted number without an explicit percent unit; check the original unit and table context.')
         if any(c.get("source_scope_absence_unverified") for c in claims):
             limitations.append("A claim says a source lacks information, but only excerpts were analyzed; the full-source absence is not established.")
         if unverified_calculations:

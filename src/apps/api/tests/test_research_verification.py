@@ -51,6 +51,12 @@ def test_review_does_not_promote_agreement_into_an_opposing_argument():
     assert batch.indexes == [] and batch.omitted == [0]
 
 
+def test_review_does_not_equate_a_bare_number_with_a_percentage():
+    item = {**claim(), 'text':'Revenue increased 100 percent.'}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omitted == [0]
+
+
 def test_review_cannot_clear_an_unquoted_dissent_motive():
     item = {**claim(), 'text':"Revenue was the concern behind the member's dissent."}
     batch = prepare_support_review([item], [source()], 3000)
@@ -286,7 +292,11 @@ def test_review_does_not_clear_percentage_missing_from_quotations():
     batch = prepare_support_review([item], [source()], 3000)
     assert batch.indexes == [] and batch.omitted == [0]
     present = {**claim(), "text": "Revenue increased 100 percent", "uncited_percentages": ["stale"]}
-    assert prepare_support_review([present], [source()], 3000).indexes == [0]
+    assert prepare_support_review([present], [source()], 3000).indexes == []
+    explicit_source = source().model_copy(update={'text':'Before. Revenue 100 percent. After.'})
+    explicit = {**present, 'citations':[{'source_id':'s', 'quotation':'Revenue 100 percent',
+        'location':{'character_start':8,'character_end':27}}]}
+    assert prepare_support_review([explicit], [explicit_source], 3000).indexes == [0]
 
 
 def test_review_omits_uncited_percentage_point_amount():

@@ -1052,3 +1052,28 @@ def test_rate_comparison_flags_reversed_period_direction_only_with_usable_source
     assert not flag_component_direction([{**claim,'text':claim['text'].replace('GDI was slower','GDP was slower')}],[source])[0].get('balance_direction_warnings')
     assert not flag_component_direction([{**claim,'citations':[{**citation,'location':{'status':'ambiguous'}}]}],[source])[0].get('balance_direction_warnings')
     assert not flag_component_direction([claim],[source.model_copy(update={'permissions':SourcePermissions(store=True)})])[0].get('balance_direction_warnings')
+
+
+def test_percent_unit_is_not_assumed_from_an_unrelated_matching_number():
+    item = {'text':'Revenue increased 5 percent.', 'citations':[{'quotation':'Revenue was $5 million.'}]}
+    checked = suggest_percentage_evidence([item], [])[0]
+    assert not checked.get('uncited_percentages')
+    assert checked['percentage_unit_unverified'] == ['5 percent']
+    for quotation in ('Revenue increased 5 percent.', 'Revenue increased 5%.'):
+        assert not suggest_percentage_evidence([{**item,'citations':[{'quotation':quotation}]}],[])[0].get('percentage_unit_unverified')
+    for quotation in ('The rate changed by 5 basis points.', 'The increase was 5 percentage points.'):
+        assert suggest_percentage_evidence([{**item,'citations':[{'quotation':quotation}]}],[])[0]['percentage_unit_unverified'] == ['5 percent']
+    assert 'percentage_unit_unverified' not in item
+
+
+def test_percentage_suggestion_limit_does_not_skip_later_unit_warnings():
+    facts = []
+    for number in range(1, 7):
+        quote = f'Rate {number} percent'
+        facts.append({**fact(str(number),'s',str(number),unit='percent',currency=None),
+            'quotation':quote,'location':{'character_start':0,'character_end':len(quote)},
+            'verification':'model_extraction_not_independently_verified'})
+    item = {'text':'1%, 2%, 3%, 4%, 5%, 6%, and 99%.', 'citations':[{'quotation':'Revenue was $99 million.'}]}
+    result = suggest_percentage_evidence([item],facts)[0]
+    assert len(result['suggested_fact_evidence']) == 5
+    assert len(result['uncited_percentages']) == 5 and result['percentage_unit_unverified'] == ['99%']

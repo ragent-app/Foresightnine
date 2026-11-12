@@ -21,6 +21,7 @@ export interface ResearchClaim {
   suggested_related_quotations?: { source_id: string; quotation: string; location: SourceLocation; matched_amounts: string[]; from_claim_index: number; status: string }[];
   citation_context_warnings?: { source_id: string; citation_index: number; context_metric: string; context_character_start?: number; context_character_end?: number; status: string }[];
   uncited_percentages?: string[];
+  percentage_unit_unverified?: string[];
   reused_percentages?: string[];
   uncited_percentage_bounds?: string[];
   uncited_basis_points?: string[];

@@ -1111,6 +1111,7 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
         entry = deepcopy(claim)
         entry.pop("suggested_fact_evidence", None)
         entry.pop("uncited_percentages", None)
+        entry.pop("percentage_unit_unverified", None)
         entry.pop("reused_percentages", None)
         entry.pop("uncited_percentage_bounds", None)
         text = entry.get("text")
@@ -1131,10 +1132,18 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
         if reused:
             entry["reused_percentages"] = reused
         existing: set[Decimal] = set()
+        explicit_percentages: set[Decimal] = set()
         for citation in citations:
             quote = citation.get("quotation") if isinstance(citation, dict) else None
             if isinstance(quote, str):
-                existing.update(_quoted_numbers(quote))
+                numbers = _quoted_numbers(quote)
+                existing.update(numbers)
+                for quoted_percent in _PERCENT.finditer(quote):
+                    for value in _quoted_numbers(quoted_percent.group(1).replace("−", "-")):
+                        if value in numbers:
+                            explicit_percentages.add(value)
+                        if -value in numbers and _directional_negative_percent(-value, 'percent', quote):
+                            explicit_percentages.add(-value)
         cited_bounds = {value for citation in citations if isinstance(citation, dict)
                         and isinstance(citation.get("quotation"), str)
                         for value, _ in _strict_upper_percentages(citation["quotation"])}
@@ -1144,6 +1153,7 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
             entry["uncited_percentage_bounds"] = missing_bounds
         suggested = []
         uncited = []
+        unit_unverified = []
         seen: set[Decimal] = set()
         for match in _PERCENT.finditer(text):
             if _is_ratio_scale_factor(text, match):
@@ -1158,19 +1168,22 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
             value = next(iter(values))
             if value not in existing and match.group(0) not in uncited and len(uncited) < 5:
                 uncited.append(match.group(0))
+            elif value in existing and value not in explicit_percentages and match.group(0) not in unit_unverified and len(unit_unverified) < 5:
+                unit_unverified.append(match.group(0))
             candidates = by_value.get(value, [])
-            if value in seen or value in existing or len(candidates) != 1:
+            if value in seen or value in existing or len(candidates) != 1 or len(suggested) >= 5:
                 continue
             seen.add(value)
             fact = candidates[0]
             suggested.append({key: deepcopy(fact[key]) for key in
                               ("fact_id", "source_id", "value", "unit", "period", "quotation", "location") if key in fact} |
                              {"status": "requires_semantic_review"})
-            if len(suggested) == 5: break
         if suggested:
             entry["suggested_fact_evidence"] = suggested
         if uncited:
             entry["uncited_percentages"] = uncited
+        if unit_unverified:
+            entry["percentage_unit_unverified"] = unit_unverified
         output.append(entry)
     return output
 

@@ -15,6 +15,37 @@ from app.research_analysis import AnalysisInterrupted
 from app.research_verification import REVIEW_SYSTEM_PROMPT
 
 
+def test_research_does_not_complete_when_percentage_only_matches_a_currency_amount(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    source_id = ''
+    class Provider:
+        name = 'unit-mismatch'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {'claims':[{'text':'Revenue increased 5 percent.', 'citations':[
+                {'source_id':source_id, 'quotation':'Revenue was $5 million.'}]}]}, 20
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email':f'unit-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json()
+    headers = {'Authorization':'Bearer '+auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title':'Report',
+        'text':'Revenue was $5 million.', 'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question':'How did revenue change?', 'source_ids':[source_id]}).json()
+    path = '/v2/research/topics/'+topic['topic_id']
+    receipt = client.post(path+'/runs', headers={**headers,'Idempotency-Key':'unit-mismatch'}, json={
+        'parent_version_id':topic['versions'][0]['version_id'], 'require_counterarguments':False}).json()['operation']
+    for _ in range(100):
+        state = client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'): break
+        time.sleep(.02)
+    assert state == 'completed'
+    content = client.get(path,headers=headers).json()['versions'][-1]['content']
+    assert content['run']['status'] == 'partial'
+    assert content['claims'][0]['percentage_unit_unverified'] == ['5 percent']
+
+
 @pytest.mark.parametrize('mode', ['batch', 'isolated'])
 def test_review_of_flagged_claim_is_diagnostic_only_even_if_model_says_supports(monkeypatch, mode):
     from uuid import uuid4
