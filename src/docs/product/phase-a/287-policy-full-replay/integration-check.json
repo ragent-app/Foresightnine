@@ -1,0 +1,15 @@
+{
+  "checks": {
+    "operation_finished": true,
+    "research_partial": true,
+    "checkpoint_preserved": true,
+    "one_extra_field_discarded": true,
+    "supplement_requires_review": true,
+    "old_and_new_counterpoints_retained": true,
+    "new_counterpoint_cited_and_warned": true,
+    "replayed_usage_accounted": true
+  },
+  "all_checks_pass": true,
+  "live_model_calls": 0,
+  "note": "Replayed usage is historical; source quotation matching and flags do not establish semantic support."
+}

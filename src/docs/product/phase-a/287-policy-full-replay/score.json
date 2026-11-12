@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "task": "POLICY_FOMC_201706",
+      "set": "development_recheck",
+      "status": "completed",
+      "checks": {
+        "all_claims_located": true,
+        "no_claim_warnings": false,
+        "counterargument_cited": true,
+        "research_completed": false,
+        "budget": true,
+        "target_lower": true,
+        "target_upper": true,
+        "dissenter": false,
+        "preferred_unchanged": false
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 3435,
+      "semantic_support": "requires separate source-level assessment"
+    }
+  ],
+  "mechanical_pass": false,
+  "known_tokens": 3435,
+  "unknown_usage": false,
+  "semantic_support": "not established by numeric or lexical matches"
+}
