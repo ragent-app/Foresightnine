@@ -1,0 +1,277 @@
+{
+  "id": "BEA_Q1",
+  "operation_status": "completed",
+  "manifest_sha256": "d8402bbb53ae89db75048573546c223d13a4f247357c6bb0745a6b522067186e",
+  "input_sha256": "84d043c0134ea89cccdd0e4da346e71e8260063a06bdfe77a86b0bd3817d3bda",
+  "elapsed_seconds_observed": 24.738,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+        "title": "BEA GDP third estimate first quarter 2023",
+        "url": null,
+        "event_at": null,
+        "published_at": "2023-06-29T12:30:00+00:00",
+        "obtained_at": "2026-11-12T07:10:01.154274+00:00",
+        "revised_at": null,
+        "content_sha256": "a3f661c159e37d1024c56ba90b9febc41eee656d4adfa9f5333895501ee40226",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_q1_2023_third_estimate",
+        "value": "2.0",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2023年第一季度",
+        "label": "实际GDP折年增长率（第三次估计）",
+        "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+        "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.0 percent in the first quarter of 2023",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 382,
+          "character_end": 487,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_q1_2023_second_estimate",
+        "value": "1.3",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2023年第一季度",
+        "label": "实际GDP折年增长率（第二次估计）",
+        "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+        "quotation": "In the second estimate, the increase in real GDP was 1.3 percent.",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 768,
+          "character_end": 833,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "difference",
+        "formula_version": "2",
+        "expression": "first - second",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fact_q1_2023_third_estimate",
+            "value": "2.0",
+            "unit": "percent (annual rate)",
+            "currency": null,
+            "period": "2023年第一季度"
+          },
+          {
+            "fact_id": "fact_q1_2023_second_estimate",
+            "value": "1.3",
+            "unit": "percent (annual rate)",
+            "currency": null,
+            "period": "2023年第一季度"
+          }
+        ],
+        "value": "0.70",
+        "unit": "percentage points",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "根据 BEA 第三次估计，2023 年第一季度实际 GDP 折年增长率为 2.0%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+            "location": {
+              "character_start": 382,
+              "character_end": 487,
+              "page": 1
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.0 percent in the first quarter of 2023"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v5",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "第二次估计显示增长率为 1.3%，第三次估计的上调主要反映了出口和消费支出的向上修订。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+            "location": {
+              "character_start": 768,
+              "character_end": 995,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In the second estimate, the increase in real GDP was 1.3 percent.\nThe updated estimates primarily reflected upward revisions to exports and consumer spending that\nwere partly offset by downward revisions to nonresidential fixed"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v5",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "第三次估计并非最终数字；BEA 之后可能发布年度修订（如 2023 年 9 月的年度更新），可能进一步改变该季度增长率，因此不应将 2.0% 视为终值。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+            "location": {
+              "character_start": 838,
+              "character_end": 995,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "updated estimates primarily reflected upward revisions to exports and consumer spending that\nwere partly offset by downward revisions to nonresidential fixed"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "fact_q1_2023_third_estimate",
+            "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+            "value": "2.0",
+            "unit": "percent (annual rate)",
+            "period": "2023年第一季度",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.0 percent in the first quarter of 2023",
+            "location": {
+              "character_start": 382,
+              "character_end": 487,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "uncited_percentages": [
+          "2.0%"
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_2c5bf73102ed483c8f5163cf074f5193: only character ranges 245–549, 697–996 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源为部分摘录，仅包含第三次估计的关键数字，缺少完整的表格数据与分解细节。",
+      "第二次估计的 1.3% 仅通过该第三次估计发布稿的文字说明，而非第二次估计原始发布稿，无法独立核验。",
+      "发布日期为声明值（2023-06-29），未经验证；文中的 1.3% 和 2.0% 均以折年率表示，单位口径一致但摘录未完整显示。",
+      "修订涉及的'非住宅固定投资'下调的具体幅度在摘录中缺失。",
+      "后续年度修订（annual update）是否改变了该季度数字未在来源中提供。",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:1b8ffc9b568ff0def21b5ed0",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 1895,
+      "cost_usd": null,
+      "generation_tokens": 1294,
+      "support_review_tokens": 601,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "partial",
+      "support_review_error": null,
+      "support_review_method": "bounded_quotation_context_model_review_v5",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": "cc39ac9b04a0116ab3c983bdb690ff00685837bca78c556e818a69fb406b5854",
+      "support_review_indexes": [
+        0,
+        1
+      ],
+      "support_review_omissions": [
+        {
+          "claim_index": 2,
+          "reason": "input_budget",
+          "required_subject_context": false
+        }
+      ],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+          "character_start": 292,
+          "character_end": 577,
+          "context_radius": 90
+        },
+        {
+          "claim_index": 1,
+          "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+          "character_start": 678,
+          "character_end": 1085,
+          "context_radius": 90
+        }
+      ],
+      "support_review_system_sha256": "deacbe17348931bf0b8c9d48b8fdff11067001f58b71c50e9ba6e22874662566",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 22.666,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "385dd0bfa360bcb500dc5f2af804e6c4e320285bdd4d69d39b08671a117847c2",
+      "prompt_characters": 1954,
+      "prompt_bytes": 2048,
+      "selection_method": "ranked_nonoverlapping_windows_v16",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+          "character_start": 245,
+          "character_end": 549
+        },
+        {
+          "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+          "character_start": 697,
+          "character_end": 996
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_2c5bf73102ed483c8f5163cf074f5193": "a3f661c159e37d1024c56ba90b9febc41eee656d4adfa9f5333895501ee40226"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

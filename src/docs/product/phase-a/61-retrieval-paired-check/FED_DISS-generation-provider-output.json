@@ -1,0 +1,86 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据2019年7月31日FOMC声明，Esther L. George 和 Eric S. Rosengren 对降息决定投了反对票。",
+        "citations": [
+          {
+            "source_id": "source_74635c2e24064be5b5e31d5a9d980376",
+            "quotation": "Voting against the action were Esther L. George and Eric S. Rosengren,"
+          }
+        ]
+      },
+      {
+        "text": "两位反对者倾向于在本次会议上维持联邦基金利率目标区间在2-1/4至2-1/2 percent不变，即反对降息。",
+        "citations": [
+          {
+            "source_id": "source_74635c2e24064be5b5e31d5a9d980376",
+            "quotation": "who preferred at this meeting to maintain the target range for the federal funds rate at 2-1/4 to 2-1/2 percent."
+          }
+        ]
+      },
+      {
+        "text": "本次被反对的货币政策行动是将联邦基金利率目标区间下调至2至2-1/4 percent。",
+        "citations": [
+          {
+            "source_id": "source_74635c2e24064be5b5e31d5a9d980376",
+            "quotation": "the Committee decided to lower the target range for the federal funds rate to 2 to 2-1/4 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "声明片段未给出反对者反对的理由，只能从'倾向于维持利率不变'推断他们不认为当时需要降息，但这属于推断而非声明原文所述理由。",
+        "citations": [
+          {
+            "source_id": "source_74635c2e24064be5b5e31d5a9d980376",
+            "quotation": "who preferred at this meeting to maintain the target range for the federal funds rate at 2-1/4 to 2-1/2 percent."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的文本为部分节选，并非声明全文；无法核验其他段落内容。",
+      "节选未包含反对者投反对票的具体理由，需参考会议纪要或反对者讲话才能了解。",
+      "声明的发布日期为资料中声明的2019-07-31，未经独立核验。",
+      "资料未包含委员会成员的完整名单，仅节选显示部分投票者姓名。"
+    ],
+    "facts": [
+      {
+        "fact_id": "rate_range_new",
+        "label": "联邦基金利率目标区间（下调后）",
+        "value": "2 to 2-1/4",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2019年7月会议",
+        "citation": {
+          "source_id": "source_74635c2e24064be5b5e31d5a9d980376",
+          "quotation": "the Committee decided to lower the target range for the federal funds rate to 2 to 2-1/4 percent."
+        }
+      },
+      {
+        "fact_id": "rate_range_preferred",
+        "label": "反对者倾向的目标区间（维持）",
+        "value": "2-1/4 to 2-1/2",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2019年7月会议",
+        "citation": {
+          "source_id": "source_74635c2e24064be5b5e31d5a9d980376",
+          "quotation": "who preferred at this meeting to maintain the target range for the federal funds rate at 2-1/4 to 2-1/2 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "rate_range_preferred",
+        "second_fact_id": "rate_range_new"
+      }
+    ]
+  },
+  "reported_tokens": 1354,
+  "prompt_sha256": "720c9cbdbbb27feb31f737bddcbc1b9711c890c78fcda0ff67a9600e278b21b2",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

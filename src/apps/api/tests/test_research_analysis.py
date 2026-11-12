@@ -861,3 +861,21 @@ def test_third_estimate_selection_keeps_current_and_prior_values():
     assert any("2.0 percent" in part and 'third" estimate' in part for _, part in parts)
     assert any("second estimate" in part and "1.3 percent" in part for _, part in parts)
     assert all(text[start:start + len(part)] == part for start, part in parts)
+
+
+def test_analyze_keeps_short_structured_total_row_with_its_longer_header():
+    header = ("ACME CORP\nConsolidated Statements of Operations\n(in millions)\n"
+              "| Years Ended | July 31, 2024 | July 31, 2023 |\n")
+    middle = "| Product | 150 | 140 |\n" + "| Other item | 5 | 4 |\n" * 28
+    text = "other " * 600 + header + middle + "| Total revenue | 200 | 190 |\n" + "other " * 600
+    report = source("source_0123456789abcdef0123456789abcdef", text=text)
+    received = []
+    def generate(prompt):
+        received.extend(json.loads(prompt)["sources"])
+        return {}, 1
+    result = analyze("2024 与 2023 财年营收多少？", [report], None, generate, max_prompt_chars=1800)
+    excerpts = " ".join(item["text"] for item in received)
+    assert len(result.segments) == 2
+    assert all(value in excerpts for value in ("ACME CORP", "millions", "2024", "2023", "200", "190"))
+    assert all(text[item["character_start"]:item["character_end"]] == excerpt["text"]
+               for item, excerpt in zip(result.segments, received))

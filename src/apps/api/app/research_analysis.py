@@ -768,10 +768,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         hi = middle - 1
                 return lo
             lo = budget_for(split)
-            # Tiny fragments rarely provide enough context; retain one larger
-            # window when a pair cannot fit at least 200 characters apiece.
-            compressed_parts = portions(lo, True) if split and lo else []
-            if split and (lo < 400 or any(len(re.sub(r"[ \t]{2,}", "\t", part)) < 200 for _, part in compressed_parts)):
+            # Tiny fragments rarely provide enough context. Structured table
+            # or vote retrieval may intentionally use unequal spans, however:
+            # a short total row must not discard its longer identifying header.
+            if split and lo < 400:
                 split = False
                 lo = budget_for(False)
             selected = portions(lo, split) if lo else []

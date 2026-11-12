@@ -1,0 +1,78 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据 BEA 第三次估计，2023 年第一季度实际 GDP 折年增长率为 2.0%。",
+        "citations": [
+          {
+            "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.0 percent in the first quarter of 2023"
+          }
+        ]
+      },
+      {
+        "text": "第二次估计显示增长率为 1.3%，第三次估计的上调主要反映了出口和消费支出的向上修订。",
+        "citations": [
+          {
+            "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+            "quotation": "In the second estimate, the increase in real GDP was 1.3 percent. The updated estimates primarily reflected upward revisions to exports and consumer spending that were partly offset by downward revisions to nonresidential fixed"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "第三次估计并非最终数字；BEA 之后可能发布年度修订（如 2023 年 9 月的年度更新），可能进一步改变该季度增长率，因此不应将 2.0% 视为终值。",
+        "citations": [
+          {
+            "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+            "quotation": "updated estimates primarily reflected upward revisions to exports and consumer spending that were partly offset by downward revisions to nonresidential fixed"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源为部分摘录，仅包含第三次估计的关键数字，缺少完整的表格数据与分解细节。",
+      "第二次估计的 1.3% 仅通过该第三次估计发布稿的文字说明，而非第二次估计原始发布稿，无法独立核验。",
+      "发布日期为声明值（2023-06-29），未经验证；文中的 1.3% 和 2.0% 均以折年率表示，单位口径一致但摘录未完整显示。",
+      "修订涉及的'非住宅固定投资'下调的具体幅度在摘录中缺失。",
+      "后续年度修订（annual update）是否改变了该季度数字未在来源中提供。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_q1_2023_third_estimate",
+        "label": "实际GDP折年增长率（第三次估计）",
+        "value": "2.0",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2023年第一季度",
+        "citation": {
+          "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.0 percent in the first quarter of 2023"
+        }
+      },
+      {
+        "fact_id": "fact_q1_2023_second_estimate",
+        "label": "实际GDP折年增长率（第二次估计）",
+        "value": "1.3",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2023年第一季度",
+        "citation": {
+          "source_id": "source_2c5bf73102ed483c8f5163cf074f5193",
+          "quotation": "In the second estimate, the increase in real GDP was 1.3 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact_q1_2023_third_estimate",
+        "second_fact_id": "fact_q1_2023_second_estimate"
+      }
+    ]
+  },
+  "reported_tokens": 1294,
+  "prompt_sha256": "385dd0bfa360bcb500dc5f2af804e6c4e320285bdd4d69d39b08671a117847c2",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
