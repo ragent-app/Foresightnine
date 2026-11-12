@@ -37,6 +37,7 @@ MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
 SELECTION_METHOD = "ranked_nonoverlapping_windows_v18"
+MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 
 class Citation(BaseModel):
@@ -1152,6 +1153,6 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
 
     return AnalysisResult(check_claims(result.claims), check_claims(result.counterarguments),
                           limitations + ["Matching a quotation does not independently establish that it supports a claim."]
-                          + result.limitations, [s.source_id for s in processed], tokens,
+                          + [MODEL_LIMITATION_PREFIX + value for value in result.limitations], [s.source_id for s in processed], tokens,
                           checked_facts, checked_calculations, sha256(prompt.encode("utf-8")).hexdigest(),
                           len(prompt), len(prompt.encode("utf-8")), segments)

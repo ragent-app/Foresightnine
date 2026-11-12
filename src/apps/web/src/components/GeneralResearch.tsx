@@ -10,6 +10,8 @@ interface Props { baseUrl: string | null; accountId: string | null; language: La
 
 function localizeLimitation(value: string, en: boolean): string {
   if (en) return value;
+  const modelPrefix = "Model-reported limitation (not independently verified): ";
+  if (value.startsWith(modelPrefix)) return `模型报告（尚未独立核实）：${value.slice(modelPrefix.length)}`;
   const fixed: Record<string, string> = {
     "No permitted, time-eligible source was available for model analysis.": "没有可供模型分析且符合时间要求的授权资料。",
     "The research is partial: supported claims or counterarguments are incomplete.": "研究尚未完成：有依据的结论或反方材料不足。",

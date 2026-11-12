@@ -190,7 +190,7 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
 
     result = analyze("What would contradict this?", [source("s")], None, model)
     assert result.counterarguments == []
-    assert "No opposing evidence supplied." in result.limitations
+    assert "Model-reported limitation (not independently verified): No opposing evidence supplied." in result.limitations
 
 
 def test_prompt_distinguishes_full_source_from_partial_excerpts():
