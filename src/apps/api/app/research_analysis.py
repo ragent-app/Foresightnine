@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v38"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v39"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -418,6 +418,24 @@ def _trim_partial_ascii_words(text: str, start: int, passage: str) -> tuple[int,
 
 _NUMERIC_WINDOW_TAIL = re.compile(r"(?<![\w.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?[ \t\n]*$")
 _NUMERIC_UNIT_PREFIX = re.compile(r"^[ \t\n]{0,8}(?:%|％|percentage\s+points?\b|percent\b|basis\s+points?\b|bps\b|trillion\b|billion\b|million\b|thousand\b|个?百分[点點]|个?基[点點]|万亿|亿|万)(?![A-Za-z])", re.IGNORECASE)
+
+
+def _restore_numeric_prefix(text: str, windows: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Restore a number cut at a window's left edge when doing so is safe."""
+    result = []
+    for index, (start, passage) in enumerate(windows):
+        left = max(0, start - 32)
+        right = min(len(text), start + 32)
+        for match in re.finditer(r"(?<![\w.])(?:[$€£¥]\s*)?[-−]?\d+(?:[,.]\d+)*", text[left:right]):
+            number_start, number_end = left + match.start(), left + match.end()
+            if number_start < start < number_end and number_end < right:
+                previous_end = result[-1][0] + len(result[-1][1]) if result else 0
+                if number_start >= previous_end:
+                    end = start + len(passage)
+                    start, passage = number_start, text[number_start:end]
+                break
+        result.append((start, passage))
+    return result
 
 
 def _preserve_numeric_units(text: str, windows: list[tuple[int, str]], question: str) -> list[tuple[int, str]]:
@@ -1406,6 +1424,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             any(term in _query_intent(question) for term in ("原因", "因素", "抵消", "drivers", "factors", "offset")))
         source_budget_limit = current_bytes + (available_bytes * 37 // 100 if revision_compare else
                                                available_bytes // (len(eligible) - index))
+        intent = _query_intent(question)
+        # Reserve at least two useful windows at smaller budgets. With more
+        # room, a multi-part question can instead sample three places. Keep
+        # two for explicit counterpoint requests, whose separate balancing
+        # logic currently expects two windows. This is a retrieval heuristic,
+        # not proof that any requested facet was covered.
+        multi_part = bool(re.search(r"\b(?:and|including|compare|both)\b|,|以及|同时|同時|分别|分別", intent))
+        asks_counterpoint = bool(re.search(r"\b(?:counterarguments?|counterpoints?|counterevidence|risks?)\b|反方|反证|反證|风险|風險", intent))
+        generic_window_count = 3 if (source_budget_limit - current_bytes >= 2600 and max_size >= 1200 and multi_part and not asks_counterpoint) else 2
         structured_parts = (_structured_observation_windows(selection_text, question, max_size, should_stop)
                             if source.retrieval_method != "user_pdf" else None)
         revision_parts = _revision_summary_windows(selection_text, question, max_size, should_stop)
@@ -1419,7 +1446,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             windows = (structured_parts if structured_parts and
                        sum(len(part) for _, part in structured_parts) <= size else None)
             if windows is None:
-                if split and size >= 2:
+                if split and size >= generic_window_count:
                     windows = _policy_vote_windows(selection_text, question, size, should_stop)
                     if windows is None:
                         windows = _policy_rate_purchase_risk_windows(selection_text, question, size, should_stop)
@@ -1430,14 +1457,18 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     if windows is None:
                         windows = _comparison_windows(selection_text, question, size, should_stop)
                     if windows is None:
-                        windows = _select_windows(selection_text, question, size // 2, 2, should_stop, source_title=source.title)
-                        windows = _replace_empty_table_with_counterpoint(selection_text, question, windows, should_stop)
+                        windows = _select_windows(selection_text, question, size // generic_window_count, generic_window_count, should_stop, source_title=source.title)
+                        if generic_window_count == 2:
+                            windows = _replace_empty_table_with_counterpoint(selection_text, question, windows, should_stop)
                         windows = sorted(windows, key=lambda item: item[0])
                         generic_selection = True
                 else:
                     windows = [_select_window(selection_text, question, size, should_stop, source_title=source.title)]
             windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
             if generic_selection:
+                restored = _restore_numeric_prefix(selection_text, windows)
+                if sum(len(part) for _, part in restored) <= max_size:
+                    windows = restored
                 windows = _preserve_numeric_units(selection_text, windows, question)
             return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                     for start, part in windows]

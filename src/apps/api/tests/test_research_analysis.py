@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _additional_query_sentences, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _replace_empty_table_with_counterpoint, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _additional_query_sentences, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _replace_empty_table_with_counterpoint, _restore_numeric_prefix, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
@@ -840,6 +840,43 @@ def test_additional_sentence_rejects_table_of_contents_fragment():
     selected = [(0, "The central bank discusses capital ratios.")]
     text = selected[0][1] + "\n3\nStress Test Process .\n"
     assert _additional_query_sentences(text, "Explain the bank stress test process", selected) == []
+
+
+@pytest.mark.parametrize("value,fragment", [("$23.7", ".7"), ("-1,234.5", "234.5"), ("12.4", "4")])
+def test_restores_numeric_prefix_at_excerpt_start(value, fragment):
+    text = "Before " + value + " billion of revenue was reported for the period."
+    start = text.index(fragment)
+    end = len(text)
+    restored = _restore_numeric_prefix(text, [(start, text[start:end])])
+    assert restored == [(text.index(value), text[text.index(value):end])]
+
+
+def test_numeric_prefix_restoration_does_not_overlap_previous_window():
+    text = "Revenue was $23.7 billion for the financial year."
+    cut = text.index(".7")
+    windows = [(0, text[:cut]), (cut, text[cut:])]
+    assert _restore_numeric_prefix(text, windows) == windows
+
+
+def test_multi_part_question_can_use_three_windows_when_budget_permits(monkeypatch):
+    import app.research_analysis as analysis
+    text = ("Revenue increased. " + "Other unrelated text. " * 100 + "Debt declined. " +
+            "Other unrelated text. " * 100 + "Margin improved. " + "Other unrelated text. " * 100)
+    report = source("s", text=text)
+    observed = []
+    original = analysis._select_windows
+    def collect(text, question, length, count, *args, **kwargs):
+        observed.append(count)
+        return original(text, question, length, count, *args, **kwargs)
+    monkeypatch.setattr(analysis, "_select_windows", collect)
+    analyze("Explain revenue and debt and margin.", [report], None, lambda _: ({}, 0), max_prompt_chars=1500)
+    assert 3 not in observed
+    observed.clear()
+    result = analyze("Explain revenue and debt and margin.", [report], None, lambda _: ({}, 0), max_prompt_chars=5000)
+    assert 3 in observed and result.prompt_bytes <= 5000
+    observed.clear()
+    analyze("Explain revenue and debt and risk.", [report], None, lambda _: ({}, 0), max_prompt_chars=5000)
+    assert 3 not in observed
 
 
 def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote():
