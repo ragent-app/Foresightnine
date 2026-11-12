@@ -1,0 +1,58 @@
+{
+  "manifest_sha256": "4407e3756991a47641f2c59259195db511a737c0b7bb907f0d41a70143f76a54",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent"
+          }
+        ]
+      },
+      {
+        "text": "Neel Kashkari dissented, preferring to maintain the existing target range for the federal funds rate.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting against the action was Neel Kashkari, who preferred at this meeting to maintain the existing target range for the federal funds rate."
+          }
+        ]
+      },
+      {
+        "text": "One uncertainty about the future policy path: the Committee noted near-term risks to the economic outlook appear roughly balanced but is monitoring inflation developments closely, and inflation is expected to remain somewhat below 2 percent in the near term.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Near-term risks to the economic outlook appear roughly balanced, but the Committee is monitoring inflation developments closely."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "The source is partial; the dissent's stated rationale is not included, so no cited counterargument on the dissent can be provided.",
+      "Dates are declared in the source metadata and not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr_range",
+        "label": "federal funds rate target range",
+        "value": "1 to 1-1/4 percent",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1627,
+  "prompt_sha256": "76562237740b708dda6af64f94e3b7191d1d48e32a435ca96691e1ad157477bd",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

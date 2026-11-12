@@ -1,0 +1,111 @@
+{
+  "manifest_sha256": "4407e3756991a47641f2c59259195db511a737c0b7bb907f0d41a70143f76a54",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Real GDP increased at an annual rate of 2.7 percent in the fourth quarter of 2022, down from 3.2 percent in the third quarter — a deceleration of real economic growth between the two quarters.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of 2022 (table 1), according to the \"second\" estimate released by the Bureau of Economic Analysis. In the third quarter, real GDP increased 3.2 percent.",
+            "source_page": null
+          }
+        ]
+      },
+      {
+        "text": "The release attributes the quarter-over-quarter deceleration partly to a deceleration in consumer spending, alongside a downturn in exports and decelerations in nonresidential fixed investment and state and local government spending.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Compared to the third quarter, the deceleration in real GDP in the fourth quarter primarily reflected a downturn in exports and decelerations in consumer spending, nonresidential fixed investment, and state and local government spending.",
+            "source_page": null
+          }
+        ]
+      },
+      {
+        "text": "The 2.7 percent fourth-quarter figure is a revision of the advance estimate: the advance estimate showed 2.9 percent growth, and the second estimate reflects a downward revision to consumer spending partly offset by upward revisions to nonresidential fixed investment and imports. This 2.9 to 2.7 change is a revision to an estimate based on more complete source data, not an actual change in the economy; the actual change between quarters is the slowdown from 3.2 percent (Q3) to 2.7 percent (Q4).",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The GDP estimate released today is based on more complete source data than were available for the \"advance\" estimate issued last month. In the advance estimate, the increase in real GDP was 2.9 percent. The updated estimates primarily reflected a downward revision to consumer spending that was partly offset by an upward revision to nonresidential fixed investment (refer to \"Updates to GDP\"). Imports, which are a subtraction in the calculation of GDP, were revised up.",
+            "source_page": null
+          }
+        ]
+      },
+      {
+        "text": "Decreases/increases in goods versus services are described in the excerpt only for exports and imports, not for consumer spending: within exports, goods decreased while services increased; within imports, goods decreased while services increased.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Within exports, a decrease in goods (led by nondurable goods excluding petroleum) was partly offset by an increase in services (led by travel as well as transport). Within imports, a decrease in goods (led by durable consumer goods) was partly offset by an increase in services (led by travel).",
+            "source_page": null
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "No opposing evidence on the growth comparison is present in the sources; the excerpt is partial and full tables (e.g., table 1) are not provided, so no alternative figure for Q4 or Q3 real GDP growth is available to challenge the 2.7 and 3.2 percent figures.",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "The excerpt does not provide a goods-versus-services breakdown of consumer (PCE) spending for the fourth quarter, so it cannot be determined from the supplied sources whether both goods and services consumption increased in Q4.",
+      "The excerpt states consumer spending decelerated in Q4 relative to Q3 but does not give the underlying growth rates for goods vs. services consumption in either quarter.",
+      "Source coverage is declared partial; table 1 and the 'Updates to GDP' section are not included in the excerpt.",
+      "Publication date (2023-02-23) is declared, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "q4_real_gdp_growth",
+        "label": "Q4 2022 real GDP annualized growth (second estimate)",
+        "value": 2.7,
+        "unit": "percent annual rate",
+        "currency": null,
+        "period": "2022 Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.7 percent in the fourth quarter of 2022 (table 1)",
+          "source_page": null
+        }
+      },
+      {
+        "fact_id": "q3_real_gdp_growth",
+        "label": "Q3 2022 real GDP annualized growth",
+        "value": 3.2,
+        "unit": "percent annual rate",
+        "currency": null,
+        "period": "2022 Q3",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "In the third quarter, real GDP increased 3.2 percent.",
+          "source_page": null
+        }
+      },
+      {
+        "fact_id": "q4_advance_estimate",
+        "label": "Q4 2022 real GDP annualized growth (advance estimate)",
+        "value": 2.9,
+        "unit": "percent annual rate",
+        "currency": null,
+        "period": "2022 Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "In the advance estimate, the increase in real GDP was 2.9 percent.",
+          "source_page": null
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "q4_real_gdp_growth",
+        "second_fact_id": "q3_real_gdp_growth"
+      }
+    ]
+  },
+  "reported_tokens": 2773,
+  "prompt_sha256": "ab3385c7d68d1a6b8f17623c48c44cb4536b9ea49a4fd7a09a53e51788e60382",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

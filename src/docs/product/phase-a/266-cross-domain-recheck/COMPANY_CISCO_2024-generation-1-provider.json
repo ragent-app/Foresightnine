@@ -1,0 +1,130 @@
+{
+  "manifest_sha256": "4407e3756991a47641f2c59259195db511a737c0b7bb907f0d41a70143f76a54",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Cisco 2024财年(截至2024年7月27日)总收入为538.03亿美元，2023财年(截至2023年7月29日)总收入为569.98亿美元，单位为百万美元。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Years Ended | July 27, 2024 | July 29, 2023"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Total revenue | 53,803 | 56,998 | 51,557"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "(in millions, except per-share amounts)"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "提供的ref-1摘要是财务报表表格(部分覆盖)，仅包含利润表数据，未包含管理层讨论与分析(MD&A)中解释收入同比变化原因的叙述性原文，因此无法引用原文说明收入下降的具体原因，此为证据缺口，不代表不存在相关说明。",
+      "摘要是压缩的HTML/PDF片段且列结构以colspan标记表示，存在列错读风险，需对照完整年报核实。",
+      "期间日期为报表中声明日期，未经独立验证。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fy2024-total-revenue",
+        "label": "Total revenue FY2024",
+        "value": "53803",
+        "unit": "million USD",
+        "currency": "USD",
+        "period": "Year ended July 27, 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Total revenue | 53,803"
+        }
+      },
+      {
+        "fact_id": "fy2023-total-revenue",
+        "label": "Total revenue FY2023",
+        "value": "56998",
+        "unit": "million USD",
+        "currency": "USD",
+        "period": "Year ended July 29, 2023",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Total revenue | 53,803 | 56,998"
+        }
+      },
+      {
+        "fact_id": "fy2023-product-revenue",
+        "label": "Product revenue FY2023",
+        "value": "43142",
+        "unit": "million USD",
+        "currency": "USD",
+        "period": "Year ended July 29, 2023",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Product | $ | 39,253 | $ | 43,142"
+        }
+      },
+      {
+        "fact_id": "fy2024-product-revenue",
+        "label": "Product revenue FY2024",
+        "value": "39253",
+        "unit": "million USD",
+        "currency": "USD",
+        "period": "Year ended July 27, 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Product | $ | 39,253"
+        }
+      },
+      {
+        "fact_id": "fy2023-services-revenue",
+        "label": "Services revenue FY2023",
+        "value": "13856",
+        "unit": "million USD",
+        "currency": "USD",
+        "period": "Year ended July 29, 2023",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Services | 14,550 | 13,856"
+        }
+      },
+      {
+        "fact_id": "fy2024-services-revenue",
+        "label": "Services revenue FY2024",
+        "value": "14550",
+        "unit": "million USD",
+        "currency": "USD",
+        "period": "Year ended July 27, 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Services | 14,550"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fy2024-total-revenue",
+        "second_fact_id": "fy2023-total-revenue"
+      },
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fy2024-product-revenue",
+        "second_fact_id": "fy2023-product-revenue"
+      },
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fy2024-services-revenue",
+        "second_fact_id": "fy2023-services-revenue"
+      },
+      {
+        "formula": "difference",
+        "first_fact_id": "fy2024-total-revenue",
+        "second_fact_id": "fy2023-total-revenue"
+      }
+    ]
+  },
+  "reported_tokens": 3021,
+  "prompt_sha256": "41c91088538ab09ef6cb7bbbc88359724794ad025f8311a9ba1b8fc8efa0faea",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

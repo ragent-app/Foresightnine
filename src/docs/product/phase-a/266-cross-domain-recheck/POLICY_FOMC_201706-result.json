@@ -1,0 +1,227 @@
+{
+  "task": "POLICY_FOMC_201706",
+  "status": "completed",
+  "operation_id": "operation:e371d85e02b27f6c67e95a28",
+  "manifest_sha256": "4407e3756991a47641f2c59259195db511a737c0b7bb907f0d41a70143f76a54",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_26300000000000000000000000000003",
+        "title": "fomc-20170614.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": "2017-06-14T18:00:00+00:00",
+        "obtained_at": "2026-11-12T20:14:38.234575+00:00",
+        "revised_at": null,
+        "content_sha256": "c3d14cc538bbbebc1a94583ce7dbdd58ed97c310090419373242ab7545ce4d81",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "ffr_range:lower",
+        "value": "1",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017",
+        "label": "federal funds rate target range (lower bound)",
+        "source_id": "source_26300000000000000000000000000003",
+        "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1554,
+          "character_end": 1650,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "ffr_range:upper",
+        "value": "1.25",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017",
+        "label": "federal funds rate target range (upper bound)",
+        "source_id": "source_26300000000000000000000000000003",
+        "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "ffr_range",
+        "location": {
+          "character_start": 1554,
+          "character_end": 1650,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1554,
+              "character_end": 1650,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the\nCommittee decided to raise the target range for the federal funds rate to 1 to 1-1/4\npercent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Neel Kashkari dissented, preferring to maintain the existing target range for the federal funds rate.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 3905,
+              "character_end": 4045,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against the action was\nNeel Kashkari, who preferred at this meeting to maintain the existing target range for the\nfederal funds rate."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "One uncertainty about the future policy path: the Committee noted near-term risks to the economic outlook appear roughly balanced but is monitoring inflation developments closely, and inflation is expected to remain somewhat below 2 percent in the near term.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_26300000000000000000000000000003",
+            "location": {
+              "character_start": 1345,
+              "character_end": 1473,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Near-term risks to the economic outlook appear roughly balanced, but the Committee is\nmonitoring inflation developments closely."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_percentage_bounds": [
+          "2 percent"
+        ],
+        "uncited_percentages": [
+          "2 percent"
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_26300000000000000000000000000003: only character ranges 689–2603, 3093–5048 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The source is partial; the dissent's stated rationale is not included, so no cited counterargument on the dissent can be provided.",
+      "Model-reported limitation (not independently verified): Dates are declared in the source metadata and not independently verified.",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "A strict percentage upper bound is not present in the attached quotations; do not treat its threshold as an exact value.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:e371d85e02b27f6c67e95a28",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1627,
+      "cost_usd": null,
+      "generation_tokens": 1627,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "budget_exhausted",
+      "support_review_error": null,
+      "support_review_mode": "batch",
+      "support_review_method": "bounded_quotation_context_model_review_v29",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [
+        {
+          "claim_index": 0,
+          "reason": "token_budget"
+        },
+        {
+          "claim_index": 1,
+          "reason": "token_budget"
+        },
+        {
+          "claim_index": 2,
+          "reason": "token_budget"
+        }
+      ],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "official_fetch_calls": 0,
+      "official_fetch_status": "not_requested",
+      "elapsed_seconds": 7.513,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "76562237740b708dda6af64f94e3b7191d1d48e32a435ca96691e1ad157477bd",
+      "prompt_characters": 5025,
+      "prompt_bytes": 5037,
+      "selection_method": "ranked_nonoverlapping_windows_v47",
+      "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+      "selected_segments": [
+        {
+          "source_id": "source_26300000000000000000000000000003",
+          "character_start": 689,
+          "character_end": 2603,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_26300000000000000000000000000003",
+          "character_start": 3093,
+          "character_end": 5048,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_26300000000000000000000000000003": "c3d14cc538bbbebc1a94583ce7dbdd58ed97c310090419373242ab7545ce4d81"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "elapsed_seconds": 8.135
+}
