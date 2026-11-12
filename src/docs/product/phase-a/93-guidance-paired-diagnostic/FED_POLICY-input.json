@@ -1,0 +1,15 @@
+{
+  "id": "FED_POLICY",
+  "question": "根據所附2022年11月美聯儲聲明，聯邦基金目標利率區間是多少？列出決議對未來利率路徑的表述，並指出能從這份聲明確認與不能確認的限制。",
+  "sources": [
+    {
+      "kind": "pdf",
+      "file": "fed-nov-2022.pdf",
+      "title": "Federal Reserve FOMC statement 2022-11-02",
+      "published_at": "2022-11-02T18:00:00Z",
+      "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+      "sha256": "3c0745c9cb654d951d22a9e73ce69bdc93b525a0ac5a749efcfbaf3331133715",
+      "text_sha256": "097643b62fc0c91514e4fcb6012474f76b2007ebcba288e3377f54fa88f79344"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "MSFT_REVENUE",
+  "question": "根據提供的 SEC 記錄，列出截至2023年與2022年6月30日的12個月收入各為多少美元，計算同比增長率，並說明資料限制。注意不要把填報的 fy 欄位誤當成每條觀察的實際期間。",
+  "sources": [
+    {
+      "kind": "text",
+      "title": "Microsoft: SEC 2023 filing revenue facts (derived extract)",
+      "text": "{\n  \"type\": \"derived_sec_facts_not_full_filing\",\n  \"issuer\": \"Microsoft Corporation\",\n  \"cik\": \"0000789019\",\n  \"concept\": \"us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax\",\n  \"unit\": \"USD\",\n  \"filing\": \"10-K\",\n  \"accession\": \"0000950170-23-035122\",\n  \"filing_date\": \"2023-07-27\",\n  \"source_url\": \"https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json\",\n  \"retrieved_at_utc\": \"2026-11-11T10:59:04.595392+00:00\",\n  \"response_sha256\": \"8c1903c041f5c27e86ed15f37debb1f41882b7904bba129ef9edc76478b1e8ea\",\n  \"derived_from_probe_sha256\": \"51534f32e749bfa38154553e131acfb28c8027293900eb1b14926aa2e0d00518\",\n  \"records\": [\n    {\n      \"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000,\n      \"accn\": \"0000950170-23-035122\",\n      \"fy\": 2023,\n      \"fp\": \"FY\",\n      \"form\": \"10-K\",\n      \"filed\": \"2023-07-27\",\n      \"frame\": null\n    },\n    {\n      \"start\": \"2022-07-01\",\n      \"end\": \"2023-06-30\",\n      \"val\": 211915000000,\n      \"accn\": \"0000950170-23-035122\",\n      \"fy\": 2023,\n      \"fp\": \"FY\",\n      \"form\": \"10-K\",\n      \"filed\": \"2023-07-27\",\n      \"frame\": null\n    }\n  ],\n  \"limitations\": [\n    \"Rows were extracted from the SEC API response, not copied as a full original filing.\",\n    \"The 2026 snapshot and filing date do not independently prove exact historical availability or absence of restatements.\"\n  ]\n}\n",
+      "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+      "source_id": "source_a8b030ff2377499ca814bb0e604c5714"
+    }
+  ]
+}
