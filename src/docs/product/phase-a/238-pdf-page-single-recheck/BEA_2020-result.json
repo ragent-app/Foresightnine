@@ -1,0 +1,320 @@
+{
+  "task": "BEA_2020",
+  "status": "completed",
+  "operation_id": "operation:bab27a3b9869ec4274a0500c",
+  "manifest_sha256": "8732fc9c16bc3db5289fd6301eea222cd849a5080df4a0abc792f165977a341a",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_23100000000000000000000000000002",
+        "title": "bea-2020-historical.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T18:17:15.675119+00:00",
+        "revised_at": null,
+        "content_sha256": "15cdf72d82ce534fbfae2691d055d48dfef8e1ded88c116d0a657ebde853bb48",
+        "is_simulated": false,
+        "pdf_text_order": "layout",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "pce_current_dollar_change_2020",
+        "value": "-399.3",
+        "unit": "billions",
+        "currency": "USD",
+        "period": "2020",
+        "label": "PCE dollar change from preceding year, current dollars",
+        "source_id": "source_23100000000000000000000000000002",
+        "quotation": "Current dollars\nDollar change from preceding year (in billions):\n Personal income                                                   1,139.5 ---        ---        ---     ---       2019            699.7\n Disposable personal income (DPI)                                  1,146.6 ---        ---        ---     ---       2019            582.1\n Personal consumption expenditures (PCE)                            -399.3 ---        ---        2019        551.3 ---       ---",
+        "quotation_match": "expanded_ellipsis",
+        "location": {
+          "character_start": 4010,
+          "character_end": 4477,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "pce_chained_dollar_change_2020",
+        "value": "-514.6",
+        "unit": "billions",
+        "currency": "USD",
+        "period": "2020",
+        "label": "PCE dollar change from preceding year, chained dollars",
+        "source_id": "source_23100000000000000000000000000002",
+        "quotation": "Chained dollars\nDollar change from preceding year (in billions):\n DPI                                                                 856.8 ---        ---        ---     ---         2019          316.1\n PCE                                                                -514.6 ---        ---        2019          312.1 ---     ---",
+        "quotation_match": "expanded_ellipsis",
+        "location": {
+          "character_start": 5121,
+          "character_end": 5451,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "pce_pct_current_2020",
+        "value": "-2.7",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020",
+        "label": "PCE percent change from preceding year, current dollars",
+        "source_id": "source_23100000000000000000000000000002",
+        "quotation": "Percent change from preceding year:\n Personal income                                                      6.1     1987          6.1 2011             6.2 2019            3.9\n DPI                                                                  7.0     1967          7.0 2000             7.6 2019            3.7\n PCE                                                                 -2.7 ---      ---          2019             3.9 1938           -3.8",
+        "quotation_match": "expanded_ellipsis",
+        "location": {
+          "character_start": 4615,
+          "character_end": 5061,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "pce_pct_chained_2020",
+        "value": "-3.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020",
+        "label": "PCE percent change from preceding year, chained dollars",
+        "source_id": "source_23100000000000000000000000000002",
+        "quotation": "Percent change from preceding year:\n DPI                                                                   5.8 ---        ---        1998            5.9 2019            2.2\n PCE                                                                  -3.9 ---        ---        2019            2.4 1932           -9.0",
+        "quotation_match": "expanded_ellipsis",
+        "location": {
+          "character_start": 5452,
+          "character_end": 5761,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "saving_rate_2020",
+        "value": "16.3",
+        "unit": "percent of DPI",
+        "currency": null,
+        "period": "2020",
+        "label": "Personal saving rate",
+        "source_id": "source_23100000000000000000000000000002",
+        "quotation": "Personal saving as a percentage of DPI\nPersonal saving rate                                                 16.3 ---      ---           1945           22.5 2019            7.5",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 6199,
+          "character_end": 6374,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "In 2020, PCE fell $399.3 billion in current dollars from the preceding year, while in chained dollars it fell $514.6 billion — the two series use different bases (current dollars vs. inflation-adjusted chained dollars).",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000002",
+            "location": {
+              "character_start": 4010,
+              "character_end": 4477,
+              "page": 2
+            },
+            "quotation_match": "expanded_ellipsis",
+            "support_status": "not_independently_verified",
+            "quotation": "Current dollars\nDollar change from preceding year (in billions):\n Personal income                                                   1,139.5 ---        ---        ---     ---       2019            699.7\n Disposable personal income (DPI)                                  1,146.6 ---        ---        ---     ---       2019            582.1\n Personal consumption expenditures (PCE)                            -399.3 ---        ---        2019        551.3 ---       ---"
+          },
+          {
+            "source_id": "source_23100000000000000000000000000002",
+            "location": {
+              "character_start": 5121,
+              "character_end": 5451,
+              "page": 2
+            },
+            "quotation_match": "expanded_ellipsis",
+            "support_status": "not_independently_verified",
+            "quotation": "Chained dollars\nDollar change from preceding year (in billions):\n DPI                                                                 856.8 ---        ---        ---     ---         2019          316.1\n PCE                                                                -514.6 ---        ---        2019          312.1 ---     ---"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_dollar_amounts": [
+          "$399.3 billion",
+          "$514.6 billion"
+        ]
+      },
+      {
+        "text": "The 2020 personal saving rate was 16.3 percent of DPI.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000002",
+            "location": {
+              "character_start": 6199,
+              "character_end": 6374,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Personal saving as a percentage of DPI\nPersonal saving rate                                                 16.3 ---      ---           1945           22.5 2019            7.5"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "The two PCE series do not use the same basis: the -399.3 figure is under the 'Current dollars' heading and the -514.6 figure is under the 'Chained dollars' heading, i.e., the chained-dollar change is adjusted for price changes while the current-dollar change is not.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_23100000000000000000000000000002",
+            "location": {
+              "character_start": 4010,
+              "character_end": 4074,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Current dollars\nDollar change from preceding year (in billions):"
+          },
+          {
+            "source_id": "source_23100000000000000000000000000002",
+            "location": {
+              "character_start": 5121,
+              "character_end": 5185,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Chained dollars\nDollar change from preceding year (in billions):"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_fact_values": [
+          "-399.3 billions",
+          "-514.6 billions"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "pce_current_dollar_change_2020",
+            "source_id": "source_23100000000000000000000000000002",
+            "value": "-399.3",
+            "unit": "billions",
+            "period": "2020",
+            "quotation": "Current dollars\nDollar change from preceding year (in billions):\n Personal income                                                   1,139.5 ---        ---        ---     ---       2019            699.7\n Disposable personal income (DPI)                                  1,146.6 ---        ---        ---     ---       2019            582.1\n Personal consumption expenditures (PCE)                            -399.3 ---        ---        2019        551.3 ---       ---",
+            "location": {
+              "character_start": 4010,
+              "character_end": 4477,
+              "page": 2
+            },
+            "status": "requires_semantic_review"
+          },
+          {
+            "fact_id": "pce_chained_dollar_change_2020",
+            "source_id": "source_23100000000000000000000000000002",
+            "value": "-514.6",
+            "unit": "billions",
+            "period": "2020",
+            "quotation": "Chained dollars\nDollar change from preceding year (in billions):\n DPI                                                                 856.8 ---        ---        ---     ---         2019          316.1\n PCE                                                                -514.6 ---        ---        2019          312.1 ---     ---",
+            "location": {
+              "character_start": 5121,
+              "character_end": 5451,
+              "page": 2
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_23100000000000000000000000000002: quotation location is ambiguous in the analyzed passages.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The base/reference year for the chained-dollar series is not stated in the source.",
+      "Model-reported limitation (not independently verified): The document is dated March 26, 2021; the 2020 annual figures are declared by the source and not independently verified.",
+      "Model-reported limitation (not independently verified): Compressed PDF table columns may misalign values across rows and columns.",
+      "Model-reported limitation (not independently verified): No annual PCE dollar-change figure for personal income basis beyond what is shown; full source not available.",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "A dollar-symbol amount could not be matched in the attached quotations; check currency, units, source and any calculation.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:bab27a3b9869ec4274a0500c",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 2867,
+      "cost_usd": null,
+      "generation_tokens": 2867,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 16.16,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "4c6afdc5b3c904968935150da0191a7af8268278f962c76c40ce0c1b12a21037",
+      "prompt_characters": 4282,
+      "prompt_bytes": 4282,
+      "selection_method": "ranked_nonoverlapping_windows_v46",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_23100000000000000000000000000002",
+          "character_start": 0,
+          "character_end": 6417,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_23100000000000000000000000000002": "15cdf72d82ce534fbfae2691d055d48dfef8e1ded88c116d0a657ebde853bb48"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_6f914e80b3c446fa952981d3e7b946df",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_d124236096c04269a734428931bd9b07",
+      "parent_version_id": "version_6f914e80b3c446fa952981d3e7b946df",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 18.166
+}

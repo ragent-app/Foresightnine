@@ -1,0 +1,126 @@
+{
+  "manifest_sha256": "8732fc9c16bc3db5289fd6301eea222cd849a5080df4a0abc792f165977a341a",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "In 2020, PCE fell $399.3 billion in current dollars from the preceding year, while in chained dollars it fell $514.6 billion — the two series use different bases (current dollars vs. inflation-adjusted chained dollars).",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Current dollars Dollar change from preceding year (in billions): ... Personal consumption expenditures (PCE) -399.3 --- --- 2019 551.3 --- ---"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Chained dollars Dollar change from preceding year (in billions): ... PCE -514.6 --- --- 2019 312.1 --- ---"
+          }
+        ]
+      },
+      {
+        "text": "The 2020 personal saving rate was 16.3 percent of DPI.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal saving as a percentage of DPI Personal saving rate 16.3 --- --- 1945 22.5 2019 7.5"
+          }
+        ]
+      },
+      {
+        "text": "The two PCE series do not use the same basis: the -399.3 figure is under the 'Current dollars' heading and the -514.6 figure is under the 'Chained dollars' heading, i.e., the chained-dollar change is adjusted for price changes while the current-dollar change is not.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Current dollars Dollar change from preceding year (in billions):"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Chained dollars Dollar change from preceding year (in billions):"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The percent-change rows in the same table (-2.7 percent current dollars, -3.9 percent chained dollars) confirm the declines, so the dollar-change readings are unlikely to be column-misread; however, compressed PDF tables could still misalign values, and the document does not define the base year of the chained-dollar series.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Percent change from preceding year: ... PCE -2.7 --- --- 2019 3.9 1938 -3.8 ... PCE -3.9 --- --- 2019 2.4 1932 -9.0"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The base/reference year for the chained-dollar series is not stated in the source.",
+      "The document is dated March 26, 2021; the 2020 annual figures are declared by the source and not independently verified.",
+      "Compressed PDF table columns may misalign values across rows and columns.",
+      "No annual PCE dollar-change figure for personal income basis beyond what is shown; full source not available."
+    ],
+    "facts": [
+      {
+        "fact_id": "pce_current_dollar_change_2020",
+        "label": "PCE dollar change from preceding year, current dollars",
+        "value": "-399.3",
+        "unit": "billions",
+        "currency": "USD",
+        "period": "2020",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Current dollars Dollar change from preceding year (in billions): ... Personal consumption expenditures (PCE) -399.3 --- --- 2019 551.3 --- ---"
+        }
+      },
+      {
+        "fact_id": "pce_chained_dollar_change_2020",
+        "label": "PCE dollar change from preceding year, chained dollars",
+        "value": "-514.6",
+        "unit": "billions",
+        "currency": "USD",
+        "period": "2020",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Chained dollars Dollar change from preceding year (in billions): ... PCE -514.6 --- --- 2019 312.1 --- ---"
+        }
+      },
+      {
+        "fact_id": "pce_pct_current_2020",
+        "label": "PCE percent change from preceding year, current dollars",
+        "value": "-2.7",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Percent change from preceding year: ... PCE -2.7 --- --- 2019 3.9 1938 -3.8"
+        }
+      },
+      {
+        "fact_id": "pce_pct_chained_2020",
+        "label": "PCE percent change from preceding year, chained dollars",
+        "value": "-3.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2020",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Percent change from preceding year: ... PCE -3.9 --- --- 2019 2.4 1932 -9.0"
+        }
+      },
+      {
+        "fact_id": "saving_rate_2020",
+        "label": "Personal saving rate",
+        "value": "16.3",
+        "unit": "percent of DPI",
+        "currency": null,
+        "period": "2020",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Personal saving as a percentage of DPI Personal saving rate 16.3 --- --- 1945 22.5 2019 7.5"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2867,
+  "prompt_sha256": "4c6afdc5b3c904968935150da0191a7af8268278f962c76c40ce0c1b12a21037",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

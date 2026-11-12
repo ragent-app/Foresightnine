@@ -1,0 +1,33 @@
+{
+  "results": [
+    {
+      "task": "BEA_2020",
+      "status": "completed",
+      "research_status": "partial",
+      "mechanical_checks": {
+        "nominal": false,
+        "real": false,
+        "saving": true,
+        "pce": true,
+        "year": false,
+        "current": true,
+        "chained": true,
+        "saving_label": true,
+        "all_claims_located": true,
+        "no_known_claim_warnings": false,
+        "no_known_fact_warnings": true,
+        "required_counterargument": false,
+        "no_omitted_content": false,
+        "bounded_call": true,
+        "partial_disclosed": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 2867,
+      "semantic_support": "not established by mechanical checks"
+    }
+  ],
+  "mechanical_pass": false,
+  "total_reported_tokens": 2867,
+  "unknown_usage": false,
+  "semantic_support": "requires separate assessment; matching numbers and terms is insufficient"
+}
