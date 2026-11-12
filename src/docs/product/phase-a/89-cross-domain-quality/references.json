@@ -1,0 +1,13 @@
+{
+  "MSFT_REVENUE": {
+    "usd_2022": "198270000000",
+    "usd_2023": "211915000000",
+    "growth_percent": "6.88"
+  },
+  "FED_POLICY": {
+    "lower": "3.75",
+    "upper": "4",
+    "source_range": "3-3/4 to 4 percent",
+    "future": "ongoing increases"
+  }
+}
