@@ -1,0 +1,16 @@
+{
+  "manifest_sha256": "bbac6dc89b6e004b81230a43eca266a9b6fe553fb84c7c4ffd33206df7bf1e6b",
+  "kind": "review",
+  "payload": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      }
+    ],
+    "notes": "The excerpt only mentions 'a downward revision to consumer spending' with no goods/services breakdown, so the assertion that the excerpts do not disaggregate spending is supported by the excerpt's content. The downward revision indicates consumer spending was weaker than first estimated in the advance estimate, as stated. The final point (contradiction of an unqualified 'both rose' claim) follows reasonably: since a downward revision implies weaker-than-initially-estimated spending, an unqualified claim that both components rose is not established by the excerpt—though the excerpt itself does not state that either goods or services rose, so it does not directly contradict such a claim; it simply fails to support it."
+  },
+  "reported_tokens": 571,
+  "prompt_sha256": "8ec8dd1bb969d52b223cacdd4ad859b3cddc106c283d6baf942bcee8c50d63d5",
+  "system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407"
+}
