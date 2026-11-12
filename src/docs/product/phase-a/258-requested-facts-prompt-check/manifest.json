@@ -1,0 +1,71 @@
+{
+  "implementation_commit": "dde25e19f461bb4d9743236e8f4517c6b8c0d306",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "review_method": "bounded_quotation_context_model_review_v26",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "9c4cea65c34660040c5e93c4276b2dd4f3747ceaed2354c1151107de1f2e9479",
+    "prepare.py": "40a50095c555991a15518a04656ec2d1f77143aa697499e1a6a008e6ec47ba67",
+    "run.py": "11ecb86eb60f17d0aa1aa20de853c7425209f1455afe21b1120615462bf37a35",
+    "score.py": "ecf0d5e40ee03cc629fdf5b4f01754d9d99bd94f93edaf8fddf114f609c9a396"
+  },
+  "source_files": {
+    "tasks.json": "4d13a30ca6b306f66d1cf1a2bd3adc662eec00979d75ef4713bfacc7afaf0902",
+    "reference.json": "0bce368432355b874db5f18b65f9ff04b7c8896a4ee720cb313a6aaba56e46a6",
+    "bea-gdp1q24.pdf": "403caea1ac737cc9617984489cef398b9ed6ddbc98c716b320b0a8e68a03cfe1"
+  },
+  "conditions": [
+    {
+      "task": "GDP_COUNTER_2024",
+      "prompt_sha256": "9b719ebe7b88454028daa6fcdc3ecf799fc3673c243c50b5c97efae74b1c47d8",
+      "prompt_bytes": 4957,
+      "segments": [
+        {
+          "source_id": "source_19900000000000000000000000000001",
+          "character_start": 620,
+          "character_end": 2583,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_19900000000000000000000000000001",
+          "character_start": 2625,
+          "character_end": 3766,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_19900000000000000000000000000001",
+          "character_start": 6862,
+          "character_end": 9024,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_19900000000000000000000000000001": "edced6a4a3ffc8d576d0ee4fa446eb711e70dd0401f9bf79710d03861020880e"
+      }
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 4,
+  "max_calls_per_task": 4,
+  "max_total_tokens": 20000,
+  "run_elapsed_seconds": 120,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 271990
+}
