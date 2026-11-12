@@ -1,0 +1,60 @@
+{
+  "model_calls": 0,
+  "original_result_sha256": "efb8eeafdd4feb53a6546cedb7f7ea66aaa96a456fd866f86ce761fbad6a37e9",
+  "claims": [
+    {
+      "claim_index": 0,
+      "citations": [
+        {
+          "source_id": "source_00000000000000000000000000000002",
+          "location": {
+            "character_start": 31139,
+            "character_end": 31462,
+            "page": 7
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "March          April r      May r         June r        July r       Aug. r        Sept. r       Oct. p\n 1 Personal income                                                                                                   109.5           48.2         70.5           44.7          62.6       105.1           96.8         57.1"
+        }
+      ],
+      "uncited_fact_values": [
+        "94.0 billions of dollars, seasonally adjusted at annual rates"
+      ],
+      "suggested_fact_evidence": [
+        {
+          "fact_id": "aug_change_sept_release",
+          "source_id": "source_00000000000000000000000000000001",
+          "value": "94.0",
+          "unit": "billions of dollars, seasonally adjusted at annual rates",
+          "period": "2023年8月",
+          "quotation": "July r                Aug. r       Sept. p\n1 Personal income                                                                                                    123.1       109.5           57.8       77.3       48.4       52.8                 94.0          77.8",
+          "location": {
+            "character_start": 30981,
+            "character_end": 31241,
+            "page": 7
+          },
+          "status": "requires_semantic_review"
+        }
+      ]
+    },
+    {
+      "claim_index": 1,
+      "citations": [
+        {
+          "source_id": "source_00000000000000000000000000000002",
+          "location": {
+            "character_start": 31154,
+            "character_end": 31242,
+            "page": 7
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "April r      May r         June r        July r       Aug. r        Sept. r       Oct. p"
+        }
+      ],
+      "uncited_fact_values": [],
+      "suggested_fact_evidence": []
+    }
+  ],
+  "limitations": "Candidates are not attached citations or independent verification."
+}

@@ -407,6 +407,38 @@ def test_release_dates_in_labels_preserve_cross_source_revision_candidate():
     assert not evidence_differences([earlier, {**later, 'period':'2023年9月'}])
 
 
+def test_cross_source_comparison_suggests_only_eligible_located_fact_without_attaching_it():
+    from app.research_evidence import suggest_cross_source_comparison_evidence
+    def make(sid, value):
+        quote = 'Personal income ' + value
+        source = ResearchSource(source_id=sid, owner_id='owner', title='Release', text=quote, kind='user_supplied',
+            obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+            permissions=SourcePermissions(store=True, display=True, model_input=True))
+        item = {**fact(sid, sid, value, label='Personal income', period='2023-08', unit='billions', currency='USD'),
+                'quotation':quote, 'location':{'character_start':0,'character_end':len(quote)},
+                'verification':'model_extraction_not_independently_verified'}
+        return source,item
+    a,fa = make('a','94.0'); b,fb = make('b','105.1')
+    citation = {'source_id':'b','quotation':fb['quotation'],'location':fb['location']}
+    claim = {'text':'The estimate was revised from 94.0 to 105.1.', 'citations':[citation]}
+    def run(claims=None, facts=None, sources=None):
+        return suggest_cross_source_comparison_evidence(claims or [claim], facts or [fa,fb], sources or [a,b])[0]
+    result = run()
+    assert result['citations'] == [citation] and result['uncited_fact_values'] == ['94.0 billions']
+    assert [item['fact_id'] for item in result['suggested_fact_evidence']] == ['a']
+    assert result['suggested_fact_evidence'][0]['status'] == 'requires_semantic_review'
+    assert 'suggested_fact_evidence' not in claim
+    assert not run(claims=[{**claim,'text':'The estimate is 105.1.'}]).get('suggested_fact_evidence')
+    assert not run(claims=[{**claim,'citations':[]}]).get('suggested_fact_evidence')
+    assert not run(facts=[{**fa,'authorship':'user'},fb]).get('suggested_fact_evidence')
+    assert not run(facts=[{**fa,'quotation':'invented'},fb]).get('suggested_fact_evidence')
+    assert not run(facts=[fa,{**fb,'period':'2023-09'}]).get('suggested_fact_evidence')
+    assert not run(sources=[a.model_copy(update={'permissions':SourcePermissions(store=True,display=True)}),b]).get('suggested_fact_evidence')
+    assert not run(sources=[a.model_copy(update={'is_simulated':True}),b]).get('suggested_fact_evidence')
+    c,fc = make('c','94.0')
+    assert not run(facts=[fa,fb,fc], sources=[a,b,c]).get('suggested_fact_evidence')
+
+
 def test_unfinished_quoted_phrase_is_flagged_without_claiming_it_is_false():
     text = "GDP revisions included consumer spending and nonresidential fixed investment."
     quote = "consumer spending and nonresidential"

@@ -1467,3 +1467,82 @@ def evidence_differences(facts: list[dict]) -> list[dict]:
         if len(result) == 50:
             break
     return result
+
+
+def suggest_cross_source_comparison_evidence(claims: list[dict], facts: list[dict],
+                                              sources: list[ResearchSource]) -> list[dict]:
+    """Suggest, but never attach or validate, a missing comparison source.
+
+    Only already located, unedited facts in a matching cross-source difference
+    group qualify. Equal labels and numbers do not establish entity, period
+    interpretation, statistical basis, or semantic support.
+    """
+    source_map = {s.source_id:s for s in sources if s.permissions.display and s.permissions.model_input and not s.is_simulated}
+    counts = Counter(f.get('fact_id') for f in facts if isinstance(f.get('fact_id'), str))
+    usable = {}
+    for fact in facts:
+        fid, sid, quote, loc = fact.get('fact_id'), fact.get('source_id'), fact.get('quotation'), fact.get('location')
+        source = source_map.get(sid) if isinstance(sid, str) else None
+        if (source is None or not isinstance(fid, str) or counts[fid] != 1 or fact.get('authorship') == 'user' or
+                fact.get('verification') != 'model_extraction_not_independently_verified' or fact.get('source_value_warnings') or
+                not isinstance(quote, str) or not 1 <= len(quote) <= 1000 or not isinstance(loc, dict) or loc.get('status') == 'ambiguous'):
+            continue
+        a,b = loc.get('character_start'),loc.get('character_end')
+        if (type(a) is not int or type(b) is not int or not 0 <= a < b <= len(source.text) or
+                source.text[a:b] != quote or source.text.find(quote) != a or source.text.find(quote, a+1) >= 0 or
+                partial_ascii_token(source.text,a,b)):
+            continue
+        try:
+            value = Decimal(str(fact.get('value')))
+            if not value.is_finite() or value not in _quoted_numbers(quote):
+                continue
+        except (InvalidOperation, ValueError):
+            continue
+        usable[fid] = (sid,value,fact)
+    groups = evidence_differences(facts)
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        text,citations = entry.get('text'),entry.get('citations')
+        if (not isinstance(text,str) or len(text)>3000 or not isinstance(citations,list) or
+                not re.search(r'\b(?:compar\w*|revis\w*|updat\w*|versus|previous|earlier|later)\b|比较|比較|对比|對比|修订|修訂|修正|初值|此前|之后|之後|取代', text,re.IGNORECASE)):
+            output.append(entry); continue
+        cited = {}
+        for citation in citations[:10]:
+            if not isinstance(citation,dict) or citation.get('partial_token'):
+                continue
+            sid,quote,loc = citation.get('source_id'),citation.get('quotation'),citation.get('location')
+            source = source_map.get(sid) if isinstance(sid,str) else None
+            if source is None or not isinstance(quote,str) or not isinstance(loc,dict) or loc.get('status')=='ambiguous':
+                continue
+            a,b=loc.get('character_start'),loc.get('character_end')
+            if (type(a) is int and type(b) is int and 0 <= a < b <= len(source.text) and
+                    source.text[a:b] == quote and not partial_ascii_token(source.text,a,b)):
+                cited.setdefault(sid,set()).update(_quoted_numbers(quote))
+        if not cited:
+            output.append(entry); continue
+        numbers = _quoted_numbers(text)
+        suggestions = [x for x in entry.get('suggested_fact_evidence',[]) if isinstance(x,dict)] if isinstance(entry.get('suggested_fact_evidence',[]),list) else []
+        missing = list(entry.get('uncited_fact_values',[])) if isinstance(entry.get('uncited_fact_values'),list) else []
+        seen = {x.get('fact_id') for x in suggestions}
+        for group in groups:
+            members = [usable[x['fact_id']] for x in group['facts'] if x.get('fact_id') in usable]
+            mentioned = [member for member in members if member[1] in numbers]
+            if len({value for _,value,_ in mentioned}) < 2 or not any(value in cited.get(sid,set()) for sid,value,_ in mentioned):
+                continue
+            candidates = [(sid,value,fact) for sid,value,fact in mentioned if sid not in cited]
+            value_counts = Counter(value for _,value,_ in mentioned)
+            for sid,value,fact in candidates:
+                if value_counts[value] != 1 or fact['fact_id'] in seen or len(suggestions)>=5:
+                    continue
+                label = f"{fact['value']} {fact.get('unit','')}".strip()
+                if label not in missing and len(missing)<5:
+                    missing.append(label)
+                suggestions.append({key:deepcopy(fact[key]) for key in
+                    ('fact_id','source_id','value','unit','period','quotation','location') if key in fact} |
+                    {'status':'requires_semantic_review'})
+                seen.add(fact['fact_id'])
+        if suggestions: entry['suggested_fact_evidence'] = suggestions
+        if missing: entry['uncited_fact_values'] = missing
+        output.append(entry)
+    return output

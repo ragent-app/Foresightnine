@@ -644,7 +644,7 @@ def test_research_marks_cross_source_differences_for_review_and_recomputes_them(
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             def cite(index, quote): return {"source_id": ids[index], "quotation": quote}
-            return {"claims": [{"text": "Reported revenue varies", "citations": [cite(0, "Revenue 100")]}],
+            return {"claims": [{"text": "Revenue was revised from 100 to 120", "citations": [cite(1, "Revenue 120")]}],
                     "counterarguments": [{"text": "Sources may measure different things", "citations": [cite(1, "Revenue 120")]}],
                     "facts": [{"fact_id": "a", "label": "Revenue", "value": "100", "unit": "USD million",
                                "currency": "USD", "period": "2023", "citation": cite(0, "Revenue 100")},
@@ -674,12 +674,17 @@ def test_research_marks_cross_source_differences_for_review_and_recomputes_them(
     current = client.get(path, headers=headers).json()["versions"][-1]
     assert current["content"]["run"]["status"] == "partial"
     assert len(current["content"]["evidence_differences"]) == 1
+    comparison = current["content"]["claims"][0]
+    assert [citation["source_id"] for citation in comparison["citations"]] == [ids[1]]
+    assert [item["source_id"] for item in comparison["suggested_fact_evidence"]] == [ids[0]]
+    assert comparison["uncited_fact_values"] == ["100 USD million"]
     edited = deepcopy(current["content"])
     edited["facts"][1]["value"] = "100"
     edited["evidence_differences"] = [{"fabricated": True}]
     saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": edited})
     assert saved.status_code == 201, saved.text
     assert saved.json()["versions"][-1]["content"]["evidence_differences"] == []
+    assert not saved.json()["versions"][-1]["content"]["claims"][0].get("suggested_fact_evidence")
     assert len(saved.json()["versions"][-2]["content"]["evidence_differences"]) == 1
 
 
