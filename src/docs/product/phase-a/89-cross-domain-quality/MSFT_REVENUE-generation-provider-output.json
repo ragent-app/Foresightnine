@@ -1,0 +1,66 @@
+{
+  "source_attribution": "SEC EDGAR companyfacts, derived Microsoft observations; not an original filing.",
+  "payload": {
+    "claims": [
+      {
+        "text": "來源僅包含截至2022年6月30日的12個月收入記錄（198,270,000,000美元）；截至2023年6月30日的12個月收入值未出現在提供的摘錄中，因此無法計算同比增長率。",
+        "citations": [
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"start\": \"2021-07-01\", \"end\": \"2022-06-30\", \"val\": 198270000000"
+          }
+        ]
+      },
+      {
+        "text": "摘錄中的記錄帶有 fy 2023 標記，但該 fy 欄位是申報的會計年度標籤，而非該觀察的實際期間；實際期間由 start/end 欄位（2021-07-01 至 2022-06-30）界定。",
+        "citations": [
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"val\": 198270000000, \"accn\": \"0000950170-23-035122\", \"fy\": 2023"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "由於提供的摘錄明顯被截斷（records 陣列未完整顯示），FY2023（2022-07-01 至 2023-06-30）的收入記錄可能存在於完整來源中，只是未包含在此摘錄內。",
+        "citations": [
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"title\": \"Microsoft: SEC 2023 filing revenue facts (derived extract)\", \"source_coverage\": \"partial\""
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的摘錄為 partial，records 陣列在第一條記錄後被截斷，2022-07-01 至 2023-06-30 期間的收入值未提供，因此無法完成同比增長率計算。",
+      "摘錄文字不完整（fp 欄位後即中斷），無法確認該記錄的 fp 值及是否存在其他期間的記錄。",
+      "日期與數值為申報資料所宣告，未經獨立驗證；來源為 XBRL API 衍生摘錄，非原始 10-K 文件本身。",
+      "未提供其他來源可交叉驗證 FY2022 收入數字。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fy2022_revenue",
+        "label": "Revenue for 12 months ended 2022-06-30",
+        "value": 198270000000,
+        "unit": "USD",
+        "currency": "USD",
+        "period": "2021-07-01 to 2022-06-30",
+        "citation": {
+          "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+          "quotation": "\"start\": \"2021-07-01\", \"end\": \"2022-06-30\", \"val\": 198270000000"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "current(2022-07-01 至 2023-06-30 收入) — 缺少佐證數值，無法引用",
+        "second_fact_id": "fy2022_revenue"
+      }
+    ]
+  },
+  "reported_tokens": 1610,
+  "prompt_sha256": "d942e5abfb61f2bf42e31bf8e4a285d13db5aac15ab4a8a6bd1a4f3433a5609b",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

@@ -1,0 +1,72 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; public FOMC statement.",
+  "payload": {
+    "claims": [
+      {
+        "text": "所提供的聲明摘錄確認，美聯儲理事會一致投票決定將準備金餘額利率上調至3.9%，自2022年11月3日起生效。",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the interest rate paid on reserve balances to 3.9 percent, effective November 3, 2022."
+          }
+        ]
+      },
+      {
+        "text": "同一摘錄確認，理事會一致投票批准將主要信貸利率（貼現率）上調0.75個百分點至4%，自2022年11月3日起生效。",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "quotation": "voted unanimously to approve a 3/4 percentage point increase in the primary credit rate to 4 percent, effective November 3, 2022."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "雖然準備金餘額利率（3.9%）與貼現率（4%）與聯邦基金目標區間上調75個基點至3.75%–4%的做法一致，但所附文本並未包含決議本身的聲明正文，無法直接從引文確認目標區間數字。",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "quotation": "the monetary policy stance announced by the Federal Open Market Committee in its statement on November 2, 2022:"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "所附摘錄僅為聲明的局部內容（source_coverage為partial），未包含FOMC決議正文中關於聯邦基金利率目標區間的直接表述，故無法從這些文本確認目標區間數字。",
+      "所附文本未包含聲明中關於未來利率路徑的表述（如'持續上調…將是適當的'等措辭），無法確認未來利率路徑的原文。",
+      "摘錄被截斷（如'• As '），可能遺漏其他關鍵內容。",
+      "來源日期為聲明公佈日（declared_published_at），未經獨立驗證。"
+    ],
+    "facts": [
+      {
+        "fact_id": "iorb_nov2022",
+        "label": "準備金餘額利率",
+        "value": 3.9,
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective 2022-11-03",
+        "citation": {
+          "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+          "quotation": "raise the interest rate paid on reserve balances to 3.9 percent, effective November 3, 2022"
+        }
+      },
+      {
+        "fact_id": "primary_credit_rate_nov2022",
+        "label": "主要信貸利率（貼現率）",
+        "value": 4,
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective 2022-11-03",
+        "citation": {
+          "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+          "quotation": "a 3/4 percentage point increase in the primary credit rate to 4 percent, effective November 3, 2022"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1423,
+  "prompt_sha256": "46af480d9a748dde2d8cbfc2e528d8297b35828277d38eeefc84954f89e32ca2",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

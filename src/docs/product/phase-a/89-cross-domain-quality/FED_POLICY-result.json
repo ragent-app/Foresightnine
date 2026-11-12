@@ -1,0 +1,237 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; public FOMC statement.",
+  "id": "FED_POLICY",
+  "manifest_sha256": "491f8ad2b5fa21295b97d350b6ce0669ef4b9ed856cacc9397d78ce0f636fea1",
+  "operation_status": "completed",
+  "operation_id": "operation:0414428d4babef434429c5d6",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 20.184,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+        "title": "Federal Reserve FOMC statement 2022-11-02",
+        "url": null,
+        "event_at": null,
+        "published_at": "2022-11-02T18:00:00+00:00",
+        "obtained_at": "2026-11-12T09:21:36.594462+00:00",
+        "revised_at": null,
+        "content_sha256": "097643b62fc0c91514e4fcb6012474f76b2007ebcba288e3377f54fa88f79344",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "iorb_nov2022",
+        "value": "3.9",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective 2022-11-03",
+        "label": "準備金餘額利率",
+        "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+        "quotation": "raise the\ninterest rate paid on reserve balances to 3.9 percent, effective November 3, 2022",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 2949,
+          "character_end": 3040,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "primary_credit_rate_nov2022",
+        "value": "4",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective 2022-11-03",
+        "label": "主要信貸利率（貼現率）",
+        "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+        "quotation": "a 3/4 percentage point increase in the primary credit rate to\n4 percent, effective November 3, 2022",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 4957,
+          "character_end": 5056,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "所提供的聲明摘錄確認，美聯儲理事會一致投票決定將準備金餘額利率上調至3.9%，自2022年11月3日起生效。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "location": {
+              "character_start": 2875,
+              "character_end": 3041,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The Board of Governors of the Federal Reserve System voted unanimously to raise the\ninterest rate paid on reserve balances to 3.9 percent, effective November 3, 2022."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "同一摘錄確認，理事會一致投票批准將主要信貸利率（貼現率）上調0.75個百分點至4%，自2022年11月3日起生效。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "location": {
+              "character_start": 4928,
+              "character_end": 5057,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "voted\nunanimously to approve a 3/4 percentage point increase in the primary credit rate to\n4 percent, effective November 3, 2022."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "雖然準備金餘額利率（3.9%）與貼現率（4%）與聯邦基金目標區間上調75個基點至3.75%–4%的做法一致，但所附文本並未包含決議本身的聲明正文，無法直接從引文確認目標區間數字。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "location": {
+              "character_start": 2761,
+              "character_end": 2872,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the monetary policy stance\nannounced by the Federal Open Market Committee in its statement on November 2, 2022:"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "uncited_percentages": [
+          "3.9%",
+          "4%",
+          "3.75%"
+        ],
+        "uncited_fact_values": [
+          "3.9 percent",
+          "4 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "iorb_nov2022",
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "value": "3.9",
+            "unit": "percent",
+            "period": "effective 2022-11-03",
+            "quotation": "raise the\ninterest rate paid on reserve balances to 3.9 percent, effective November 3, 2022",
+            "location": {
+              "character_start": 2949,
+              "character_end": 3040,
+              "page": 3
+            },
+            "status": "requires_semantic_review"
+          },
+          {
+            "fact_id": "primary_credit_rate_nov2022",
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "value": "4",
+            "unit": "percent",
+            "period": "effective 2022-11-03",
+            "quotation": "a 3/4 percentage point increase in the primary credit rate to\n4 percent, effective November 3, 2022",
+            "location": {
+              "character_start": 4957,
+              "character_end": 5056,
+              "page": 3
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_274a2a991bc64c4ab611f803546d77d7: only character ranges 2760–3047, 4866–5149 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 所附摘錄僅為聲明的局部內容（source_coverage為partial），未包含FOMC決議正文中關於聯邦基金利率目標區間的直接表述，故無法從這些文本確認目標區間數字。",
+      "Model-reported limitation (not independently verified): 所附文本未包含聲明中關於未來利率路徑的表述（如'持續上調…將是適當的'等措辭），無法確認未來利率路徑的原文。",
+      "Model-reported limitation (not independently verified): 摘錄被截斷（如'• As '），可能遺漏其他關鍵內容。",
+      "Model-reported limitation (not independently verified): 來源日期為聲明公佈日（declared_published_at），未經獨立驗證。",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:0414428d4babef434429c5d6",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1423,
+      "cost_usd": null,
+      "generation_tokens": 1423,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 18.798,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "46af480d9a748dde2d8cbfc2e528d8297b35828277d38eeefc84954f89e32ca2",
+      "prompt_characters": 1929,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v23",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+          "character_start": 2760,
+          "character_end": 3047
+        },
+        {
+          "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+          "character_start": 4866,
+          "character_end": 5149
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_274a2a991bc64c4ab611f803546d77d7": "097643b62fc0c91514e4fcb6012474f76b2007ebcba288e3377f54fa88f79344"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}

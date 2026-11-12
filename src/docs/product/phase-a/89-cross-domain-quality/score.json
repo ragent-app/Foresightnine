@@ -1,0 +1,43 @@
+{
+  "manifest_sha256": "491f8ad2b5fa21295b97d350b6ce0669ef4b9ed856cacc9397d78ce0f636fea1",
+  "semantic_support": "not independently established",
+  "tasks": {
+    "MSFT_REVENUE": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 1610,
+      "expected_detail": {
+        "fact_2022": true,
+        "fact_2023": false,
+        "growth_calculation": false
+      },
+      "checks": {
+        "expected": false,
+        "all_citations_located": true,
+        "no_system_warnings": false,
+        "research_complete": false,
+        "budget_and_provenance": true
+      },
+      "mechanical_pass": false
+    },
+    "FED_POLICY": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 1423,
+      "expected_detail": {
+        "target_range": false,
+        "future_policy": false
+      },
+      "checks": {
+        "expected": false,
+        "all_citations_located": true,
+        "no_system_warnings": false,
+        "research_complete": false,
+        "budget_and_provenance": true
+      },
+      "mechanical_pass": false
+    }
+  },
+  "passed": 0,
+  "total": 2
+}
