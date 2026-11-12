@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v36"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v37"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -952,6 +952,44 @@ def _structured_observation_windows(text: str, question: str, size: int,
         return None
 
 
+def _additional_query_sentences(text: str, question: str, selected: list[tuple[int, str]],
+                                should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
+    """Return bounded original sentences that add a query term to existing coverage.
+
+    Keyword overlap is only a retrieval hint; it does not establish relevance
+    or support. No selected text is replaced to make space for a candidate.
+    """
+    ignored = {"what", "when", "where", "which", "whose", "that", "this", "these", "those", "from", "with", "have", "were", "according", "under", "their", "source", "sources", "report", "reported", "using", "provide", "explain", "compare", "between", "describe", "question", "please", "include", "including", "relevant", "period", "year", "years"}
+    terms = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", question.casefold()[:2000]) if word not in ignored}
+    terms = set(sorted(terms)[:32])
+    def hits(value: str) -> set[str]:
+        words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", value.casefold())}
+        return terms & words
+    covered = hits(" ".join(part for _, part in selected))
+    if not covered or not terms - covered:
+        return []
+    candidates: list[tuple[int, int, int, str]] = []
+    previous = 0
+    for index, boundary in enumerate(re.finditer(r"\.(?!\d)|[!?。！？]", text[:1_000_000])):
+        if index >= 4096:
+            break
+        if should_stop is not None and index % 32 == 0 and should_stop():
+            raise AnalysisInterrupted()
+        start, end = previous, boundary.end()
+        previous = end
+        while start < end and text[start].isspace():
+            start += 1
+        if not 20 <= end - start <= 240 or any(start < offset + len(part) and offset < end for offset, part in selected):
+            continue
+        sentence = text[start:end]
+        found = hits(sentence)
+        novel, shared = found - covered, found & covered
+        if novel and shared:
+            candidates.append((-len(novel), -len(shared), start, sentence))
+    candidates.sort()
+    return [(start, sentence) for _, _, start, sentence in candidates]
+
+
 def _replace_empty_table_with_counterpoint(text: str, question: str, windows: list[tuple[int, str]],
                                            should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
     """Use a complete topical qualification in place of an empty table header.
@@ -1483,6 +1521,17 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # baseline selected ranges intact, then spend any saved bytes only on
         # adjacent original context, so no previously selected text is lost.
         compact_metadata = len(selected) > 1
+        if focus is None and selected and sum(len(part) for _, part in selected) < len(source.text):
+            # Preserve all baseline excerpts. Use only remaining source and
+            # serialized-input budget for one complete additional sentence.
+            candidates = _additional_query_sentences(source.text, question, selected, should_stop)
+            for candidate in candidates:
+                trial = sorted([*selected, candidate], key=lambda item: item[0])
+                normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in trial)
+                if normalized <= max_size and fits(trial, compact_metadata=True, short_refs=True):
+                    selected = trial
+                    compact_metadata = True
+                    break
         ordered_disjoint = all(selected[i][0] + len(selected[i][1]) <= selected[i + 1][0]
                                for i in range(len(selected) - 1))
         if compact_metadata and ordered_disjoint and fits(selected, compact_metadata=True):

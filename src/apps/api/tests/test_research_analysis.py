@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _replace_empty_table_with_counterpoint, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _additional_query_sentences, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _replace_empty_table_with_counterpoint, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
@@ -787,6 +787,34 @@ def test_chinese_bank_question_can_retrieve_english_stress_results():
     report = "General unrelated commentary. " * 80 + expected + " General unrelated commentary. " * 80
     parts = _select_windows(report, "银行资本比率和个别银行在严重不利压力测试下的最低水平如何？", 250, 2)
     assert any("12.4 percent" in part and "9.9 percent" in part for _, part in parts)
+
+
+def test_additional_query_sentences_are_complete_original_and_add_a_facet():
+    first = "Revenue increased in the year."
+    new = "Revenue and debt both increased for the company."
+    text = first + " " + "Other notes. " * 50 + new
+    selected = [(0, first)]
+    assert _additional_query_sentences(text, "Explain revenue and debt.", selected) == [(text.index(new), new)]
+    assert _additional_query_sentences(text, "Explain revenue.", selected) == []
+    assert _additional_query_sentences(text, "Explain revenue and debt.", [*selected, (text.index(new), new)]) == []
+
+
+def test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ranges(monkeypatch):
+    import app.research_analysis as analysis
+    extra = "Revenue and debt both increased for the company."
+    text = "Revenue increased in the year. " + "Other notes. " * 70 + extra + " Other notes. " * 120
+    report = source("s", text=text)
+    first, second = (0, text[:150]), (300, text[300:450])
+    monkeypatch.setattr(analysis, "_select_windows", lambda *args, **kwargs: [first, second])
+    result = analyze("Explain revenue and debt.", [report], None, lambda _: ({}, 0), max_prompt_chars=2000)
+    ranges = [(segment["character_start"], segment["character_end"]) for segment in result.segments]
+    for original in (first, second):
+        original_start, original_text = _trim_partial_ascii_words(text, *original)
+        assert any(start <= original_start and end >= original_start + len(original_text) for start, end in ranges)
+    assert (text.index(extra), text.index(extra) + len(extra)) in ranges
+    assert result.prompt_bytes <= 2000
+    limited = analyze("Explain revenue and debt.", [report], None, lambda _: ({}, 0), max_prompt_chars=1350)
+    assert limited.prompt_bytes <= 1350
 
 
 def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote():
