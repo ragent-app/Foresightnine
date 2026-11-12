@@ -2475,6 +2475,72 @@
         "summary": "Confirm Research Direction"
       }
     },
+    "/v2/research/topics/{topic_id}/facts/confirm-table": {
+      "post": {
+        "description": "Record a user's review of an exact, uniquely located restored table row.",
+        "operationId": "confirm_research_table_v2_research_topics__topic_id__facts_confirm_table_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmDirectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchTopic"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Research Table"
+      }
+    },
     "/v2/research/topics/{topic_id}/runs": {
       "get": {
         "operationId": "list_research_runs_v2_research_topics__topic_id__runs_get",

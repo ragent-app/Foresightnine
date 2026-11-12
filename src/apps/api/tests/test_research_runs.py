@@ -2481,11 +2481,40 @@ def test_restored_table_fact_cannot_be_calculated_or_clear_warning_by_edit(monke
     edited = deepcopy(version["content"])
     edited["facts"][0].pop("quotation_match")
     edited["facts"][0]["label"] = "Edited revenue"
+    edited["facts"][0]["table_confirmation"] = {"confirmed_by": "user", "fact_sha256": "forged"}
     saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": version["version_id"], "content": edited})
     assert saved.status_code == 201, saved.text
     latest = saved.json()["versions"][-1]
     assert latest["content"]["facts"][0]["quotation_match"] == "table_markup_expanded"
+    assert "table_confirmation" not in latest["content"]["facts"][0]
     assert client.post(path + "/calculations", headers=headers, json={**payload, "parent_version_id": latest["version_id"]}).status_code == 422
+    confirm = lambda parent, fact_id: client.post(path + "/facts/confirm-table", headers=headers,
+        json={"parent_version_id": parent, "fact_id": fact_id})
+    assert confirm(latest["version_id"], "unknown").status_code == 422
+    other = client.post("/v1/auth/local/register", json={"email": f"other-{uuid4().hex}@example.test", "password": "correct horse battery staple!"}).json()
+    assert client.post(path + "/facts/confirm-table", headers={"Authorization": "Bearer " + other["access_token"]},
+                       json={"parent_version_id": latest["version_id"], "fact_id": "current"}).status_code == 404
+    first = confirm(latest["version_id"], "current")
+    assert first.status_code == 201, first.text
+    first_version = first.json()["versions"][-1]
+    assert first_version["content"]["facts"][0]["table_confirmation"]["confirmed_by"] == "user"
+    assert first_version["content"]["facts"][0]["verification"] == "user_edited_not_independently_verified"
+    assert client.post(path + "/calculations", headers=headers, json={**payload, "parent_version_id": first_version["version_id"]}).status_code == 422
+    second = confirm(first_version["version_id"], "prior")
+    assert second.status_code == 201, second.text
+    reviewed = second.json()["versions"][-1]
+    calculation = client.post(path + "/calculations", headers=headers, json={**payload, "parent_version_id": reviewed["version_id"]})
+    assert calculation.status_code == 201, calculation.text
+    calculated = calculation.json()["versions"][-1]
+    assert calculated["content"]["calculations"][-1]["value"] == "25.00"
+    modified = deepcopy(calculated["content"])
+    modified["facts"][0]["period"] = "2025"
+    changed = client.post(path + "/versions", headers=headers, json={"parent_version_id": calculated["version_id"], "content": modified})
+    assert changed.status_code == 201, changed.text
+    changed_version = changed.json()["versions"][-1]
+    assert "table_confirmation" not in changed_version["content"]["facts"][0]
+    assert changed_version["content"]["calculations"][-1]["input_status"] == "unverifiable"
+    assert confirm(latest["version_id"], "current").status_code == 409
 
 
 def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_after_edit(monkeypatch):

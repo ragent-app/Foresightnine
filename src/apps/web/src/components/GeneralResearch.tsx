@@ -567,6 +567,18 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     } catch { setNotice(en ? "Could not confirm this figure. Check its source, location and other warnings." : "无法确认此数值，请检查来源、原文位置及其他提示。"); }
     finally { setBusy(false); }
   }
+  async function confirmTable(factId: string) {
+    if (!api || !topic || !current || !isLatest || running) return;
+    if (hasUnsavedReview) { setNotice(en ? "Save your edits before confirming this figure." : "请先保存当前修改，再确认此数值。"); return; }
+    setBusy(true); setNotice("");
+    try {
+      const updated = await api.confirmTable(topic.topic_id, current.version_id, factId);
+      setTopic(updated); setSelectedVersionId("");
+      setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+      setNotice(en ? "Your table review was saved in a new version; the source is not independently verified." : "已在新版本记录你的表格核对；来源尚未独立核验。");
+    } catch { setNotice(en ? "Could not confirm this figure. Check its source, location and other warnings." : "无法确认此数值，请检查来源、原文位置及其他提示。"); }
+    finally { setBusy(false); }
+  }
   async function createCalculation() {
     if (!api || !topic || !current || !isLatest || running) return;
     if (hasUnsavedReview) { setNotice(en ? "Save your edits before calculating." : "请先保存当前修改，再计算。"); return; }
@@ -747,6 +759,10 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         {facts.map((fact, index) => <article className="general-claim" key={`${fact.fact_id}:${index}`}>
           <strong>{fact.label}</strong>
           {fact.authorship === "user" || !originalFacts.has(JSON.stringify(fact)) ? <small> {en ? "User-edited; not independently verified." : "用户编辑，尚未独立核验。"}</small> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.source_value_warnings?.length ? <div role="status"><p>{en ? "Check this edited figure against its source:" : "请核对编辑后的数值与来源："}</p><ul>{fact.source_value_warnings.map((warning, warningIndex) => <li key={warningIndex}>{factSourceWarning(warning, en)}</li>)}</ul></div> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.currency_conflict_unverified ? <p role="status">{en ? "The fact currency conflicts with a currency cue on the same quoted value. Review the source before calculating." : "事实的币种与引文中同一数值旁的明确币种不一致，计算前请核对原文。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.currency_quote_missing ? <p role="status">{en ? "This table quotation does not identify the currency. Check the original source and currency before relying on the calculation." : "该表格引文未标明币种；使用计算结果前请核对原文及币种。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.table_period_conflict ? <p role="status">{en ? `The fact states ${fact.table_period_conflict.declared_year}, but its apparent table column is ${fact.table_period_conflict.column_year}. Check the original table before calculating.` : `事实标注 ${fact.table_period_conflict.declared_year} 年，但表格对应列可能为 ${fact.table_period_conflict.column_year} 年；计算前请核对原表。`}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.table_alignment_unverified ? <p role="status">{en ? "Table column alignment has not been verified. Check the original table, period and unit before relying on this figure or its calculations." : "表格列对齐尚未核实；使用此数值或计算结果前，请核对原始表格、期间和单位。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.quotation_match === "pdf_line_hyphen_restored" ? <p role="status">{en ? "This quotation was recovered across a PDF line-break hyphen. Check and replace it with the exact original passage before calculating." : "此引文通过恢复 PDF 换行连字符定位；计算前请核对并替换为准确原文。"}</p> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.direction_context_unverified ? <div><p role="status">{fact.direction_confirmation ? (en ? "You confirmed the sign and subject for this version; the source remains independently unverified." : "你已在此版本确认方向和对象；来源仍未独立核验。") : (en ? "The negative sign was inferred from a decrease in the quotation. Check the subject and whether this is a change or a level before calculating." : "负号根据引文中的下降表述推断；计算前请核对指标对象以及它表示变化还是水平。")}</p>{!fact.direction_confirmation && isLatest && !running ? <Button disabled={busy} onClick={() => void confirmDirection(fact.fact_id)}>{en ? "I checked: this is a negative change" : "我已核对：这是负向变化"}</Button> : null}</div> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.numeric_normalization === "equivalent_decimal_fraction" ? <small> {en ? "Equivalent decimal and fraction were checked exactly." : "小数与分数已按精确数值核对。"}</small> : null}{!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.numeric_normalization === "exact_range_bound" ? <small> {en ? "This figure is a bound extracted from a range." : "该数值是从区间中提取的端点。"}</small> : null}
+          {!hasUnsavedFacts && originalFacts.has(JSON.stringify(fact)) && fact.quotation_match === "table_markup_expanded" ? <div>
+            <p role="status">{fact.table_confirmation ? (en ? "You reviewed the table for this version; the source remains independently unverified." : "你已核对本版本的表格；来源仍未独立核验。") : (en ? "Compare the original table's company, value, column, period and unit before confirming." : "确认前请对照原始表格核对公司、数值、列、期间和单位。")}</p>
+            {!fact.table_confirmation && isLatest && !running ? <Button disabled={busy} onClick={() => void confirmTable(fact.fact_id)}>{en ? "I checked the original table" : "我已核对原始表格"}</Button> : null}
+          </div> : null}
           {editingFacts && isLatest && !running ? <>
             <Field label={`${en ? "Metric" : "指标"} ${index + 1}`}><Input value={fact.label ?? ""} maxLength={300} disabled={busy} onChange={(event) => updateFact(index, { label: event.target.value })} /></Field>
             <Field label={`${en ? "Value" : "数值"} ${index + 1}`}><Input value={fact.value ?? ""} inputMode="decimal" maxLength={64} disabled={busy} onChange={(event) => updateFact(index, { value: event.target.value })} /></Field>
@@ -755,7 +771,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
             <Field label={`${en ? "Period" : "期间"} ${index + 1}`}><Input value={fact.period ?? ""} maxLength={100} disabled={busy} onChange={(event) => updateFact(index, { period: event.target.value })} /></Field>
             <CitationEditor mode="replace" loadSource={(sourceId) => api.sourceText(topic.topic_id, current.version_id, sourceId)} sources={sourceMetadata} asOf={topic.request.as_of} disabled={busy} en={en} onAdd={(sourceId, quotation) => setFacts((items) => items.map((item, itemIndex) => {
               if (itemIndex !== index) return item;
-              const { location: _location, direction_confirmation: _confirmation, quotation_match: _match, ...rest } = item;
+              const { location: _location, direction_confirmation: _confirmation, table_confirmation: _tableConfirmation, quotation_match: _match, ...rest } = item;
               return { ...rest, source_id: sourceId, quotation };
             }))} />
           </> : <p>{fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</p>}

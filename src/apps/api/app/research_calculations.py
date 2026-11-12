@@ -74,6 +74,14 @@ def direction_user_confirmed(fact: dict) -> bool:
         return False
 
 
+def table_user_confirmed(fact: dict) -> bool:
+    confirmation = fact.get("table_confirmation")
+    if not isinstance(confirmation, dict) or confirmation.get("confirmed_by") != "user":
+        return False
+    try:
+        return confirmation.get("fact_sha256") == direction_confirmation_fingerprint(fact)
+    except (TypeError, ValueError):
+        return False
 class CalculationError(ValueError):
     """The available inputs do not support the requested calculation."""
 
@@ -420,8 +428,10 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             candidates = by_id.get(snapshot.fact_id, [])
             if len(candidates) != 1:
                 return "missing_or_ambiguous"
-            if candidates[0].get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded"} or candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
-                    candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation")):
+            if (candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or
+                candidates[0].get("quotation_match") == "table_markup_expanded" and not table_user_confirmed(candidates[0]) or
+                candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
+                    candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation"))):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})
             if actual != snapshot:

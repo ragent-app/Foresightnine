@@ -10,6 +10,7 @@ import json
 import inspect
 import logging
 import os
+import re
 import secrets
 from time import monotonic
 from typing import Annotated, Any
@@ -96,7 +97,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_related_claim_quotations, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
@@ -1828,6 +1829,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         # Confirmations are issued only by the dedicated action;
                         # any edit invalidates the prior attestation.
                         entry.pop("direction_confirmation", None)
+                        entry.pop("table_confirmation", None)
                         entry.pop("numeric_normalization", None)
                         entry.pop("range_parent_id", None)
         for entry in content.calculations:
@@ -1939,6 +1941,62 @@ def confirm_research_direction(topic_id: str, request: ConfirmDirectionRequest,
         raise ApiProblem(422, "invalid_request", "The directional fact or its source requires further review.") from error
 
 
+@app.post("/v2/research/topics/{topic_id}/facts/confirm-table", response_model=ResearchTopic,
+          status_code=201, include_in_schema=False)
+def confirm_research_table(topic_id: str, request: ConfirmDirectionRequest,
+                           authorization: str | None = Header(default=None)) -> ResearchTopic:
+    """Record a user's review of an exact, uniquely located restored table row."""
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        previous = topic.versions[-1]
+        if previous.version_id != request.parent_version_id:
+            raise TopicVersionConflict()
+        matches = [fact for fact in previous.content.facts if fact.get("fact_id") == request.fact_id]
+        if len(matches) != 1 or matches[0].get("quotation_match") != "table_markup_expanded":
+            raise ApiProblem(422, "invalid_request", "A unique restored table fact is required.")
+        fact = matches[0]
+        if table_user_confirmed(fact):
+            return topic
+        source_id, quote, location = fact.get("source_id"), fact.get("quotation"), fact.get("location")
+        if (source_id not in set(previous.source_ids) or not isinstance(quote, str) or not quote or
+                not isinstance(location, dict) or location.get("status") == "ambiguous" or
+                fact.get("source_value_warnings") or fact.get("table_period_conflict") or
+                fact.get("currency_conflict_unverified") or fact.get("currency_context_unverified") or
+                fact.get("direction_context_unverified")):
+            raise ApiProblem(422, "invalid_request", "The fact or its source requires further review.")
+        source = research_sources.get(account.account_id, source_id)
+        if (source.is_simulated or not source.permissions.display or topic.request.as_of is not None and
+                (source.published_at is None or source.published_at > topic.request.as_of or
+                 source.revised_at is not None and source.revised_at > topic.request.as_of)):
+            raise ApiProblem(422, "invalid_request", "The source is unavailable for this research.")
+        checked = locate_user_quotation(source, quote)
+        located = checked.get("location", {})
+        if (located.get("status") == "ambiguous" or checked.get("partial_token") or
+                located.get("character_start") != location.get("character_start") or
+                located.get("character_end") != location.get("character_end") or
+                not quotation_is_table_row(source.text, located.get("character_start"), quote)):
+            raise ApiProblem(422, "invalid_request", "A unique complete table row is required.")
+        numeric = NumericFact.model_validate({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})
+        original_cells = re.sub(r"\[(?:colspan|rowspan)=\d+\]", "", quote, flags=re.IGNORECASE)
+        if numeric.value not in _quoted_numbers(original_cells):
+            raise ApiProblem(422, "invalid_request", "The quoted row does not contain the value.")
+        content = previous.content.model_copy(deep=True)
+        target = next(item for item in content.facts if item.get("fact_id") == request.fact_id)
+        target["table_confirmation"] = {"confirmed_by": "user", "fact_sha256": direction_confirmation_fingerprint(target),
+                                        "confirmed_at": datetime.now(timezone.utc).isoformat()}
+        for calculation in content.calculations:
+            calculation["input_status"] = calculation_input_status(calculation, content.facts)
+        return research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=previous.version_id, content=content, review="draft", note=previous.note))
+    except (TopicNotFound, SourceNotFound) as error:
+        raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
+    except TopicVersionConflict as error:
+        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before saving.") from error
+    except (ValueError, ValidationError) as error:
+        raise ApiProblem(422, "invalid_request", "The fact or its source requires further review.") from error
+
+
 def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) -> list[dict]:
     """Resolve version-owned inputs and apply the same checks for both actions."""
     facts = []
@@ -1949,7 +2007,7 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
         fact = candidates[0]
         if fact.get("source_value_warnings"):
             raise ApiProblem(422, "invalid_request", "The fact's source quotation requires review before calculation.")
-        if fact.get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded"}:
+        if fact.get("quotation_match") == "pdf_line_hyphen_restored" or (fact.get("quotation_match") == "table_markup_expanded" and not table_user_confirmed(fact)):
             raise ApiProblem(422, "invalid_request", "The restored quotation requires review before calculation.")
         location = fact.get("location")
         if isinstance(location, dict) and location.get("status") == "ambiguous":

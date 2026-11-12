@@ -1,5 +1,5 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: d1c9d2963152431c26146e8a47dc9cc56fd7d8406224982734bd19abe7bf6c77
+ * SHA-256: a61908494770a441a9f7e79897f5500448a3d1e1ab6d20b939c8e73faf0086d2
  */
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
 export type CalculationRequest = { readonly "decimal_places"?: number; readonly "first": NumericFact; readonly "formula": "growth_percent" | "margin_percent" | "difference"; readonly "second": NumericFact; };
