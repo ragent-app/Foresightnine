@@ -38,6 +38,8 @@ def test_fractional_rate_notation_is_converted_exactly():
     assert Decimal("3") not in values and Decimal("4") not in values
     assert _quoted_numbers("-1/2") == {Decimal("-0.5")}
     assert _quoted_numbers("- 1/2") == {Decimal("-0.5")}
+    assert _quoted_numbers("区间为5-1/4%至5-1/2%。") == {Decimal("5.25"), Decimal("5.5")}
+    assert _quoted_numbers("目標為5-1/4至5-1/2百分點") == {Decimal("5.25"), Decimal("5.5")}
     assert Decimal("0.3333333333333333333333333333") not in _quoted_numbers("1/3")
     assert Decimal("2.6") in _quoted_numbers("同比2.6%，环比0.3%")
 

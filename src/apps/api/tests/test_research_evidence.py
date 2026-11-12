@@ -356,3 +356,19 @@ def test_traditional_chinese_basis_points_and_rate_levels_are_checked():
     assert flag_rate_level_point_warnings([level])[0]['rate_unit_warnings']
     change = {'text': '目標區間上調了1/4至1/2個百分點。'}
     assert not flag_rate_level_point_warnings([change])[0].get('rate_unit_warnings')
+
+
+def test_fraction_denominator_is_not_suggested_as_unrelated_numeric_fact():
+    from app.research_evidence import suggest_uncited_numeric_facts
+    text = 'Inflation target was 2 percent. Target range was 5-1/4 to 5-1/2 percent.'
+    src = ResearchSource(source_id='policy', owner_id='owner', title='Statement', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash', permissions=SourcePermissions(store=True, display=True))
+    quote = 'Inflation target was 2 percent'; start = text.index(quote)
+    item = {**fact('inflation', 'policy', '2', unit='percent'), 'quotation': quote,
+            'location': {'character_start': start, 'character_end': start + len(quote)},
+            'verification': 'model_extraction_not_independently_verified'}
+    range_quote = 'Target range was 5-1/4 to 5-1/2 percent'; a = text.index(range_quote)
+    claim = {'text': '目标维持在5-1/4%至5-1/2%。', 'citations': [{'source_id': 'policy', 'quotation': range_quote,
+             'location': {'character_start': a, 'character_end': a + len(range_quote)}}]}
+    result = suggest_uncited_numeric_facts([claim], [item], [src])[0]
+    assert not result.get('uncited_fact_values') and not result.get('suggested_fact_evidence')

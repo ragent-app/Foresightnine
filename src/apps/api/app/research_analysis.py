@@ -109,7 +109,7 @@ class AnalysisInterrupted(Exception):
 
 
 _NUMBER = re.compile(r"(?<![A-Za-z0-9_.])\(?\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)?(?![A-Za-z0-9_.])")
-_FRACTION = re.compile(r"(?<![\w./-])(-\s*)?(?:(\d+)-)?(\d+)/(\d+)(?![\w./-])")
+_FRACTION = re.compile(r"(?<![A-Za-z0-9_./-])(-\s*)?(?:(\d+)-)?(\d+)/(\d+)(?![A-Za-z0-9_./-])")
 _RATE_PART = r"-?(?:\d+(?:-\d+)?/\d+|\d+(?:\.\d+)?)"
 _RATE_RANGE = re.compile(rf"^({_RATE_PART})\s*(?:%|percent)?\s*(?:\bto\b|至|到|[–—])\s*({_RATE_PART})\s*(?:%|percent)?$", re.IGNORECASE)
 _EQUIVALENT_VALUES = re.compile(r"^([^()（）]{1,100}?)\s*(?:\(([^()（）]{1,100})\)|（([^()（）]{1,100})）)$")
