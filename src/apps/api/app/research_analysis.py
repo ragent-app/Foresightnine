@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v30"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v31"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -440,6 +440,34 @@ def _compact_pdf_with_offsets(text: str, should_stop: Callable[[], bool] | None 
         return position + (deltas[index - 1] if index else 0)
 
     return compacted, original_offset
+
+
+_BLANK_LINE_RUN = re.compile(r"\r?\n(?:[ \t]*\r?\n){2,}")
+
+
+def _compact_blank_lines_with_offsets(text: str, should_stop: Callable[[], bool] | None = None) -> tuple[str, Callable[[int], int]]:
+    """Collapse repeated blank lines without losing original source boundaries."""
+    ends, deltas = array("I"), array("I")
+    delta = 0
+    for index, match in enumerate(_BLANK_LINE_RUN.finditer(text)):
+        if index % 4096 == 0 and should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        ends.append(match.start() - delta + 2)
+        delta += match.end() - match.start() - 2
+        deltas.append(delta)
+    compacted = _BLANK_LINE_RUN.sub("\n\n", text)
+    def original_offset(position: int) -> int:
+        if not 0 <= position <= len(compacted):
+            raise ValueError("Normalized offset is out of range")
+        index = bisect_right(ends, position)
+        return position + (deltas[index - 1] if index else 0)
+    return compacted, original_offset
+
+
+def _prompt_source_text(text: str, pdf: bool) -> str:
+    if pdf:
+        text = re.sub(r"[ \t]{2,}", "\t", text)
+    return _BLANK_LINE_RUN.sub("\n\n", text)
 
 
 def _comparison_windows(text: str, question: str, size: int,
@@ -1188,9 +1216,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # not crowd every later comparison source out of the prompt.
         share = remaining // (len(eligible) - index)
         if source.retrieval_method == "user_pdf":
-            selection_text, original_offset = _compact_pdf_with_offsets(source.text, should_stop)
+            horizontal_text, horizontal_offset = _compact_pdf_with_offsets(source.text, should_stop)
         else:
-            selection_text, original_offset = source.text, lambda value: value
+            horizontal_text, horizontal_offset = source.text, lambda value: value
+        selection_text, blank_offset = _compact_blank_lines_with_offsets(horizontal_text, should_stop)
+        def original_offset(position: int) -> int:
+            return horizontal_offset(blank_offset(position))
         max_size = min(len(selection_text), MAX_SOURCE_CHARS, share)
         # Character quotas alone do not partition the provider's byte budget:
         # Chinese text and JSON escaping can consume several bytes per character.
@@ -1245,14 +1276,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             return [{"source_id": source.source_id,
                      **({"title": source.title} if not structured or position == 0 else {}),
                      "source_coverage": coverage,
-                     **({"user_selected_passage": re.sub(r"[ \t]{2,}", "\t", source.text[focus[1]:focus[2]])
-                          if source.retrieval_method == "user_pdf" else source.text[focus[1]:focus[2]]}
+                     **({"user_selected_passage": _prompt_source_text(source.text[focus[1]:focus[2]], source.retrieval_method == "user_pdf")}
                         if focus is not None and source.source_id == focus[0] and
                         start <= focus[1] and start + len(passage) >= focus[2] else {}),
                      **({"declared_published_at": source.published_at.isoformat()} if source.published_at and (not structured or position == 0) else {}),
                      **({"declared_revised_at": source.revised_at.isoformat()} if source.revised_at and (not structured or position == 0) else {}),
                      **({"declared_event_at": source.event_at.isoformat()} if source.event_at and (not structured or position == 0) else {}),
-                     "text": re.sub(r"[ \t]{2,}", "\t", passage) if source.retrieval_method == "user_pdf" else passage}
+                     "text": _prompt_source_text(passage, source.retrieval_method == "user_pdf")}
                     for position, (start, passage) in enumerate(parts)]
 
         def fits(candidate: list[tuple[int, str]]) -> bool:
@@ -1272,7 +1302,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 return [(left, source.text[left:right])]
             def focused_fits(radius: int) -> bool:
                 passage = focused(radius)[0][1]
-                size = len(re.sub(r"[ \t]{2,}", "\t", passage)) if source.retrieval_method == "user_pdf" else len(passage)
+                size = len(_prompt_source_text(passage, source.retrieval_method == "user_pdf"))
                 return size <= max_size and fits(focused(radius))
             if not focused_fits(0):
                 return AnalysisResult([], [], limitations + ["The requested focus exceeds the input budget; no model call was made."], [], None)
@@ -1318,8 +1348,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append(f"Source {source.source_id}: exceeds the current input budget; not processed.")
             continue
         model_text[source.source_id] = selected
-        remaining -= sum(len(re.sub(r"[ \t]{2,}", "\t", passage)) if source.retrieval_method == "user_pdf" else len(passage)
-                         for _, passage in selected)
+        remaining -= sum(len(_prompt_source_text(passage, source.retrieval_method == "user_pdf")) for _, passage in selected)
         processed.append(source)
         data["sources"].extend(source_payload(selected))
         if sum(len(passage) for _, passage in selected) < len(source.text):

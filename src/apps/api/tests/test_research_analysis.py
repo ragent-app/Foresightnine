@@ -1480,3 +1480,32 @@ def test_larger_research_prompt_budget_can_include_complete_source_without_chang
     assert len(large_prompts[0]["sources"]) == 1
     assert large_prompts[0]["sources"][0]["source_coverage"] == "complete"
     assert large_prompts[0]["sources"][0]["text"] == text
+
+
+def test_blank_line_compaction_preserves_boundaries_and_original_citation():
+    from app.research_analysis import _compact_blank_lines_with_offsets
+    original = "Header\n  \n\n  \nRevenue was 100.\n \n\n\nProfit was 20."
+    compact, offset = _compact_blank_lines_with_offsets(original)
+    assert compact == "Header\n\nRevenue was 100.\n\nProfit was 20."
+    for part in ("Header", "Revenue was 100.", "Profit was 20."):
+        start = compact.index(part)
+        assert original[offset(start):offset(start + len(part))] == part
+    report = source("s", text=original)
+    def generate(prompt):
+        assert "Revenue was 100.\\n\\nProfit was 20." in prompt
+        return {"claims": [{"text":"Revenue and profit are reported.", "citations":[{"source_id":"s", "quotation":"Revenue was 100.\n\nProfit was 20."}]}]}, 1
+    result = analyze("Revenue and profit?", [report], None, generate, max_prompt_chars=5000)
+    citation = result.claims[0]["citations"][0]
+    assert citation["quotation"] == "Revenue was 100.\n \n\n\nProfit was 20."
+    assert citation["quotation_match"] == "whitespace_normalized"
+    pos = citation["location"]
+    assert original[pos["character_start"]:pos["character_end"]] == citation["quotation"]
+
+
+def test_blank_line_compaction_keeps_page_and_nonblank_rows():
+    from app.research_analysis import _compact_blank_lines_with_offsets
+    original = "Year 2023\nRevenue 10\n\n\n\n  Cost 5\fPage two\n\n\nEnd"
+    compact, offset = _compact_blank_lines_with_offsets(original)
+    assert compact == "Year 2023\nRevenue 10\n\n  Cost 5\fPage two\n\nEnd"
+    assert offset(len(compact)) == len(original)
+    assert [line for line in compact.splitlines() if line] == [line for line in original.splitlines() if line]
