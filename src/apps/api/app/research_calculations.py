@@ -51,6 +51,23 @@ def is_percent_unit(unit: str) -> bool:
     return bool(re.fullmatch(r"(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|,\s*(?:annualized|annual rate))?", normalized))
 
 
+def table_currency_quote_missing(currency: str | None, quotation: str | None) -> bool:
+    """Flag a table-row quotation without an explicit currency identifier.
+
+    A code or symbol is only a cue, not verification of the financial fact.
+    A bare dollar sign is ambiguous across several currencies.
+    """
+    if not currency or not isinstance(quotation, str) or not quotation.lstrip().startswith("|"):
+        return False
+    code = currency.strip().upper()
+    if re.search(r"(?<![A-Za-z])" + re.escape(code) + r"(?![A-Za-z])", quotation, re.IGNORECASE):
+        return False
+    patterns = {"USD": r"US\s*\$|U\.?S\.?\s+dollars?", "EUR": r"€|\beuros?\b",
+                "GBP": r"£|\bpounds?\s+sterling\b", "JPY": r"\bJapanese\s+yen\b",
+                "KRW": r"₩|\bKorean\s+won\b"}
+    return not bool(re.search(patterns.get(code, r"(?!)"), quotation, re.IGNORECASE))
+
+
 def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
     """Parse only unambiguous matching period formats, without guessing fiscal calendars."""
     value = period.strip()

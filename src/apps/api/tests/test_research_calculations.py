@@ -196,3 +196,14 @@ def test_percentage_point_inputs_remain_points_without_becoming_percentage_level
     prior = fact("prior", "1", "2022", unit="percentage points", currency=None)
     result = calculate(CalculationRequest(formula="difference", first=current, second=prior))
     assert result["unit"] == "percentage points" and result["formula_version"] == "1"
+
+
+def test_table_currency_cue_does_not_treat_bare_dollar_sign_as_usd():
+    from app.research_calculations import table_currency_quote_missing
+    assert table_currency_quote_missing("USD", "| Revenue | 100 | 90 |")
+    assert table_currency_quote_missing("USD", "| Revenue | $100 | $90 |")
+    assert not table_currency_quote_missing("USD", "| Revenue USD | 100 | 90 |")
+    assert not table_currency_quote_missing("USD", "| Revenue US$ | 100 | 90 |")
+    assert not table_currency_quote_missing("EUR", "| Revenue | €100 | €90 |")
+    assert not table_currency_quote_missing(None, "| Revenue | 100 | 90 |")
+    assert not table_currency_quote_missing("USD", "Revenue was 100 million.")

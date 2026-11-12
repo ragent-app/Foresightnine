@@ -880,3 +880,14 @@ def test_analyze_keeps_short_structured_total_row_with_its_longer_header():
     assert all(value in excerpts for value in ("ACME CORP", "millions", "2024", "2023", "200", "190"))
     assert all(text[item["character_start"]:item["character_end"]] == excerpt["text"]
                for item, excerpt in zip(result.segments, received))
+
+
+def test_model_table_fact_flags_currency_missing_from_the_quotation():
+    text = "| Total revenue | 100 | 90 |"
+    report = source("s", text=text)
+    raw = {"facts": [{"fact_id": "f", "label": "Revenue", "value": "100", "unit": "millions",
+                       "currency": "USD", "period": "2024", "citation": {"source_id": "s", "quotation": text}}]}
+    result = analyze("Revenue?", [report], None, lambda _: (raw, 1))
+    assert result.facts[0]["currency_quote_missing"] is True
+    assert any("currency identifier is absent" in note for note in result.limitations)
+    assert result.facts[0]["verification"] == "model_extraction_not_independently_verified"
