@@ -23,14 +23,14 @@ _ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "千亿": Decimal("100000")
 _ZH_PUBLICATION = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*年\s*(1[0-2]|0?[1-9])\s*月(?:\s*(3[01]|[12]\d|0?[1-9])\s*日)?\s*(?:发布|公布|发表|刊登)")
 _EN_PUBLICATION = re.compile(r"\b(?:published|released|issued)\s+(?:on|in)\s+((?:19|20)\d{2})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?(?![-\d])", re.IGNORECASE)
 _RATE_NUMBER = r"\d+(?:-\d+/\d+|/\d+|\.\d+)?"
-_BASIS_POINTS = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?\d+(?:\.\d+)?)\s*(?:个\s*)?(?:基点|basis\s+points?\b|bps\b)", re.IGNORECASE)
-_POINTS = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.\d+)?))\s*(?:个百分点|percentage\s+points?\b)", re.IGNORECASE)
+_BASIS_POINTS = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?\d+(?:\.\d+)?)\s*(?:[个個]\s*)?(?:基[点點]|basis\s+points?\b|bps\b)", re.IGNORECASE)
+_POINTS = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.\d+)?))\s*(?:[个個]?百分[点點]|percentage\s+points?\b)", re.IGNORECASE)
 _RATE_LEVEL_POINTS = re.compile(
-    rf"(?:利率目标区间|目标利率区间|联邦基金利率目标区间|利率区间|目标区间|"
+    rf"(?:利率目[标標][区區][间間]|目[标標]利率[区區][间間]|[联聯]邦基金利率目[标標][区區][间間]|利率[区區][间間]|目[标標][区區][间間]|"
     rf"(?:interest\s+rate|federal\s+funds\s+rate|target)\s+(?:target\s+)?range)"
-    rf"(?P<between>[^。！？.!?;；\n]{{0,48}}?)(?P<range>{_RATE_NUMBER}\s*(?:至|到|to|–|—)\s*{_RATE_NUMBER})\s*(?:个百分点|percentage\s+points?)",
+    rf"(?P<between>[^。！？.!?;；\n]{{0,48}}?)(?P<range>{_RATE_NUMBER}\s*(?:至|到|to|–|—)\s*{_RATE_NUMBER})\s*(?:[个個]?百分[点點]|percentage\s+points?)",
     re.IGNORECASE)
-_RATE_CHANGE = re.compile(r"上调|下调|上升|下降|扩大|缩小|增加|减少|升高|降低|调整|"
+_RATE_CHANGE = re.compile(r"上[调調]|下[调調]|上升|下降|扩大|缩小|增加|減少|减少|升高|降低|[调調]整|"
                           r"\b(?:adjust|increase|decrease|narrow|widen|change|cut|rise|raise|lower)\w*\b", re.IGNORECASE)
 
 

@@ -36,8 +36,20 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v23"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v24"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
+
+_QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
+    "儲": "储", "幣": "币", "對": "对", "異": "异", "調": "调", "變": "变", "購": "购",
+    "買": "买", "國": "国", "貸": "贷", "債": "债", "減": "减", "額": "额", "較": "较",
+    "實": "实", "長": "长", "總": "总", "網": "网", "銷": "销", "價": "价", "類": "类",
+    "業": "业", "預": "预", "來": "来", "繼": "继", "續": "续", "點": "点", "個": "个",
+    "潤": "润", "營": "营", "訂": "订", "計": "计"})
+
+
+def _query_intent(question: str) -> str:
+    """Normalize a bounded set of query cues; never alter source text."""
+    return question.casefold().translate(_QUERY_VARIANTS)
 
 
 class Citation(BaseModel):
@@ -326,7 +338,7 @@ def _comparison_windows(text: str, question: str, size: int,
     answers the question. Original offsets and the overall size limit remain
     unchanged; fall back to ranked windows when both spans cannot fit.
     """
-    lower = question.casefold()
+    lower = _query_intent(question)
     if not (any(x in lower for x in ("环比", "较上月", "month-on-month", "preceding month", "monthly")) and
             any(x in lower for x in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))):
         return None
@@ -393,7 +405,7 @@ def _policy_vote_windows(text: str, question: str, size: int,
     Temporal proximity is only a retrieval hint; the original context must
     still establish that the vote refers to the action.
     """
-    lower = question.casefold()
+    lower = _query_intent(question)
     if (not any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against")) or
             not any(term in lower for term in ("货币政策", "利率", "美联储", "monetary policy", "federal reserve", "fomc"))):
         return None
@@ -443,7 +455,7 @@ def _policy_vote_windows(text: str, question: str, size: int,
 def _asset_purchase_window(text: str, question: str, size: int,
                            should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
     """Keep a bounded policy purchase decision and its following sentence together."""
-    lower = question.casefold()
+    lower = _query_intent(question)
     if not (any(term in lower for term in ("购买", "purchase", "buying")) and
             any(term in lower for term in ("国债", "treasury")) and
             any(term in lower for term in ("抵押贷款", "mortgage"))):
@@ -473,7 +485,7 @@ def _financial_table_windows(text: str, question: str, size: int,
     This is a bounded retrieval hint for extracted tables, not a claim that
     a column belongs to a period or that the cited passage proves a result.
     """
-    lower = question.casefold()
+    lower = _query_intent(question)
     if not any(term in lower for term in ("revenue", "sales", "收入", "营收")):
         return None
     years = list(dict.fromkeys(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", lower)))
@@ -537,6 +549,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
     if len(text) <= length:
         return [(0, text)]
     lower = question.casefold()
+    intent = _query_intent(question)
     # Match native Chinese source text as well as the English translations
     # below. Keep only a bounded number of short overlapping phrases; these
     # are retrieval cues, not inferred entities or semantic validation.
@@ -577,6 +590,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "较上月": ("preceding", "month"), "同比": ("year", "month"),
         "较上年同期": ("year", "month"),
         "联邦基金": ("federal", "funds"), "目标区间": ("target", "range"),
+        "目标利率区间": ("target", "range"), "未来": ("ongoing", "future"),
         "决定": ("decided",),
         "下调": ("lower", "decrease"), "上调": ("raise", "increase"),
         "变化幅度": ("lower", "increase", "decrease"), "当期美元": ("current", "dollars"),
@@ -585,7 +599,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "减幅": ("reduce", "reduction"), "初次": ("advance",),
         "投票": ("voting", "vote"), "反对票": ("against", "dissent"), "异议": ("against", "dissent"),
     }.items():
-        if chinese in lower:
+        if chinese in intent:
             terms.update(english)
     month_names = ("january", "february", "march", "april", "may", "june",
                    "july", "august", "september", "october", "november", "december")
@@ -608,21 +622,20 @@ def _select_windows(text: str, question: str, length: int, count: int,
                 "half": ("half", "1/2", "0.5")}
     groups = list(dict.fromkeys(synonyms.get(term, (term,)) for term in words))
     groups.extend((term,) for term in chinese_terms)
-    wants_annual_levels = ("full-year" in lower or "full year" in lower or "全年" in lower or
-                           bool(re.search(r"\bannual\s+(?:real\s+)?(?:gdp|growth|revenue|income)\b", lower)))
-    wants_month_comparison = any(term in lower for term in ("环比", "较上月", "month-on-month", "preceding month", "monthly"))
-    wants_year_comparison = any(term in lower for term in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))
-    wants_monetary_amount = any(term in lower for term in ("金额", "美元", "dollar amount", "monetary amount"))
-    wants_previous_period = any(term in lower for term in ("前月", "上月", "preceding month", "previous month"))
-    wants_revision = any(term in lower for term in ("修订", "revision", "revised", "revise", "第二次估计", "second estimate"))
-    wants_vote = any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against"))
-    wants_second_estimate = (any(term in lower for term in ("第二次估计", "second estimate")) or
-                             ("第二次" in lower and "估计" in lower))
-    wants_advance_estimate = (any(term in lower for term in ("初次估计", "advance estimate", "first estimate")) or
-                              ("初次" in lower and "估计" in lower))
-    wants_third_estimate = any(term in lower for term in ("第三次估计", "third estimate"))
-    wants_decision = (any(term in lower for term in ("决定", "decision", "decided")) or
-                      ("目标区间" in lower and any(term in lower for term in ("下调", "上调", "变化幅度"))))
+    wants_annual_levels = ("full-year" in intent or "full year" in intent or "全年" in intent or
+                           bool(re.search(r"\bannual\s+(?:real\s+)?(?:gdp|growth|revenue|income)\b", intent)))
+    wants_month_comparison = any(term in intent for term in ("环比", "较上月", "month-on-month", "preceding month", "monthly"))
+    wants_year_comparison = any(term in intent for term in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))
+    wants_monetary_amount = any(term in intent for term in ("金额", "美元", "dollar amount", "monetary amount"))
+    wants_previous_period = any(term in intent for term in ("前月", "上月", "preceding month", "previous month"))
+    wants_revision = any(term in intent for term in ("修订", "revision", "revised", "revise", "第二次估计", "second estimate"))
+    wants_vote = any(term in intent for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against"))
+    wants_second_estimate = (any(term in intent for term in ("第二次估计", "second estimate")) or
+                             ("第二次" in intent and "估计" in intent))
+    wants_advance_estimate = (any(term in intent for term in ("初次估计", "advance estimate", "first estimate")) or
+                              ("初次" in intent and "估计" in intent))
+    wants_third_estimate = any(term in intent for term in ("第三次估计", "third estimate"))
+    wants_decision = any(term in intent for term in ("决定", "决议", "decision", "decided", "目标区间", "目标利率区间", "target range"))
     metric_terms = set()
     for term in ("gdp", "pce", "revenue", "sales", "income", "inflation", "price"):
         if term in terms:

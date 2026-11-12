@@ -1075,3 +1075,16 @@ def test_chinese_explicit_decline_is_retained_as_unverified_direction():
     assert result.facts[0]['value'] == '-7.3' and result.facts[0]['direction_context_unverified'] is True
     assert result.facts[0]['quotation'] == quote
     assert any('excluded from automatic calculations' in note for note in result.limitations)
+
+
+def test_traditional_chinese_policy_query_selects_decision_not_other_rate():
+    decision = 'The Committee decided to raise the target range for the federal funds rate to 3-3/4 to 4 percent. The Committee anticipates that ongoing increases will be appropriate.'
+    other = 'The Board voted to raise the interest rate paid on reserve balances to 3.9 percent.'
+    text = 'Unrelated text. ' * 80 + decision + ' Other material. ' * 100 + (other + ' Other information. ') * 20
+    report = source('s', text=text)
+    prompts = []
+    result = analyze('美聯儲決議的聯邦基金目標利率區間和未來政策為何？', [report], None,
+                     lambda q: (prompts.append(json.loads(q)) or {}, 1), max_prompt_chars=2055)
+    assert any('target range for the federal funds rate to 3-3/4 to 4 percent' in item['text'] for item in prompts[0]['sources'])
+    assert result.prompt_bytes <= 2055
+    assert all(text[seg['character_start']:seg['character_end']] == part['text'] for seg, part in zip(result.segments, prompts[0]['sources']))

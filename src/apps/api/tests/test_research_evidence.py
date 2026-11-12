@@ -344,3 +344,15 @@ def test_basis_points_require_equivalent_explicit_quotation():
         assert flag_uncited_basis_points([{**item, 'citations': [{'quotation': quote}]}])[0]['uncited_basis_points'] == ['25个基点']
     stale = {**item, 'text': 'No rate change stated', 'uncited_basis_points': ['old']}
     assert not flag_uncited_basis_points([stale])[0].get('uncited_basis_points')
+
+
+def test_traditional_chinese_basis_points_and_rate_levels_are_checked():
+    from app.research_evidence import flag_uncited_basis_points
+    item = {'text': '利率上調75個基點。', 'citations': [{'quotation': 'ongoing increases are appropriate'}]}
+    assert flag_uncited_basis_points([item])[0]['uncited_basis_points'] == ['75個基點']
+    item['citations'] = [{'quotation': '利率上調0.75個百分點'}]
+    assert not flag_uncited_basis_points([item])[0].get('uncited_basis_points')
+    level = {'text': '目標利率區間上調至3-3/4至4個百分點。'}
+    assert flag_rate_level_point_warnings([level])[0]['rate_unit_warnings']
+    change = {'text': '目標區間上調了1/4至1/2個百分點。'}
+    assert not flag_rate_level_point_warnings([change])[0].get('rate_unit_warnings')
