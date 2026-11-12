@@ -1,0 +1,54 @@
+{
+  "method": "ranked_nonoverlapping_windows_v12",
+  "kind": "offline prompt diagnostic; no model call or rescoring",
+  "results": [
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 0,
+      "value_visible": true,
+      "published_at": "2024-11-27T15:00:00+00:00",
+      "segments": [
+        [
+          5491,
+          5986
+        ]
+      ]
+    },
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 1,
+      "value_visible": true,
+      "published_at": "2024-12-20T13:30:00+00:00",
+      "segments": [
+        [
+          5805,
+          6295
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 0,
+      "value_visible": true,
+      "published_at": "2023-10-27T12:30:00+00:00",
+      "segments": [
+        [
+          5510,
+          6061
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 1,
+      "value_visible": true,
+      "published_at": "2023-11-30T13:30:00+00:00",
+      "segments": [
+        [
+          5836,
+          6330
+        ]
+      ]
+    }
+  ]
+}

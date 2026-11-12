@@ -85,7 +85,7 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
     def model(prompt):
         payload = json.loads(prompt)
         example = payload["output_schema"]["counterarguments"][0]
-        assert example["citations"][0]["quotation"] == "exact source quote"
+        assert example["citations"][0]["quotation"] == "quote"
         assert "missing evidence in limitations" in payload["evidence_guidance"]
         return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
 
@@ -100,11 +100,34 @@ def test_prompt_distinguishes_full_source_from_partial_excerpts():
             payload = json.loads(prompt)
             assert all(entry["source_coverage"] == expected for entry in payload["sources"])
             assert all(entry["range"][1] - entry["range"][0] >= len(entry["text"]) for entry in payload["sources"])
-            assert "do not describe the whole document" in payload["evidence_guidance"]
+            assert "not the whole source" in payload["evidence_guidance"]
             return {"claims": []}, 10
         return generate
     analyze("Revenue?", [source("short")], None, inspect("complete"))
     analyze("Revenue?", [source("long", text="Revenue. " * 1000)], None, inspect("partial"), max_prompt_chars=2500)
+
+
+def test_prompt_exposes_declared_source_times_separately_from_reporting_period():
+    published = datetime(2023, 10, 27, 12, 30, tzinfo=timezone.utc)
+    revised = datetime(2023, 11, 1, tzinfo=timezone.utc)
+    event = datetime(2023, 9, 30, tzinfo=timezone.utc)
+    report = source("dated", published_at=published).model_copy(update={"revised_at": revised, "event_at": event})
+
+    def model(prompt):
+        payload = json.loads(prompt)
+        item = payload["sources"][0]
+        assert item["declared_published_at"] == published.isoformat()
+        assert item["declared_revised_at"] == revised.isoformat()
+        assert item["declared_event_at"] == event.isoformat()
+        assert "Source dates are declared, not verified" in payload["evidence_guidance"]
+        return {}, 1
+
+    analyze("What happened?", [report], None, model)
+    def undated(prompt):
+        item = json.loads(prompt)["sources"][0]
+        assert not any(key.startswith("declared_") for key in item)
+        return {}, 1
+    analyze("What happened?", [source("undated")], None, undated)
 
 
 def test_rejects_fabricated_citations_and_respects_display_permission():

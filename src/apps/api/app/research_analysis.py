@@ -35,7 +35,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v11"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v12"
 
 
 class Citation(BaseModel):
@@ -416,16 +416,16 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         return AnalysisResult([], [], limitations + ["No permitted, time-eligible source was available for model analysis."], [], None)
     data = {"question": question, "sources": [],
             "output_schema": {"claims": [{"text": "claim", "citations": [
-                {"source_id": "id", "quotation": "exact source quote"}]}],
+                {"source_id": "id", "quotation": "quote"}]}],
                 "counterarguments": [{"text": "counterargument", "citations": [
-                    {"source_id": "id", "quotation": "exact source quote"}]}], "limitations": ["text"],
+                    {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
                 "facts": [{"fact_id": "unique id", "label": "metric", "value": "quoted number",
-                           "unit": "source unit", "currency": "currency or null", "period": "period",
-                           "citation": {"source_id": "id", "quotation": "exact source quote"}}],
+                           "unit": "unit", "currency": "currency or null", "period": "period",
+                           "citation": {"source_id": "id", "quotation": "quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]},
-            "evidence_guidance": "Cite counterevidence; put missing evidence in limitations. "
-                "Partial excerpts do not describe the whole document. PDF horizontal gaps may be compressed; check columns."}
+            "evidence_guidance": "Cite exact quotes; put missing evidence in limitations. Partial excerpts are not the whole source. "
+                "PDF gaps may be compressed; check columns. Source dates are declared, not verified; distinguish publication from period."}
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
@@ -463,6 +463,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
             return [{"source_id": source.source_id, "title": source.title,
                      "range": [start, start + len(passage)], "source_coverage": coverage,
+                     **({"declared_published_at": source.published_at.isoformat()} if source.published_at else {}),
+                     **({"declared_revised_at": source.revised_at.isoformat()} if source.revised_at else {}),
+                     **({"declared_event_at": source.event_at.isoformat()} if source.event_at else {}),
                      "text": re.sub(r"[ \t]{2,}", "\t", passage) if source.retrieval_method == "user_pdf" else passage}
                     for start, passage in parts]
 
