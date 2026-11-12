@@ -1,14 +1,14 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: 7ada6af0995d02c5b35287000fee378efa4e19391c92aa88f59dc9e8aaf0fa72
+ * SHA-256: c859200c6d1cc3918fd85ddc7a5e015b4afe91b9cfb4c110d78d9eecb7ed44df
  */
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
 export type CalculationRequest = { readonly "decimal_places"?: number; readonly "first": NumericFact; readonly "formula": "growth_percent" | "margin_percent" | "difference"; readonly "second": NumericFact; };
-export type FetchSourceRequest = { readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "title": string; readonly "url": string; };
+export type FetchSourceRequest = { readonly "event_at"?: string | null; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "revised_at"?: string | null; readonly "title": string; readonly "url": string; };
 export type HTTPValidationError = { readonly "detail"?: readonly (ValidationError)[]; };
 export type NumericFact = { readonly "currency"?: string | null; readonly "fact_id": string; readonly "period": string; readonly "unit": string; readonly "value": number | string; };
 export type Operation = { readonly "cancel_token": string; readonly "content_hash": string; readonly "created_at": string; readonly "endpoint": string; readonly "idempotency_key_hash": string; readonly "last_event_id": string; readonly "operation_id": string; readonly "resume_token": string; readonly "schema_version": "v1"; readonly "source_refs": readonly (SourceRef)[]; readonly "status": "pending" | "running" | "completed" | "failed" | "cancelled"; readonly "updated_at": string; };
 export type OperationResponse = { readonly "operation": Operation; };
-export type PdfUploadRequest = { readonly "pdf_base64": string; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "title": string; };
+export type PdfUploadRequest = { readonly "event_at"?: string | null; readonly "pdf_base64": string; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "revised_at"?: string | null; readonly "title": string; };
 export type RecalculateRequest = { readonly "calculation_index": number; readonly "parent_version_id": string; };
 export type ResearchContent = { readonly "calculation_differences"?: readonly (Readonly<Record<string, unknown>>)[]; readonly "calculations"?: readonly (Readonly<Record<string, unknown>>)[]; readonly "claims"?: readonly (Readonly<Record<string, unknown>>)[]; readonly "evidence_differences"?: readonly (Readonly<Record<string, unknown>>)[]; readonly "facts"?: readonly (Readonly<Record<string, unknown>>)[]; readonly "limitations"?: readonly (string)[]; readonly "run"?: Readonly<Record<string, unknown>>; readonly "source_candidates"?: readonly (Readonly<Record<string, unknown>>)[]; readonly "sources"?: readonly (Readonly<Record<string, unknown>>)[]; readonly "summary"?: string; };
 export type ResearchInput = { readonly "as_of"?: string | null; readonly "question"?: string; readonly "scope"?: string; readonly "source_ids"?: readonly (string)[]; };

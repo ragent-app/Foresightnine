@@ -42,10 +42,15 @@ def test_pdf_upload_preserves_original_and_citation_pages(monkeypatch):
     reg = client.post("/v1/auth/local/register", json={"email": "pdf@example.test", "password": "correct horse battery staple!"})
     headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
     raw = tiny_pdf()
-    uploaded = client.post("/v2/research/sources/pdf", headers=headers, json=body(raw))
+    uploaded = client.post("/v2/research/sources/pdf", headers=headers, json={**body(raw),
+        "event_at": "2023-12-31T00:00:00Z", "published_at": "2024-01-01T00:00:00Z",
+        "revised_at": "2024-02-01T00:00:00Z"})
     assert uploaded.status_code == 201, uploaded.text
     item = uploaded.json()
     assert item["retrieval_method"] == "user_pdf"
+    assert item["event_at"].startswith("2023-12-31")
+    assert item["published_at"].startswith("2024-01-01")
+    assert item["revised_at"].startswith("2024-02-01")
     assert "original_pdf_base64" not in item and "text" not in item
     source = client.get("/v2/research/sources/" + item["source_id"], headers=headers).json()
     assert "original_pdf_base64" not in source

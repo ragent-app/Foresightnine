@@ -1742,7 +1742,8 @@ def upload_research_pdf(request: PdfUploadRequest, authorization: str | None = H
     try:
         document = extract_pdf(request)
         source = research_sources.create(account.account_id, SourceInput(title=request.title, text=document.text,
-            published_at=request.published_at, permissions=request.permissions), retrieval_method="user_pdf",
+            published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at,
+            permissions=request.permissions), retrieval_method="user_pdf",
             response_sha256=document.original_sha256, response_content_type="application/pdf",
             original_pdf_base64=document.original_base64)
         metadata = _visible_research_source(source)
@@ -1806,7 +1807,7 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
         fetched = fetch_official_text(request)
         source = research_sources.create(account.account_id, SourceInput(title=request.title,
             text=fetched.text, url=request.url, kind="official", permissions=request.permissions,
-            published_at=request.published_at),
+            published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at),
             retrieval_method="official_html", response_sha256=fetched.response_sha256,
             response_content_type=fetched.content_type)
         return _visible_research_source(source)
@@ -2108,6 +2109,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             content=ResearchContent(source_candidates=discovered, sources=[{"source_id": s.source_id, "title": s.title,
                 "url": urlunsplit((urlsplit(str(s.url)).scheme, urlsplit(str(s.url)).netloc,
                     urlsplit(str(s.url)).path, "", "")) if s.url else None,
+                "event_at": s.event_at.isoformat() if s.event_at else None,
                 "published_at": s.published_at.isoformat() if s.published_at else None,
                 "obtained_at": s.obtained_at.isoformat(),
                 "revised_at": s.revised_at.isoformat() if s.revised_at else None,
@@ -2170,6 +2172,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "question_sha256": sha256(topic.request.question.encode("utf-8")).hexdigest(),
             "as_of": topic.request.as_of.isoformat() if topic.request.as_of else None,
             "sources": [{"source_id": item.source_id, "content_sha256": item.content_sha256,
+                         "event_at": item.event_at.isoformat() if item.event_at else None,
+                         "published_at": item.published_at.isoformat() if item.published_at else None,
+                         "obtained_at": item.obtained_at.isoformat(),
+                         "revised_at": item.revised_at.isoformat() if item.revised_at else None,
                          "permissions": item.permissions.model_dump(mode="json")}
                         for item in sources],
             "budget": _request_payload(request),

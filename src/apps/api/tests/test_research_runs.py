@@ -44,7 +44,9 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
         "password": "correct horse battery staple!"})
     headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
     source = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
-        "text": "Revenue was 100 million in 2023. Revenue was 80 million in 2022.", "permissions": {"store": True,
+        "text": "Revenue was 100 million in 2023. Revenue was 80 million in 2022.",
+        "event_at": "2023-12-31T00:00:00Z", "published_at": "2024-01-01T00:00:00Z",
+        "revised_at": "2024-02-01T00:00:00Z", "permissions": {"store": True,
         "model_input": True, "display": True}}).json()
     source_id = source["source_id"]
     topic = client.post("/v2/research/topics", headers=headers, json={
@@ -67,6 +69,10 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert snapshot["parent_version_id"] == payload["parent_version_id"]
     assert snapshot["sources"][0]["source_id"] == source_id
     assert snapshot["sources"][0]["permissions"]["model_input"] is True
+    assert snapshot["sources"][0]["event_at"].startswith("2023-12-31")
+    assert snapshot["sources"][0]["published_at"].startswith("2024-01-01")
+    assert snapshot["sources"][0]["revised_at"].startswith("2024-02-01")
+    assert snapshot["sources"][0]["obtained_at"]
     assert snapshot["budget"]["max_model_calls"] == 1
     assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v5"
     assert "Revenue was 100" not in inputs.text and "owner_id" not in inputs.json()
@@ -86,6 +92,8 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert result["run"]["status"] == "completed"
     assert result["run"]["cost_status"] == "unknown"
     assert result["run"]["selection_method"] == snapshot["selection_method"]
+    assert result["sources"][0]["event_at"] == snapshot["sources"][0]["event_at"]
+    assert result["sources"][0]["revised_at"] == snapshot["sources"][0]["revised_at"]
     assert result["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"
     assert result["calculations"][0]["value"] == "25.00"
     assert result["facts"][0]["verification"] == "model_extraction_not_independently_verified"

@@ -23,3 +23,26 @@ describe("research operation polling", () => {
     expect(researchPollingDelay(new ResearchRequestError(503, 90000), 1500)).toBe(90000);
   });
 });
+
+describe("research source timestamps", () => {
+  it("sends distinct event, publication and revision times for text, official pages and PDFs", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{"source_id":"s"}', { status: 201 }));
+    vi.stubGlobal("fetch", fetcher);
+    const api = researchClient("https://api.example.com");
+    const published = "2024-02-01T10:00", event = "2023-12-31T12:00", revised = "2024-03-01T09:00";
+    await api.createSource("A", "Text", "", true, false, published, event, revised);
+    await api.fetchSource("B", "https://www.bea.gov/example", true, false, published, event, revised);
+    await api.uploadPdf("C", "JVBERg==", true, false, published, event, revised);
+    for (const [, init] of fetcher.mock.calls) {
+      const body = JSON.parse(String(init?.body));
+      expect(body).toMatchObject({ event_at: new Date(event).toISOString(),
+        published_at: new Date(published).toISOString(), revised_at: new Date(revised).toISOString() });
+    }
+    await api.createSource("D", "Text", "", true, false, "");
+    const empty = JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body));
+    expect(empty).not.toHaveProperty("event_at");
+    expect(empty).not.toHaveProperty("published_at");
+    expect(empty).not.toHaveProperty("revised_at");
+  });
+});

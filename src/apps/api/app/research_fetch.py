@@ -23,8 +23,10 @@ class FetchSourceRequest(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     permissions: SourcePermissions
     published_at: datetime | None = None
+    event_at: datetime | None = None
+    revised_at: datetime | None = None
 
-    @field_validator("published_at")
+    @field_validator("published_at", "event_at", "revised_at")
     @classmethod
     def publication_timezone_required(cls, value: datetime | None) -> datetime | None:
         if value is not None and value.utcoffset() is None:

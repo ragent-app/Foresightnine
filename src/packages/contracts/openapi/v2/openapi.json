@@ -64,6 +64,18 @@
       "FetchSourceRequest": {
         "additionalProperties": false,
         "properties": {
+          "event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
           "permissions": {
             "$ref": "#/components/schemas/SourcePermissions"
           },
@@ -78,6 +90,18 @@
               }
             ],
             "title": "Published At"
+          },
+          "revised_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised At"
           },
           "title": {
             "maxLength": 500,
@@ -279,6 +303,18 @@
       "PdfUploadRequest": {
         "additionalProperties": false,
         "properties": {
+          "event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
           "pdf_base64": {
             "maxLength": 2000000,
             "minLength": 1,
@@ -299,6 +335,18 @@
               }
             ],
             "title": "Published At"
+          },
+          "revised_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised At"
           },
           "title": {
             "maxLength": 500,

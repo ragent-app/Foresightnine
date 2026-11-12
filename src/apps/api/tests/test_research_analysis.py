@@ -183,6 +183,17 @@ def test_future_or_unknown_publication_is_not_sent():
     assert len(result.limitations) == 3
 
 
+def test_source_revised_after_cutoff_is_not_sent_even_if_published_before():
+    cutoff = datetime(2023, 6, 1, tzinfo=timezone.utc)
+    report = source("revised", published_at=datetime(2023, 1, 1, tzinfo=timezone.utc))
+    report.revised_at = datetime(2023, 7, 1, tzinfo=timezone.utc)
+    def must_not_call(_):
+        raise AssertionError("A later revision should not reach the model")
+    result = analyze("Question", [report], cutoff, must_not_call)
+    assert result.source_ids == []
+    assert any("availability at the requested time is not established" in item for item in result.limitations)
+
+
 def test_model_facts_are_quoted_and_calculations_are_deterministic():
     report = source("s", text="FY2022 revenue was 198,270 million. FY2023 revenue was 211,915 million.")
     def model(_prompt):
