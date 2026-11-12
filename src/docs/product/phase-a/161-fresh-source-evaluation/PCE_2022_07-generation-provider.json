@@ -1,0 +1,107 @@
+{
+  "manifest_sha256": "c18b8ee4b4e944065f7f651e7a8638d56cd526adff2e76a87ed4f5986a08fbde",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The personal saving rate—personal saving as a percentage of disposable personal income—was 5.0 percent in July 2022.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "rate—personal saving as a percentage of disposable personal income—was 5.0 percent (table 1)."
+          }
+        ]
+      },
+      {
+        "text": "The PCE price index for July decreased 0.1 percent from the preceding month; this is the price index, not nominal spending.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "From the preceding month, the PCE price index for July decreased 0.1 percent (table 9)."
+          }
+        ]
+      },
+      {
+        "text": "Within the price index, goods prices decreased 0.4 percent and services prices increased 0.1 percent; these are price changes, not changes in nominal spending on goods and services.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Prices for goods decreased 0.4 percent and prices for services increased 0.1 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The excerpt cuts off exactly where the PCE current-dollar row's monthly percent changes would appear, and the columns are compressed PDF values that could be misread; the actual month-over-month change in current-dollar PCE cannot be confirmed from the supplied text.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal consumption expenditures (PCE): Current dollars"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source text is truncated mid-table: the row 'Personal consumption expenditures (PCE): Current dollars' is present but the monthly percent-change values (Mar.–July 2022) are not included in the excerpt.",
+      "No passage in the excerpt reports the change in current-dollar (nominal) PCE from the preceding month, nor the nominal changes in goods spending and services spending; only the PCE price index changes (overall −0.1%, goods −0.4%, services +0.1%) are reported.",
+      "The excerpt is partial ('source_coverage': 'partial'); the full BEA release may contain the missing spending figures.",
+      "Compressed PDF column alignment makes numeric attribution risky even where values are present.",
+      "Dates (July 2022 release, data months Mar.–July 2022) are declared in the table but not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "saving-rate-jul22",
+        "label": "Personal saving rate",
+        "value": "5.0",
+        "unit": "percent of disposable personal income",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "rate—personal saving as a percentage of disposable personal income—was 5.0 percent (table 1)."
+        }
+      },
+      {
+        "fact_id": "pce-price-index-jul22",
+        "label": "PCE price index, month-over-month change",
+        "value": "-0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "From the preceding month, the PCE price index for July decreased 0.1 percent (table 9)."
+        }
+      },
+      {
+        "fact_id": "goods-prices-jul22",
+        "label": "Goods prices, month-over-month change",
+        "value": "-0.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Prices for goods decreased 0.4 percent and prices for services increased 0.1 percent."
+        }
+      },
+      {
+        "fact_id": "services-prices-jul22",
+        "label": "Services prices, month-over-month change",
+        "value": "0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Prices for goods decreased 0.4 percent and prices for services increased 0.1 percent."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1589,
+  "prompt_sha256": "c7f628eb0fa9ee1f76e244f2f6b957f2ffa54d92bff701195b59fec1d4086c2e",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

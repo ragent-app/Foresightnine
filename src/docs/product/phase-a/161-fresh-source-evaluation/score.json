@@ -1,0 +1,26 @@
+{
+  "PCE_2022_07": {
+    "mechanical_signals": {
+      "requested_numbers_in_claims_and_quotes": false,
+      "goods_and_services_named": true
+    },
+    "all_claims_located": true,
+    "research_status": "partial",
+    "model_calls": 2,
+    "reported_tokens": 2339,
+    "semantic_support": "not independently established"
+  },
+  "FOMC_2022_06": {
+    "mechanical_signals": {
+      "target_bounds_in_quotes": true,
+      "dissenter_in_claims_and_quotes": true,
+      "alternative_in_quotes": true,
+      "reserve_rate_in_claims_and_quotes": false
+    },
+    "all_claims_located": false,
+    "research_status": "partial",
+    "model_calls": 2,
+    "reported_tokens": 1854,
+    "semantic_support": "not independently established"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "manifest_sha256": "c18b8ee4b4e944065f7f651e7a8638d56cd526adff2e76a87ed4f5986a08fbde",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1-1/2 to 1-3/4 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 1-1/2 to 1-3/4 percent"
+          }
+        ]
+      },
+      {
+        "text": "Esther L. George dissented, preferring to raise the target range by 0.5 percentage point to 1-1/4 to 1-1/2 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting against this action was Esther L. George, who preferred at this meeting to raise the target range for the federal funds rate by 0.5 percentage point to 1-1/4 percent to 1-1/2 percent."
+          }
+        ]
+      },
+      {
+        "text": "The excerpts do not include the interest rate paid on reserve balances, so it cannot be distinguished numerically from the target range based on the supplied text; only the target range is quoted.",
+        "citations": []
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The excerpts are partial; the passage on the interest rate paid on reserve balances (IORB) is not present, so any claim about the IORB rate is unsupported by the supplied evidence.",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "The source excerpts are partial and do not include the passage setting the interest rate paid on reserve balances.",
+      "The June 15, 2022 date is declared in the question and consistent with context but not independently verified from the excerpts."
+    ],
+    "facts": [
+      {
+        "fact_id": "target_range",
+        "label": "federal funds rate target range",
+        "value": "1.5 to 1.75",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 15, 2022 FOMC decision",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "raise the target range for the federal funds rate to 1-1/2 to 1-3/4 percent"
+        }
+      },
+      {
+        "fact_id": "george_alternative",
+        "label": "dissenter's preferred target range",
+        "value": "1.25 to 1.5",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 15, 2022 FOMC decision",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "preferred at this meeting to raise the target range for the federal funds rate by 0.5 percentage point to 1-1/4 percent to 1-1/2 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "target_range",
+        "second_fact_id": "george_alternative"
+      }
+    ]
+  },
+  "reported_tokens": 1234,
+  "prompt_sha256": "5eb85a85f648989afb61f82f2ffe74ab94322b1c4319cfce4eecedf5fdc87c30",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

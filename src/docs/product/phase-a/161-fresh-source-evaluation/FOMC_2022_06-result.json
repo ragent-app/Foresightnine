@@ -1,0 +1,294 @@
+{
+  "task": "FOMC_2022_06",
+  "status": "completed",
+  "operation_id": "operation:4c3de0752bc31c0c4c1fa23a",
+  "manifest_sha256": "c18b8ee4b4e944065f7f651e7a8638d56cd526adff2e76a87ed4f5986a08fbde",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_16100000000000000000000000000002",
+        "title": "fed-2022-06.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T13:25:17.277052+00:00",
+        "revised_at": null,
+        "content_sha256": "8a8138ddbcfe5048f9e6c21c760839a2d8968ba496b09660c3f63671f53d6259",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "target_range:lower",
+        "value": "1.5",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 15, 2022 FOMC decision",
+        "label": "federal funds rate target range (lower bound)",
+        "source_id": "source_16100000000000000000000000000002",
+        "quotation": "raise the target range for the federal funds rate to 1-1/2 to 1-3/4 percent",
+        "quotation_match": "exact",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "target_range",
+        "location": {
+          "character_start": 894,
+          "character_end": 969,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "target_range:upper",
+        "value": "1.75",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 15, 2022 FOMC decision",
+        "label": "federal funds rate target range (upper bound)",
+        "source_id": "source_16100000000000000000000000000002",
+        "quotation": "raise the target range for the federal funds rate to 1-1/2 to 1-3/4 percent",
+        "quotation_match": "exact",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "target_range",
+        "location": {
+          "character_start": 894,
+          "character_end": 969,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "george_alternative:lower",
+        "value": "1.25",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 15, 2022 FOMC decision",
+        "label": "dissenter's preferred target range (lower bound)",
+        "source_id": "source_16100000000000000000000000000002",
+        "quotation": "preferred at this\nmeeting to raise the target range for the federal funds rate by 0.5 percentage point to\n1-1/4 percent to 1-1/2 percent.",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "george_alternative",
+        "location": {
+          "character_start": 2299,
+          "character_end": 2436,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "george_alternative:upper",
+        "value": "1.5",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 15, 2022 FOMC decision",
+        "label": "dissenter's preferred target range (upper bound)",
+        "source_id": "source_16100000000000000000000000000002",
+        "quotation": "preferred at this\nmeeting to raise the target range for the federal funds rate by 0.5 percentage point to\n1-1/4 percent to 1-1/2 percent.",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "george_alternative",
+        "location": {
+          "character_start": 2299,
+          "character_end": 2436,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1-1/2 to 1-3/4 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_16100000000000000000000000000002",
+            "location": {
+              "character_start": 869,
+              "character_end": 969,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to\nraise the target range for the federal funds rate to 1-1/2 to 1-3/4 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v20",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "Esther L. George dissented, preferring to raise the target range by 0.5 percentage point to 1-1/4 to 1-1/2 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_16100000000000000000000000000002",
+            "location": {
+              "character_start": 2246,
+              "character_end": 2436,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this action was Esther L. George, who preferred at this\nmeeting to raise the target range for the federal funds rate by 0.5 percentage point to\n1-1/4 percent to 1-1/2 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v20",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "The excerpts do not include the interest rate paid on reserve balances, so it cannot be distinguished numerically from the target range based on the supplied text; only the target range is quoted.",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "support"
+      },
+      {
+        "text": "The excerpts are partial; the passage on the interest rate paid on reserve balances (IORB) is not present, so any claim about the IORB rate is unsupported by the supplied evidence.",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_16100000000000000000000000000002: only character ranges 807–1116, 2185–2502 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "A requested calculation was omitted because its input facts were unavailable.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The source excerpts are partial and do not include the passage setting the interest rate paid on reserve balances.",
+      "Model-reported limitation (not independently verified): The June 15, 2022 date is declared in the question and consistent with context but not independently verified from the excerpts.",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:4c3de0752bc31c0c4c1fa23a",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 1854,
+      "cost_usd": null,
+      "generation_tokens": 1234,
+      "support_review_tokens": 620,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "partial",
+      "support_review_error": null,
+      "support_review_method": "bounded_quotation_context_model_review_v20",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": "2537d53d1c7852b6a43e9e472500f11ea51edda75610e2e460ab25bbea6dab9b",
+      "support_review_indexes": [
+        0,
+        1
+      ],
+      "support_review_omissions": [
+        {
+          "claim_index": 2,
+          "reason": "not_reviewable"
+        },
+        {
+          "claim_index": 3,
+          "reason": "not_reviewable"
+        }
+      ],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_16100000000000000000000000000002",
+          "character_start": 689,
+          "character_end": 1149,
+          "context_radius": 180
+        },
+        {
+          "claim_index": 1,
+          "source_id": "source_16100000000000000000000000000002",
+          "character_start": 2066,
+          "character_end": 2616,
+          "context_radius": 180
+        }
+      ],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 13.678,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "5eb85a85f648989afb61f82f2ffe74ab94322b1c4319cfce4eecedf5fdc87c30",
+      "prompt_characters": 1956,
+      "prompt_bytes": 1956,
+      "selection_method": "ranked_nonoverlapping_windows_v36",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_16100000000000000000000000000002",
+          "character_start": 807,
+          "character_end": 1116,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000002",
+          "character_start": 2185,
+          "character_end": 2502,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_16100000000000000000000000000002": "8a8138ddbcfe5048f9e6c21c760839a2d8968ba496b09660c3f63671f53d6259"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_0dd9a66b86f046a794d58c7dca661661",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_31c66b9680f848c99c33fdf42398fde8",
+      "parent_version_id": "version_0dd9a66b86f046a794d58c7dca661661",
+      "run_status": "partial",
+      "checkpoint": "generation"
+    },
+    {
+      "version_id": "version_0c5353f97a2d4984a12a631256f9f6df",
+      "parent_version_id": "version_31c66b9680f848c99c33fdf42398fde8",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 14.165
+}
