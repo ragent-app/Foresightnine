@@ -1,0 +1,51 @@
+{
+  "implementation_commit": "4f2e42913d457fe4034a864a1fd89e921c7d2a95",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "files": {
+    "common.py": "cdb45bc0e70412f1af3cf3d46c40fddcc51ff77beb6930169d64a8607f7960d4",
+    "prepare.py": "57f646c071a0878a51bef505f712744afafe86c4a02ad93933be0ed6b6536bd9",
+    "run.py": "cdc446d5f046f7c1e84453ac687fb50c8f77355cfc16ba86e005adb69d91735b",
+    "score.py": "7eddb736deb0d4da1b7ab0be422abeac8495f38290b606eedf182c06ac1efc6e",
+    "baseline-prompt.json": "1503ac99f9988936836860031c5a233839b86002f78fcc9d82857b64064467dd",
+    "candidate-prompt.json": "c564b55f98d51e984358f8742fd1be839295851cf7df62e326344faa33c4dd9f"
+  },
+  "source_files": {
+    "tasks.json": "e3c96d73bab1f5c1ac0c849e312c6fbb6dce82fe9ea3cfe7e42e0f9b6ea47cc0",
+    "reference.json": "76bf591f6b8c7315546f1f6be795047ec118cb7697e6720b39ce8ed6f05c73b5",
+    "bea-2022-07.pdf": "4afb1bf8ddacd6526104b6897b4b8c24e5c7366479f749ad1eb9c05838473e1e"
+  },
+  "conditions": [
+    {
+      "name": "baseline",
+      "prompt_sha256": "1503ac99f9988936836860031c5a233839b86002f78fcc9d82857b64064467dd",
+      "prompt_bytes": 4901
+    },
+    {
+      "name": "candidate",
+      "prompt_sha256": "c564b55f98d51e984358f8742fd1be839295851cf7df62e326344faa33c4dd9f",
+      "prompt_bytes": 5221
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "max_total_tokens": 20000,
+  "per_call_max_tokens": 10000,
+  "timeout_seconds": 60,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 203705
+}
