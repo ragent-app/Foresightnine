@@ -1,0 +1,51 @@
+{
+  "results": [
+    {
+      "case": "baseline",
+      "reported_tokens": 2412,
+      "claims": 4,
+      "cited_counterarguments": 1,
+      "quarter_warning_claims": [
+        0,
+        1
+      ],
+      "full_source_absence_warning_claims": [
+        3
+      ],
+      "limitations": [
+        "Source source_26300000000000000000000000000002: only character ranges 145–1527, 1528–2673, 9335–11497 were analyzed; remaining text was not examined.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): Sources are excerpts (partial coverage); underlying tables with exact Q3/Q4 component growth rates and page numbers are not provided.",
+        "Model-reported limitation (not independently verified): Whether the 3.2 percent Q3 figure itself was revised is not stated in the excerpts.",
+        "Model-reported limitation (not independently verified): Publication date (2023-02-23) is declared, not independently verified.",
+        "Model-reported limitation (not independently verified): The direction of the Q3-to-Q4 slowdown is supported, but no quantified reason for the slowdown is given in the excerpts beyond revision notes for Q4."
+      ],
+      "semantic_support": "requires source-level assessment"
+    },
+    {
+      "case": "candidate",
+      "reported_tokens": 2509,
+      "claims": 4,
+      "cited_counterarguments": 0,
+      "quarter_warning_claims": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "full_source_absence_warning_claims": [
+        3
+      ],
+      "limitations": [
+        "Source source_26300000000000000000000000000002: only character ranges 145–1527, 1528–2673, 9335–11497 were analyzed; remaining text was not examined.",
+        "Table column alignment is not established; verify each value, period and unit against the source before relying on calculations.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): Source excerpts are partial; quarterly consumption subcomponents (goods/services percent changes) are not included, preventing quantitative comparison.",
+        "Model-reported limitation (not independently verified): The third-quarter 3.2 percent figure is cited only in narrative text; its own revision history is not provided.",
+        "Model-reported limitation (not independently verified): Publication date shown in metadata (2023-02-23) is unverified against the document itself."
+      ],
+      "semantic_support": "requires source-level assessment"
+    }
+  ],
+  "model_calls": 0
+}

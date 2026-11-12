@@ -19,6 +19,7 @@ def test_absence_claim_requires_full_source_coverage_before_generalizing():
     assert flag_partial_source_absence([claim], [source], partial)[0]['source_scope_absence_unverified']
     mixed = {**claim, 'text': 'Consumer spending rose. No opposing evidence exists in the sources for goods rising.'}
     assert flag_partial_source_absence([mixed], [source], partial)[0]['source_scope_absence_unverified']
+    assert flag_partial_source_absence([{**claim, 'text':'No opposing evidence is present in the supplied sources.'}], [source], partial)[0]['source_scope_absence_unverified']
     assert not flag_partial_source_absence([{**claim, 'text': 'No opposing evidence exists in the supplied excerpts.'}], [source], partial)[0].get('source_scope_absence_unverified')
     assert flag_partial_source_absence([{**claim, 'text':'该报告没有提供服务和商品的拆分。'}], [source], partial)[0]['source_scope_absence_unverified']
     assert not flag_partial_source_absence([{**claim, 'text':'The provided excerpts do not include a breakdown.'}], [source], partial)[0].get('source_scope_absence_unverified')
