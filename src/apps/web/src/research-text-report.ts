@@ -48,14 +48,14 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
       add(label("Location", "位置"), citation.location);
       add(label("Quotation status", "引文状态"), {match: citation.quotation_match ?? null, partial_token: citation.partial_token ?? false, support: citation.support_status ?? null});
     }
-    for (const key of ["publication_date_warnings", "rate_unit_warnings", "uncited_amounts", "uncited_claim_amounts", "uncited_dollar_amounts", "uncited_quarters", "balance_direction_warnings", "uncited_percentages", "uncited_basis_points", "uncited_percentage_points", "uncited_fact_values", "citation_context_warnings", "suggested_fact_evidence", "suggested_calculations"]) if (claim[key] !== undefined) add(key, claim[key]);
+    for (const key of ["publication_date_warnings", "rate_unit_warnings", "uncited_amounts", "uncited_claim_amounts", "uncited_dollar_amounts", "uncited_quarters", "balance_direction_warnings", "uncited_percentages", "uncited_percentage_bounds", "reused_percentages", "uncited_basis_points", "uncited_percentage_points", "uncited_fact_values", "citation_context_warnings", "suggested_fact_evidence", "suggested_calculations"]) if (claim[key] !== undefined) add(key, claim[key]);
   });
   section(label("Extracted figures", "提取的数值"));
   empty(items(c.facts).length);
   items(c.facts).forEach((fact, i) => {
     lines.push(`\n${label("Figure", "数值")} ${i + 1}`);
-    for (const [key, a, b] of [["fact_id","ID","标识"],["label","Metric","指标"],["value","Value","数值"],["unit","Unit","单位"],["currency","Currency","币种"],["period","Period","期间"],["verification","Verification","核验状态"],["authorship","Authorship","作者类型"],["source_id","Source ID","来源标识"],["quotation","Quotation","引文"],["location","Location","位置"]] as const) add(label(a,b), fact[key]);
-    for (const key of ["currency_context_unverified", "currency_quote_missing", "table_alignment_unverified", "table_period_conflict", "currency_conflict_unverified", "direction_context_unverified", "source_value_warnings", "numeric_normalization", "range_parent_id"]) if (fact[key] !== undefined) add(key, fact[key]);
+    for (const [key, a, b] of [["fact_id","ID","标识"],["label","Metric","指标"],["value","Value","数值"],["unit","Unit","单位"],["currency","Currency","币种"],["period","Period","期间"],["verification","Verification","核验状态"],["authorship","Authorship","作者类型"],["source_id","Source ID","来源标识"],["quotation","Quotation","引文"],["quotation_match","Quotation match","引文定位方式"],["location","Location","位置"]] as const) add(label(a,b), fact[key]);
+    for (const key of ["currency_context_unverified", "currency_quote_missing", "table_alignment_unverified", "table_period_conflict", "currency_conflict_unverified", "direction_context_unverified", "direction_confirmation", "source_value_warnings", "numeric_normalization", "range_parent_id"]) if (fact[key] !== undefined) add(key, fact[key]);
   });
   section(label("Calculations", "计算"));
   empty(items(c.calculations).length);

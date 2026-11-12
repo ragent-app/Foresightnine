@@ -30,4 +30,17 @@ describe("authorized readable research export", () => {
     expect(report).toContain("None recorded.");
     expect(report).toContain("source precision and prior rounding are not established");
   });
+  it("preserves percentage cautions and user direction confirmation", () => {
+    const version = {...sample.version, content: {...sample.version.content,
+      claims: [{text:"A\nB", uncited_percentage_bounds:["0.1 percent"], reused_percentages:["0.1%"]}],
+      facts: [{fact_id:"f1", direction_context_unverified:true, quotation_match:"pdf_line_hyphen_restored",
+        direction_confirmation:{confirmed_by:"user",fact_sha256:"fingerprint",confirmed_at:"2026-01-01T00:00:00Z"}}]}};
+    const report = formatResearchTextReport({...sample, version}, false);
+    expect(report).toContain('uncited_percentage_bounds: ["0.1 percent"]');
+    expect(report).toContain('reused_percentages: ["0.1%"]');
+    expect(report).toContain('引文定位方式: pdf_line_hyphen_restored');
+    expect(report).toContain('direction_context_unverified: true');
+    expect(report).toContain('direction_confirmation: {"confirmed_by":"user","fact_sha256":"fingerprint","confirmed_at":"2026-01-01T00:00:00Z"}');
+    expect(report).toContain('内容: A\\nB');
+  });
 });
