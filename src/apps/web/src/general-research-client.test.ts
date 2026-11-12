@@ -91,6 +91,11 @@ describe("research operation polling", () => {
     const batch = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
     expect(batch.max_model_calls).toBe(2);
     expect(batch).not.toHaveProperty("support_review_mode");
+    expect(batch).not.toHaveProperty("counterpoint_followup");
+    await api.run("topic", "version", "followup", {search:false,supportReview:true,counterpointFollowup:true,
+      requireCounterarguments:true,maxElapsedSeconds:60,maxTotalTokens:20000});
+    const followup = JSON.parse(String(fetcher.mock.calls[2]?.[1]?.body));
+    expect(followup).toMatchObject({counterpoint_followup:true,support_review:true,max_model_calls:3});
   });
   it("honors a server retry delay and retains the status for read-only retries", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });

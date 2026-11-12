@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from copy import copy, deepcopy
+from dataclasses import replace
 from collections.abc import Callable, Mapping
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
@@ -106,6 +107,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
+from .research_counterpoint import prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
@@ -2454,6 +2456,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         run_request_payload.pop("auto_fetch_official", None)
     if request.support_review_mode == "batch":
         run_request_payload.pop("support_review_mode", None)
+    if not request.counterpoint_followup:
+        run_request_payload.pop("counterpoint_followup", None)
     if request.focus_citation is None:
         run_request_payload.pop("focus_citation", None)
     existing = operations.replay_async(endpoint=f"/v1/research/topics/{topic_id}/runs", idempotency_key=idempotency_key,
@@ -2664,10 +2668,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             official_fetch_status = "not_needed"
 
         attempted_prompt: dict[str, Any] = {}
+        base_prompt_text: str | None = None
         analysis_error_detail: str | None = None
 
         def generate(prompt: str) -> tuple[dict[str, Any], int | None]:
-            nonlocal calls, usage
+            nonlocal calls, usage, base_prompt_text
             if request.max_model_calls == 0:
                 raise ProviderFailure("provider_budget_exhausted", "Model call budget is zero.", retryable=False)
             # A currency cap cannot be guaranteed without a provider quote and
@@ -2696,6 +2701,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
             _reserve_model_call(http_request, operation_id, token_budget=token_reservation)
             calls = 1
+            base_prompt_text = prompt
             # Retain non-sensitive prompt provenance even if the provider
             # returns invalid output or fails after accepting the request.
             attempted_prompt.update({"prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
@@ -2743,28 +2749,139 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             analysis = AnalysisResult([], [], [*source_notes, "Research analysis could not be completed: " + unavailable_reason],
                                       selected_ids, usage, **attempted_prompt)
         _raise_if_operation_cancelled(operation_id)
-        claims = [{**item, "role": "support"} for item in analysis.claims]
-        claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
-        claims = suggest_percentage_evidence(claims, analysis.facts)
-        claims = flag_uncited_percentage_points(flag_uncited_basis_points(claims))
-        claims = suggest_percentage_calculations(claims, analysis.calculations, analysis.facts)
-        claims = flag_uncited_quarters(flag_uncited_dollar_amounts(flag_uncited_usd_amounts(claims, sources), sources), sources)
-        claims = suggest_usd_amount_evidence(claims, analysis.facts, sources)
-        claims = suggest_uncited_numeric_facts(claims, analysis.facts, sources)
-        eligible_comparison_sources, _ = prepare_sources(sources, topic.request.as_of)
-        claims = suggest_cross_source_comparison_evidence(claims, analysis.facts,
-                    [source for source in eligible_comparison_sources if source.source_id in analysis.source_ids])
-        claims = suggest_related_claim_quotations(claims, sources)
-        claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
-        claims = flag_component_direction(flag_citation_subject_context(claims, sources), sources)
-        claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(claims, sources), sources)
-        claims = flag_partial_source_absence(claims, sources, analysis.segments)
+        def prepare_claims() -> list[dict[str, Any]]:
+            claims = [{**item, "role": "support"} for item in analysis.claims]
+            claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
+            claims = suggest_percentage_evidence(claims, analysis.facts)
+            claims = flag_uncited_percentage_points(flag_uncited_basis_points(claims))
+            claims = suggest_percentage_calculations(claims, analysis.calculations, analysis.facts)
+            claims = flag_uncited_quarters(flag_uncited_dollar_amounts(flag_uncited_usd_amounts(claims, sources), sources), sources)
+            claims = suggest_usd_amount_evidence(claims, analysis.facts, sources)
+            claims = suggest_uncited_numeric_facts(claims, analysis.facts, sources)
+            eligible_comparison_sources, _ = prepare_sources(sources, topic.request.as_of)
+            claims = suggest_cross_source_comparison_evidence(claims, analysis.facts,
+                        [source for source in eligible_comparison_sources if source.source_id in analysis.source_ids])
+            claims = suggest_related_claim_quotations(claims, sources)
+            claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
+            claims = flag_component_direction(flag_citation_subject_context(claims, sources), sources)
+            claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(claims, sources), sources)
+            claims = flag_partial_source_absence(claims, sources, analysis.segments)
+            return claims
+        claims = prepare_claims()
+        generation_usage = usage
+        counterpoint_status = "not_requested"
+        counterpoint_usage: int | None = None
+        counterpoint_hash: str | None = None
+        counterpoint_error: str | None = None
+        if request.counterpoint_followup:
+            counterpoint_status = "not_needed" if calls and analysis.claims else "unavailable"
+            has_cited_counterpoint = any(item.get('citations') and item.get('support_status') != 'incomplete'
+                                         for item in analysis.counterarguments)
+            if calls and analysis.claims and not has_cited_counterpoint and base_prompt_text is not None:
+                policy = getattr(provider, 'policy', None)
+                input_limit = getattr(policy, 'max_input_tokens', None)
+                output_limit = getattr(policy, 'max_output_tokens', None)
+                timeout = getattr(policy, 'timeout_seconds', None)
+                if (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
+                        not isinstance(timeout, (int, float))):
+                    counterpoint_status = 'unavailable'
+                else:
+                    per_call = input_limit + output_limit
+                    first_charge = generation_usage if generation_usage is not None else per_call
+                    if calls >= request.max_model_calls or first_charge + per_call > request.max_total_tokens or monotonic() >= deadline:
+                        counterpoint_status = 'budget_exhausted'
+                    else:
+                        followup = prepare_counterpoint_prompt(base_prompt_text, analysis.claims,
+                            max(1, min(48000, input_limit - len(RESEARCH_SYSTEM_PROMPT.encode('utf-8')) - 512)))
+                        if followup is None:
+                            counterpoint_status = 'input_budget'
+                        else:
+                            counterpoint_hash = followup.prompt_sha256
+                            def save_counterpoint_checkpoint() -> None:
+                                nonlocal checkpoint_parent
+                                try:
+                                    current = research_topics.get(account.account_id, topic_id).versions[-1]
+                                    if current.version_id != request.parent_version_id:
+                                        raise TopicVersionConflict()
+                                    partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
+                                        sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                        evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
+                                        calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                        amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
+                                        limitations=[*discovery_notes, *analysis.limitations,
+                                            'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
+                                        run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
+                                             **({'question_override':request.question_override} if request.question_override is not None else {}),
+                                             'model_calls':calls, 'total_tokens':generation_usage, 'generation_tokens':generation_usage,
+                                             'counterpoint_requested':True, 'counterpoint_status':'pending',
+                                             'counterpoint_prompt_sha256':counterpoint_hash, 'cost_usd':None,
+                                             'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
+                                             'prompt_characters':analysis.prompt_characters, 'prompt_bytes':analysis.prompt_bytes,
+                                             'system_prompt_sha256':sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
+                                             'model':getattr(getattr(provider, 'settings', None), 'model', None),
+                                             'provider':getattr(provider, 'name', None),
+                                             'require_counterarguments':request.require_counterarguments,
+                                             'support_review_requested':request.support_review,
+                                             'support_review_status':'pending' if request.support_review else 'not_requested',
+                                             'search_calls':search_calls, 'search_status':search_status,
+                                             'official_fetch_calls':official_fetch_calls, 'official_fetch_status':official_fetch_status,
+                                             'selected_segments':analysis.segments, 'selection_method':RESEARCH_SELECTION_METHOD,
+                                             'source_hashes':{s.source_id:s.content_sha256 for s in sources},
+                                             'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
+                                             'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
+                                             'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                                    saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
+                                        parent_version_id=request.parent_version_id, content=partial, note=current.note),
+                                        source_ids=source_ids, created_by='agent')
+                                    checkpoint_parent = saved.versions[-1].version_id
+                                except (TopicNotFound, TopicVersionConflict) as error:
+                                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+                            if not operations.store.checkpoint_if_running(operation_id, save_counterpoint_checkpoint):
+                                _raise_if_operation_cancelled(operation_id)
+                                raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
+                            call_id = f'{operation_id}:counterpoint'
+                            counterpoint_attempted = False
+                            try:
+                                _raise_if_operation_cancelled(operation_id)
+                                remaining = deadline - monotonic()
+                                if remaining <= 0:
+                                    raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
+                                _reserve_model_call(http_request, call_id, token_budget=per_call)
+                                calls += 1
+                                counterpoint_attempted = True
+                                try:
+                                    raw_counterpoint, reported = generate_structured(followup.prompt,
+                                        cancel_event=operations.cancel_event(operation_id), system=RESEARCH_SYSTEM_PROMPT,
+                                        timeout_seconds=min(float(timeout), remaining))
+                                    counterpoint_usage = reported if type(reported) is int and reported >= 0 else None
+                                except ProviderFailure as error:
+                                    counterpoint_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                    raise
+                                finally:
+                                    _settle_model_call(http_request, call_id, counterpoint_usage)
+                                _raise_if_operation_cancelled(operation_id)
+                                checked = analyze(effective_question, sources, topic.request.as_of,
+                                    lambda _: (raw_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
+                                    should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
+                                if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
+                                    raise InvalidAnalysis('Counterpoint source selection changed.')
+                                analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *checked.counterarguments][:20],
+                                    limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
+                                        'Counterpoint follow-up uses a model and is not independent verification.'])))
+                                counterpoint_status = 'completed' if any(item.get('citations') for item in checked.counterarguments) else 'no_evidence'
+                                claims = prepare_claims()
+                            except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
+                                _raise_if_operation_cancelled(operation_id)
+                                counterpoint_status = 'failed'
+                                counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
+                            if counterpoint_attempted:
+                                usage = generation_usage + counterpoint_usage if generation_usage is not None and counterpoint_usage is not None else None
+        pre_review_usage = usage
         # Numeric candidates must be considered before model review. A review
         # verdict cannot clear a known calculation or unit discrepancy.
         pre_review_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
                                   *claim_amount_differences(claims, analysis.facts)]
         discrepancy_indexes = {item["claim_index"] for item in pre_review_differences}
-        generation_usage = usage
         review_usage: int | None = None
         review_status = "not_requested"
         review_error: str | None = None
@@ -2781,7 +2898,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             input_limit = getattr(policy, "max_input_tokens", None)
             output_limit = getattr(policy, "max_output_tokens", None)
             timeout = getattr(policy, "timeout_seconds", None)
-            if calls and claims and request.max_model_calls < 2:
+            if calls and claims and calls >= request.max_model_calls:
                 review_status = "budget_exhausted"
                 review_omissions = [{"claim_index": i, "reason": "call_budget"} for i in range(len(claims))]
             elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
@@ -2804,7 +2921,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     isolated_records = [{"claim_index": b.indexes[0], "prompt_sha256": b.prompt_sha256,
                                          "segments": b.segments, "status": "not_started"} for b in plan.batches]
                     claims = [{key: value for key, value in claim.items() if key != "support_review"} for claim in claims]
-                    consumed = generation_usage if generation_usage is not None else per_call
+                    consumed = pre_review_usage if pre_review_usage is not None else calls * per_call
                     review_usages: list[int | None] = []
 
                     def isolated_omission(index: int, reason: str | None) -> None:
@@ -2832,6 +2949,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      **({"question_override": request.question_override} if request.question_override is not None else {}),
                                      "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
                                      "support_review_tokens": review_usage, "cost_usd": None,
+                                     "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
+                                     "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                      "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                      "support_review_requested": True, "support_review_mode": "isolated",
                                      "support_review_status": "pending", "support_review_method": ISOLATED_REVIEW_METHOD,
@@ -2922,7 +3041,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 review_usages.append(reported)
                                 consumed += reported if reported is not None else per_call
                                 review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
-                                usage = generation_usage + review_usage if generation_usage is not None and review_usage is not None else None
+                                usage = pre_review_usage + review_usage if pre_review_usage is not None and review_usage is not None else None
                             _raise_if_operation_cancelled(operation_id)
                             mapped_index, verdict = parse_isolated_support_review(batch, raw_review)
                             claims[mapped_index] = {**claims[mapped_index], "support_review":
@@ -2954,7 +3073,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             input_limit = getattr(policy, "max_input_tokens", None)
             output_limit = getattr(policy, "max_output_tokens", None)
             timeout = getattr(policy, "timeout_seconds", None)
-            if calls and claims and request.max_model_calls < 2:
+            if calls and claims and calls >= request.max_model_calls:
                 review_status = "budget_exhausted"
                 review_omissions = [{"claim_index": index, "reason": "call_budget"} for index in range(len(claims))]
             elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
@@ -2962,7 +3081,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 # Once the provider reports a valid first-call usage, it has
                 # replaced that call's reservation. Reserve the full bound for
                 # the next call; retain the first bound only if usage is unknown.
-                first_charge = generation_usage if generation_usage is not None else per_call
+                first_charge = pre_review_usage if pre_review_usage is not None else calls * per_call
                 if request.max_total_tokens < first_charge + per_call or monotonic() >= deadline:
                     review_status = "budget_exhausted"
                     budget_reason = "token_budget" if request.max_total_tokens < first_charge + per_call else "time_budget"
@@ -2980,7 +3099,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             nonlocal checkpoint_parent
                             try:
                                 current = research_topics.get(account.account_id, topic_id).versions[-1]
-                                if current.version_id != request.parent_version_id:
+                                expected_parent = checkpoint_parent or request.parent_version_id
+                                if current.version_id != expected_parent:
                                     raise TopicVersionConflict()
                                 partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
                                     sources=source_summaries(analysis.source_ids), facts=analysis.facts,
@@ -2992,9 +3112,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
                                          **({"question_override": request.question_override} if request.question_override is not None else {}),
-                                         "model_calls": calls, "total_tokens": generation_usage, "cost_usd": None,
+                                         "model_calls": calls, "total_tokens": pre_review_usage, "cost_usd": None,
                                          "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                          "generation_tokens": generation_usage, "support_review_requested": True,
+                                         "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
+                                         "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                          "require_counterarguments": request.require_counterarguments,
                                          "support_review_status": "pending", "support_review_indexes": batch.indexes,
                                          "support_review_method": REVIEW_METHOD, "support_review_prompt_sha256": batch.prompt_sha256,
@@ -3012,7 +3134,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
                                          "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
                                 saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
-                                    parent_version_id=request.parent_version_id, content=partial, note=current.note),
+                                    parent_version_id=expected_parent, content=partial, note=current.note),
                                     source_ids=source_ids, created_by="agent")
                                 checkpoint_parent = saved.versions[-1].version_id
                             except (TopicNotFound, TopicVersionConflict) as error:
@@ -3022,6 +3144,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
                         review_hash, review_segments, review_indexes = batch.prompt_sha256, batch.segments, batch.indexes
                         review_call_id = f"{operation_id}:support-review"
+                        review_attempted = False
                         try:
                             _raise_if_operation_cancelled(operation_id)
                             remaining = deadline - monotonic()
@@ -3029,6 +3152,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
                             _reserve_model_call(http_request, review_call_id, token_budget=per_call)
                             calls += 1
+                            review_attempted = True
                             try:
                                 raw_review, reported_review_usage = generate_structured(batch.prompt,
                                     cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
@@ -3046,8 +3170,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             review_status = "failed"
                             review_failed_indexes = batch.indexes
                             review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
-                        if calls == 2:
-                            usage = generation_usage + review_usage if generation_usage is not None and review_usage is not None else None
+                        if review_attempted:
+                            usage = pre_review_usage + review_usage if pre_review_usage is not None and review_usage is not None else None
         _raise_if_operation_cancelled(operation_id)
         differences = evidence_differences(analysis.facts)
         calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
@@ -3137,6 +3261,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      **({"question_override": request.question_override} if request.question_override is not None else {}),
                      "model_calls": calls, "total_tokens": usage, "cost_usd": None,
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,
+                     "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
+                     "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
+                     "counterpoint_error":counterpoint_error,
                      "require_counterarguments": request.require_counterarguments,
                      "support_review_requested": request.support_review, "support_review_status": review_status,
                      "support_review_error": review_error,

@@ -26,6 +26,7 @@ class ResearchRunRequest(BaseModel):
     max_input_tokens_per_call: int | None = Field(default=None, ge=1, le=12000, strict=True)
     support_review: bool = False
     support_review_mode: Literal["batch", "isolated"] = "batch"
+    counterpoint_followup: bool = Field(default=False, strict=True)
     require_counterarguments: bool = True
     include_scope_in_search: bool = False
     auto_fetch_official: bool = Field(default=False, strict=True)

@@ -3434,3 +3434,164 @@ def test_auto_sec_filing_respects_shared_rate_limit(monkeypatch):
     result=client.get(path,headers=headers).json()['versions'][-1]['content']
     assert result['run']['official_fetch_status']=='failed' and result['run']['official_fetch_calls']==0
     assert not result['claims'] and not result['facts']
+
+
+@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated'])
+def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeypatch, mode):
+    import json
+    from uuid import uuid4
+    from app.phase3 import ProviderFailure
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    source_id = ''
+    prompts = []
+    class Provider:
+        name = 'counterpoint-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            payload = json.loads(prompt)
+            prompts.append((system, payload))
+            if system == REVIEW_SYSTEM_PROMPT:
+                return {'reviews':[{'claim_index':i,'verdict':'supports'} for i in range(len(payload['claims']))]}, 80
+            if 'counterpoint_request' in payload:
+                if mode == 'followup_failure':
+                    raise ProviderFailure('provider_unavailable','Follow-up failed.',retryable=False)
+                assert payload['sources'] == prompts[0][1]['sources']
+                assert payload['question'] == prompts[0][1]['question']
+                if mode == 'unlocated':
+                    return {'counterarguments':[{'text':'Invented.', 'citations':[
+                        {'source_id':source_id,'quotation':'Invented source text.'}]}]}, 70
+                return {'counterarguments':[{'text':'Costs also increased.', 'citations':[
+                    {'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
+            return {'claims':[{'text':'Revenue increased.', 'citations':[
+                {'source_id':source_id,'quotation':'Revenue increased.'}]}]}, 50
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    reg = client.post('/v1/auth/local/register', json={'email':f'counter-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json()
+    headers = {'Authorization':'Bearer '+reg['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title':'Report',
+        'text':'Revenue increased. Costs increased.', 'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question':'Assess revenue.', 'source_ids':[source_id]}).json()
+    path = '/v2/research/topics/'+topic['topic_id']
+    budget = 1 if mode == 'call_budget' else 3
+    body = {'parent_version_id':topic['versions'][0]['version_id'], 'counterpoint_followup':True,
+            'max_model_calls':budget, 'max_total_tokens':10000, 'support_review':mode == 'followup_and_review'}
+    response = client.post(path+'/runs', headers={**headers,'Idempotency-Key':'counterpoint-run'}, json=body)
+    assert response.status_code == 202, response.text
+    op = response.json()['operation']['operation_id']
+    for _ in range(100):
+        state = client.get(path+'/runs/'+op, headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'): break
+        time.sleep(.02)
+    assert state == 'completed'
+    versions = client.get(path,headers=headers).json()['versions']
+    content = versions[-1]['content']; run = content['run']
+    assert content['claims'][0]['text'] == 'Revenue increased.'
+    if mode == 'followup_and_review':
+        assert len(prompts)==3 and run['counterpoint_status']=='completed'
+        assert run['model_calls']==3 and run['generation_tokens']==50 and run['counterpoint_tokens']==70
+        assert run['support_review_tokens']==80 and run['total_tokens']==200
+        assert run['support_review_status']=='complete'
+        assert any(x['role']=='counterargument' and x['text']=='Costs also increased.' for x in content['claims'])
+        assert any(v['content']['run'].get('checkpoint')=='counterpoint' for v in versions)
+        assert any(v['content']['run'].get('checkpoint')=='generation' for v in versions)
+    elif mode == 'call_budget':
+        assert len(prompts)==1 and run['counterpoint_status']=='budget_exhausted' and run['total_tokens']==50
+    elif mode == 'followup_failure':
+        assert len(prompts)==2 and run['counterpoint_status']=='failed' and run['total_tokens'] is None
+        assert any(v['content']['run'].get('checkpoint')=='counterpoint' for v in versions)
+    else:
+        assert len(prompts)==2 and run['counterpoint_status']=='no_evidence' and run['total_tokens']==120
+        assert all(x.get('role')!='counterargument' for x in content['claims'])
+    replay = client.post(path+'/runs',headers={**headers,'Idempotency-Key':'counterpoint-run'},json=body)
+    assert replay.status_code==202 and replay.json()['operation']['operation_id']==op
+
+
+def test_counterpoint_cancellation_preserves_generation_checkpoint(monkeypatch):
+    import json
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    entered,release=Event(),Event()
+    source_id=''
+    class Provider:
+        name='counterpoint-cancel'
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            if 'counterpoint_request' in json.loads(prompt):
+                entered.set(); assert release.wait(5)
+                return {'counterarguments':[{'text':'Costs increased.', 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]}, 10
+            return {'claims':[{'text':'Revenue increased.','citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]}, 20
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    reg=client.post('/v1/auth/local/register',json={'email':f'cancel-counter-{uuid4().hex}@example.test','password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+reg['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue increased. Costs increased.',
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Assess revenue.','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'cancel-counterpoint'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'counterpoint_followup':True,'max_model_calls':2,
+        'max_total_tokens':10000}).json()['operation']
+    try:
+        assert entered.wait(5)
+        before=client.get(path,headers=headers).json()['versions']
+        assert before[-1]['content']['run']['checkpoint']=='counterpoint'
+        assert before[-1]['content']['claims'][0]['text']=='Revenue increased.'
+        stopped=client.post('/v1/operations/'+receipt['operation_id']+'/cancel',
+            headers={**headers,'Idempotency-Key':'cancel-counterpoint-call'},json={'cancel_token':receipt['cancel_token']})
+        assert stopped.status_code==200 and stopped.json()['operation']['status']=='cancelled'
+        release.set()
+        for _ in range(100):
+            if not api.operations._pending_provider_executions.get(receipt['operation_id']):break
+            time.sleep(.02)
+        after=client.get(path,headers=headers).json()['versions']
+        assert len(after)==len(before) and after[-1]['content']['run']['counterpoint_status']=='pending'
+    finally:
+        release.set()
+
+
+def test_counterpoint_followup_never_overwrites_concurrent_edit(monkeypatch):
+    import json
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    entered,release=Event(),Event()
+    source_id=''
+    class Provider:
+        name='counterpoint-edit'
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            if 'counterpoint_request' in json.loads(prompt):
+                entered.set(); assert release.wait(5)
+                return {'counterarguments':[{'text':'Costs increased.','citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]},10
+            return {'claims':[{'text':'Revenue increased.','citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]},20
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    reg=client.post('/v1/auth/local/register',json={'email':f'edit-counter-{uuid4().hex}@example.test','password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+reg['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue increased. Costs increased.',
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Assess revenue.','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'edit-counterpoint'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'counterpoint_followup':True,'max_model_calls':2,
+        'max_total_tokens':10000}).json()['operation']
+    try:
+        assert entered.wait(5)
+        checkpoint=client.get(path,headers=headers).json()['versions'][-1]
+        assert checkpoint['content']['run']['checkpoint']=='counterpoint'
+        edited=deepcopy(checkpoint['content']);edited['summary']='User revision'
+        saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':checkpoint['version_id'],'content':edited})
+        assert saved.status_code==201
+        release.set()
+        for _ in range(100):
+            status=client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+            if status in {'failed','completed'}:break
+            time.sleep(.02)
+        assert status=='failed'
+        latest=client.get(path,headers=headers).json()['versions'][-1]['content']
+        assert latest['summary']=='User revision' and not any(x.get('role')=='counterargument' for x in latest['claims'])
+    finally:
+        release.set()

@@ -267,6 +267,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .general-research .thesis-textarea { min-height: 140px; padding-bottom: 14px; }
 .general-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 32px; margin: 30px 0; }
 .general-source { margin: 16px 0 20px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.general-run-choice { display: block; margin: 10px 0; }
 .general-source summary { cursor: pointer; font-weight: 600; }
 .general-source label:has(input[type="checkbox"]) { display: block; margin: 10px 0; font-size: 14px; }
 .general-library { padding: 4px 0 4px 24px; border-left: 1px solid var(--border); }
