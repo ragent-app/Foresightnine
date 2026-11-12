@@ -1,0 +1,80 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "美联储将联邦基金利率目标区间上调至 1/4 至 1/2 个百分点（0.25%–0.50%）。",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 1/4 to 1/2 percent and anticipates that ongoing increases in the target range will be appropriate."
+          }
+        ]
+      },
+      {
+        "text": "唯一投反对票的是 James Bullard，他主张本次加息 0.5 个百分点，将目标区间上调至 1/2 至 3/4 个百分点。",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "quotation": "Voting against this action was James Bullard, who preferred at this meeting to raise the target range for the federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent."
+          }
+        ]
+      },
+      {
+        "text": "Patrick Harker 在本次会议上作为替代成员投票。",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "quotation": "Patrick Harker voted as an alternate member at this meeting."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "虽然 Bullard 反对并主张更大幅加息，但委员会多数仍决定较小幅度（25 个基点），并预期将持续加息；委员会的立场在声明中体现为对持续加息的预期而非立即大幅加息。",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "quotation": "anticipates that ongoing increases in the target range will be appropriate"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源为部分摘录（source_coverage 为 partial），未包含完整声明，可能遗漏其他背景信息。",
+      "摘录未给出完整投票名单的上下文（仅列出部分投票者姓名片段）。",
+      "声明的发布时间（2022-03-16）为声明的时间字段，未经独立核实。",
+      "日期以 declared_published_at 为准，非独立验证。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_target_range",
+        "label": "federal funds target range",
+        "value": 0.25,
+        "unit": "percent (to 0.50 percent)",
+        "currency": null,
+        "period": "March 16, 2022 decision",
+        "citation": {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "quotation": "raise the target range for the federal funds rate to 1/4 to 1/2 percent"
+        }
+      },
+      {
+        "fact_id": "fact_bullard_proposal",
+        "label": "Bullard proposed rate hike",
+        "value": 0.5,
+        "unit": "percentage point (target range 1/2 to 3/4 percent)",
+        "currency": null,
+        "period": "March 16, 2022 meeting",
+        "citation": {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "quotation": "James Bullard, who preferred at this meeting to raise the target range for the federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1496,
+  "prompt_sha256": "4d937e30843e15193c3322cc6eb6fa6271d938a0970851dc67dd51193256eb2d",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

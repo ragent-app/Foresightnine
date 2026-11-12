@@ -1,0 +1,14 @@
+{
+  "status": "completed",
+  "research_status": "partial",
+  "reported_tokens": 1496,
+  "checks": {
+    "target_range_and_source": true,
+    "dissenter_preference_and_source": true,
+    "all_citations_located": true,
+    "no_system_warnings": false,
+    "budget_and_provenance": true
+  },
+  "mechanical_pass": false,
+  "semantic_support": "not established"
+}

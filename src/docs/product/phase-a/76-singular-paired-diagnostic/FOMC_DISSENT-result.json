@@ -1,0 +1,231 @@
+{
+  "id": "FOMC_DISSENT",
+  "manifest_sha256": "c35bbb93b5045ac2e02b07ee09624bd3c6a408f5fc45176ded267c02f6f5a469",
+  "operation_status": "completed",
+  "operation_id": "operation:7e475ce6d2840583a9b52577",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 18.175,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+        "title": "FOMC statement March 16 2022",
+        "url": null,
+        "event_at": null,
+        "published_at": "2022-03-16T18:00:00+00:00",
+        "obtained_at": "2026-11-12T08:38:26.944357+00:00",
+        "revised_at": null,
+        "content_sha256": "2c1ec0e948b7cfa58e411445bae7e9d0537fdea3c7b44c2d779471936554ced1",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_target_range",
+        "value": "0.25",
+        "unit": "percent (to 0.50 percent)",
+        "currency": null,
+        "period": "March 16, 2022 decision",
+        "label": "federal funds target range",
+        "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+        "quotation": "raise the target range for the federal funds rate to 1/4 to 1/2 percent",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 981,
+          "character_end": 1052,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_bullard_proposal",
+        "value": "0.5",
+        "unit": "percentage point (target range 1/2 to 3/4 percent)",
+        "currency": null,
+        "period": "March 16, 2022 meeting",
+        "label": "Bullard proposed rate hike",
+        "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+        "quotation": "James Bullard, who preferred at this meeting to raise the target range for\nthe federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent.",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 2153,
+          "character_end": 2297,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "美联储将联邦基金利率目标区间上调至 1/4 至 1/2 个百分点（0.25%–0.50%）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "location": {
+              "character_start": 956,
+              "character_end": 1132,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to\nraise the target range for the federal funds rate to 1/4 to 1/2 percent and anticipates\nthat ongoing increases in the target range will be appropriate."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_fact_values": [
+          "0.5 percentage point (target range 1/2 to 3/4 percent)"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "fact_bullard_proposal",
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "value": "0.5",
+            "unit": "percentage point (target range 1/2 to 3/4 percent)",
+            "period": "March 16, 2022 meeting",
+            "quotation": "James Bullard, who preferred at this meeting to raise the target range for\nthe federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent.",
+            "location": {
+              "character_start": 2153,
+              "character_end": 2297,
+              "page": 2
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      },
+      {
+        "text": "唯一投反对票的是 James Bullard，他主张本次加息 0.5 个百分点，将目标区间上调至 1/2 至 3/4 个百分点。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "location": {
+              "character_start": 2122,
+              "character_end": 2297,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this\naction was James Bullard, who preferred at this meeting to raise the target range for\nthe federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Patrick Harker 在本次会议上作为替代成员投票。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "location": {
+              "character_start": 2298,
+              "character_end": 2358,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Patrick Harker\nvoted as an alternate member at this meeting."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "虽然 Bullard 反对并主张更大幅加息，但委员会多数仍决定较小幅度（25 个基点），并预期将持续加息；委员会的立场在声明中体现为对持续加息的预期而非立即大幅加息。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "location": {
+              "character_start": 1057,
+              "character_end": 1131,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "anticipates\nthat ongoing increases in the target range will be appropriate"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_403c0fc29c5349c98c369cba7f099309: only character ranges 894–1198, 2058–2363 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 来源为部分摘录（source_coverage 为 partial），未包含完整声明，可能遗漏其他背景信息。",
+      "Model-reported limitation (not independently verified): 摘录未给出完整投票名单的上下文（仅列出部分投票者姓名片段）。",
+      "Model-reported limitation (not independently verified): 声明的发布时间（2022-03-16）为声明的时间字段，未经独立核实。",
+      "Model-reported limitation (not independently verified): 日期以 declared_published_at 为准，非独立验证。",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:7e475ce6d2840583a9b52577",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1496,
+      "cost_usd": null,
+      "generation_tokens": 1496,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 16.305,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "4d937e30843e15193c3322cc6eb6fa6271d938a0970851dc67dd51193256eb2d",
+      "prompt_characters": 1943,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v19",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "character_start": 894,
+          "character_end": 1198
+        },
+        {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "character_start": 2058,
+          "character_end": 2363
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_403c0fc29c5349c98c369cba7f099309": "2c1ec0e948b7cfa58e411445bae7e9d0537fdea3c7b44c2d779471936554ced1"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}
