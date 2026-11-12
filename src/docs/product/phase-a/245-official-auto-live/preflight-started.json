@@ -1,0 +1,6 @@
+{
+  "url": "https://www.bea.gov/news/2024/gross-domestic-product-fourth-quarter-and-year-2023-advance-estimate",
+  "expected_response_sha256": "10970e0f520e4571372e2f5e5d121f92ad1448e7871c26297f46cd8bdc3cee76",
+  "max_fetches": 1,
+  "timeout_seconds": 15
+}

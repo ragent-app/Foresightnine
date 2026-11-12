@@ -1,0 +1,45 @@
+{
+  "implementation_commit": "c4e26325d101abc5aaa7d54f21b4b22099d8a852",
+  "question": "According to BEA's January 2024 advance estimate, what was real GDP growth for full-year 2023 and the annualized rate for the fourth quarter of 2023? Cite the source and distinguish the periods.",
+  "source_url": "https://www.bea.gov/news/2024/gross-domestic-product-fourth-quarter-and-year-2023-advance-estimate",
+  "source_sha256": "10970e0f520e4571372e2f5e5d121f92ad1448e7871c26297f46cd8bdc3cee76",
+  "text_sha256": "f62053f49a22410fdd9d2e0c7ac945da939a7c1e9c9b87c0238300bde2a82e6b",
+  "prompt_sha256": "3aae297bb919d63958322261866d95ac9ed42c41565db053a58358891bd1145f",
+  "prompt_bytes": 4904,
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "selection_method": "ranked_nonoverlapping_windows_v46",
+  "review_method": "bounded_quotation_context_model_review_v25",
+  "files": {
+    "preflight.py": "a183c92048fb6692549dcf558be4422d0366bc923143e9f7c63f1f8056884cfc",
+    "prepare.py": "ae230ce7bba82074fbde74b1d6e68e093cab93fb5e748c64f0fbfcb5255aa393",
+    "run.py": "30841ff453deb5b2ec89c5db88e5b1c7a100444cc312d2c88f0a289cbedfc05b",
+    "score.py": "fb7cd4d4eebdacf4610ce9e31858e07df584d556abd1474d95b605ab052b859d"
+  },
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_model_calls": 1,
+  "max_total_tokens": 10000,
+  "max_search_calls": 1,
+  "search": "fixed synthetic candidate, no external search",
+  "real_official_fetches_during_run": 1,
+  "timeout_seconds": 60,
+  "run_elapsed_seconds": 120,
+  "retry": 0,
+  "model_review": false,
+  "as_of": null,
+  "dollar_cost": "unknown",
+  "previous_known_tokens": 268091
+}

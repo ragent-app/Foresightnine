@@ -1,0 +1,8 @@
+{
+  "status": "matched",
+  "response_sha256": "10970e0f520e4571372e2f5e5d121f92ad1448e7871c26297f46cd8bdc3cee76",
+  "text_sha256": "f62053f49a22410fdd9d2e0c7ac945da939a7c1e9c9b87c0238300bde2a82e6b",
+  "text_chars": 16738,
+  "elapsed_seconds": 1.542,
+  "model_calls": 0
+}
