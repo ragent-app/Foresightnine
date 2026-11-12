@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v18"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v19"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 
@@ -385,7 +385,7 @@ def _policy_vote_windows(text: str, question: str, size: int,
     if (not any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against")) or
             not any(term in lower for term in ("货币政策", "利率", "美联储", "monetary policy", "federal reserve", "fomc"))):
         return None
-    vote_pattern = r"\bvoting\s+against\s+(?:this|the)\s+action(?:\s*:\s*|\s+were\s+)"
+    vote_pattern = r"\bvoting\s+against\s+(?:this|the)\s+action(?:\s*:\s*|\s+(?:was|were)\s+)"
     action_pattern = (r"\b(?:members|committee)\s+(?:agreed|decided|voted)\s+to\s+"
                       r"(?:raise|lower|maintain|increase|reduce|hold)\s+(?:the\s+)?target\s+range\s+for\s+"
                       r"(?:the\s+)?federal\s+funds\s+rate\b")

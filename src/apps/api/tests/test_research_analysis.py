@@ -853,6 +853,18 @@ def test_vote_retrieval_keeps_full_names_and_policy_preference_with_initials():
     assert sum(len(part) for _, part in parts) <= 360
 
 
+@pytest.mark.parametrize("verb,names", [("was", "Jane Smith"), ("were", "Jane Smith and Robert Jones")])
+def test_vote_retrieval_includes_singular_and_plural_dissent(verb, names):
+    action = "The Committee decided to raise the target range for the federal funds rate to 1/4 to 1/2 percent."
+    vote = f"Voting against this action {verb} {names}, who preferred to raise the rate by 0.5 percentage point."
+    text = "intro " * 50 + action + " background " * 130 + vote + " end " * 30
+    parts = _policy_vote_windows(text, "美联储的目标利率和反对票是什么？", 300)
+    assert parts and len(parts) == 2
+    assert action in parts[0][1] and vote in parts[1][1]
+    assert all(text[start:start + len(part)] == part for start, part in parts)
+    assert sum(len(part) for _, part in parts) <= 300
+
+
 def test_third_estimate_selection_keeps_current_and_prior_values():
     text = ("unrelated " * 70 +
             'Real GDP increased at an annual rate of 2.0 percent in the first quarter, according to the "third" estimate. ' +
