@@ -205,13 +205,13 @@ def flag_publication_date_mismatches(claims: list[dict], sources: list[ResearchS
 
 
 def claim_amount_differences(claims: list[dict], facts: list[dict]) -> list[dict]:
-    """Flag unmatched Chinese USD amounts only when another amount anchors the same cited facts.
+    """Flag narrow Chinese USD unit mismatches against cited numeric facts.
 
     This is a review candidate, not a finding that a claim is false. It covers
     explicit Chinese USD units only, preserves rounding, and fails closed when
     model facts or citations are missing or ambiguous.
     """
-    usable: list[tuple[str, str, Decimal]] = []
+    usable: list[tuple[str, str, Decimal, Decimal]] = []
     for item in facts:
         source_id, fact_id = item.get("source_id"), item.get("fact_id")
         quote, location = item.get("quotation"), item.get("location")
@@ -222,7 +222,8 @@ def claim_amount_differences(claims: list[dict], facts: list[dict]) -> list[dict
                 not isinstance(location, dict) or location.get("status") == "ambiguous" or
                 type(location.get("character_start")) is not int or type(location.get("character_end")) is not int or
                 location["character_start"] < 0 or location["character_end"] - location["character_start"] != len(quote) or
-                not ("million" in unit and ("usd" in unit or currency == "USD")) or currency not in {"", "USD"}):
+                not re.search(r"\b(?:million|billion)s?\b", unit) or
+                not ("usd" in unit or "dollar" in unit or currency == "USD") or currency not in {"", "USD"}):
             continue
         try:
             value = Decimal(str(item.get("value")))
@@ -230,16 +231,22 @@ def claim_amount_differences(claims: list[dict], facts: list[dict]) -> list[dict
                 continue
         except (InvalidOperation, ValueError):
             continue
-        usable.append((source_id, fact_id, value))
+        scales = set(re.findall(r"\b(million|billion)s?\b", unit))
+        if len(scales) != 1:
+            continue
+        scale = Decimal(1000) if "billion" in scales else Decimal(1)
+        with localcontext() as context:
+            context.prec = 100
+            usable.append((source_id, fact_id, value * scale, value))
     result: list[dict] = []
     for index, claim in enumerate(claims):
         text, citations = claim.get("text"), claim.get("citations")
         if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
             continue
         cited = {c.get("source_id") for c in citations if isinstance(c, dict) and isinstance(c.get("source_id"), str)}
-        candidates = [(fact_id, value) for source_id, fact_id, value in usable if source_id in cited]
+        candidates = [(fact_id, value, original) for source_id, fact_id, value, original in usable if source_id in cited]
         matches = list(_ZH_USD_AMOUNT.finditer(text))
-        if not candidates or len(matches) < 2 or len(matches) > 20:
+        if not candidates or not matches or len(matches) > 20:
             continue
         checked = []
         for match in matches:
@@ -253,17 +260,22 @@ def claim_amount_differences(claims: list[dict], facts: list[dict]) -> list[dict
                 with localcontext() as context:
                     context.prec = 100
                     matches_fact = any((value / factor).quantize(Decimal(1).scaleb(-precision), rounding=ROUND_HALF_UP) == amount
-                                       for _, value in candidates)
+                                       for _, value, _ in candidates)
             except (InvalidOperation, ValueError):
                 checked = []
                 break
             checked.append((match, matches_fact))
-        if not checked or not any(matched for _, matched in checked):
+        anchored = any(matched for _, matched in checked)
+        # A single amount is comparable only as a conservative cue when its
+        # bare number exactly matches the sole cited fact but its unit does not.
+        single_unit_cue = (len(checked) == 1 and len(candidates) == 1 and
+                           Decimal(checked[0][0].group(1).replace(",", "").replace("−", "-")) == candidates[0][2])
+        if not checked or not (anchored or single_unit_cue):
             continue
         for match, matched in checked:
             if not matched:
                 result.append({"claim_index": index, "claimed_amount": match.group(0),
-                               "source_fact_ids": list(dict.fromkeys(fact_id for fact_id, _ in candidates))[:20],
+                               "source_fact_ids": list(dict.fromkeys(fact_id for fact_id, _, _ in candidates))[:20],
                                "status": "requires_review"})
                 if len(result) == 50:
                     return result

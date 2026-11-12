@@ -245,3 +245,17 @@ def test_truncated_conflict_keeps_different_sources_and_values_visible():
         assert any(a["source_id"] != b["source_id"] and a["value"] != b["value"]
                    for a in candidate["facts"] for b in candidate["facts"])
         assert candidate["status"] == "requires_entity_and_method_review"
+
+
+def test_single_chinese_amount_with_same_number_but_wrong_billion_scale_is_flagged():
+    quote = "Personal income 74.4"
+    item = {**fact("f", "one", "74.4", unit="billions of dollars", currency="USD"),
+            "quotation": quote, "location": {"character_start": 0, "character_end": len(quote)},
+            "verification": "model_extraction_not_independently_verified"}
+    claim = {"text": "个人收入变化为74.4亿美元。", "citations": [{"source_id": "one"}]}
+    result = claim_amount_differences([claim], [item])
+    assert result == [{"claim_index": 0, "claimed_amount": "74.4亿美元", "source_fact_ids": ["f"], "status": "requires_review"}]
+    assert not claim_amount_differences([{**claim, "text": "个人收入变化为744亿美元。"}], [item])
+    assert not claim_amount_differences([{**claim, "text": "个人收入变化为75亿美元。"}], [item])
+    assert not claim_amount_differences([claim], [item, {**item, "fact_id": "other", "value": "74.4"}])
+    assert not claim_amount_differences([claim], [{**item, "currency": "EUR"}])
