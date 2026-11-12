@@ -316,6 +316,24 @@ def _counterargument_absence_only(text: str) -> bool:
         r"|\b(?:no|without|none|not)\b[^.\n]{0,55}\b(?:counterarguments?|counterevidence|opposing\s+(?:views?|evidence))\b",
         text, re.IGNORECASE))
 
+def _counterargument_evidence_gap_only(text: str) -> bool:
+    """Recognize narrow statements solely about missing supplied evidence.
+
+    Keep mixed statements in the normal review path: a gap can accompany
+    material counterevidence, and a heuristic cannot establish relevance.
+    """
+    value = text.strip()
+    if len(value) > 200 or re.search(r"\d|但是|但|不过|不過|然而|并且|並且|以及|同时|同時|导致|導致|造成|因此|而|且|however|\b(?:but|yet|while|and|therefore|caus(?:e|es|ed))\b", value, re.IGNORECASE):
+        return False
+    chinese = (r"(?:所提供的?|提供的?|现有|現有|这些|這些)?(?:资料|資料|材料|摘录|摘錄|引文|证据|證據|信息|資訊)"
+               r"(?:中|里|裏)?(?:没有|沒有|未有|未提供|未包含|不包含|不包括|缺少|缺乏)"
+               r"[^。！？；;，,\n]{1,45}[。.!！]?")
+    english = (r"(?:the\s+)?(?:provided\s+|available\s+|supplied\s+)?(?:sources?|materials?|excerpts?|quotations?|evidence|information)"
+               r"\s+(?:do(?:es)?\s+not|did\s+not|doesn\u2019t|doesn't|lack(?:s|ed)?|omit(?:s|ted)?)\s+"
+               r"[^.!?;,\n]{1,90}[.!?]?")
+    return bool(re.fullmatch(chinese, value) or re.fullmatch(english, value, re.IGNORECASE))
+
+
 def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
     """Split an explicit finite percentage range into independently checked bounds."""
     if len(value) > 220:
@@ -1637,8 +1655,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     def check_claims(items: list[Claim], *, counterargument: bool = False) -> list[dict[str, Any]]:
         checked = []
         for item in items:
-            if counterargument and _counterargument_absence_only(item.text):
-                note = "A model-reported absence of counterarguments is an unverified limitation, not counterevidence."
+            if counterargument and (_counterargument_absence_only(item.text) or _counterargument_evidence_gap_only(item.text)):
+                note = ("A model-reported absence of counterarguments is an unverified limitation, not counterevidence."
+                        if _counterargument_absence_only(item.text) else
+                        "A model-reported evidence gap is an unverified limitation, not counterevidence.")
                 if note not in limitations:
                     limitations.append(note)
                 limitations.append(MODEL_LIMITATION_PREFIX + item.text)

@@ -36,6 +36,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "Table column alignment is not established; verify each value, period and unit against the source before relying on calculations.": "表格列对齐尚未核实；使用计算结果前请对照原文核对数值、期间和单位。",
     "A table fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.": "表格事实的引文未标明币种；使用计算结果前请核对原文及币种。",
     "A fact's currency conflicts with an explicit currency cue on the same quoted value; it was excluded from automatic calculations pending review.": "事实的币种与引文中同一数值旁的明确币种不一致；核查前不参与自动计算。",
+    "A model-reported evidence gap is an unverified limitation, not counterevidence.": "模型声称资料存在缺口仅是未经核实的局限说明，不属于反方证据。",
     "A model-reported absence of counterarguments is an unverified limitation, not counterevidence.": "模型声称未发现反方仅是未经核实的局限说明，不属于反方证据。",
     "A claimed publication date may differ from the source's declared date; review both.": "结论中的发布日期可能与来源声明的日期不一致，请核对两者。",
     "At most 50 amount review candidates are shown; additional candidates may exist.": "最多展示 50 条待核查金额，可能还有其他差异。",

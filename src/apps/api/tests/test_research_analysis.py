@@ -1453,3 +1453,18 @@ def test_policy_rate_purchase_risk_windows_preserve_condition_and_bounded_offset
     assert _policy_rate_purchase_risk_windows(text, '利率目标区间是什么？', 1000) is None
     with pytest.raises(AnalysisInterrupted):
         _policy_rate_purchase_risk_windows(text, question, 1000, lambda: True)
+
+
+def test_pure_evidence_gap_is_a_limitation_not_a_substantive_counterargument():
+    from app.research_analysis import _counterargument_evidence_gap_only
+    for text in ("所提供的材料未包含未来风险的详细信息。", "The provided excerpts do not include future guidance.", "Available sources lack risk details."):
+        assert _counterargument_evidence_gap_only(text)
+    for text in ("材料未提供风险，但库存下降。", "Sources do not include forecasts, but costs increased.", "公司没有提供预测。", "库存下降。", "材料未包含财务数据而销售下降。", "Sources do not include forecasts and revenue fell."):
+        assert not _counterargument_evidence_gap_only(text)
+    report = source("s", text="Revenue increased.")
+    citation = {"source_id": "s", "quotation": "Revenue increased."}
+    raw = {"claims": [{"text": "Revenue increased.", "citations": [citation]}],
+           "counterarguments": [{"text": "The provided excerpts do not include future guidance.", "citations": [citation]}]}
+    result = analyze("Assess revenue.", [report], None, lambda _: (raw, 1))
+    assert not result.counterarguments
+    assert any("future guidance" in note for note in result.limitations)
