@@ -914,6 +914,8 @@ def test_focused_passage_is_included_and_budget_failure_never_calls_model():
         return {'claims': [{'text': 'Revenue was 123', 'citations': [{'source_id': 'focus', 'quotation': quote}]}]}, 10
     result = analyze('Revenue?', [report], None, generate, focus=('focus', start, start + len(quote)))
     assert quote in prompts[0]['sources'][0]['text']
+    assert prompts[0]['sources'][0]['user_selected_passage'] == quote
+    assert 'do not assume it supports any claim' in prompts[0]['evidence_guidance']
     assert result.claims[0]['citations'][0]['location']['character_start'] == start
     assert any(segment['character_start'] <= start and segment['character_end'] >= start + len(quote) for segment in result.segments)
     prompts.clear()
@@ -922,3 +924,22 @@ def test_focused_passage_is_included_and_budget_failure_never_calls_model():
     denied = source('focus', text=report.text, model_input=False)
     result = analyze('Revenue?', [denied], None, generate, focus=('focus', start, start + len(quote)))
     assert not prompts and any('no model call was made' in item for item in result.limitations)
+
+
+def test_focused_pdf_passage_is_labeled_and_uses_same_whitespace_as_source_text():
+    quote = '收入    123 million'
+    report = source('pdf', text='其他段落。' * 300 + quote + '  additional context.')
+    report.retrieval_method = 'user_pdf'
+    start = report.text.index(quote)
+    prompts = []
+    def generate(prompt):
+        prompts.append(json.loads(prompt))
+        return {'claims': []}, 1
+    analyze('What is the revenue?', [report], None, generate, focus=('pdf', start, start + len(quote)))
+    passage = prompts[0]['sources'][0]
+    assert passage['user_selected_passage'] == '收入\t123 million'
+    assert passage['user_selected_passage'] in passage['text']
+    prompts.clear()
+    analyze('What is the revenue?', [report], None, generate)
+    assert all('user_selected_passage' not in part for part in prompts[0]['sources'])
+    assert 'A user selected a passage' not in prompts[0]['evidence_guidance']
