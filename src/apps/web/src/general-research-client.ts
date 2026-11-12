@@ -45,7 +45,7 @@ export interface ResearchVersion {
 }
 export interface ResearchTopic {
   topic_id: string;
-  request: { question: string; source_ids: string[] };
+  request: { question: string; source_ids: string[]; as_of?: string | null };
   versions: ResearchVersion[];
 }
 export interface ResearchOperation {
@@ -112,6 +112,8 @@ export function researchClient(baseUrl: string) {
     get: (id: string) => request<ResearchTopic>(`/v2/research/topics/${encodeURIComponent(id)}`),
     sources: (topicId: string, versionId: string) => request<SourceMetadata[]>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/versions/${encodeURIComponent(versionId)}/sources`),
+    sourceText: (sourceId: string) => request<{ source_id: string; text?: string }>(
+      `/v2/research/sources/${encodeURIComponent(sourceId)}`),
     sourceContext: (sourceId: string, start: number, end: number) => request<SourceContextResult>(
       `/v2/research/sources/${encodeURIComponent(sourceId)}/context?start=${start}&end=${end}`),
     createSource: (title: string, text: string, url: string, modelInput: boolean, allowExport: boolean, publishedAt: string, eventAt = "", revisedAt = "", isSimulated = false) =>

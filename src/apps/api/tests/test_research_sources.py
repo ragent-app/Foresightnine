@@ -173,12 +173,18 @@ def test_source_context_uses_unicode_offsets_and_enforces_display_ownership(monk
     data = context.json()
     assert data["selected"] == "📈 Revenue 100" and data["before"] == "前" * 300 and data["after"] == "后" * 300
     assert data["content_sha256"] == item["content_sha256"]
+    full_path = "/v2/research/sources/" + item["source_id"]
+    full = client.get(full_path, headers=first)
+    assert full.status_code == 200 and full.json()["text"] == text and full.headers["cache-control"] == "no-store"
+    assert client.get(full_path, headers=second).status_code == 404
+    assert client.get(full_path).status_code == 401
     assert client.get(path, headers=second, params={"start": start, "end": end}).status_code == 404
     assert client.get(path, params={"start": start, "end": end}).status_code == 401
     assert client.get(path, headers=first, params={"start": end, "end": start}).status_code == 422
     assert client.get(path, headers=first, params={"start": 0, "end": 1100}).status_code == 422
     hidden = client.post("/v2/research/sources", headers=first, json={"title": "Private", "text": "Secret",
         "permissions": {"store": True, "display": False}}).json()
+    assert "text" not in client.get("/v2/research/sources/" + hidden["source_id"], headers=first).json()
     assert client.get("/v2/research/sources/" + hidden["source_id"] + "/context", headers=first,
                       params={"start": 0, "end": 6}).status_code == 403
 
