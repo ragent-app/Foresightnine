@@ -1,0 +1,22 @@
+{
+  "GDP_REVISION": {
+    "second": "2.8",
+    "third": "3.1",
+    "delta_pp": "0.3",
+    "up": [
+      "exports",
+      "consumer spending"
+    ],
+    "offset": "private inventory investment"
+  },
+  "FED_HOLD": {
+    "lower": "5.25",
+    "upper": "5.5",
+    "decision": "maintain",
+    "factors": [
+      "cumulative tightening",
+      "lags",
+      "economic and financial developments"
+    ]
+  }
+}
