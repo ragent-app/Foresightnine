@@ -1243,3 +1243,26 @@ def test_percent_marked_hyphenated_range_is_source_checked_and_currency_guarded(
     assert all(f['currency_context_unverified'] for f in result.facts) and not result.calculations
     raw['facts'][0]['citation']['quotation'] = '5-1/4'
     assert [f['value'] for f in analyze('What is the target?', [report], None, lambda _: (raw, 1)).facts] == ['5.25']
+
+
+def test_pure_absence_of_counterargument_is_a_limitation_not_counterevidence():
+    text = 'Official estimate: GDP grew 3.1 percent.'
+    report = source('s', text=text)
+    citation = {'source_id': 's', 'quotation': 'Official estimate'}
+    raw = {'claims': [{'text':'GDP grew 3.1 percent.', 'citations':[{'source_id':'s', 'quotation':'GDP grew 3.1 percent'}]}],
+           'counterarguments': [{'text':'无来源提供反方观点；文本为官方估计，不含对修订本身的质疑。', 'citations':[citation]},
+                                {'text':'No counterarguments were provided in these excerpts.', 'citations':[citation]}]}
+    result = analyze('Compare GDP.', [report], None, lambda _: (raw, 1))
+    assert len(result.claims) == 1 and not result.counterarguments
+    assert any('not counterevidence' in note for note in result.limitations)
+    assert any('无来源提供反方观点' in note and 'not independently verified' in note for note in result.limitations)
+    assert any('No counterarguments were provided in these excerpts' in note for note in result.limitations)
+
+
+def test_mixed_counterargument_absence_does_not_discard_opposing_evidence():
+    from app.research_analysis import _counterargument_absence_only
+    assert _counterargument_absence_only('未发现反证。')
+    assert not _counterargument_absence_only('未发现反证，但库存投资下降。')
+    assert not _counterargument_absence_only('No counterarguments, but inventory fell.')
+    assert not _counterargument_absence_only('没有反方观点，但是支出下降了 3%。')
+    assert not _counterargument_absence_only('反方指出库存投资下修。')

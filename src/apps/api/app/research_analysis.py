@@ -226,6 +226,20 @@ def _directional_negative_percent(value: Decimal, unit: str, quotation: str) -> 
     return False
 
 
+
+def _counterargument_absence_only(text: str) -> bool:
+    """Recognize a narrow absence statement, not a supported counterargument.
+
+    Mixed statements with numbers or explicit contrast may contain substantive
+    evidence and stay in the normal review path; absence is never proof.
+    """
+    if len(text) > 500 or re.search(r"\d|但是|但|不过|不過|然而|however|\bbut\b|\byet\b", text, re.IGNORECASE):
+        return False
+    return bool(re.search(
+        r"(?:无|無|没有|沒有|未见|未見|未发现|未發現|未提供|不含|缺少)[^。；;\n]{0,30}(?:反方|反证|反證|反对观点|反對觀點|相反观点|相反觀點|质疑|質疑)"
+        r"|\b(?:no|without|none|not)\b[^.\n]{0,55}\b(?:counterarguments?|counterevidence|opposing\s+(?:views?|evidence))\b",
+        text, re.IGNORECASE))
+
 def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
     """Split an explicit finite percentage range into independently checked bounds."""
     if len(value) > 220:
@@ -1400,9 +1414,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         except CalculationError as error:
             limitations.append(f"A requested calculation was omitted: {error}")
 
-    def check_claims(items: list[Claim]) -> list[dict[str, Any]]:
+    def check_claims(items: list[Claim], *, counterargument: bool = False) -> list[dict[str, Any]]:
         checked = []
         for item in items:
+            if counterargument and _counterargument_absence_only(item.text):
+                note = "A model-reported absence of counterarguments is an unverified limitation, not counterevidence."
+                if note not in limitations:
+                    limitations.append(note)
+                limitations.append(MODEL_LIMITATION_PREFIX + item.text)
+                continue
             citations = []
             omitted = False
             incomplete_boundary = False
@@ -1465,7 +1485,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                 "not_independently_verified" if citations else "unsupported"})
         return checked
 
-    return AnalysisResult(check_claims(result.claims), check_claims(result.counterarguments),
+    return AnalysisResult(check_claims(result.claims), check_claims(result.counterarguments, counterargument=True),
                           limitations + ["Matching a quotation does not independently establish that it supports a claim."]
                           + [MODEL_LIMITATION_PREFIX + value for value in result.limitations], [s.source_id for s in processed], tokens,
                           checked_facts, checked_calculations, sha256(prompt.encode("utf-8")).hexdigest(),
