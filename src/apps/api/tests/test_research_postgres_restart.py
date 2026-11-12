@@ -8,7 +8,7 @@ import pytest
 
 
 @pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
-@pytest.mark.parametrize("phase", ["generation", "review", "result_commit"])
+@pytest.mark.parametrize("phase", ["before_provider", "generation", "review", "result_commit"])
 def test_interrupted_research_retains_inputs_and_cannot_replay_external_call(tmp_path, phase):
     state_file = tmp_path / "state.json"
     env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
@@ -75,7 +75,19 @@ assert retry.json()["operation"]["status"] == "failed"
 assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
 assert api.RESEARCH_RUN_INPUTS.get(op) is None
 '''
-    if phase == "review":
+    if phase == "before_provider":
+        # Admission and its input snapshot are durable, but no provider call or
+        # billing reservation has begun when the worker disappears.
+        start = start.replace('api.challenge_provider = Provider()\n', '''api.challenge_provider = Provider()
+def hold_before_reservation(*args, **kwargs):
+    entered.set()
+    Event().wait(30)
+    raise AssertionError("process should be terminated")
+api._reserve_model_call = hold_before_reservation
+''')
+        recover = recover.replace('assert reservation is not None and reservation.status == "reserved"',
+                                  'assert reservation is None')
+    elif phase == "review":
         start = start.replace('        entered.set()\n', '''        if "reviewing whether supplied evidence" not in system:
             citation = {"source_id": source_id, "quotation": "Revenue was 100"}
             return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
