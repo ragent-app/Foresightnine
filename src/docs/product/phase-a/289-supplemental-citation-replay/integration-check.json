@@ -1,0 +1,12 @@
+{
+  "checks": {
+    "candidate_found": true,
+    "candidate_not_attached": true,
+    "original_missing_value_warning_retained": true,
+    "counterpoint_needs_review": true,
+    "research_still_partial": true
+  },
+  "all_checks_pass": true,
+  "live_model_calls": 0,
+  "semantic_assessment": "Candidate addresses near-term inflation expectation only; other assertions and implied motive remain unverified."
+}
