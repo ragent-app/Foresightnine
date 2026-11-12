@@ -2901,7 +2901,7 @@ def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(mon
     def fetch(request, *, timeout_seconds):
         seen["fetch"] += 1
         assert str(request.url) == "https://www.bea.gov/news/report"
-        assert request.permissions.model_input and request.permissions.display and not request.permissions.export
+        assert request.permissions.model_input and request.permissions.display and request.permissions.export
         assert 0 < timeout_seconds <= 15
         return FetchedText(text="Revenue was 100 million.", response_sha256="f" * 64, content_type="text/html")
     class Provider:
@@ -2942,6 +2942,9 @@ def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(mon
     assert source_id in current['source_ids'] and current['content']['run']['official_fetch_calls'] == 1, (seen, current['content'])
     assert current['content']['claims'][0]['citations'][0]['source_id'] == source_id
     assert client.get('/v2/research/sources/' + source_id, headers=headers).status_code == 200
+    exported = client.get(path + '/versions/' + current['version_id'] + '/export', headers=headers)
+    assert exported.status_code == 200, exported.text
+    assert exported.json()['version']['content']['claims'][0]['citations'][0]['source_id'] == source_id
     assert seen == {'search': 1, 'fetch': 1, 'model': 1}
     assert client.post(path + '/runs', headers=request_headers, json=body).headers['Idempotency-Replayed'] == 'true'
     assert seen == {'search': 1, 'fetch': 1, 'model': 1}

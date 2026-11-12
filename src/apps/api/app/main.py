@@ -2543,7 +2543,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     break
                 try:
                     _reserve_search_call(http_request)
-                    permissions = SourcePermissions(store=True, display=True, model_input=True, export=False)
+                    permissions = SourcePermissions(store=True, display=True, model_input=True, export=True)
                     source_request = FetchSourceRequest(url=candidate["url"], title=candidate["title"][:500],
                                                         permissions=permissions)
                     remaining = deadline - monotonic()
