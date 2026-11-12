@@ -588,3 +588,24 @@ def test_quarter_formats_are_distinct_and_ranges_do_not_produce_false_quarters()
     for text in ("2022:Q4", "Q4 2022", "fourth quarter of 2022", "2022年第四季度"):
         assert _explicit_quarters(text)[0][1] == (2022,4)
     assert _explicit_quarters("2025 and 4.5 percent") == []
+
+
+def test_trade_deficit_direction_warning_requires_matching_located_components():
+    from app.research_evidence import flag_trade_balance_direction
+    text = "The deficit reflected a decrease in the goods deficit of $0.3 billion and a decrease in the services surplus of $1.6 billion."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Trade report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    citation={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
+    claim={"text":"The goods deficit and services surplus fell, both of which would narrow the deficit.","citations":[citation]}
+    flagged=flag_trade_balance_direction([claim],[source])[0]
+    assert flagged["balance_direction_warnings"][0]["status"]=="requires_review"
+    assert "balance_direction_warnings" not in claim
+    for statement in ("The goods deficit narrowed and the smaller services surplus widened the combined deficit.",
+                      "It is not true that both changes would narrow the deficit.",
+                      "Both changes widened the deficit."):
+        assert not flag_trade_balance_direction([{**claim,"text":statement}],[source])[0].get("balance_direction_warnings")
+    assert not flag_trade_balance_direction([claim],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("balance_direction_warnings")
+    assert not flag_trade_balance_direction([{**claim,"citations":[{**citation,"partial_token":True}]}],[source])[0].get("balance_direction_warnings")
+    assert not flag_trade_balance_direction([{**claim,"citations":[{**citation,"location":{"status":"ambiguous"}}]}],[source])[0].get("balance_direction_warnings")
+    omitted={**claim,"citations":[{**citation,"quotation":"invented"}]}
+    assert not flag_trade_balance_direction([omitted],[source])[0].get("balance_direction_warnings")

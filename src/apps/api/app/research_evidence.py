@@ -448,6 +448,48 @@ def flag_uncited_quarters(claims: list[dict], sources: list[ResearchSource]) -> 
     return _flag_uncited_expressions(claims, sources, "uncited_quarters", _explicit_quarters)
 
 
+_BOTH_NARROW_DEFICIT = re.compile(
+    r"\bboth(?:\s+of\s+which|\s+changes?)?\s+(?:(?:would|will|should|can|could)\s+)?"
+    r"(?:narrow|reduce|shrink|decrease)\s+(?:the\s+)?(?:overall\s+|total\s+)?deficit\b", re.IGNORECASE)
+_GOODS_DEFICIT_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?goods\s+deficit\b", re.IGNORECASE)
+_SERVICES_SURPLUS_FALL = re.compile(r"\b(?:decrease|decline|fall|reduction)\s+(?:in\s+)?(?:the\s+)?services\s+surplus\b", re.IGNORECASE)
+
+
+def flag_trade_balance_direction(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag a narrow sign inconsistency for goods deficit minus services surplus.
+
+    This is a deterministic accounting cue, not proof of claim support. It
+    requires both components and their decreases in the same located quote.
+    """
+    source_map = {s.source_id:s for s in sources if s.permissions.display and not s.is_simulated}
+    output=[]
+    for claim in claims:
+        entry=deepcopy(claim)
+        entry.pop("balance_direction_warnings",None)
+        text,citations=entry.get("text"),entry.get("citations")
+        if not isinstance(text,str) or len(text)>3000 or not isinstance(citations,list):
+            output.append(entry);continue
+        matches=list(_BOTH_NARROW_DEFICIT.finditer(text))[:5]
+        matches=[m for m in matches if not re.search(r"\b(?:not|neither|incorrect|false|deny|denies)\b", text[max(0,m.start()-50):m.start()], re.IGNORECASE)]
+        if matches:
+            for index,citation in enumerate(citations[:10]):
+                if not isinstance(citation,dict) or citation.get("partial_token"):
+                    continue
+                source=source_map.get(citation.get("source_id")) if isinstance(citation.get("source_id"),str) else None
+                quote,loc=citation.get("quotation"),citation.get("location")
+                if source is None or not isinstance(quote,str) or not isinstance(loc,dict) or loc.get("status")=="ambiguous":
+                    continue
+                a,b=loc.get("character_start"),loc.get("character_end")
+                if (type(a) is int and type(b) is int and 0<=a<b<=len(source.text) and source.text[a:b]==quote
+                        and not partial_ascii_token(source.text,a,b) and _GOODS_DEFICIT_FALL.search(quote)
+                        and _SERVICES_SURPLUS_FALL.search(quote)):
+                    entry["balance_direction_warnings"]=[{"source_id":source.source_id,"citation_index":index,
+                        "claimed_text":matches[0].group(0),"status":"requires_review"}]
+                    break
+        output.append(entry)
+    return output
+
+
 def flag_uncited_percentage_points(claims: list[dict]) -> list[dict]:
     """Flag percentage-point amounts absent from quotations, not entailment."""
     output = []

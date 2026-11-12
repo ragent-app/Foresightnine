@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v16"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v17"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -291,4 +291,13 @@ def test_review_omits_dollar_amount_missing_from_exact_quote():
 def test_review_omits_a_quarter_absent_from_quotations():
     item={**claim(),"text":"Revenue was 100 in 2025:Q1", "uncited_quarters":[]}
     batch=prepare_support_review([item],[source()],3000)
+    assert not batch.indexes and batch.omitted==[0]
+
+
+def test_review_omits_trade_balance_direction_conflict():
+    text = "A decrease in the goods deficit and a decrease in the services surplus."
+    report = source().model_copy(update={"text":text})
+    item={"text":"Both changes would narrow the deficit.","citations":[{"source_id":"s","quotation":text,
+         "location":{"character_start":0,"character_end":len(text)}}]}
+    batch=prepare_support_review([item],[report],3000)
     assert not batch.indexes and batch.omitted==[0]
