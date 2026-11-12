@@ -1,0 +1,58 @@
+{
+  "implementation_commit": "551b0cf886e5fa4290f02d0f8687f78f422f67d2",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "CASH_FLOW",
+      "input_sha256": "1e0a54e1a10e8a07510cff10a7d7aeb236db9dd190e5d7c7732fd554aeae9649"
+    }
+  ],
+  "source_attributions": {
+    "CASH_FLOW": "NVIDIA 2023 Form 10-K, SEC EDGAR HTML extraction; table separators are generated."
+  },
+  "research_entry": "material-only topic; question_override on run",
+  "script_sha256": {
+    "prepare.py": "d472f258fd3a80181e94030c7d14a2a6586530b2436d3bafb177c22ee9f6fb74",
+    "run.py": "274ed867f7dda2f4b556710ab31089d6a333a22c65efe5279085387e8d9438f6",
+    "score.py": "15a88b775b7d65bfdb02683db99c17dd68d404eb12f6c8d5409a77238ecf53b1",
+    "validate_scorer.py": "d93be8b24004725e6e10f14388e9ab84de63647d82052c3ba579fdb4c097487a"
+  },
+  "references_sha256": "69a08216e63708a5fea70a112f16e88906b610de3af22e093ab3ea8ec8cab2af",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v11",
+  "prompt_sha256_by_task": {
+    "CASH_FLOW": "c6114007e78ad1dbdb5101055efad41d5d7e477e0d39221599faab47e7dd09ce"
+  },
+  "preselected_segments": {
+    "CASH_FLOW": [
+      {
+        "source_id": "source_7983b37ad1234c49bf8294bc486ba4d6",
+        "character_start": 215930,
+        "character_end": 216732
+      }
+    ]
+  },
+  "max_calls_per_task": 1,
+  "max_calls_total": 1,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 10000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown"
+}
