@@ -409,3 +409,14 @@ def test_isolated_plan_keeps_required_source_context_and_budget_guard():
     assert batch.segments[0]["required_context_start"] == text.index("River's")
     limited = prepare_isolated_support_reviews([item], [report], 100)
     assert not limited.batches and limited.omissions[0]["reason"] == "input_budget"
+
+
+def test_review_does_not_treat_reused_percentages_as_proof_of_each_metric():
+    text = "Nominal spending grew 0.1 percent while the price index fell 0.1 percent."
+    quote = "The price index decreased 0.1 percent."
+    report = source().model_copy(update={"text": quote})
+    item = {"text": text, "citations": [{"source_id": "s", "quotation": quote,
+        "location": {"character_start": 0, "character_end": len(quote)}}]}
+    batch = prepare_support_review([item], [report], 3000)
+    assert batch.indexes == []
+    assert batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]

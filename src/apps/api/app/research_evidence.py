@@ -759,11 +759,24 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
         entry = deepcopy(claim)
         entry.pop("suggested_fact_evidence", None)
         entry.pop("uncited_percentages", None)
+        entry.pop("reused_percentages", None)
         text = entry.get("text")
         citations = entry.get("citations")
         if not isinstance(text, str) or not isinstance(citations, list):
             output.append(entry)
             continue
+        # The same number can refer to different measures. A matching number
+        # elsewhere in a quotation is not evidence for every occurrence.
+        occurrences: dict[Decimal, list[str]] = defaultdict(list)
+        for match in _PERCENT.finditer(text):
+            if _is_ratio_scale_factor(text, match):
+                continue
+            values = _quoted_numbers(match.group(1).replace("−", "-"))
+            if len(values) == 1:
+                occurrences[next(iter(values))].append(match.group(0))
+        reused = [matches[0] for matches in occurrences.values() if len(matches) > 1][:5]
+        if reused:
+            entry["reused_percentages"] = reused
         existing: set[Decimal] = set()
         for citation in citations:
             quote = citation.get("quotation") if isinstance(citation, dict) else None

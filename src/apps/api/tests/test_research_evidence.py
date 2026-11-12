@@ -686,3 +686,16 @@ def test_possessive_context_does_not_include_previous_sentence():
             "location":{"character_start":start,"character_end":start+len(quote)}}]}
     warning = flag_citation_subject_context([item],[report])[0]["citation_context_warnings"][0]
     assert text[warning["context_character_start"]:warning["context_character_end"]] == "River's "
+
+
+def test_repeated_percentage_requires_review_even_when_number_is_quoted():
+    item = {"text": "Nominal spending grew 0.1 percent while the price index fell 0.1%.",
+            "citations": [{"quotation": "The price index decreased 0.1 percent."}]}
+    result = suggest_percentage_evidence([item], [])[0]
+    assert result["reused_percentages"] == ["0.1 percent"]
+    assert not result.get("uncited_percentages")
+    assert "reused_percentages" not in item
+    revised = {**item, "text": "Nominal spending grew 0.1 percent.", "reused_percentages": ["stale"]}
+    assert not suggest_percentage_evidence([revised], [])[0].get("reused_percentages")
+    formula = {"text": "(120-100)/100 × 100% and (90-80)/80 × 100%", "citations": []}
+    assert not suggest_percentage_evidence([formula], [])[0].get("reused_percentages")
