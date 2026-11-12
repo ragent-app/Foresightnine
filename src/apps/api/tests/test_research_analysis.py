@@ -85,7 +85,7 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
     def model(prompt):
         payload = json.loads(prompt)
         example = payload["output_schema"]["counterarguments"][0]
-        assert example["citations"][0]["quotation"] == "exact quotation from supplied text"
+        assert example["citations"][0]["quotation"] == "exact source quote"
         assert "missing evidence in limitations" in payload["evidence_guidance"]
         return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
 
@@ -99,8 +99,8 @@ def test_prompt_distinguishes_full_source_from_partial_excerpts():
         def generate(prompt):
             payload = json.loads(prompt)
             assert all(entry["source_coverage"] == expected for entry in payload["sources"])
-            assert all(entry["source_characters"] >= len(entry["text"]) for entry in payload["sources"])
-            assert "not from the entire document" in payload["evidence_guidance"]
+            assert all(entry["range"][1] - entry["range"][0] >= len(entry["text"]) for entry in payload["sources"])
+            assert "do not describe the whole document" in payload["evidence_guidance"]
             return {"claims": []}, 10
         return generate
     analyze("Revenue?", [source("short")], None, inspect("complete"))
@@ -360,6 +360,46 @@ def test_multilingual_comparison_reserves_budget_for_each_source(reverse):
     assert set(result.source_ids) == {"positive", "negative"}
     assert all(any(source_id in gap and "remaining text" in gap for gap in result.limitations)
                for source_id in ("positive", "negative"))
+
+
+def test_pdf_horizontal_spacing_is_compacted_only_in_prompt_and_offsets_stay_original():
+    quote = "Personal income:\nCurrent dollars" + " " * 150 + "74.4  88.2"
+    report = source("pdf", text=quote).model_copy(update={"retrieval_method": "user_pdf"})
+
+    def model(prompt):
+        item = json.loads(prompt)["sources"][0]
+        assert item["text"] == "Personal income:\nCurrent dollars\t74.4\t88.2"
+        assert item["range"] == [0, len(quote)]
+        return {"claims": [{"text": "Personal income was revised.", "citations": [
+            {"source_id": "pdf", "quotation": item["text"]}]}]}, 10
+
+    result = analyze("收入?", [report], None, model)
+    citation = result.claims[0]["citations"][0]
+    assert citation["quotation"] == quote and citation["quotation_match"] == "whitespace_normalized"
+    assert citation["location"]["character_end"] == len(quote)
+    assert result.segments[0]["character_end"] == len(quote)
+
+
+def test_two_pdf_tables_keep_labels_and_values_under_shared_budget():
+    def report(sid, earlier, revised):
+        table = ("Change from preceding month\n" + " " * 40 + "August" + " " * 30 + "September\n" +
+                 "Previous  Revised  Previous  Revised\n(Billions of dollars)  (Percent)\nPersonal income:\n" +
+                 "Current dollars" + " " * 45 + f"{earlier}     {revised}\n")
+        text = "Unrelated introduction. " * 500 + table + "Unrelated appendix. " * 500
+        return source(sid, text=text).model_copy(update={"retrieval_method": "user_pdf"})
+    reports = [report("first", "71.6", "74.4"), report("second", "74.4", "88.2")]
+
+    def model(prompt):
+        parts = json.loads(prompt)["sources"]
+        for sid, value in (("first", "74.4"), ("second", "88.2")):
+            assert any(part["source_id"] == sid and value in part["text"] and "income" in part["text"].lower()
+                       and "september" in part["text"].lower() for part in parts)
+        assert len(prompt.encode()) <= 2055
+        return {}, 10
+
+    result = analyze("比较2024年9月个人收入较前月的当期美元变化。", reports, None, model, max_prompt_chars=2055)
+    assert result.source_ids == ["first", "second"]
+    assert all(any(s["source_id"] == item.source_id for s in result.segments) for item in reports)
 
 
 def test_comparison_windows_keep_unequal_extracted_passages_within_budget():

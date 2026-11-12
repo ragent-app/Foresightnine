@@ -33,7 +33,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v9"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v10"
 
 
 class Citation(BaseModel):
@@ -275,7 +275,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "the", "and", "for", "what", "how", "was", "were", "compare", "report", "from", "with", "that", "this", "does", "differ",
         "according", "distinguish", "their", "periods", "note", "relevant", "limitations", "provided", "supplied", "using"}
     for chinese, english in {
-        "收入": ("revenue", "sales"), "营收": ("revenue", "sales"),
+        "收入": ("revenue", "sales"), "个人收入": ("personal", "income"), "营收": ("revenue", "sales"),
         "利润": ("income", "profit", "margin"), "增长": ("growth", "increase"),
         "现金": ("cash",), "负债": ("debt", "liabilities"),
         "通胀": ("inflation", "price"), "利率": ("interest", "rate"),
@@ -285,10 +285,15 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "较上月": ("preceding", "month"), "同比": ("year", "month"),
         "较上年同期": ("year", "month"),
         "联邦基金": ("federal", "funds"), "目标区间": ("target", "range"),
-        "变化幅度": ("lower", "increase", "decrease"),
+        "变化幅度": ("lower", "increase", "decrease"), "当期美元": ("current", "dollars"),
+        "前月": ("preceding", "month"), "修订": ("revised", "previous"),
     }.items():
         if chinese in lower:
             terms.update(english)
+    month_names = ("january", "february", "march", "april", "may", "june",
+                   "july", "august", "september", "october", "november", "december")
+    for month in re.findall(r"(?<!\d)(1[0-2]|[1-9])\s*月", lower):
+        terms.add(month_names[int(month) - 1])
     if not terms:
         return [(0, text[:length])]
     # Keep the search bounded for long or adversarial questions. Query years
@@ -376,19 +381,17 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     if not eligible:
         return AnalysisResult([], [], limitations + ["No permitted, time-eligible source was available for model analysis."], [], None)
     data = {"question": question, "sources": [],
-            "output_schema": {"claims": [{"text": "interpretation", "citations": [
-                {"source_id": "id", "quotation": "exact quotation from supplied text"}]}],
-                "counterarguments": [{"text": "interpretation", "citations": [
-                    {"source_id": "id", "quotation": "exact quotation from supplied text"}]}], "limitations": ["text"],
-                "facts": [{"fact_id": "unique id", "label": "metric", "value": "numeric value exactly in quote",
-                           "unit": "original unit", "currency": "currency or null", "period": "period",
-                           "citation": {"source_id": "id", "quotation": "exact contextual quote"}}],
+            "output_schema": {"claims": [{"text": "claim", "citations": [
+                {"source_id": "id", "quotation": "exact source quote"}]}],
+                "counterarguments": [{"text": "counterargument", "citations": [
+                    {"source_id": "id", "quotation": "exact source quote"}]}], "limitations": ["text"],
+                "facts": [{"fact_id": "unique id", "label": "metric", "value": "quoted number",
+                           "unit": "source unit", "currency": "currency or null", "period": "period",
+                           "citation": {"source_id": "id", "quotation": "exact source quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]},
-            "evidence_guidance": "Cite the supplied evidence for source-based counterarguments. "
-                "Put unanswered questions and missing evidence in limitations; do not invent evidence. "
-                "When source coverage is partial, describe missing information as absent from the supplied excerpts, "
-                "not from the entire document."}
+            "evidence_guidance": "Cite counterevidence; put missing evidence in limitations. "
+                "Partial excerpts do not describe the whole document. PDF horizontal gaps may be compressed; check columns."}
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
@@ -419,8 +422,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         def source_payload(parts: list[tuple[int, str]]) -> list[dict[str, Any]]:
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
             return [{"source_id": source.source_id, "title": source.title,
-                     "character_start": start, "source_characters": len(source.text),
-                     "source_coverage": coverage, "text": passage} for start, passage in parts]
+                     "range": [start, start + len(passage)], "source_coverage": coverage,
+                     "text": re.sub(r"[ \t]{2,}", "\t", passage) if source.retrieval_method == "user_pdf" else passage}
+                    for start, passage in parts]
 
         def fits(candidate: list[tuple[int, str]]) -> bool:
             data["sources"].extend(source_payload(candidate))
@@ -447,7 +451,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             lo = budget_for(split)
             # Tiny fragments rarely provide enough context; retain one larger
             # window when a pair cannot fit at least 200 characters apiece.
-            if split and lo < 400:
+            compressed_parts = portions(lo, True) if split and lo else []
+            if split and (lo < 400 or any(len(re.sub(r"[ \t]{2,}", "\t", part)) < 200 for _, part in compressed_parts)):
                 split = False
                 lo = budget_for(False)
             selected = portions(lo, split) if lo else []

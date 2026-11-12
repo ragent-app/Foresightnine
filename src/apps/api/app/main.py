@@ -2065,8 +2065,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             prompt_data = json.loads(prompt)
             attempted_prompt.update({"prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
                 "prompt_characters": len(prompt), "prompt_bytes": len(prompt.encode("utf-8")),
-                "segments": [{"source_id": item["source_id"], "character_start": item["character_start"],
-                              "character_end": item["character_start"] + len(item["text"])}
+                "segments": [{"source_id": item["source_id"], "character_start": item["range"][0],
+                              "character_end": item["range"][1]}
                              for item in prompt_data["sources"]]})
             try:
                 payload, usage = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
