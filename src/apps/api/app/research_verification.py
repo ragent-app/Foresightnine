@@ -24,7 +24,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v6"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v7"
 
 
 class ReviewEntry(BaseModel):
@@ -72,7 +72,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     for index, claim in enumerate(review_claims):
         citations = claim.get("citations")
         text = claim.get("text")
-        if (claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
+        if (claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or claim.get("uncited_fact_values") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)
             omissions.append({"claim_index": index, "reason": "not_reviewable"})

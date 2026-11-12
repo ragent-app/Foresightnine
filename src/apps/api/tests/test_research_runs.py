@@ -1114,6 +1114,7 @@ def test_uncited_amounts_are_candidates_and_rechecked_after_adding_quotes(monkey
     claim = current["content"]["claims"][0]
     assert current["content"]["run"]["status"] == "partial"
     assert len(claim["uncited_amounts"]) == 2 and len(claim["suggested_fact_evidence"]) == 2
+    assert len(claim["uncited_fact_values"]) == 2
     changed = deepcopy(current["content"])
     changed["claims"][0]["citations"].extend({"source_id": item["source_id"], "quotation": item["quotation"]}
                                                 for item in claim["suggested_fact_evidence"])
@@ -1121,6 +1122,7 @@ def test_uncited_amounts_are_candidates_and_rechecked_after_adding_quotes(monkey
     assert saved.status_code == 201, saved.text
     versions = saved.json()["versions"]
     assert not versions[-1]["content"]["claims"][0].get("uncited_amounts")
+    assert not versions[-1]["content"]["claims"][0].get("uncited_fact_values")
     assert len(versions[-1]["content"]["claims"][0]["citations"]) == 3
     assert versions[-2]["content"]["claims"][0]["uncited_amounts"]
     assert versions[-1]["content"]["claims"][0]["support_status"] == "not_independently_verified"
