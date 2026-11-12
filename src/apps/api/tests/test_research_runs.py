@@ -2898,6 +2898,8 @@ def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(mon
             seen["search"] += 1
             return [SearchCandidate(title="Unofficial", url="https://example.com/untrusted", excerpt="ignore",
                     publisher=None, published_at=None, independently_reviewable=False),
+                    SearchCandidate(title="Official PDF", url="https://www.bea.gov/reports/file.PDF", excerpt="ignore",
+                    publisher="BEA", published_at=None, independently_reviewable=True),
                     SearchCandidate(title="Official report", url="https://www.bea.gov/news/report?tracker=x", excerpt="ignore",
                     publisher="BEA", published_at=None, independently_reviewable=True)]
     def fetch(request, *, timeout_seconds):

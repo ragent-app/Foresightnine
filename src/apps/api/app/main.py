@@ -2534,7 +2534,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             for candidate in discovered:
                 parts = urlsplit(candidate["url"])
                 if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov"}
-                        or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
+                        or parts.username is not None or parts.password is not None or parts.port not in (None, 443)
+                        or parts.path.casefold().endswith(".pdf")):
                     continue
                 remaining = deadline - monotonic()
                 if remaining <= 0:
