@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v19"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v20"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -85,6 +85,21 @@ def test_review_reserves_budget_for_multiple_claims_before_extra_context():
     for entry in json.loads(batch.prompt)["claims"]:
         excerpt = entry["excerpts"][0]
         assert excerpt["quotation"] == "Revenue 100"
+
+
+def test_review_balances_support_and_counterarguments_under_input_budget():
+    items = [{**claim(), "role": role} for role in ("support", "support", "counterargument")]
+    report = source()
+    budget = next(b for b in range(100, 1500) if len(prepare_support_review(items, [report], b).indexes) == 2)
+    batch = prepare_support_review(items, [report], budget)
+    assert batch.indexes == [0, 2]
+    assert batch.omissions == [{"claim_index": 1, "reason": "input_budget", "required_subject_context": False}]
+    assert [item["claim_index"] for item in json.loads(batch.prompt)["claims"]] == [0, 2]
+    assert len(batch.prompt.encode()) <= budget
+    invalid_counter = {**items[2], "citations": []}
+    batch = prepare_support_review([*items[:2], invalid_counter], [report], budget)
+    assert batch.indexes == [0, 1]
+    assert batch.omissions == [{"claim_index": 2, "reason": "not_reviewable"}]
 
 
 def test_review_preserves_required_subject_context_or_omits_claim():

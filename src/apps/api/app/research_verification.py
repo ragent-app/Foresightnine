@@ -24,7 +24,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v19"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v20"
 
 
 class ReviewEntry(BaseModel):
@@ -74,7 +74,15 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int, int, int]]]] = []
     def serialize() -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    for index, claim in enumerate(review_claims):
+    # Alternate the two roles before allocating scarce review input, so a
+    # run of supporting claims cannot always crowd out counterarguments.
+    support = [i for i, claim in enumerate(review_claims) if claim.get("role") != "counterargument"]
+    counter = [i for i, claim in enumerate(review_claims) if claim.get("role") == "counterargument"]
+    order = [index for pair in zip(support, counter) for index in pair]
+    order.extend(support[len(counter):])
+    order.extend(counter[len(support):])
+    for index in order:
+        claim = review_claims[index]
         citations = claim.get("citations")
         text = claim.get("text")
         if (any(warning.get("context_metric") == "related unquoted sentence" for warning in claim.get("citation_context_warnings", [])) or
@@ -120,6 +128,12 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             continue
         indexes.append(index)
         accepted.append((index, text, located))
+    # Preserve original claim order in the prompt and audit records.
+    payload["claims"].sort(key=lambda item: item["claim_index"])
+    accepted.sort(key=lambda item: item[0])
+    indexes.sort()
+    omitted.sort()
+    omissions.sort(key=lambda item: item["claim_index"])
     # Expand in rounds so one claim cannot consume all spare context while
     # another still has only an exact quotation. Never truncate a quotation.
     radii = [0] * len(accepted)
