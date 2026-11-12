@@ -1884,6 +1884,48 @@ def test_larger_provider_input_limit_requires_matching_research_budget(monkeypat
     assert reservations == [10000]
 
 
+def test_per_run_input_limit_is_bounded_recorded_and_reserved(monkeypatch):
+    from app.openai_compatible import OpenAICompatibleLlmProvider
+    from app.phase3 import ProviderPolicy
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", "6000")
+    calls, reservations = [], []
+    provider = OpenAICompatibleLlmProvider(policy=ProviderPolicy(max_input_tokens=3000, max_output_tokens=1500, timeout_seconds=5))
+    def generate(self, prompt, *, cancel_event, system, timeout_seconds):
+        calls.append(self.policy.max_input_tokens)
+        return {"claims": [{"text": "Revenue was 100", "citations": [{"source_id": source_id, "quotation": "Revenue was 100"}]}]}, 20
+    monkeypatch.setattr(OpenAICompatibleLlmProvider, "generate_structured", generate)
+    monkeypatch.setattr(api, "challenge_provider", provider)
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: reservations.append(kwargs["token_budget"]))
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={"email":"per-run-budget@example.test", "password":"correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + reg["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title":"Report", "text":"Revenue was 100.", "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question":"Revenue?", "source_ids":[source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    payload = {"parent_version_id":topic["versions"][-1]["version_id"], "max_input_tokens_per_call":2500,
+               "max_total_tokens":4000, "require_counterarguments":False}
+    for invalid in (0, 6001, 12001, True):
+        bad = client.post(path + "/runs", headers={**headers,"Idempotency-Key":f"invalid-cap-{invalid}"}, json={**payload,"max_input_tokens_per_call":invalid})
+        assert bad.status_code == 422
+    receipt = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json=payload)
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in ("completed", "failed"): break
+        time.sleep(.02)
+    assert status == "completed" and calls == [2500] and reservations == [4000]
+    snapshot = client.get(path + "/runs/" + op + "/inputs", headers=headers).json()
+    assert snapshot["budget"]["max_input_tokens_per_call"] == 2500
+    assert snapshot["provider_limits"]["max_input_tokens"] == 2500
+    assert provider.policy.max_input_tokens == 3000
+    replay = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json=payload)
+    assert replay.status_code == 202 and replay.headers["Idempotency-Replayed"] == "true"
+    assert calls == [2500]
+
+
 def test_related_source_sentence_is_reviewable_and_recomputed_after_edit(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     text = "Officials may adjust policy. They monitor labor market conditions and inflation pressures."

@@ -2087,7 +2087,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     effective_question = request.question_override if request.question_override is not None else topic.request.question
     provider, _personal = _model_provider_for_request(http_request)
     if isinstance(provider, OpenAICompatibleLlmProvider):
-        provider = provider.for_research()
+        try:
+            provider = provider.for_research(request.max_input_tokens_per_call)
+        except ValueError as error:
+            raise ApiProblem(422, "invalid_request", "The input limit exceeds the configured research limit.") from error
+    elif request.max_input_tokens_per_call is not None:
+        raise ApiProblem(422, "invalid_request", "The selected provider does not support a per-run input limit.")
     generate_structured = getattr(provider, "generate_structured", None)
     checkpoint_parent: str | None = None
     # Preserve idempotency keys issued before this optional field existed.

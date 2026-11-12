@@ -791,6 +791,19 @@
             "title": "Max Elapsed Seconds",
             "type": "integer"
           },
+          "max_input_tokens_per_call": {
+            "anyOf": [
+              {
+                "maximum": 12000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Input Tokens Per Call"
+          },
           "max_model_calls": {
             "default": 1,
             "maximum": 2.0,

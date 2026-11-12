@@ -4,6 +4,17 @@ import { researchClient, researchPollingDelay, ResearchRequestError } from "./ge
 afterEach(() => vi.unstubAllGlobals());
 
 describe("research operation polling", () => {
+  it("sends an input limit only when explicitly selected", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 202 }));
+    vi.stubGlobal("fetch", fetcher);
+    const api = researchClient("https://api.example.com");
+    const budget = { search: false, supportReview: false, requireCounterarguments: false, maxElapsedSeconds: 60, maxTotalTokens: 10000 };
+    await api.run("topic", "version", "key-one", budget);
+    await api.run("topic", "version", "key-two", {...budget, maxInputTokensPerCall: 2500});
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty("max_input_tokens_per_call");
+    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)).max_input_tokens_per_call).toBe(2500);
+  });
   it("honors a server retry delay and retains the status for read-only retries", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("", { status: 429, headers: { "Retry-After": "45" } }));

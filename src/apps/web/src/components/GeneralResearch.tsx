@@ -204,6 +204,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [focusChoice, setFocusChoice] = useState("");
   const [maxElapsed, setMaxElapsed] = useState("60");
   const [maxTokens, setMaxTokens] = useState("10000");
+  const [maxInputTokens, setMaxInputTokens] = useState("");
   const [maxCost, setMaxCost] = useState("");
   const [sourceMetadata, setSourceMetadata] = useState<SourceMetadata[]>([]);
   const [busy, setBusy] = useState(false);
@@ -432,13 +433,14 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     if (focusChoice && !focus) { setNotice(en ? "The selected quotation is no longer available." : "所选引文已不可用，请重新选择。"); return; }
     if (!/^\d+$/.test(maxElapsed) || Number(maxElapsed) < 1 || Number(maxElapsed) > 180 ||
         !/^\d+$/.test(maxTokens) || Number(maxTokens) > 20000 ||
+        (maxInputTokens !== "" && (!/^\d+$/.test(maxInputTokens) || Number(maxInputTokens) < 1 || Number(maxInputTokens) > 12000)) ||
         (maxCost !== "" && !/^\d+(?:\.\d{1,6})?$/.test(maxCost))) {
       setNotice(en ? "Check the research budget values." : "请检查研究预算设置。"); return;
     }
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxInputTokens ? { maxInputTokensPerCall: Number(maxInputTokens) } : {}), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -607,6 +609,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       <details className="general-source"><summary>{en ? "Research budget" : "研究预算"}</summary>
         <Field label={en ? "Time limit in seconds (1–180)" : "时间上限（秒，1–180）"}><Input type="number" min="1" max="180" value={maxElapsed} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxElapsed(event.target.value)} /></Field>
         <Field label={en ? "Maximum model tokens" : "模型 Token 上限"}><Input type="number" min="0" max="20000" value={maxTokens} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxTokens(event.target.value)} /></Field>
+        <Field label={en ? "Input tokens per call (optional)" : "每次调用的输入 Token 上限（可选）"} helper={en ? "Leave blank for the configured limit. A smaller limit may omit more material; it cannot exceed the deployment limit. The total budget must also cover output and any review call." : "留空使用服务配置的上限；调低可能遗漏更多资料，不能超过服务配置的上限。总预算还需覆盖输出和可能的复查调用。"}><Input type="number" min="1" max="12000" value={maxInputTokens} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxInputTokens(event.target.value)} /></Field>
         <Field label={en ? "Maximum cost in USD (optional)" : "费用上限（美元，可选）"} helper={en ? "If provider pricing is unknown, a cost cap prevents external calls." : "供应商价格未知时，设置费用上限会阻止外部调用。"}><Input type="number" min="0" step="0.01" value={maxCost} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxCost(event.target.value)} /></Field>
       </details>
       {operation ? <p role="status">{en ? "Run status: " : "运行状态："}{statusLabel(operation.status, en)}{running ? <> <Button disabled={busy} onClick={() => void cancel()}>{en ? "Cancel" : "取消"}</Button></> : null}</p> : null}
@@ -614,6 +617,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {runInputs ? <details className="general-source"><summary>{en ? "Run input snapshot" : "运行时输入记录"}</summary>
         <p>{en ? "Captured" : "记录时间"}: {new Date(runInputs.captured_at).toLocaleString()} · {en ? "Source version" : "输入版本"}: {runInputs.parent_version_id}</p>
         <p>{en ? "Time limit" : "时间上限"}: {runInputs.budget.max_elapsed_seconds} s · {en ? "Token limit" : "Token 上限"}: {runInputs.budget.max_total_tokens} · {en ? "Cost limit (USD)" : "费用上限（美元）"}: {runInputs.budget.max_cost_usd ?? (en ? "not set" : "未设置")}</p>
+        <p>{en ? "Input limit per call" : "每次调用输入上限"}: {runInputs.provider_limits?.max_input_tokens ?? (en ? "unknown" : "未知")}</p>
         <p>{en ? "Model" : "模型"}: {runInputs.model ?? (en ? "unknown" : "未知")} · {en ? "Provider" : "服务方"}: {runInputs.provider ?? (en ? "unknown" : "未知")}</p>
         <ul>{runInputs.sources.map((source) => <li key={source.source_id}>{source.source_id} · SHA-256: {source.content_sha256} · {source.is_simulated ? (en ? "Simulated; excluded from real research" : "模拟资料，排除于真实研究") : (en ? "Model processing" : "模型处理") + ": " + (source.permissions.model_input ? (en ? "allowed" : "允许") : (en ? "not allowed" : "未允许"))}</li>)}</ul>
       </details> : null}

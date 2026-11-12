@@ -21,6 +21,7 @@ class ResearchRunRequest(BaseModel):
     parent_version_id: str = Field(min_length=1, max_length=100)
     source_ids: list[str] = Field(default_factory=list, max_length=100)
     max_model_calls: int = Field(default=1, ge=0, le=2)
+    max_input_tokens_per_call: int | None = Field(default=None, ge=1, le=12000, strict=True)
     support_review: bool = False
     require_counterarguments: bool = True
     include_scope_in_search: bool = False

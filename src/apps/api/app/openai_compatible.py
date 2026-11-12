@@ -677,9 +677,12 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         # enough room for all ten rubric items and the final structured answer.
         return cls(settings, policy=effective_policy, transport=transport, sleeper=sleeper)
 
-    def for_research(self) -> "OpenAICompatibleLlmProvider":
-        """Clone only when a separate bounded research input limit is configured."""
-        limit = _research_input_limit_from_environment(self.policy.max_input_tokens)
+    def for_research(self, max_input_tokens: int | None = None) -> "OpenAICompatibleLlmProvider":
+        """Apply a per-run cap within the deployment's research input limit."""
+        ceiling = _research_input_limit_from_environment(self.policy.max_input_tokens)
+        if max_input_tokens is not None and (type(max_input_tokens) is not int or not 1 <= max_input_tokens <= ceiling):
+            raise ValueError("Research input limit exceeds the deployment limit.")
+        limit = max_input_tokens if max_input_tokens is not None else ceiling
         if limit == self.policy.max_input_tokens:
             return self
         return type(self)(self.settings, policy=replace(self.policy, max_input_tokens=limit),

@@ -749,6 +749,13 @@ def test_research_input_budget_is_bounded_and_does_not_change_shared_provider(mo
     assert research_provider.policy.max_input_tokens == 6000
     assert provider.policy.max_input_tokens == default_limit
     assert research_provider.transport is provider.transport
+    limited = provider.for_research(2500)
+    assert limited.policy.max_input_tokens == 2500
+    assert research_provider.policy.max_input_tokens == 6000 and provider.policy.max_input_tokens == default_limit
+    with pytest.raises(ValueError, match="deployment limit"):
+        provider.for_research(6001)
+    with pytest.raises(ValueError, match="deployment limit"):
+        provider.for_research(True)
     for raw in ("0", "12001", "-1", "3.5", "not-a-number"):
         monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", raw)
         with pytest.raises(ProviderFailure, match="configuration"):
