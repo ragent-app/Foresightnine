@@ -44,6 +44,20 @@ class CalculationError(ValueError):
 
 _TEXT_NUMBER = re.compile(r"(?<![\w.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
 _TEXT_PERCENT = re.compile(r"(?<![\w.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
+_RATIO_SCALE_PREFIX = re.compile(r"(?:/|÷)\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)*\s*[×*]\s*$")
+
+
+def _is_ratio_scale_factor(text: str, match: re.Match[str]) -> bool:
+    """Recognize only the explicit conversion factor in a numeric ratio.
+
+    A bare 100% or other percentage still needs review. This does not parse
+    arbitrary expressions or establish whether a model's formula is correct.
+    """
+    try:
+        return Decimal(match.group(1).replace(",", "").replace("−", "-")) == 100 and bool(
+            _RATIO_SCALE_PREFIX.search(text[:match.start()]))
+    except InvalidOperation:
+        return False
 
 
 def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
@@ -158,7 +172,7 @@ def claim_calculation_differences(claims: list[dict], calculations: list[dict], 
         text = claim.get("text")
         if not isinstance(text, str) or len(text) > 3000:
             continue
-        percentages = list(_TEXT_PERCENT.finditer(text))
+        percentages = [match for match in _TEXT_PERCENT.finditer(text) if not _is_ratio_scale_factor(text, match)]
         if not percentages or len(percentages) > 20:
             continue
         raw_values = [item.group(1).replace(",", "").replace("−", "-") for item in percentages]

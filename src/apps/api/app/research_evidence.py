@@ -8,7 +8,7 @@ import re
 
 from pydantic import ValidationError
 
-from .research_calculations import NumericFact
+from .research_calculations import NumericFact, _is_ratio_scale_factor
 from .research_analysis import _quoted_numbers
 
 
@@ -61,6 +61,8 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
         suggested = []
         seen: set[Decimal] = set()
         for match in _PERCENT.finditer(text):
+            if _is_ratio_scale_factor(text, match):
+                continue
             try: value = Decimal(match.group(1).replace("−", "-"))
             except InvalidOperation: continue
             candidates = by_value.get(value, [])

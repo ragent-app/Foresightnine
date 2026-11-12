@@ -71,6 +71,16 @@ def test_same_percentage_at_two_precisions_checks_each_rounding():
     assert len(result) == 1 and result[0]["claimed_value"] == "13.70" and result[0]["calculated_value"] == "13.69"
 
 
+def test_formula_scaling_factor_is_not_treated_as_a_claimed_percentage():
+    current, prior = fact("current", "254453", "FY2024"), fact("prior", "242290", "FY2023")
+    growth = calculate(CalculationRequest(formula="growth_percent", first=current, second=prior))
+    for formula in ("(254,453 − 242,290) ÷ 242,290 × 100%", "(254453 / 242290) * 100%"):
+        assert claim_calculation_differences([{"text": formula}], [growth], [current, prior]) == []
+    claim = {"text": "(254453 / 242290) * 100% = 5.03%"}
+    assert claim_calculation_differences([claim], [growth], [current, prior])[0]["claimed_value"] == "5.03"
+    assert claim_calculation_differences([{"text": "On 242290 revenue growth was 100%."}], [growth], [current, prior])[0]["claimed_value"] == "100"
+
+
 @pytest.mark.parametrize("first,second,formula", [
     (fact("a", "1", "2023"), fact("b", "0", "2022"), "growth_percent"),
     (fact("a", "1", "2023"), fact("b", "-1", "2022"), "growth_percent"),

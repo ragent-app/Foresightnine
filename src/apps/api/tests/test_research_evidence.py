@@ -60,3 +60,12 @@ def test_suggestions_fail_closed_for_ambiguous_or_user_edited_facts():
     assert not suggest_percentage_evidence([claim], [{**base, "quotation": "Missing number!!!"}])[0].get("suggested_fact_evidence")
     assert not suggest_percentage_evidence([claim], [{**base, "location": {"character_start": 0, "character_end": 10}}])[0].get("suggested_fact_evidence")
     assert not suggest_percentage_evidence([{**claim, "suggested_fact_evidence": [{"fabricated": True}]}], [])[0].get("suggested_fact_evidence")
+
+
+def test_formula_scale_factor_does_not_suggest_unrelated_percent_fact():
+    hundred = {**fact("a", "one", "100", unit="percent", currency=None), "quotation": "Growth 100 percent",
+        "location": {"character_start": 0, "character_end": 18}, "verification": "model_extraction_not_independently_verified"}
+    formula = {"text": "(120 - 100) / 100 × 100%", "citations": []}
+    assert not suggest_percentage_evidence([formula], [hundred])[0].get("suggested_fact_evidence")
+    statement = {"text": "Growth was 100%.", "citations": []}
+    assert suggest_percentage_evidence([statement], [hundred])[0]["suggested_fact_evidence"][0]["fact_id"] == "a"
