@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
@@ -67,25 +68,40 @@ class HtmlUploadRequest(BaseModel):
 
 
 class _UploadedHtmlParser(_TextParser):
-    """Omit inline XBRL metadata while preserving visible financial tables."""
+    """Omit XBRL headers and explicitly hidden subtrees without executing CSS."""
+    _void = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"})
+
     def __init__(self) -> None:
         super().__init__()
-        self.xbrl_header_depth = 0
+        self.hidden_tags: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "ix:header":
-            self.xbrl_header_depth += 1
-        elif not self.xbrl_header_depth:
-            super().handle_starttag(tag, attrs)
+        if self.hidden_tags:
+            if tag not in self._void:
+                self.hidden_tags.append(tag)
+            return
+        hidden = tag == "ix:header" or any(name == "hidden" for name, _ in attrs)
+        for name, value in attrs:
+            if name == "style" and isinstance(value, str):
+                hidden = hidden or bool(re.search(r"(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!\s*important\s*)?(?:;|$)", value, re.IGNORECASE))
+        if hidden:
+            if tag not in self._void:
+                self.hidden_tags.append(tag)
+            return
+        super().handle_starttag(tag, attrs)
 
     def handle_endtag(self, tag: str) -> None:
-        if self.xbrl_header_depth and tag == "ix:header":
-            self.xbrl_header_depth -= 1
-        elif not self.xbrl_header_depth:
-            super().handle_endtag(tag)
+        if self.hidden_tags:
+            # A malformed inner closing tag must never make a hidden parent
+            # visible. Closing an ancestor closes its nested hidden subtree.
+            if tag in self.hidden_tags:
+                index = len(self.hidden_tags) - 1 - self.hidden_tags[::-1].index(tag)
+                del self.hidden_tags[index:]
+            return
+        super().handle_endtag(tag)
 
     def handle_data(self, data: str) -> None:
-        if not self.xbrl_header_depth:
+        if not self.hidden_tags:
             super().handle_data(data)
 
 
@@ -102,8 +118,8 @@ def extract_uploaded_html(request: HtmlUploadRequest) -> tuple[str, str]:
         parser = _UploadedHtmlParser()
         parser.feed(html)
         parser.close()
-        if parser.xbrl_header_depth:
-            raise ValueError("unclosed inline XBRL header")
+        if parser.hidden_tags:
+            raise ValueError("unclosed hidden subtree")
         text = "\n".join(line.strip() for line in "".join(parser.parts).splitlines() if line.strip())
         if not text or len(text.encode("utf-8")) > MAX_TEXT_BYTES or len(text) > MAX_TEXT_BYTES:
             raise ValueError("text size")

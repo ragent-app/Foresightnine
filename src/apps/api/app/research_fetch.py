@@ -17,7 +17,7 @@ from .research_sources import SourcePermissions
 
 ALLOWED_HOSTS = frozenset({"www.bea.gov", "www.federalreserve.gov", "www.sec.gov"})
 HTML_EXTRACTION_DISCLOSURE = ("Webpage text is extracted; table separators and span markers, when present, "
-                              "are generated. Check the original document for layout.")
+                              "are generated. Extraction does not reproduce browser rendering; check the original document for layout and visibility.")
 
 
 class FetchSourceRequest(BaseModel):

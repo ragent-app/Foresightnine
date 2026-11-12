@@ -3,6 +3,7 @@ import gzip
 from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
+import pytest
 from fastapi.testclient import TestClient
 import app.main as api
 
@@ -64,3 +65,19 @@ def test_original_cisco_filing_can_be_extracted_with_bounded_upload(monkeypatch)
     path = f"/v2/research/topics/{topic['topic_id']}/versions/{topic['versions'][0]['version_id']}/sources/{source_id}/text"
     text = client.get(path, headers=headers).json()['text']
     assert '53,803' in text and '56,998' in text and 'Total revenue' in text
+
+
+def test_html_explicitly_hidden_subtrees_are_excluded_without_executing_css():
+    from app.research_uploads import HtmlUploadRequest, PdfFailure, extract_uploaded_html
+    from app.research_sources import SourcePermissions
+    def extract(value):
+        return extract_uploaded_html(HtmlUploadRequest(title='Report', html_base64=base64.b64encode(value.encode()).decode(),
+            permissions=SourcePermissions(store=True)))[0]
+    html = ('<p>Visible before</p><div style="color:red; DISPLAY : none !important;">secret<br><b>nested</b></div>'
+            '<div hidden><span>hidden data</span><input></div><p style="visibility:hidden">hidden text</p>'
+            '<p>Visible after</p><p style="display:block">Visible normally</p>')
+    text = extract(html)
+    assert all(value in text for value in ('Visible before', 'Visible after', 'Visible normally'))
+    assert all(value not in text for value in ('secret', 'nested', 'hidden data', 'hidden text'))
+    with pytest.raises(PdfFailure):
+        extract('<p>Visible</p><div hidden>Unclosed hidden data')
