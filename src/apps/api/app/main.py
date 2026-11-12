@@ -1779,8 +1779,11 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                     entry["verification"] = "user_edited_not_independently_verified"
                     if field == "claims":
                         entry.pop("support_review", None)
-                        entry["support_status"] = ("incomplete" if any(c.get("partial_token") for c in entry.get("citations", []) if isinstance(c, dict))
-                                                   else "not_independently_verified" if entry.get("citations") else "unsupported")
+                        entry["support_status"] = ("incomplete" if any(
+                            c.get("partial_token") or c.get("quotation_match") in {"table_markup_expanded", "split_conjunction"} or
+                            isinstance(c.get("location"), dict) and c["location"].get("status") == "ambiguous"
+                            for c in entry.get("citations", []) if isinstance(c, dict))
+                            else "not_independently_verified" if entry.get("citations") else "unsupported")
                         if isinstance(entry.get("citations"), list):
                             for citation in entry["citations"]:
                                 if isinstance(citation, dict):

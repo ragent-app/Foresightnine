@@ -1644,3 +1644,50 @@ def test_unverified_period_comparability_keeps_automatic_research_partial(monkey
     assert content['run']['status']=='partial'
     assert content['calculations'][0]['period_granularity_check']=='different_labels_verify_stock_or_flow'
     assert any('Period comparability is not established' in x for x in content['limitations'])
+
+
+def test_reclassifying_findings_preserves_quotes_but_invalidates_review(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    class Provider:
+        name = 'role-edit-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                return {'reviews': [{'claim_index': 0, 'verdict': 'supports'}]}, 10
+            return {'claims': [
+                {'text': 'Cash was 100.', 'citations': [{'source_id': source_id, 'quotation': 'Cash was 100.'}]},
+                {'text': 'Revenue was reported.', 'citations': [{'source_id': source_id, 'quotation': 'Revenue | $ | 100 | | $ | 90'}]}]}, 20
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'role-edit-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title': 'Report',
+        'text': 'Cash was 100.\n| [colspan=3] Revenue | $ | 100 | | [colspan=3] | $ | 90 |',
+        'permissions': {'store': True, 'model_input': True, 'display': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Review results', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'role-edit'},
+        json={'parent_version_id': topic['versions'][0]['version_id'], 'support_review': True, 'max_model_calls': 2, 'max_total_tokens': 9000}).json()
+    op = receipt['operation']['operation_id']
+    for _ in range(100):
+        status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    previous = client.get(path, headers=headers).json()['versions'][-1]
+    before = previous['content']['claims']
+    assert before[0]['support_review']['verdict'] == 'supports'
+    assert before[1]['support_status'] == 'incomplete'
+    content = deepcopy(previous['content'])
+    for claim in content['claims']:
+        claim['role'] = 'counterargument'
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': previous['version_id'], 'content': content})
+    assert saved.status_code == 201, saved.text
+    latest = saved.json()['versions'][-1]
+    for old, new in zip(before, latest['content']['claims']):
+        assert new['role'] == 'counterargument' and new['text'] == old['text']
+        assert new['citations'][0]['quotation'] == old['citations'][0]['quotation']
+        assert new['authorship'] == 'user' and 'support_review' not in new
+    assert latest['content']['claims'][1]['support_status'] == 'incomplete'
+    assert saved.json()['versions'][-2]['content']['claims'] == before
