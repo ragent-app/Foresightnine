@@ -1,0 +1,113 @@
+{
+  "manifest_sha256": "c4cacd986573eb2c4e098d9226a618178695e398e59c6a523b2803265b3686d0",
+  "payload": {
+    "claims": [
+      {
+        "text": "The claim is FALSE. According to the BEA May 2021 release, current-dollar consumer spending in May reflected an increase in services that was partly offset by a decrease in goods — not both rising.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Current-dollar consumer spending increased in May, reflecting an increase in services that was partly offset by a decrease in goods."
+          }
+        ]
+      },
+      {
+        "text": "Within services, the increase was driven primarily by recreation services and food services and accommodations.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Within services, the increase primarily reflected an increase in recreation services (led by membership clubs, sports centers, parks, theaters, and museums), based on payment card transaction data, as well as food services and accommodations (led by food services), based on data from the Census Monthly Retail Trade Survey (MRTS)."
+          }
+        ]
+      },
+      {
+        "text": "Within goods, the decrease was driven primarily by motor vehicles and parts, with other categories also decreasing.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Within goods, the decrease primarily reflected a decrease in motor vehicles and parts (led by new motor vehicles), based on data from Wards Automotive. Other categories, such as furnishings and recreationals goods and vehicles, also decreased based on data from the MRTS."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "A possible source of confusion: relative to February 2020 pre-pandemic levels, goods spending was above baseline (services below), but the month-over-month May change showed goods declining.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "A comparison of the May 2021 current-dollar levels of consumer spending with the February 2020 pre-pandemic levels shows that spending for goods increased while spending for services decreased."
+          }
+        ]
+      },
+      {
+        "text": "The release's price discussion mentions increases in both goods and services, but that concerns the PCE price index (inflation), not spending volumes.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The personal consumption expenditures (PCE) price index for May increased 3.9 percent from one year ago, reflecting increases in both goods and services."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The supplied excerpts do not provide a numeric dollar value for the total current-dollar change in consumer spending in May 2021; only the direction of change (an increase) is stated. A supported calculation of the exact dollar change cannot be performed without that numeric fact.",
+      "The excerpts are partial coverage of the source document; the full Personal Income and Outlays tables are not included.",
+      "Publication and coverage dates are declared by the source and were not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact-goods-decrease",
+        "label": "Goods consumer spending change, May 2021",
+        "value": null,
+        "unit": "directional change (decrease)",
+        "currency": null,
+        "period": "May 2021",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "reflecting an increase in services that was partly offset by a decrease in goods"
+        }
+      },
+      {
+        "fact_id": "fact-goods-vs-feb2020",
+        "label": "Goods spending level vs February 2020",
+        "value": 20,
+        "unit": "percent above baseline",
+        "currency": null,
+        "period": "May 2021 vs February 2020",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Spending for goods in May 2021 was 20 percent above the February 2020 level."
+        }
+      },
+      {
+        "fact_id": "fact-services-vs-feb2020",
+        "label": "Services spending level vs February 2020",
+        "value": -1.0,
+        "unit": "percent below baseline",
+        "currency": null,
+        "period": "May 2021 vs February 2020",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Spending for services in May 2021 was 1.0 percent below the February 2020 level."
+        }
+      },
+      {
+        "fact_id": "fact-pce-yoy",
+        "label": "PCE price index, 12-month change",
+        "value": 3.9,
+        "unit": "percent",
+        "currency": null,
+        "period": "May 2021 (year-over-year)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "The personal consumption expenditures (PCE) price index for May increased 3.9 percent from one year ago"
+        }
+      }
+    ],
+    "calculations": [],
+    "explanation": "The claim that both goods and services consumer spending rose in May 2021 is contradicted by the BEA release, which states services increased while goods decreased. Regarding the current-dollar change in total consumer spending: the source states total current-dollar consumer spending increased in May, but the excerpts do not contain the numeric dollar amount, so a supported calculation of the magnitude cannot be produced. What the aggregate increase alone cannot establish: the composition of the change — the release shows the aggregate masks offsetting movements (services up, goods down). An aggregate figure alone would not reveal that goods spending fell (driven by motor vehicles and parts), nor whether underlying category-level changes were large and offsetting, nor real (inflation-adjusted) changes, since the aggregate is in current dollars and May's PCE prices also rose."
+  },
+  "reported_tokens": 2298,
+  "prompt_sha256": "ce81a438ca2a9dec62ed5a1846669cfe6c6267393ebb1ffe09298242a9f9127f"
+}

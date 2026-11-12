@@ -1,0 +1,43 @@
+{
+  "results": [
+    {
+      "task": "READING",
+      "status": "completed",
+      "research_status": "partial",
+      "checks": {
+        "total": false,
+        "goods": true,
+        "services": false,
+        "increased": false,
+        "decreased": false,
+        "all_claims_unique_and_complete": true,
+        "selected_source_only": true,
+        "bounded_call": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 1928,
+      "semantic_support": "not established by mechanical checks"
+    },
+    {
+      "task": "LAYOUT",
+      "status": "completed",
+      "research_status": "partial",
+      "checks": {
+        "total": false,
+        "goods": true,
+        "services": true,
+        "increased": true,
+        "decreased": true,
+        "all_claims_unique_and_complete": true,
+        "selected_source_only": true,
+        "bounded_call": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 2298,
+      "semantic_support": "not established by mechanical checks"
+    }
+  ],
+  "total_reported_tokens": 4226,
+  "unknown_usage": false,
+  "semantic_support": "requires separate assessment; matching numbers and terms is insufficient"
+}

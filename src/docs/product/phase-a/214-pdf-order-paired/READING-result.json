@@ -1,0 +1,144 @@
+{
+  "task": "READING",
+  "status": "completed",
+  "operation_id": "operation:1ea7ca9d7ae6d3ba0b961883",
+  "manifest_sha256": "c4cacd986573eb2c4e098d9226a618178695e398e59c6a523b2803265b3686d0",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_21400000000000000000000000000001",
+        "title": "bea-2021-may.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T16:33:57.839707+00:00",
+        "revised_at": null,
+        "content_sha256": "83a0f8099fc5b3c17c5283653cce85a9be0444c6588ace459356ab0628f17bc5",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "derived_from_source_id": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Comparisons to February 2020 show goods spending up 20 percent and services down 1.0 percent versus pre-pandemic levels; these are levels relative to February 2020, not May-over-April changes, and also do not support the claim about May's monthly movements.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_21400000000000000000000000000001",
+            "location": {
+              "character_start": 3099,
+              "character_end": 3167,
+              "page": 3
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Spendingforgoodsin May2021 was 20 percentabovetheFebruary2020 level."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "uncited_percentages": [
+          "1.0 percent"
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_21400000000000000000000000000001: PDF text may have missing word spacing; check the original and consider another extraction order.",
+      "Source source_21400000000000000000000000000001: only character ranges 323–1616, 2060–2238, 2453–3742 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "A model-generated fact had an unlocatable quotation and was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The excerpts provide no numeric breakdown of the current-dollar change for goods versus services separately in May 2021, so the size of each component's change cannot be quantified from the supplied text.",
+      "Model-reported limitation (not independently verified): The source is partial; the detailed tables (e.g., Table entries for goods/services monthly change) are not included.",
+      "Model-reported limitation (not independently verified): The May 2021 month-over-month change for services and goods individually is stated only qualitatively (increase/decrease), not numerically, in the supplied passages.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:1ea7ca9d7ae6d3ba0b961883",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1928,
+      "cost_usd": null,
+      "generation_tokens": 1928,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 13.148,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "382cb549840ba4832e075319af5008a91b985e0240539d00f681e45e12b13c21",
+      "prompt_characters": 4177,
+      "prompt_bytes": 4183,
+      "selection_method": "ranked_nonoverlapping_windows_v42",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_21400000000000000000000000000001",
+          "character_start": 323,
+          "character_end": 1616,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_21400000000000000000000000000001",
+          "character_start": 2060,
+          "character_end": 2238,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_21400000000000000000000000000001",
+          "character_start": 2453,
+          "character_end": 3742,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_21400000000000000000000000000001": "83a0f8099fc5b3c17c5283653cce85a9be0444c6588ace459356ab0628f17bc5"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "input_sources": [
+    "source_21400000000000000000000000000001"
+  ],
+  "elapsed_seconds": 14.203
+}
