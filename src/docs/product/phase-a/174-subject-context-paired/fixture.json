@@ -1,0 +1,10 @@
+{
+  "label": "Synthetic fictional fixture; not real financial evidence",
+  "source_id": "synthetic_entity_fixture",
+  "text": "Fictional test only. River is a subsidiary of Harbor Labs. River's revenue increased 5 percent. Harbor Labs consolidated revenue declined 2 percent. These fictional figures are not financial data.",
+  "quotation": "revenue increased 5 percent",
+  "claims": [
+    "River revenue increased 5 percent.",
+    "Harbor Labs consolidated revenue increased 5 percent."
+  ]
+}

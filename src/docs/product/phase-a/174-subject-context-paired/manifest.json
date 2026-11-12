@@ -1,0 +1,52 @@
+{
+  "implementation_commit": "dd9354f334b50b6849b9bf842a1141e517fe7a66",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v23",
+  "files": {
+    "fixture.json": "81ecc9c5e4bae2620e0bed3a43b1342e9d8cae7b47ded3ec66e793d663e0a7ab",
+    "common.py": "3d7f620a5b5c525eca203f55120aaff5930d0ce2bc15fcfe3b9cdd8a32d58919",
+    "prepare.py": "ad9eb1c973cab548f19be466b38beee86f7e16492b88b5cd4950d44b726ec3c6",
+    "run.py": "80ad2655f1e89852d4e084c2cf3e78604fbbbaa53f0dcfb38a5e4d323357d0bb",
+    "score.py": "d65d0c68f7a8571ba7a971083ac4cd9022830097e6524f269a21ec51506bbc79",
+    "contextual-prompt.json": "823aab44b2b5ed77e203e2b1e7accd7922d1624d10ba1226c0ecaded2db0fb82",
+    "required_only-prompt.json": "a335f882cdc27fc316fe537cfe535453e99351b13a65a2ac59f9a085f1eee7da"
+  },
+  "source_files": {
+    "171-review-index-paired/local-prompt.json": "b2975c05783daa753cb8bdb1b88b02445e552b8bf1607f21667e2986972340c4",
+    "171-review-index-paired/manifest.json": "a66e8702b98b0470f9a442eb40ad3243a9673ee358e5b492f93c70eab58366ae"
+  },
+  "conditions": [
+    {
+      "name": "contextual",
+      "prompt_sha256": "823aab44b2b5ed77e203e2b1e7accd7922d1624d10ba1226c0ecaded2db0fb82",
+      "prompt_bytes": 2704
+    },
+    {
+      "name": "required_only",
+      "prompt_sha256": "a335f882cdc27fc316fe537cfe535453e99351b13a65a2ac59f9a085f1eee7da",
+      "prompt_bytes": 1648
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "per_call_max_tokens": 10000,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 194626
+}
