@@ -1779,3 +1779,26 @@ def test_quote_initial_case_restores_original_and_preserves_ambiguity():
     assert ambiguous.claims[0]["citations"][0]["location"]["status"] == "ambiguous"
     rejected = run("Income rose and personal consumption increased 0.1 percent.", "PERSonal consumption increased 0.1 percent.")
     assert not rejected.claims
+
+
+def test_pdf_line_hyphen_restores_original_continuous_quotation_and_keeps_review_caution():
+    passage = "Capital ratios, actual 2023:Q4. These are hypothetical esti-\nmates that may differ."
+    report = source("s", text=passage).model_copy(update={"retrieval_method":"user_pdf"})
+    def run(quote, src=report):
+        raw = {"claims":[{"text":"The estimates are hypothetical.","citations":[{"source_id":"s","quotation":quote}]}]}
+        return analyze("Capital ratios",[src],None,lambda _:(raw,10))
+    result=run("These are hypothetical estimates that may differ.")
+    citation=result.claims[0]["citations"][0]
+    assert citation["quotation"] == "These are hypothetical esti-\nmates that may differ."
+    assert citation["quotation_match"] == "pdf_line_hyphen_restored"
+    assert result.claims[0]["support_status"] == "incomplete"
+    assert report.text[citation["location"]["character_start"]:citation["location"]["character_end"]] == citation["quotation"]
+    expanded=run("Capital ratios, actual 2023:Q4 ... hypothetical estimates that may differ.")
+    assert expanded.claims[0]["citations"][0]["quotation"] == passage
+    assert expanded.claims[0]["citations"][0]["quotation_match"] == "pdf_line_hyphen_restored"
+    duplicate=report.model_copy(update={"text":passage+" Another: "+passage})
+    ambiguous=run("These are hypothetical estimates that may differ.",duplicate)
+    assert ambiguous.claims[0]["citations"][0]["location"]["status"] == "ambiguous"
+    assert not run("These are hypothetical estimates that may change.").claims
+    plain=report.model_copy(update={"retrieval_method":"user_supplied"})
+    assert not run("These are hypothetical estimates that may differ.",plain).claims

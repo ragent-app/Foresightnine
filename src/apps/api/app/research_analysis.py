@@ -1798,6 +1798,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         table_markup_expanded = False
         trimmed_json_closure = False
         initial_case_normalized = False
+        pdf_line_hyphen_restored = False
         if not positions and quotation[0].isascii() and quotation[0].isalpha():
             # Models sometimes capitalize an excerpt taken from the middle of
             # a sentence. Only the first ASCII letter may differ in case;
@@ -1880,10 +1881,54 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     if len(positions) >= 6 or scan_truncated:
                         break
                 expanded = bool(positions)
+        if not positions and source.retrieval_method == "user_pdf" and len(quotation) >= 8:
+            # PDF extraction may break an English word with a hyphen at the
+            # end of a line. Search a bounded normalized view, but always map
+            # matches back to one continuous, unmodified original passage.
+            fragments = re.split(r"\s*(?:\.{3}|…)\s*", quotation)
+            if 1 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments):
+                patterns = [pattern_for(part.strip()) for part in fragments]
+                first_count = 0
+                for offset, passage in model_text[source.source_id]:
+                    if should_stop is not None and should_stop():
+                        raise AnalysisInterrupted()
+                    breaks = list(re.finditer(r"(?<=[A-Za-z])-\r?\n(?=[A-Za-z])", passage))
+                    if not breaks:
+                        continue
+                    removed = {i for match in breaks for i in range(match.start(), match.end())}
+                    original_indexes = [i for i in range(len(passage)) if i not in removed]
+                    normalized = "".join(passage[i] for i in original_indexes)
+                    def extend_normalized(index: int, left: int, right: int) -> None:
+                        if len(positions) >= 6:
+                            return
+                        if index == len(patterns):
+                            original_left, original_right = original_indexes[left], original_indexes[right - 1] + 1
+                            if original_right - original_left <= 1000:
+                                record(offset, passage, original_left, original_right)
+                            return
+                        for match in patterns[index].finditer(normalized, right, min(len(normalized), left + 1000)):
+                            extend_normalized(index + 1, left, match.end(1))
+                            if len(positions) >= 6:
+                                return
+                    for match in patterns[0].finditer(normalized):
+                        first_count += 1
+                        if first_count > 128:
+                            scan_truncated = True
+                            break
+                        extend_normalized(1, match.start(1), match.end(1))
+                        if len(positions) >= 6:
+                            break
+                    if len(positions) >= 6 or scan_truncated:
+                        break
+                pdf_line_hyphen_restored = bool(positions)
+                if pdf_line_hyphen_restored:
+                    note = "A model quotation omitted a PDF line-break hyphen; the original continuous text was restored and requires review."
+                    if note not in limitations:
+                        limitations.append(note)
         if not positions:
             raise InvalidAnalysis("Model cited a missing source or quotation.")
         original = originals[0]
-        matching = ("initial_case_normalized" if initial_case_normalized else "table_markup_expanded" if table_markup_expanded else "trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
+        matching = ("pdf_line_hyphen_restored" if pdf_line_hyphen_restored else "initial_case_normalized" if initial_case_normalized else "table_markup_expanded" if table_markup_expanded else "trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
                     "exact" if original == quotation else "whitespace_normalized")
         if len(positions) == 1 and not scan_truncated:
             return positions[0], original, matching
@@ -2058,7 +2103,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             limitations.append("A model-generated quotation cuts through a word or number; review the surrounding source.")
                     omitted = True
                     continue
-                if matching == "table_markup_expanded":
+                if matching in {"table_markup_expanded", "pdf_line_hyphen_restored"}:
                     incomplete_boundary = True
                 entry = {"source_id": source.source_id,
                          "location": location, "quotation_match": matching,
