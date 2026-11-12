@@ -79,6 +79,22 @@ def test_explicit_rate_range_is_split_into_source_checked_bounds():
     assert [fact["value"] for fact in analyze("Target?", [report], None, lambda _: (bad_quote, 10)).facts] == ["4.25"]
 
 
+def test_rate_range_currency_context_is_retained_but_cannot_feed_calculations():
+    report = source("s", text="The target range was 4-1/4 to 4-1/2 percent.")
+    citation = {"source_id": "s", "quotation": "4-1/4 to 4-1/2 percent"}
+    raw = {"facts": [{"fact_id": "range", "label": "Target range", "value": "4-1/4 to 4-1/2",
+                      "unit": "percent", "currency": "USD", "period": "2025", "citation": citation}],
+           "calculations": [{"formula": "difference", "first_fact_id": "range:upper", "second_fact_id": "range:lower"}]}
+    result = analyze("Target?", [report], None, lambda _: (raw, 10))
+    assert [(item["value"], item["currency"]) for item in result.facts] == [("4.25", "USD"), ("4.5", "USD")]
+    assert all(item["currency_context_unverified"] for item in result.facts)
+    assert not result.calculations
+    assert any("currency; it was excluded" in item for item in result.limitations)
+    assert any("input facts were unavailable" in item for item in result.limitations)
+    raw["facts"][0]["citation"]["quotation"] = "4-1/4"
+    assert [item["value"] for item in analyze("Target?", [report], None, lambda _: (raw, 10)).facts] == ["4.25"]
+
+
 def test_only_authorized_sources_are_sent_and_quotes_must_be_real():
     good = source("good")
     private = source("no-model", model_input=False)

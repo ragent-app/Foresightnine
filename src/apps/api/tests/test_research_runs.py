@@ -998,3 +998,57 @@ def test_rate_unit_candidate_makes_run_partial_and_recomputes_on_edit(monkeypatc
     versions = saved.json()["versions"]
     assert not versions[-1]["content"]["claims"][0].get("rate_unit_warnings")
     assert versions[-2]["content"]["claims"][0]["rate_unit_warnings"]
+
+
+def test_unverified_rate_currency_is_visible_and_rechecked_on_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    class Provider:
+        name = "rate-currency-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            citation = {"source_id": source_id, "quotation": "4-1/4 to 4-1/2 percent"}
+            return {"claims": [{"text": "The rate target is 4.25% to 4.5%.", "citations": [citation]}],
+                    "facts": [{"fact_id": "range", "label": "Target", "value": "4-1/4 to 4-1/2",
+                               "unit": "percent", "currency": "USD", "period": "2025", "citation": citation}]}, 30
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post("/v1/auth/local/register", json={"email": "rate-currency@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Statement", "text": "4-1/4 to 4-1/2 percent",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Rate?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "rate-currency-run"},
+                          json={"parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": False})
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    assert current["content"]["run"]["status"] == "partial"
+    assert len(current["content"]["facts"]) == 2
+    assert all(item["currency_context_unverified"] for item in current["content"]["facts"])
+    with_calculation = deepcopy(current["content"])
+    inputs = [{key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period")}
+              for fact in with_calculation["facts"]]
+    with_calculation["calculations"] = [{"formula_id": "difference", "formula_version": "1", "inputs": inputs,
+                                          "expression": "first - second", "value": "0", "unit": "percent"}]
+    saved_calc = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": with_calculation})
+    assert saved_calc.status_code == 201, saved_calc.text
+    current = saved_calc.json()["versions"][-1]
+    retry = client.post(path + "/calculations/recalculate", headers=headers,
+                        json={"parent_version_id": current["version_id"], "calculation_index": 0})
+    assert retry.status_code == 422
+    changed = deepcopy(current["content"])
+    for item in changed["facts"]:
+        item["currency"] = None
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
+    assert saved.status_code == 201, saved.text
+    versions = saved.json()["versions"]
+    assert all(not item.get("currency_context_unverified") for item in versions[-1]["content"]["facts"])
+    assert all(item["currency_context_unverified"] for item in versions[-2]["content"]["facts"])

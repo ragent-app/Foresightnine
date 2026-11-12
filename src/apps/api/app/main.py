@@ -1668,6 +1668,9 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                 except (SourceNotFound, ValueError) as error:
                     raise ApiProblem(422, "invalid_request", "Research fact must use an attached real source.") from error
             fact.update(numeric.model_dump(mode="json"))
+            fact.pop("currency_context_unverified", None)
+            if numeric.unit.strip().casefold() in {"percent", "percentage", "%"} and numeric.currency is not None:
+                fact["currency_context_unverified"] = True
         for field in ("claims", "facts", "calculations"):
             originals = getattr(previous.content, field)
             entries = getattr(content, field)
@@ -1755,6 +1758,9 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
             candidates = [fact for fact in previous.content.facts if fact.get("fact_id") == item["fact_id"]]
             if len(candidates) != 1:
                 raise ApiProblem(422, "invalid_request", "Calculation input facts are missing or ambiguous.")
+            if (str(candidates[0].get("unit", "")).strip().casefold() in {"percent", "percentage", "%"}
+                    and candidates[0].get("currency") is not None):
+                raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before recalculation.")
             facts.append({key: candidates[0][key] for key in ("fact_id", "value", "unit", "currency", "period")
                           if key in candidates[0]})
         spec = CalculationRequest.model_validate({"formula": old.get("formula_id"), "first": facts[0],
@@ -2216,7 +2222,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
             "not processed", "remaining text was not examined", "was omitted", "were omitted",
             "permission is not granted", "not established", "not authorized", "quotation location is ambiguous",
-            "simulated material is excluded"))
+            "simulated material is excluded", "percentage fact included a model-declared currency"))
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)

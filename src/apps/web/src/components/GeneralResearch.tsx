@@ -25,6 +25,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "A model-generated fact had an invalid source or ambiguous identifier and was omitted.": "模型生成的一项事实来源无效或标识不唯一，已省略。",
     "A model-generated fact had an unlocatable quotation and was omitted.": "模型生成的一项事实引文无法定位，已省略。",
     "A model-generated fact value was absent from its quotation and was omitted.": "模型生成的一项事实数值未出现在引文中，已省略。",
+    "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.": "生成时，一项百分比事实带有模型声明的币种，核查前未用于自动计算。",
     "The requested model support review did not cover all claims.": "所请求的模型证据复查未覆盖全部结论。",
     "Generation is saved; support review is pending or was interrupted.": "生成结果已保存；证据复查尚未完成或已中断。",
     "Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.": "跨来源数值差异需要核对研究对象和统计口径，不能直接认定为冲突。",
@@ -539,7 +540,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
             <Field label={`${en ? "Unit" : "单位"} ${index + 1}`}><Input value={fact.unit ?? ""} maxLength={100} disabled={busy} onChange={(event) => updateFact(index, { unit: event.target.value })} /></Field>
             <Field label={`${en ? "Currency (optional)" : "币种（可选）"} ${index + 1}`}><Input value={fact.currency ?? ""} maxLength={16} disabled={busy} onChange={(event) => updateFact(index, { currency: event.target.value || null })} /></Field>
             <Field label={`${en ? "Period" : "期间"} ${index + 1}`}><Input value={fact.period ?? ""} maxLength={100} disabled={busy} onChange={(event) => updateFact(index, { period: event.target.value })} /></Field>
-          </> : <p>{fact.value} {fact.unit} · {fact.period}</p>}
+          </> : <p>{fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</p>}
+          {fact.currency && typeof fact.unit === "string" && ["percent", "percentage", "%"].includes(fact.unit.trim().toLowerCase()) ? <p role="status">{en ? "The currency associated with this percentage is unverified; it is excluded from automatic calculations until the metadata is corrected." : "此百分比关联的币种尚未核验；更正资料前不用于自动计算。"}</p> : null}
           <blockquote>{fact.quotation}<small> {fact.source_id}{fact.location?.page ? ` · ${en ? "page" : "第"} ${fact.location.page}${en ? "" : " 页"}` : ""}</small>{fact.quotation_match === "expanded_ellipsis" ? <small> {en ? "Ellipsis expanded to the continuous source text." : "已将省略号展开为连续原文。"}</small> : null}{fact.source_id ? <SourceContext key={`${current.version_id}:${fact.source_id}:${fact.location?.character_start}:${fact.location?.character_end}`} sourceId={fact.source_id} location={fact.location} quotation={fact.quotation ?? undefined} en={en} load={api.sourceContext} /> : null}</blockquote>
         </article>)}
         {hasUnsavedFacts ? <p role="status">{en ? "Figures have unsaved changes. Calculations and source differences still reflect the saved version." : "数值修改尚未保存；计算和来源差异仍依据已保存版本。"}</p> : null}

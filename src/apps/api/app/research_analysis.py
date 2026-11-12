@@ -143,7 +143,7 @@ def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[
     """Split an explicit finite percentage range into independently checked bounds."""
     match = _RATE_RANGE.fullmatch(value)
     fact_id, label = fact.get("fact_id"), fact.get("label")
-    if (not match or unit.casefold() not in {"percent", "percentage", "%"} or fact.get("currency") is not None or
+    if (not match or unit.casefold() not in {"percent", "percentage", "%"} or
             not isinstance(fact_id, str) or not fact_id or len(fact_id) > 190 or
             not isinstance(label, str) or not label or len(label) > 280):
         return None
@@ -643,6 +643,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
 
     checked_facts: list[dict[str, Any]] = []
     numeric_facts: dict[str, NumericFact] = {}
+    currency_context_noted = False
     fact_ids = Counter(item.fact_id for item in result.facts)
     for item in result.facts:
         source = source_map.get(item.citation.source_id)
@@ -657,10 +658,22 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if item.value not in _quoted_numbers(quotation):
             limitations.append("A model-generated fact value was absent from its quotation and was omitted.")
             continue
-        numeric_facts[item.fact_id] = NumericFact(fact_id=item.fact_id, value=item.value,
+        numeric = NumericFact(fact_id=item.fact_id, value=item.value,
             unit=item.unit, currency=item.currency, period=item.period)
-        checked_facts.append({**numeric_facts[item.fact_id].model_dump(mode="json"), "label": item.label,
+        # Currency on a percentage can describe the underlying instrument, but
+        # neither a numeric match nor a rate quotation proves that context.
+        # Keep the located observation for review; do not feed it into any
+        # calculation until the user has resolved the metadata.
+        currency_context = item.unit.strip().casefold() in {"percent", "percentage", "%"} and item.currency is not None
+        if currency_context:
+            if not currency_context_noted:
+                limitations.append("During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.")
+                currency_context_noted = True
+        else:
+            numeric_facts[item.fact_id] = numeric
+        checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
+            **({"currency_context_unverified": True} if currency_context else {}),
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),
             **({"numeric_normalization": "exact_range_bound", "range_parent_id": normalized_range_ids[item.fact_id]}
                if item.fact_id in normalized_range_ids else {}),
