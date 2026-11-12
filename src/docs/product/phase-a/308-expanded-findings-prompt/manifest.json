@@ -1,0 +1,33 @@
+{
+  "implementation_commit": "476c5204d21bc2755c83263495511d30224006bb",
+  "baseline_sha256": "8e005762ec28207a055fe6d1b84e254873f868939d7545343f864153324160c4",
+  "candidate_sha256": "3caa1b14e56caddf0354954182c9ccbc10620e06dc735daac57facc38fd579e9",
+  "generation_sha256": "8a500129e7437323257aedb401f1df4fc401a8b3cf9cc575d255ea1c0910101e",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "baseline_provider_sha256": "8065149fba3d7942a0c04c39dad1ed007db1c5d86e2597c9b2c0e5420183779e",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "output_limit": 4000,
+  "timeout_seconds": 60,
+  "max_tokens": 10000,
+  "max_calls": 1,
+  "previous_known_tokens": 337502,
+  "cost_usd": "unknown",
+  "change": "previous_findings_untrusted: first two complete findings to first 60 characters of each of four findings",
+  "files": {
+    "common.py": "baa5a97829ca5648b44bc0a38d7991b0fc247abd2ec609cb437ccc866d9367d9",
+    "prepare.py": "4aaa8051a4a9615a74813f33dc3a0db420611d38824ad8a24d8533976b136428",
+    "run.py": "110b37a935c36dc0643ae2a311b73ce654ba6cd33bd5c2d706fade8e9760d033"
+  }
+}
