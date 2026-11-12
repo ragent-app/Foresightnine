@@ -1,0 +1,108 @@
+{
+  "manifest_sha256": "3322bc36a378dc57c6ea31effe5c2a2b72a7aaebfbbb3b97ce7905adc9609e97",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Bank of America Corporation's actual common equity tier 1 capital ratio for 2024:Q4 was 11.9%, per Appendix A bank-specific results (Table A.2) under the severely adverse scenario.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": " of America Corporation\nProjected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and\nnet income before taxes\nFederal Reserve estimates: Severely adverse scenario\nCapital ratios and risk-weighted assets, actual 2024:Q4\nand projected 2025:Q1–2027:Q1\nPercent except as noted\nItem\nActual\n2024:Q4\nProjected\n2027:Q1\nProjected\nminimum\nCommon equity tier 1 capital ratio 11.9 10.7 10.2"
+          }
+        ]
+      },
+      {
+        "text": "The projected CET1 ratio at the end of the severely adverse scenario (2027:Q1) is 10.7%, a hypothetical projection, not an actual result.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Common equity tier 1 capital ratio 11.9 10.7 10.2"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "These\nprojections represent hypothetical estimates that involve an eco-\nnomic outcome that is more adverse than expected."
+          }
+        ]
+      },
+      {
+        "text": "The projected minimum CET1 ratio is 10.2%, for the period 2025:Q1 to 2027:Q1, also a hypothetical projection.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The\nminimum capital ratios are for the period 2025:Q1 to 2027:Q1."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Common equity tier 1 capital ratio 11.9 10.7 10.2"
+          }
+        ]
+      },
+      {
+        "text": "Table 6 of the report corroborates the same figures: Bank of America CET1 actual 2024:Q4 11.9, ending 10.7, minimum 10.2 (percent).",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Table 6. Capital ratios, actual 2024:Q4 and projected 2025:Q1–2027:Q1 under the severely adverse scenario: 22 banks\nPercent\nBank\nCommon equity\ntier 1 capital ratio\n... Bank of America 11.9 10.7 10.2 13.2 12.1 11.5 15.1 14.1 13.8 6.9 6.3 6.0 5.9 5.3 5.1"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "A reader might confuse Bank of America's row in Table 6 with adjacent banks (e.g., Bank of NY-Mellon at 11.2/14.8/11.6) because compressed PDF columns can misalign; however, both Table 6 and the bank-specific appendix table agree on 11.9/10.7/10.2 for Bank of America.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Bank of America 11.9 10.7 10.2 13.2 12.1 11.5 15.1 14.1 13.8 6.9 6.3 6.0 5.9 5.3 5.1\nBank of NY-Mellon 11.2 14.8 11.6"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source text is a partial excerpt of the PDF; the full bank name 'Bank of America Corporation' is truncated at the start of the appendix excerpt (' of America Corporation'), so full-name coverage relies on context.",
+      "Excerpts are not the whole source; Table 6 columns are compressed and ordering was verified against the aligned Appendix A table.",
+      "The report's publication date is not shown in the excerpts; the 2024:Q4 actual and 2025:Q1–2027:Q1 projection periods are as declared in the table headings.",
+      "Projections are Federal Reserve estimates under a hypothetical severely adverse scenario, not forecasts of actual outcomes."
+    ],
+    "facts": [
+      {
+        "fact_id": "bac-cet1-actual",
+        "label": "Bank of America actual CET1 ratio (actual, not hypothetical)",
+        "value": "11.9",
+        "unit": "percent",
+        "period": "2024:Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio 11.9 10.7 10.2"
+        }
+      },
+      {
+        "fact_id": "bac-cet1-ending",
+        "label": "Bank of America projected CET1 ratio at end of severely adverse scenario (hypothetical projection)",
+        "value": "10.7",
+        "unit": "percent",
+        "period": "2027:Q1 (projected)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio 11.9 10.7 10.2"
+        }
+      },
+      {
+        "fact_id": "bac-cet1-minimum",
+        "label": "Bank of America projected minimum CET1 ratio (hypothetical projection)",
+        "value": "10.2",
+        "unit": "percent",
+        "period": "2025:Q1 to 2027:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "The\nminimum capital ratios are for the period 2025:Q1 to 2027:Q1."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2956,
+  "prompt_sha256": "ed103e022fd232ac37cac08502a3d93a4e41125e72b0bbba0f198802e766920e",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

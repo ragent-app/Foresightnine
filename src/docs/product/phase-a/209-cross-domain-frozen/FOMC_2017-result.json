@@ -1,0 +1,268 @@
+{
+  "task": "FOMC_2017",
+  "status": "completed",
+  "operation_id": "operation:6900058a67feddfab5051242",
+  "manifest_sha256": "3322bc36a378dc57c6ea31effe5c2a2b72a7aaebfbbb3b97ce7905adc9609e97",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_20900000000000000000000000000003",
+        "title": "fomc-2017-mar.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T16:05:21.221420+00:00",
+        "revised_at": null,
+        "content_sha256": "0c1ed989c5202375cae3d504c2e52e27b897bc5b3e370b8a3d7d721cbf121f47",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "inflation-goal",
+        "value": "2.0",
+        "unit": "percent",
+        "currency": null,
+        "period": "medium term",
+        "label": "inflation goal",
+        "source_id": "source_20900000000000000000000000000003",
+        "quotation": "inflation will stabilize around 2 percent over\nthe medium term",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 1133,
+          "character_end": 1195,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "iorb-rate",
+        "value": "1.00",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective March 16, 2017",
+        "label": "interest rate on required and excess reserve balances",
+        "source_id": "source_20900000000000000000000000000003",
+        "quotation": "voted unanimously to raise the\ninterest rate paid on required and excess reserve balances to 1.00 percent, effective March\n16, 2017",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 3955,
+          "character_end": 4086,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 3/4 to 1 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_20900000000000000000000000000003",
+            "location": {
+              "character_start": 1446,
+              "character_end": 1540,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee\ndecided to raise the target range for the federal funds rate to 3/4 to 1 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "uncited_fact_values": [
+          "1.00 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "iorb-rate",
+            "source_id": "source_20900000000000000000000000000003",
+            "value": "1.00",
+            "unit": "percent",
+            "period": "effective March 16, 2017",
+            "quotation": "voted unanimously to raise the\ninterest rate paid on required and excess reserve balances to 1.00 percent, effective March\n16, 2017",
+            "location": {
+              "character_start": 3955,
+              "character_end": 4086,
+              "page": 3
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      },
+      {
+        "text": "Neel Kashkari dissented, preferring at this meeting to maintain the existing target range for the federal funds rate.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_20900000000000000000000000000003",
+            "location": {
+              "character_start": 3485,
+              "character_end": 3625,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against the action was Neel\nKashkari, who preferred at this meeting to maintain the existing target range for the federal funds\nrate."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "The 2 percent figure is the Committee's symmetric inflation goal, distinct from the federal funds rate target range: the Committee monitors inflation relative to this goal, and policy aims at a sustained return to 2 percent inflation.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_20900000000000000000000000000003",
+            "location": {
+              "character_start": 2251,
+              "character_end": 2372,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The Committee will carefully monitor actual and expected inflation\ndevelopments relative to its symmetric inflation goal."
+          },
+          {
+            "source_id": "source_20900000000000000000000000000003",
+            "location": {
+              "character_start": 1542,
+              "character_end": 1714,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The stance of\nmonetary policy remains accommodative, thereby supporting some further strengthening in labor\nmarket conditions and a sustained return to 2 percent inflation."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "reused_percentages": [
+          "2 percent"
+        ],
+        "uncited_fact_values": [
+          "2.0 percent"
+        ],
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "inflation-goal",
+            "source_id": "source_20900000000000000000000000000003",
+            "value": "2.0",
+            "unit": "percent",
+            "period": "medium term",
+            "quotation": "inflation will stabilize around 2 percent over\nthe medium term",
+            "location": {
+              "character_start": 1133,
+              "character_end": 1195,
+              "page": 1
+            },
+            "status": "requires_semantic_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_20900000000000000000000000000003: only character ranges 605–2386, 2640–4471 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "A model-reported absence of counterarguments is an unverified limitation, not counterevidence.",
+      "Model-reported limitation (not independently verified): None identified in the sources; the statement itself does not present an opposing view beyond the recorded dissent, and Kashkari's stated rationale is not included in the excerpts.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): The sources are partial excerpts of the March 15, 2017 FOMC statement; Kashkari's reasons for dissenting are not included in the provided text.",
+      "Model-reported limitation (not independently verified): The excerpts do not include the prior target range, so the size of the increase cannot be determined from the provided evidence.",
+      "Model-reported limitation (not independently verified): The date March 15, 2017 is declared in the release line and is not independently verified.",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+      "A percentage repeats within a claim; check that each measure has its own supporting evidence.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:6900058a67feddfab5051242",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1739,
+      "cost_usd": null,
+      "generation_tokens": 1739,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_mode": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 10.247,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "20758f9fc348fd1c5658b5132dda6f089d8ab32069ba80a8f0a785eae782f107",
+      "prompt_characters": 4953,
+      "prompt_bytes": 4959,
+      "selection_method": "ranked_nonoverlapping_windows_v41",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_20900000000000000000000000000003",
+          "character_start": 605,
+          "character_end": 2386,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20900000000000000000000000000003",
+          "character_start": 2640,
+          "character_end": 4471,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_20900000000000000000000000000003": "0c1ed989c5202375cae3d504c2e52e27b897bc5b3e370b8a3d7d721cbf121f47"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_63a3d82322b14de2aed3505688ec24af",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_cf962099fc1847efa50f398066e2fceb",
+      "parent_version_id": "version_63a3d82322b14de2aed3505688ec24af",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 12.135
+}

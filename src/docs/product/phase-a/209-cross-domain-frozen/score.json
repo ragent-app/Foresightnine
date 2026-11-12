@@ -1,0 +1,69 @@
+{
+  "results": [
+    {
+      "task": "BANK_2025",
+      "status": "completed",
+      "research_status": "partial",
+      "mechanical_checks": {
+        "bank": true,
+        "metric": true,
+        "actual": true,
+        "end": true,
+        "minimum": true,
+        "actual_label": true,
+        "projected_label": true,
+        "minimum_label": true,
+        "scenario": true,
+        "all_claims_located": false,
+        "no_known_claim_warnings": false,
+        "bounded_call": true,
+        "partial_disclosed": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 2956,
+      "semantic_support": "not established by mechanical checks"
+    },
+    {
+      "task": "PCE_2021",
+      "status": "completed",
+      "research_status": "partial",
+      "mechanical_checks": {
+        "total": false,
+        "services": false,
+        "goods": false,
+        "increased": false,
+        "decreased": false,
+        "all_claims_located": false,
+        "no_known_claim_warnings": true,
+        "bounded_call": true,
+        "partial_disclosed": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 1595,
+      "semantic_support": "not established by mechanical checks"
+    },
+    {
+      "task": "FOMC_2017",
+      "status": "completed",
+      "research_status": "partial",
+      "mechanical_checks": {
+        "range_low": true,
+        "range_high": true,
+        "dissenter": true,
+        "preference": true,
+        "target": true,
+        "all_claims_located": true,
+        "no_known_claim_warnings": false,
+        "bounded_call": true,
+        "partial_disclosed": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 1739,
+      "semantic_support": "not established by mechanical checks"
+    }
+  ],
+  "mechanical_pass": false,
+  "total_reported_tokens": 6290,
+  "unknown_usage": false,
+  "semantic_support": "requires separate assessment; matching numbers and terms is insufficient"
+}
