@@ -1,0 +1,93 @@
+{
+  "manifest_sha256": "873dab1238dc50f11f36367b555c0f89e78fca260fa63b92b114cf8148afee7a",
+  "independence": "New held-out public source snapshots and tasks not used in prior model debugging, but evaluator knows references and no independent human review was performed. Three tasks cannot establish overall quality.",
+  "semantic_support": "not established by mechanical checks",
+  "historical_availability": "not established",
+  "tasks": {
+    "CISCO_REV": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "53803",
+          "unit": "million",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": false
+        },
+        {
+          "value": "56998",
+          "unit": "million",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": false
+        }
+      ],
+      "calculation_ok": false,
+      "name_checks_ok": true,
+      "counterargument_citations_located": true,
+      "review_coverage_and_verdicts_ok": true,
+      "support_citations_located_and_complete": false,
+      "omitted_or_truncated_quotation": false,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": true,
+      "declared_publication_matches": true,
+      "budget_ok": true,
+      "reported_tokens": 1437,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    },
+    "BEA_Q1": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "2.0",
+          "unit": "percent",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": false
+        },
+        {
+          "value": "1.3",
+          "unit": "percent",
+          "fact_matches": true,
+          "same_claim_mentions_value_and_cites_source": true
+        }
+      ],
+      "calculation_ok": true,
+      "name_checks_ok": true,
+      "counterargument_citations_located": true,
+      "review_coverage_and_verdicts_ok": false,
+      "support_citations_located_and_complete": true,
+      "omitted_or_truncated_quotation": false,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": true,
+      "declared_publication_matches": true,
+      "budget_ok": true,
+      "reported_tokens": 2517,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    },
+    "FED_DISS": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [],
+      "calculation_ok": true,
+      "name_checks_ok": false,
+      "counterargument_citations_located": true,
+      "review_coverage_and_verdicts_ok": false,
+      "support_citations_located_and_complete": false,
+      "omitted_or_truncated_quotation": false,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": true,
+      "declared_publication_matches": true,
+      "budget_ok": true,
+      "reported_tokens": 1912,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    }
+  },
+  "passed": 0,
+  "total": 3
+}

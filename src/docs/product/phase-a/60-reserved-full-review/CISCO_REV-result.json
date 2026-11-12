@@ -1,0 +1,135 @@
+{
+  "id": "CISCO_REV",
+  "operation_status": "completed",
+  "manifest_sha256": "873dab1238dc50f11f36367b555c0f89e78fca260fa63b92b114cf8148afee7a",
+  "input_sha256": "d9f6eefae1640021ff1a00c149a4cd73e03b6188eacbb225da853b9ccd1a8f9c",
+  "elapsed_seconds_observed": 16.499,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_30347234ff284541b06000413c5c083c",
+        "title": "Cisco FY2024 Form 10-K, filed 2024-09-05, SEC HTML text extraction; table separators generated",
+        "url": "https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T07:04:16.351508+00:00",
+        "revised_at": null,
+        "content_sha256": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "所供来源仅为 Cisco FY2024 Form 10-K 的部分节选文本，未包含 FY2024 或 FY2023 的总收入数据，因此无法基于所供来源列示总收入并计算同比变化。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 410662,
+              "character_end": 410851
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Our Consolidated Statements of Operations for fiscal 2024 includes revenue of approximately $1.4 billion and a net loss of $557 million attributable to Splunk since the date of acquisition."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v5",
+          "independently_verified": false
+        }
+      }
+    ],
+    "limitations": [
+      "Source source_30347234ff284541b06000413c5c083c: only character ranges 105305–105594, 410624–410925 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源文本为 Form 10-K 的部分节选（source_coverage: partial），未包含 FY2024 与 FY2023 的公司总收入数字。",
+      "来源仅提供 Splunk 自收购日起并入的分部收入（约 $1.4 billion）与净亏损（$557 million），并非公司总收入。",
+      "缺少总收入及同比变化的证据，无法执行所请求的计算；如需计算，请提供包含合并利润表中 total revenue 数值的来源片段。",
+      "来源中未见 FY2023 任何财务数据。",
+      "节选并非完整文件；PDF 抽取可能压缩或丢失表格列，需以完整 10-K 验证。",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:1c7888e951fcf4db83fe8b42",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 1437,
+      "cost_usd": null,
+      "generation_tokens": 915,
+      "support_review_tokens": 522,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "complete",
+      "support_review_error": null,
+      "support_review_method": "bounded_quotation_context_model_review_v5",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": "873cee283740af8499e3536aec2c6c95da3887f40379cae983ea420ceb0a9ff9",
+      "support_review_indexes": [
+        0
+      ],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "character_start": 410482,
+          "character_end": 411031,
+          "context_radius": 180
+        }
+      ],
+      "support_review_system_sha256": "deacbe17348931bf0b8c9d48b8fdff11067001f58b71c50e9ba6e22874662566",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 14.557,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "8f6f5ff2a63dffd74fd29089fd196bf6712ff9a3d2aa8edecc459f6524204677",
+      "prompt_characters": 1946,
+      "prompt_bytes": 2050,
+      "selection_method": "ranked_nonoverlapping_windows_v15",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "character_start": 105305,
+          "character_end": 105594
+        },
+        {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "character_start": 410624,
+          "character_end": 410925
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_30347234ff284541b06000413c5c083c": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}
