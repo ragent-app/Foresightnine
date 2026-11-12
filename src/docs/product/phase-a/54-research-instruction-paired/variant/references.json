@@ -1,0 +1,78 @@
+{
+  "NVDA_REV": {
+    "facts": [
+      {
+        "value": "26974",
+        "period": "2023",
+        "unit": "million",
+        "literal": "26,974"
+      },
+      {
+        "value": "26914",
+        "period": "2022",
+        "unit": "million",
+        "literal": "26,914"
+      }
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "26974",
+        "26914"
+      ],
+      "value": "0.22"
+    },
+    "allowed_percentages": [
+      "0.22",
+      "56.9",
+      "64.9"
+    ]
+  },
+  "BEA_Q3": {
+    "facts": [
+      {
+        "value": "3.2",
+        "period": "2022",
+        "unit": "percent",
+        "literal": "3.2"
+      },
+      {
+        "value": "2.9",
+        "period": "2022",
+        "unit": "percent",
+        "literal": "2.9"
+      }
+    ],
+    "allowed_percentages": [
+      "3.2",
+      "2.9",
+      "0.3",
+      "-0.6"
+    ]
+  },
+  "FED_VOTE": {
+    "facts": [],
+    "name_checks": [
+      {
+        "claim_aliases": [
+          "无反对",
+          "没有反对",
+          "无人反对",
+          "没有委员反对",
+          "no dissent",
+          "no votes against",
+          "none voted against",
+          "unanimous",
+          "一致通过",
+          "全票通过"
+        ],
+        "quote_term": "Voting against this action: None"
+      }
+    ],
+    "allowed_percentages": [
+      "5",
+      "5.25",
+      "0.25"
+    ]
+  }
+}

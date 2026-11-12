@@ -1,0 +1,11 @@
+{
+  "id": "FED_VOTE",
+  "question": "根据所附美联储 2023 年 5 月会议纪要，货币政策行动是否有委员投反对票？说明证据和未知项，不要编造异议。",
+  "source_kind": "original_pdf",
+  "source_file": "fed-minutes-2023-05.pdf",
+  "source_title": "Federal Reserve May 2023 meeting minutes",
+  "published_at": "2023-05-24T18:00:00Z",
+  "text_order": "reading",
+  "source_sha256": "1fb7cd49c318a22c39ceb89c750462490f6e4388503009fe92e738013a418da7",
+  "source_text_sha256": "438dd6be38ad3f5b43b7e212832d1365e10e8ec571c67be5b6dd02d158a2ab73"
+}
