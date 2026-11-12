@@ -449,6 +449,7 @@ def test_unspecified_currency_for_monetary_labels_is_not_a_verified_input():
     assert not monetary_currency_unspecified({**a,'currency':'USD'})
     assert not monetary_currency_unspecified({**a,'unit':'percent'})
     assert not monetary_currency_unspecified({**a,'label':'Unit volume'})
+    assert monetary_currency_unspecified({**a,'label':'total_revenue_fy2024'})
     calc=calculate(CalculationRequest(formula='growth_percent',first={k:a[k] for k in ('fact_id','value','unit','currency','period')},
         second={k:b[k] for k in ('fact_id','value','unit','currency','period')}))
     assert calculation_input_status(calc,[a,b])=='unverifiable'
@@ -465,3 +466,16 @@ def test_declared_currency_requires_an_unambiguous_source_cue_for_monetary_input
     assert not monetary_currency_not_in_quotation({**item,'source_id':None})
     assert not monetary_currency_not_in_quotation({**item,'unit':'percent'})
     assert monetary_currency_not_in_quotation({**item,'currency':'CAD','quotation':'Revenue was $100 million.'})
+
+
+def test_monetary_scale_cannot_be_inferred_from_a_matching_bare_number():
+    from app.research_calculations import monetary_scale_not_in_quotation
+    item={'label':'Revenue','value':'100','unit':'USD million','currency':'USD',
+          'source_id':'s','quotation':'Revenue was USD 100.'}
+    assert monetary_scale_not_in_quotation(item)
+    assert monetary_scale_not_in_quotation({**item,'label':'total_revenue_fy2024'})
+    assert monetary_scale_not_in_quotation({**item,'quotation':'Revenue was USD 100 billion.'})
+    assert not monetary_scale_not_in_quotation({**item,'quotation':'Revenue was USD 100 million.'})
+    assert not monetary_scale_not_in_quotation({**item,'unit':'USD millions','quotation':'Revenue was USD 100 million.'})
+    assert not monetary_scale_not_in_quotation({**item,'unit':'percent'})
+    assert not monetary_scale_not_in_quotation({**item,'source_id':None})

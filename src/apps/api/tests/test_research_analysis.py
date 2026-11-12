@@ -62,6 +62,20 @@ def test_monetary_fact_currency_not_in_quotation_makes_calculation_provisional()
     assert any('currency identifier is absent' in note for note in result.limitations)
 
 
+def test_monetary_fact_scale_not_in_quotation_makes_calculation_provisional():
+    report = source('s', text='Revenue was USD 100 in 2024. Revenue was USD 90 in 2023.')
+    raw = {'facts':[
+        {'fact_id':'current','label':'Revenue','value':'100','unit':'million','currency':'USD','period':'2024',
+         'citation':{'source_id':'s','quotation':'Revenue was USD 100 in 2024.'}},
+        {'fact_id':'previous','label':'Revenue','value':'90','unit':'million','currency':'USD','period':'2023',
+         'citation':{'source_id':'s','quotation':'Revenue was USD 90 in 2023.'}}],
+        'calculations':[{'formula':'growth_percent','first_fact_id':'current','second_fact_id':'previous'}]}
+    result=analyze('Compare revenue.', [report], None, lambda _: (raw, 10))
+    assert all(f['scale_quote_missing'] for f in result.facts)
+    assert result.calculations[0]['input_status']=='unverifiable'
+    assert any('unit scale is absent' in note for note in result.limitations)
+
+
 def test_selected_sentence_opening_is_restored_only_within_budget():
     text = ("Header.\nRevenue increased at an annual rate of 3 percent. " + "filler " * 800 +
             "Profit was 10 percent. " + "filler " * 800)

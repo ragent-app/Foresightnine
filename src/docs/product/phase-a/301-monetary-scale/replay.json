@@ -1,0 +1,55 @@
+{
+  "model_calls": 0,
+  "source_sha256": "2cf482f78cce5038a1e750ca7b53ba96409854cb56e21eb2081532dcaa04ecf6",
+  "provider_sha256": "995f0d27d8b2c3a0225a1c4b273fcd660f260cba39907c171d71d80461e3a637",
+  "facts": [
+    {
+      "fact_id": "rev-fy2024",
+      "currency": "USD",
+      "scale_quote_missing": true,
+      "currency_quote_missing": true,
+      "source_tag_consistent": true
+    },
+    {
+      "fact_id": "rev-fy2023",
+      "currency": "USD",
+      "scale_quote_missing": true,
+      "currency_quote_missing": true,
+      "source_tag_consistent": true
+    }
+  ],
+  "calculations": [
+    {
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "period_order_check": "recognized_formats_only",
+      "period_granularity_check": "not_established",
+      "inputs": [
+        {
+          "fact_id": "rev-fy2024",
+          "value": "53803",
+          "unit": "million",
+          "currency": "USD",
+          "period": "fiscal year ended July 27, 2024"
+        },
+        {
+          "fact_id": "rev-fy2023",
+          "value": "56998",
+          "unit": "million",
+          "currency": "USD",
+          "period": "fiscal year ended July 29, 2023"
+        }
+      ],
+      "value": "-5.61",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2,
+      "input_status": "matched"
+    }
+  ],
+  "note": "Source-tag consistency is not independent verification of filing accuracy or semantic support."
+}

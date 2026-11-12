@@ -133,7 +133,9 @@ def monetary_currency_unspecified(fact: dict) -> bool:
     if (re.search(r'%|％|percent|percentage|百分点|百分點|百分比|basis\s+points?|\bbps\b|基点|基點', unit, re.IGNORECASE) or
             unit.strip().casefold() in {'ratio', 'multiple', 'times', 'x'}):
         return False
-    return bool(_MONETARY_FACT_LABEL.search(label[:300]))
+    # Model fact labels commonly use snake_case; underscores are not word
+    # boundaries in regex and must not hide an otherwise explicit metric.
+    return bool(_MONETARY_FACT_LABEL.search(label[:300].replace('_', ' ')))
 
 
 def monetary_currency_not_in_quotation(fact: dict) -> bool:
@@ -155,6 +157,31 @@ def monetary_currency_not_in_quotation(fact: dict) -> bool:
     if not monetary_currency_unspecified({'label':label, 'unit':unit, 'currency':None}):
         return False
     return table_currency_quote_missing(currency, '|' + quote.lstrip())
+
+
+_MONETARY_SCALE = re.compile(r'\b(?:thousands?|millions?|billions?|trillions?)\b|万亿|萬億|十亿|十億|百万|百萬|千|万|萬|亿|億', re.IGNORECASE)
+_SCALE_ALIASES = {'thousands':'thousand','millions':'million','billions':'billion','trillions':'trillion',
+                  '萬億':'万亿','十億':'十亿','百萬':'百万','萬':'万','億':'亿'}
+
+
+def monetary_scale_not_in_quotation(fact: dict) -> bool:
+    """Flag an explicit monetary scale absent from a source-backed quotation.
+
+    The narrow lexical check does not establish that a quoted scale belongs
+    to the same metric or table column. No scale or unknown spelling is not
+    interpreted as evidence of an unscaled amount.
+    """
+    unit, quote, sid = fact.get('unit'), fact.get('quotation'), fact.get('source_id')
+    if not isinstance(unit, str) or not isinstance(quote, str) or not quote or not isinstance(sid, str) or not sid:
+        return False
+    if table_user_confirmed(fact) or xbrl_source_consistent(fact):
+        return False
+    if not monetary_currency_unspecified({'label':fact.get('label'), 'unit':unit, 'currency':None}):
+        return False
+    def scales(text: str) -> set[str]:
+        return {_SCALE_ALIASES.get(x.group(0).casefold(), x.group(0).casefold()) for x in _MONETARY_SCALE.finditer(text)}
+    declared = scales(unit)
+    return bool(declared and not declared.issubset(scales(quote)))
 
 
 def quotation_is_inside_table_row(source_text: str, start: object, quotation: object) -> bool:
@@ -565,7 +592,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             if (candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or
                 candidates[0].get("quotation_match") == "table_markup_expanded" and not (table_user_confirmed(candidates[0]) or xbrl_source_consistent(candidates[0])) or
                 isinstance(candidates[0].get("table_structure_alignment"), dict) and candidates[0]["table_structure_alignment"].get("status") == "conflict" or
-                candidates[0].get("table_period_conflict") or monetary_currency_unspecified(candidates[0]) or monetary_currency_not_in_quotation(candidates[0]) or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
+                candidates[0].get("table_period_conflict") or monetary_currency_unspecified(candidates[0]) or monetary_currency_not_in_quotation(candidates[0]) or monetary_scale_not_in_quotation(candidates[0]) or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation"))):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})

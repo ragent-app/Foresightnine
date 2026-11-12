@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_xbrl import match_inline_fact
 
@@ -2442,6 +2442,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     table_period_conflict_noted = False
     currency_conflict_noted = False
     currency_unspecified_noted = False
+    scale_quote_noted = False
     directional_context_noted = False
     ambiguous_fact_noted = False
     table_traces: dict[tuple[str, int], dict] = {}
@@ -2548,6 +2549,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 limitations.append(note)
         currency_conflict = currency_value_conflict(item.currency, item.value, quotation)
         currency_unspecified = monetary_currency_unspecified({'label':item.label, 'unit':item.unit, 'currency':item.currency})
+        scale_quote_missing = monetary_scale_not_in_quotation({'label':item.label, 'unit':item.unit,
+            'currency':item.currency, 'source_id':source.source_id, 'quotation':quotation})
         ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:
             if not currency_context_noted:
@@ -2568,6 +2571,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if currency_unspecified and not currency_unspecified_noted:
             limitations.append('A monetary fact has no specified currency; it was excluded from automatic calculations pending review.')
             currency_unspecified_noted = True
+        if scale_quote_missing and not scale_quote_noted:
+            limitations.append('A monetary fact unit scale is absent from its quotation; check the original scale and context before relying on the calculation.')
+            scale_quote_noted = True
         if direction_context and not directional_context_noted:
             limitations.append("A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
             directional_context_noted = True
@@ -2586,6 +2592,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             **({"table_structure_alignment": structure_alignment} if structure_alignment else {}),
             **({"currency_conflict_unverified": True} if currency_conflict else {}),
             **({"currency_unspecified": True} if currency_unspecified else {}),
+            **({"scale_quote_missing": True} if scale_quote_missing else {}),
             **({"direction_context_unverified": True} if direction_context else {}),
             **({"numeric_normalization": "thousands_separator"} if item.fact_id in normalized_grouped_ids else {}),
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),
