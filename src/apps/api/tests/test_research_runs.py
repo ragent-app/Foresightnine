@@ -329,19 +329,26 @@ def test_selection_timeout_produces_partial_result_without_calling_model(monkeyp
     assert content["claims"] == []
 
 
-@pytest.mark.parametrize("budget,second_verdict,expected_calls,expected_review", [
-    (9000, "contradicts", 2, "complete"),
-    (9000, "supports", 2, "complete"),
-    (4500, "supports", 1, "budget_exhausted"),
-    (9000, "invalid", 2, "failed"),
+@pytest.mark.parametrize("budget,second_verdict,first_usage,output_limit,expected_calls,expected_review", [
+    (9000, "contradicts", 55, 1500, 2, "complete"),
+    (9000, "supports", 55, 1500, 2, "complete"),
+    (4500, "supports", 55, 1500, 1, "budget_exhausted"),
+    (5000, "supports", 55, 1500, 2, "complete"),
+    (5000, "supports", 1000, 1500, 1, "budget_exhausted"),
+    (5000, "supports", None, 1500, 1, "budget_exhausted"),
+    (5000, "supports", -1, 1500, 1, "budget_exhausted"),
+    (9000, "supports", None, 1500, 2, "complete"),
+    (9000, "invalid", 55, 1500, 2, "failed"),
+    (10000, "supports", 3000, 4000, 2, "complete"),
+    (10000, "supports", 3001, 4000, 1, "budget_exhausted"),
 ])
-def test_optional_support_review_is_bounded_and_preserves_initial_research(monkeypatch, budget, second_verdict, expected_calls, expected_review):
+def test_optional_support_review_is_bounded_and_preserves_initial_research(monkeypatch, budget, second_verdict, first_usage, output_limit, expected_calls, expected_review):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     calls = []
     source_id = ""
     class Provider:
         name = "review-test"
-        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=output_limit)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             calls.append(system)
             if system == REVIEW_SYSTEM_PROMPT:
@@ -351,10 +358,10 @@ def test_optional_support_review_is_bounded_and_preserves_initial_research(monke
             citation = {"source_id": source_id, "quotation": "Revenue was 100"}
             return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
                     "counterarguments": [{"text": "Revenue does not establish profit", "citations": [citation]}],
-                    "limitations": [], "facts": [], "calculations": []}, 55
+                    "limitations": [], "facts": [], "calculations": []}, first_usage
     monkeypatch.setattr(api, "challenge_provider", Provider())
     client = TestClient(api.app)
-    registration = client.post("/v1/auth/local/register", json={"email": f"review-{budget}-{second_verdict}@example.test",
+    registration = client.post("/v1/auth/local/register", json={"email": f"review-{budget}-{second_verdict}-{first_usage}-{output_limit}@example.test",
         "password": "correct horse battery staple!"})
     headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
     source = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
@@ -384,16 +391,18 @@ def test_optional_support_review_is_bounded_and_preserves_initial_research(monke
         assert run["support_review_omissions"] == []
     assert run["support_review_failed_indexes"] == ([0, 1] if expected_review == "failed" else [])
     first_entry = api.billing_ledger.usage.get("model:" + op)
-    assert first_entry.status == "settled" and first_entry.actual_tokens == 55
+    accounted_first = first_usage if type(first_usage) is int and first_usage >= 0 else None
+    assert first_entry.status == "settled" and first_entry.actual_tokens == (accounted_first if accounted_first is not None else 3000 + output_limit)
     second_entry = api.billing_ledger.usage.get("model:" + op + ":support-review")
     if expected_calls == 2:
         assert len(versions) == 3 and versions[-2]["content"]["run"]["checkpoint"] == "generation"
         assert current["parent_version_id"] == versions[-2]["version_id"]
         assert second_entry.status == "settled" and second_entry.actual_tokens == 12
-        assert run["total_tokens"] == 67 and len(run["support_review_prompt_sha256"]) == 64
+        assert run["total_tokens"] == (accounted_first + 12 if accounted_first is not None else None)
+        assert len(run["support_review_prompt_sha256"]) == 64
     else:
         assert len(versions) == 2
-        assert second_entry is None and run["total_tokens"] == 55
+        assert second_entry is None and run["total_tokens"] == accounted_first
     if expected_review == "complete":
         assert content["claims"][1]["support_review"]["verdict"] == second_verdict
         assert content["claims"][1]["support_review"]["independently_verified"] is False

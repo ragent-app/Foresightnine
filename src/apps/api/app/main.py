@@ -2118,8 +2118,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             attempted_prompt.update({"prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
                 "prompt_characters": len(prompt), "prompt_bytes": len(prompt.encode("utf-8"))})
             try:
-                payload, usage = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
+                payload, reported_usage = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
                     system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
+                # Treat missing or malformed usage as unknown; settlement and
+                # subsequent reservations then use the per-call bound.
+                usage = reported_usage if type(reported_usage) is int and reported_usage >= 0 else None
                 return payload, usage
             finally:
                 # An attempted remote request can incur charges even if the
@@ -2181,7 +2184,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 review_omissions = [{"claim_index": index, "reason": "call_budget"} for index in range(len(claims))]
             elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
                 per_call = input_limit + output_limit
-                first_charge = max(per_call, generation_usage if generation_usage is not None else per_call)
+                # Once the provider reports a valid first-call usage, it has
+                # replaced that call's reservation. Reserve the full bound for
+                # the next call; retain the first bound only if usage is unknown.
+                first_charge = generation_usage if generation_usage is not None else per_call
                 if request.max_total_tokens < first_charge + per_call or monotonic() >= deadline:
                     review_status = "budget_exhausted"
                     budget_reason = "token_budget" if request.max_total_tokens < first_charge + per_call else "time_budget"
@@ -2243,9 +2249,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             _reserve_model_call(http_request, review_call_id, token_budget=per_call)
                             calls += 1
                             try:
-                                raw_review, review_usage = generate_structured(batch.prompt,
+                                raw_review, reported_review_usage = generate_structured(batch.prompt,
                                     cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
                                     timeout_seconds=min(float(timeout), remaining))
+                                review_usage = reported_review_usage if type(reported_review_usage) is int and reported_review_usage >= 0 else None
                             finally:
                                 _settle_model_call(http_request, review_call_id, review_usage)
                             claims = apply_support_review(claims, batch, raw_review)
