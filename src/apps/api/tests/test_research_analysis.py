@@ -48,6 +48,20 @@ def test_monetary_facts_without_currency_are_retained_but_not_used_for_calculati
     assert any('no specified currency' in note for note in result.limitations)
 
 
+def test_monetary_fact_currency_not_in_quotation_makes_calculation_provisional():
+    report = source('s', text='Revenue was 100 million in 2024. Revenue was 90 million in 2023.')
+    raw = {'facts':[
+        {'fact_id':'current','label':'Revenue','value':'100','unit':'million','currency':'USD','period':'2024',
+         'citation':{'source_id':'s','quotation':'Revenue was 100 million in 2024.'}},
+        {'fact_id':'previous','label':'Revenue','value':'90','unit':'million','currency':'USD','period':'2023',
+         'citation':{'source_id':'s','quotation':'Revenue was 90 million in 2023.'}}],
+        'calculations':[{'formula':'growth_percent','first_fact_id':'current','second_fact_id':'previous'}]}
+    result=analyze('Compare revenue.', [report], None, lambda _: (raw, 10))
+    assert all(f['currency_quote_missing'] for f in result.facts)
+    assert result.calculations[0]['input_status']=='unverifiable'
+    assert any('currency identifier is absent' in note for note in result.limitations)
+
+
 def test_selected_sentence_opening_is_restored_only_within_budget():
     text = ("Header.\nRevenue increased at an annual rate of 3 percent. " + "filler " * 800 +
             "Profit was 10 percent. " + "filler " * 800)
@@ -1739,7 +1753,7 @@ def test_currency_warning_for_quotation_inside_table_row():
         {'fact_id':'prose', 'label':'Revenue', 'value':'100', 'unit':'million', 'currency':'USD', 'period':'2024', 'citation':{'source_id':'s','quotation':'Revenue was $100'}}]}
     result = analyze('Review revenue.', [source('s', text=text)], None, lambda _: (raw, 1))
     assert result.facts[0]['currency_quote_missing'] is True
-    assert 'currency_quote_missing' not in result.facts[1]
+    assert result.facts[1]['currency_quote_missing'] is True  # A bare dollar sign does not identify USD.
 
 
 def test_table_fact_and_calculation_require_column_alignment_review():

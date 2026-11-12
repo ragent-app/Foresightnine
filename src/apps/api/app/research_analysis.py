@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_unspecified, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_xbrl import match_inline_fact
 
@@ -2509,6 +2509,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         currency_quote_missing = (not is_percent_unit(item.unit) and
                                   table_currency_quote_missing(item.currency,
                                       ("|" + quotation) if table_substring else quotation))
+        currency_quote_missing = currency_quote_missing or monetary_currency_not_in_quotation({
+            'label':item.label, 'unit':item.unit, 'currency':item.currency,
+            'source_id':source.source_id, 'quotation':quotation})
         table_alignment_unverified = (location.get("status") != "ambiguous" and
                                       (quotation_is_table_row(source.text, quote_start, quotation) or
                                        (source.retrieval_method == "user_pdf" and source.pdf_text_order == "layout" and
@@ -2551,7 +2554,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 limitations.append("During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.")
                 currency_context_noted = True
         if currency_quote_missing and not currency_quote_noted:
-            limitations.append("A table fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.")
+            limitations.append("A monetary fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.")
             currency_quote_noted = True
         if table_alignment_unverified and not table_alignment_noted:
             limitations.append("Table column alignment is not established; verify each value, period and unit against the source before relying on calculations.")

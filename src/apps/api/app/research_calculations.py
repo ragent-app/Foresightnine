@@ -136,6 +136,27 @@ def monetary_currency_unspecified(fact: dict) -> bool:
     return bool(_MONETARY_FACT_LABEL.search(label[:300]))
 
 
+def monetary_currency_not_in_quotation(fact: dict) -> bool:
+    """Flag a source-backed monetary amount when its cited text omits the currency.
+
+    A matching identifier is only a cue; it does not prove that it describes
+    the same value or that table columns, units or source data are correct.
+    User-entered facts without a source remain explicitly unverified inputs.
+    """
+    label, unit, currency = fact.get('label'), fact.get('unit'), fact.get('currency')
+    quote, source_id = fact.get('quotation'), fact.get('source_id')
+    if (not isinstance(label, str) or not isinstance(unit, str) or not isinstance(currency, str) or not currency.strip() or
+            not isinstance(source_id, str) or not source_id or not isinstance(quote, str) or not quote):
+        return False
+    if table_user_confirmed(fact) or xbrl_source_consistent(fact):
+        return False
+    # Reuse the same narrow monetary-label classification without guessing a
+    # currency from a symbol or from the issuer's geography.
+    if not monetary_currency_unspecified({'label':label, 'unit':unit, 'currency':None}):
+        return False
+    return table_currency_quote_missing(currency, '|' + quote.lstrip())
+
+
 def quotation_is_inside_table_row(source_text: str, start: object, quotation: object) -> bool:
     """Identify a located single-line quotation inside a pipe-delimited row.
 
@@ -544,7 +565,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             if (candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or
                 candidates[0].get("quotation_match") == "table_markup_expanded" and not (table_user_confirmed(candidates[0]) or xbrl_source_consistent(candidates[0])) or
                 isinstance(candidates[0].get("table_structure_alignment"), dict) and candidates[0]["table_structure_alignment"].get("status") == "conflict" or
-                candidates[0].get("table_period_conflict") or monetary_currency_unspecified(candidates[0]) or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
+                candidates[0].get("table_period_conflict") or monetary_currency_unspecified(candidates[0]) or monetary_currency_not_in_quotation(candidates[0]) or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation"))):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})

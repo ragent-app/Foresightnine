@@ -195,6 +195,48 @@ def test_legacy_monetary_calculation_requires_currency_without_rewriting_history
     assert recalculated.status_code==201, recalculated.text
 
 
+def test_legacy_monetary_citation_requires_currency_cue_without_rewriting_history(monkeypatch):
+    from uuid import uuid4
+    from app.research_calculations import CalculationRequest, calculate
+    from app.research_topics import VersionInput
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    client=TestClient(api.app)
+    auth=client.post('/v1/auth/local/register',json={'email':f'quoted-money-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+auth['access_token']}
+    text='USD Revenue was 100 million in 2024. USD Revenue was 90 million in 2023.'
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':text,
+        'permissions':{'store':True,'display':True,'model_input':True,'export':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?','source_ids':[source_id]}).json()
+    facts=[]
+    for fid,value,period in [('a','100','2024'),('b','90','2023')]:
+        quote=f'Revenue was {value} million in {period}'; start=text.index(quote)
+        facts.append({'fact_id':fid,'label':'Revenue','value':value,'unit':'million','currency':'USD','period':period,
+            'source_id':source_id,'quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)},
+            'verification':'model_extraction_not_independently_verified'})
+    inputs=[{key:fact[key] for key in ('fact_id','value','unit','currency','period')} for fact in facts]
+    calculation=calculate(CalculationRequest(formula='growth_percent',first=inputs[0],second=inputs[1]));calculation['input_status']='matched'
+    stored=api.research_topics.add_version(topic['owner_id'],topic['topic_id'],VersionInput(
+        parent_version_id=topic['versions'][0]['version_id'],content=ResearchContent(facts=facts,calculations=[calculation])))
+    version=stored.versions[-1];path='/v2/research/topics/'+topic['topic_id']
+    read=client.get(path,headers=headers).json()['versions'][-1]
+    assert all(f['currency_quote_missing'] for f in read['content']['facts'])
+    assert read['content']['calculations'][0]['input_status']=='unverifiable'
+    exported=client.get(path+'/versions/'+version.version_id+'/export',headers=headers).json()['version']
+    assert exported['content']['calculations'][0]['input_status']=='unverifiable'
+    assert not api.research_topics.get(topic['owner_id'],topic['topic_id']).versions[-1].content.facts[0].get('currency_quote_missing')
+    assert client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':version.version_id,'calculation_index':0}).status_code==422
+    edited=deepcopy(read['content'])
+    for fact in edited['facts']:
+        fact['quotation']='USD '+fact['quotation'];fact.pop('location',None);fact.pop('quotation_match',None)
+    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version.version_id,'content':edited})
+    assert saved.status_code==201, saved.text
+    current=saved.json()['versions'][-1]
+    assert all(not f.get('currency_quote_missing') for f in current['content']['facts'])
+    result=client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':current['version_id'],'calculation_index':0})
+    assert result.status_code==201, result.text
+
+
 def test_provisional_html_calculation_remains_partial_through_export_and_edit(monkeypatch):
     import base64
     from uuid import uuid4
@@ -324,12 +366,12 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
             assert "untrusted data" in system
             assert 0 < timeout_seconds <= 5
             return {"claims": [{"text": "Revenue is reported", "citations": [
-                {"source_id": source_id, "quotation": "Revenue was 100"}]}],
+                {"source_id": source_id, "quotation": "Revenue was USD 100"}]}],
                 "counterarguments": [{"text": "Revenue alone does not establish profit growth", "citations": [
-                    {"source_id": source_id, "quotation": "Revenue was 100"}]}],
+                    {"source_id": source_id, "quotation": "Revenue was USD 100"}]}],
                 "limitations": [], "facts": [
-                    {"fact_id": "current", "label": "Revenue", "value": "100", "unit": "USD million", "currency": "USD", "period": "2023", "citation": {"source_id": source_id, "quotation": "Revenue was 100 million in 2023."}},
-                    {"fact_id": "prior", "label": "Revenue", "value": "80", "unit": "USD million", "currency": "USD", "period": "2022", "citation": {"source_id": source_id, "quotation": "Revenue was 80 million in 2022."}}],
+                    {"fact_id": "current", "label": "Revenue", "value": "100", "unit": "USD million", "currency": "USD", "period": "2023", "citation": {"source_id": source_id, "quotation": "Revenue was USD 100 million in 2023."}},
+                    {"fact_id": "prior", "label": "Revenue", "value": "80", "unit": "USD million", "currency": "USD", "period": "2022", "citation": {"source_id": source_id, "quotation": "Revenue was USD 80 million in 2022."}}],
                 "calculations": [{"formula": "growth_percent", "first_fact_id": "current", "second_fact_id": "prior"}]}, 55
 
     monkeypatch.setattr(api, "challenge_provider", Provider())
@@ -340,7 +382,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
         "password": "correct horse battery staple!"})
     headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
     source = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
-        "text": "Revenue was 100 million in 2023. Revenue was 80 million in 2022.",
+        "text": "Revenue was USD 100 million in 2023. Revenue was USD 80 million in 2022.",
         "event_at": "2023-12-31T00:00:00Z", "published_at": "2024-01-01T00:00:00Z",
         "revised_at": "2024-02-01T00:00:00Z", "permissions": {"store": True,
         "model_input": True, "display": True}}).json()
@@ -371,7 +413,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert snapshot["sources"][0]["obtained_at"]
     assert snapshot["budget"]["max_model_calls"] == 1
     assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v49"
-    assert "Revenue was 100" not in inputs.text and "owner_id" not in inputs.json()
+    assert "Revenue was USD 100" not in inputs.text and "owner_id" not in inputs.json()
     other = client.post("/v1/auth/local/register", json={"email": "other@example.test",
         "password": "correct horse battery staple!"}).json()["access_token"]
     assert client.get(inputs_path, headers={"Authorization": "Bearer " + other}).status_code == 404
@@ -390,7 +432,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert result["run"]["selection_method"] == snapshot["selection_method"]
     assert result["sources"][0]["event_at"] == snapshot["sources"][0]["event_at"]
     assert result["sources"][0]["revised_at"] == snapshot["sources"][0]["revised_at"]
-    assert result["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"
+    assert result["claims"][0]["citations"][0]["quotation"] == "Revenue was USD 100"
     assert result["calculations"][0]["value"] == "25.00"
     assert result["facts"][0]["verification"] == "model_extraction_not_independently_verified"
     assert updated["versions"][-1]["source_ids"] == [source_id]
@@ -1543,7 +1585,7 @@ def test_recalculation_refreshes_claim_calculation_candidates_without_changing_h
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             def cite(quotation): return {"source_id": source_id, "quotation": quotation}
-            current, prior = "Revenue was 100 in 2023", "Revenue was 80 in 2022"
+            current, prior = "Revenue was USD 100 in 2023", "Revenue was USD 80 in 2022"
             return {"claims": [{"text": "Revenue grew 25%", "citations": [cite(current), cite(prior)]}],
                     "facts": [{"fact_id": "current", "label": "Revenue", "value": "100", "unit": "USD million", "currency": "USD", "period": "2023", "citation": cite(current)},
                               {"fact_id": "prior", "label": "Revenue", "value": "80", "unit": "USD million", "currency": "USD", "period": "2022", "citation": cite(prior)}],
@@ -1553,7 +1595,7 @@ def test_recalculation_refreshes_claim_calculation_candidates_without_changing_h
     account = client.post("/v1/auth/local/register", json={"email": "recalc-candidates@example.test", "password": "correct horse battery staple!"}).json()
     headers = {"Authorization": "Bearer " + account["access_token"]}
     source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
-        "text": "Revenue was 100 in 2023. Revenue was 80 in 2022.",
+        "text": "Revenue was USD 100 in 2023. Revenue was USD 80 in 2022.",
         "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
     topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue growth?", "source_ids": [source_id]}).json()
     path = "/v2/research/topics/" + topic["topic_id"]
@@ -2949,9 +2991,9 @@ def test_pdf_line_hyphen_fact_requires_exact_source_selection_before_calculation
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
             return {"facts":[
               {"fact_id":"current","label":"Revenue","value":"100","unit":"USD million","currency":"USD","period":"2024",
-               "citation":{"source_id":source_id,"quotation":"Revenue estimates were 100"}},
+               "citation":{"source_id":source_id,"quotation":"Revenue estimates were USD 100"}},
               {"fact_id":"prior","label":"Revenue","value":"80","unit":"USD million","currency":"USD","period":"2023",
-               "citation":{"source_id":source_id,"quotation":"Prior revenue was 80"}},
+               "citation":{"source_id":source_id,"quotation":"Prior revenue was USD 80"}},
               {"fact_id":"decline","label":"Change","value":"-5","unit":"percent","period":"2024",
                "citation":{"source_id":source_id,"quotation":"Loss estimates decreased 5 percent"}}],
               "calculations":[{"formula":"growth_percent","first_fact_id":"current","second_fact_id":"prior"}]},10
@@ -2959,7 +3001,7 @@ def test_pdf_line_hyphen_fact_requires_exact_source_selection_before_calculation
     client=TestClient(api.app)
     account=client.post("/v1/auth/local/register",json={"email":f"pdf-fact-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
     headers={"Authorization":"Bearer "+account["access_token"]}
-    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue esti-\nmates were 100. Prior revenue was 80. Loss esti-\nmates decreased 5 percent.",
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue esti-\nmates were USD 100. Prior revenue was USD 80. Loss esti-\nmates decreased 5 percent.",
       "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
     document=api.RESEARCH_SOURCES.get(source_id)
     api.RESEARCH_SOURCES.put(source_id,document.model_copy(update={"retrieval_method":"user_pdf"}))
