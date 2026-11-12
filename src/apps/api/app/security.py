@@ -189,6 +189,7 @@ class SecurityConfig:
     trusted_proxies: TrustedProxyConfig = TrustedProxyConfig()
     require_captcha: bool = False
     max_pdf_body_bytes: int = 2_100_000
+    max_research_source_body_bytes: int = 2_100_000
 
 
 def build_security_config() -> SecurityConfig:
@@ -202,6 +203,10 @@ def build_security_config() -> SecurityConfig:
         max_pdf_body = int(os.getenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES", "2100000"))
     except ValueError:
         max_pdf_body = 2_100_000
+    try:
+        max_source_body = int(os.getenv("FORESIGHTNINE_MAX_RESEARCH_SOURCE_BODY_BYTES", "2100000"))
+    except ValueError:
+        max_source_body = 2_100_000
     origins = _parse_origins(
         os.getenv("FORESIGHTNINE_CORS_ORIGINS", ""),
         hardened=require_captcha,
@@ -212,6 +217,7 @@ def build_security_config() -> SecurityConfig:
         trusted_proxies=TrustedProxyConfig(_parse_networks(os.getenv("FORESIGHTNINE_TRUSTED_PROXY_CIDRS", ""))),
         require_captcha=require_captcha,
         max_pdf_body_bytes=min(2_100_000, max(1024, max_pdf_body)),
+        max_research_source_body_bytes=min(2_100_000, max(1024, max_source_body)),
     )
 
 
@@ -274,7 +280,12 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
         session_id = request.headers.get("X-Session-ID")
         body: bytes = b""
         if request.method in {"POST", "PUT", "PATCH"}:
-            body_limit = self.config.max_pdf_body_bytes if request.url.path == "/v2/research/sources/pdf" else self.config.max_body_bytes
+            if request.method == "POST" and request.url.path == "/v2/research/sources":
+                body_limit = self.config.max_research_source_body_bytes
+            elif request.url.path == "/v2/research/sources/pdf":
+                body_limit = self.config.max_pdf_body_bytes
+            else:
+                body_limit = self.config.max_body_bytes
             content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
             if content_type != "application/json":
                 return _boundary_error(415, "unsupported_media_type", "JSON requests are required.", request)

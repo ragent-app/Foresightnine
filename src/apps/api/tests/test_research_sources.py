@@ -289,3 +289,23 @@ def test_new_user_citations_respect_historical_cutoff(monkeypatch):
     for source_id, quote in [(future, "future quote"), (revised, "revised quote"), (unknown, "unknown quote")]:
         assert save(source_id, quote).status_code == 422
     assert save(before, "before quote").status_code == 201
+
+
+def test_research_text_upload_has_scoped_bounded_body_limit(monkeypatch):
+    from hashlib import sha256
+
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    session = client.post("/v1/auth/local/register", json={"email": "large-source@example.test",
+        "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + session["access_token"]}
+    text = "A financial report. " * 25000
+    response = client.post("/v2/research/sources", headers=headers, json={"title": "Long filing", "text": text,
+        "permissions": {"store": True, "display": True, "model_input": True}})
+    assert response.status_code == 201, response.text
+    assert response.json()["content_sha256"] == sha256(text.encode()).hexdigest()
+    oversized = client.post("/v2/research/sources", headers=headers, json={"title": "Too large", "text": "x" * 2_100_000,
+        "permissions": {"store": True}})
+    assert oversized.status_code == 413
+    unrelated = client.post("/v2/research/sources/fetch", headers=headers, json={"text": "x" * 300_000})
+    assert unrelated.status_code == 413
