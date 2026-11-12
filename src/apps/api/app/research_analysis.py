@@ -1455,8 +1455,17 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Keep the located observation for review; do not feed it into any
         # calculation until the user has resolved the metadata.
         currency_context = is_percent_unit(item.unit) and item.currency is not None
+        # A model may quote a substring of a table row without the leading
+        # pipe. Inspect the original line solely to identify table context;
+        # the currency cue must still occur in the actual quotation.
+        quote_start = location.get("character_start")
+        table_substring = False
+        if isinstance(quote_start, int) and "\n" not in quotation:
+            line_start = source.text.rfind("\n", 0, quote_start) + 1
+            table_substring = source.text[line_start:quote_start].lstrip().startswith("|")
         currency_quote_missing = (not is_percent_unit(item.unit) and
-                                  table_currency_quote_missing(item.currency, quotation))
+                                  table_currency_quote_missing(item.currency,
+                                      ("|" + quotation) if table_substring else quotation))
         currency_conflict = currency_value_conflict(item.currency, item.value, quotation)
         ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:

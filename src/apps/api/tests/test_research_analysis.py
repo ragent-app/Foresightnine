@@ -1349,3 +1349,13 @@ def test_recovered_table_rows_with_multiple_matches_remain_ambiguous():
     assert result.claims[0]['support_status'] == 'incomplete'
     loc = result.claims[0]['citations'][0]['location']
     assert loc['status'] == 'ambiguous' and len(loc['matches']) == 2
+
+
+def test_currency_warning_for_quotation_inside_table_row():
+    text = '| [colspan=3] Revenue | $ | 100 | 90 |\nRevenue was $100.'
+    raw = {'facts': [
+        {'fact_id':'table', 'label':'Revenue', 'value':'100', 'unit':'million', 'currency':'USD', 'period':'2024', 'citation':{'source_id':'s','quotation':'Revenue | $ | 100'}},
+        {'fact_id':'prose', 'label':'Revenue', 'value':'100', 'unit':'million', 'currency':'USD', 'period':'2024', 'citation':{'source_id':'s','quotation':'Revenue was $100'}}]}
+    result = analyze('Review revenue.', [source('s', text=text)], None, lambda _: (raw, 1))
+    assert result.facts[0]['currency_quote_missing'] is True
+    assert 'currency_quote_missing' not in result.facts[1]
