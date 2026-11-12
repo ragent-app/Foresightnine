@@ -1,0 +1,94 @@
+{
+  "manifest_sha256": "7ba5ba59454a2a9adf189c8d49c6afa722b3ccd778174b3e978e0787c0871cda",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "JPMorgan Chase & Co.'s common equity tier 1 capital ratio was 15.0% actual in 2023:Q4, projected 13.4% at 2026:Q1 ending, and projected minimum 12.5% under the severely adverse scenario, per Table A.17 of the 2024 Federal Reserve Stress Test Results.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Table A.17. JPMorgan Chase & Co. Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net income before taxes Federal Reserve estimates: Severely adverse scenario ... Item Actual 2023:Q4 Projected 2026:Q1 Projected minimum Common equity tier 1 capital ratio 15.0 13.4 12.5"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Capital ratios and risk-weighted assets, actual 2023:Q4 and projected 2024:Q1–2026:Q1 ... These projections represent hypothetical estimates that involve an economic outcome that is more adverse than expected."
+          }
+        ]
+      },
+      {
+        "text": "The 12.5% figure in Table 6's summary list also appears as JPMorgan Chase's minimum CET1 ratio for the 2024:Q1–2026:Q1 period, consistent with Table A.17's projected minimum.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "JPMorgan Chase 12.5 ... The minimum capital ratio presented is for the period 2024:Q1 to 2026:Q1. Source: Federal Reserve estimates in the severely adverse scenario."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The 12.5% value in the Table 6 excerpt appears without its column header directly attached in the excerpt; it could theoretically be an ending rather than minimum ratio, but the note stating 'The minimum capital ratio presented is for the period 2024:Q1 to 2026:Q1' supports it being the projected minimum.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "JPMorgan Chase 12.5 ... Note: The capital ratios are calculated using the capital action assumptions provided within the supervisory stress testing rules."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source excerpts are partial; the full Table 6 column headers for JPMorgan Chase's row are not visible in the excerpt, so the bank-specific Table A.17 is used as the primary evidence.",
+      "The source text notes that data for JPMorgan Chase in table A.32 (page 57) was revised on August 28, 2024; the excerpts do not show whether Table A.17 values were affected.",
+      "Projections are hypothetical estimates under a severely adverse scenario, not forecasts of actual outcomes; capital ratios use supervisory capital action assumptions per 12 C.F.R. §§ 238.132(d); 252.44(c)."
+    ],
+    "facts": [
+      {
+        "fact_id": "jpm-cet1-actual-2023q4",
+        "label": "JPMorgan Chase & Co. common equity tier 1 capital ratio, actual 2023:Q4",
+        "value": "15.0",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023:Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Item Actual 2023:Q4 Projected 2026:Q1 Projected minimum Common equity tier 1 capital ratio 15.0 13.4 12.5"
+        }
+      },
+      {
+        "fact_id": "jpm-cet1-ending-2026q1",
+        "label": "JPMorgan Chase & Co. common equity tier 1 capital ratio, projected ending 2026:Q1, severely adverse scenario",
+        "value": "13.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "2026:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Projected stressed capital ratios ... Federal Reserve estimates: Severely adverse scenario ... Common equity tier 1 capital ratio 15.0 13.4 12.5"
+        }
+      },
+      {
+        "fact_id": "jpm-cet1-minimum",
+        "label": "JPMorgan Chase & Co. common equity tier 1 capital ratio, projected minimum, severely adverse scenario",
+        "value": "12.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "2024:Q1–2026:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio 15.0 13.4 12.5"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "jpm-cet1-actual-2023q4",
+        "second_fact_id": "jpm-cet1-minimum"
+      }
+    ]
+  },
+  "reported_tokens": 2608,
+  "prompt_sha256": "88df2fa406c74a771e5b0b62986d488c5e55c95943efeba765e1546d0cdbb705",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
