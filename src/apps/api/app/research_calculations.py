@@ -132,7 +132,8 @@ def calculate(request: CalculationRequest) -> dict:
 def claim_calculation_differences(claims: list[dict], calculations: list[dict], facts: list[dict]) -> list[dict]:
     """Flag narrow numerical mismatches for review, without asserting entailment.
 
-    Compare only a claim with one percentage and a uniquely matching denominator.
+    Compare claims whose percentages denote the same number and have a uniquely
+    matching denominator; inspect each stated precision separately.
     Recompute the saved calculation from current facts at both its own and the
     claim's stated precision; ignore user-edited, stale or ambiguous calculations.
     """
@@ -158,30 +159,35 @@ def claim_calculation_differences(claims: list[dict], calculations: list[dict], 
         if not isinstance(text, str) or len(text) > 3000:
             continue
         percentages = list(_TEXT_PERCENT.finditer(text))
-        if len(percentages) != 1:
+        if not percentages or len(percentages) > 20:
             continue
-        raw = percentages[0].group(1).replace(",", "").replace("−", "-")
-        precision = len(raw.rsplit(".", 1)[1]) if "." in raw else 0
-        if precision > 8 or len(raw) > 40:
+        raw_values = [item.group(1).replace(",", "").replace("−", "-") for item in percentages]
+        if any(len(raw) > 40 or ("." in raw and len(raw.rsplit(".", 1)[1]) > 8) for raw in raw_values):
             continue
         try:
-            stated = Decimal(raw)
+            stated_values = {Decimal(raw) for raw in raw_values}
             mentioned = {Decimal(m.group().replace(",", "").replace("−", "-")) for m in _TEXT_NUMBER.finditer(text)}
         except InvalidOperation:
+            continue
+        if len(stated_values) != 1:
             continue
         candidates = [entry for value in mentioned for entry in by_denominator.get(value, [])]
         if len(candidates) != 1:
             continue
         calculation_index, request = candidates[0]
-        try:
-            expected = calculate(request.model_copy(update={"decimal_places": precision}))["value"]
-            if stated == Decimal(expected):
+        seen: set[tuple[str, str]] = set()
+        for raw in raw_values:
+            precision = len(raw.rsplit(".", 1)[1]) if "." in raw else 0
+            try:
+                expected = calculate(request.model_copy(update={"decimal_places": precision}))["value"]
+                if Decimal(raw) == Decimal(expected) or (raw, expected) in seen:
+                    continue
+            except (CalculationError, InvalidOperation):
                 continue
-        except (CalculationError, InvalidOperation):
-            continue
-        differences.append({"claim_index": claim_index, "calculation_index": calculation_index,
-                            "claimed_value": raw, "calculated_value": expected,
-                            "unit": "percent", "status": "requires_review"})
-        if len(differences) == 50:
-            break
+            seen.add((raw, expected))
+            differences.append({"claim_index": claim_index, "calculation_index": calculation_index,
+                                "claimed_value": raw, "calculated_value": expected,
+                                "unit": "percent", "status": "requires_review"})
+            if len(differences) == 50:
+                return differences
     return differences

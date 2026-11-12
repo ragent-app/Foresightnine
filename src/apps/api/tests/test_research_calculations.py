@@ -62,6 +62,15 @@ def test_avoids_guessing_when_a_denominator_or_percentage_is_ambiguous():
                                          [revenue, profit, earnings]) == []
 
 
+def test_same_percentage_at_two_precisions_checks_each_rounding():
+    current = fact("current", "25785", "FY2024")
+    prior = fact("prior", "22680", "FY2023")
+    growth = calculate(CalculationRequest(formula="growth_percent", first=current, second=prior))
+    claim = {"text": "Using 22680 as baseline, growth is about 13.7% (13.70%)."}
+    result = claim_calculation_differences([claim], [growth], [current, prior])
+    assert len(result) == 1 and result[0]["claimed_value"] == "13.70" and result[0]["calculated_value"] == "13.69"
+
+
 @pytest.mark.parametrize("first,second,formula", [
     (fact("a", "1", "2023"), fact("b", "0", "2022"), "growth_percent"),
     (fact("a", "1", "2023"), fact("b", "-1", "2022"), "growth_percent"),
