@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v45"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v46"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -57,6 +57,7 @@ class Citation(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     source_id: str = Field(min_length=1, max_length=100)
     quotation: str = Field(min_length=1, max_length=1000)
+    source_page: int | None = Field(default=None, ge=1, le=100000, strict=True)
 
 
 class Claim(BaseModel):
@@ -1544,17 +1545,19 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         prompt_refs[source.source_id] = ref
     data = {"question": question, "sources": [],
             "output_schema": {"claims": [{"text": "claim", "citations": [
-                {"source_id": "id", "quotation": "quote"}]}],
+                {"source_id": "id", "quotation": "quote", "source_page": "optional PDF page number"}]}],
                 "counterarguments": [{"text": "counterargument", "citations": [
-                    {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
+                    {"source_id": "id", "quotation": "quote", "source_page": "optional PDF page number"}]}], "limitations": ["text"],
                 "facts": [{"fact_id": "id", "label": "metric", "value": "number",
                            "unit": "unit", "currency": "currency or null", "period": "period",
-                           "citation": {"source_id": "id", "quotation": "quote"}}],
+                           "citation": {"source_id": "id", "quotation": "quote", "source_page": "optional PDF page number"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}]},
             "evidence_guidance": "Quote one continuous source passage; never join passages or quote metadata. "
                 "Cite table headers, units and rows separately. "
                 "Put missing evidence in limitations. Excerpts are not the whole source. "
+                "For a PDF excerpt with source_page, include that page number in each citation taken from it. "
+                "The page only locates text; it does not establish support. "
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
     if as_of is not None:
         data["research_cutoff"] = as_of.isoformat()
@@ -1568,6 +1571,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
     model_text: dict[str, list[tuple[int, str]]] = {}
+    model_pages: dict[str, set[int]] = {}
     processed: list[ResearchSource] = []
     remaining = MAX_TOTAL_CHARS
     for index, source in enumerate(eligible):
@@ -1665,9 +1669,28 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             structured = (structured_parts is not None and parts == structured_parts or
                           revision_original is not None and parts == revision_original or
                           policy_original is not None and parts == policy_original)
+            # Keep PDF page boundaries visible to the model without modifying
+            # any text presented as evidence. Excessively fragmented input is
+            # left unsplit and cannot use page-scoped citations.
+            fragments: list[tuple[int, str, int | None]] = []
+            for start, passage in parts:
+                if (source.retrieval_method == "user_pdf" and passage.count("\f") <= 20 and
+                        not (focus is not None and source.source_id == focus[0] and
+                             start <= focus[1] < focus[2] <= start + len(passage) and
+                             "\f" in source.text[focus[1]:focus[2]])):
+                    page = source.text.count("\f", 0, start) + 1
+                    cursor = start
+                    for chunk in passage.split("\f"):
+                        if chunk:
+                            fragments.append((cursor, chunk, page))
+                        cursor += len(chunk) + 1
+                        page += 1
+                else:
+                    fragments.append((start, passage, None))
             return [{"source_id": prompt_refs[source.source_id] if short_refs else source.source_id,
                      **({"title": source.title} if (not structured and not compact_metadata) or position == 0 else {}),
                      "source_coverage": coverage,
+                     **({"source_page": page} if page is not None else {}),
                      **({"user_selected_passage": _prompt_source_text(source.text[focus[1]:focus[2]], source.retrieval_method == "user_pdf")}
                         if focus is not None and source.source_id == focus[0] and
                         start <= focus[1] and start + len(passage) >= focus[2] else {}),
@@ -1675,12 +1698,16 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                      **({"declared_revised_at": source.revised_at.isoformat()} if source.revised_at and (not structured or position == 0) else {}),
                      **({"declared_event_at": source.event_at.isoformat()} if source.event_at and (not structured or position == 0) else {}),
                      "text": _prompt_source_text(passage, source.retrieval_method == "user_pdf")}
-                    for position, (start, passage) in enumerate(parts)]
+                    for position, (start, passage, page) in enumerate(fragments)]
 
         def fits(candidate: list[tuple[int, str]], *, compact_metadata: bool = False, short_refs: bool = False) -> bool:
-            data["sources"].extend(source_payload(candidate, compact_metadata=compact_metadata, short_refs=short_refs))
+            additions = source_payload(candidate, compact_metadata=compact_metadata, short_refs=short_refs)
+            if not additions:
+                return False
+            data["sources"].extend(additions)
             within_budget = len(serialize().encode("utf-8")) <= source_budget_limit
-            del data["sources"][-len(candidate):]
+            if additions:
+                del data["sources"][-len(additions):]
             return within_budget
 
         # Prefer the entire document when it fits. Otherwise choose the
@@ -1874,7 +1901,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         model_text[source.source_id] = selected
         remaining -= sum(len(_prompt_source_text(passage, source.retrieval_method == "user_pdf")) for _, passage in selected)
         processed.append(source)
-        data["sources"].extend(source_payload(selected, compact_metadata=compact_metadata, short_refs=True))
+        selected_payload = source_payload(selected, compact_metadata=compact_metadata, short_refs=True)
+        model_pages[source.source_id] = {item["source_page"] for item in selected_payload if "source_page" in item}
+        data["sources"].extend(selected_payload)
         if sum(len(passage) for _, passage in selected) < len(source.text):
             ranges = ", ".join(f"{start}–{start + len(passage)}" for start, passage in selected)
             limitations.append(f"Source {source.source_id}: only character ranges {ranges} were analyzed; remaining text was not examined.")
@@ -2003,7 +2032,27 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     source_map.update({prompt_refs[source.source_id]: source for source in processed})
     ambiguous: set[tuple[str, str]] = set()
 
-    def quotation_location(source: ResearchSource, quotation: str) -> tuple[dict[str, Any], str, str]:
+    def quotation_location(source: ResearchSource, quotation: str, source_page: int | None = None) -> tuple[dict[str, Any], str, str]:
+        passages = model_text[source.source_id]
+        if source_page is not None:
+            if source.retrieval_method != "user_pdf" or source_page not in model_pages.get(source.source_id, set()):
+                raise InvalidAnalysis("Model cited an unavailable source page.")
+            page_start = 0
+            for _ in range(source_page - 1):
+                position = source.text.find("\f", page_start)
+                if position < 0:
+                    raise InvalidAnalysis("Model cited an unavailable source page.")
+                page_start = position + 1
+            page_end = source.text.find("\f", page_start)
+            if page_end < 0:
+                page_end = len(source.text)
+            passages = [(max(start, page_start), source.text[max(start, page_start):min(start + len(text), page_end)])
+                        for start, text in passages if max(start, page_start) < min(start + len(text), page_end)]
+            if not passages:
+                raise InvalidAnalysis("Model cited a source page outside analyzed passages.")
+            note = "The model selected the cited PDF page; page selection and semantic support are not independently verified."
+            if note not in limitations:
+                limitations.append(note)
         positions: list[dict[str, Any]] = []
         originals: list[str] = []
         scan_truncated = False
@@ -2020,7 +2069,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             originals.append(passage[left:right])
 
         pattern = pattern_for(quotation)
-        for offset, passage in model_text[source.source_id]:
+        for offset, passage in passages:
             for match in pattern.finditer(passage):
                 if match.end(1) - match.start(1) <= 1000:
                     record(offset, passage, match.start(1), match.end(1))
@@ -2039,7 +2088,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             # preserve the original and the usual ambiguity checks.
             rest = r"\s+".join(re.escape(part) for part in re.split(r"\s+", quotation[1:]))
             initial_pattern = re.compile("(?=((?i:" + re.escape(quotation[0]) + ")" + rest + "))")
-            for offset, passage in model_text[source.source_id]:
+            for offset, passage in passages:
                 for match in initial_pattern.finditer(passage):
                     if match.end(1) - match.start(1) <= 1000:
                         record(offset, passage, match.start(1), match.end(1))
@@ -2053,7 +2102,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 if note not in limitations:
                     limitations.append(note)
         if not positions:
-            for start, end in _table_markup_rows(source.text, model_text[source.source_id], quotation, should_stop):
+            for start, end in _table_markup_rows(source.text, passages, quotation, should_stop):
                 record(0, source.text, start, end)
             table_markup_expanded = bool(positions)
             if table_markup_expanded:
@@ -2076,7 +2125,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         and source.text.find(prefix, start + 1) < 0
                         and any(offset <= start and end <= offset + len(passage) and
                                 re.match(r'\s*,\s*"(?:[^"\\]|\\.)+"\s*:', passage[end - offset:])
-                                for offset, passage in model_text[source.source_id])):
+                                for offset, passage in passages)):
                     record(0, source.text, start, end)
                     trimmed_json_closure = True
                     note = "A model-added JSON closing brace was removed from a quotation; check the original context."
@@ -2093,7 +2142,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if 2 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments):
                 patterns = [pattern_for(part.strip()) for part in fragments]
                 first_count = 0
-                for offset, passage in model_text[source.source_id]:
+                for offset, passage in passages:
                     def extend(index: int, left: int, right: int) -> None:
                         if len(positions) >= 6:
                             return
@@ -2123,7 +2172,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if 1 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments):
                 patterns = [pattern_for(part.strip()) for part in fragments]
                 first_count = 0
-                for offset, passage in model_text[source.source_id]:
+                for offset, passage in passages:
                     if should_stop is not None and should_stop():
                         raise AnalysisInterrupted()
                     breaks = list(re.finditer(r"(?<=[A-Za-z])-\r?\n(?=[A-Za-z])", passage))
@@ -2193,7 +2242,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append("A model-generated fact had an invalid source or ambiguous identifier and was omitted.")
             continue
         try:
-            location, quotation, matching = quotation_location(source, item.citation.quotation)
+            location, quotation, matching = quotation_location(source, item.citation.quotation, item.citation.source_page)
         except InvalidAnalysis:
             # Keep a table row as a review candidate when a model joined a
             # uniquely located heading and row with an explicit ellipsis.
@@ -2203,7 +2252,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if 2 <= len(fragments) <= 3 and all(len(fragment.strip()) >= 4 for fragment in fragments):
                 for fragment in fragments:
                     try:
-                        loc, original, kind = quotation_location(source, fragment.strip())
+                        loc, original, kind = quotation_location(source, fragment.strip(), item.citation.source_page)
                     except InvalidAnalysis:
                         recovered = []
                         break
@@ -2335,7 +2384,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     omitted = True
                     continue
                 try:
-                    location, quotation, matching = quotation_location(source, citation.quotation)
+                    location, quotation, matching = quotation_location(source, citation.quotation, citation.source_page)
                 except InvalidAnalysis:
                     # Some models join independently quoted passages with
                     # "and". Preserve them only as separate, unique original
@@ -2351,7 +2400,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             len(citations) + len(fragments) + remaining_citations <= 10):
                         for fragment in fragments:
                             try:
-                                loc, original, match_kind = quotation_location(source, fragment.strip())
+                                loc, original, match_kind = quotation_location(source, fragment.strip(), citation.source_page)
                             except InvalidAnalysis:
                                 recovered = []
                                 break
