@@ -1367,7 +1367,7 @@ def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources
 
 
 def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
-    """Suggest other claims' uniquely located numeric excerpts, never support.
+    """Suggest other claims' uniquely located numeric or period excerpts.
 
     Candidates come only from a source already cited by the target claim;
     equal numbers do not establish entity, currency, unit, period or meaning. The
@@ -1375,7 +1375,7 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
     """
     source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
     output = [deepcopy(claim) for claim in claims]
-    demands: dict[tuple[str, str, Decimal], dict[int, list[str]]] = defaultdict(dict)
+    demands: dict[tuple[str, str, Decimal | tuple[int, int]], dict[int, list[str]]] = defaultdict(dict)
 
     def located(citation: object) -> tuple[str, str, dict, ResearchSource] | None:
         if not isinstance(citation, dict) or citation.get("partial_token"):
@@ -1419,14 +1419,19 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
         if not isinstance(citations, list):
             continue
         cited_sources = {sid for citation in citations[:10] if (sid := target_source(citation)) is not None}
-        for kind, field in (("dollar", "uncited_dollar_amounts"), ("percent", "uncited_percentages")):
+        for kind, field in (("dollar", "uncited_dollar_amounts"), ("percent", "uncited_percentages"), ("quarter", "uncited_quarters")):
             missing = claim.get(field)
             if not isinstance(missing, list):
                 continue
             for raw in missing[:5]:
                 if not isinstance(raw, str):
                     continue
-                values = [v for _, v in _dollar_amounts(raw)] if kind == "dollar" else [v for match in _PERCENT.finditer(raw) for v in _quoted_numbers(match.group(1).replace("−", "-"))]
+                if kind == 'dollar':
+                    values = [v for _, v in _dollar_amounts(raw)]
+                elif kind == 'quarter':
+                    values = [value for _, value in _explicit_quarters(raw)]
+                else:
+                    values = [v for match in _PERCENT.finditer(raw) for v in _quoted_numbers(match.group(1).replace("−", "-"))]
                 for value in values:
                     for sid in sorted(cited_sources):
                         demands[(sid, kind, value)].setdefault(index, []).append(raw)
@@ -1451,7 +1456,9 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
             for match in _RELATED_DECIMAL.finditer(quote):
                 if len(match.group()) <= 100:
                     percent_values.add(Decimal(match.group().replace("−", "-")))
-            values = {("dollar", value) for _, value in _dollar_amounts(quote)} | {("percent", value) for value in percent_values}
+            values = ({("dollar", value) for _, value in _dollar_amounts(quote)} |
+                      {("percent", value) for value in percent_values} |
+                      {("quarter", value) for _, value in _explicit_quarters(quote)})
             matching = sorted((kind, value) for kind, value in values if (sid, kind, value) in demands)
             if not matching:
                 continue

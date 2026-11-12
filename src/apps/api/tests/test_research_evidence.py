@@ -1100,3 +1100,24 @@ def test_date_leads_stay_within_authorized_analyzed_excerpt_and_are_not_attached
     assert not suggest_excerpt_dates([outside],[source],segments)[0].get('suggested_related_quotations')
     ambiguous={**claim,'citations':[{**claim['citations'][0],'location':{'status':'ambiguous'}}]}
     assert not suggest_excerpt_dates([ambiguous],[source],segments)[0].get('suggested_related_quotations')
+
+
+def test_related_claim_suggests_same_source_quarter_as_a_review_lead():
+    from app.research_evidence import flag_uncited_quarters, suggest_related_claim_quotations
+    text = 'GDP increased in the first quarter of 2026. The estimate was revised.'
+    source = ResearchSource(source_id='s',owner_id='owner',title='Report',text=text,kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc),content_sha256='hash',
+        permissions=SourcePermissions(store=True,display=True,model_input=True))
+    def cite(quote):
+        start=text.index(quote)
+        return {'source_id':'s','quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)}}
+    donor={'text':'GDP increased in Q1 2026.', 'citations':[cite('GDP increased in the first quarter of 2026.')]}
+    target={'text':'The Q1 2026 estimate was revised.', 'citations':[cite('The estimate was revised.')]}
+    claims=flag_uncited_quarters([donor,target],[source])
+    result=suggest_related_claim_quotations(claims,[source]); lead=result[1]['suggested_related_quotations'][0]
+    assert lead['from_claim_index']==0 and lead['matched_amounts']==['Q1 2026']
+    assert result[1]['uncited_quarters']==['Q1 2026'] and result[1]['citations']==target['citations']
+    hidden=source.model_copy(update={'permissions':SourcePermissions(store=True)})
+    assert not suggest_related_claim_quotations(claims,[hidden])[1].get('suggested_related_quotations')
+    repeated=source.model_copy(update={'text':text+' GDP increased in the first quarter of 2026.'})
+    assert not suggest_related_claim_quotations(claims,[repeated])[1].get('suggested_related_quotations')

@@ -1,0 +1,105 @@
+{
+  "checks": {
+    "revision_period_still_flagged": true,
+    "same_source_quarter_candidate": true,
+    "comparison_periods_still_flagged": true,
+    "comparison_candidate": true,
+    "no_automatic_attachment": true
+  },
+  "all_checks_pass": true,
+  "model_calls": 0,
+  "candidates": {
+    "1": [
+      {
+        "source_id": "source_29200000000000000000000000000001",
+        "quotation": "Real gross domestic product (GDP) increased at an annual rate of 1.6 percent in the first quarter of 2026\n(January, February, and March), according to the second estimate released today by the U.S. Bureau of\nEconomic Analysis. In the fourth quarter of 2025, real GDP increased 0.5 percent.",
+        "location": {
+          "character_start": 487,
+          "character_end": 776,
+          "page": 1
+        },
+        "matched_amounts": [
+          "Q1 2026"
+        ],
+        "from_claim_index": 0,
+        "status": "requires_semantic_review"
+      },
+      {
+        "source_id": "source_29200000000000000000000000000001",
+        "quotation": "0.9 percent in the first quarter of 2026, compared with an\nincrease of 1.6 percent in the fourth quarter of 2025. The average of real GDP and real GDI increased\n1.3 percent",
+        "location": {
+          "character_start": 4177,
+          "character_end": 4349,
+          "page": 3
+        },
+        "matched_amounts": [
+          "Q1 2026"
+        ],
+        "from_claim_index": 3,
+        "status": "requires_semantic_review"
+      },
+      {
+        "source_id": "source_29200000000000000000000000000001",
+        "quotation": "0.9 percent in the first quarter of 2026, compared with an\nincrease of 1.6 percent in the fourth quarter of 2025. The average of real GDP and real GDI increased\n1.3 percent, compared with an increase of 1.1 percent.",
+        "location": {
+          "character_start": 4177,
+          "character_end": 4392,
+          "page": 3
+        },
+        "matched_amounts": [
+          "Q1 2026"
+        ],
+        "from_claim_index": 4,
+        "status": "requires_semantic_review"
+      }
+    ],
+    "2": [
+      {
+        "source_id": "source_29200000000000000000000000000001",
+        "quotation": "Real gross domestic product (GDP) increased at an annual rate of 1.6 percent in the first quarter of 2026\n(January, February, and March), according to the second estimate released today by the U.S. Bureau of\nEconomic Analysis. In the fourth quarter of 2025, real GDP increased 0.5 percent.",
+        "location": {
+          "character_start": 487,
+          "character_end": 776,
+          "page": 1
+        },
+        "matched_amounts": [
+          "Q4 2025",
+          "Q1 2026"
+        ],
+        "from_claim_index": 0,
+        "status": "requires_semantic_review"
+      },
+      {
+        "source_id": "source_29200000000000000000000000000001",
+        "quotation": "0.9 percent in the first quarter of 2026, compared with an\nincrease of 1.6 percent in the fourth quarter of 2025. The average of real GDP and real GDI increased\n1.3 percent",
+        "location": {
+          "character_start": 4177,
+          "character_end": 4349,
+          "page": 3
+        },
+        "matched_amounts": [
+          "Q4 2025",
+          "Q1 2026"
+        ],
+        "from_claim_index": 3,
+        "status": "requires_semantic_review"
+      },
+      {
+        "source_id": "source_29200000000000000000000000000001",
+        "quotation": "0.9 percent in the first quarter of 2026, compared with an\nincrease of 1.6 percent in the fourth quarter of 2025. The average of real GDP and real GDI increased\n1.3 percent, compared with an increase of 1.1 percent.",
+        "location": {
+          "character_start": 4177,
+          "character_end": 4392,
+          "page": 3
+        },
+        "matched_amounts": [
+          "Q4 2025",
+          "Q1 2026"
+        ],
+        "from_claim_index": 4,
+        "status": "requires_semantic_review"
+      }
+    ]
+  },
+  "note": "Matching quarters do not establish metric, value, comparison or semantic support."
+}

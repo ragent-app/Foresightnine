@@ -85,6 +85,47 @@ def test_date_lead_is_a_reviewable_source_location_and_survives_version_save(mon
     assert saved_claim['suggested_related_quotations'][0]['from_claim_index'] == -2
 
 
+def test_related_quarter_citation_lead_survives_save_without_auto_attaching(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    source_id=''
+    donor_quote='GDP increased in the first quarter of 2026.'
+    target_quote='The estimate was revised.'
+    class Provider:
+        name='quarter-lead'
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {'claims':[{'text':'GDP increased in Q1 2026.','citations':[{'source_id':source_id,'quotation':donor_quote}]},
+                              {'text':'The Q1 2026 estimate was revised.','citations':[{'source_id':source_id,'quotation':target_quote}]}]},20
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    auth=client.post('/v1/auth/local/register',json={'email':f'quarter-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json();headers={'Authorization':'Bearer '+auth['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':donor_quote+' '+target_quote,
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'What changed?','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'quarter-lead'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'require_counterarguments':False}).json()['operation']
+    for _ in range(100):
+        state=client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'):break
+        time.sleep(.02)
+    assert state=='completed'
+    version=client.get(path,headers=headers).json()['versions'][-1];content=version['content'];claim=content['claims'][1]
+    assert content['run']['status']=='partial' and claim['uncited_quarters']==['Q1 2026']
+    assert claim['suggested_related_quotations'][0]['quotation']==donor_quote and len(claim['citations'])==1
+    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version['version_id'],'content':content,'note':'Review period'})
+    assert saved.status_code==201, saved.text
+    saved_version=saved.json()['versions'][-1];saved_claim=saved_version['content']['claims'][1]
+    assert saved_claim['uncited_quarters']==['Q1 2026'] and saved_claim['suggested_related_quotations'][0]['quotation']==donor_quote
+    edited=deepcopy(saved_version['content']);edited['claims'][1]['citations'].append({'source_id':source_id,'quotation':donor_quote})
+    updated=client.post(path+'/versions',headers=headers,json={'parent_version_id':saved_version['version_id'],'content':edited})
+    assert updated.status_code==201, updated.text
+    final=updated.json()['versions'][-1]['content']['claims'][1]
+    assert not final.get('uncited_quarters') and final['support_status']=='not_independently_verified'
+
+
 @pytest.mark.parametrize('mode', ['batch', 'isolated'])
 def test_review_of_flagged_claim_is_diagnostic_only_even_if_model_says_supports(monkeypatch, mode):
     from uuid import uuid4
