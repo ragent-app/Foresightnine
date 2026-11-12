@@ -1,0 +1,93 @@
+{
+  "source_attribution": "SEC EDGAR companyfacts, derived Microsoft observations; not an original filing.",
+  "payload": {
+    "claims": [
+      {
+        "text": "截至2023年6月30日的12個月收入為211,915,000,000美元，截至2022年6月30日的12個月收入為198,270,000,000美元。",
+        "citations": [
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"start\": \"2022-07-01\",\n      \"end\": \"2023-06-30\",\n      \"val\": 211915000000"
+          },
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000"
+          }
+        ]
+      },
+      {
+        "text": "兩條觀察的 fy 欄位均為2023，但這是填報會計年度標記，不代表各條資料的實際期間；實際期間應以 start/end 欄位為準（分別為2021-07-01至2022-06-30及2022-07-01至2023-06-30）。",
+        "citations": [
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"accn\": \"0000950170-23-035122\",\n      \"fy\": 2023"
+          }
+        ]
+      },
+      {
+        "text": "同比增長率應以兩條 val 數值計算（211,915,000,000 對比 198,270,000,000），約為6.88%；本助手不自行計算，僅提供公式與引用數值。",
+        "citations": [
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"concept\": \"us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax\",\n  \"unit\": \"USD\""
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "兩條觀察來自同一份申報檔案（accn 0000950170-23-035122），前一個財年數字為比較期間資料，可能未經後續重述修訂；若有更晚申報，數值可能不同。",
+        "citations": [
+          {
+            "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+            "quotation": "\"accn\": \"0000950170-23-035122\""
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "來源標記為 source_coverage: partial，摘錄並非完整申報文件。",
+      "來源未包含2021-06-30止期間或其他年度資料，無法計算更長期趨勢。",
+      "日期與數值為申報中宣告之資料，未經獨立驗證；未包含發布日期資訊。",
+      "未提供分部或地區明細。",
+      "實際同比增長百分比需由使用者依 facts 中的兩個數值執行計算；本助手不自行運算。",
+      "單位標記僅在概念層級給出（USD），各觀察列未重複單位欄位。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fy2023_revenue",
+        "label": "Revenue for 12 months ended 2023-06-30",
+        "value": "211915000000",
+        "unit": "USD",
+        "currency": "USD",
+        "period": "2022-07-01 to 2023-06-30",
+        "citation": {
+          "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+          "quotation": "\"start\": \"2022-07-01\",\n      \"end\": \"2023-06-30\",\n      \"val\": 211915000000"
+        }
+      },
+      {
+        "fact_id": "fy2022_revenue",
+        "label": "Revenue for 12 months ended 2022-06-30",
+        "value": "198270000000",
+        "unit": "USD",
+        "currency": "USD",
+        "period": "2021-07-01 to 2022-06-30",
+        "citation": {
+          "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+          "quotation": "\"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fy2023_revenue",
+        "second_fact_id": "fy2022_revenue"
+      }
+    ]
+  },
+  "reported_tokens": 1843,
+  "prompt_sha256": "cbe024f45d2a15d0f84233d761b02e9938657be2afa70cd8ef6476cb6196e2fd",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

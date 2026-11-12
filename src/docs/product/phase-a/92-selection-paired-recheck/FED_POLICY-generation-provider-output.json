@@ -1,0 +1,86 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; public FOMC statement.",
+  "payload": {
+    "claims": [
+      {
+        "text": "根據2022年11月2日的FOMC聲明，聯邦基金目標利率區間被上調至3-3/4至4%。",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 3-3/4 to 4 percent"
+          }
+        ]
+      },
+      {
+        "text": "決議對未來利率路徑的表述：委員會預期為達成貨幣政策立場，持續上調目標區間將是適當的。",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "quotation": "The Committee anticipates that ongoing increases in the target range will be appropriate in order to attain a stance of monetary"
+          }
+        ]
+      },
+      {
+        "text": "自2022年11月3日起生效，聯邦公開市場委員會指示交易檯透過公開市場操作將聯邦基金利率維持在3-3/4至4%的目標區間。",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "quotation": "Effective November 3, 2022, the Federal Open Market Committee directs the Desk to: o Undertake open market operations as necessary to maintain the federal funds rate in a target range of 3-3/4 to 4"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "未來路徑表述僅為「預期持續上調將是適當的」，屬前瞻指引而非承諾，具體加息幅度與時點仍取決於數據，不能確認未來每次會議都會加息。",
+        "citations": [
+          {
+            "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+            "quotation": "The Committee anticipates that ongoing increases in the target range will be appropriate in order to attain a stance of monetary"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的聲明文本為節錄（source_coverage為partial），非完整聲明；未見關於終端利率水平、縮表細節或數據依賴表述的完整段落。",
+      "聲明日期為declared_published_at（2022-11-02），未經獨立驗證。",
+      "無法從所附文本確認本次加息幅度（如由3-1/4至3-1/2%上調75個基點），因文本未包含前一區間。"
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr_target_lower",
+        "label": "聯邦基金目標利率區間下限",
+        "value": "3.75",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2022-11生效",
+        "citation": {
+          "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+          "quotation": "maintain the federal funds rate in a target range of 3-3/4 to 4"
+        }
+      },
+      {
+        "fact_id": "ffr_target_upper",
+        "label": "聯邦基金目標利率區間上限",
+        "value": "4.00",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2022-11生效",
+        "citation": {
+          "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+          "quotation": "raise the target range for the federal funds rate to 3-3/4 to 4 percent"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "ffr_target_upper",
+        "second_fact_id": "ffr_target_lower"
+      }
+    ]
+  },
+  "reported_tokens": 1441,
+  "prompt_sha256": "213539e52f53a2e81fe1ef5645451015566581f6c1ce4981f64e9bcb755b6d2e",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
