@@ -1,0 +1,146 @@
+{
+  "kind": "offline replay after dropping three known annotations; original frozen source selection; no model call or rescore",
+  "prompt_sha256_unchanged": true,
+  "discarded_fields": 3,
+  "claims": [
+    {
+      "text": "根据 BEA 第三次估计，2022 年第三季度实际 GDP 折年增长率为 3.2%。",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+          "location": {
+            "character_start": 384,
+            "character_end": 525,
+            "page": 1
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the third quarter of\n2022 (table 1), according to the \"third\""
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "相对第二次估计，第三次估计为向下修订 0.1 个百分点，据此可推断第二次估计为 3.3%（3.2% + 0.1pp，此为推断而非来源直接陈述）。",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+          "location": {
+            "character_start": 4881,
+            "character_end": 4934,
+            "page": 2
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "quarter, a downward revision of 0.1 percentage point."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "counterarguments": [
+    {
+      "text": "第二次估计值 3.3% 并非来源直接给出，而是由“向下修订 0.1 个百分点”推断而来；若修订基准或表述有歧义，则该推断可能不准确。",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+          "location": {
+            "character_start": 4881,
+            "character_end": 4934,
+            "page": 2
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "quarter, a downward revision of 0.1 percentage point."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "GDP 与 GDI 走势分歧（GDI 上调 0.5pp）表明对经济动能的解读存在不确定性，仅依赖 GDP 单一指标可能高估或低估增长。",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+          "location": {
+            "character_start": 4985,
+            "character_end": 5132,
+            "page": 3
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "Real gross domestic income (GDI) increased 0.8 percent in the third quarter, an upward revision of 0.5\npercentage point from the previous estimate."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "f1",
+      "value": "3.2",
+      "unit": "percent, annualized",
+      "currency": null,
+      "period": "2022 Q3",
+      "label": "real GDP annualized growth rate (third estimate)",
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the third quarter of\n2022 (table 1)",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 384,
+        "character_end": 499,
+        "page": 1
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "f3",
+      "value": "0.8",
+      "unit": "percent",
+      "currency": null,
+      "period": "2022 Q3",
+      "label": "real GDI growth (third estimate)",
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "quotation": "Real gross domestic income (GDI) increased 0.8 percent in the third quarter",
+      "quotation_match": "exact",
+      "location": {
+        "character_start": 4985,
+        "character_end": 5060,
+        "page": 3
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "f4",
+      "value": "0.5",
+      "unit": "percentage point",
+      "currency": null,
+      "period": "2022 Q3",
+      "label": "real GDI upward revision from previous estimate",
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "quotation": "an upward revision of 0.5\npercentage point from the previous estimate",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 5062,
+        "character_end": 5131,
+        "page": 3
+      },
+      "verification": "model_extraction_not_independently_verified"
+    }
+  ],
+  "calculations": [],
+  "limitations": [
+    "Source source_50bc8202c2d84f0d9ca7599367f17b0b: only character ranges 225–526, 4881–5193 were analyzed; remaining text was not examined.",
+    "A model-generated fact value was absent from its quotation and was omitted.",
+    "A requested calculation was omitted because its input facts were unavailable.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "来源为节选（partial coverage），未包含表格 1 或完整报告，无法直接核验第二次估计的原始数值。",
+    "来源声明发布日期为 2022-12-22，为声明值而非经独立验证；发布日期与数据所属期间（2022 年第三季度）需区分。",
+    "来源未说明修订的具体原因或分项构成，无法解释修订驱动因素。",
+    "第三次估计仍非最终数据，BEA 通常后续还有年度修订，来源未涉及。",
+    "PDF 摘录可能存在压缩或列错位，节选内容不代表完整原文。"
+  ]
+}

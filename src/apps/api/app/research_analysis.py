@@ -741,6 +741,28 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     if on_prepare is not None:
         on_prepare(segments)
     raw, tokens = generate(prompt)
+    # Two common, non-contractual annotations can be discarded without using
+    # their content. Do not broadly ignore extra fields: unknown structure and
+    # non-string or oversized annotations still fail schema validation.
+    discarded_annotations = 0
+    if isinstance(raw, dict):
+        cleaned = dict(raw)
+        for field, extra, limit, max_rows in (("claims", "status", 100, 30), ("counterarguments", "status", 100, 20),
+                                              ("calculations", "note", 1000, 50)):
+            rows = raw.get(field)
+            if not isinstance(rows, list) or len(rows) > max_rows:
+                continue
+            result_rows = []
+            for row in rows:
+                value = row.get(extra) if isinstance(row, dict) else None
+                if isinstance(value, str) and len(value) <= limit:
+                    row = {key: value for key, value in row.items() if key != extra}
+                    discarded_annotations += 1
+                result_rows.append(row)
+            cleaned[field] = result_rows
+        raw = cleaned
+    if discarded_annotations:
+        limitations.append("Non-schema model annotations were omitted and were not used; retained results still require source review.")
     # A nonnumeric or incomplete fact cannot be used by the deterministic
     # calculator. Drop only those facts, disclose the omission, and continue
     # validating all remaining claims and citations against the source.

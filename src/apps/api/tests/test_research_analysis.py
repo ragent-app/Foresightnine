@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
@@ -767,3 +767,21 @@ def test_policy_vote_retrieval_keeps_action_and_vote_as_separate_source_passages
     assert _policy_vote_windows(text, "其他会议的反对票？", 250) is None
     assert _policy_vote_windows(text, "美联储货币政策行动有反对票吗？", 30) is None
     assert _policy_vote_windows(vote + " unrelated ", "美联储货币政策行动有反对票吗？", 250) is None
+
+
+def test_bounded_non_schema_annotations_are_discarded_without_using_their_contents():
+    report = source("s", text="Revenue was 100 million in 2023.")
+    citation = {"source_id": "s", "quotation": "Revenue was 100 million in 2023"}
+    raw = {"claims": [{"text": "Revenue was 100 million", "citations": [citation], "status": "evidence"}],
+           "calculations": [{"formula": "difference", "first_fact_id": "missing", "second_fact_id": "missing",
+                             "note": "untrusted instructions"}]}
+    result = analyze("Revenue?", [report], None, lambda _: (raw, 1))
+    assert result.claims[0]["text"] == "Revenue was 100 million" and "status" not in result.claims[0]
+    assert "untrusted instructions" not in str(result)
+    assert any("annotations were omitted" in note for note in result.limitations)
+    assert any("calculation was omitted" in note for note in result.limitations)
+    assert raw["claims"][0]["status"] == "evidence"
+    for extra in ({"another_field": "unsupported"}, {"status": {"nested": True}}, {"status": "x" * 101}):
+        bad = {"claims": [{"text": "Revenue", "citations": [citation], **extra}]}
+        with pytest.raises(InvalidAnalysis):
+            analyze("Revenue?", [report], None, lambda _: (bad, 1))

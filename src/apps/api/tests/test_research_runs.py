@@ -1142,3 +1142,35 @@ def test_budget_exhaustion_keeps_selected_source_without_claiming_a_call(monkeyp
     assert content["run"]["prompt_sha256"] is None
     assert [item["source_id"] for item in content["sources"]] == [src["source_id"]]
     assert any("selected for analysis" in note for note in content["limitations"])
+
+
+def test_discarded_model_annotations_keep_research_partial(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "extra-metadata-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {"claims": [{"text": "Revenue was 100", "status": "evidence", "citations": [
+                {"source_id": source_id, "quotation": "Revenue was 100"}]}], "counterarguments": []}, 10
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register", json={"email": "extra-model-fields@example.test",
+        "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "extra-metadata-001"},
+        json={"parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": False}).json()
+    op = receipt["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert status == "completed"
+    content = client.get(path, headers=headers).json()["versions"][-1]["content"]
+    assert content["run"]["status"] == "partial" and content["run"]["error"] is None
+    assert content["claims"][0]["text"] == "Revenue was 100"
+    assert any("annotations were omitted" in note for note in content["limitations"])
