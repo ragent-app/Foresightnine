@@ -211,6 +211,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   if (!accountId || !api) return <p role="status">{en ? "Sign in to create private research." : "登录后即可创建私人研究。"}</p>;
   const running = !!operation && ["pending", "running"].includes(operation.status);
   const hasMaterial = sourceMode === "sec" ? Boolean(cik.trim()) : sourceMode === "file" ? Boolean(file) : Boolean(text.trim() || url.trim());
+  const hasMaterialDraft = Boolean(title.trim() || text.trim() || url.trim() || publishedAt || eventAt || revisedAt || file || cik.trim() || filingBefore || issuerQuery.trim());
 
   function updateFact(index: number, patch: Partial<ResearchFact>) {
     setFacts((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
@@ -240,6 +241,24 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setTitle(""); setText(""); setUrl(""); setPublishedAt(""); setEventAt(""); setRevisedAt(""); setCik(""); setFilingBefore(""); setFile(null); setFileInputKey((value) => value + 1);
     setConfirmRights(false); setModelInput(false); setAllowExport(false); setIsSimulated(false); setPdfTextOrder("layout");
     setIssuerQuery(""); setIssuerCandidates([]); setIssuerRetrievedAt("");
+  }
+
+  function selectCandidate(candidate: { title: string; url: string }) {
+    if (hasMaterialDraft) {
+      setNotice(en ? "Finish adding the current material, or clear it before choosing another source." : "请先添加当前资料，或清空当前资料后再选择其他来源。");
+      if (sourceDetails.current) {
+        sourceDetails.current.open = true;
+        sourceDetails.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return;
+    }
+    pendingSource.current = null;
+    setConfirmRights(false); setModelInput(false); setAllowExport(false); setIsSimulated(false);
+    setTitle(candidate.title); setUrl(candidate.url); setSourceMode("text"); setCandidates([]); setNotice("");
+    if (sourceDetails.current) {
+      sourceDetails.current.open = true;
+      sourceDetails.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   async function searchIssuers() {
@@ -424,7 +443,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <Field label={en ? "Research question" : "研究问题"}><Textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={en ? "What would you like to investigate?" : "你想研究什么？"} /></Field>
         <Field label={en ? "Research cutoff (optional)" : "研究截止时间（可选）"} helper={en ? "Uses your device's local time." : "使用设备所在时区。"}><Input type="datetime-local" value={asOf} onChange={(event) => setAsOf(event.target.value)} /></Field>
         <Button disabled={busy || !question.trim()} onClick={() => void discover()}>{en ? "Find sources" : "查找资料"}</Button>
-        {candidates.length ? <section className="general-candidates"><p>{en ? "Search results are unverified leads." : "搜索结果是待核验线索。"}</p>{candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.excerpt}</p><Button onClick={() => { setTitle(candidate.title); setUrl(candidate.url); setSourceMode("text"); setCandidates([]); if (sourceDetails.current) sourceDetails.current.open = true; }}>{en ? "Use link" : "使用链接"}</Button></article>)}</section> : null}
+        {candidates.length ? <section className="general-candidates"><p>{en ? "Search results are unverified leads." : "搜索结果是待核验线索。"}</p>{candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.excerpt}</p><Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Use link" : "使用链接"}</Button></article>)}</section> : null}
         <details className="general-source" ref={sourceDetails}><summary>{en ? "Add material (optional)" : "添加资料（可选）"}</summary>
           <Field label={en ? "Source type" : "资料类型"}><select className="text-input select-input" value={sourceMode} onChange={(event) => { const mode = event.target.value as "text" | "sec" | "file"; setSourceMode(mode); if (mode === "sec") setIsSimulated(false); }}><option value="text">{en ? "Text or official page" : "正文或官方网页"}</option><option value="file">{en ? "PDF document" : "PDF 文档"}</option><option value="sec">{en ? "SEC company concept" : "SEC 公司财务指标"}</option></select></Field>
           {sourceMode === "sec" ? <>
@@ -459,6 +478,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
           <label><input type="checkbox" checked={confirmRights} onChange={(event) => setConfirmRights(event.target.checked)} /> {en ? "I may store this material." : "我有权保存这份资料。"}</label>
           <label><input type="checkbox" checked={modelInput} onChange={(event) => setModelInput(event.target.checked)} /> {en ? "Allow model processing." : "允许模型处理这份资料。"}</label>
           <label><input type="checkbox" checked={allowExport} onChange={(event) => setAllowExport(event.target.checked)} /> {en ? "Allow export of this material." : "允许导出这份资料。"}</label>
+          {hasMaterialDraft ? <Button disabled={busy || running} onClick={() => { clearMaterial(); setNotice(""); }}>{en ? "Clear current material" : "清空当前资料"}</Button> : null}
           {topic ? <Button disabled={busy || running || !isLatest || !hasMaterial} onClick={() => void attachMaterial()}>{en ? "Add to current research" : "添加到当前研究"}</Button> : null}
         </details>
         <Button variant="primary" disabled={busy || (!question.trim() && !hasMaterial)} onClick={() => void create()}>{en ? "Create research" : "创建研究"}</Button>
@@ -502,7 +522,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.content.run.checkpoint === "generation" ? <p role="status">{en ? "Generation checkpoint: citation review had not finished when this draft was saved." : "生成阶段草稿：保存此版本时，引文复查尚未完成。"}</p> : null}
       {current.content.run.support_review_requested ? <p>{en ? "Model support review: " : "模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
       <h3>{en ? "Sources" : "资料来源"}</h3>
-      {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.published_at || (en ? "Publication date unknown" : "公开时间未知")}</p><Button onClick={() => { setTitle(candidate.title); setUrl(candidate.url); setSourceMode("text"); if (sourceDetails.current) { sourceDetails.current.open = true; sourceDetails.current.scrollIntoView({ behavior: "smooth", block: "start" }); } }}>{en ? "Attach source" : "添加此来源"}</Button></article>)}</section> : null}
+      {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.published_at || (en ? "Publication date unknown" : "公开时间未知")}</p><Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Attach source" : "添加此来源"}</Button></article>)}</section> : null}
       {sourceMetadata.length ? <><p>{en ? "Attached material (declared dates are not independently verified)" : "已关联资料（声明的时间尚未独立核验）"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.is_simulated ? <strong>{en ? "(simulated; excluded from real research)" : "（模拟，未用于真实研究）"}</strong> : null} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : <><br /><SourceTimes source={source} en={en} /></>}{source.retrieval_method === "official_html" ? <p><small>{en ? "Extracted webpage text; table separators and span markers, when present, are generated. Check the original webpage for layout." : "网页提取文本；表格中的分隔符和合并单元格标记（如有）由系统生成，请查阅原网页确认排版。"}</small></p> : null}{source.retrieval_method === "user_pdf" ? <p><small>{en ? "PDF text order: " : "PDF 文字读取方式："}{source.pdf_text_order === "layout" ? (en ? "preserve layout" : "保留版式") : source.pdf_text_order === "reading" ? (en ? "reading order" : "阅读顺序") : (en ? "not recorded for this older source" : "旧资料未记录")}</small></p> : null}{source.retrieval_method === "user_pdf" && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id)}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
       {current.content.sources.length ? <ul>{current.content.sources.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} <SourceTimes source={source} en={en} /></li>; })}</ul> : <p>{en ? "No source analyzed." : "尚无已分析来源。"}</p>}
       {facts.length ? <>
