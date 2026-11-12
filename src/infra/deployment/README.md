@@ -36,7 +36,9 @@ Public deployment is a gated release-candidate exercise. The deployer must recor
 
 The local Compose stack has a repository-external backup helper. It writes a
 PostgreSQL custom dump, a Redis RDB snapshot, and a SHA-256 sidecar without
-printing credentials:
+printing credentials. The files are not redacted and may contain private
+research, account data, and sensitive configuration: restrict access and
+apply the deployment's encryption and retention policy:
 
 ```bash
 bash src/infra/deployment/backup-staging.sh /absolute/path/outside/Foresightnine-backups
@@ -46,5 +48,18 @@ The helper has no restore mode. A restore is an owner-approved destructive
 operation and must be performed into a separately verified database/Redis
 target before any traffic is exposed. Do not put backup files in the Git
 checkout or commit them.
+
+To exercise research backup and restore without touching the Compose data,
+run the opt-in test from `src` with Docker available:
+
+```bash
+FORESIGHTNINE_TEST_DISPOSABLE_DOCKER_BACKUP=1 uv run --project apps/api pytest apps/api/tests/test_research_backup_restore.py -q
+```
+
+It creates two uniquely named temporary PostgreSQL containers, writes synthetic
+accounts and research data, restores a custom dump into the empty second
+container, verifies access and operation replay, and removes the containers.
+This drill does not test production backup policies, external file stores,
+Redis recovery, encryption, or a live environment's credentials.
 
 No step above authorizes brokerage connectivity, order routing, custody, or real-money execution. Those remain out of scope and would require a separate approved product and regulatory design.
