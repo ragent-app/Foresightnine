@@ -1,0 +1,57 @@
+{
+  "baseline": {
+    "monitoring_claims": [
+      {
+        "claim_index": 0,
+        "mentioned": [
+          "labor"
+        ],
+        "missing_exact_terms_from_quotations": []
+      },
+      {
+        "claim_index": 2,
+        "mentioned": [
+          "health"
+        ],
+        "missing_exact_terms_from_quotations": []
+      },
+      {
+        "claim_index": 3,
+        "mentioned": [
+          "labor",
+          "health",
+          "inflation",
+          "international"
+        ],
+        "missing_exact_terms_from_quotations": [
+          "labor",
+          "health",
+          "inflation",
+          "international"
+        ]
+      }
+    ],
+    "mechanical_only": true,
+    "semantic_support": "not independently established"
+  },
+  "variant": {
+    "monitoring_claims": [
+      {
+        "claim_index": 1,
+        "mentioned": [
+          "labor"
+        ],
+        "missing_exact_terms_from_quotations": []
+      },
+      {
+        "claim_index": 5,
+        "mentioned": [
+          "health"
+        ],
+        "missing_exact_terms_from_quotations": []
+      }
+    ],
+    "mechanical_only": true,
+    "semantic_support": "not independently established"
+  }
+}
