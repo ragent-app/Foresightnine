@@ -806,7 +806,7 @@
           },
           "max_model_calls": {
             "default": 1,
-            "maximum": 2.0,
+            "maximum": 10.0,
             "minimum": 0.0,
             "title": "Max Model Calls",
             "type": "integer"
@@ -861,6 +861,15 @@
             "default": false,
             "title": "Support Review",
             "type": "boolean"
+          },
+          "support_review_mode": {
+            "default": "batch",
+            "enum": [
+              "batch",
+              "isolated"
+            ],
+            "title": "Support Review Mode",
+            "type": "string"
           }
         },
         "required": [

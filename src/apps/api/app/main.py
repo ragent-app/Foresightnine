@@ -100,8 +100,9 @@ from .research_calculations import CalculationError, CalculationRequest, Numeric
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
-from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
-                                    apply_partial_support_review, prepare_support_review)
+from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
+                                    apply_partial_support_review, prepare_support_review,
+                                    prepare_isolated_support_reviews, parse_isolated_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
@@ -2091,6 +2092,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         run_request_payload.pop("require_counterarguments", None)
     if not request.include_scope_in_search:
         run_request_payload.pop("include_scope_in_search", None)
+    if request.support_review_mode == "batch":
+        run_request_payload.pop("support_review_mode", None)
     if request.focus_citation is None:
         run_request_payload.pop("focus_citation", None)
     existing = operations.replay_async(endpoint=f"/v1/research/topics/{topic_id}/runs", idempotency_key=idempotency_key,
@@ -2318,7 +2321,180 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         review_omissions: list[dict[str, Any]] = ([{"claim_index": index, "reason": "not_started"}
                                                    for index in range(len(claims))] if request.support_review else [])
         review_failed_indexes: list[int] = []
-        if request.support_review:
+        isolated_records: list[dict[str, Any]] = []
+        if request.support_review and request.support_review_mode == "isolated":
+            review_status = "not_reviewable"
+            policy = getattr(provider, "policy", None)
+            input_limit = getattr(policy, "max_input_tokens", None)
+            output_limit = getattr(policy, "max_output_tokens", None)
+            timeout = getattr(policy, "timeout_seconds", None)
+            if calls and claims and request.max_model_calls < 2:
+                review_status = "budget_exhausted"
+                review_omissions = [{"claim_index": i, "reason": "call_budget"} for i in range(len(claims))]
+            elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
+                per_call = input_limit + output_limit
+                review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
+                review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if i in discrepancy_indexes else {})}
+                                 for i, claim in enumerate(claims)]
+                try:
+                    plan = prepare_isolated_support_reviews(review_claims,
+                        [s for s in sources if s.source_id in analysis.source_ids], review_budget,
+                        should_stop=lambda: monotonic() >= deadline or operations.cancel_event(operation_id).is_set())
+                except AnalysisInterrupted:
+                    _raise_if_operation_cancelled(operation_id)
+                    plan = None
+                    review_status = "budget_exhausted"
+                    review_omissions = [{"claim_index": i, "reason": "time_budget"} for i in range(len(claims))]
+                if plan is not None:
+                    review_omissions = list(plan.omissions) + [{"claim_index": b.indexes[0], "reason": "not_started"} for b in plan.batches]
+                    review_omissions.sort(key=lambda item: item["claim_index"])
+                    isolated_records = [{"claim_index": b.indexes[0], "prompt_sha256": b.prompt_sha256,
+                                         "segments": b.segments, "status": "not_started"} for b in plan.batches]
+                    claims = [{key: value for key, value in claim.items() if key != "support_review"} for claim in claims]
+                    consumed = generation_usage if generation_usage is not None else per_call
+                    review_usages: list[int | None] = []
+
+                    def isolated_omission(index: int, reason: str | None) -> None:
+                        nonlocal review_omissions
+                        review_omissions = [item for item in review_omissions if item["claim_index"] != index]
+                        if reason is not None:
+                            review_omissions.append({"claim_index": index, "reason": reason})
+                        review_omissions.sort(key=lambda item: item["claim_index"])
+
+                    def save_isolated_checkpoint() -> None:
+                        nonlocal checkpoint_parent
+                        try:
+                            current = research_topics.get(account.account_id, topic_id).versions[-1]
+                            expected = checkpoint_parent or request.parent_version_id
+                            if current.version_id != expected:
+                                raise TopicVersionConflict()
+                            partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
+                                sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
+                                calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
+                                limitations=[*discovery_notes, *analysis.limitations,
+                                    "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
+                                run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
+                                     **({"question_override": request.question_override} if request.question_override is not None else {}),
+                                     "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
+                                     "support_review_tokens": review_usage, "cost_usd": None,
+                                     "cost_status": "unknown" if calls or search_calls else "no_external_call",
+                                     "support_review_requested": True, "support_review_mode": "isolated",
+                                     "support_review_status": "pending", "support_review_method": ISOLATED_REVIEW_METHOD,
+                                     "support_review_indexes": list(review_indexes), "support_review_omissions": list(review_omissions),
+                                     "support_review_calls": list(isolated_records), "search_calls": search_calls,
+                                     "require_counterarguments": request.require_counterarguments,
+                                     "model": getattr(getattr(provider, "settings", None), "model", None),
+                                     "provider": getattr(provider, "name", None), "prompt_sha256": analysis.prompt_sha256,
+                                     "prompt_characters": analysis.prompt_characters, "prompt_bytes": analysis.prompt_bytes,
+                                     "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+                                     "selection_method": RESEARCH_SELECTION_METHOD, "selected_segments": analysis.segments,
+                                     "source_hashes": {s.source_id: s.content_sha256 for s in sources},
+                                     "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
+                                     "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
+                                     "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                            saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
+                                parent_version_id=expected, content=partial, note=current.note), source_ids=source_ids, created_by="agent")
+                            checkpoint_parent = saved.versions[-1].version_id
+                        except (TopicNotFound, TopicVersionConflict) as error:
+                            raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
+
+                    if plan.batches:
+                        if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
+                            _raise_if_operation_cancelled(operation_id)
+                            raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
+                        review_status = "partial"
+                    for position, batch in enumerate(plan.batches):
+                        index = batch.indexes[0]
+                        _raise_if_operation_cancelled(operation_id)
+                        reason = ("call_budget" if calls >= request.max_model_calls else
+                                  "token_budget" if consumed + per_call > request.max_total_tokens else
+                                  "time_budget" if monotonic() >= deadline else None)
+                        if reason:
+                            for pending in plan.batches[position:]:
+                                isolated_omission(pending.indexes[0], reason)
+                            if not review_indexes:
+                                review_status = "budget_exhausted"
+                            break
+                        call_id = f"{operation_id}:support-review:{index}"
+                        reported: int | None = None
+                        try:
+                            _reserve_model_call(http_request, call_id, token_budget=per_call)
+                            remaining = deadline - monotonic()
+                            if remaining <= 0:
+                                _settle_model_call(http_request, call_id, 0)
+                                for pending in plan.batches[position:]:
+                                    isolated_omission(pending.indexes[0], "time_budget")
+                                if not review_indexes:
+                                    review_status = "budget_exhausted"
+                                break
+                            calls += 1
+                            review_indexes.append(index)
+                            review_segments.extend(batch.segments)
+                            isolated_records[position]["status"] = "in_progress"
+                            isolated_omission(index, "in_progress")
+                            try:
+                                if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
+                                    _raise_if_operation_cancelled(operation_id)
+                                    raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
+                            except BaseException:
+                                # No provider call has been made yet.
+                                _settle_model_call(http_request, call_id, 0)
+                                raise
+                            remaining = deadline - monotonic()
+                            if remaining <= 0:
+                                _settle_model_call(http_request, call_id, 0)
+                                calls -= 1
+                                review_indexes.pop()
+                                if batch.segments:
+                                    del review_segments[-len(batch.segments):]
+                                isolated_records[position]["status"] = "not_started"
+                                for pending in plan.batches[position:]:
+                                    isolated_omission(pending.indexes[0], "time_budget")
+                                if not review_indexes:
+                                    review_status = "budget_exhausted"
+                                break
+                            try:
+                                raw_review, reported_raw = generate_structured(batch.prompt,
+                                    cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
+                                    timeout_seconds=min(float(timeout), remaining))
+                                reported = reported_raw if type(reported_raw) is int and reported_raw >= 0 else None
+                            except ProviderFailure as error:
+                                reported = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                raise
+                            finally:
+                                _settle_model_call(http_request, call_id, reported)
+                                review_usages.append(reported)
+                                consumed += reported if reported is not None else per_call
+                                review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
+                                usage = generation_usage + review_usage if generation_usage is not None and review_usage is not None else None
+                            _raise_if_operation_cancelled(operation_id)
+                            mapped_index, verdict = parse_isolated_support_review(batch, raw_review)
+                            claims[mapped_index] = {**claims[mapped_index], "support_review": {
+                                "verdict": verdict, "method": ISOLATED_REVIEW_METHOD, "independently_verified": False}}
+                            isolated_records[position].update(status="completed", reported_tokens=reported)
+                            isolated_omission(index, None)
+                            if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
+                                _raise_if_operation_cancelled(operation_id)
+                                raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
+                        except (ProviderFailure, InvalidReview, ApiProblem) as error:
+                            _raise_if_operation_cancelled(operation_id)
+                            # Version conflicts must remain visible rather than
+                            # being converted into a successful partial review.
+                            if isinstance(error, ApiProblem) and error.error_code == "lifecycle_conflict":
+                                raise
+                            review_status = "failed"
+                            review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
+                            review_failed_indexes.append(index)
+                            isolated_records[position].update(status="failed", reported_tokens=reported)
+                            isolated_omission(index, "review_failed")
+                            for pending in plan.batches[position + 1:]:
+                                isolated_omission(pending.indexes[0], "review_failure")
+                            break
+                    if review_status not in {"failed", "budget_exhausted"} and plan.batches:
+                        review_status = "partial" if review_omissions else "complete"
+        elif request.support_review:
             review_status = "not_reviewable"
             policy = getattr(provider, "policy", None)
             input_limit = getattr(policy, "max_input_tokens", None)
@@ -2494,11 +2670,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,
                      "require_counterarguments": request.require_counterarguments,
                      "support_review_requested": request.support_review, "support_review_status": review_status,
-                     "support_review_error": review_error, "support_review_method": REVIEW_METHOD if request.support_review else None,
+                     "support_review_error": review_error,
+                     "support_review_mode": request.support_review_mode if request.support_review else None,
+                     "support_review_method": (ISOLATED_REVIEW_METHOD if request.support_review_mode == "isolated" else REVIEW_METHOD) if request.support_review else None,
                      "analysis_error_detail": analysis_error_detail,
                      "support_review_prompt_sha256": review_hash, "support_review_indexes": review_indexes,
                      "support_review_omissions": review_omissions, "support_review_failed_indexes": review_failed_indexes,
                      "support_review_segments": review_segments,
+                     **({"support_review_calls": isolated_records} if request.support_review and request.support_review_mode == "isolated" else {}),
                      "support_review_system_sha256": sha256(REVIEW_SYSTEM_PROMPT.encode("utf-8")).hexdigest() if request.support_review else None,
                      "search_calls": search_calls, "search_status": search_status,
                      "elapsed_seconds": round(monotonic() - started, 3),

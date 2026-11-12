@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import json
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -25,6 +25,7 @@ REVIEW_SYSTEM_PROMPT = (
     "JSON schema. This model assessment is not independent proof."
 )
 REVIEW_METHOD = "bounded_quotation_context_model_review_v23"
+ISOLATED_REVIEW_METHOD = REVIEW_METHOD + "_isolated"
 
 
 class ReviewEntry(BaseModel):
@@ -167,7 +168,8 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions)
 
 
-def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchSource], max_bytes: int) -> IsolatedReviewPlan:
+def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchSource], max_bytes: int,
+                                     should_stop: Callable[[], bool] | None = None) -> IsolatedReviewPlan:
     """Prepare separate bounded prompts, retaining original claim indexes.
 
     This only prepares prompts; the caller must separately enforce call,
@@ -176,6 +178,9 @@ def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchS
     batches: list[ReviewBatch] = []
     omissions: list[dict[str, int | str | bool]] = []
     for original_index in _review_order(claims):
+        if should_stop is not None and should_stop():
+            from .research_analysis import AnalysisInterrupted
+            raise AnalysisInterrupted()
         single = prepare_support_review([claims[original_index]], sources, max_bytes)
         if not single.indexes:
             omissions.extend({**item, "claim_index": original_index} for item in single.omissions)

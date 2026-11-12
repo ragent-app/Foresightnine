@@ -1379,6 +1379,194 @@ def test_partial_support_review_records_omissions_and_leaves_other_claims_unrevi
     assert checkpoint["support_review_segments"][0]["claim_index"] == reviewed
 
 
+def test_isolated_review_respects_token_budget_and_checkpoints_each_result(monkeypatch):
+    import json
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    calls = []
+    class Provider:
+        name = "isolated-review-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                payload = json.loads(prompt)
+                assert len(payload["claims"]) == 1 and payload["claims"][0]["claim_index"] == 0
+                calls.append(payload["claims"][0]["text"])
+                return {"reviews":[{"claim_index":0,"verdict":"supports"}]}, 10
+            def c(text): return {"text":text,"citations":[{"source_id":source_id,"quotation":text}]}
+            return {"claims":[c("Revenue was 100"),c("Profit was 20")],"counterarguments":[c("Cash was 30")]}, 20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register",json={"email":"isolated-budget@example.test","password":"correct horse battery staple!"}).json()
+    headers = {"Authorization":"Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue was 100. Profit was 20. Cash was 30.",
+        "permissions":{"store":True,"model_input":True,"display":True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics",headers=headers,json={"question":"Financial figures?","source_ids":[source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    payload = {"parent_version_id":topic["versions"][0]["version_id"], "support_review":True,
+        "support_review_mode":"isolated", "max_model_calls":5, "max_total_tokens":4530}
+    receipt = client.post(path+"/runs",headers={**headers,"Idempotency-Key":"isolated-budget"},json=payload)
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    versions = client.get(path,headers=headers).json()["versions"]
+    content = versions[-1]["content"]; run = content["run"]
+    assert calls == ["Revenue was 100", "Cash was 30"]
+    assert run["status"] == "partial" and run["support_review_status"] == "partial"
+    assert run["model_calls"] == 3 and run["total_tokens"] == 40 and run["support_review_tokens"] == 20
+    assert run["support_review_indexes"] == [0,2] and run["support_review_omissions"] == [{"claim_index":1,"reason":"token_budget"}]
+    assert content["claims"][0]["support_review"]["verdict"] == "supports"
+    assert content["claims"][2]["support_review"]["verdict"] == "supports"
+    assert "support_review" not in content["claims"][1]
+    checkpoints = [v["content"] for v in versions if v["content"].get("run",{}).get("checkpoint") == "isolated_review"]
+    assert len(checkpoints) == 5
+    assert "support_review" not in checkpoints[0]["claims"][0]
+    assert checkpoints[1]["run"]["support_review_omissions"][0]["reason"] == "in_progress"
+    assert checkpoints[2]["claims"][0]["support_review"]["verdict"] == "supports"
+    assert "support_review" not in checkpoints[2]["claims"][2]
+    assert checkpoints[4]["claims"][2]["support_review"]["verdict"] == "supports"
+    replay = client.post(path+"/runs",headers={**headers,"Idempotency-Key":"isolated-budget"},json=payload)
+    assert replay.status_code == 202 and replay.headers["Idempotency-Replayed"] == "true" and len(calls) == 2
+
+
+def test_isolated_review_cancellation_preserves_previous_checkpoint(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    entered, release = Event(), Event()
+    reviews = []
+    class Provider:
+        name = "isolated-cancel-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                reviews.append(prompt)
+                if len(reviews) == 2:
+                    entered.set()
+                    assert release.wait(5)
+                return {"reviews":[{"claim_index":0,"verdict":"supports"}]}, 10
+            def c(text): return {"text":text,"citations":[{"source_id":source_id,"quotation":text}]}
+            return {"claims":[c("Revenue was 100"),c("Profit was 20")],"counterarguments":[]}, 20
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register",json={"email":"isolated-cancel@example.test","password":"correct horse battery staple!"}).json()
+    headers = {"Authorization":"Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue was 100. Profit was 20.",
+        "permissions":{"store":True,"model_input":True,"display":True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics",headers=headers,json={"question":"Financial figures?","source_ids":[source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path+"/runs",headers={**headers,"Idempotency-Key":"isolated-cancel"},json={
+        "parent_version_id":topic["versions"][0]["version_id"],"support_review":True,"support_review_mode":"isolated",
+        "max_model_calls":3,"max_total_tokens":9000,"require_counterarguments":False}).json()["operation"]
+    try:
+        assert entered.wait(5)
+        before = client.get(path,headers=headers).json()["versions"]
+        checkpoint = before[-1]["content"]
+        assert checkpoint["run"]["checkpoint"] == "isolated_review"
+        assert checkpoint["claims"][0]["support_review"]["verdict"] == "supports"
+        assert "support_review" not in checkpoint["claims"][1]
+        stopped = client.post("/v1/operations/"+receipt["operation_id"]+"/cancel",
+            headers={**headers,"Idempotency-Key":"cancel-isolated"},json={"cancel_token":receipt["cancel_token"]})
+        assert stopped.status_code == 200 and stopped.json()["operation"]["status"] == "cancelled"
+        release.set()
+        for _ in range(100):
+            if not api.operations._pending_provider_executions.get(receipt["operation_id"]): break
+            time.sleep(.02)
+        after = client.get(path,headers=headers).json()["versions"]
+        assert len(after) == len(before)
+        assert after[-1]["content"]["claims"][0]["support_review"]["verdict"] == "supports"
+        assert "support_review" not in after[-1]["content"]["claims"][1]
+    finally:
+        release.set()
+
+
+def test_isolated_review_does_not_overwrite_concurrent_user_revision(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    entered, release = Event(), Event()
+    class Provider:
+        name = "isolated-edit-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                self.reviews = getattr(self, "reviews", 0) + 1
+                if self.reviews == 2:
+                    entered.set()
+                    assert release.wait(5)
+                return {"reviews":[{"claim_index":0,"verdict":"supports"}]}, 10
+            def c(text): return {"text":text,"citations":[{"source_id":source_id,"quotation":text}]}
+            return {"claims":[c("Revenue was 100"),c("Profit was 20")],"counterarguments":[]},20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register", json={"email":"isolated-edit@example.test","password":"correct horse battery staple!"}).json()
+    headers = {"Authorization":"Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title":"Report","text":"Revenue was 100. Profit was 20.",
+        "permissions":{"store":True,"model_input":True,"display":True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question":"Financial figures?","source_ids":[source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"isolated-edit"}, json={
+        "parent_version_id":topic["versions"][0]["version_id"],"support_review":True,"support_review_mode":"isolated",
+        "max_model_calls":3,"max_total_tokens":9000,"require_counterarguments":False}).json()["operation"]
+    try:
+        assert entered.wait(5)
+        checkpoint = client.get(path, headers=headers).json()["versions"][-1]
+        assert checkpoint["content"]["claims"][0]["support_review"]["verdict"] == "supports"
+        edited = deepcopy(checkpoint["content"]); edited["summary"] = "User revision"
+        saved = client.post(path + "/versions", headers=headers, json={"parent_version_id":checkpoint["version_id"],"content":edited})
+        assert saved.status_code == 201
+        release.set()
+        for _ in range(100):
+            status = client.get(path + "/runs/" + receipt["operation_id"],headers=headers).json()["operation"]["status"]
+            if status in {"failed","completed"}: break
+            time.sleep(.02)
+        assert status == "failed"
+        latest = client.get(path, headers=headers).json()["versions"][-1]["content"]
+        assert latest["summary"] == "User revision"
+        assert latest["claims"][0]["support_review"]["verdict"] == "supports"
+        assert "support_review" not in latest["claims"][1]
+    finally:
+        release.set()
+
+
+def test_isolated_review_failure_keeps_prior_verdict_and_marks_remaining(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    review_calls = []
+    class Provider:
+        name = "isolated-failure-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                review_calls.append(prompt)
+                index = 0 if len(review_calls) == 1 else 9
+                return {"reviews":[{"claim_index":index,"verdict":"supports"}]}, 10
+            def c(text): return {"text":text,"citations":[{"source_id":source_id,"quotation":text}]}
+            return {"claims":[c("Revenue was 100"),c("Profit was 20"),c("Cash was 30")],"counterarguments":[]},20
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register",json={"email":"isolated-failure@example.test","password":"correct horse battery staple!"}).json()
+    headers = {"Authorization":"Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue was 100. Profit was 20. Cash was 30.",
+        "permissions":{"store":True,"model_input":True,"display":True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics",headers=headers,json={"question":"Financial figures?","source_ids":[source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path+"/runs",headers={**headers,"Idempotency-Key":"isolated-failure"},json={
+        "parent_version_id":topic["versions"][0]["version_id"],"support_review":True,"support_review_mode":"isolated",
+        "max_model_calls":4,"max_total_tokens":20000,"require_counterarguments":False}).json()["operation"]
+    for _ in range(100):
+        status = client.get(path+"/runs/"+receipt["operation_id"],headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}: break
+        time.sleep(.02)
+    assert status == "completed" and len(review_calls) == 2
+    content = client.get(path,headers=headers).json()["versions"][-1]["content"]
+    assert content["run"]["status"] == "partial" and content["run"]["support_review_status"] == "failed"
+    assert content["run"]["support_review_failed_indexes"] == [1]
+    assert content["run"]["support_review_omissions"] == [{"claim_index":1,"reason":"review_failed"},
+                                                          {"claim_index":2,"reason":"review_failure"}]
+    assert content["claims"][0]["support_review"]["verdict"] == "supports"
+    assert all("support_review" not in content["claims"][i] for i in (1,2))
+    assert content["run"]["total_tokens"] == 40 and content["run"]["model_calls"] == 3
+
+
 def test_run_can_focus_on_saved_unique_quotation(monkeypatch):
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
     monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)

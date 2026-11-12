@@ -99,6 +99,10 @@ function reviewOmissionHint(run: Record<string, unknown>, index: number, en: boo
   if (item.reason === "call_budget") return en ? "The model-call budget did not allow the review." : "模型调用次数预算不足，未进行复查。";
   if (item.reason === "token_budget") return en ? "The token budget did not allow the review." : "Token 预算不足，未进行复查。";
   if (item.reason === "time_budget") return en ? "The time budget did not allow the review." : "时间预算不足，未进行复查。";
+  if (item.reason === "review_failed") return en ? "The review for this finding failed." : "该结论的复查失败。";
+  if (item.reason === "review_failure") return en ? "This review was not started after an earlier review failed." : "之前的复查失败，此项未开始。";
+  if (item.reason === "not_started") return en ? "This review has not started." : "此项复查尚未开始。";
+  if (item.reason === "in_progress") return en ? "This review was in progress; its outcome is unknown." : "此项复查进行中断，结果未知。";
   return null;
 }
 
@@ -200,6 +204,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [runQuestion, setRunQuestion] = useState("");
   const [allowSearch, setAllowSearch] = useState(true);
   const [supportReview, setSupportReview] = useState(false);
+  const [reviewMode, setReviewMode] = useState<"batch" | "isolated">("batch");
+  const [maxModelCalls, setMaxModelCalls] = useState("4");
   const [requireCounterarguments, setRequireCounterarguments] = useState(true);
   const [focusChoice, setFocusChoice] = useState("");
   const [maxElapsed, setMaxElapsed] = useState("60");
@@ -433,6 +439,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     if (focusChoice && !focus) { setNotice(en ? "The selected quotation is no longer available." : "所选引文已不可用，请重新选择。"); return; }
     if (!/^\d+$/.test(maxElapsed) || Number(maxElapsed) < 1 || Number(maxElapsed) > 180 ||
         !/^\d+$/.test(maxTokens) || Number(maxTokens) > 20000 ||
+        (supportReview && reviewMode === "isolated" && (!/^\d+$/.test(maxModelCalls) || Number(maxModelCalls) < 2 || Number(maxModelCalls) > 10)) ||
         (maxInputTokens !== "" && (!/^\d+$/.test(maxInputTokens) || Number(maxInputTokens) < 1 || Number(maxInputTokens) > 12000)) ||
         (maxCost !== "" && !/^\d+(?:\.\d{1,6})?$/.test(maxCost))) {
       setNotice(en ? "Check the research budget values." : "请检查研究预算设置。"); return;
@@ -440,7 +447,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxInputTokens ? { maxInputTokensPerCall: Number(maxInputTokens) } : {}), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, ...(supportReview && reviewMode === "isolated" ? { supportReviewMode: "isolated", maxModelCalls: Number(maxModelCalls) } : {}), requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxInputTokens ? { maxInputTokensPerCall: Number(maxInputTokens) } : {}), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -602,8 +609,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       <label><input type="checkbox" checked={allowSearch} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setAllowSearch(event.target.checked)} /> {en ? "When no material is attached, send the question to the configured search provider to find leads." : "未关联资料时，将问题发送给已配置的搜索服务以查找线索。"}</label>
       {allowSearch && topic.request.scope ? <label><input type="checkbox" checked={runSearchScope} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRunSearchScope(event.target.checked)} /> {en ? "Include part of the saved scope in source search (sent to the search provider)." : "搜索来源时包含部分已保存的研究范围（将发送给搜索服务）。"}</label> : null}
       {allowSearch && (runQuestion.trim() || topic.request.question) ? <p><small>{en ? "If source search runs, its query is: " : "如需搜索来源，发送的内容："}{sourceDiscoveryQuery(runQuestion.trim() || topic.request.question, topic.request.scope ?? "", runSearchScope)}</small></p> : null}
-      <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (up to one additional paid call; not independent verification)." : "请求模型复查引用是否支持结论（最多增加一次付费调用；不等于独立核验）。"}</label>
-      {supportReview ? <p><small>{en ? "The review remains subject to token and time budgets; unknown initial usage requires reserving both call limits." : "复查仍受 Token 和时间预算限制；首次用量未知时需预留两次调用上限。"}</small></p> : null}
+      <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (additional paid calls; not independent verification)." : "请求模型复查引用是否支持结论（会产生额外付费调用；不等于独立核验）。"}</label>
+      {supportReview ? <><Field label={en ? "Review mode" : "复查方式"} helper={en ? "Separate review sends each finding in its own call; it can cost more and may finish only partially." : "逐条复查为每条结论单独调用，可能增加费用，也可能只能部分完成。"}><Select value={reviewMode} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setReviewMode(event.target.value as "batch" | "isolated")}><option value="batch">{en ? "Review together" : "合并复查"}</option><option value="isolated">{en ? "Review separately" : "逐条复查"}</option></Select></Field>{reviewMode === "isolated" ? <Field label={en ? "Maximum model calls including research (2–10)" : "模型调用总次数上限（含研究，2–10）"}><Input type="number" min="2" max="10" value={maxModelCalls} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxModelCalls(event.target.value)} /></Field> : null}<p><small>{en ? "Review is also subject to the total token and time budgets; unknown usage reserves the full call limit." : "复查还受总 Token 和时间预算限制；用量未知时按调用上限预留。"}</small></p></> : null}
       <label><input type="checkbox" checked={requireCounterarguments} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRequireCounterarguments(event.target.checked)} /> {en ? "Require a cited counterargument for a complete result (turn off for straightforward fact checks)." : "完成研究需要有引文的反方意见（简单事实核验可关闭）。"}</label>
       {focusOptions.length ? <Field label={en ? "Focus on a saved quotation (optional)" : "优先分析已保存的引文（可选）"} helper={en ? "The selected passage and nearby context are included in the next analysis." : "下次分析将包含所选原文及附近上下文。"}><select value={focusChoice} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setFocusChoice(event.target.value)}><option value="">{en ? "No selected quotation" : "不指定引文"}</option>{focusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field> : null}
       <details className="general-source"><summary>{en ? "Research budget" : "研究预算"}</summary>

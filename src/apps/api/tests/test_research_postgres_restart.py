@@ -8,7 +8,7 @@ import pytest
 
 
 @pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
-@pytest.mark.parametrize("phase", ["before_provider", "generation", "review", "result_commit"])
+@pytest.mark.parametrize("phase", ["before_provider", "generation", "review", "isolated_review_second", "result_commit"])
 def test_interrupted_research_retains_inputs_and_cannot_replay_external_call(tmp_path, phase):
     state_file = tmp_path / "state.json"
     env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
@@ -105,6 +105,31 @@ assert checkpoint["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"
         recover = recover.replace('assert reservation is not None and reservation.status == "reserved"', '''assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55
 review_reservation = api.billing_ledger.usage.get("model:" + op + ":support-review")
 assert review_reservation is not None and review_reservation.status == "reserved"''')
+    elif phase == "isolated_review_second":
+        start = start.replace('        entered.set()\n', '''        if system != api.REVIEW_SYSTEM_PROMPT:
+            citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+            return {"claims": [{"text": "Revenue was 100", "citations": [citation]},
+                               {"text": "Revenue was reported", "citations": [citation]}],
+                    "counterarguments": [], "facts": [], "calculations": [], "limitations": []}, 55
+        self.review_count = getattr(self, "review_count", 0) + 1
+        if self.review_count == 1:
+            return {"reviews": [{"claim_index": 0, "verdict": "supports"}]}, 10
+        entered.set()
+''')
+        start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
+        start = start.replace('payload = {"parent_version_id":value["versions"][0]["version_id"]}',
+                              'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "support_review_mode":"isolated", "max_model_calls":3, "max_total_tokens":9000, "require_counterarguments":False}')
+        recover = recover.replace('assert topic.status_code == 200 and len(topic.json()["versions"]) == 1', '''assert topic.status_code == 200 and len(topic.json()["versions"]) == 5
+checkpoint = topic.json()["versions"][-1]["content"]
+assert checkpoint["run"]["checkpoint"] == "isolated_review" and checkpoint["run"]["status"] == "partial"
+assert checkpoint["claims"][0]["support_review"]["verdict"] == "supports"
+assert "support_review" not in checkpoint["claims"][1]
+assert checkpoint["run"]["support_review_omissions"] == [{"claim_index": 1, "reason": "in_progress"}]''')
+        recover = recover.replace('assert reservation is not None and reservation.status == "reserved"', '''assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55
+first = api.billing_ledger.usage.get("model:" + op + ":support-review:0")
+second = api.billing_ledger.usage.get("model:" + op + ":support-review:1")
+assert first is not None and first.status == "settled" and first.actual_tokens == 10
+assert second is not None and second.status == "reserved"''')
     elif phase == "result_commit":
         # Exit while the result document has been written in the same
         # uncommitted PostgreSQL transaction as the operation's terminal state.

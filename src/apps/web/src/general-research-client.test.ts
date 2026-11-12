@@ -15,6 +15,22 @@ describe("research operation polling", () => {
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty("max_input_tokens_per_call");
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)).max_input_tokens_per_call).toBe(2500);
   });
+
+  it("sends isolated review mode and its explicit total call cap", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 202 }));
+    vi.stubGlobal("fetch", fetcher);
+    const api = researchClient("https://api.example.com");
+    await api.run("topic", "version", "isolated", {search:false,supportReview:true,supportReviewMode:"isolated",
+      maxModelCalls:4,requireCounterarguments:true,maxElapsedSeconds:60,maxTotalTokens:20000});
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({support_review:true,
+      support_review_mode:"isolated",max_model_calls:4,max_total_tokens:20000});
+    await api.run("topic", "version", "batch", {search:false,supportReview:true,
+      requireCounterarguments:true,maxElapsedSeconds:60,maxTotalTokens:10000});
+    const batch = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
+    expect(batch.max_model_calls).toBe(2);
+    expect(batch).not.toHaveProperty("support_review_mode");
+  });
   it("honors a server retry delay and retains the status for read-only retries", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("", { status: 429, headers: { "Retry-After": "45" } }));
