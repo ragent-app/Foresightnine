@@ -1,0 +1,38 @@
+{
+  "checks": [
+    {
+      "index": 0,
+      "status": "completed",
+      "reported_verdict": "supports",
+      "effective_verdict": "uncertain",
+      "diagnostic_only": true,
+      "guards_match": true,
+      "safe": true,
+      "reported_tokens": 578
+    },
+    {
+      "index": 2,
+      "status": "completed",
+      "reported_verdict": "supports",
+      "effective_verdict": "uncertain",
+      "diagnostic_only": true,
+      "guards_match": true,
+      "safe": true,
+      "reported_tokens": 429
+    },
+    {
+      "index": 1,
+      "status": "completed",
+      "reported_verdict": "supports",
+      "effective_verdict": "uncertain",
+      "diagnostic_only": true,
+      "guards_match": true,
+      "safe": true,
+      "reported_tokens": 430
+    }
+  ],
+  "mechanical_pass": true,
+  "known_tokens": 1437,
+  "cost_usd": "unknown",
+  "semantic_support": "not independently established"
+}

@@ -1,0 +1,24 @@
+{
+  "status": "completed",
+  "index": 1,
+  "payload": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      }
+    ]
+  },
+  "reported_tokens": 430,
+  "stored_review": {
+    "verdict": "uncertain",
+    "reported_verdict": "supports",
+    "diagnostic_only": true,
+    "guard_reasons": [
+      "causal_attribution_unverified"
+    ],
+    "method": "bounded_quotation_context_model_review_v27",
+    "independently_verified": false
+  },
+  "manifest_sha256": "b4facac98dd458a4b962f47e254afce986c232db07a76c4fce3ca15e347c6634"
+}
