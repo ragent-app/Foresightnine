@@ -995,6 +995,31 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if len(positions) == 6:
                 break
         expanded = False
+        trimmed_json_closure = False
+        if (not positions and source.retrieval_method == "user_supplied" and len(source.text) <= 100_000
+                and quotation.startswith('"') and re.search(r"\d\}$", quotation)):
+            # A model may close a JSON object immediately after a numeric field
+            # even though more fields follow in the original. Only recover an
+            # exact, unique prefix from a valid JSON document and disclose the
+            # removed character; never insert the invented brace into evidence.
+            try:
+                source_json = json.loads(source.text)
+                quoted_json = json.loads("{" + quotation + "}")
+                prefix = quotation[:-1]
+                start = source.text.find(prefix)
+                end = start + len(prefix)
+                if (isinstance(source_json, dict) and isinstance(quoted_json, dict) and start >= 0
+                        and source.text.find(prefix, start + 1) < 0
+                        and any(offset <= start and end <= offset + len(passage) and
+                                re.match(r'\s*,\s*"(?:[^"\\]|\\.)+"\s*:', passage[end - offset:])
+                                for offset, passage in model_text[source.source_id])):
+                    record(0, source.text, start, end)
+                    trimmed_json_closure = True
+                    note = "A model-added JSON closing brace was removed from a quotation; check the original context."
+                    if note not in limitations:
+                        limitations.append(note)
+            except (ValueError, RecursionError):
+                pass
         if not positions:
             # A model sometimes uses an explicit ellipsis between excerpts.
             # Accept it only when every fragment occurs in order in ONE
@@ -1029,7 +1054,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if not positions:
             raise InvalidAnalysis("Model cited a missing source or quotation.")
         original = originals[0]
-        matching = "expanded_ellipsis" if expanded else "exact" if original == quotation else "whitespace_normalized"
+        matching = ("trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
+                    "exact" if original == quotation else "whitespace_normalized")
         if len(positions) == 1 and not scan_truncated:
             return positions[0], original, matching
         identity = (source.source_id, quotation)

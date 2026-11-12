@@ -943,3 +943,32 @@ def test_focused_pdf_passage_is_labeled_and_uses_same_whitespace_as_source_text(
     analyze('What is the revenue?', [report], None, generate)
     assert all('user_selected_passage' not in part for part in prompts[0]['sources'])
     assert 'A user selected a passage' not in prompts[0]['evidence_guidance']
+
+
+def test_model_added_json_closing_brace_recovers_only_unique_original_numeric_prefix():
+    text = '{"issuer":"Example","FY2023":{"revenue":100},"FY2024":{"revenue":120,"income":8}}'
+    report = source('s', text=text)
+    wrong = '"FY2024":{"revenue":120}'
+    raw = {'claims': [{'text': 'Revenue was 120', 'citations': [{'source_id': 's', 'quotation': wrong}]}],
+           'facts': [
+               {'fact_id': 'current', 'label': 'revenue', 'value': '120', 'unit': 'USD millions', 'currency': 'USD', 'period': 'FY2024', 'citation': {'source_id': 's', 'quotation': wrong}},
+               {'fact_id': 'prior', 'label': 'revenue', 'value': '100', 'unit': 'USD millions', 'currency': 'USD', 'period': 'FY2023', 'citation': {'source_id': 's', 'quotation': '"FY2023":{"revenue":100}'}},
+           ], 'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}
+    result = analyze('Revenue growth?', [report], None, lambda _: (raw, 1))
+    fact = result.facts[0]
+    assert fact['quotation'] == '"FY2024":{"revenue":120'
+    assert fact['quotation_match'] == 'trimmed_json_closure'
+    assert text[fact['location']['character_start']:fact['location']['character_end']] == fact['quotation']
+    assert result.claims[0]['citations'][0]['quotation'] == fact['quotation']
+    assert result.calculations[0]['value'] == '20.00'
+    assert any('model-added JSON closing brace' in note for note in result.limitations)
+
+    # A prefix appearing twice is ambiguous when each occurrence is
+    # followed by another property. Invalid JSON and a longer number cannot be repaired.
+    for bad_text in [
+        '{"a":{"FY2024":{"revenue":120,"income":8}},"b":{"FY2024":{"revenue":120,"income":9}}}',
+        '"FY2024":{"revenue":120,"income":8}',
+        '{"FY2024":{"revenue":1200,"income":8}}',
+    ]:
+        rejected = analyze('Revenue?', [source('s', text=bad_text)], None, lambda _: (raw, 1))
+        assert not rejected.facts and not rejected.calculations and not rejected.claims
