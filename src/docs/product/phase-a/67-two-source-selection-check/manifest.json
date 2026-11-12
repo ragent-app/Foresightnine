@@ -1,0 +1,49 @@
+{
+  "assessment": "Known two-source public PDF task; fixed inputs, model, parameters and scoring versus 66. Implementation selection and prompt compaction changed together. Source IDs vary; nonblind diagnostic, not independent evaluation.",
+  "implementation_commit": "6553d62dd290500a5f297633e49b7d49d7e273cc",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "sources": [
+    {
+      "pdf": "bea-oct-2024.pdf",
+      "text": "bea-oct-2024.txt",
+      "title": "BEA October 2024 PIO release, published November 27 2024",
+      "published_at": "2024-11-27T15:00:00Z",
+      "pdf_sha256": "abe11bf570065994a6853eae5997b4c11c189043435d854055b9826fb58a312d",
+      "text_sha256": "9ab0bc913b39506013fde55301de1bd16a7a31b5cc3defe9194141f5064d3cdf"
+    },
+    {
+      "pdf": "bea-nov-2024.pdf",
+      "text": "bea-nov-2024.txt",
+      "title": "BEA November 2024 PIO release, published December 20 2024",
+      "published_at": "2024-12-20T13:30:00Z",
+      "pdf_sha256": "19088f1156bb57380740b90d6401dbf07af6843e42b830e1820df8cb6bd0b39a",
+      "text_sha256": "7644f30b1dfa0a8aa72541371209310c8f5b2debf4b62c2215fa26e965ab96b3"
+    }
+  ],
+  "input_sha256": "e49c5f72de8e8d5f447225c5ed0a0058e84f0004449cb976dff812495d07a91c",
+  "runner_sha256": "108d5e687db3d74b26d73e2e8c668fc4892bf079ee20a885b5254c6a9eb20ed0",
+  "scorer_sha256": "51552e5102d30783730cd94f39c10d1f7d92d8750fae9796a995b0212473933c",
+  "max_calls_total": 1,
+  "max_tokens_per_task": 10000,
+  "max_elapsed_seconds_per_task": 120,
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "search_calls": 0,
+  "review_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "reference": "September 2024 current-dollar personal-income change: $74.4 billion in Nov 27 release and $88.2 billion revised in Dec 20 release. Both figures, period, unit, valid source positions, and one revision claim citing both sources required. Mechanical checks cannot establish semantic support.",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
