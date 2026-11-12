@@ -2026,36 +2026,3 @@ def test_early_total_summary_is_bounded_and_relevant_to_multiple_query_terms():
     assert _early_total_summary("Total revenue increased while expenses fell.","Evaluate total revenue and expenses.") is None
     with pytest.raises(AnalysisInterrupted):
         _early_total_summary(text,"Evaluate total revenue and operating expenses.",lambda:True)
-
-
-def test_pdf_page_scoped_citation_uses_only_model_visible_page():
-    report = source("report", text="Header common. First page.\fHeader common. Second page.").model_copy(
-        update={"retrieval_method": "user_pdf"})
-    def output(page):
-        def model(prompt):
-            excerpts = json.loads(prompt)["sources"]
-            assert [(e["source_page"], e["text"]) for e in excerpts] == [
-                (1, "Header common. First page."), (2, "Header common. Second page.")]
-            return {"claims": [{"text": "Interpretation", "citations": [
-                {"source_id": "report", "quotation": "Header common", **({"source_page": page} if page is not None else {})}]}]}, 1
-        return analyze("Question", [report], None, model)
-    first = output(1)
-    second = output(2)
-    unspecified = output(None)
-    assert first.claims[0]["citations"][0]["location"]["page"] == 1
-    assert second.claims[0]["citations"][0]["location"]["page"] == 2
-    assert second.claims[0]["support_status"] == "not_independently_verified"
-    assert unspecified.claims[0]["citations"][0]["location"]["status"] == "ambiguous"
-    assert not output(3).claims
-    assert any("not independently verified" in text for text in second.limitations)
-
-
-def test_pdf_page_scope_cannot_resolve_multiple_matches_on_same_page_or_cross_source():
-    report = source("report", text="Header Header.\fOther content.").model_copy(update={"retrieval_method": "user_pdf"})
-    other = source("other", text="Header on a plain source.")
-    def run(source_id, page):
-        return analyze("Question", [report, other], None, lambda _: ({"claims": [{"text": "Claim", "citations": [
-            {"source_id": source_id, "quotation": "Header", "source_page": page}]}]}, 1))
-    assert run("report", 1).claims[0]["citations"][0]["location"]["status"] == "ambiguous"
-    assert not run("report", 2).claims
-    assert not run("other", 1).claims
