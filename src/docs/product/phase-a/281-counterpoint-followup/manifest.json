@@ -1,0 +1,50 @@
+{
+  "implementation_commit": "8ec14de8ec031ff17c6c85fdb59153080aff3624",
+  "source_sha256": "2cf482f78cce5038a1e750ca7b53ba96409854cb56e21eb2081532dcaa04ecf6",
+  "text_sha256": "38106fd55c9ba6935d7e24ac5c6342af3c005b519f9a7b13e8d49b010774c219",
+  "source_segments": [
+    {
+      "source_id": "source_26300000000000000000000000000001",
+      "character_start": 170198,
+      "character_end": 170755,
+      "model_source_id": "ref-1"
+    },
+    {
+      "source_id": "source_26300000000000000000000000000001",
+      "character_start": 299181,
+      "character_end": 302357,
+      "model_source_id": "ref-1"
+    }
+  ],
+  "prior_result_sha256": "9361af10bbfa6d12dcdcb5e20320ce96ee41ed90994ef9e1c4ce180294c490fe",
+  "prompt_sha256": "51743a09ebf1dba35bea6b48c44e5e8e1cfb635f2e3d535ef51a9d8b1cad7c6b",
+  "original_prompt_sha256": "a7fe2a6526bbd4fecfd38f687b34b6cca542dfc5cad2b12fc6e98a17f0f11514",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "files": {
+    "common.py": "650a55db76e4c2fbb93176f61060a429bff1ccade452936f32770cdaad36633e",
+    "prepare.py": "391bac0862b23bb07be1c4b73553e162c033dc09eeb096d42a99f4820c0022c2",
+    "run.py": "933d566c35a73183dabca162bff043d661e137395be9b8c1685452bb4e17f8fa"
+  },
+  "max_calls": 1,
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_tokens": 10000,
+  "timeout_seconds": 60,
+  "search": false,
+  "retries": 0,
+  "previous_known_tokens": 316569,
+  "cost_usd": "unknown"
+}
