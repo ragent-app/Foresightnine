@@ -21,7 +21,7 @@ export interface ResearchClaim {
   rate_unit_warnings?: { claimed_text: string; status: string }[];
   publication_date_warnings?: { claimed_text: string; source_id: string; declared_published_at: string; status: string }[];
 }
-export interface ResearchFact { numeric_normalization?: string; currency_context_unverified?: boolean; currency_quote_missing?: boolean; direction_context_unverified?: boolean; source_value_warnings?: string[]; fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
+export interface ResearchFact { numeric_normalization?: string; currency_context_unverified?: boolean; currency_quote_missing?: boolean; currency_conflict_unverified?: boolean; direction_context_unverified?: boolean; source_value_warnings?: string[]; fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
 export interface ResearchContent {
   summary: string;
   sources: { source_id: string; title?: string; url?: string | null; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null }[];

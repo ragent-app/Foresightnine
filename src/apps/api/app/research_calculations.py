@@ -68,6 +68,45 @@ def table_currency_quote_missing(currency: str | None, quotation: str | None) ->
     return not bool(re.search(patterns.get(code, r"(?!)"), quotation, re.IGNORECASE))
 
 
+
+_CURRENCY_NUMBER = re.compile(
+    r"(?<![A-Za-z0-9])(?:(?P<before>USD|EUR|GBP|US\s*\$|€|£)\s*(?P<amount1>\d[\d,]*(?:\.\d+)?)|"
+    r"(?P<amount2>\d[\d,]*(?:\.\d+)?)\s*(?P<after>USD|EUR|GBP|US\s*\$|€|£))(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
+
+
+def currency_value_conflict(currency: str | None, value: object, quotation: str | None) -> bool:
+    """Flag explicit currency cues on the same value; not a semantic verdict.
+
+    Bare dollar/yen signs, unrelated values and multiple conflicting cues are
+    deliberately inconclusive. Neither a match nor silence proves the unit.
+    """
+    code = currency.strip().upper() if isinstance(currency, str) else ""
+    if code not in {"USD", "EUR", "GBP"} or not isinstance(quotation, str):
+        return False
+    value_text = str(value)
+    if len(value_text) > 128:
+        return False
+    try:
+        expected = Decimal(value_text)
+        if not expected.is_finite():
+            return False
+    except (InvalidOperation, ValueError):
+        return False
+    seen: set[str] = set()
+    for match in _CURRENCY_NUMBER.finditer(quotation):
+        try:
+            amount = Decimal((match.group("amount1") or match.group("amount2")).replace(",", ""))
+        except InvalidOperation:
+            continue
+        if amount != expected:
+            continue
+        cue = (match.group("before") or match.group("after")).upper().replace(" ", "")
+        seen.add({"US$": "USD", "€": "EUR", "£": "GBP"}.get(cue, cue))
+    return bool(len(seen) == 1 and code not in seen)
+
+
 def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
     """Parse only unambiguous matching period formats, without guessing fiscal calendars."""
     value = period.strip()
@@ -138,7 +177,8 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             candidates = by_id.get(snapshot.fact_id, [])
             if len(candidates) != 1:
                 return "missing_or_ambiguous"
-            if candidates[0].get("direction_context_unverified"):
+            if candidates[0].get("direction_context_unverified") or currency_value_conflict(
+                    candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation")):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})
             if actual != snapshot:

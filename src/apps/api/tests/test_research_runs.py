@@ -1556,3 +1556,57 @@ def test_invalid_model_output_preserves_reported_usage_and_settles_budget(monkey
     assert run['error'] == 'invalid_provider_output' and run['status'] == 'partial'
     assert run['total_tokens'] == reported and run['generation_tokens'] == reported
     assert settlements == [reported]
+
+
+def test_conflicting_currency_is_rechecked_on_edit_and_recalculation(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    class Provider:
+        name = 'currency-conflict-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def fact(fid, value, year):
+                return {'fact_id': fid, 'label': 'Revenue', 'value': value, 'unit': 'million',
+                        'currency': 'USD', 'period': year, 'citation': {'source_id': source_id, 'quotation': 'EUR ' + value}}
+            return {'facts': [fact('new', '100', '2023'), fact('old', '80', '2022')],
+                    'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'new', 'second_fact_id': 'old'}]}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    account = client.post('/v1/auth/local/register', json={'email': 'currency-conflict@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + account['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': 'Revenue EUR 100. Revenue EUR 80.',
+        'permissions': {'store': True, 'model_input': True, 'display': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'currency-conflict'},
+        json={'parent_version_id': topic['versions'][0]['version_id']}).json()
+    op = receipt['operation']['operation_id']
+    for _ in range(100):
+        status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    current = client.get(path, headers=headers).json()['versions'][-1]
+    assert current['content']['run']['status'] == 'partial'
+    assert all(f['currency_conflict_unverified'] for f in current['content']['facts'])
+    assert not current['content']['calculations']
+    content = deepcopy(current['content'])
+    inputs = [{key: f[key] for key in ('fact_id', 'value', 'unit', 'currency', 'period')} for f in content['facts']]
+    content['calculations'] = [{'formula_id': 'growth_percent', 'formula_version': '1', 'inputs': inputs,
+                                'expression': '(first / second - 1) * 100', 'value': '25', 'unit': 'percent'}]
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': content})
+    assert saved.status_code == 201
+    latest = saved.json()['versions'][-1]
+    assert latest['content']['calculations'][0]['input_status'] == 'unverifiable'
+    recalc = client.post(path + '/calculations/recalculate', headers=headers,
+                         json={'parent_version_id': latest['version_id'], 'calculation_index': 0})
+    assert recalc.status_code == 422
+    fixed = deepcopy(latest['content'])
+    for fact in fixed['facts']:
+        fact['currency'] = 'EUR'
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': latest['version_id'], 'content': fixed})
+    assert saved.status_code == 201
+    latest = saved.json()['versions'][-1]
+    assert all(not fact.get('currency_conflict_unverified') for fact in latest['content']['facts'])
+    recalc = client.post(path + '/calculations/recalculate', headers=headers,
+                         json={'parent_version_id': latest['version_id'], 'calculation_index': 0})
+    assert recalc.status_code == 201 and recalc.json()['versions'][-1]['content']['calculations'][0]['value'] == '25.00'

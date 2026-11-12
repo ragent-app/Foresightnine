@@ -1137,3 +1137,16 @@ def test_structured_annual_observations_keep_period_value_and_issuer_within_budg
     assert len(captured[0]['sources']) == 3 and result.prompt_bytes <= 2055
     assert result.calculations[0]['value'] == '20.00'
     assert all(text[f['location']['character_start']:f['location']['character_end']] == f['quotation'] for f in result.facts)
+
+
+def test_explicit_currency_conflict_does_not_enter_calculation():
+    text = 'Revenue in 2023 was EUR 100. Revenue in 2022 was EUR 80.'
+    quote1, quote2 = 'EUR 100', 'EUR 80'
+    raw = {'facts': [
+        {'fact_id': 'new', 'label': 'Revenue', 'value': '100', 'unit': 'million', 'currency': 'USD', 'period': '2023', 'citation': {'source_id': 's', 'quotation': quote1}},
+        {'fact_id': 'old', 'label': 'Revenue', 'value': '80', 'unit': 'million', 'currency': 'USD', 'period': '2022', 'citation': {'source_id': 's', 'quotation': quote2}}],
+        'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'new', 'second_fact_id': 'old'}]}
+    result = analyze('Compare revenue.', [source('s', text=text)], None, lambda _: (raw, 1))
+    assert all(f['currency_conflict_unverified'] for f in result.facts)
+    assert result.calculations == []
+    assert any('currency conflicts' in note for note in result.limitations)

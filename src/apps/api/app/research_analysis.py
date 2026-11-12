@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict
 
 
 SYSTEM_PROMPT = (
@@ -1233,6 +1233,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     numeric_facts: dict[str, NumericFact] = {}
     currency_context_noted = False
     currency_quote_noted = False
+    currency_conflict_noted = False
     directional_context_noted = False
     ambiguous_fact_noted = False
     fact_ids = Counter(item.fact_id for item in result.facts)
@@ -1264,6 +1265,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         currency_context = is_percent_unit(item.unit) and item.currency is not None
         currency_quote_missing = (not is_percent_unit(item.unit) and
                                   table_currency_quote_missing(item.currency, quotation))
+        currency_conflict = currency_value_conflict(item.currency, item.value, quotation)
         ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:
             if not currency_context_noted:
@@ -1272,18 +1274,22 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if currency_quote_missing and not currency_quote_noted:
             limitations.append("A table fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.")
             currency_quote_noted = True
+        if currency_conflict and not currency_conflict_noted:
+            limitations.append("A fact's currency conflicts with an explicit currency cue on the same quoted value; it was excluded from automatic calculations pending review.")
+            currency_conflict_noted = True
         if direction_context and not directional_context_noted:
             limitations.append("A negative percentage was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
             directional_context_noted = True
         if ambiguous_fact and not ambiguous_fact_noted:
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
             ambiguous_fact_noted = True
-        if not currency_context and not ambiguous_fact and not direction_context:
+        if not currency_context and not currency_conflict and not ambiguous_fact and not direction_context:
             numeric_facts[item.fact_id] = numeric
         checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
             **({"currency_context_unverified": True} if currency_context else {}),
             **({"currency_quote_missing": True} if currency_quote_missing else {}),
+            **({"currency_conflict_unverified": True} if currency_conflict else {}),
             **({"direction_context_unverified": True} if direction_context else {}),
             **({"numeric_normalization": "thousands_separator"} if item.fact_id in normalized_grouped_ids else {}),
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),

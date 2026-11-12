@@ -230,3 +230,15 @@ def test_ratio_result_does_not_claim_precision_of_its_recorded_inputs():
     assert result['rounding'] == 'half_up' and result['decimal_places'] == 2
     assert result['input_precision_status'] == 'not_established'
     assert result['input_verification'] == 'not_verified_by_calculator'
+
+
+def test_currency_conflict_requires_explicit_cue_on_same_value():
+    from app.research_calculations import currency_value_conflict
+    assert currency_value_conflict('USD', '100', 'Revenue was EUR 100 million.')
+    assert currency_value_conflict('USD', '100', 'Revenue was €100 million.')
+    assert currency_value_conflict('EUR', '100', 'Revenue was 100 US$ million.')
+    assert not currency_value_conflict('EUR', '100', 'Revenue was EUR 100 million.')
+    assert not currency_value_conflict('USD', '100', 'Revenue was $100 million.')
+    assert not currency_value_conflict('USD', '100', 'Revenue was EUR 200 million and total was 100.')
+    assert not currency_value_conflict('USD', '100', 'Revenue was EUR 100 and USD 100.')
+    assert not currency_value_conflict(None, '100', 'Revenue was EUR 100.')

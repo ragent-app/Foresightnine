@@ -96,7 +96,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
@@ -1718,6 +1718,9 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
             fact.pop("currency_context_unverified", None)
             if is_percent_unit(numeric.unit) and numeric.currency is not None:
                 fact["currency_context_unverified"] = True
+            fact.pop("currency_conflict_unverified", None)
+            if currency_value_conflict(numeric.currency, numeric.value, quote):
+                fact["currency_conflict_unverified"] = True
             fact.pop("currency_quote_missing", None)
             if not is_percent_unit(numeric.unit) and table_currency_quote_missing(numeric.currency, quote):
                 fact["currency_quote_missing"] = True
@@ -1861,6 +1864,8 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
                 raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before recalculation.")
             if candidates[0].get("direction_context_unverified"):
                 raise ApiProblem(422, "invalid_request", "Percentage direction and subject require review before recalculation.")
+            if currency_value_conflict(candidates[0].get("currency"), candidates[0].get("value"), candidates[0].get("quotation")):
+                raise ApiProblem(422, "invalid_request", "Currency and quoted value require review before recalculation.")
             if (is_percent_unit(str(candidates[0].get("unit", "")))
                     and candidates[0].get("currency") is not None):
                 raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before recalculation.")
