@@ -354,13 +354,32 @@ def _explicit_usd_amounts(text: str) -> list[tuple[str, Decimal]]:
     return amounts
 
 
-def flag_uncited_usd_amounts(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
-    """Flag explicit USD amounts absent from located quotations, not semantic support."""
+
+_DOLLAR_AMOUNT = re.compile(
+    r"(?<![A-Za-z0-9_$])([-−]?)(?:US)?\$\s*([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
+    r"\s*(trillion|billion|million|thousand|bn|mn)?\b", re.IGNORECASE)
+_DOLLAR_SCALE = {**_USD_SCALE, "bn": Decimal("1000"), "mn": Decimal("1")}
+
+
+def _dollar_amounts(text: str) -> list[tuple[str, Decimal]]:
+    result = []
+    for match in _DOLLAR_AMOUNT.finditer(text):
+        sign, raw = match.group(1).replace("−", "-"), match.group(2).replace(",", "").replace("−", "-")
+        if len(raw) > 40 or (sign and raw.startswith("-")):
+            continue
+        with localcontext() as context:
+            context.prec = 100
+            result.append((match.group(0), Decimal(sign + raw) * _DOLLAR_SCALE[(match.group(3) or "").casefold()]))
+    return result
+
+
+def _flag_uncited_amounts(claims: list[dict], sources: list[ResearchSource], key: str, parse) -> list[dict]:
+    """Compare bounded monetary expressions against located quotations, not entailment."""
     source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
     output = []
     for claim in claims:
         entry = deepcopy(claim)
-        entry.pop("uncited_claim_amounts", None)
+        entry.pop(key, None)
         text, citations = entry.get("text"), entry.get("citations")
         if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
             output.append(entry)
@@ -376,17 +395,28 @@ def flag_uncited_usd_amounts(claims: list[dict], sources: list[ResearchSource]) 
             start, end = location.get("character_start"), location.get("character_end")
             if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text)
                     and source.text[start:end] == quote and not partial_ascii_token(source.text, start, end)):
-                quoted.update(value for _, value in _explicit_usd_amounts(quote))
+                quoted.update(value for _, value in parse(quote))
         missing = []
-        for raw, value in _explicit_usd_amounts(text):
+        for raw, value in parse(text):
             if value not in quoted and raw not in missing:
                 missing.append(raw)
                 if len(missing) == 5:
                     break
         if missing:
-            entry["uncited_claim_amounts"] = missing
+            entry[key] = missing
         output.append(entry)
     return output
+
+
+
+def flag_uncited_usd_amounts(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag explicit USD amounts absent from located quotations, not semantic support."""
+    return _flag_uncited_amounts(claims, sources, "uncited_claim_amounts", _explicit_usd_amounts)
+
+
+def flag_uncited_dollar_amounts(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Compare bare dollar expressions without deciding their currency or meaning."""
+    return _flag_uncited_amounts(claims, sources, "uncited_dollar_amounts", _dollar_amounts)
 
 
 def flag_uncited_percentage_points(claims: list[dict]) -> list[dict]:

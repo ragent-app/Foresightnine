@@ -512,3 +512,36 @@ def test_pronoun_quotation_exposes_same_sentence_antecedent_without_claiming_sup
     covered = {**original, "citations":[citation("Last December, the Committee indicated that"),*original["citations"]]}
     assert not flag_citation_subject_context([covered],[source])[0].get("citation_context_warnings")
     assert not flag_citation_subject_context([original],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("citation_context_warnings")
+
+
+def test_dollar_amounts_without_structured_facts_require_located_quotations():
+    from app.research_evidence import flag_uncited_dollar_amounts
+    text = "Goods deficit narrowed $0.3 billion. Exports increased $5.8 billion; imports rose $7.1 billion."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    def cite(quote):
+        start=text.index(quote)
+        return {"source_id":"s","quotation":quote,"location":{"character_start":start,"character_end":start+len(quote)}}
+    claim={"text":"Imports rose $7.1 billion versus $5.8 billion for exports.", "citations":[cite("Goods deficit narrowed $0.3 billion.")]}
+    flagged=flag_uncited_dollar_amounts([claim],[source])[0]
+    assert flagged["uncited_dollar_amounts"]==["$7.1 billion", "$5.8 billion"]
+    assert "uncited_dollar_amounts" not in claim
+    added={**claim,"citations":claim["citations"]+[cite("Exports increased $5.8 billion; imports rose $7.1 billion.")]}
+    assert not flag_uncited_dollar_amounts([added],[source])[0].get("uncited_dollar_amounts")
+    for change in ({"partial_token":True},{"location":{"status":"ambiguous"}}, {"quotation":"$7.1 billion"}):
+        assert flag_uncited_dollar_amounts([{**claim,"citations":[{**added["citations"][-1],**change}]}],[source])[0]["uncited_dollar_amounts"]
+    assert flag_uncited_dollar_amounts([added],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0]["uncited_dollar_amounts"]
+
+
+def test_dollar_amount_normalization_compares_scale_and_sign_not_currency():
+    from app.research_evidence import flag_uncited_dollar_amounts
+    text="A $7,100 million rise and -$2 billion loss."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    citation={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
+    claim={"text":"$7.1 billion and -$2,000 million.","citations":[citation]}
+    assert not flag_uncited_dollar_amounts([claim],[source])[0].get("uncited_dollar_amounts")
+    changed={**claim,"text":"$7.1 million and $2 billion."}
+    assert len(flag_uncited_dollar_amounts([changed],[source])[0]["uncited_dollar_amounts"])==2
+    # A prefixed dollar symbol is not automatically treated as unqualified $.
+    assert not flag_uncited_dollar_amounts([{**claim,"text":"C$4 billion","citations":[]}],[source])[0].get("uncited_dollar_amounts")

@@ -1918,3 +1918,40 @@ def test_related_source_sentence_is_reviewable_and_recomputed_after_edit(monkeyp
     latest = saved.json()["versions"][-1]["content"]["claims"][0]
     assert not latest.get("citation_context_warnings") and latest["authorship"] == "user"
     assert content["claims"][0]["citation_context_warnings"]
+
+
+def test_unquoted_dollar_figures_remain_partial_until_source_quotes_are_added(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    text = "Goods deficit narrowed $0.3 billion. Exports increased $5.8 billion; imports rose $7.1 billion."
+    first, second = "Goods deficit narrowed $0.3 billion.", "Exports increased $5.8 billion; imports rose $7.1 billion."
+    class Provider:
+        name = "dollar-gap-test"
+        policy = SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {"claims":[{"text":"Imports rose $7.1 billion and exports rose $5.8 billion.",
+                    "citations":[{"source_id":source_id,"quotation":first}]}]},10
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    user=client.post("/v1/auth/local/register",json={"email":"dollar-gap@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+user["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":text,
+        "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Imports and exports?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"dollar-gap-test"},
+        json={"parent_version_id":topic["versions"][0]["version_id"],"require_counterarguments":False})
+    assert receipt.status_code==202
+    op=receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        state=client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+        if state in {"completed","failed"}:break
+        time.sleep(.02)
+    assert state=="completed"
+    version=client.get(path,headers=headers).json()["versions"][-1];content=version["content"]
+    assert content["run"]["status"]=="partial"
+    assert content["claims"][0]["uncited_dollar_amounts"]==["$7.1 billion","$5.8 billion"]
+    edited=deepcopy(content);edited["claims"][0]["citations"].append({"source_id":source_id,"quotation":second})
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
+    assert saved.status_code==201
+    assert not saved.json()["versions"][-1]["content"]["claims"][0].get("uncited_dollar_amounts")
+    assert content["claims"][0]["uncited_dollar_amounts"]
