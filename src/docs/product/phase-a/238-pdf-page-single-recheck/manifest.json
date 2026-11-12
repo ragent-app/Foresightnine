@@ -1,0 +1,61 @@
+{
+  "implementation_commit": "a9b7d2bafbb8c35c57df833597499dfcb59a5d5b",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_method": "bounded_quotation_context_model_review_v23",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "1ea6af689d9bd5a7410cf5de548c55c632777aaae00e877be9f7f226ac332f56",
+    "prepare.py": "dd086fb92196d7b216b64f8b303c9e616b85be2511fb60d343b4f0bd65064e9a",
+    "run.py": "166af3e087f144942ee022d520e60d98414c422dfa227ef4efa8dac90e5b6b3e",
+    "score.py": "5cb82b3a2fdfe22def8eb49129f7dbfd928d3b9de74b2b4a57cbbd5ccc3923c1"
+  },
+  "source_files": {
+    "tasks.json": "dd3b02e2069426f28e0de12826ea5312d9fc80c068678c7dd198e9e481addfc8",
+    "reference.json": "71dc98e436757a56bc24db79abe13a2f01ec51e2c55a85c68733791cc35f6d3d",
+    "fed-stress-2020.pdf": "57ab98b21e05e87c0e19baf5d3aca74d86181d9166cc4f10096c4f26124162c5",
+    "bea-2020-historical.pdf": "4ed1912d0080dcca9293e4a56fddf6e9d7595028a4590d0062edbae321ce493f",
+    "fomc-2016.pdf": "71113de0a980f1ed5e29efb9b1ef9706ad6019696a3c60a089883a7df817b6e1"
+  },
+  "conditions": [
+    {
+      "task": "BEA_2020",
+      "prompt_sha256": "4c6afdc5b3c904968935150da0191a7af8268278f962c76c40ce0c1b12a21037",
+      "prompt_bytes": 4282,
+      "segments": [
+        {
+          "source_id": "source_23100000000000000000000000000002",
+          "character_start": 0,
+          "character_end": 6417,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_23100000000000000000000000000002": "15cdf72d82ce534fbfae2691d055d48dfef8e1ded88c116d0a657ebde853bb48"
+      }
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 1,
+  "max_calls_per_task": 1,
+  "max_total_tokens": 10000,
+  "run_elapsed_seconds": 120,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 265224
+}
