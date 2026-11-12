@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 
-from checks import comparison_quotations_cover_values, unexpected_explicit_usd_amounts
+from checks import comparison_quotations_cover_values, unexpected_explicit_usd_amounts, explicitly_distinguishes_periods
 
 
 def cite(sid, text, part):
@@ -42,3 +42,18 @@ def test_known_result_exposes_scoring_gaps_without_changing_its_saved_score():
     expected = dict(zip(result["source_ids"], ["74.4", "88.2"]))
     assert not comparison_quotations_cover_values(claims[2], sources, expected)
     assert json.loads((root / "score.json").read_text())["mechanical_pass"] is True
+
+
+def test_period_difference_recognizes_direct_wording_without_generalizing_to_industry():
+    for text in ("两家公司的财年并不覆盖完全相同的期间。", "两者的财年结束时间不同。",
+                 "The fiscal years are different.", "The reporting periods are not the same."):
+        assert explicitly_distinguishes_periods(text)
+    for text in ("两家公司行业不同。", "财年并非不同。", "The fiscal years are not different.", "期间相同。"):
+        assert not explicitly_distinguishes_periods(text)
+
+
+def test_known_fiscal_wording_is_detected_without_rewriting_frozen_score():
+    root = Path(__file__).resolve().parents[1] / "70-multitask-evaluation"
+    result = json.loads((root / "FISCAL_COMPARE-result.json").read_text())
+    assert explicitly_distinguishes_periods(result["content"]["claims"][1]["text"])
+    assert json.loads((root / "score.json").read_text())["tasks"]["FISCAL_COMPARE"]["expected"]["different_fiscal_end_dates_with_both_quotes"] is False

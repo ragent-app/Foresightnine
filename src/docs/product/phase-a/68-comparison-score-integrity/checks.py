@@ -75,3 +75,18 @@ def unexpected_explicit_usd_amounts(text: str, allowed_millions: list[str]) -> l
         except (InvalidOperation, ValueError):
             bad.append(match.group(0))
     return bad
+
+
+def explicitly_distinguishes_periods(text: str) -> bool:
+    """Recognize limited direct period-comparison language, not general semantics."""
+    if not isinstance(text, str) or len(text) > 3000:
+        return False
+    for sentence in re.split(r"[。！？!?;；\n]", text):
+        if not re.search(r"期间|财年|年度|\b(?:periods?|fiscal|years?)\b", sentence, re.IGNORECASE):
+            continue
+        if re.search(r"并非\s*不同|不是\s*不同|未必\s*不同|\bnot\s+different\b", sentence, re.IGNORECASE):
+            continue
+        if re.search(r"不同|不一致|不一样|不相同|不(?:能|会|应|是|属于|覆盖)?(?:完全)?(?:相同|一致|同一)|"
+                     r"\bdifferent\b|\bnot\s+(?:the\s+)?same\b", sentence, re.IGNORECASE):
+            return True
+    return False
