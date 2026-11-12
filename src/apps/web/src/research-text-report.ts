@@ -21,7 +21,8 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
   const empty = (count: number) => { if (!count) lines.push(label("None recorded.", "未记录。")); };
   const v = data.version, c = v.content;
   lines.push(label("ForesightNine research report", "ForesightNine 研究报告"));
-  add(label("Question", "问题"), data.request.question);
+  add(label("Topic question", "主题原问题"), data.request.question);
+  if (typeof c.run?.question_override === "string") add(label("Question for this version", "本版本的研究问题"), c.run.question_override);
   add(label("Scope", "范围"), data.request.scope);
   add(label("Research cutoff", "研究截止时间"), data.request.as_of);
   add(label("Topic ID", "主题标识"), data.topic_id);

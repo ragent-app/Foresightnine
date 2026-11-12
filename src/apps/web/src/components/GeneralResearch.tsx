@@ -187,6 +187,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [editingClaims, setEditingClaims] = useState(false);
   const [operation, setOperation] = useState<ResearchOperation | null>(null);
   const [runInputs, setRunInputs] = useState<RunInputSnapshot | null>(null);
+  const [runQuestion, setRunQuestion] = useState("");
   const [allowSearch, setAllowSearch] = useState(true);
   const [supportReview, setSupportReview] = useState(false);
   const [requireCounterarguments, setRequireCounterarguments] = useState(true);
@@ -205,7 +206,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const current = topic?.versions.find((item) => item.version_id === selectedVersionId) ?? latest;
   const isLatest = current?.version_id === latest?.version_id;
   useEffect(() => { setFocusChoice(""); }, [current?.version_id]);
-  useEffect(() => { setRunSearchScope(false); }, [accountId, topic?.topic_id]);
+  useEffect(() => { setRunSearchScope(false); setRunQuestion(""); }, [accountId, topic?.topic_id]);
   const focusOptions = (current?.content.claims ?? []).flatMap((claim, claimIndex) => (claim.citations ?? []).flatMap((citation, citationIndex) => {
     const source = sourceMetadata.find((item) => item.source_id === citation.source_id);
     if (!source || !source.permissions?.model_input || !canUseCitationSource(source, topic?.request.as_of) || !citation.quotation || citation.partial_token || citation.location?.status === "ambiguous" || citation.location?.character_start === undefined) return [];
@@ -427,7 +428,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { ...(runQuestion.trim() ? { questionOverride: runQuestion.trim() } : {}), search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -584,9 +585,11 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <p><strong>{en ? "Current figures" : "当前数值"}</strong></p><ul>{facts.map((fact, index) => <li key={index}>{fact.label}: {fact.value} {fact.unit} · {fact.period}{fact.currency ? ` · ${fact.currency}` : ""}</li>)}</ul>
       </details> : null}
       <p>{en ? "Only provided material with model permission can be analyzed. A question alone may return a clear information gap." : "目前仅分析你提供且允许模型处理的资料。只输入问题时，系统可能先返回资料缺口。"}</p>
+      {typeof current.content.run.question_override === "string" ? <p><strong>{en ? "Question for this version: " : "本版本的研究问题："}</strong>{current.content.run.question_override}</p> : null}
+      {isLatest ? <Field label={en ? "Question for the next run (optional)" : "下次运行的研究问题（可选）"} helper={en ? "Leave blank to use the topic's original question. The new question is saved with its run." : "留空使用主题创建时的问题；填写后将随本次运行保存。"}><Textarea value={runQuestion} maxLength={10000} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRunQuestion(event.target.value)} /></Field> : null}
       <label><input type="checkbox" checked={allowSearch} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setAllowSearch(event.target.checked)} /> {en ? "When no material is attached, send the question to the configured search provider to find leads." : "未关联资料时，将问题发送给已配置的搜索服务以查找线索。"}</label>
       {allowSearch && topic.request.scope ? <label><input type="checkbox" checked={runSearchScope} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRunSearchScope(event.target.checked)} /> {en ? "Include part of the saved scope in source search (sent to the search provider)." : "搜索来源时包含部分已保存的研究范围（将发送给搜索服务）。"}</label> : null}
-      {allowSearch && topic.request.question ? <p><small>{en ? "If source search runs, its query is: " : "如需搜索来源，发送的内容："}{sourceDiscoveryQuery(topic.request.question, topic.request.scope ?? "", runSearchScope)}</small></p> : null}
+      {allowSearch && (runQuestion.trim() || topic.request.question) ? <p><small>{en ? "If source search runs, its query is: " : "如需搜索来源，发送的内容："}{sourceDiscoveryQuery(runQuestion.trim() || topic.request.question, topic.request.scope ?? "", runSearchScope)}</small></p> : null}
       <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (up to one additional paid call; not independent verification)." : "请求模型复查引用是否支持结论（最多增加一次付费调用；不等于独立核验）。"}</label>
       {supportReview ? <p><small>{en ? "The review remains subject to token and time budgets; unknown initial usage requires reserving both call limits." : "复查仍受 Token 和时间预算限制；首次用量未知时需预留两次调用上限。"}</small></p> : null}
       <label><input type="checkbox" checked={requireCounterarguments} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRequireCounterarguments(event.target.checked)} /> {en ? "Require a cited counterargument for a complete result (turn off for straightforward fact checks)." : "完成研究需要有引文的反方意见（简单事实核验可关闭）。"}</label>

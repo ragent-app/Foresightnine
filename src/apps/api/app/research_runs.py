@@ -16,7 +16,8 @@ class FocusCitation(BaseModel):
 
 
 class ResearchRunRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    question_override: str | None = Field(default=None, min_length=1, max_length=10000)
     parent_version_id: str = Field(min_length=1, max_length=100)
     source_ids: list[str] = Field(default_factory=list, max_length=100)
     max_model_calls: int = Field(default=1, ge=0, le=2)

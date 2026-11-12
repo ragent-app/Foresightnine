@@ -1516,10 +1516,12 @@ def test_source_discovery_only_sends_scope_when_explicitly_selected(monkeypatch)
     # An explicit false remains idempotent with requests predating the field.
     replay = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'scope-search-default'}, json={'parent_version_id': first_parent, 'include_scope_in_search': False})
     assert replay.status_code == 202 and replay.headers['Idempotency-Replayed'] == 'true'
-    second, _ = run(parent, 'scope-search-opt-in', {'include_scope_in_search': True})
+    second, parent = run(parent, 'scope-search-opt-in', {'include_scope_in_search': True})
     assert queries == ['Compare revenue', 'Compare revenue Oceania FY2024']
     assert client.get(path + '/runs/' + second + '/inputs', headers=headers).json()['budget']['include_scope_in_search'] is True
     assert 'include_scope_in_search' not in client.get(path + '/runs/' + first + '/inputs', headers=headers).json()['budget']
+    run(parent, 'question-override-search', {'question_override': 'Compare cash flow', 'include_scope_in_search': True})
+    assert queries[-1] == 'Compare cash flow Oceania FY2024'
     bounded = discovery_query('问' * 80, '🌏' * 80, True)
     assert len(bounded) == 70 and bounded == '问' * 45 + ' ' + '🌏' * 24
 
@@ -1786,3 +1788,58 @@ def test_table_period_conflict_excludes_calculation_and_rechecks_edits(monkeypat
     recalc = client.post(path + '/calculations/recalculate', headers=headers, json={'parent_version_id':latest['version_id'],'calculation_index':0})
     assert recalc.status_code == 201 and recalc.json()['versions'][-1]['content']['calculations'][0]['value'] == '11.11'
     assert all(f.get('table_alignment_unverified') for f in latest['content']['facts'])
+
+
+def test_material_topic_accepts_versioned_run_questions_and_idempotency(monkeypatch):
+    import json
+    from hashlib import sha256
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    received = []
+    class Provider:
+        name = 'run-question-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            data = json.loads(prompt)
+            received.append(data['question'])
+            return {'claims':[{'text':'Cash was 100.', 'citations':[{'source_id': source_id, 'quotation':'Cash was 100.'}]}]}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email':f'run-question-{uuid4().hex}@example.test','password':'correct horse battery staple!'}).json()
+    headers = {'Authorization':'Bearer '+auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title':'Report','text':'Cash was 100.',
+        'permissions':{'store':True,'display':True,'model_input':True,'export':True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'source_ids':[source_id]}).json()
+    assert topic['request']['question'] == ''
+    path = '/v2/research/topics/' + topic['topic_id']
+    def run(parent, key, question):
+        body = {'parent_version_id':parent,'question_override':question,'require_counterarguments':False}
+        response = client.post(path+'/runs', headers={**headers,'Idempotency-Key':key}, json=body)
+        assert response.status_code == 202, response.text
+        op = response.json()['operation']['operation_id']
+        for _ in range(100):
+            status = client.get(path+'/runs/'+op, headers=headers).json()['operation']['status']
+            if status in {'completed','failed'}: break
+            time.sleep(.02)
+        assert status == 'completed'
+        return body, op, client.get(path, headers=headers).json()
+    first_body, first_op, updated = run(topic['versions'][0]['version_id'], 'question-one', '  What was cash?  ')
+    first = updated['versions'][-1]
+    assert received == ['What was cash?']
+    assert first['content']['run']['question_override'] == 'What was cash?'
+    inputs = client.get(path+'/runs/'+first_op+'/inputs', headers=headers).json()
+    assert inputs['question_sha256'] == sha256(b'What was cash?').hexdigest()
+    assert 'question_override' not in inputs['budget'] and 'What was cash?' not in str(inputs)
+    replay = client.post(path+'/runs', headers={**headers,'Idempotency-Key':'question-one'}, json=first_body)
+    assert replay.status_code == 202 and replay.json()['operation']['operation_id'] == first_op and len(received) == 1
+    changed = {**first_body,'question_override':'A different question?'}
+    assert client.post(path+'/runs', headers={**headers,'Idempotency-Key':'question-one'}, json=changed).status_code == 409
+    _, _, updated = run(first['version_id'], 'question-two', 'What was profit?')
+    assert received == ['What was cash?', 'What was profit?']
+    assert updated['versions'][-2]['content']['run']['question_override'] == 'What was cash?'
+    assert updated['versions'][-1]['content']['run']['question_override'] == 'What was profit?'
+    assert updated['request']['question'] == ''
+    exported = client.get(path+'/versions/'+first['version_id']+'/export', headers=headers).json()
+    assert exported['version']['content']['run']['question_override'] == 'What was cash?'
+    invalid = {'parent_version_id':updated['versions'][-1]['version_id'],'question_override':'   '}
+    assert client.post(path+'/runs', headers={**headers,'Idempotency-Key':'question-empty'}, json=invalid).status_code == 422

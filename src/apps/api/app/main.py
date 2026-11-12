@@ -2083,6 +2083,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         sources = [research_sources.get(account.account_id, source_id) for source_id in source_ids]
     except (TopicNotFound, SourceNotFound) as error:
         raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
+    effective_question = request.question_override if request.question_override is not None else topic.request.question
     provider, _personal = _model_provider_for_request(http_request)
     generate_structured = getattr(provider, "generate_structured", None)
     checkpoint_parent: str | None = None
@@ -2140,7 +2141,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
-        if not sources and topic.request.question and request.max_search_calls:
+        if not sources and effective_question and request.max_search_calls:
             search = getattr(evidence_provider, "search", None)
             if request.max_cost_usd is not None:
                 search_status = "cost_unknown"
@@ -2160,7 +2161,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         raise ProviderFailure("search_timeout", "Search time budget is exhausted.", retryable=False)
                     _reserve_search_call(http_request)
                     search_calls = 1
-                    raw_candidates = search(discovery_query(topic.request.question, topic.request.scope, request.include_scope_in_search), limit=5,
+                    raw_candidates = search(discovery_query(effective_question, topic.request.scope, request.include_scope_in_search), limit=5,
                                             deadline=deadline, cancel_event=operations.cancel_event(operation_id))
                     if not isinstance(raw_candidates, (list, tuple)):
                         raise ProviderFailure("search_response_invalid", "Search provider returned invalid results.", retryable=False)
@@ -2257,7 +2258,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             # Reserve room for the system instruction and transport framing;
             # byte length is a conservative approximation, not a provider tokenizer.
             max_prompt_chars = max(1, min(48000, int(max_input_tokens) - len(RESEARCH_SYSTEM_PROMPT.encode("utf-8")) - 512))
-            analysis = analyze(topic.request.question, sources, topic.request.as_of, generate,
+            analysis = analyze(effective_question, sources, topic.request.as_of, generate,
                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
                                on_prepare=lambda segments: attempted_prompt.update({"segments": segments}),
                                focus=focus, scope=topic.request.scope)
@@ -2346,6 +2347,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     claims=claims, limitations=[*discovery_notes, *analysis.limitations,
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
+                                         **({"question_override": request.question_override} if request.question_override is not None else {}),
                                          "model_calls": calls, "total_tokens": generation_usage, "cost_usd": None,
                                          "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                          "generation_tokens": generation_usage, "support_review_requested": True,
@@ -2460,6 +2462,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 calculations=analysis.calculations, calculation_differences=calculation_differences, amount_differences=amount_differences,
                 claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
+                     **({"question_override": request.question_override} if request.question_override is not None else {}),
                      "model_calls": calls, "total_tokens": usage, "cost_usd": None,
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,
                      "require_counterarguments": request.require_counterarguments,
@@ -2515,7 +2518,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "schema_version": "1", "operation_id": operation_id, "owner_id": account.account_id,
             "topic_id": topic_id, "parent_version_id": request.parent_version_id,
             "captured_at": lifecycle_clock.now().isoformat(),
-            "question_sha256": sha256(topic.request.question.encode("utf-8")).hexdigest(),
+            "question_sha256": sha256(effective_question.encode("utf-8")).hexdigest(),
             **({"scope_sha256": sha256(topic.request.scope.encode("utf-8")).hexdigest()} if topic.request.scope else {}),
             "as_of": topic.request.as_of.isoformat() if topic.request.as_of else None,
             "sources": [{"source_id": item.source_id, "content_sha256": item.content_sha256,
@@ -2526,7 +2529,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                          "revised_at": item.revised_at.isoformat() if item.revised_at else None,
                          "is_simulated": item.is_simulated, "permissions": item.permissions.model_dump(mode="json")}
                         for item in sources],
-            "budget": run_request_payload,
+            "budget": {key: value for key, value in run_request_payload.items() if key != "question_override"},
             "model": getattr(getattr(provider, "settings", None), "model", None),
             "provider": getattr(provider, "name", None),
             "provider_limits": {key: getattr(policy, key, None) for key in

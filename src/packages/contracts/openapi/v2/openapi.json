@@ -347,7 +347,7 @@
             "type": "boolean"
           },
           "pdf_base64": {
-            "maxLength": 2000000,
+            "maxLength": 4000000,
             "minLength": 1,
             "title": "Pdf Base64",
             "type": "string"
@@ -817,6 +817,19 @@
             "minLength": 1,
             "title": "Parent Version Id",
             "type": "string"
+          },
+          "question_override": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Override"
           },
           "require_counterarguments": {
             "default": true,
