@@ -1922,8 +1922,21 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
     provider, _personal = _model_provider_for_request(http_request)
     generate_structured = getattr(provider, "generate_structured", None)
+    checkpoint_parent: str | None = None
+
+    def source_summaries(analyzed_ids: list[str]) -> list[dict[str, Any]]:
+        return [{"source_id": s.source_id, "title": s.title,
+                 "url": urlunsplit((urlsplit(str(s.url)).scheme, urlsplit(str(s.url)).netloc,
+                     urlsplit(str(s.url)).path, "", "")) if s.url else None,
+                 "event_at": s.event_at.isoformat() if s.event_at else None,
+                 "published_at": s.published_at.isoformat() if s.published_at else None,
+                 "obtained_at": s.obtained_at.isoformat(),
+                 "revised_at": s.revised_at.isoformat() if s.revised_at else None,
+                 "content_sha256": s.content_sha256, "verification": "user_declared_not_verified"}
+                for s in sources if s.source_id in analyzed_ids]
 
     def build(operation_id: str) -> tuple[ResearchRunResult, str]:
+        nonlocal checkpoint_parent
         started = monotonic()
         deadline = started + request.max_elapsed_seconds
         calls = 0
@@ -2089,6 +2102,43 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
                     batch = prepare_support_review(claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
                     if batch.indexes:
+                        def save_generation_checkpoint() -> None:
+                            nonlocal checkpoint_parent
+                            try:
+                                current = research_topics.get(account.account_id, topic_id).versions[-1]
+                                if current.version_id != request.parent_version_id:
+                                    raise TopicVersionConflict()
+                                partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
+                                    sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                    evidence_differences=evidence_differences(analysis.facts),
+                                    calculations=analysis.calculations,
+                                    calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                    claims=claims, limitations=[*discovery_notes, *analysis.limitations,
+                                        "Generation is saved; support review is pending or was interrupted."],
+                                    run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
+                                         "model_calls": calls, "total_tokens": generation_usage, "cost_usd": None,
+                                         "cost_status": "unknown" if calls or search_calls else "no_external_call",
+                                         "generation_tokens": generation_usage, "support_review_requested": True,
+                                         "support_review_status": "pending", "search_calls": search_calls,
+                                         "model": getattr(getattr(provider, "settings", None), "model", None),
+                                         "provider": getattr(provider, "name", None),
+                                         "prompt_sha256": analysis.prompt_sha256,
+                                         "prompt_characters": analysis.prompt_characters, "prompt_bytes": analysis.prompt_bytes,
+                                         "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+                                         "selection_method": RESEARCH_SELECTION_METHOD, "selected_segments": analysis.segments,
+                                         "source_hashes": {s.source_id: s.content_sha256 for s in sources},
+                                         "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
+                                         "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
+                                         "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                                saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
+                                    parent_version_id=request.parent_version_id, content=partial, note=current.note),
+                                    source_ids=source_ids, created_by="agent")
+                                checkpoint_parent = saved.versions[-1].version_id
+                            except (TopicNotFound, TopicVersionConflict) as error:
+                                raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
+                        if not operations.store.checkpoint_if_running(operation_id, save_generation_checkpoint):
+                            _raise_if_operation_cancelled(operation_id)
+                            raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
                         review_hash, review_segments, review_indexes = batch.prompt_sha256, batch.segments, batch.indexes
                         review_call_id = f"{operation_id}:support-review"
                         try:
@@ -2143,15 +2193,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("The research is partial: supported claims or counterarguments are incomplete.")
         result = ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
             parent_version_id=request.parent_version_id, status="completed" if complete else "partial",
-            content=ResearchContent(source_candidates=discovered, sources=[{"source_id": s.source_id, "title": s.title,
-                "url": urlunsplit((urlsplit(str(s.url)).scheme, urlsplit(str(s.url)).netloc,
-                    urlsplit(str(s.url)).path, "", "")) if s.url else None,
-                "event_at": s.event_at.isoformat() if s.event_at else None,
-                "published_at": s.published_at.isoformat() if s.published_at else None,
-                "obtained_at": s.obtained_at.isoformat(),
-                "revised_at": s.revised_at.isoformat() if s.revised_at else None,
-                "content_sha256": s.content_sha256, "verification": "user_declared_not_verified"}
-                for s in sources if s.source_id in analysis.source_ids], facts=analysis.facts,
+            content=ResearchContent(source_candidates=discovered, sources=source_summaries(analysis.source_ids), facts=analysis.facts,
                 evidence_differences=differences,
                 calculations=analysis.calculations, calculation_differences=calculation_differences,
                 claims=claims, limitations=limitations,
@@ -2190,10 +2232,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         assert isinstance(result, ResearchRunResult)
         # Refuse to save a stale result over a user's intervening edit.
         try:
-            parent = topic.versions[-1]
+            parent = research_topics.get(account.account_id, topic_id).versions[-1]
+            expected_parent = checkpoint_parent or result.parent_version_id
+            if parent.version_id != expected_parent:
+                raise TopicVersionConflict()
             content = result.content.model_copy(update={"summary": parent.content.summary})
             research_topics.add_version(account.account_id, topic_id, VersionInput(
-                parent_version_id=result.parent_version_id, content=content, note=parent.note),
+                parent_version_id=expected_parent, content=content, note=parent.note),
                 source_ids=source_ids, created_by="agent")
         except (TopicNotFound, TopicVersionConflict) as error:
             raise ApiProblem(409, "lifecycle_conflict", "Research changed before the result was saved.") from error

@@ -98,6 +98,10 @@ api._reserve_model_call = hold_before_reservation
         start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
         start = start.replace('payload = {"parent_version_id":value["versions"][0]["version_id"]}',
                               'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "max_model_calls":2, "max_total_tokens":9000}')
+        recover = recover.replace('assert topic.status_code == 200 and len(topic.json()["versions"]) == 1', '''assert topic.status_code == 200 and len(topic.json()["versions"]) == 2
+checkpoint = topic.json()["versions"][-1]["content"]
+assert checkpoint["run"]["checkpoint"] == "generation" and checkpoint["run"]["status"] == "partial"
+assert checkpoint["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"''')
         recover = recover.replace('assert reservation is not None and reservation.status == "reserved"', '''assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55
 review_reservation = api.billing_ledger.usage.get("model:" + op + ":support-review")
 assert review_reservation is not None and review_reservation.status == "reserved"''')

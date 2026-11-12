@@ -211,6 +211,51 @@ def test_cancelled_run_does_not_save_late_model_output(monkeypatch):
     assert len(client.get(path, headers=headers).json()["versions"]) == 1
 
 
+def test_cancelling_support_review_keeps_completed_generation_as_draft(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    entered, release = Event(), Event()
+    source_id = ""
+    class Provider:
+        name = "review-cancellation-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                entered.set()
+                assert release.wait(5)
+                return {"reviews": [{"claim_index": 0, "verdict": "supports"}]}, 10
+            citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+            return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
+                    "counterarguments": [], "facts": [], "calculations": [], "limitations": []}, 55
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    registered = client.post("/v1/auth/local/register", json={"email": "review-cancel@example.test",
+        "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
+    source = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()
+    source_id = source["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    started = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "review-cancel-run"}, json={
+        "parent_version_id": topic["versions"][0]["version_id"], "support_review": True,
+        "max_model_calls": 2, "max_total_tokens": 9000}).json()["operation"]
+    assert entered.wait(5)
+    versions = client.get(path, headers=headers).json()["versions"]
+    assert len(versions) == 2 and versions[-1]["review"] == "draft"
+    checkpoint = versions[-1]["content"]
+    assert checkpoint["run"]["checkpoint"] == "generation" and checkpoint["run"]["status"] == "partial"
+    assert checkpoint["run"]["cost_status"] == "unknown" and checkpoint["run"]["generation_tokens"] == 55
+    assert checkpoint["run"]["max_model_calls"] == 2 and checkpoint["run"]["source_hashes"][source_id] == source["content_sha256"]
+    assert checkpoint["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"
+    stopped = client.post("/v1/operations/" + started["operation_id"] + "/cancel",
+        headers={**headers, "Idempotency-Key": "cancel-review-run"}, json={"cancel_token": started["cancel_token"]})
+    assert stopped.status_code == 200 and stopped.json()["operation"]["status"] == "cancelled"
+    release.set()
+    time.sleep(0.1)
+    assert client.get(path, headers=headers).json()["versions"] == versions
+    assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
+
+
 def test_selection_timeout_produces_partial_result_without_calling_model(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     monkeypatch.setattr(api, "analyze", lambda *args, **kwargs: (_ for _ in ()).throw(AnalysisInterrupted()))
@@ -279,7 +324,8 @@ def test_optional_support_review_is_bounded_and_preserves_initial_research(monke
         if status in {"completed", "failed"}: break
         time.sleep(0.02)
     assert status == "completed"
-    current = client.get(path, headers=headers).json()["versions"][-1]
+    versions = client.get(path, headers=headers).json()["versions"]
+    current = versions[-1]
     content, run = current["content"], current["content"]["run"]
     assert len(calls) == expected_calls == run["model_calls"]
     assert run["support_review_status"] == expected_review
@@ -288,9 +334,12 @@ def test_optional_support_review_is_bounded_and_preserves_initial_research(monke
     assert first_entry.status == "settled" and first_entry.actual_tokens == 55
     second_entry = api.billing_ledger.usage.get("model:" + op + ":support-review")
     if expected_calls == 2:
+        assert len(versions) == 3 and versions[-2]["content"]["run"]["checkpoint"] == "generation"
+        assert current["parent_version_id"] == versions[-2]["version_id"]
         assert second_entry.status == "settled" and second_entry.actual_tokens == 12
         assert run["total_tokens"] == 67 and len(run["support_review_prompt_sha256"]) == 64
     else:
+        assert len(versions) == 2
         assert second_entry is None and run["total_tokens"] == 55
     if expected_review == "complete":
         assert content["claims"][1]["support_review"]["verdict"] == second_verdict
@@ -610,3 +659,45 @@ def test_question_only_discovers_unverified_leads_without_creating_evidence(monk
     disabled_content = client.get(path, headers=headers).json()["versions"][-1]["content"]
     assert disabled_content["run"]["search_status"] == "not_requested"
     assert len(calls) == 1
+
+
+def test_review_completion_does_not_overwrite_edits_to_generation_checkpoint(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    entered, release = Event(), Event()
+    source_id = ""
+    class Provider:
+        name = "checkpoint-edit-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            if system == REVIEW_SYSTEM_PROMPT:
+                entered.set()
+                assert release.wait(5)
+                return {"reviews": [{"claim_index": 0, "verdict": "supports"}]}, 10
+            citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+            return {"claims": [{"text": "Revenue was 100", "citations": [citation]}]}, 55
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={"email": "checkpoint-edit@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+    source = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()
+    source_id = source["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "checkpoint-edit-run"}, json={
+        "parent_version_id": topic["versions"][0]["version_id"], "support_review": True,
+        "max_model_calls": 2, "max_total_tokens": 9000}).json()["operation"]
+    assert entered.wait(5)
+    checkpoint = client.get(path, headers=headers).json()["versions"][-1]
+    edited = deepcopy(checkpoint["content"]); edited["summary"] = "User revision"
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": checkpoint["version_id"], "content": edited})
+    assert saved.status_code == 201
+    release.set()
+    for _ in range(100):
+        status = client.get(path + "/runs/" + receipt["operation_id"], headers=headers).json()["operation"]["status"]
+        if status in {"failed", "completed"}: break
+        time.sleep(.02)
+    assert status == "failed"
+    versions = client.get(path, headers=headers).json()["versions"]
+    assert len(versions) == 3 and versions[-1]["content"]["summary"] == "User revision"
+    assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200

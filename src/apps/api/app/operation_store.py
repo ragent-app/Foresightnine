@@ -108,6 +108,8 @@ class OperationStore(Protocol):
 
     def is_cancel_requested(self, operation_id: str) -> bool: ...
 
+    def checkpoint_if_running(self, operation_id: str, admission: Callable[[], None]) -> bool: ...
+
     def finish(
         self,
         *,
@@ -296,6 +298,16 @@ class InMemoryOperationStore:
     def is_cancel_requested(self, operation_id: str) -> bool:
         with self._lock:
             return operation_id in self._cancelled
+
+    def checkpoint_if_running(self, operation_id: str, admission: Callable[[], None]) -> bool:
+        with self._condition:
+            current = self._operations.get(operation_id)
+            if current is None:
+                raise OperationStoreNotFound("Operation not found.")
+            if current.get("status") not in {"pending", "running"}:
+                return False
+            admission()
+            return True
 
     def finish(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any] | None,
                error: dict[str, Any] | None, admission: Callable[[], None] | None = None) -> tuple[bool, dict[str, Any]]:
@@ -693,6 +705,19 @@ class PostgresOperationStore:
             cursor.execute(f"SELECT status = 'cancelled' FROM {OPERATION_STATE_TABLE} WHERE operation_id = %s", (operation_id,))
             row = cursor.fetchone()
             return bool(row and row[0])
+        return self._run(action)
+
+    def checkpoint_if_running(self, operation_id: str, admission: Callable[[], None]) -> bool:
+        def action(ctx: tuple[Any, Any]) -> bool:
+            _connection, cursor = ctx
+            cursor.execute(f"SELECT status FROM {OPERATION_STATE_TABLE} WHERE operation_id = %s FOR UPDATE", (operation_id,))
+            row = cursor.fetchone()
+            if row is None:
+                raise OperationStoreNotFound("Operation not found.")
+            if _row_value(row, "status", 0) not in {"pending", "running"}:
+                return False
+            admission()
+            return True
         return self._run(action)
 
     def finish(self, *, operation_id: str, operation: dict[str, Any], event: dict[str, Any], response: dict[str, Any] | None, error: dict[str, Any] | None,

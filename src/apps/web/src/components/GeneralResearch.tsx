@@ -22,6 +22,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "A model-generated fact had an unlocatable quotation and was omitted.": "模型生成的一项事实引文无法定位，已省略。",
     "A model-generated fact value was absent from its quotation and was omitted.": "模型生成的一项事实数值未出现在引文中，已省略。",
     "The requested model support review did not cover all claims.": "所请求的模型证据复查未覆盖全部结论。",
+    "Generation is saved; support review is pending or was interrupted.": "生成结果已保存；证据复查尚未完成或已中断。",
     "Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.": "跨来源数值差异需要核对研究对象和统计口径，不能直接认定为冲突。",
     "At most 50 candidate differences are shown.": "最多展示 50 组待核查差异。",
     "Source discovery is unavailable; attach source material manually.": "来源搜索暂不可用，请手动添加资料。",
@@ -323,6 +324,9 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
+      // Follow the latest version after this run, even if the latest version
+      // had been explicitly selected before starting it.
+      setSelectedVersionId("");
       if (!["pending", "running"].includes(receipt.operation.status)) {
         const updated = await api.get(topic.topic_id); setTopic(updated);
         setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
@@ -363,9 +367,17 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     finally { setBusy(false); }
   }
   async function cancel() {
-    if (!api || !operation) return;
+    if (!api || !operation || !topic) return;
     setBusy(true);
-    try { setOperation((await api.cancel(operation, crypto.randomUUID())).operation); }
+    try {
+      const stopped = await api.cancel(operation, crypto.randomUUID());
+      setOperation(stopped.operation);
+      try {
+        const updated = await api.get(topic.topic_id);
+        setTopic(updated); setSelectedVersionId("");
+        setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+      } catch { setNotice(en ? "Cancellation was confirmed, but saved research could not be refreshed. Reopen it to check." : "取消已确认，但无法刷新已保存的研究。请重新打开研究查看。"); }
+    }
     catch { setNotice(en ? "Cancellation could not be confirmed." : "无法确认取消结果。"); }
     finally { setBusy(false); }
   }
@@ -472,7 +484,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       </details> : null}
       {operation && ["failed", "cancelled"].includes(operation.status) ? <p role="status">{en ? "This run cannot resume from a checkpoint. Saved versions remain available. Starting another run makes new external requests; previous requests may still be billed." : "此运行无法从检查点续跑，已保存的版本仍可查看。再次运行会发起新的外部请求，之前的请求仍可能产生费用。"}</p> : null}
       {current.content.run.status ? <p>{en ? "Result: " : "结果："}{statusLabel(String(current.content.run.status), en)}</p> : null}
-      {current.content.run.support_review_requested ? <p>{en ? "Model support review: " : "模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
+      {current.content.run.checkpoint === "generation" ? <p role="status">{en ? "Generation checkpoint: citation review had not finished when this draft was saved." : "生成阶段草稿：保存此版本时，引文复查尚未完成。"}</p> : null}
+      {current.content.run.support_review_requested ? <p>{en ? "Model support review: " : "模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
       <h3>{en ? "Sources" : "资料来源"}</h3>
       {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.published_at || (en ? "Publication date unknown" : "公开时间未知")}</p><Button onClick={() => { setTitle(candidate.title); setUrl(candidate.url); setSourceMode("text"); if (sourceDetails.current) { sourceDetails.current.open = true; sourceDetails.current.scrollIntoView({ behavior: "smooth", block: "start" }); } }}>{en ? "Attach source" : "添加此来源"}</Button></article>)}</section> : null}
       {sourceMetadata.length ? <><p>{en ? "Attached material (declared dates are not independently verified)" : "已关联资料（声明的时间尚未独立核验）"}</p><ul>{sourceMetadata.map((source) => { const href = safeCitationUrl(source.url); return <li key={source.source_id}>{href ? <a href={href} target="_blank" rel="noreferrer">{source.title || source.source_id}</a> : source.title || source.source_id} {source.status !== "available" ? (en ? "(unavailable)" : "（不可用）") : <><br /><SourceTimes source={source} en={en} /></>}{source.retrieval_method === "user_pdf" && source.permissions?.display && source.permissions.export ? <> <Button disabled={busy} onClick={() => void downloadOriginal(source.source_id)}>{en ? "Download original" : "下载原文件"}</Button></> : null}</li>; })}</ul></> : null}
