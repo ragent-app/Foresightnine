@@ -1,0 +1,116 @@
+{
+  "manifest_sha256": "9c8c3b51e3589063dbcae50423ca011a21467d32f8779b6252f280f82fa4c120",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The claim asserts that because total current-dollar PCE rose in April 2024 ($39.1 billion, 0.2 percent), both goods and services spending must have risen.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "personal consumption expenditures (PCE) increased $39.1 billion (0.2 percent)."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Real (chained-dollar) goods PCE decreased 0.4 percent in April while services increased 0.1 percent, showing the goods component did not rise in quantity terms. However, these are chained-dollar measures, not current-dollar measures, so they do not directly refute the claim about current-dollar values; they only show the claim's implied quantity logic fails and that the aggregate increase could have been driven by prices or by services.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Real DPI decreased 0.1 percent in April and real PCE decreased 0.1 percent; goods decreased 0.4 percent and services increased 0.1 percent (tables 3 and 4)."
+          }
+        ]
+      },
+      {
+        "text": "The monthly percent-change table also shows chained-dollar goods moving differently from the aggregate: Goods -0.2 percent versus PCE 0.2 percent in April, indicating the components did not move together and the aggregate rise does not establish that goods spending rose.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal consumption expenditures\t0.7\t0.2\t0.4\t0.6\t0.1\t0.7\t0.7\t0.2\t14\n\tGoods\t0.8\t-0.4\t-0.1\t0.5\t-1.5\t0.4\t1.1\t-0.2\t15"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The excerpts do not include current-dollar (nominal) monthly percent changes or dollar levels for goods and services separately for April 2024; only total current-dollar PCE (+$39.1 billion, +0.2 percent) is given, so the goods and services contributions in current dollars cannot be quantified from the supplied text.",
+      "The provided goods (-0.4 percent) and services (+0.1 percent) figures are real/chained-dollar changes, and the source notes 'Chained-dollar values are not additive because the relative weights for a given period differ from those of the reference year,' so they cannot be summed to decompose the current-dollar aggregate.",
+      "Percent changes calculated from chained-dollar levels may differ from index changes due to rounding, per the source.",
+      "Excerpts are partial; Tables 2 and 3 (which would contain current-dollar detail by product) are not fully reproduced, and compressed PDF table columns may be misread.",
+      "The April 2024 figures are preliminary/revised estimates published 2024-05-31; the publication date is declared, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "pce-current-dollar-level-change",
+        "label": "Current-dollar PCE monthly change, April 2024",
+        "value": "39.1",
+        "unit": "billions of dollars; 0.2 percent monthly rate",
+        "currency": "USD",
+        "period": "April 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "personal consumption expenditures (PCE) increased $39.1 billion (0.2 percent)."
+        }
+      },
+      {
+        "fact_id": "pce-real-change",
+        "label": "Real PCE monthly change, April 2024",
+        "value": "-0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "April 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real DPI decreased 0.1 percent in April and real PCE decreased 0.1 percent"
+        }
+      },
+      {
+        "fact_id": "real-goods-change",
+        "label": "Real goods PCE monthly change, April 2024",
+        "value": "-0.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "April 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "goods decreased 0.4 percent and services increased 0.1 percent (tables 3 and 4)."
+        }
+      },
+      {
+        "fact_id": "real-services-change",
+        "label": "Real services PCE monthly change, April 2024",
+        "value": "0.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "April 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "goods decreased 0.4 percent and services increased 0.1 percent (tables 3 and 4)."
+        }
+      },
+      {
+        "fact_id": "pce-price-index",
+        "label": "PCE price index monthly change, April 2024",
+        "value": "0.3",
+        "unit": "percent",
+        "currency": null,
+        "period": "April 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "The PCE price index increased 0.3 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "pce-current-dollar-level-change",
+        "second_fact_id": "pce-price-index"
+      }
+    ]
+  },
+  "reported_tokens": 2711,
+  "prompt_sha256": "3f7aaabbc8b8c0feeadf950cea2e4498056d8e5b46e84ccfd7ad016249ddc27f",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
