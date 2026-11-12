@@ -1955,6 +1955,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     provider, _personal = _model_provider_for_request(http_request)
     generate_structured = getattr(provider, "generate_structured", None)
     checkpoint_parent: str | None = None
+    # Preserve idempotency keys issued before this optional field existed.
+    run_request_payload = _request_payload(request)
+    if request.require_counterarguments:
+        run_request_payload.pop("require_counterarguments", None)
 
     def source_summaries(analyzed_ids: list[str]) -> list[dict[str, Any]]:
         return [{"source_id": s.source_id, "title": s.title,
@@ -2162,6 +2166,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "model_calls": calls, "total_tokens": generation_usage, "cost_usd": None,
                                          "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                          "generation_tokens": generation_usage, "support_review_requested": True,
+                                         "require_counterarguments": request.require_counterarguments,
                                          "support_review_status": "pending", "search_calls": search_calls,
                                          "model": getattr(getattr(provider, "settings", None), "model", None),
                                          "provider": getattr(provider, "name", None),
@@ -2214,11 +2219,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "simulated material is excluded"))
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
-        complete = bool(analysis.claims and analysis.counterarguments and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
+        complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
                         not any(c.get("publication_date_warnings") for c in claims) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
+        if not analysis.counterarguments:
+            limitations.append("No counterarguments were provided; this does not establish that none exist.")
         if request.support_review:
             limitations.append("A second model assessment is not independent proof that evidence supports a claim.")
             if review_status != "complete":
@@ -2252,6 +2259,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
                      "model_calls": calls, "total_tokens": usage, "cost_usd": None,
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,
+                     "require_counterarguments": request.require_counterarguments,
                      "support_review_requested": request.support_review, "support_review_status": review_status,
                      "support_review_error": review_error, "support_review_method": REVIEW_METHOD if request.support_review else None,
                      "analysis_error_detail": analysis_error_detail,
@@ -2313,7 +2321,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                          "revised_at": item.revised_at.isoformat() if item.revised_at else None,
                          "is_simulated": item.is_simulated, "permissions": item.permissions.model_dump(mode="json")}
                         for item in sources],
-            "budget": _request_payload(request),
+            "budget": run_request_payload,
             "model": getattr(getattr(provider, "settings", None), "model", None),
             "provider": getattr(provider, "name", None),
             "provider_limits": {key: getattr(policy, key, None) for key in
@@ -2326,7 +2334,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     # above is a real route and keeps old receipt readers compatible.
     result, replayed = operations.submit_async(endpoint=f"/v1/research/topics/{topic_id}/runs",
         idempotency_key=idempotency_key, owner_subject=f"account:{account.account_id}",
-        request_payload=_request_payload(request), result_field="research", build_result=build,
+        request_payload=run_request_payload, result_field="research", build_result=build,
         session_id=topic_id, before_accept=record_inputs, commit_result=commit)
     _mark_replay(response, replayed)
     return result

@@ -15,6 +15,54 @@ from app.research_analysis import AnalysisInterrupted
 from app.research_verification import REVIEW_SYSTEM_PROMPT
 
 
+@pytest.mark.parametrize("required,bad_citation,expected", [
+    (True, False, "partial"),
+    (False, False, "completed"),
+    (False, True, "partial"),
+])
+def test_counterargument_requirement_can_be_disabled_for_fact_checks(monkeypatch, required, bad_citation, expected):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+
+    class Provider:
+        name = "fact-check-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            quotation = "invented" if bad_citation else "Revenue was 100"
+            return {"claims": [{"text": "Revenue was 100", "citations": [
+                {"source_id": source_id, "quotation": quotation}]}], "counterarguments": []}, 10
+
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    account = client.post("/v1/auth/local/register", json={"email": f"facts-{required}-{bad_citation}@example.test",
+        "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + account["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+        "text": "Revenue was 100.", "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    payload = {"parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": required}
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "fact-check-requirement"}, json=payload)
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        state = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert state == "completed"
+    content = client.get(path, headers=headers).json()["versions"][-1]["content"]
+    assert content["run"]["status"] == expected
+    assert content["run"]["require_counterarguments"] is required
+    assert any("No counterarguments were provided" in item for item in content["limitations"])
+    snapshot = client.get(path + "/runs/" + op + "/inputs", headers=headers).json()
+    assert snapshot["budget"].get("require_counterarguments", True) is required
+    # Old requests and explicit default true have identical idempotency payloads.
+    if required:
+        replay = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "fact-check-requirement"},
+                             json={"parent_version_id": payload["parent_version_id"]})
+        assert replay.status_code == 202 and replay.headers["Idempotency-Replayed"] == "true"
+
+
 def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     calls = []

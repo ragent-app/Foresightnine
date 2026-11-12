@@ -122,6 +122,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [runInputs, setRunInputs] = useState<RunInputSnapshot | null>(null);
   const [allowSearch, setAllowSearch] = useState(true);
   const [supportReview, setSupportReview] = useState(false);
+  const [requireCounterarguments, setRequireCounterarguments] = useState(true);
   const [maxElapsed, setMaxElapsed] = useState("60");
   const [maxTokens, setMaxTokens] = useState("10000");
   const [maxCost, setMaxCost] = useState("");
@@ -330,7 +331,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { search: allowSearch, supportReview, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -482,6 +483,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       <p>{en ? "Only provided material with model permission can be analyzed. A question alone may return a clear information gap." : "目前仅分析你提供且允许模型处理的资料。只输入问题时，系统可能先返回资料缺口。"}</p>
       <label><input type="checkbox" checked={allowSearch} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setAllowSearch(event.target.checked)} /> {en ? "When no material is attached, send the question to the configured search provider to find leads." : "未关联资料时，将问题发送给已配置的搜索服务以查找线索。"}</label>
       <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (up to one additional paid call; not independent verification)." : "请求模型复查引用是否支持结论（最多增加一次付费调用；不等于独立核验）。"}</label>
+      <label><input type="checkbox" checked={requireCounterarguments} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRequireCounterarguments(event.target.checked)} /> {en ? "Require a cited counterargument for a complete result (turn off for straightforward fact checks)." : "完成研究需要有引文的反方意见（简单事实核验可关闭）。"}</label>
       <details className="general-source"><summary>{en ? "Research budget" : "研究预算"}</summary>
         <Field label={en ? "Time limit in seconds (1–180)" : "时间上限（秒，1–180）"}><Input type="number" min="1" max="180" value={maxElapsed} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxElapsed(event.target.value)} /></Field>
         <Field label={en ? "Maximum model tokens" : "模型 Token 上限"}><Input type="number" min="0" max="20000" value={maxTokens} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxTokens(event.target.value)} /></Field>

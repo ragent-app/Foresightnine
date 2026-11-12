@@ -776,6 +776,11 @@
             "title": "Parent Version Id",
             "type": "string"
           },
+          "require_counterarguments": {
+            "default": true,
+            "title": "Require Counterarguments",
+            "type": "boolean"
+          },
           "source_ids": {
             "items": {
               "type": "string"

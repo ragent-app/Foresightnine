@@ -15,6 +15,7 @@ class ResearchRunRequest(BaseModel):
     source_ids: list[str] = Field(default_factory=list, max_length=100)
     max_model_calls: int = Field(default=1, ge=0, le=2)
     support_review: bool = False
+    require_counterarguments: bool = True
     max_search_calls: int = Field(default=1, ge=0, le=1)
     max_elapsed_seconds: int = Field(default=60, ge=1, le=180)
     max_total_tokens: int = Field(default=10000, ge=0, le=20000)
