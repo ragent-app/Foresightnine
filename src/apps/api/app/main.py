@@ -102,7 +102,7 @@ from .research_calculations import CalculationError, CalculationRequest, Confirm
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
-from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
+from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
@@ -1923,6 +1923,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
             date_sources = [s for s in eligible_comparison_sources if previous_hashes.get(s.source_id) == s.content_sha256]
             content.claims = suggest_excerpt_dates(content.claims, date_sources, previous_segments)
         content.claims = flag_counterpoint_agreement(content.claims)
+        content.claims = flag_truncated_previous_findings(content.claims)
         content.evidence_differences = evidence_differences(content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         content.amount_differences = claim_amount_differences(content.claims, content.facts)
@@ -2816,6 +2817,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             claims = suggest_excerpt_dates(claims, eligible_date_sources, analysis.segments)
             claims = flag_partial_source_absence(claims, sources, analysis.segments)
             claims = flag_counterpoint_agreement(claims)
+            claims = flag_truncated_previous_findings(claims)
             return claims
         claims = prepare_claims()
         generation_usage = usage
@@ -2942,7 +2944,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         supplemental_citation_leads = []
                                 first_followup_index = len(analysis.claims) + len(analysis.counterarguments)
                                 room = 20 - len(analysis.counterarguments)
-                                retained_counterpoints = checked.counterarguments[:room]
+                                retained_counterpoints = [{**item, **({'prior_findings_truncated':True} if followup.truncated_findings else {})}
+                                                          for item in checked.counterarguments[:room]]
                                 truncated_counterpoints = len(checked.counterarguments) > room
                                 analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *retained_counterpoints],
                                     limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
@@ -3291,6 +3294,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         limitations = [*discovery_notes, *analysis.limitations]
         if any(c.get('counterpoint_relevance_unverified') for c in claims):
             limitations.append('A counterpoint explicitly agrees with prior findings; review whether it provides a relevant opposing argument or limitation.')
+        if any(c.get('prior_findings_scope_unverified') for c in claims):
+            limitations.append('A counterpoint claims prior findings omit information, but the model received only part of those findings; review the full prior result.')
         if any(c.get('percentage_unit_unverified') for c in claims):
             limitations.append('A percentage matches a quoted number without an explicit percent unit; check the original unit and table context.')
         if any(c.get("source_scope_absence_unverified") for c in claims):

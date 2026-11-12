@@ -549,3 +549,9 @@ def test_model_review_omits_claim_with_uncited_exact_date():
     item = {**claim(), 'text': 'On January 25, 2024 the report said revenue was 100.', 'uncited_exact_dates': []}
     batch = prepare_support_review([item], [source()], 3000)
     assert not batch.indexes and batch.omissions == [{'claim_index': 0, 'reason': 'not_reviewable'}]
+
+
+def test_review_does_not_resolve_an_omission_claim_about_truncated_findings():
+    item = {**claim(), 'text':'The prior findings omit the preferred action.', 'prior_findings_truncated':True}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omitted == [0]

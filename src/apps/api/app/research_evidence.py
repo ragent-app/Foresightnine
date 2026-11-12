@@ -22,6 +22,31 @@ _COUNTERPOINT_AGREEMENT = re.compile(
     r"^\s*(?:the\s+)?(?:prior|previous|original|earlier)\s+(?:findings?|conclusions?|claims?)\s+"
     r"(?:are|is|remain|remains)\s+(?:consistent\s+with|supported\s+by|confirmed\s+by)\b|"
     r"^\s*(?:原|此前|先前)(?:结论|結論|观点|觀點|发现|發現)(?:与|與).{0,30}(?:一致|相符)", re.IGNORECASE)
+_PREVIOUS_FINDINGS_MENTION = re.compile(
+    r"\b(?:prior|previous|original|earlier)\s+(?:findings?|conclusions?|claims?)\b|"
+    r"(?:原|此前|先前)(?:结论|結論|观点|觀點|发现|發現)", re.IGNORECASE)
+_PREVIOUS_FINDINGS_MISSING = re.compile(
+    r"\b(?:omit(?:s|ted)?|miss(?:es|ed)?|lack(?:s|ed)?|fail(?:s|ed)?\s+to\s+(?:include|mention|state)|"
+    r"(?:do|does|did)\s+not\s+(?:include|mention|state))\b|"
+    r"(?:遗漏|遺漏|缺少|未提及|未包含|没有提及|沒有提及)", re.IGNORECASE)
+
+
+def flag_truncated_previous_findings(claims: list[dict]) -> list[dict]:
+    """Flag claims of prior omissions when the follow-up saw only a subset."""
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop('prior_findings_scope_unverified', None)
+        text = entry.get('text')
+        if entry.get('prior_findings_truncated') is True and isinstance(text, str) and len(text) <= 3000:
+            mention, missing = _PREVIOUS_FINDINGS_MENTION.search(text), _PREVIOUS_FINDINGS_MISSING.search(text)
+            if mention and missing and 0 <= missing.start() - mention.end() <= 200:
+                prefix = text[max(0, missing.start() - 20):missing.start()]
+                negated = bool(re.search(r'\b(?:do|does|did)\s+not\s*$', prefix, re.IGNORECASE))
+                if not negated:
+                    entry['prior_findings_scope_unverified'] = True
+        output.append(entry)
+    return output
 
 
 def flag_counterpoint_agreement(claims: list[dict]) -> list[dict]:

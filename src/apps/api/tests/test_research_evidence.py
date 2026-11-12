@@ -1159,3 +1159,21 @@ def test_explicit_opposite_direction_is_flagged_for_matching_metric_and_value():
         assert not flag_component_direction([{**claim,'text':f'{subject} increased 5 percent in Q2 2026.'}],[source])[0].get('balance_direction_warnings')
         assert not flag_component_direction([{**claim,'text':f'It is not true that {subject} increased 5 percent in Q1 2026.'}],[source])[0].get('balance_direction_warnings')
         assert not flag_component_direction([{**claim,'citations':[{**cite,'location':{'status':'ambiguous'}}]}],[source])[0].get('balance_direction_warnings')
+
+
+def test_truncated_previous_findings_omission_cue_is_limited_and_recomputed():
+    from app.research_evidence import flag_truncated_previous_findings
+    text = "The prior findings correctly state the range, but they omit the dissenters' preferred action."
+    items = [
+        {'text': text, 'prior_findings_truncated': True},
+        {'text': text},
+        {'text': 'The dissenters preferred a cut.', 'prior_findings_truncated': True},
+        {'text': '原结论遗漏了反对者的偏好。', 'prior_findings_truncated': True},
+        {'text': 'The prior findings did not omit the preferred action.', 'prior_findings_truncated': True},
+        {'text': 'The prior findings did not include the preferred action.', 'prior_findings_truncated': True},
+    ]
+    result = flag_truncated_previous_findings(items)
+    assert [bool(item.get('prior_findings_scope_unverified')) for item in result] == [True, False, False, True, False, True]
+    assert 'prior_findings_scope_unverified' not in items[0]
+    result[0]['text'] = 'The dissenters preferred a cut.'
+    assert not flag_truncated_previous_findings(result)[0].get('prior_findings_scope_unverified')

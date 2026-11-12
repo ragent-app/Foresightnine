@@ -3742,7 +3742,7 @@ def test_auto_sec_filing_respects_shared_rate_limit(monkeypatch):
     assert not result['claims'] and not result['facts']
 
 
-@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields', 'warning', 'extra_citation_leads', 'malformed_row', 'agreement'])
+@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields', 'warning', 'extra_citation_leads', 'malformed_row', 'agreement', 'truncated_findings'])
 def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeypatch, mode):
     import json
     from uuid import uuid4
@@ -3785,14 +3785,20 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
                     return {'counterarguments':[{'text':'Costs increased.', 'citations':[
                         {'source_id':source_id,'quotation':'Costs increased.'}]},
                         {'text':'secret malformed', 'citations':'invalid'}]}, 70
+                if mode == 'truncated_findings':
+                    return {'counterarguments':[{'text':'The prior findings omit the preferred action.',
+                        'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
                 if mode == 'agreement':
                     return {'counterarguments':[{'text':'Prior findings are consistent with the source: costs increased.',
                         'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
                 return {'counterarguments':[{'text':'Costs also increased.', 'citations':[
                     {'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
             text = 'Revenue increased and inflation was below 2 percent.' if mode == 'extra_citation_leads' else 'Revenue increased.'
-            return {'claims':[{'text':text, 'citations':[
-                {'source_id':source_id,'quotation':'Revenue increased.'}]}]}, 50
+            claims = [{'text':text, 'citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]
+            if mode == 'truncated_findings':
+                claims += [{'text':'Costs increased.', 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]},
+                           {'text':'The preferred action was lower costs.', 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]
+            return {'claims':claims}, 50
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
     monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
@@ -3854,6 +3860,15 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
         assert run['status']=='partial' and 'secret malformed' not in str(content)
         assert any(item.get('role')=='counterargument' and item['text']=='Costs increased.' for item in content['claims'])
         assert any('malformed counterpoints were omitted' in item for item in content['limitations'])
+    elif mode == 'truncated_findings':
+        assert run['counterpoint_status']=='needs_review' and run['status']=='partial'
+        assert len(content['claims']) == 4
+        counter = content['claims'][-1]
+        assert counter['prior_findings_truncated'] and counter['prior_findings_scope_unverified']
+        saved = client.post(path+'/versions', headers=headers, json={
+            'parent_version_id': versions[-1]['version_id'], 'content': content, 'note':'Keep for review'})
+        assert saved.status_code == 201
+        assert saved.json()['versions'][-1]['content']['claims'][-1]['prior_findings_scope_unverified']
     else:
         assert run['counterpoint_status']=='needs_review' and run['status']=='partial'
         assert any(item.get('counterpoint_relevance_unverified') for item in content['claims'])
