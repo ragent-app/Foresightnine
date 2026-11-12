@@ -176,7 +176,9 @@ def test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissio
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             if system == api.REVIEW_SYSTEM_PROMPT:
                 review_indexes.extend(item["claim_index"] for item in json.loads(prompt)["claims"])
-                assert not {0, 2, 3}.intersection(review_indexes)
+                # Provider-facing indexes are dense within this batch; the
+                # persisted run maps them back to original claim indexes.
+                assert review_indexes == list(range(len(review_indexes)))
                 return {"reviews": [{"claim_index": index, "verdict": "supports"} for index in review_indexes]}, 20
             parts = json.loads(prompt)["sources"]
             assert any("74.4" in item["text"] for item in parts)
@@ -218,6 +220,8 @@ def test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissio
     assert content["amount_differences"][0]["claimed_amount"] == "74.4亿美元"
     assert content["claims"][2]["uncited_fact_values"] and content["claims"][3]["uncited_fact_values"]
     assert not any(content["claims"][i].get("support_review") for i in (0, 2, 3))
+    assert not {0, 2, 3}.intersection(content["run"]["support_review_indexes"])
+    assert len(content["run"]["support_review_indexes"]) == len(review_indexes)
     assert {entry["claim_index"] for entry in content["run"]["support_review_omissions"]} >= {0, 2, 3}
     difference = content["evidence_differences"][0]
     assert difference["matching_basis"] == "release_qualifiers_ignored"

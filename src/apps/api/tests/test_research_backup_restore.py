@@ -55,7 +55,7 @@ a = client.post('/v1/auth/local/register', json={'email':f'backup-a-{uuid4().hex
 b = client.post('/v1/auth/local/register', json={'email':f'backup-b-{uuid4().hex}@example.test','password':'correct horse battery staple!'})
 assert a.status_code == b.status_code == 201
 headers={'Authorization':'Bearer '+a.json()['access_token']}
-source=client.post('/v2/research/sources',headers=headers,json={'title':'Synthetic report','text':'Revenue was 100 million in 2024.','permissions':{'store':True,'display':True,'model_input':True,'export':True}})
+source=client.post('/v2/research/sources',headers=headers,json={'title':'Synthetic report','text':'Revenue was 100 million in 2024. Goods had a $36.7 billion decrease. Services increased $44.9 billion.','permissions':{'store':True,'display':True,'model_input':True,'export':True}})
 assert source.status_code==201
 sid=source.json()['source_id']
 topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?','source_ids':[sid]})
@@ -66,7 +66,11 @@ class Provider:
  policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
  def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
   c={'source_id':sid,'quotation':'Revenue was 100 million in 2024.'}
-  return {'claims':[{'text':'Revenue was 100 million.','citations':[c]}], 'counterarguments':[{'text':'Revenue alone does not establish profit.','citations':[c]}], 'facts':[], 'calculations':[], 'limitations':[]}, 40
+  facts=[{'fact_id':'goods','label':'Goods change','value':'-36.7','unit':'billion USD','currency':'USD','period':'2024',
+          'citation':{'source_id':sid,'quotation':'a $36.7 billion decrease'}},
+         {'fact_id':'services','label':'Services change','value':'44.9','unit':'billion USD','currency':'USD','period':'2024',
+          'citation':{'source_id':sid,'quotation':'increased $44.9 billion'}}]
+  return {'claims':[{'text':'Revenue was 100 million.','citations':[c]}], 'counterarguments':[{'text':'Revenue alone does not establish profit.','citations':[c]}], 'facts':facts, 'calculations':[], 'limitations':[]}, 40
 api.challenge_provider=Provider()
 r=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'backup-drill-idempotency'},json=payload);assert r.status_code==202, r.text
 op=r.json()['operation']['operation_id']
@@ -76,6 +80,13 @@ for _ in range(200):
  time.sleep(.05)
 assert status=='completed', status
 value=client.get(path,headers=headers).json();assert len(value['versions'])==2
+r=client.post(path+'/facts/confirm-direction',headers=headers,json={'parent_version_id':value['versions'][-1]['version_id'],'fact_id':'goods'})
+assert r.status_code==201,r.text
+value=r.json()
+r=client.post(path+'/calculations',headers=headers,json={'parent_version_id':value['versions'][-1]['version_id'],
+  'formula':'difference','first_fact_id':'services','second_fact_id':'goods'})
+assert r.status_code==201,r.text
+value=r.json();assert value['versions'][-1]['content']['calculations'][0]['value']=='81.60'
 r=client.post(path+'/versions',headers=headers,json={'parent_version_id':value['versions'][-1]['version_id'],'content':value['versions'][-1]['content'],'review':'confirmed','note':'Synthetic confirmation'})
 assert r.status_code==201, r.text
 state={'token':a.json()['access_token'],'other':b.json()['access_token'],'source_id':sid,'path':path,'operation_id':op,'payload':payload,'topic':r.json()}
@@ -96,6 +107,9 @@ h={'Authorization':'Bearer '+s['token']};other={'Authorization':'Bearer '+s['oth
 r=client.get(path,headers=h);assert r.status_code==200 and r.json()==s['topic']
 assert r.json()['versions'][-1]['review']=='confirmed'
 assert r.json()['versions'][-1]['content']['claims'][0]['citations'][0]['quotation']=='Revenue was 100 million in 2024.'
+fact=next(f for f in r.json()['versions'][-1]['content']['facts'] if f['fact_id']=='goods')
+assert fact['direction_confirmation']['confirmed_by']=='user' and api.direction_user_confirmed(fact)
+assert r.json()['versions'][-1]['content']['calculations'][0]['value']=='81.60'
 assert client.get('/v2/research/sources/'+s['source_id'],headers=h).status_code==200
 assert client.get(path,headers=other).status_code==404
 assert client.get('/v2/research/sources/'+s['source_id'],headers=other).status_code==404

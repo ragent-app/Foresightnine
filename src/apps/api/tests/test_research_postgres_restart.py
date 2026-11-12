@@ -329,3 +329,69 @@ assert client.delete("/v1/auth/local/account", headers=headers).status_code == 2
     for script in (start, recover):
         result = subprocess.run([sys.executable, "-c", script], cwd=root, env=env, capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
+def test_corrected_fact_confirmation_and_calculation_survive_process_restart(tmp_path):
+    """Versioned user evidence and confirmation survive a fresh PostgreSQL client process."""
+    env=dict(os.environ,FORESIGHTNINE_STORAGE_MODE="postgres",FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
+             FORESIGHTNINE_POSTGRES_DSN=os.environ["FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"],
+             STAGEB_TEST_STATE=str(tmp_path/"fact-confirmation.json"))
+    root=Path(__file__).resolve().parents[3]
+    start=r'''
+import json, os, sys
+from uuid import uuid4
+sys.path.insert(0,"apps/api")
+from fastapi.testclient import TestClient
+import app.main as api
+client=TestClient(api.app)
+r=client.post("/v1/auth/local/register",json={"email":f"persist-fact-{uuid4().hex}@example.test","password":"correct horse battery staple!"})
+assert r.status_code==201,r.text
+headers={"Authorization":"Bearer "+r.json()["access_token"]}
+s=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Goods had a $36.7 billion decrease. Goods had a $40.0 billion decrease. Services increased $44.9 billion.",
+ "permissions":{"store":True,"display":True,"model_input":True}});assert s.status_code==201,s.text
+sid=s.json()["source_id"]
+t=client.post("/v2/research/topics",headers=headers,json={"question":"Spending changes?","source_ids":[sid]});assert t.status_code==201,t.text
+topic=t.json();path="/v2/research/topics/"+topic["topic_id"]
+facts=[{"fact_id":"goods","label":"Goods change","value":"-40.0","unit":"billion USD","currency":"USD","period":"2023-03",
+        "source_id":sid,"quotation":"a $36.7 billion decrease"},
+       {"fact_id":"services","label":"Services change","value":"44.9","unit":"billion USD","currency":"USD","period":"2023-03",
+        "source_id":sid,"quotation":"increased $44.9 billion"}]
+r=client.post(path+"/versions",headers=headers,json={"parent_version_id":topic["versions"][0]["version_id"],"content":{"facts":facts}})
+assert r.status_code==201,r.text
+bad=r.json()["versions"][-1];assert bad["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
+content=bad["content"];content["facts"][0]["quotation"]="a $40.0 billion decrease";content["facts"][0].pop("location",None)
+r=client.post(path+"/versions",headers=headers,json={"parent_version_id":bad["version_id"],"content":content})
+assert r.status_code==201,r.text
+corrected=r.json()["versions"][-1];assert corrected["content"]["facts"][0]["direction_context_unverified"]
+r=client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":corrected["version_id"],"fact_id":"goods"});assert r.status_code==201,r.text
+confirmed=r.json()["versions"][-1]
+r=client.post(path+"/calculations",headers=headers,json={"parent_version_id":confirmed["version_id"],"formula":"difference","first_fact_id":"services","second_fact_id":"goods"})
+assert r.status_code==201,r.text
+final=r.json()["versions"][-1];assert final["content"]["calculations"][0]["value"]=="84.90"
+with open(os.environ["STAGEB_TEST_STATE"],"w") as f:json.dump({"token":headers["Authorization"],"path":path,"version":final["version_id"],"bad":bad["version_id"]},f)
+'''
+    recover=r'''
+import json, os, sys
+sys.path.insert(0,"apps/api")
+from fastapi.testclient import TestClient
+import app.main as api
+with open(os.environ["STAGEB_TEST_STATE"]) as f:state=json.load(f)
+client=TestClient(api.app);headers={"Authorization":state["token"]};path=state["path"]
+r=client.get(path,headers=headers);assert r.status_code==200,r.text
+versions=r.json()["versions"];final=versions[-1];assert final["version_id"]==state["version"]
+assert next(v for v in versions if v["version_id"]==state["bad"])["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
+fact=next(f for f in final["content"]["facts"] if f["fact_id"]=="goods")
+assert fact["quotation"]=="a $40.0 billion decrease" and fact["direction_confirmation"]["confirmed_by"]=="user"
+assert api.direction_user_confirmed(fact)
+assert final["content"]["calculations"][0]["value"]=="84.90" and final["content"]["calculations"][0]["input_status"]=="matched"
+content=final["content"];content["facts"][0]["label"]="Different metric"
+r=client.post(path+"/versions",headers=headers,json={"parent_version_id":final["version_id"],"content":content});assert r.status_code==201,r.text
+changed=r.json()["versions"][-1];assert not changed["content"]["facts"][0].get("direction_confirmation")
+assert changed["content"]["calculations"][0]["input_status"]=="unverifiable"
+r=client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":changed["version_id"],"calculation_index":0});assert r.status_code==422,r.text
+assert client.delete("/v1/auth/local/account",headers=headers).status_code==200
+'''
+    for script in (start,recover):
+        result=subprocess.run([sys.executable,"-c",script],cwd=root,env=env,capture_output=True,text=True,timeout=60)
+        assert result.returncode==0,result.stderr
