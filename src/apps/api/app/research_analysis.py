@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v21"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v22"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 
@@ -525,6 +525,27 @@ def _select_windows(text: str, question: str, length: int, count: int,
     if len(text) <= length:
         return [(0, text)]
     lower = question.casefold()
+    # Match native Chinese source text as well as the English translations
+    # below. Keep only a bounded number of short overlapping phrases; these
+    # are retrieval cues, not inferred entities or semantic validation.
+    pieces = re.split(r"比较|分析|列出|说明|请问|什么|多少|是否|如何|哪些|以及|的|与|和|为|在|是|及|该|其", lower[:512])
+    chinese_runs = [run for piece in pieces for run in re.findall(r"[\u3400-\u9fff]{2,}", piece)]
+    chinese_terms: list[str] = []
+    for size in (4, 3, 2):
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        added = 0
+        for run in chinese_runs:
+            for position in range(min(max(0, len(run) - size + 1), 128)):
+                term = run[position:position + size]
+                if term not in chinese_terms:
+                    chinese_terms.append(term)
+                    added += 1
+                    if added == 8:
+                        break
+            if added == 8:
+                break
+    chinese_terms = [term for term in chinese_terms if term in text]
     terms = set(re.findall(r"[a-z]{3,}|(?<!\d)(?:19|20)\d{2}(?!\d)", lower)) - {
         "the", "and", "for", "what", "how", "was", "were", "compare", "report", "from", "with", "that", "this", "does", "differ",
         "according", "distinguish", "their", "periods", "note", "relevant", "limitations", "provided", "supplied", "using"}
@@ -553,7 +574,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
                    "july", "august", "september", "october", "november", "december")
     for month in re.findall(r"(?<!\d)(1[0-2]|[1-9])\s*月", lower):
         terms.add(month_names[int(month) - 1])
-    if not terms:
+    if not terms and not chinese_terms:
         return [(0, text[:length])]
     # Keep the search bounded for long or adversarial questions. Query years
     # and coverage matter more than the raw density of digits in a table.
@@ -569,6 +590,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
                 "cut": ("cut", "lower", "decrease", "reduc"),
                 "half": ("half", "1/2", "0.5")}
     groups = list(dict.fromkeys(synonyms.get(term, (term,)) for term in words))
+    groups.extend((term,) for term in chinese_terms)
     wants_annual_levels = ("full-year" in lower or "full year" in lower or "全年" in lower or
                            bool(re.search(r"\bannual\s+(?:real\s+)?(?:gdp|growth|revenue|income)\b", lower)))
     wants_month_comparison = any(term in lower for term in ("环比", "较上月", "month-on-month", "preceding month", "monthly"))
@@ -758,10 +780,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
     if as_of is not None:
         data["research_cutoff"] = as_of.isoformat()
-        data["evidence_guidance"] += (
-            " Answer from information available by research_cutoff; do not use later events. "
-            "Declared source dates are not independent proof of historical availability."
-        )
+        data["evidence_guidance"] += " Do not use events after research_cutoff."
     if focus is not None:
         data["evidence_guidance"] += (
             " A user selected a passage for attention; assess its relevance to the question, "

@@ -1013,9 +1013,28 @@ def test_prompt_includes_cutoff_only_for_historical_research():
         return {}, 1
     analyze('What was known?', [old, later], cutoff, generate)
     assert captured[0]['research_cutoff'] == cutoff.isoformat()
-    assert 'do not use later events' in captured[0]['evidence_guidance']
+    assert 'Do not use events after research_cutoff' in captured[0]['evidence_guidance']
     assert [item['source_id'] for item in captured[0]['sources']] == ['old']
     captured.clear()
     analyze('What happened?', [old], None, generate)
     assert 'research_cutoff' not in captured[0]
-    assert 'do not use later events' not in captured[0]['evidence_guidance']
+    assert 'Do not use events after research_cutoff' not in captured[0]['evidence_guidance']
+
+
+def test_chinese_question_retrieves_matching_chinese_source_with_original_offsets():
+    from app.research_analysis import _select_windows
+    target = '云计算业务2024年营业收入达到4321万元，较上年增长百分之十。'
+    text = '无关地区的库存、税务和采购讨论。' * 350 + target + '其他业务说明。' * 350
+    parts = _select_windows(text, '比较云计算业务2024年营业收入变化', 160, 2)
+    assert any(target in passage for _, passage in parts)
+    assert all(text[start:start + len(passage)] == passage for start, passage in parts)
+    assert sum(len(passage) for _, passage in parts) <= 320
+    calls = []
+    def generate(prompt):
+        payload = json.loads(prompt)
+        calls.append(payload)
+        return {'claims': [{'text': '营业收入达到4321万元', 'citations': [{'source_id': 's', 'quotation': target}]}]}, 5
+    result = analyze('比较云计算业务2024年营业收入变化', [source('s', text=text)], None, generate, max_prompt_chars=2500)
+    assert any(target in item['text'] for item in calls[0]['sources'])
+    assert result.claims[0]['citations'][0]['location']['character_start'] == text.index(target)
+    assert result.prompt_bytes <= 2500
