@@ -147,6 +147,25 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
                 if len(warnings) >= 5:
                     break
                 continue
+            # A relative clause can contain another metric (e.g. GDP) while
+            # still omitting the subject it describes (e.g. imports). Check
+            # this before the metric shortcut so a later noun cannot hide the
+            # missing antecedent. This exposes context, not an entailment verdict.
+            if re.match(r"(?i)^\s*(?:which|who|that)\s+(?:is|are|was|were|has|have|had)\b", quote):
+                prefix_start = max(0, start - 200)
+                prefix = source.text[prefix_start:start]
+                boundaries = list(_SENTENCE_END.finditer(prefix))
+                left = prefix_start + (boundaries[-1].end() if boundaries else 0)
+                antecedent = source.text[left:start]
+                if (antecedent.strip() and "\f" not in antecedent and len(antecedent) < 200 and
+                        re.search(r"[\w)]\s*,\s*$", antecedent)):
+                    warnings.append({"source_id": source_id, "citation_index": index,
+                                     "context_metric": "relative-clause antecedent",
+                                     "context_character_start": left, "context_character_end": start,
+                                     "status": "requires_review"})
+                    if len(warnings) >= 5:
+                        break
+                    continue
             if any(pattern.search(quote) for pattern in _METRIC_SUBJECTS.values()):
                 continue
             before = source.text[max(0, start - 400):start]

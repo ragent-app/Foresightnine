@@ -372,3 +372,25 @@ def test_fraction_denominator_is_not_suggested_as_unrelated_numeric_fact():
              'location': {'character_start': a, 'character_end': a + len(range_quote)}}]}
     result = suggest_uncited_numeric_facts([claim], [item], [src])[0]
     assert not result.get('uncited_fact_values') and not result.get('suggested_fact_evidence')
+
+
+def test_relative_clause_flags_omitted_subject_even_when_quote_mentions_another_metric():
+    text = 'Other information. Imports, which are a subtraction in the calculation of GDP, were revised down.'
+    quote = 'which are a subtraction in the calculation of GDP, were revised down.'
+    start = text.index(quote)
+    source = ResearchSource(source_id='s', owner_id='owner', title='Report', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash', permissions=SourcePermissions(store=True, display=True, model_input=True))
+    claim = {'text':'Inventory was subtracted from GDP.', 'citations':[{'source_id':'s', 'quotation':quote,
+        'location':{'character_start':start, 'character_end':start+len(quote)}}]}
+    flagged = flag_citation_subject_context([claim], [source])[0]
+    warning = flagged['citation_context_warnings'][0]
+    assert warning['context_metric'] == 'relative-clause antecedent'
+    assert 'Imports,' in text[warning['context_character_start']:warning['context_character_end']]
+    assert warning['status'] == 'requires_review' and not claim.get('citation_context_warnings')
+    full = 'Imports, ' + quote; full_start = text.index(full)
+    complete = {**claim, 'citations':[{'source_id':'s', 'quotation':full,
+        'location':{'character_start':full_start,'character_end':full_start+len(full)}}]}
+    assert not flag_citation_subject_context([complete], [source])[0].get('citation_context_warnings')
+    denied = source.model_copy(update={'permissions':SourcePermissions(store=True, display=False)})
+    assert not flag_citation_subject_context([claim], [denied])[0].get('citation_context_warnings')
+    assert not flag_citation_subject_context([{**claim, 'citations':[{**claim['citations'][0], 'location':{'status':'ambiguous'}}]}], [source])[0].get('citation_context_warnings')

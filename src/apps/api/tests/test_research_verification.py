@@ -190,3 +190,17 @@ def test_review_does_not_accept_unquoted_basis_point_figures():
     item = {**claim(), 'text': 'Rates increased by 25 basis points'}
     batch = prepare_support_review([item], [source()], 3000)
     assert batch.indexes == [] and batch.omissions[0]['reason'] == 'not_reviewable'
+
+
+def test_review_keeps_relative_clause_antecedent_with_verbatim_quote():
+    text = 'Other update. Imports, which are a subtraction in GDP, were revised down.'
+    quotation = 'which are a subtraction in GDP, were revised down.'
+    start = text.index(quotation)
+    report = source().model_copy(update={'text':text})
+    item = {'text':'Inventory was subtracted from GDP.', 'citations':[{'source_id':'s', 'quotation':quotation,
+        'location':{'character_start':start,'character_end':start+len(quotation)}}]}
+    batch = prepare_support_review([item], [report], 2000)
+    assert batch.indexes == [0]
+    excerpt = json.loads(batch.prompt)['claims'][0]['excerpts'][0]
+    assert 'Imports,' in excerpt['preceding_context'] and excerpt['quotation'] == quotation
+    assert report.text[batch.segments[0]['required_context_start']:start].strip() == 'Imports,'
