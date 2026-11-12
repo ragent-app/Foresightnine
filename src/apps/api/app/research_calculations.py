@@ -157,14 +157,11 @@ def _spanned_table_period_conflict(source_text: str, start: int, value: Decimal,
     """
     year_match = re.fullmatch(r"(?:FY\s*)?((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
     if year_match is None:
-        year_match = re.fullmatch(r"(?:Fiscal\s+)?Year\s+Ended\s+[A-Za-z]+\s+\d{1,2},?\s+((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
-        if year_match is not None:
-            date_text = re.sub(r"^(?:Fiscal\s+)?Year\s+Ended\s+", "", period.strip(), flags=re.IGNORECASE)
-            try:
-                datetime.strptime(date_text.replace(",", ""), "%B %d %Y")
-            except ValueError:
-                return None
-    if year_match is None:
+        ended = parse_annual_period_end(period)
+        declared_year = str(ended.year) if ended is not None else None
+    else:
+        declared_year = year_match.group(1)
+    if declared_year is None:
         return None
     def parse_row(line: str) -> list[tuple[int, int, str]] | None:
         line = line.strip()
@@ -254,8 +251,8 @@ def _spanned_table_period_conflict(source_text: str, start: int, value: Decimal,
                     len({year for _, _, year in selected_years}) != len(selected_years)):
                 return None
             candidates = [year for a, b, year in selected_years if a <= positions[0][0] and positions[0][1] <= b]
-            if len(candidates) == 1 and candidates[0] != year_match.group(1):
-                return {"declared_year": year_match.group(1), "column_year": candidates[0]}
+            if len(candidates) == 1 and candidates[0] != declared_year:
+                return {"declared_year": declared_year, "column_year": candidates[0]}
             return None
         # Only blank rows, unit labels, or ordinary numeric data rows may
         # intervene between date header and target. Arbitrary text stops us.
@@ -392,6 +389,24 @@ def currency_value_conflict(currency: str | None, value: object, quotation: str 
     return bool(len(seen) == 1 and code not in seen)
 
 
+def parse_annual_period_end(period: str) -> date | None:
+    """Recognize an explicit annual end date and an optional consistent FY label.
+
+    Some issuers label a fiscal year differently from its calendar end year;
+    such mixed labels require source-specific interpretation and return None.
+    """
+    value = period.strip()
+    match = re.fullmatch(r"(?:(?:FY\s*((?:19|20)\d{2}))\s*\(\s*)?(?:fiscal\s+)?year\s+ended\s+([A-Za-z]+)\s+(\d{1,2}),?\s+((?:19|20)\d{2})(\s*\))?", value, re.IGNORECASE)
+    if not match or bool(match.group(1)) != bool(match.group(5)):
+        return None
+    months = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+    try:
+        end = date(int(match.group(4)), months.index(match.group(2).casefold()) + 1, int(match.group(3)))
+    except ValueError:
+        return None
+    return end if match.group(1) is None or int(match.group(1)) == end.year else None
+
+
 def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
     """Parse only unambiguous matching period formats, without guessing fiscal calendars."""
     value = period.strip()
@@ -404,13 +419,7 @@ def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
     # Financial filings commonly spell out the end date of each annual period.
     # Keep this distinct from bare dates and FY labels: matching dates alone do
     # not establish that two companies use comparable fiscal calendars.
-    match = re.fullmatch(r"(?:fiscal\s+)?year\s+ended\s+([A-Za-z]+)\s+(\d{1,2}),?\s+((?:19|20)\d{2})", value, re.IGNORECASE)
-    if match:
-        months = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
-        try:
-            day = date(int(match.group(3)), months.index(match.group(1).casefold()) + 1, int(match.group(2)))
-        except ValueError:
-            return None
+    if day := parse_annual_period_end(value):
         return ("year_ended_date", (day.year, day.month, day.day))
     if re.fullmatch(r"(?:19|20)\d{2}-\d{2}-\d{2}", value):
         try:

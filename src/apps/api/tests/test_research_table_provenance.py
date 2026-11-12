@@ -84,6 +84,8 @@ def test_annual_alignment_checks_original_column_and_exact_date():
     data = {'status': 'available', **trace(source)}
     matched = annual_table_value_alignment(data, Decimal('100'), 'Fiscal year ended July 27, 2024')
     assert matched['status'] == 'matched' and matched['column_date'] == '2024-07-27'
+    assert annual_table_value_alignment(data, Decimal('100'), 'FY2024 (year ended July 27, 2024)')['status'] == 'matched'
+    assert annual_table_value_alignment(data, Decimal('100'), 'FY2023 (year ended July 27, 2024)') is None
     assert annual_table_value_alignment(data, Decimal('100'), 'Fiscal year ended July 29, 2023')['status'] == 'conflict'
     assert annual_table_value_alignment(data, Decimal('100'), 'Fiscal year ended July 28, 2024')['status'] == 'conflict'
     assert annual_table_value_alignment(data, Decimal('100'), 'FY2024') is None

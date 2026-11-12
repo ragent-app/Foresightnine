@@ -107,6 +107,7 @@ def test_nonfinite_values_rejected():
     ("Year Ended January 30, 2022", "Year Ended January 29, 2023"),
     ("Year ended January 29 2023", "YEAR ENDED JANUARY 29, 2023"),
     ("Fiscal year ended July 29, 2023", "Fiscal year ended July 27, 2024"),
+    ("FY2023 (year ended July 29, 2023)", "FY2024 (year ended July 27, 2024)"),
 ])
 def test_growth_rejects_reversed_or_equivalent_recognized_periods(current, baseline):
     with pytest.raises(CalculationError, match="later than its baseline"):
@@ -123,6 +124,16 @@ def test_growth_does_not_guess_order_across_fiscal_and_calendar_or_free_text():
                                               second=fact("b", "80", baseline)))
         assert result["value"] == "25.00" and result["input_verification"] == "not_verified_by_calculator"
         assert result["period_order_check"] == "not_checked"
+
+
+def test_annual_period_end_requires_consistent_label_and_valid_date():
+    from datetime import date
+    from app.research_calculations import parse_annual_period_end
+    assert parse_annual_period_end('FY2024 (year ended July 27, 2024)') == date(2024, 7, 27)
+    assert parse_annual_period_end('Fiscal year ended July 27, 2024') == date(2024, 7, 27)
+    for value in ('FY2024 (year ended July 27, 2025)', 'FY2024 (year ended February 30, 2024)',
+                  'FY2024 year ended July 27, 2024', 'year ended July 27, 2024)', '2024 Q4'):
+        assert parse_annual_period_end(value) is None
 
 
 def test_retained_calculation_detects_changed_missing_and_ambiguous_facts():
@@ -330,6 +341,8 @@ def test_spanned_table_period_conflict_needs_complete_unique_consistent_columns(
     assert check(text, period='Year Ended January 29, 2023') is None
     assert check(text, period='Fiscal Year Ended January 30, 2022') == {'declared_year': '2022', 'column_year': '2023'}
     assert check(text, period='Fiscal Year Ended February 30, 2022') is None
+    assert check(text, period='FY2022 (year ended January 30, 2022)') == {'declared_year': '2022', 'column_year': '2023'}
+    assert check(text, period='FY2023 (year ended January 30, 2022)') is None
     assert check(text, q='9,108', value='9108', period='FY2023') == {'declared_year': '2023', 'column_year': '2022'}
     assert check(text, q='Operating cash', value='5641') is None
     assert check(text.replace('9,108','5,641')) is None

@@ -17,7 +17,7 @@ from time import monotonic
 from typing import Callable
 
 from .research_fetch import _TextParser
-from .research_calculations import quotation_is_inside_table_row, quotation_is_table_row
+from .research_calculations import parse_annual_period_end, quotation_is_inside_table_row, quotation_is_table_row
 from .research_sources import ResearchSource
 from .research_uploads import MAX_PDF_BYTES, MAX_TEXT_BYTES, _UploadedHtmlParser
 
@@ -204,12 +204,8 @@ def annual_table_value_alignment(trace: dict, value: Decimal, period: str) -> di
     rows = trace["rows"]
     if not 2 <= len(rows) <= 16:
         return None
-    period_match = re.fullmatch(r"(?:fiscal\s+)?year\s+ended\s+([A-Za-z]+\s+\d{1,2},?\s+(?:19|20)\d{2})", period.strip(), re.IGNORECASE)
-    if not period_match:
-        return None
-    try:
-        declared = datetime.strptime(period_match.group(1).replace(",", ""), "%B %d %Y").date()
-    except ValueError:
+    declared = parse_annual_period_end(period)
+    if declared is None:
         return None
     width = rows[-1].get("width")
     if not isinstance(width, int) or width <= 0 or any(row.get("width") != width for row in rows):
