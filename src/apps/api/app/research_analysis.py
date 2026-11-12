@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v26"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v27"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -281,8 +281,8 @@ def prepare_sources(sources: list[ResearchSource], as_of: datetime | None) -> tu
 
 
 def _select_window(text: str, question: str, length: int,
-                   should_stop: Callable[[], bool] | None = None) -> tuple[int, str]:
-    return _select_windows(text, question, length, 1, should_stop)[0]
+                   should_stop: Callable[[], bool] | None = None, *, source_title: str = "") -> tuple[int, str]:
+    return _select_windows(text, question, length, 1, should_stop, source_title=source_title)[0]
 
 
 def _trim_partial_ascii_words(text: str, start: int, passage: str) -> tuple[int, str]:
@@ -633,7 +633,7 @@ def _structured_observation_windows(text: str, question: str, size: int,
 
 
 def _select_windows(text: str, question: str, length: int, count: int,
-                    should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
+                    should_stop: Callable[[], bool] | None = None, *, source_title: str = "") -> list[tuple[int, str]]:
     """Select bounded, non-overlapping passages with original-text offsets."""
     if len(text) <= length:
         return [(0, text)]
@@ -680,6 +680,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "较上年同期": ("year", "month"),
         "联邦基金": ("federal", "funds"), "目标区间": ("target", "range"),
         "目标利率区间": ("target", "range"), "未来": ("ongoing", "future"),
+        "后续": ("additional", "future"), "政策": ("policy",),
+        "考虑": ("consider", "account"), "因素": ("factors", "cumulative", "lags"),
         "决定": ("decided",),
         "下调": ("lower", "decrease"), "上调": ("raise", "increase"),
         "变化幅度": ("lower", "increase", "decrease"), "当期美元": ("current", "dollars"),
@@ -724,7 +726,18 @@ def _select_windows(text: str, question: str, length: int, count: int,
     wants_advance_estimate = (any(term in intent for term in ("初次估计", "advance estimate", "first estimate")) or
                               ("初次" in intent and "估计" in intent))
     wants_third_estimate = any(term in intent for term in ("第三次估计", "third estimate"))
+    # When a comparison asks for both releases, a source's user-supplied
+    # title can be a retrieval cue for its own estimate. It does not establish
+    # identity or override source evidence, and ambiguous titles do nothing.
+    if wants_second_estimate and wants_third_estimate:
+        title = _query_intent(source_title[:500])
+        title_second = bool(re.search(r"\bsecond\s+estimate\b|第二次估计", title))
+        title_third = bool(re.search(r"\bthird\s+estimate\b|第三次估计", title))
+        if title_second != title_third:
+            wants_second_estimate, wants_third_estimate = title_second, title_third
     wants_decision = any(term in intent for term in ("决定", "决议", "decision", "decided", "目标区间", "目标利率区间", "target range"))
+    wants_policy_factors = (any(term in intent for term in ("政策", "policy")) and
+                            any(term in intent for term in ("因素", "考虑", "factors", "consider")))
     metric_terms = set()
     for term in ("gdp", "pce", "revenue", "sales", "income", "inflation", "price"):
         if term in terms:
@@ -764,6 +777,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
                             (wants_previous_period, r"\bchange\s+from\s+(?:the\s+)?preceding\s+(?:month|period)\b"),
                             (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b"),
                             (wants_vote, r"\bvoting\s+against\s+this\s+action\b"),
+                            (wants_policy_factors, r"\bcumulative\s+tightening\b"),
                             (wants_third_estimate, r"\bthird[\"']?\s+estimate\b"),
                             (wants_second_estimate, r"\bsecond[\"']?\s+estimate\b"),
                             (wants_advance_estimate, r"\bin\s+the\s+advance\s+estimate\b"),
@@ -829,6 +843,11 @@ def _select_windows(text: str, question: str, length: int, count: int,
             score += 250
         if wants_decision and re.search(r"\b(?:decided|voted)\s+to\s+(?:lower|raise|maintain|hold|increase|reduce)\s+(?:the\s+)?target\s+range\b", passage):
             score += 350
+        if (wants_policy_factors and re.search(r"\bcumulative\s+tightening\b", passage) and
+                re.search(r"\blags?\b", passage)):
+            score += 1200
+            if re.search(r"\beconomic\s+and\s+financial\s+developments\b", passage):
+                score += 500
         if wants_annual_levels and re.search(r"\b(?:annual (?:level|average)|calendar year|full[- ]year|year ended)\b", passage):
             score += 350
             if re.search(r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b", passage):
@@ -943,9 +962,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     if windows is None:
                         windows = _comparison_windows(selection_text, question, size, should_stop)
                     if windows is None:
-                        windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop), key=lambda item: item[0])
+                        windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop, source_title=source.title), key=lambda item: item[0])
                 else:
-                    windows = [_select_window(selection_text, question, size, should_stop)]
+                    windows = [_select_window(selection_text, question, size, should_stop, source_title=source.title)]
             windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
             return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                     for start, part in windows]

@@ -1152,3 +1152,37 @@ def test_explicit_currency_conflict_does_not_enter_calculation():
     assert all(f['currency_conflict_unverified'] for f in result.facts)
     assert result.calculations == []
     assert any('currency conflicts' in note for note in result.limitations)
+
+
+def test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact():
+    q = '比较第二次估计与第三次估计的实际GDP及修订方向。'
+    second = ('Other information. ' * 20 + 'Real GDP increased at an annual rate of 2.8 percent in the third quarter, according to the "second" estimate. ' +
+              'Other material. ' * 30 + 'In the third estimate, the prior 2.9 percent was revised. ' + 'Other material. ' * 200)
+    third = ('Other information. ' * 20 + 'Real GDP increased at an annual rate of 3.1 percent in the third quarter, according to the "third" estimate. ' +
+             'Other material. ' * 30 + 'In the second estimate, the increase in real GDP was 2.8 percent. ' * 5 + 'Other material. ' * 200)
+    sources = [source('s1', text=second).model_copy(update={'title': 'GDP second estimate'}),
+               source('s2', text=third).model_copy(update={'title': 'GDP third estimate'})]
+    captured = []
+    result = analyze(q, sources, None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 1), max_prompt_chars=2055)
+    excerpts = captured[0]['sources']
+    assert any(part['source_id'] == 's1' and '2.8 percent' in part['text'] for part in excerpts)
+    assert any(part['source_id'] == 's2' and '3.1 percent' in part['text'] for part in excerpts)
+    assert result.prompt_bytes <= 2055
+    assert all(next(s for s in sources if s.source_id == part['source_id']).text[seg['character_start']:seg['character_end']] == part['text']
+               for seg, part in zip(result.segments, excerpts))
+
+
+def test_policy_factor_selection_covers_decision_and_considerations():
+    text = ('Other policy material. ' * 60 +
+            'The Committee decided to maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent. ' +
+            'Other policy details. ' * 15 +
+            'The Committee will take into account the cumulative tightening of monetary policy, the lags with which policy affects the economy, and economic and financial developments. ' +
+            'Other text. ' * 140 +
+            'The Desk will maintain the federal funds rate in a target range. ' * 10)
+    prompt = []
+    result = analyze('决议目标利率区间及后续政策考虑因素是什么？', [source('s', text=text)], None,
+                     lambda q: (prompt.append(json.loads(q)) or {}, 1), max_prompt_chars=2055)
+    combined = ' '.join(part['text'] for part in prompt[0]['sources'])
+    assert 'decided to maintain the target range' in combined
+    assert 'cumulative tightening' in combined and 'lags' in combined and 'economic and financial developments' in combined
+    assert result.prompt_bytes <= 2055
