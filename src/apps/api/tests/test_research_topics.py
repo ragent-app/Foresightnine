@@ -411,3 +411,51 @@ def test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation(monke
     assert uncertain["content"]["facts"][0]["source_value_warnings"]==["quotation_ambiguous"]
     assert uncertain["content"]["calculations"][0]["input_status"]=="unverifiable"
     assert client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":uncertain["version_id"],"calculation_index":0}).status_code==422
+
+
+def test_pdf_table_warning_survives_user_edits_and_export(monkeypatch):
+    import base64
+    import shutil
+    from pathlib import Path
+    from uuid import uuid4
+    from app.research_uploads import _extract_text
+
+    path = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/231-new-cross-domain-check/bea-2020-historical.pdf'
+    if not path.is_file() or not shutil.which('pdftotext') or not shutil.which('prlimit'):
+        pytest.skip('retained official PDF or PDF tools unavailable')
+    raw = path.read_bytes()
+    text = _extract_text(raw, text_order='layout')
+    line = next(line for line in text.splitlines() if 'Personal saving rate' in line and '16.3' in line)
+    quote = line.strip()
+    start = text.index(quote)
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(app)
+    session = client.post('/v1/auth/local/register', json={'email': f'pdf-table-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + session['access_token']}
+    source = client.post('/v2/research/sources/pdf', headers=headers, json={'title': 'BEA historical comparison',
+        'pdf_base64': base64.b64encode(raw).decode(), 'text_order': 'layout',
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True}})
+    assert source.status_code == 201, source.text
+    source_id = source.json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was the savings rate?',
+        'source_ids': [source_id]}).json()
+    topic_path = '/v2/research/topics/' + topic['topic_id']
+    fact = {'fact_id': 'saving', 'label': 'Saving rate', 'value': '16.3', 'unit': 'percent', 'currency': None,
+        'period': '2020', 'source_id': source_id, 'quotation': quote,
+        'location': {'character_start': start, 'character_end': start + len(quote)}}
+    initial = client.post(topic_path + '/versions', headers=headers, json={
+        'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': [fact]}})
+    assert initial.status_code == 201, initial.text
+    version = initial.json()['versions'][-1]
+    assert version['content']['facts'][0]['table_alignment_unverified'] is True
+    content = deepcopy(version['content'])
+    content['facts'][0].update(label='Saving rate, edited', table_alignment_unverified=False)
+    updated = client.post(topic_path + '/versions', headers=headers, json={
+        'parent_version_id': version['version_id'], 'content': content})
+    assert updated.status_code == 201, updated.text
+    current = updated.json()['versions'][-1]
+    assert current['content']['facts'][0]['table_alignment_unverified'] is True
+    exported = client.get(topic_path + '/versions/' + current['version_id'] + '/export', headers=headers)
+    assert exported.status_code == 200, exported.text
+    assert exported.json()['version']['content']['facts'][0]['table_alignment_unverified'] is True
