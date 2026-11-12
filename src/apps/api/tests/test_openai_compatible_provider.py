@@ -783,3 +783,82 @@ def test_binary_transport_preserves_bytes_without_weakening_text_or_size_limits(
         openai_compatible._default_transport('GET', 'https://example.org/file.pdf', {}, b'', 5)
     with pytest.raises(openai_compatible._TransportFailure):
         openai_compatible._default_binary_transport('GET', 'https://example.org/file.pdf', {}, b'', 5, max_response_bytes=4)
+
+
+def test_transport_deadline_includes_slow_dns_and_does_not_submit_after_timeout(monkeypatch):
+    from threading import Event
+    from time import monotonic
+    entered, release, finished = Event(), Event(), Event()
+    attempts = []
+    def slow_dns(*args, **kwargs):
+        entered.set()
+        try:
+            release.wait(2)
+            return ('1.1.1.1',)
+        finally:
+            finished.set()
+    def forbidden_connection(*args, **kwargs):
+        attempts.append('connected')
+        raise AssertionError('transport must not connect after DNS budget expires')
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', slow_dns)
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', forbidden_connection)
+    started = monotonic()
+    try:
+        with pytest.raises(openai_compatible._TransportTimeout):
+            openai_compatible._default_binary_transport('GET', 'https://example.org/file', {}, b'', 0.05)
+        assert entered.is_set() and monotonic() - started < 1
+    finally:
+        release.set()
+        assert finished.wait(2)
+    assert not attempts
+
+
+def test_transport_deadline_covers_stalled_response_body(monkeypatch):
+    from threading import Event
+    from time import monotonic
+    reading, released = Event(), Event()
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', lambda *a, **k: ('1.1.1.1',))
+    class Sock:
+        def settimeout(self, timeout): pass
+        def shutdown(self, how): released.set()
+    class Response:
+        status = 200
+        headers = {'content-type': 'text/plain'}
+        def read(self, size):
+            reading.set()
+            released.wait(2)
+            return b'data'
+    class Connection:
+        def __init__(self, host, port, address, timeout): self.sock = Sock()
+        def connect(self): pass
+        def request(self, *args, **kwargs): pass
+        def getresponse(self): return Response()
+        def close(self): released.set()
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', Connection)
+    started = monotonic()
+    with pytest.raises(openai_compatible._TransportTimeout):
+        openai_compatible._default_binary_transport('GET', 'https://example.org/file', {}, b'', 0.05)
+    assert reading.is_set() and released.wait(1) and monotonic() - started < 1
+
+
+def test_transport_capacity_remains_bounded_when_dns_cannot_be_cancelled(monkeypatch):
+    from threading import BoundedSemaphore, Event
+    entered, release, finished = Event(), Event(), Event()
+    def slow_dns(*args, **kwargs):
+        entered.set()
+        try:
+            release.wait(2)
+            return ('1.1.1.1',)
+        finally:
+            finished.set()
+    monkeypatch.setattr(openai_compatible, '_TRANSPORT_SLOTS', BoundedSemaphore(1))
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', slow_dns)
+    try:
+        with pytest.raises(openai_compatible._TransportTimeout):
+            openai_compatible._default_binary_transport('GET', 'https://example.org/a', {}, b'', .05)
+        assert entered.is_set()
+        with pytest.raises(openai_compatible._TransportFailure, match='transport busy'):
+            openai_compatible._default_binary_transport('GET', 'https://example.org/b', {}, b'', .05)
+    finally:
+        release.set()
+        assert finished.wait(2)

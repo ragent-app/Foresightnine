@@ -18,6 +18,7 @@ import re
 import socket
 import ssl
 from time import monotonic, sleep
+from threading import BoundedSemaphore, Event, Lock, Thread
 from typing import Callable, Mapping, Protocol
 from urllib.parse import urlencode, urlsplit
 
@@ -451,7 +452,7 @@ class OpenAICompatibleSettings:
         )
 
 
-def _default_binary_transport(
+def _execute_binary_transport(
     method: str,
     url: str,
     headers: Mapping[str, str],
@@ -460,6 +461,7 @@ def _default_binary_transport(
     *,
     allow_private_network: bool = False,
     max_response_bytes: int = _MAX_RESPONSE_BYTES,
+    deadline: float, stopped: Event, register_connection: Callable[[HTTPConnection | None], None],
 ) -> BinaryHttpResponse:
     if not 1 <= max_response_bytes <= 5_000_000:
         raise _TransportFailure("invalid response limit")
@@ -471,9 +473,10 @@ def _default_binary_transport(
     path = parsed.path or "/"
     if parsed.query:
         path = f"{path}?{parsed.query}"
+    if stopped.is_set() or monotonic() >= deadline:
+        raise _TransportTimeout()
     # Try only the previously validated numeric addresses. Connection failures
     # occur before HTTP submission, so fallback never resends a model request.
-    deadline = monotonic() + timeout
     connection: HTTPConnection | None = None
     last_error: OSError | None = None
     for address in addresses:
@@ -487,9 +490,14 @@ def _default_binary_transport(
             candidate = _PinnedHTTPConnection(parsed.hostname, port, address, connect_timeout)
         else:
             raise _TransportFailure()
+        register_connection(candidate)
+        if stopped.is_set():
+            candidate.close()
+            raise _TransportTimeout()
         try:
             candidate.connect()
         except OSError as error:
+            register_connection(None)
             candidate.close()
             last_error = error
             continue
@@ -507,6 +515,8 @@ def _default_binary_transport(
             raise _TransportTimeout() from last_error
         raise _TransportFailure() from last_error
     try:
+        if stopped.is_set() or monotonic() >= deadline:
+            raise _TransportTimeout()
         connection.request(method, path, body=body, headers=dict(headers))
         response = connection.getresponse()
         content = response.read(max_response_bytes + 1)
@@ -519,12 +529,83 @@ def _default_binary_transport(
             content,
             {str(key).lower(): str(value) for key, value in response.headers.items()},
         )
+    except _TransportTimeout:
+        raise
     except (TimeoutError, socket.timeout) as error:
         raise _TransportTimeout() from error
     except (OSError, ssl.SSLError, HTTPException) as error:
         raise _TransportFailure() from error
     finally:
+        register_connection(None)
         connection.close()
+
+
+_TRANSPORT_SLOTS = BoundedSemaphore(16)
+
+
+def _default_binary_transport(
+    method: str, url: str, headers: Mapping[str, str], body: bytes, timeout: float, *,
+    allow_private_network: bool = False, max_response_bytes: int = _MAX_RESPONSE_BYTES,
+) -> BinaryHttpResponse:
+    """Bound DNS and network wall time, including slow headers and bodies.
+
+    A timed-out DNS call cannot be killed by Python; daemon workers remain
+    capped and retain their slot until they exit. A submitted remote request
+    may still have incurred charges even when this function times out.
+    """
+    if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        raise _TransportTimeout()
+    if not 1 <= max_response_bytes <= 5_000_000:
+        raise _TransportFailure("invalid response limit")
+    slots = _TRANSPORT_SLOTS
+    if not slots.acquire(blocking=False):
+        raise _TransportFailure("transport busy")
+    deadline = monotonic() + timeout
+    stopped, finished, guard = Event(), Event(), Lock()
+    state: dict[str, object] = {"connection": None}
+    def register(connection: HTTPConnection | None) -> None:
+        with guard:
+            state["connection"] = connection
+    def run() -> None:
+        try:
+            state["result"] = _execute_binary_transport(method, url, headers, body, timeout,
+                allow_private_network=allow_private_network, max_response_bytes=max_response_bytes,
+                deadline=deadline, stopped=stopped, register_connection=register)
+        except Exception as error:
+            state["error"] = error
+        finally:
+            slots.release()
+            finished.set()
+    try:
+        Thread(target=run, name="foresight-bounded-transport", daemon=True).start()
+    except BaseException:
+        slots.release()
+        raise
+    remaining = max(0.0, deadline - monotonic())
+    if not finished.wait(remaining):
+        stopped.set()
+        with guard:
+            connection = state.get("connection")
+        # Shutdown does not wait for a blocked reader; the worker owns final
+        # close. A DNS call or third-party socket may still outlive the caller,
+        # but it retains a bounded transport slot until it exits.
+        sock = getattr(connection, "sock", None)
+        shutdown = getattr(sock, "shutdown", None)
+        if callable(shutdown):
+            try:
+                shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        raise _TransportTimeout()
+    error = state.get("error")
+    if isinstance(error, _TransportFailure):
+        raise error
+    if error is not None:
+        raise _TransportFailure() from error
+    result = state.get("result")
+    if not isinstance(result, BinaryHttpResponse):
+        raise _TransportFailure()
+    return result
 
 
 def _default_transport(
