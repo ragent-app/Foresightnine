@@ -97,7 +97,8 @@ class AnalysisInterrupted(Exception):
 _NUMBER = re.compile(r"(?<![A-Za-z0-9_.])\(?\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)?(?![A-Za-z0-9_.])")
 _FRACTION = re.compile(r"(?<![\w./-])(-\s*)?(?:(\d+)-)?(\d+)/(\d+)(?![\w./-])")
 _RATE_PART = r"-?(?:\d+(?:-\d+)?/\d+|\d+(?:\.\d+)?)"
-_RATE_RANGE = re.compile(rf"^({_RATE_PART})\s*(?:\bto\b|[–—])\s*({_RATE_PART})$", re.IGNORECASE)
+_RATE_RANGE = re.compile(rf"^({_RATE_PART})\s*(?:%|percent)?\s*(?:\bto\b|至|到|[–—])\s*({_RATE_PART})\s*(?:%|percent)?$", re.IGNORECASE)
+_EQUIVALENT_VALUES = re.compile(r"^([^()（）]{1,100}?)\s*(?:\(([^()（）]{1,100})\)|（([^()（）]{1,100})）)$")
 
 
 def _quoted_numbers(quotation: str) -> set[Decimal]:
@@ -140,20 +141,54 @@ def _quoted_numbers(quotation: str) -> set[Decimal]:
 
 
 
-def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
-    """Split an explicit finite percentage range into independently checked bounds."""
+def _rate_bounds(value: str) -> tuple[Decimal, Decimal] | None:
+    if len(value) > 160:
+        return None
     match = _RATE_RANGE.fullmatch(value)
-    fact_id, label = fact.get("fact_id"), fact.get("label")
-    if (not match or unit.casefold() not in {"percent", "percentage", "%"} or
-            not isinstance(fact_id, str) or not fact_id or len(fact_id) > 190 or
-            not isinstance(label, str) or not label or len(label) > 280):
+    if match is None:
         return None
     parts = [_quoted_numbers(part) for part in match.groups()]
     if any(len(values) != 1 for values in parts):
         return None
     lower, upper = (next(iter(values)) for values in parts)
-    if not lower < upper:
+    return (lower, upper) if lower < upper else None
+
+
+def _equivalent_scalar(value: str, unit: str) -> Decimal | None:
+    """Accept decimal/fraction pairs only if the two exact values agree."""
+    if len(value) > 220 or unit.casefold() not in {"percent", "percentage", "%", "percentage point", "percentage points"}:
         return None
+    match = _EQUIVALENT_VALUES.fullmatch(value)
+    if match is None:
+        return None
+    parts = [match.group(1).strip(), (match.group(2) or match.group(3)).strip()]
+    if any(not re.fullmatch(_RATE_PART, part) for part in parts):
+        return None
+    if sum(bool(_FRACTION.fullmatch(part)) for part in parts) != 1:
+        return None
+    numbers = [_quoted_numbers(part) for part in parts]
+    if any(len(item) != 1 for item in numbers) or numbers[0] != numbers[1]:
+        return None
+    return next(iter(numbers[0]))
+
+
+def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
+    """Split an explicit finite percentage range into independently checked bounds."""
+    if len(value) > 220:
+        return None
+    pair = _EQUIVALENT_VALUES.fullmatch(value)
+    if pair:
+        first = _rate_bounds(pair.group(1).strip())
+        second = _rate_bounds((pair.group(2) or pair.group(3)).strip())
+        bounds = first if first is not None and first == second else None
+    else:
+        bounds = _rate_bounds(value)
+    fact_id, label = fact.get("fact_id"), fact.get("label")
+    if (bounds is None or unit.casefold() not in {"percent", "percentage", "%"} or
+            not isinstance(fact_id, str) or not fact_id or len(fact_id) > 190 or
+            not isinstance(label, str) or not label or len(label) > 280):
+        return None
+    lower, upper = bounds
     split = [{**fact, "fact_id": fact_id + suffix, "label": label + label_suffix, "value": str(number)}
              for suffix, label_suffix, number in ((":lower", " (lower bound)", lower), (":upper", " (upper bound)", upper))]
     try:
@@ -603,12 +638,14 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     # calculator. Drop only those facts, disclose the omission, and continue
     # validating all remaining claims and citations against the source.
     normalized_fraction_ids: set[str] = set()
+    normalized_equivalent_ids: set[str] = set()
     normalized_range_ids: dict[str, str] = {}
     if isinstance(raw, dict) and isinstance(raw.get("facts"), list) and len(raw["facts"]) <= 100:
         valid_facts = []
         omitted_facts = 0
         for fact in raw["facts"]:
             normalized_fraction = False
+            normalized_equivalent = False
             if isinstance(fact, dict) and isinstance(fact.get("value"), str) and isinstance(fact.get("unit"), str):
                 value = fact["value"].strip()
                 unit = fact["unit"].strip()
@@ -622,8 +659,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     else:
                         omitted_facts += 1
                     continue
-                match = _FRACTION.fullmatch(value)
-                if match:
+                equivalent = _equivalent_scalar(value, unit)
+                match = _FRACTION.fullmatch(value) if len(value) <= 160 else None
+                if equivalent is not None:
+                    fact = {**fact, "value": str(equivalent)}
+                    normalized_equivalent = True
+                elif match:
                     values = _quoted_numbers(value)
                     if len(values) == 1:
                         fact = {**fact, "value": str(next(iter(values)))}
@@ -632,13 +673,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 validated = ModelFact.model_validate(fact)
                 if normalized_fraction:
                     normalized_fraction_ids.add(validated.fact_id)
+                if normalized_equivalent:
+                    normalized_equivalent_ids.add(validated.fact_id)
                 if len(valid_facts) < 100:
                     valid_facts.append(fact)
                 else:
                     omitted_facts += 1
             except ValidationError:
                 omitted_facts += 1
-        if omitted_facts or normalized_fraction_ids or normalized_range_ids:
+        if omitted_facts or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids:
             raw = {**raw, "facts": valid_facts}
         if omitted_facts:
             limitations.append(f"{omitted_facts} model-generated numeric fact(s) were omitted because their format was invalid.")
@@ -765,6 +808,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
             **({"currency_context_unverified": True} if currency_context else {}),
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),
+            **({"numeric_normalization": "equivalent_decimal_fraction"} if item.fact_id in normalized_equivalent_ids else {}),
             **({"numeric_normalization": "exact_range_bound", "range_parent_id": normalized_range_ids[item.fact_id]}
                if item.fact_id in normalized_range_ids else {}),
             "location": location,

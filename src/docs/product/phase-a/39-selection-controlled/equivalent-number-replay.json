@@ -1,0 +1,63 @@
+{
+  "kind": "offline replay of saved provider output; no new model call or rescore",
+  "raw_response_sha256": "0c52c4cde9cc42232cf7ef98d22ac5c4606fa306679d066365abf95939bf66a0",
+  "source_text_sha256": "b0fa15c7c62a2700ca4715a196709b700cea49e4994efd6d116fe3cb5617fa6b",
+  "analysis_code_sha256": "cb4ca33212375def2df6ffeded4b7fd45c00c0cc80bedb6357fcd6e70d7fe29a",
+  "prompt_sha256": "0356129f6ed66890d7d2674c6fdb43cce06315cfca664e5ba827113f55f73783",
+  "facts": [
+    {
+      "fact_id": "fed_funds_target_range:lower",
+      "value": "3.5",
+      "unit": "percent",
+      "numeric_normalization": "exact_range_bound",
+      "quotation": "lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to\n\n3-3/4 percent",
+      "location": {
+        "character_start": 863,
+        "character_end": 963,
+        "page": 1
+      }
+    },
+    {
+      "fact_id": "fed_funds_target_range:upper",
+      "value": "3.75",
+      "unit": "percent",
+      "numeric_normalization": "exact_range_bound",
+      "quotation": "lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to\n\n3-3/4 percent",
+      "location": {
+        "character_start": 863,
+        "character_end": 963,
+        "page": 1
+      }
+    },
+    {
+      "fact_id": "rate_cut_size",
+      "value": "0.25",
+      "unit": "percentage point",
+      "numeric_normalization": "equivalent_decimal_fraction",
+      "quotation": "by 1/4 percentage point",
+      "location": {
+        "character_start": 913,
+        "character_end": 936,
+        "page": 1
+      }
+    },
+    {
+      "fact_id": "iorb_rate",
+      "value": "3.65",
+      "unit": "percent",
+      "numeric_normalization": null,
+      "quotation": "lower the\n         interest rate paid on reserve balances to 3.65 percent, effective December 11, 2025",
+      "location": {
+        "character_start": 3297,
+        "character_end": 3399,
+        "page": 3
+      }
+    }
+  ],
+  "limitations": [
+    "Source source_63468b4d163849f582f3ba0ae01d579d: only character ranges 754–1070, 3144–3466 were analyzed; remaining text was not examined.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "来源声明为部分节选（source_coverage: partial），未包含完整FOMC声明；下调前的前一目标区间未在提供的文本中明确给出，系根据下调幅度推断。",
+    "发布日期为声明标注日期（2025-12-10），未独立核实。"
+  ]
+}

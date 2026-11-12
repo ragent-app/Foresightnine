@@ -139,6 +139,26 @@ def test_rate_range_currency_context_is_retained_but_cannot_feed_calculations():
     assert [item["value"] for item in analyze("Target?", [report], None, lambda _: (raw, 10)).facts] == ["4.25"]
 
 
+def test_equivalent_range_and_scalar_forms_are_checked_against_original():
+    report = source("s", text="The target was lowered by 1/4 percentage point to 3-1/2 to 3-3/4 percent.")
+    range_fact = {"fact_id": "range", "label": "Target range", "value": "3.5% 至 3.75%（3-1/2 to 3-3/4 percent）",
+                  "unit": "percent", "currency": None, "period": "2025", "citation": {"source_id": "s", "quotation": "3-1/2 to 3-3/4 percent"}}
+    cut_fact = {"fact_id": "cut", "label": "Cut", "value": "0.25（1/4）", "unit": "percentage point",
+                "currency": None, "period": "2025", "citation": {"source_id": "s", "quotation": "by 1/4 percentage point"}}
+    def run(facts):
+        return analyze("Target?", [report], None, lambda _: ({"facts": facts}, 1))
+    result = run([range_fact, cut_fact])
+    assert [(f["fact_id"], f["value"]) for f in result.facts] == [("range:lower", "3.5"), ("range:upper", "3.75"), ("cut", "0.25")]
+    assert result.facts[-1]["numeric_normalization"] == "equivalent_decimal_fraction"
+    assert all(report.text[f["location"]["character_start"]:f["location"]["character_end"]] == f["quotation"] for f in result.facts)
+    assert not run([{**range_fact, "value": "3.5% 至 3.75%（3-1/2 to 3-1/2 percent）"}]).facts
+    assert not run([{**cut_fact, "value": "0.5（1/4）"}]).facts
+    assert not run([{**cut_fact, "value": "0.25（1/3）"}]).facts
+    assert not run([{**cut_fact, "value": "0.25（1/4）", "unit": "USD"}]).facts
+    assert not run([{**cut_fact, "citation": {"source_id": "s", "quotation": "3-3/4 percent"}}]).facts
+    assert not run([{**cut_fact, "value": "9" * 5000 + "/2"}]).facts
+
+
 def test_only_authorized_sources_are_sent_and_quotes_must_be_real():
     good = source("good")
     private = source("no-model", model_input=False)
