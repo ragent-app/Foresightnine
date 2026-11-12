@@ -23,14 +23,14 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     assert batch.indexes == [0] and not batch.omitted
     payload = json.loads(batch.prompt)
     excerpt = payload["claims"][0]["excerpts"][0]
-    assert excerpt["text"] == "Before. Revenue 100. After."
+    assert excerpt["preceding_context"] + excerpt["quotation"] + excerpt["following_context"] == "Before. Revenue 100. After."
     assert excerpt["quotation"] == "Revenue 100"
-    assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == excerpt["quotation"]
+    assert excerpt["quotation"] == "Revenue 100"
     assert "not as a substitute for an unquoted fact" in REVIEW_SYSTEM_PROMPT
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v5"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v6"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -70,7 +70,7 @@ def test_review_reduces_context_to_fit_without_truncating_the_quote():
     assert batch.indexes == [0] and len(batch.prompt.encode()) <= 350
     assert batch.segments[0]["context_radius"] < 180
     excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
-    assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == "Revenue 100"
+    assert excerpt["quotation"] == "Revenue 100"
 
 
 def test_review_reserves_budget_for_multiple_claims_before_extra_context():
@@ -82,7 +82,7 @@ def test_review_reserves_budget_for_multiple_claims_before_extra_context():
     assert any(segment["context_radius"] < 180 for segment in batch.segments)
     for entry in json.loads(batch.prompt)["claims"]:
         excerpt = entry["excerpts"][0]
-        assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == "Revenue 100"
+        assert excerpt["quotation"] == "Revenue 100"
 
 
 def test_review_preserves_required_subject_context_or_omits_claim():
@@ -95,10 +95,10 @@ def test_review_preserves_required_subject_context_or_omits_claim():
     batch = prepare_support_review([item], [report], 2000)
     assert batch.indexes == [0] and not batch.omitted
     excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
-    assert "Personal saving rate" in excerpt["text"]
-    assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == quotation
+    assert "Personal saving rate" in excerpt["preceding_context"]
+    assert excerpt["quotation"] == quotation
     assert batch.segments[0]["required_context_start"] == 0
-    assert report.text[batch.segments[0]["character_start"]:batch.segments[0]["character_end"]] == excerpt["text"]
+    assert report.text[batch.segments[0]["character_start"]:batch.segments[0]["character_end"]] == excerpt["preceding_context"] + excerpt["quotation"] + excerpt["following_context"]
     neutral = report.model_copy(update={"text": text.replace("Personal saving rate", "x" * len("Personal saving rate"))})
     # Exact quote alone fits, but the identified subject context does not.
     for budget in range(200, 700):

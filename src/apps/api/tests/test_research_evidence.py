@@ -195,3 +195,14 @@ def test_citation_subject_context_is_an_explicit_bounded_review_hint():
     bad = {**claim, "citations": [{**claim["citations"][0], "location": {"status": "ambiguous"}}]}
     assert not flag_citation_subject_context([bad], [source])[0].get("citation_context_warnings")
     assert not flag_citation_subject_context([{**claim, "citations": [{"source_id": [], "quotation": quote}]}], [source])[0].get("citation_context_warnings")
+
+
+def test_fractional_percentage_is_not_misread_as_its_denominator():
+    supported = {"text": "目标区间为2至2-1/4 percent。", "citations": [{"quotation": "target range 2 to 2-1/4 percent"}]}
+    assert not suggest_percentage_evidence([supported], [])[0].get("uncited_percentages")
+    unsupported = {**supported, "citations": [{"quotation": "target range 2 to 2-1/2 percent"}]}
+    assert suggest_percentage_evidence([unsupported], [])[0]["uncited_percentages"] == ["2-1/4 percent"]
+    fraction = {"text": "下调1/4 percent。", "citations": [{"quotation": "lowered by 0.25 percent"}]}
+    assert not suggest_percentage_evidence([fraction], [])[0].get("uncited_percentages")
+    inexact = {"text": "增加1/3 percent。", "citations": [{"quotation": "increase 1/3 percent"}]}
+    assert suggest_percentage_evidence([inexact], [])[0]["uncited_percentages"] == ["1/3 percent"]
