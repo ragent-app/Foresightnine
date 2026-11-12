@@ -1,0 +1,26 @@
+{
+  "original": {
+    "valid": true,
+    "verdicts_by_original_index": {
+      "1": "supports",
+      "2": "supports",
+      "3": "supports",
+      "4": "supports",
+      "5": "supports"
+    },
+    "missing_original_indexes": [],
+    "claim_3_unsupported_or_uncertain": false
+  },
+  "local": {
+    "valid": true,
+    "verdicts_by_original_index": {
+      "1": "supports",
+      "2": "supports",
+      "3": "supports",
+      "4": "supports",
+      "5": "supports"
+    },
+    "missing_original_indexes": [],
+    "claim_3_unsupported_or_uncertain": false
+  }
+}
