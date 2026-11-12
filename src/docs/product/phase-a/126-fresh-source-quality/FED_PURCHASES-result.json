@@ -1,0 +1,213 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System, 2021-07-28 statement, extracted HTML text.",
+  "id": "FED_PURCHASES",
+  "manifest_sha256": "96ab7cc7a7957ca3a8c44c4715974a26c29d987aa387cf78a2a82e8b106d4674",
+  "operation_status": "completed",
+  "operation_id": "operation:b276c8c3a203aafed5fc8d1f",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 16.193,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+        "title": "Federal Reserve 2021-07-28 FOMC statement (HTML-extracted text)",
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20210728a.htm",
+        "event_at": null,
+        "published_at": "2021-07-28T18:00:00+00:00",
+        "obtained_at": "2026-11-12T11:28:41.458448+00:00",
+        "revised_at": null,
+        "content_sha256": "0c5f6b1144bf337a31807a20b0d8e12200684d079ce14f95e28c949ac7470e0a",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_fedfunds_range:lower",
+        "value": "0",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2021-07-28 FOMC statement",
+        "label": "联邦基金利率目标区间 (lower bound)",
+        "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+        "quotation": "keep the target range for the federal funds rate at 0 to 1/4 percent",
+        "quotation_match": "exact",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "fact_fedfunds_range",
+        "location": {
+          "character_start": 6807,
+          "character_end": 6875
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_fedfunds_range:upper",
+        "value": "0.25",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2021-07-28 FOMC statement",
+        "label": "联邦基金利率目标区间 (upper bound)",
+        "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+        "quotation": "keep the target range for the federal funds rate at 0 to 1/4 percent",
+        "quotation_match": "exact",
+        "currency_context_unverified": true,
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "fact_fedfunds_range",
+        "location": {
+          "character_start": 6807,
+          "character_end": 6875
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "联邦基金利率目标区间维持在 0 至 1/4 百分比（0%–0.25%），并将维持至劳动市场条件达到目标。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "location": {
+              "character_start": 6782,
+              "character_end": 6975
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent and expects it will be appropriate to maintain this target range until labor market conditions have"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "美联储将继续推进资产购买以支持其充分就业和物价稳定目标，并在未来会议上评估进展；经济已朝这些目标取得进展。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "location": {
+              "character_start": 7481,
+              "character_end": 7673
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Since then, the economy has made progress toward these goals, and the Committee will continue to assess progress in coming meetings. These asset purchases help foster smooth market functioning"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "所提供的摘录为部分文本，未包含每月国债和机构抵押贷款支持证券的具体购买金额（通常为至少每月 800 亿美元国债和 400 亿美元 MBS），因此无法从给定资料确认这些数字。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "location": {
+              "character_start": 7614,
+              "character_end": 7673
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "These asset purchases help foster smooth market functioning"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      },
+      {
+        "text": "摘录中明确指出利率维持需等到劳动市场条件（恢复）——这本身表明声明中劳动市场尚未完全恢复，构成剩余风险/未恢复领域，但摘录未具体列出其他风险如通胀或疫情影响的原文表述。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "location": {
+              "character_start": 6880,
+              "character_end": 6975
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "expects it will be appropriate to maintain this target range until labor market conditions have"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_8a668505f5fe4d16b9694d2dfce28713: only character ranges 6739–6976, 7424–7673 were analyzed; remaining text was not examined.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 提供的来源仅为部分摘录，未包含每月购买至少 800 亿美元国债和 400 亿美元机构 MBS 的原文表述，故无法从该来源确认这些数值。",
+      "Model-reported limitation (not independently verified): 摘录未包含声明中关于经济风险（如病毒变异、通胀、金融脆弱性）或路径指引的完整段落。",
+      "Model-reported limitation (not independently verified): 来源日期为声明的声明发布日期（2021-07-28），未经独立验证。",
+      "Model-reported limitation (not independently verified): 要求通过引用相关数值事实来支持计算；本来源未提供足够数值事实以进行计算。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:b276c8c3a203aafed5fc8d1f",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1356,
+      "cost_usd": null,
+      "generation_tokens": 1356,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 15.015,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "b3677c2c52ee33759275c1e34c0e8861af005c3ee76de30a0956ab7fed700c78",
+      "prompt_characters": 1896,
+      "prompt_bytes": 2040,
+      "selection_method": "ranked_nonoverlapping_windows_v29",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 6739,
+          "character_end": 6976
+        },
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 7424,
+          "character_end": 7673
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_8a668505f5fe4d16b9694d2dfce28713": "0c5f6b1144bf337a31807a20b0d8e12200684d079ce14f95e28c949ac7470e0a"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}

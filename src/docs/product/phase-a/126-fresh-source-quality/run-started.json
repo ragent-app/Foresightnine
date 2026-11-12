@@ -1,0 +1,5 @@
+{
+  "manifest_sha256": "96ab7cc7a7957ca3a8c44c4715974a26c29d987aa387cf78a2a82e8b106d4674",
+  "status": "started_once",
+  "uncertain_calls_are_not_retried": true
+}

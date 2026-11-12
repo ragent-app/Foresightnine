@@ -1,0 +1,41 @@
+{
+  "manifest_sha256": "96ab7cc7a7957ca3a8c44c4715974a26c29d987aa387cf78a2a82e8b106d4674",
+  "results": {
+    "GDP_THIRD": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 1309,
+      "required_detail": {
+        "rates_in_claim_and_quotes": true,
+        "annualized_in_claim_and_quotes": true,
+        "upward_components": false,
+        "offset_in_counterargument": false
+      },
+      "checks": {
+        "required_elements": false,
+        "all_claim_citations_located": true,
+        "budget_and_provenance": true
+      },
+      "narrow_mechanical_pass": false,
+      "semantic_support": "not independently established"
+    },
+    "FED_PURCHASES": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 1356,
+      "required_detail": {
+        "rate_in_claim_and_quotes": true,
+        "treasury_in_claim_and_quotes": false,
+        "mbs_in_claim_and_quotes": false,
+        "risk_in_counterargument": false
+      },
+      "checks": {
+        "required_elements": false,
+        "all_claim_citations_located": true,
+        "budget_and_provenance": true
+      },
+      "narrow_mechanical_pass": false,
+      "semantic_support": "not independently established"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System, 2021-07-28 statement, extracted HTML text.",
+  "payload": {
+    "claims": [
+      {
+        "text": "联邦基金利率目标区间维持在 0 至 1/4 百分比（0%–0.25%），并将维持至劳动市场条件达到目标。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent and expects it will be appropriate to maintain this target range until labor market conditions have"
+          }
+        ]
+      },
+      {
+        "text": "美联储将继续推进资产购买以支持其充分就业和物价稳定目标，并在未来会议上评估进展；经济已朝这些目标取得进展。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "Since then, the economy has made progress toward these goals, and the Committee will continue to assess progress in coming meetings. These asset purchases help foster smooth market functioning"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "所提供的摘录为部分文本，未包含每月国债和机构抵押贷款支持证券的具体购买金额（通常为至少每月 800 亿美元国债和 400 亿美元 MBS），因此无法从给定资料确认这些数字。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "These asset purchases help foster smooth market functioning"
+          }
+        ]
+      },
+      {
+        "text": "摘录中明确指出利率维持需等到劳动市场条件（恢复）——这本身表明声明中劳动市场尚未完全恢复，构成剩余风险/未恢复领域，但摘录未具体列出其他风险如通胀或疫情影响的原文表述。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "expects it will be appropriate to maintain this target range until labor market conditions have"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的来源仅为部分摘录，未包含每月购买至少 800 亿美元国债和 400 亿美元机构 MBS 的原文表述，故无法从该来源确认这些数值。",
+      "摘录未包含声明中关于经济风险（如病毒变异、通胀、金融脆弱性）或路径指引的完整段落。",
+      "来源日期为声明的声明发布日期（2021-07-28），未经独立验证。",
+      "要求通过引用相关数值事实来支持计算；本来源未提供足够数值事实以进行计算。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_fedfunds_range",
+        "label": "联邦基金利率目标区间",
+        "value": "0 to 1/4",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2021-07-28 FOMC statement",
+        "citation": {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "quotation": "keep the target range for the federal funds rate at 0 to 1/4 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1356,
+  "prompt_sha256": "b3677c2c52ee33759275c1e34c0e8861af005c3ee76de30a0956ab7fed700c78",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

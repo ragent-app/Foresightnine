@@ -1,0 +1,90 @@
+{
+  "source_attribution": "U.S. Bureau of Economic Analysis, 2023 Q4 third estimate, original PDF.",
+  "payload": {
+    "claims": [
+      {
+        "text": "2023年第四季度实际GDP第三次估计的年化增长率为3.4%。",
+        "citations": [
+          {
+            "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.4 percent in the fourth quarter of 2023"
+          }
+        ]
+      },
+      {
+        "text": "第二次估计的年化增长率为3.2%，因此第三次估计相对上修了0.2个百分点。",
+        "citations": [
+          {
+            "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+            "quotation": "In the second estimate, the increase in real GDP was 3.2 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "公告文本指出第三次估计基于更完整的源数据，但所提供的摘录并未说明上修的具体来源分项，也未提及任何抵消上修的反向因素，因此无法基于所给文本确认上修来源或反向因素。",
+        "citations": [
+          {
+            "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+            "quotation": "The GDP estimate released today is based on more complete source data than were available for the \"second\" estimate issued last month."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "所提供的摘录未包含2023年第四季度上修的主要来源分项（如消费者支出、出口等）的具体说明。",
+      "摘录未提及抵消上修的反向因素（如下修的分项）。",
+      "摘录未包含第三季度4.9%增长率的上下文细节以外的分项信息。",
+      "文本仅为部分节选（partial coverage），非完整公告。"
+    ],
+    "facts": [
+      {
+        "fact_id": "q4_2023_third_estimate",
+        "label": "2023Q4实际GDP年化增长率（第三次估计）",
+        "value": "3.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023Q4",
+        "citation": {
+          "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.4 percent in the fourth quarter of 2023"
+        }
+      },
+      {
+        "fact_id": "q4_2023_second_estimate",
+        "label": "2023Q4实际GDP年化增长率（第二次估计）",
+        "value": "3.2",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023Q4",
+        "citation": {
+          "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+          "quotation": "In the second estimate, the increase in real GDP was 3.2 percent."
+        }
+      },
+      {
+        "fact_id": "q3_2023_growth",
+        "label": "2023Q3实际GDP年化增长率",
+        "value": "4.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023Q3",
+        "citation": {
+          "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+          "quotation": "In the third quarter, real GDP increased 4.9 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "q4_2023_third_estimate",
+        "second_fact_id": "q4_2023_second_estimate"
+      }
+    ]
+  },
+  "reported_tokens": 1309,
+  "prompt_sha256": "7bc43da257a4e6c32bdd3289ec4635975d20321b3468ab5ce77e4dded142e186",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
