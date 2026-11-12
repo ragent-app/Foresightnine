@@ -154,13 +154,20 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
             # A page break or distant sentence start is insufficient context.
             if "\f" in before or len(before) >= 400:
                 continue
+            # A quotation may begin in the middle of a multiword subject, for
+            # example "index increased" after "PCE price". Inspect the
+            # boundary as well as subjects wholly preceding the quotation.
+            # Keep the sentence prefix as context so qualifiers such as
+            # "excluding food and energy" are not silently dropped.
+            boundary = len(before)
+            subject_text = before + quote
             subject_matches = [(name, match) for name, pattern in _METRIC_SUBJECTS.items()
-                               if (match := pattern.search(before)) is not None]
+                               if (match := pattern.search(subject_text)) is not None and match.start() < boundary]
             if len(subject_matches) != 1:
                 continue
             name, match = subject_matches[0]
             warnings.append({"source_id": source.source_id, "citation_index": index,
-                             "context_metric": name, "context_character_start": left + match.start(),
+                             "context_metric": name, "context_character_start": left,
                              "context_character_end": left + match.end(), "status": "requires_review"})
             if len(warnings) >= 5:
                 break

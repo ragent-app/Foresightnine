@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v9"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v10"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -164,3 +164,23 @@ def test_review_preserves_following_context_for_unfinished_quoted_phrase():
         pytest.fail("expected the required continuation to exceed some budget")
     limited = prepare_support_review([item], [report], budget)
     assert limited.omissions == [{"claim_index": 0, "reason": "input_budget", "required_subject_context": True}]
+
+
+def test_review_keeps_metric_prefix_and_qualifier_when_quotation_splits_subject():
+    text = 'Other prices increased. Excluding food and energy, the PCE price index increased 0.3 percent.'
+    quotation = 'index increased 0.3 percent.'
+    start = text.index(quotation)
+    report = source().model_copy(update={'text': text})
+    item = claim(quotation=quotation, location={'character_start': start, 'character_end': start + len(quotation)})
+    batch = prepare_support_review([item], [report], 3000)
+    assert batch.indexes == [0]
+    excerpt = json.loads(batch.prompt)['claims'][0]['excerpts'][0]
+    assert 'Excluding food and energy, the PCE price ' in excerpt['preceding_context']
+    assert excerpt['quotation'] == quotation
+    required = batch.segments[0]
+    assert text[required['required_context_start']:start].strip() == 'Excluding food and energy, the PCE price'
+    complete = 'the PCE price index increased 0.3 percent.'
+    full_start = text.index(complete)
+    complete_item = claim(quotation=complete, location={'character_start': full_start, 'character_end': full_start + len(complete)})
+    full_batch = prepare_support_review([complete_item], [report], 3000)
+    assert 'required_context_start' not in full_batch.segments[0]
