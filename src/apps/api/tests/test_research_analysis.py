@@ -34,6 +34,25 @@ def test_selected_source_offsets_survive_generation_failure():
     assert report.text[segment["character_start"]:segment["character_end"]] == report.text
 
 
+def test_selected_sentence_opening_is_restored_only_within_budget():
+    text = ("Header.\nRevenue increased at an annual rate of 3 percent. " + "filler " * 800 +
+            "Profit was 10 percent. " + "filler " * 800)
+    report = source("s", text=text)
+    start = text.index("annual rate")
+    second = text.index("Profit was")
+    def windows(value, question, length, count, should_stop=None, **kwargs):
+        length = min(length, 400)
+        return [(start, value[start:start + length]), (second, value[second:second + length])]
+    prepared = []
+    with patch("app.research_analysis._select_windows", windows):
+        result = analyze("Revenue and profit?", [report], None, lambda _: ({}, 1),
+                         max_prompt_chars=4000, on_prepare=prepared.extend)
+    first = min(prepared, key=lambda segment: segment["character_start"])
+    assert text[first["character_start"]:].startswith("Revenue increased at an annual rate")
+    assert result.prompt_bytes <= 4000
+    assert all(text[s["character_start"]:s["character_end"]] for s in prepared)
+
+
 def test_fractional_rate_notation_is_converted_exactly():
     values = _quoted_numbers("lower by 1/2 percentage point to 4-3/4 to 5 percent")
     assert Decimal("0.5") in values and Decimal("4.75") in values and Decimal("5") in values

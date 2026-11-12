@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v43"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v44"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1715,6 +1715,30 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 def can_expand(parts: list[tuple[int, str]]) -> bool:
                     normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in parts)
                     return normalized <= max_size and fits(parts, compact_metadata=True, short_refs=short_refs)
+
+                # A selected window can begin midway through a sentence and
+                # omit its subject. Restore a nearby sentence opening only
+                # when the entire extra original text fits the same budget.
+                # A line or sentence boundary limits the expansion; charts,
+                # pages and already selected neighboring windows stay intact.
+                for part_index, (start, passage) in enumerate(selected):
+                    if not start or not re.match(r"^\s*[a-z]", passage):
+                        continue
+                    left = max(0, start - 180)
+                    prefix = source.text[left:start]
+                    boundaries = list(re.finditer(r"[.!?。！？](?=\s)|[\n\f]", prefix))
+                    candidate = left + (boundaries[-1].end() if boundaries else 0)
+                    while candidate < start and source.text[candidate].isspace():
+                        candidate += 1
+                    opening = source.text[candidate:start]
+                    if not re.match(r"[A-Z][A-Za-z0-9]", opening) or "\f" in opening:
+                        continue
+                    if part_index and candidate < selected[part_index - 1][0] + len(selected[part_index - 1][1]):
+                        continue
+                    trial = list(selected)
+                    trial[part_index] = (candidate, source.text[candidate:start + len(passage)])
+                    if can_expand(trial):
+                        selected = trial
 
                 # A window that starts "of America" can omit "Bank" even
                 # though its boundary is not inside a word. Preserve the
