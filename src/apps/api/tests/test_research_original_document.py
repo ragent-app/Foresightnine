@@ -359,3 +359,35 @@ def test_total_question_keeps_early_summary_and_component_evidence():
     assert len(result.segments)==len(captured[0]["sources"])
     for segment,item in zip(result.segments,captured[0]["sources"]):
         assert _prompt_source_text(text[segment["character_start"]:segment["character_end"]],True)==item["text"]
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+@pytest.mark.parametrize("task_id", ["BANK_2020", "BEA_2020", "FOMC_2016"])
+def test_pdf_page_hints_preserve_frozen_research_excerpt_budget(task_id):
+    from app.research_analysis import _prompt_source_text
+    root = Path(__file__).resolve().parents[3] / "docs/product/phase-a"
+    folder = root / "231-new-cross-domain-check"
+    tasks = json.loads((folder / "tasks.json").read_text())
+    baseline = json.loads((root / "235-cross-domain-recheck/manifest.json").read_text())
+    task = next(item for item in tasks if item["id"] == task_id)
+    condition = next(item for item in baseline["conditions"] if item["task"] == task_id)
+    raw = (folder / task["source"]).read_bytes()
+    assert sha256(raw).hexdigest() == baseline["source_files"][task["source"]]
+    text = _extract_text(raw, text_order="layout")
+    report = ResearchSource(source_id=task["source_id"], owner_id="test", title=task["source"], text=text,
+        kind="user_supplied", obtained_at=datetime(2026, 11, 12, tzinfo=timezone.utc),
+        content_sha256=sha256(text.encode()).hexdigest(), retrieval_method="user_pdf", pdf_text_order="layout",
+        permissions=SourcePermissions(store=True, model_input=True, display=True))
+    captured = []
+    budget = 6000 - len(SYSTEM_PROMPT.encode()) - 512
+    result = analyze(task["question"], [report], None,
+                     lambda prompt: (captured.append(prompt) or {}, 0), max_prompt_chars=budget)
+    assert result.segments == condition["segments"]
+    assert len(captured[0].encode()) <= budget
+    payload = json.loads(captured[0])
+    for segment, item in zip(result.segments, payload["sources"], strict=True):
+        start, end = segment["character_start"], segment["character_end"]
+        assert item["text"] == _prompt_source_text(text[start:end], True)
+        if "p" in item:
+            first = text.count("\f", 0, start) + 1
+            assert item["p"] == [first, first + text[start:end].count("\f")]
