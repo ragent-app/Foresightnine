@@ -1,0 +1,61 @@
+{
+  "status": "completed",
+  "payload": {
+    "target_range": {
+      "text": "The Committee decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent.",
+      "citations": [
+        {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent"
+        }
+      ]
+    },
+    "dissenters": [
+      {
+        "name": "Michelle W. Bowman",
+        "stated_preference": "to lower the target range for the federal funds rate by 1/4 percentage point at this meeting",
+        "inferred_motive": null,
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting against this action were Michelle W. Bowman and Christopher J. Waller, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting."
+          }
+        ]
+      },
+      {
+        "name": "Christopher J. Waller",
+        "stated_preference": "to lower the target range for the federal funds rate by 1/4 percentage point at this meeting",
+        "inferred_motive": null,
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting against this action were Michelle W. Bowman and Christopher J. Waller, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting."
+          }
+        ]
+      }
+    ],
+    "preference_vs_motive_note": "The statement records only the dissenters' stated preference for a 25-basis-point cut; the source contains no stated reasons, so any motive (e.g., concerns about labor market softening) would be inference and is not asserted here.",
+    "policy_path_uncertainty": {
+      "text": "Uncertainty about the economic outlook remains elevated, which the Committee weighs in assessing the extent and timing of additional rate adjustments.",
+      "citations": [
+        {
+          "source_id": "ref-1",
+          "quotation": "Uncertainty about the economic outlook remains elevated."
+        },
+        {
+          "source_id": "ref-1",
+          "quotation": "In considering the extent and timing of additional adjustments to the target range for the federal funds rate, the Committee will carefully assess incoming data, the evolving outlook, and the balance of risks."
+        }
+      ]
+    },
+    "counterarguments": [],
+    "limitations": [
+      "The source excerpt is partial ('(more)' marker and truncation), so the full statement including any explanatory remarks from dissenters is not available.",
+      "The sources do not state dissenters' rationales; no inference about motives is made.",
+      "No counterargument is included because the supplied sources contain no opposing or qualifying evidence on these findings."
+    ]
+  },
+  "reported_tokens": 1796,
+  "manifest_sha256": "89cd5a7c14a947721c3be06b834b356f144b70248ab25cfeb73a3bc3d3ee1a77",
+  "cost_usd": "unknown"
+}

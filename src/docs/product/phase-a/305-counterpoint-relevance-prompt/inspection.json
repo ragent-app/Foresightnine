@@ -1,0 +1,99 @@
+{
+  "results": [
+    {
+      "case": "baseline",
+      "status": "parsed",
+      "reported_tokens": 1930,
+      "omitted_rows": 0,
+      "counterargument_count": 1,
+      "located_count": 1,
+      "warning_fields": [
+        [
+          "counterpoint_relevance_unverified"
+        ]
+      ],
+      "counterarguments": [
+        {
+          "text": "Prior findings are consistent with the source: the Committee 'decided to maintain the target range for the federal funds rate at 4-1/4 to 4-1/2 percent,' and 'Voting against this action were Michelle W. Bowman and Christopher J. Waller, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting.' Any motive beyond this stated preference (e.g., political pressure or positioning for a future Chair role) is NOT stated in the source and should not be asserted. One stated uncertainty relevant to the future path: 'Uncertainty about the economic outlook remains elevated,' with the Committee to 'carefully assess incoming data, the evolving outlook, and the balance of risks' in considering 'the extent and timing of additional adjustments.'",
+          "kind": "model_interpretation",
+          "citations": [
+            {
+              "source_id": "source_29200000000000000000000000000002",
+              "location": {
+                "character_start": 673,
+                "character_end": 777,
+                "page": 1
+              },
+              "quotation_match": "whitespace_normalized",
+              "support_status": "not_independently_verified",
+              "quotation": "the Committee decided to maintain the target range for the federal\n\nfunds rate at 4-1/4 to 4-1/2 percent"
+            },
+            {
+              "source_id": "source_29200000000000000000000000000002",
+              "location": {
+                "character_start": 2157,
+                "character_end": 2343,
+                "page": 2
+              },
+              "quotation_match": "whitespace_normalized",
+              "support_status": "not_independently_verified",
+              "quotation": "Voting against this action were Michelle\n\nW. Bowman and Christopher J. Waller, who preferred to lower the target range for the federal\n\nfunds rate by 1/4 percentage point at this meeting"
+            },
+            {
+              "source_id": "source_29200000000000000000000000000002",
+              "location": {
+                "character_start": 506,
+                "character_end": 561,
+                "page": 1
+              },
+              "quotation_match": "exact",
+              "support_status": "not_independently_verified",
+              "quotation": "Uncertainty about the economic outlook remains elevated"
+            },
+            {
+              "source_id": "source_29200000000000000000000000000002",
+              "location": {
+                "character_start": 779,
+                "character_end": 989,
+                "page": 1
+              },
+              "quotation_match": "whitespace_normalized",
+              "support_status": "not_independently_verified",
+              "quotation": "In considering the extent and timing of additional\n\nadjustments to the target range for the federal funds rate, the Committee will carefully assess\n\nincoming data, the evolving outlook, and the balance of risks"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "role": "counterargument",
+          "counterpoint_relevance_unverified": true
+        }
+      ],
+      "limitations": [
+        "Source source_29200000000000000000000000000002: only character ranges 0–1742, 1754–3847 were analyzed; remaining text was not examined.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): Answer: target range 4-1/4 to 4-1/2 percent (ref-1); dissenters Michelle W. Bowman and Christopher J. Waller, each preferring a 1/4 percentage point cut (ref-1); stated uncertainty: elevated uncertainty about the economic outlook amid attentiveness to 'risks to both sides of its dual mandate' (ref-1).",
+        "Model-reported limitation (not independently verified): The dissenters' preference is stated verbatim; the source provides no evidence of their motives, so no motive claim can be supported.",
+        "Model-reported limitation (not independently verified): Source coverage is declared partial; the text appears truncated mid-sentence in the assessment paragraph, so no conclusions should be drawn about content beyond the supplied excerpts.",
+        "Model-reported limitation (not independently verified): No numeric calculations were performed, per instructions."
+      ]
+    },
+    {
+      "case": "candidate",
+      "status": "parsed",
+      "reported_tokens": 1796,
+      "omitted_rows": 0,
+      "counterargument_count": 0,
+      "located_count": 0,
+      "warning_fields": [],
+      "counterarguments": [],
+      "limitations": [
+        "Source source_29200000000000000000000000000002: only character ranges 0–1742, 1754–3847 were analyzed; remaining text was not examined.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): The source excerpt is partial ('(more)' marker and truncation), so the full statement including any explanatory remarks from dissenters is not available.",
+        "Model-reported limitation (not independently verified): The sources do not state dissenters' rationales; no inference about motives is made.",
+        "Model-reported limitation (not independently verified): No counterargument is included because the supplied sources contain no opposing or qualifying evidence on these findings."
+      ]
+    }
+  ],
+  "model_calls": 0,
+  "semantic_support": "requires separate source-level assessment"
+}
