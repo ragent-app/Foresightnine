@@ -39,6 +39,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     (claim(quotation="invented"), source()),
     (claim(location={"status": "ambiguous", "matches": []}), source()),
     ({**claim(), "support_status": "incomplete"}, source()),
+    ({**claim(), "uncited_amounts": ["100万美元"]}, source()),
     ({"text": "No citation", "citations": []}, source()),
 ])
 def test_review_omits_unauthorized_unlocated_or_unsupported_claims(item, src):

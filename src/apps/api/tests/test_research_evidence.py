@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from app.research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence
+from app.research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence, suggest_usd_amount_evidence
 from app.research_sources import ResearchSource, SourcePermissions
 
 
@@ -81,6 +81,44 @@ def test_suggests_unique_numeric_evidence_without_claiming_semantic_support():
     assert result[0]["suggested_fact_evidence"][0]["fact_id"] == "annual"
     assert result[0]["suggested_fact_evidence"][0]["status"] == "requires_semantic_review"
     assert "suggested_fact_evidence" not in claim
+
+
+def test_suggests_same_source_usd_facts_for_uncited_amounts_without_changing_citations():
+    text = 'unit USD millions; revenue 200966; income 83276.'
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    def item(id, value, quote):
+        start = text.index(quote)
+        return {**fact(id, "s", value, period="FY2025", unit="millions", currency="USD"), "quotation": quote,
+                "location": {"character_start": start, "character_end": start + len(quote)},
+                "verification": "model_extraction_not_independently_verified"}
+    revenue, income = item("revenue", "200966", "revenue 200966"), item("income", "83276", "income 83276")
+    claim = {"text": "收入200,966百万美元，营业利润83,276百万美元。",
+             "citations": [{"source_id": "s", "quotation": "unit USD millions"}]}
+    result = suggest_usd_amount_evidence([claim], [revenue, income], [source])[0]
+    assert result["citations"] == claim["citations"]
+    assert [x["fact_id"] for x in result["suggested_fact_evidence"]] == ["revenue", "income"]
+    assert result["uncited_amounts"] == ["200,966百万美元", "83,276百万美元"]
+    assert all(x["status"] == "requires_semantic_review" for x in result["suggested_fact_evidence"])
+    assert "uncited_amounts" not in claim
+    with_revenue = {**claim, "citations": claim["citations"] + [{"source_id": "s", "quotation": "revenue 200966", "location": revenue["location"]}]}
+    result = suggest_usd_amount_evidence([with_revenue], [revenue, income], [source])[0]
+    assert result["uncited_amounts"] == ["83,276百万美元"]
+    assert [x["fact_id"] for x in result["suggested_fact_evidence"]] == ["income"]
+    for changed in ({**income, "authorship": "user"}, {**income, "currency": "EUR"},
+                    {**income, "location": {"status": "ambiguous"}}, {**income, "quotation": "invented"}):
+        assert not suggest_usd_amount_evidence([claim], [changed], [source])[0].get("uncited_amounts")
+    assert not suggest_usd_amount_evidence([claim], [income, {**income, "fact_id": "other"}], [source])[0].get("uncited_amounts")
+    assert not suggest_usd_amount_evidence([claim], [income], [source.model_copy(update={"permissions": SourcePermissions(store=True)})])[0].get("uncited_amounts")
+    other = source.model_copy(update={"source_id": "other", "text": "200966"})
+    mixed = {**claim, "citations": claim["citations"] + [{"source_id": "other", "quotation": "200966"}]}
+    assert suggest_usd_amount_evidence([mixed], [revenue], [source, other])[0]["uncited_amounts"] == ["200,966百万美元"]
+    cut_text = "revenue 2009660"
+    cut_source = source.model_copy(update={"text": cut_text})
+    cut_fact = {**revenue, "quotation": "revenue 200966", "location": {"character_start": 0, "character_end": 14}}
+    assert not suggest_usd_amount_evidence([claim], [cut_fact], [cut_source])[0].get("uncited_amounts")
+    duplicated_source = source.model_copy(update={"text": text + " revenue 200966"})
+    assert not suggest_usd_amount_evidence([claim], [revenue], [duplicated_source])[0].get("uncited_amounts")
 
 
 def test_suggestions_fail_closed_for_ambiguous_or_user_edited_facts():

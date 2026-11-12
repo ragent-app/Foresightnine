@@ -1052,3 +1052,51 @@ def test_unverified_rate_currency_is_visible_and_rechecked_on_edit(monkeypatch):
     versions = saved.json()["versions"]
     assert all(not item.get("currency_context_unverified") for item in versions[-1]["content"]["facts"])
     assert all(item["currency_context_unverified"] for item in versions[-2]["content"]["facts"])
+
+
+def test_uncited_amounts_are_candidates_and_rechecked_after_adding_quotes(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    class Provider:
+        name = "amount-candidate-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def item(id, value, quote):
+                return {"fact_id": id, "label": id, "value": value, "unit": "millions", "currency": "USD", "period": "2025",
+                        "citation": {"source_id": source_id, "quotation": quote}}
+            return {"claims": [{"text": "收入200,966百万美元，营业利润83,276百万美元。", "citations": [
+                        {"source_id": source_id, "quotation": "unit USD millions"}]}],
+                    "facts": [item("revenue", "200966", "revenue 200966"), item("income", "83276", "income 83276")]}, 30
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post("/v1/auth/local/register", json={"email": "amount-candidate@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+        "text": "unit USD millions; revenue 200966; income 83276.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue and income?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "amount-candidate-run"},
+                          json={"parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": False})
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    claim = current["content"]["claims"][0]
+    assert current["content"]["run"]["status"] == "partial"
+    assert len(claim["uncited_amounts"]) == 2 and len(claim["suggested_fact_evidence"]) == 2
+    changed = deepcopy(current["content"])
+    changed["claims"][0]["citations"].extend({"source_id": item["source_id"], "quotation": item["quotation"]}
+                                                for item in claim["suggested_fact_evidence"])
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
+    assert saved.status_code == 201, saved.text
+    versions = saved.json()["versions"]
+    assert not versions[-1]["content"]["claims"][0].get("uncited_amounts")
+    assert len(versions[-1]["content"]["claims"][0]["citations"]) == 3
+    assert versions[-2]["content"]["claims"][0]["uncited_amounts"]
+    assert versions[-1]["content"]["claims"][0]["support_status"] == "not_independently_verified"

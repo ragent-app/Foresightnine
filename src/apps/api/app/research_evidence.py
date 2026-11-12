@@ -1,7 +1,7 @@
 """Conservative, auditable cross-source numeric comparison."""
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from copy import deepcopy
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from .research_calculations import NumericFact, _is_ratio_scale_factor
 from .research_analysis import _quoted_numbers
-from .research_sources import ResearchSource
+from .research_sources import ResearchSource, partial_ascii_token
 
 
 _PERCENT = re.compile(r"(?<![A-Za-z0-9_.])([-−]?\d+(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
@@ -219,6 +219,103 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
             entry["suggested_fact_evidence"] = suggested
         if uncited:
             entry["uncited_percentages"] = uncited
+        output.append(entry)
+    return output
+
+
+def suggest_usd_amount_evidence(claims: list[dict], facts: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Suggest unique, source-matched USD amount facts; never assert entailment.
+
+    This deliberately handles only explicit Chinese USD amounts against
+    uniquely located, unedited model facts in USD millions. Matching numbers
+    does not establish entity, period, accounting basis, or claim support.
+    """
+    usable = []
+    source_map = {source.source_id: source for source in sources if source.permissions.display and not source.is_simulated}
+    id_counts = Counter(item.get("fact_id") for item in facts if isinstance(item.get("fact_id"), str))
+    for item in facts:
+        source_id, fact_id = item.get("source_id"), item.get("fact_id")
+        quote, location = item.get("quotation"), item.get("location")
+        unit = " ".join(str(item.get("unit") or "").casefold().split())
+        currency = str(item.get("currency") or "").upper()
+        if (item.get("verification") != "model_extraction_not_independently_verified" or item.get("authorship") == "user" or
+                not isinstance(source_id, str) or not isinstance(fact_id, str) or id_counts[fact_id] != 1 or not isinstance(quote, str) or
+                not quote or len(quote) > 1000 or not isinstance(location, dict) or location.get("status") == "ambiguous" or
+                type(location.get("character_start")) is not int or type(location.get("character_end")) is not int or
+                location["character_start"] < 0 or location["character_end"] - location["character_start"] != len(quote) or
+                not re.fullmatch(r"(?:usd\s+)?millions?(?:\s+usd)?", unit) or
+                not ("usd" in unit or currency == "USD") or currency not in {"", "USD"}):
+            continue
+        try:
+            value = Decimal(str(item.get("value")))
+            source = source_map.get(source_id)
+            start, end = location["character_start"], location["character_end"]
+            if (source is None or end > len(source.text) or source.text[start:end] != quote or
+                    source.text.find(quote) != start or source.text.find(quote, start + 1) >= 0 or
+                    partial_ascii_token(source.text, start, end) or not value.is_finite() or value not in _quoted_numbers(quote)):
+                continue
+        except (InvalidOperation, ValueError):
+            continue
+        usable.append((source_id, value, item))
+
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("uncited_amounts", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
+            output.append(entry)
+            continue
+        cited_sources = {c.get("source_id") for c in citations if isinstance(c, dict) and isinstance(c.get("source_id"), str)}
+        existing: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        for citation in citations:
+            if not isinstance(citation, dict) or citation.get("partial_token"):
+                continue
+            source_id, quote, location = citation.get("source_id"), citation.get("quotation"), citation.get("location")
+            source = source_map.get(source_id) if isinstance(source_id, str) else None
+            if (source is None or not isinstance(quote, str) or not isinstance(location, dict) or
+                    location.get("status") == "ambiguous"):
+                continue
+            start, end = location.get("character_start"), location.get("character_end")
+            if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text) and
+                    source.text[start:end] == quote and not partial_ascii_token(source.text, start, end)):
+                existing[source_id].append((start, end))
+        previous_suggestions = entry.get("suggested_fact_evidence")
+        suggestions = [item for item in previous_suggestions if isinstance(item, dict)] if isinstance(previous_suggestions, list) else []
+        seen = {item.get("fact_id") for item in suggestions if isinstance(item, dict)}
+        missing = []
+        matches = list(_ZH_USD_AMOUNT.finditer(text))
+        if len(matches) <= 20:
+            for match in matches:
+                raw = match.group(1).replace(",", "").replace("−", "-")
+                places = len(raw.rsplit(".", 1)[1]) if "." in raw else 0
+                if len(raw) > 40 or places > 8:
+                    continue
+                try:
+                    amount, factor = Decimal(raw), _ZH_USD_TO_MILLIONS[match.group(2) or ""]
+                    with localcontext() as context:
+                        context.prec = 100
+                        candidates = [(value, item) for source_id, value, item in usable if source_id in cited_sources and
+                            (value / factor).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP) == amount]
+                except (InvalidOperation, ValueError):
+                    continue
+                if len(candidates) != 1:
+                    continue
+                value, fact = candidates[0]
+                fact_start, fact_end = fact["location"]["character_start"], fact["location"]["character_end"]
+                if any(start <= fact_start and fact_end <= end for start, end in existing[fact["source_id"]]):
+                    continue
+                if match.group(0) not in missing and len(missing) < 5:
+                    missing.append(match.group(0))
+                if fact["fact_id"] not in seen and len(suggestions) < 5:
+                    seen.add(fact["fact_id"])
+                    suggestions.append({key: deepcopy(fact[key]) for key in
+                        ("fact_id", "source_id", "value", "unit", "period", "quotation", "location") if key in fact} |
+                        {"status": "requires_semantic_review"})
+        if suggestions:
+            entry["suggested_fact_evidence"] = suggestions
+        if missing:
+            entry["uncited_amounts"] = missing
         output.append(entry)
     return output
 

@@ -99,7 +99,7 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
-from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence
+from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence, suggest_usd_amount_evidence
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_support_review, prepare_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult
@@ -1713,6 +1713,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         citation_sources[source_id] = research_sources.get(account.account_id, source_id)
                     except SourceNotFound:
                         pass
+        content.claims = suggest_usd_amount_evidence(content.claims, content.facts, list(citation_sources.values()))
         content.claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(content.claims, list(citation_sources.values())))
         content.evidence_differences = evidence_differences(content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
@@ -2141,6 +2142,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         claims = [{**item, "role": "support"} for item in analysis.claims]
         claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
         claims = suggest_percentage_evidence(claims, analysis.facts)
+        claims = suggest_usd_amount_evidence(claims, analysis.facts, sources)
         claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
         generation_usage = usage
         review_usage: int | None = None
@@ -2241,7 +2243,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
-                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") for c in claims) and
+                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") for c in claims) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if not analysis.counterarguments:
@@ -2262,6 +2264,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("A claimed publication date may differ from the source's declared date; review both.")
         if any(c.get("rate_unit_warnings") for c in claims):
             limitations.append("An interest rate level may be expressed as percentage points; review the unit and context.")
+        if any(c.get("uncited_amounts") for c in claims):
+            limitations.append("A matched amount fact passage is not fully covered by attached quotations; check evidence and context.")
         if len(differences) == 50:
             limitations.append("At most 50 candidate differences are shown.")
         if monotonic() > deadline:
