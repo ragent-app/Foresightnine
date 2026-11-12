@@ -1,0 +1,75 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Cisco FY2024(截至2024年7月27日的年度)总收入为538.03亿美元，FY2023(截至2023年7月29日的年度)总收入为569.98亿美元，单位均为百万美元。",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "quotation": "(in millions, except per-share amounts)"
+          },
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+          },
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "quotation": "| [colspan=3] Years Ended | [colspan=3] July 27, 2024 | [colspan=3]  | [colspan=3] July 29, 2023 | [colspan=3]  | [colspan=3] July 30, 2022 |"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "反方/限制：所提供的摘录仅含总收入行，未包含分部、产品/服务收入构成或管理层对收入下降原因的解释，故无法从所给来源确认同比下降的驱动因素；表格摘录为部分抽取（source_coverage: partial），列对齐可能存在压缩或错位风险。",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "所提供文本仅为合并利润表的部分摘录，未包含收入变动的管理层讨论与分析（MD&A）说明。",
+      "各期具体起止日期未在摘录中完整给出，仅表头列示各年度结束日（July 27, 2024 / July 29, 2023），期间长度按52/53周惯例未经验证。",
+      "文本提取可能存在表格压缩或列错位，建议核对原始10-K。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fy2024_total_revenue",
+        "label": "Total revenue FY2024",
+        "value": "53,803",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended July 27, 2024",
+        "citation": {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+        }
+      },
+      {
+        "fact_id": "fy2023_total_revenue",
+        "label": "Total revenue FY2023",
+        "value": "56,998",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended July 29, 2023",
+        "citation": {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fy2024_total_revenue",
+        "second_fact_id": "fy2023_total_revenue"
+      }
+    ]
+  },
+  "reported_tokens": 1637,
+  "prompt_sha256": "5b713c027655d4b46eee0bbc5c945e8fdc165a21ceda5da8b91e74ce6b8d32b4",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

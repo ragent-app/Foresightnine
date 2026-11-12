@@ -1,0 +1,16 @@
+{
+  "operation_status": "completed",
+  "claims": [
+    {
+      "both_amounts_in_claim": true,
+      "all_citations_located": true,
+      "cited_both_amounts": true,
+      "cited_periods": true,
+      "cited_unit": true,
+      "table_warning": false
+    }
+  ],
+  "narrow_mechanical_pass": true,
+  "semantic_support": "not established",
+  "independent_test": false
+}

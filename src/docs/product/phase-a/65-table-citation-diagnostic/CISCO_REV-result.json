@@ -1,0 +1,230 @@
+{
+  "id": "CISCO_REV",
+  "operation_status": "completed",
+  "manifest_sha256": "4c4c111cc9c2dc09b6b09931f21eee388b052053251c9f6aa84132d2f3987855",
+  "input_sha256": "d9f6eefae1640021ff1a00c149a4cd73e03b6188eacbb225da853b9ccd1a8f9c",
+  "elapsed_seconds_observed": 22.275,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_30347234ff284541b06000413c5c083c",
+        "title": "Cisco FY2024 Form 10-K, filed 2024-09-05, SEC HTML text extraction; table separators generated",
+        "url": "https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T07:23:11.179897+00:00",
+        "revised_at": null,
+        "content_sha256": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fy2024_total_revenue",
+        "value": "53803",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended July 27, 2024",
+        "label": "Total revenue FY2024",
+        "source_id": "source_30347234ff284541b06000413c5c083c",
+        "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |",
+        "quotation_match": "exact",
+        "numeric_normalization": "thousands_separator",
+        "location": {
+          "character_start": 343589,
+          "character_end": 343723
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fy2023_total_revenue",
+        "value": "56998",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year ended July 29, 2023",
+        "label": "Total revenue FY2023",
+        "source_id": "source_30347234ff284541b06000413c5c083c",
+        "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |",
+        "quotation_match": "exact",
+        "numeric_normalization": "thousands_separator",
+        "location": {
+          "character_start": 343589,
+          "character_end": 343723
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "period_order_check": "recognized_formats_only",
+        "inputs": [
+          {
+            "fact_id": "fy2024_total_revenue",
+            "value": "53803",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year ended July 27, 2024"
+          },
+          {
+            "fact_id": "fy2023_total_revenue",
+            "value": "56998",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year ended July 29, 2023"
+          }
+        ],
+        "value": "-5.61",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Cisco FY2024(截至2024年7月27日的年度)总收入为538.03亿美元，FY2023(截至2023年7月29日的年度)总收入为569.98亿美元，单位均为百万美元。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 343016,
+              "character_end": 343055
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "(in millions, except per-share amounts)"
+          },
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 343589,
+              "character_end": 343723
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+          },
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 343112,
+              "character_end": 343253
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Years Ended | [colspan=3] July 27, 2024 | [colspan=3]  | [colspan=3] July 29, 2023 | [colspan=3]  | [colspan=3] July 30, 2022 |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "反方/限制：所提供的摘录仅含总收入行，未包含分部、产品/服务收入构成或管理层对收入下降原因的解释，故无法从所给来源确认同比下降的驱动因素；表格摘录为部分抽取（source_coverage: partial），列对齐可能存在压缩或错位风险。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "location": {
+              "character_start": 343589,
+              "character_end": 343723
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |  | [colspan=3]  | [colspan=2] 51,557  |  |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "citation_context_warnings": [
+          {
+            "source_id": "source_30347234ff284541b06000413c5c083c",
+            "citation_index": 0,
+            "context_metric": "financial table header",
+            "context_character_start": 342920,
+            "context_character_end": 343253,
+            "status": "requires_review"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_30347234ff284541b06000413c5c083c: only character ranges 342924–343254, 343589–343723 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "所提供文本仅为合并利润表的部分摘录，未包含收入变动的管理层讨论与分析（MD&A）说明。",
+      "各期具体起止日期未在摘录中完整给出，仅表头列示各年度结束日（July 27, 2024 / July 29, 2023），期间长度按52/53周惯例未经验证。",
+      "文本提取可能存在表格压缩或列错位，建议核对原始10-K。",
+      "A quotation may omit a relevant subject or table header; review the source context and claim.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:cb9c74871e4d74dbdc4b46a6",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1637,
+      "cost_usd": null,
+      "generation_tokens": 1637,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 20.637,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "5b713c027655d4b46eee0bbc5c945e8fdc165a21ceda5da8b91e74ce6b8d32b4",
+      "prompt_characters": 1901,
+      "prompt_bytes": 1999,
+      "selection_method": "ranked_nonoverlapping_windows_v16",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "character_start": 342924,
+          "character_end": 343254
+        },
+        {
+          "source_id": "source_30347234ff284541b06000413c5c083c",
+          "character_start": 343589,
+          "character_end": 343723
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_30347234ff284541b06000413c5c083c": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}
