@@ -1888,8 +1888,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     # Form feeds in the supplied text denote page boundaries. Labels are
     # hints for the model, not a verification of any interpretation.
     shown_pages: dict[str, set[int]] = {}
-    guidance = " PDF p=[first,last] pages; form feed breaks pages; cite integer source_page."
+    guidance = " PDF p=[first,last] pages; form feed breaks pages. Cite integer source_page only for a labeled PDF."
     baseline_guidance = data["evidence_guidance"]
+    citation_examples = [data["output_schema"]["claims"][0]["citations"][0],
+                         data["output_schema"]["counterarguments"][0]["citations"][0],
+                         data["output_schema"]["facts"][0]["citation"]]
+    for example in citation_examples:
+        example["source_page"] = None
     baseline_sources = [dict(item) for item in data["sources"]]
     excerpt_map = [(source, start, passage) for source in processed for start, passage in model_text[source.source_id]]
     # Later entries repeat metadata for the same source. Removing only those
@@ -1916,6 +1921,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 data["evidence_guidance"] = baseline_guidance
     if not shown_pages:
         data["sources"] = baseline_sources
+        for example in citation_examples:
+            del example["source_page"]
     prompt = serialize()
     segments = [{"source_id": s.source_id, "character_start": start, "character_end": start + len(passage),
                  **({"model_source_id": prompt_refs[s.source_id]} if prompt_refs[s.source_id] != s.source_id else {})}

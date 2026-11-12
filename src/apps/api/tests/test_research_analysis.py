@@ -2035,6 +2035,8 @@ def test_page_hints_only_locate_model_visible_pdf_pages_without_verifying_suppor
         def model(prompt):
             data = json.loads(prompt)
             assert data["sources"][0]["p"] == [1, 2]
+            assert data["output_schema"]["claims"][0]["citations"][0]["source_page"] is None
+            assert data["output_schema"]["facts"][0]["citation"]["source_page"] is None
             assert len(prompt.encode()) <= 12000
             return {"claims": [{"text": "Interpretation", "citations": [
                 {"source_id": "report", "quotation": "Header common", **({"source_page": page} if page is not None else {})}]}]}, 1
