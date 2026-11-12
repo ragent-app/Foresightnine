@@ -494,6 +494,62 @@
         "title": "ResearchContent",
         "type": "object"
       },
+      "ResearchFullExport": {
+        "additionalProperties": false,
+        "description": "A permission-checked snapshot of one immutable research version.",
+        "properties": {
+          "disclosure": {
+            "const": "Model interpretations and declared source permissions are not independently verified.",
+            "default": "Model interpretations and declared source permissions are not independently verified.",
+            "title": "Disclosure",
+            "type": "string"
+          },
+          "format": {
+            "const": "research_json",
+            "default": "research_json",
+            "title": "Format",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ResearchInput"
+          },
+          "schema_version": {
+            "const": "1",
+            "default": "1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_provenance": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Source Provenance",
+            "type": "array"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ResearchVersion"
+          }
+        },
+        "required": [
+          "topic_id",
+          "generated_at",
+          "request",
+          "version",
+          "source_provenance"
+        ],
+        "title": "ResearchFullExport",
+        "type": "object"
+      },
       "ResearchInput": {
         "additionalProperties": false,
         "properties": {
@@ -2321,9 +2377,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Research Version V2 Research Topics  Topic Id  Versions  Version Id  Export Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ResearchFullExport"
                 }
               }
             },

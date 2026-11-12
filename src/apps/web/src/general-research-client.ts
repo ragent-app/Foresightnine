@@ -151,7 +151,7 @@ export function researchClient(baseUrl: string) {
       request<ResearchTopic>(`/v2/research/topics/${encodeURIComponent(topicId)}/versions`, {
         parent_version_id: version.version_id, content: { ...version.content, summary, claims, facts }, review, note,
       }),
-    exportVersion: (topicId: string, versionId: string) => request<Record<string, unknown>>(
+    exportVersion: (topicId: string, versionId: string) => request<ResearchV2.ResearchFullExport>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/versions/${encodeURIComponent(versionId)}/export`),
     exportMetadata: (topicId: string, versionId: string) => request<ResearchV2.ResearchMetadataExport>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/versions/${encodeURIComponent(versionId)}/export/metadata`),

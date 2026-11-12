@@ -95,7 +95,7 @@ from .services import (
     validate_worldline_bundle_semantics,
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
-from .research_topics import AttachSourcesInput, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
+from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
@@ -1514,8 +1514,8 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
     return result
 
 
-@app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export", include_in_schema=False)
-def export_research_version(topic_id: str, version_id: str, authorization: str | None = Header(default=None)) -> dict:
+@app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export", response_model=ResearchFullExport, include_in_schema=False)
+def export_research_version(topic_id: str, version_id: str, authorization: str | None = Header(default=None)) -> ResearchFullExport:
     account = _authenticated_account(authorization)
     try:
         topic = research_topics.get(account.account_id, topic_id)
@@ -1554,9 +1554,8 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
             sources.append(metadata)
     except SourceNotFound as error:
         raise ApiProblem(403, "invalid_request", "A research source is unavailable for export.") from error
-    return {"schema_version": "1", "topic_id": topic_id, "request": topic.request.model_dump(mode="json"),
-            "version": version.model_dump(mode="json"), "source_provenance": sources,
-            "disclosure": "Model interpretations and declared source permissions are not independently verified."}
+    return ResearchFullExport(topic_id=topic_id, generated_at=lifecycle_clock.now(), request=topic.request,
+                              version=version, source_provenance=sources)
 
 
 @app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export/metadata",

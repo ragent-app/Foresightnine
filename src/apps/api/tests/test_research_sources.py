@@ -104,6 +104,7 @@ def test_metadata_export_omits_all_research_and_source_text(monkeypatch):
 
 
 def test_authorized_full_export_contains_provenance_without_original_or_url_query(monkeypatch):
+    from datetime import datetime, timezone
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     client = TestClient(app)
     registration = client.post("/v1/auth/local/register", json={"email": "full-export@example.test",
@@ -120,9 +121,13 @@ def test_authorized_full_export_contains_provenance_without_original_or_url_quer
         "review": "confirmed", "content": {"summary": "Research result", "claims": [{"text": "Revenue was 100",
           "citations": [{"source_id": source["source_id"], "quotation": "Revenue was 100."}]}]}}).json()
     version = saved["versions"][-1]
+    before = datetime.now(timezone.utc)
     response = client.get(path + "/versions/" + version["version_id"] + "/export", headers=headers)
+    after = datetime.now(timezone.utc)
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
     result = response.json()
+    assert result["schema_version"] == "1" and result["format"] == "research_json"
+    assert before <= datetime.fromisoformat(result["generated_at"].replace("Z", "+00:00")) <= after
     assert result["version"]["review"] == "confirmed" and result["request"]["as_of"] is not None
     assert result["version"]["content"]["claims"][0]["citations"][0]["quotation"] == "Revenue was 100."
     provenance = result["source_provenance"][0]

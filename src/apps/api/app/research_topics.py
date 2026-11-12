@@ -92,6 +92,20 @@ class ResearchTopic(BaseModel):
     versions: list[ResearchVersion]
 
 
+class ResearchFullExport(BaseModel):
+    """A permission-checked snapshot of one immutable research version."""
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["1"] = "1"
+    format: Literal["research_json"] = "research_json"
+    topic_id: str
+    generated_at: datetime
+    request: ResearchInput
+    version: ResearchVersion
+    source_provenance: list[dict]
+    disclosure: Literal["Model interpretations and declared source permissions are not independently verified."] = \
+        "Model interpretations and declared source permissions are not independently verified."
+
+
 class ResearchMetadataExport(BaseModel):
     """Content-free export when the full research cannot be shared."""
     model_config = ConfigDict(extra="forbid")
