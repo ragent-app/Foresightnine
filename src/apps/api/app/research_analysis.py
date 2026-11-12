@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
+from itertools import islice
 from typing import Any, Callable, Literal
 from urllib.parse import urlsplit
 
@@ -35,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v14"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v15"
 
 
 class Citation(BaseModel):
@@ -348,6 +349,53 @@ def _comparison_windows(text: str, question: str, size: int,
     return [(start, text[start:end]) for start, end in spans]
 
 
+def _policy_vote_windows(text: str, question: str, size: int,
+                         should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
+    """Preserve nearby policy-action and vote passages without joining them.
+
+    Temporal proximity is only a retrieval hint; the original context must
+    still establish that the vote refers to the action.
+    """
+    lower = question.casefold()
+    if (not any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against")) or
+            not any(term in lower for term in ("货币政策", "利率", "美联储", "monetary policy", "federal reserve", "fomc"))):
+        return None
+    vote_pattern = r"\bvoting\s+against\s+this\s+action\s*:\s*[^.\n\f]{1,100}\."
+    action_pattern = (r"\b(?:members|committee)\s+(?:agreed|decided|voted)\s+to\s+"
+                      r"(?:raise|lower|maintain|increase|reduce|hold)\s+(?:the\s+)?target\s+range\s+for\s+"
+                      r"(?:the\s+)?federal\s+funds\s+rate\b")
+    votes = list(islice(re.finditer(vote_pattern, text, re.IGNORECASE), 64))
+    if not votes:
+        return None
+    actions = list(islice(re.finditer(action_pattern, text, re.IGNORECASE), 512))
+    for vote in votes:
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        candidates = [action for action in actions if 0 < vote.start() - action.start() <= 12000]
+        if not candidates:
+            continue
+        action = candidates[-1]
+        tail = text[action.end():min(vote.start(), action.end() + 160)]
+        sentence_end = re.search(r"[.!?](?=\s|$)", tail)
+        if not sentence_end:
+            continue
+        spans = [[action.start(), action.end() + sentence_end.end()], [vote.start(), vote.end()]]
+        if spans[0][1] > spans[1][0] or sum(end - start for start, end in spans) > size:
+            continue
+        remaining = size - sum(end - start for start, end in spans)
+        for index in range(2):
+            start, end = spans[index]
+            left_limit = spans[index - 1][1] if index else 0
+            right_limit = spans[index + 1][0] if index + 1 < 2 else len(text)
+            allowance = remaining // (2 - index)
+            left = min(start - left_limit, allowance // 2)
+            right = min(right_limit - end, allowance - left)
+            spans[index] = [start - left, end + right]
+            remaining -= left + right
+        return [(start, text[start:end]) for start, end in spans]
+    return None
+
+
 def _financial_table_windows(text: str, question: str, size: int,
                              should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
     """Keep a fiscal-year header, units and a matching total row together.
@@ -619,7 +667,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         source_budget_limit = current_bytes + max(0, max_prompt_chars - current_bytes) // (len(eligible) - index)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             if split and size >= 2:
-                windows = _financial_table_windows(selection_text, question, size, should_stop)
+                windows = _policy_vote_windows(selection_text, question, size, should_stop)
+                if windows is None:
+                    windows = _financial_table_windows(selection_text, question, size, should_stop)
                 if windows is None:
                     windows = _comparison_windows(selection_text, question, size, should_stop)
                 if windows is None:

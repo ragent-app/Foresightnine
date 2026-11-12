@@ -104,6 +104,8 @@ def test_nonfinite_values_rejected():
 @pytest.mark.parametrize("current,baseline", [
     ("2023", "2024"), ("FY2023", "fy2024"), ("2023-Q4", "2024-Q1"),
     ("2024-01", "2024-02"), ("2024-12-30", "2024-12-31"), ("FY2024", "fy2024"),
+    ("Year Ended January 30, 2022", "Year Ended January 29, 2023"),
+    ("Year ended January 29 2023", "YEAR ENDED JANUARY 29, 2023"),
 ])
 def test_growth_rejects_reversed_or_equivalent_recognized_periods(current, baseline):
     with pytest.raises(CalculationError, match="later than its baseline"):
@@ -113,7 +115,9 @@ def test_growth_rejects_reversed_or_equivalent_recognized_periods(current, basel
 
 def test_growth_does_not_guess_order_across_fiscal_and_calendar_or_free_text():
     for current, baseline in [("FY2023", "2024"), ("earlier estimate", "later estimate"),
-                              ("2024-02-31", "2024-03-01")]:
+                              ("2024-02-31", "2024-03-01"),
+                              ("Year Ended February 30, 2024", "Year Ended March 1, 2024"),
+                              ("Year Ended January 29, 2023", "2022-01-30")]:
         result = calculate(CalculationRequest(formula="growth_percent", first=fact("a", "100", current),
                                               second=fact("b", "80", baseline)))
         assert result["value"] == "25.00" and result["input_verification"] == "not_verified_by_calculator"
@@ -154,3 +158,12 @@ def test_suggested_calculation_requires_matching_result_and_both_source_passages
     assert not suggest_percentage_calculations([claim], [calculation], [current, {**prior, "authorship": "user"}])[0].get("suggested_calculations")
     assert not suggest_percentage_calculations([{**claim, "citations": [{**claim["citations"][0], "partial_token": True}, claim["citations"][1]]}], [calculation], [current, prior])[0].get("suggested_calculations")
     assert not suggest_percentage_calculations([{**claim, "uncited_percentages": ["26%"], "suggested_calculations": [{"fabricated": True}]}], [calculation], [current, prior])[0].get("suggested_calculations")
+
+
+def test_year_ended_dates_check_order_without_changing_fiscal_identity():
+    result = calculate(CalculationRequest(formula="growth_percent",
+        first=fact("current", "26974", "Year Ended January 29, 2023"),
+        second=fact("prior", "26914", "Year Ended January 30, 2022")))
+    assert result["value"] == "0.22"
+    assert result["period_order_check"] == "recognized_formats_only"
+    assert result["input_verification"] == "not_verified_by_calculator"

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
@@ -753,3 +753,17 @@ def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote
     assert result.calculations[0]["value"] == "0.22"
     assert any("format was invalid" in note for note in result.limitations)
     assert any("absent from its quotation" in note for note in result.limitations)
+
+
+def test_policy_vote_retrieval_keeps_action_and_vote_as_separate_source_passages():
+    action = "The members agreed to raise the target range for the federal funds rate to 5 percent."
+    vote = "Voting against this action: None."
+    text = "intro " * 30 + action + " unrelated material " * 100 + vote + " end " * 30
+    result = _policy_vote_windows(text, "美联储货币政策行动有反对票吗？", 250)
+    assert result is not None and len(result) == 2
+    assert sum(len(part) for _, part in result) <= 250
+    assert action in result[0][1] and vote in result[1][1]
+    assert all(text[start:start + len(part)] == part for start, part in result)
+    assert _policy_vote_windows(text, "其他会议的反对票？", 250) is None
+    assert _policy_vote_windows(text, "美联储货币政策行动有反对票吗？", 30) is None
+    assert _policy_vote_windows(vote + " unrelated ", "美联储货币政策行动有反对票吗？", 250) is None
