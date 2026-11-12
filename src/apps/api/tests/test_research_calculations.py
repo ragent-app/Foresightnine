@@ -220,3 +220,13 @@ def test_ratio_difference_is_not_inferred_from_an_unrelated_yoy_percentage():
     assert len(differences) == 1 and differences[0]['status'] == 'requires_review'
     both_inputs = {'text': '網上銷售29億元、總銷貨317億元，結果為9.3%。'}
     assert len(claim_calculation_differences([both_inputs], [ratio], [online, total])) == 1
+
+
+def test_ratio_result_does_not_claim_precision_of_its_recorded_inputs():
+    total = fact('total', '317', '2024-11')
+    online = fact('online', '29', '2024-11')
+    result = calculate(CalculationRequest(formula='margin_percent', first=online, second=total))
+    assert result['value'] == '9.15'
+    assert result['rounding'] == 'half_up' and result['decimal_places'] == 2
+    assert result['input_precision_status'] == 'not_established'
+    assert result['input_verification'] == 'not_verified_by_calculator'

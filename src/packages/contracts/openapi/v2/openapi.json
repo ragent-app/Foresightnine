@@ -528,6 +528,12 @@
         "additionalProperties": false,
         "description": "A permission-checked snapshot of one immutable research version.",
         "properties": {
+          "calculation_disclosure": {
+            "const": "Calculations use the recorded inputs; their source precision and prior rounding are not established.",
+            "default": "Calculations use the recorded inputs; their source precision and prior rounding are not established.",
+            "title": "Calculation Disclosure",
+            "type": "string"
+          },
           "disclosure": {
             "const": "Model interpretations and declared source permissions are not independently verified.",
             "default": "Model interpretations and declared source permissions are not independently verified.",

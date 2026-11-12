@@ -104,6 +104,8 @@ class ResearchFullExport(BaseModel):
     source_provenance: list[dict]
     disclosure: Literal["Model interpretations and declared source permissions are not independently verified."] = \
         "Model interpretations and declared source permissions are not independently verified."
+    calculation_disclosure: Literal["Calculations use the recorded inputs; their source precision and prior rounding are not established."] = \
+        "Calculations use the recorded inputs; their source precision and prior rounding are not established."
 
 
 class ResearchMetadataExport(BaseModel):

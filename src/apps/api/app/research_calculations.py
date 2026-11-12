@@ -201,6 +201,7 @@ def calculate(request: CalculationRequest) -> dict:
         raise CalculationError("Calculation exceeds supported precision.") from error
     return {"formula_id": request.formula, "formula_version": formula_version, "expression": expression,
             "input_verification": "not_verified_by_calculator",
+            "input_precision_status": "not_established",
             **({"period_order_check": period_order_check} if request.formula == "growth_percent" else {}),
             "inputs": [a.model_dump(mode="json"), b.model_dump(mode="json")],
             "value": str(rounded), "unit": unit,

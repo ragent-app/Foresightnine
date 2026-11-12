@@ -222,3 +222,19 @@ def test_basis_point_warnings_recompute_after_edit_and_preserve_history(monkeypa
     assert saved.status_code == 201, saved.text
     assert not saved.json()['versions'][-1]['content']['claims'][0].get('uncited_basis_points')
     assert saved.json()['versions'][-2]['content']['claims'][0]['uncited_basis_points'] == ['25 basis points']
+
+
+def test_full_export_discloses_input_precision_for_existing_versions(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'precision-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Compare figures', 'scope': '2024', 'as_of': '2025-01-01T00:00:00Z'}).json()
+    path = '/v2/research/topics/' + topic['topic_id'] + '/versions/' + topic['versions'][0]['version_id']
+    result = client.get(path + '/export', headers=headers)
+    assert result.status_code == 200
+    exported = result.json()
+    assert exported['request']['scope'] == '2024'
+    assert exported['calculation_disclosure'] == 'Calculations use the recorded inputs; their source precision and prior rounding are not established.'
+    assert 'calculation_disclosure' not in client.get(path + '/export/metadata', headers=headers).json()
