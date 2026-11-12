@@ -430,7 +430,10 @@ def test_split_ellipsis_requires_unique_ordered_fragments_in_analyzed_passage():
     assert result.claims[0]["support_status"] == "incomplete"
     assert [c["quotation"] for c in result.claims[0]["citations"]] == ["Issuer Example", "Revenue 100"]
     assert not run(report.text, "Revenue 100 ... Issuer Example").claims
-    assert not run(report.text + " Issuer Example.", "Issuer Example ... Revenue 100").claims
+    ambiguous = run(report.text + " Issuer Example.", "Issuer Example ... Revenue 100")
+    assert ambiguous.claims[0]["support_status"] == "incomplete"
+    assert ambiguous.claims[0]["citations"][0]["location"]["status"] == "ambiguous"
+    assert len(ambiguous.claims[0]["citations"][0]["location"]["matches"]) == 2
     assert not run(report.text, "Issuer Example ... Revenue 101").claims
 
 

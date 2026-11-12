@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
-from itertools import islice
+from itertools import islice, product
 from typing import Any, Callable, Literal
 from urllib.parse import urlsplit
 
@@ -2399,8 +2399,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     location, quotation, matching = quotation_location(source, citation.quotation, citation.source_page)
                 except InvalidAnalysis:
                     # Some models join independently quoted passages with
-                    # "and". Preserve them only as separate, unique original
-                    # quotations; never stitch them into invented source text.
+                    # "and" or an ellipsis. Preserve separate original texts;
+                    # ellipsis locations can remain explicitly ambiguous.
                     fragments = re.split(r"\s+and\s+", citation.quotation, flags=re.IGNORECASE)
                     split_kind = "split_conjunction"
                     if len(fragments) == 1:
@@ -2419,7 +2419,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             allowed_matches = {"exact", "whitespace_normalized"}
                             if split_kind == "split_ellipsis":
                                 allowed_matches.add("table_markup_expanded")
-                            if loc.get("status") == "ambiguous" or match_kind not in allowed_matches:
+                            if (match_kind not in allowed_matches or
+                                    (loc.get("status") == "ambiguous" and
+                                     (split_kind != "split_ellipsis" or match_kind == "table_markup_expanded" or loc.get("truncated")))):
                                 recovered = []
                                 break
                             partial = partial_boundary(source, loc)
@@ -2431,13 +2433,19 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         # Preserve ordered fragments only within one analyzed
                         # passage. Do not imply that distant, reordered, or
                         # separately selected passages form one quotation.
-                        spans = [(part["location"]["character_start"], part["location"]["character_end"]) for part in recovered]
-                        if (any(left[1] > right[0] for left, right in zip(spans, spans[1:])) or
-                                spans[-1][1] - spans[0][0] > 5000 or
-                                not any(offset <= spans[0][0] and spans[-1][1] <= offset + len(passage)
-                                        for offset, passage in model_text[source.source_id])):
+                        alternatives = [part["location"].get("matches", [part["location"]]) for part in recovered]
+                        # At least one ordered chain must fit a single excerpt.
+                        # Do not select a chain or discard other locations: the
+                        # model's intended table and semantic support are unknown.
+                        def valid_chain(chain: tuple[dict[str, Any], ...]) -> bool:
+                            spans = [(loc["character_start"], loc["character_end"]) for loc in chain]
+                            return (not any(left[1] > right[0] for left, right in zip(spans, spans[1:])) and
+                                    spans[-1][1] - spans[0][0] <= 5000 and
+                                    any(offset <= spans[0][0] and spans[-1][1] <= offset + len(passage)
+                                        for offset, passage in model_text[source.source_id]))
+                        if not any(valid_chain(chain) for chain in product(*alternatives)):
                             recovered = []
-                    if recovered and len({(part["location"]["character_start"], part["location"]["character_end"]) for part in recovered}) == len(recovered):
+                    if recovered and (split_kind == "split_ellipsis" or len({(part["location"]["character_start"], part["location"]["character_end"]) for part in recovered}) == len(recovered)):
                         citations.extend(recovered)
                         limitations.append("A joined quotation was split into separately located passages; support requires review.")
                         if any(part.get("partial_token") for part in recovered):
