@@ -1,0 +1,30 @@
+{
+  "status": "completed",
+  "research_status": "partial",
+  "mechanical_checks": {
+    "bank": true,
+    "metric": true,
+    "actual": true,
+    "projected_end": true,
+    "projected_minimum": true,
+    "actual_and_projection_labels": true,
+    "scenario_cited": true,
+    "all_claims_uniquely_located": false
+  },
+  "mechanical_pass": false,
+  "model_calls": 2,
+  "reported_tokens": 2896,
+  "review_status": "partial",
+  "review_omissions": [
+    {
+      "claim_index": 1,
+      "reason": "not_reviewable"
+    },
+    {
+      "claim_index": 2,
+      "reason": "not_reviewable"
+    }
+  ],
+  "claim_count": 3,
+  "semantic_support": "not independently established; table alignment requires review"
+}

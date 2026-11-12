@@ -1,0 +1,81 @@
+{
+  "manifest_sha256": "e99d070cf600ba6e733db8c50a4265b5d49283999c50345c0beece15ce7fdc3e",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Table A.17, 'JPMorgan Chase & Co.', reports common equity tier 1 capital ratio values under columns 'Actual 2025:Q4', 'Projected 2028:Q1', and 'Projected minimum' from 'Federal Reserve estimates: Severely adverse scenario'.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Table A.17. JPMorgan Chase & Co.\nProjected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net\nincome before taxes\nFederal Reserve estimates: Severely adverse scenario\nCapital ratios and risk-weighted assets, actual 2025:Q4\nand projected 2026:Q1–2028:Q1\nPercent except as noted\nItem\nActual\n2025:Q4\nProjected\n2028:Q1\nProjected\nminimum\nCommon equity tier 1 capital ratio 14.6 15.0 12.6"
+          }
+        ]
+      },
+      {
+        "text": "The 14.6% actual 2025:Q4 ratio is an observed value, whereas the 15.0% ending and 12.6% minimum figures are hypothetical projections, per the report's note.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "These\nprojections represent hypothetical estimates that involve an eco-\nnomic outcome that is more adverse than expected. The\nminimum capital ratios are for the period 2026:Q1 to 2028:Q1."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "A separately excerpted aggregate table lists 'JPMorgan Chase 12.6', which matches only the projected minimum in Table A.17; the 12.6 in that listing is not the actual 2025:Q4 value.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "JPMorgan Chase 12.6"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "PDF text is compressed; column alignment was reconstructed from line order, though the row order (Actual, Projected, minimum) matches the stated column headers.",
+      "The excerpts are partial; the full report was not available.",
+      "No counterargument evidence contradicts the values themselves."
+    ],
+    "facts": [
+      {
+        "fact_id": "jpm_cet1_actual",
+        "label": "JPMorgan Chase & Co. CET1 ratio, actual",
+        "value": 14.6,
+        "unit": "percent",
+        "period": "2025:Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio 14.6 15.0 12.6"
+        }
+      },
+      {
+        "fact_id": "jpm_cet1_projected_end",
+        "label": "JPMorgan Chase & Co. CET1 ratio, projected ending (severely adverse scenario)",
+        "value": 15.0,
+        "unit": "percent",
+        "period": "2028:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Common equity tier 1 capital ratio 14.6 15.0 12.6"
+        }
+      },
+      {
+        "fact_id": "jpm_cet1_projected_min",
+        "label": "JPMorgan Chase & Co. CET1 ratio, projected minimum (severely adverse scenario)",
+        "value": 12.6,
+        "unit": "percent",
+        "period": "2026:Q1–2028:Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "The\nminimum capital ratios are for the period 2026:Q1 to 2028:Q1."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 2343,
+  "prompt_sha256": "5b8413812c0e1bb64acac75fc9e7ee4f529fc355ccd7e8c21c15b42be3624452",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

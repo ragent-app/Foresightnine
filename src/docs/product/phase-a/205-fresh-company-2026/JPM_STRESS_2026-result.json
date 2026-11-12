@@ -1,0 +1,332 @@
+{
+  "task": "JPM_STRESS_2026",
+  "status": "completed",
+  "operation_id": "operation:0e1e26639f2426460d6b1450",
+  "manifest_sha256": "e99d070cf600ba6e733db8c50a4265b5d49283999c50345c0beece15ce7fdc3e",
+  "poll_errors": [],
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_20500000000000000000000000000001",
+        "title": "fed-stress-2026.pdf",
+        "url": null,
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T15:54:23.912033+00:00",
+        "revised_at": null,
+        "content_sha256": "9654bad7bef7163ecfaeca99e1835a28a1170795da7250d73ae56e3e10db7201",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "jpm_cet1_actual",
+        "value": "14.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025:Q4",
+        "label": "JPMorgan Chase & Co. CET1 ratio, actual",
+        "source_id": "source_20500000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio 14.6 15.0 12.6",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 113567,
+          "character_end": 113616,
+          "page": 50
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "jpm_cet1_projected_end",
+        "value": "15.0",
+        "unit": "percent",
+        "currency": null,
+        "period": "2028:Q1",
+        "label": "JPMorgan Chase & Co. CET1 ratio, projected ending (severely adverse scenario)",
+        "source_id": "source_20500000000000000000000000000001",
+        "quotation": "Common equity tier 1 capital ratio 14.6 15.0 12.6",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 113567,
+          "character_end": 113616,
+          "page": 50
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Table A.17, 'JPMorgan Chase & Co.', reports common equity tier 1 capital ratio values under columns 'Actual 2025:Q4', 'Projected 2028:Q1', and 'Projected minimum' from 'Federal Reserve estimates: Severely adverse scenario'.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_20500000000000000000000000000001",
+            "location": {
+              "character_start": 113199,
+              "character_end": 113616,
+              "page": 50
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Table A.17. JPMorgan Chase & Co.\nProjected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net\nincome before taxes\nFederal Reserve estimates: Severely adverse scenario\nCapital ratios and risk-weighted assets, actual 2025:Q4\nand projected 2026:Q1–2028:Q1\nPercent except as noted\nItem\nActual\n2025:Q4\nProjected\n2028:Q1\nProjected\nminimum\nCommon equity tier 1 capital ratio 14.6 15.0 12.6"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v23_isolated",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "The 14.6% actual 2025:Q4 ratio is an observed value, whereas the 15.0% ending and 12.6% minimum figures are hypothetical projections, per the report's note.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_20500000000000000000000000000001",
+            "location": {
+              "status": "ambiguous",
+              "matches": [
+                {
+                  "character_start": 75451,
+                  "character_end": 75638,
+                  "page": 40
+                },
+                {
+                  "character_start": 113999,
+                  "character_end": 114186,
+                  "page": 50
+                }
+              ],
+              "truncated": false
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "These\nprojections represent hypothetical estimates that involve an eco-\nnomic outcome that is more adverse than expected. The\nminimum capital ratios are for the period 2026:Q1 to 2028:Q1."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "jpm_cet1_actual",
+            "source_id": "source_20500000000000000000000000000001",
+            "value": "14.6",
+            "unit": "percent",
+            "period": "2025:Q4",
+            "quotation": "Common equity tier 1 capital ratio 14.6 15.0 12.6",
+            "location": {
+              "character_start": 113567,
+              "character_end": 113616,
+              "page": 50
+            },
+            "status": "requires_semantic_review"
+          },
+          {
+            "fact_id": "jpm_cet1_projected_end",
+            "source_id": "source_20500000000000000000000000000001",
+            "value": "15.0",
+            "unit": "percent",
+            "period": "2028:Q1",
+            "quotation": "Common equity tier 1 capital ratio 14.6 15.0 12.6",
+            "location": {
+              "character_start": 113567,
+              "character_end": 113616,
+              "page": 50
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "uncited_percentages": [
+          "14.6%",
+          "15.0%",
+          "12.6%"
+        ],
+        "uncited_quarters": [
+          "2025:Q4"
+        ]
+      },
+      {
+        "text": "A separately excerpted aggregate table lists 'JPMorgan Chase 12.6', which matches only the projected minimum in Table A.17; the 12.6 in that listing is not the actual 2025:Q4 value.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_20500000000000000000000000000001",
+            "location": {
+              "character_start": 25609,
+              "character_end": 25628,
+              "page": 19
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "JPMorgan Chase 12.6"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "uncited_quarters": [
+          "2025:Q4"
+        ]
+      }
+    ],
+    "limitations": [
+      "Source source_20500000000000000000000000000001: only character ranges 25579–26729, 74545–75738, 113084–114186 were analyzed; remaining text was not examined.",
+      "Source source_20500000000000000000000000000001: quotation location is ambiguous in the analyzed passages.",
+      "A model-generated fact value was absent from its quotation and was omitted.",
+      "Source source_20500000000000000000000000000001: quotation location is ambiguous in the analyzed passages.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): PDF text is compressed; column alignment was reconstructed from line order, though the row order (Actual, Projected, minimum) matches the stated column headers.",
+      "Model-reported limitation (not independently verified): The excerpts are partial; the full report was not available.",
+      "Model-reported limitation (not independently verified): No counterargument evidence contradicts the values themselves.",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "An explicit quarter and year could not be matched in the attached quotations; check the period and source context.",
+      "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:0e1e26639f2426460d6b1450",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 2896,
+      "cost_usd": null,
+      "generation_tokens": 2343,
+      "support_review_tokens": 553,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "partial",
+      "support_review_error": null,
+      "support_review_mode": "isolated",
+      "support_review_method": "bounded_quotation_context_model_review_v23_isolated",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [
+        0
+      ],
+      "support_review_omissions": [
+        {
+          "claim_index": 1,
+          "reason": "not_reviewable"
+        },
+        {
+          "claim_index": 2,
+          "reason": "not_reviewable"
+        }
+      ],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_20500000000000000000000000000001",
+          "character_start": 113019,
+          "character_end": 113796,
+          "context_radius": 180
+        }
+      ],
+      "support_review_calls": [
+        {
+          "claim_index": 0,
+          "prompt_sha256": "d070633fb670d423f2a8cd10c40a84f5179e678076696e7de749d55cdab54950",
+          "segments": [
+            {
+              "claim_index": 0,
+              "source_id": "source_20500000000000000000000000000001",
+              "character_start": 113019,
+              "character_end": 113796,
+              "context_radius": 180
+            }
+          ],
+          "status": "completed",
+          "reported_tokens": 553
+        }
+      ],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 17.634,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "5b8413812c0e1bb64acac75fc9e7ee4f529fc355ccd7e8c21c15b42be3624452",
+      "prompt_characters": 5043,
+      "prompt_bytes": 5055,
+      "selection_method": "ranked_nonoverlapping_windows_v41",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_20500000000000000000000000000001",
+          "character_start": 25579,
+          "character_end": 26729,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20500000000000000000000000000001",
+          "character_start": 74545,
+          "character_end": 75738,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_20500000000000000000000000000001",
+          "character_start": 113084,
+          "character_end": 114186,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 6000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_20500000000000000000000000000001": "9654bad7bef7163ecfaeca99e1835a28a1170795da7250d73ae56e3e10db7201"
+      },
+      "max_model_calls": 4,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 20000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "versions": [
+    {
+      "version_id": "version_74383df7639b44e089dc00f6dce07e1b",
+      "parent_version_id": null,
+      "run_status": null,
+      "checkpoint": null
+    },
+    {
+      "version_id": "version_37e0bef747ef496b9a919bcc6bab5e84",
+      "parent_version_id": "version_74383df7639b44e089dc00f6dce07e1b",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_112bcf9ebd1b41368a24e1ec8067380e",
+      "parent_version_id": "version_37e0bef747ef496b9a919bcc6bab5e84",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_2888ec4c6e964fe79f70b2dddf910953",
+      "parent_version_id": "version_112bcf9ebd1b41368a24e1ec8067380e",
+      "run_status": "partial",
+      "checkpoint": "isolated_review"
+    },
+    {
+      "version_id": "version_9aff8b39730c43abb3445c2590068a98",
+      "parent_version_id": "version_2888ec4c6e964fe79f70b2dddf910953",
+      "run_status": "partial",
+      "checkpoint": null
+    }
+  ],
+  "elapsed_seconds": 19.021
+}
