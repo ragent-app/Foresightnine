@@ -122,7 +122,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert snapshot["sources"][0]["revised_at"].startswith("2024-02-01")
     assert snapshot["sources"][0]["obtained_at"]
     assert snapshot["budget"]["max_model_calls"] == 1
-    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v33"
+    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v34"
     assert "Revenue was 100" not in inputs.text and "owner_id" not in inputs.json()
     other = client.post("/v1/auth/local/register", json={"email": "other@example.test",
         "password": "correct horse battery staple!"}).json()["access_token"]
@@ -1477,7 +1477,11 @@ def test_historical_run_sends_cutoff_and_excludes_later_source(monkeypatch):
         time.sleep(0.02)
     assert status == 'completed' and len(prompts) == 1
     assert prompts[0]['research_cutoff'] == '2023-07-01T12:30:00.123456+00:00'
-    assert [s['source_id'] for s in prompts[0]['sources']] == ids[:1]
+    assert [s['source_id'] for s in prompts[0]['sources']] == ['ref-1']
+    assert 'Old material.' in prompts[0]['sources'][0]['text']
+    assert all('Later material.' not in s['text'] for s in prompts[0]['sources'])
+    segments = client.get(path, headers=headers).json()['versions'][-1]['content']['run']['selected_segments']
+    assert segments[0]['source_id'] == ids[0] and segments[0]['model_source_id'] == 'ref-1'
     snapshot = client.get(path + '/runs/' + op + '/inputs', headers=headers).json()
     assert snapshot['as_of'] == prompts[0]['research_cutoff']
 

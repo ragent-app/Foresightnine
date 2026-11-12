@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v33"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v34"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1229,6 +1229,21 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         return AnalysisResult([], [], limitations + ["The requested focus is unavailable; no model call was made."], [], None)
     if not eligible:
         return AnalysisResult([], [], limitations + ["No permitted, time-eligible source was available for model analysis."], [], None)
+    # Use short per-run references only for opaque generated identifiers.
+    # Resolve them back to original source IDs before saving citations; do not
+    # expose a source merely because its short reference was guessed.
+    original_ids = {source.source_id for source in eligible}
+    used_refs = set(original_ids)
+    prompt_refs: dict[str, str] = {}
+    for source_index, source in enumerate(eligible, 1):
+        if len(eligible) != 1 or not re.fullmatch(r"source_[0-9a-f]{32}", source.source_id):
+            prompt_refs[source.source_id] = source.source_id
+            continue
+        ref = f"ref-{source_index}"
+        while ref in used_refs:
+            ref += "x"
+        used_refs.add(ref)
+        prompt_refs[source.source_id] = ref
     data = {"question": question, "sources": [],
             "output_schema": {"claims": [{"text": "claim", "citations": [
                 {"source_id": "id", "quotation": "quote"}]}],
@@ -1320,12 +1335,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                     for start, part in windows]
 
-        def source_payload(parts: list[tuple[int, str]], *, compact_metadata: bool = False) -> list[dict[str, Any]]:
+        def source_payload(parts: list[tuple[int, str]], *, compact_metadata: bool = False,
+                           short_refs: bool = False) -> list[dict[str, Any]]:
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
             structured = (structured_parts is not None and parts == structured_parts or
                           revision_original is not None and parts == revision_original or
                           policy_original is not None and parts == policy_original)
-            return [{"source_id": source.source_id,
+            return [{"source_id": prompt_refs[source.source_id] if short_refs else source.source_id,
                      **({"title": source.title} if (not structured and not compact_metadata) or position == 0 else {}),
                      "source_coverage": coverage,
                      **({"user_selected_passage": _prompt_source_text(source.text[focus[1]:focus[2]], source.retrieval_method == "user_pdf")}
@@ -1337,8 +1353,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                      "text": _prompt_source_text(passage, source.retrieval_method == "user_pdf")}
                     for position, (start, passage) in enumerate(parts)]
 
-        def fits(candidate: list[tuple[int, str]], *, compact_metadata: bool = False) -> bool:
-            data["sources"].extend(source_payload(candidate, compact_metadata=compact_metadata))
+        def fits(candidate: list[tuple[int, str]], *, compact_metadata: bool = False, short_refs: bool = False) -> bool:
+            data["sources"].extend(source_payload(candidate, compact_metadata=compact_metadata, short_refs=short_refs))
             within_budget = len(serialize().encode("utf-8")) <= source_budget_limit
             del data["sources"][-len(candidate):]
             return within_budget
@@ -1403,72 +1419,83 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         ordered_disjoint = all(selected[i][0] + len(selected[i][1]) <= selected[i + 1][0]
                                for i in range(len(selected) - 1))
         if compact_metadata and ordered_disjoint and fits(selected, compact_metadata=True):
-            def can_expand(parts: list[tuple[int, str]]) -> bool:
-                normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in parts)
-                return normalized <= max_size and fits(parts, compact_metadata=True)
+            def expand_selected(selected: list[tuple[int, str]], *, short_refs: bool) -> list[tuple[int, str]]:
+                def can_expand(parts: list[tuple[int, str]]) -> bool:
+                    normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in parts)
+                    return normalized <= max_size and fits(parts, compact_metadata=True, short_refs=short_refs)
 
-            for part_index, (start, passage) in enumerate(selected):
-                if start == 0 or not re.match(r"^\s*(?:in|on|at|for|from|to|during|as|by)\s+", passage, re.IGNORECASE):
-                    continue
-                left = max(0, start - 80)
-                prefix = source.text[left:start]
-                previous = re.search(r"(?<![\w.])(?:[$€£¥]\s*)?[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:trillion|billion|million|thousand|percent|%|％)\s*$", prefix, re.IGNORECASE)
-                if previous is None or "\f" in prefix[previous.start():]:
-                    continue
-                new_start = left + previous.start()
-                if part_index and new_start < selected[part_index - 1][0] + len(selected[part_index - 1][1]):
-                    continue
-                trial = list(selected)
-                trial[part_index] = (new_start, source.text[new_start:start + len(passage)])
-                if can_expand(trial):
-                    selected = trial
-            # Expand a numeric-ended fragment toward the next sentence end.
-            # Exact limits and offsets remain validated on the serialized data.
-            for part_index, (start, passage) in enumerate(selected):
-                end = start + len(passage)
-                if end >= len(source.text) or not re.search(r"\d(?:[\d.,]*)(?:\s*(?:percent|billion|million|thousand|%|％))?\s*$", passage, re.IGNORECASE):
-                    continue
-                limit = min(len(source.text), end + 160)
-                if part_index + 1 < len(selected):
-                    limit = min(limit, selected[part_index + 1][0])
-                if "\f" in source.text[end:limit]:
-                    limit = end + source.text[end:limit].index("\f")
-                tail = source.text[end:limit]
-                boundary = re.search(r"[.!?。！？](?=\s|$)", tail)
-                if boundary:
-                    limit = end + boundary.end()
-                lo, hi = end, limit
-                while lo < hi:
-                    middle = (lo + hi + 1) // 2
+                for part_index, (start, passage) in enumerate(selected):
+                    if start == 0 or not re.match(r"^\s*(?:in|on|at|for|from|to|during|as|by)\s+", passage, re.IGNORECASE):
+                        continue
+                    left = max(0, start - 80)
+                    prefix = source.text[left:start]
+                    previous = re.search(r"(?<![\w.])(?:[$€£¥]\s*)?[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:trillion|billion|million|thousand|percent|%|％)\s*$", prefix, re.IGNORECASE)
+                    if previous is None or "\f" in prefix[previous.start():]:
+                        continue
+                    new_start = left + previous.start()
+                    if part_index and new_start < selected[part_index - 1][0] + len(selected[part_index - 1][1]):
+                        continue
                     trial = list(selected)
-                    trial[part_index] = (start, source.text[start:middle])
+                    trial[part_index] = (new_start, source.text[new_start:start + len(passage)])
                     if can_expand(trial):
-                        lo = middle
-                    else:
-                        hi = middle - 1
-                while lo > end and partial_ascii_token(source.text, start, lo):
-                    lo -= 1
-                numeric_tail = _NUMERIC_WINDOW_TAIL.search(source.text[start:lo])
-                following_unit = _NUMERIC_UNIT_PREFIX.match(source.text[lo:lo + 64]) if numeric_tail else None
-                if following_unit:
-                    trial = list(selected)
-                    candidate_end = lo + following_unit.end()
-                    trial[part_index] = (start, source.text[start:candidate_end])
-                    if candidate_end <= limit and can_expand(trial):
-                        lo = candidate_end
-                    else:
-                        # Never introduce a new number while truncating its
-                        # immediately following recognized unit.
-                        lo = max(end, start + numeric_tail.start())
-                if lo > end:
-                    selected[part_index] = (start, source.text[start:lo])
+                        selected = trial
+                # Expand a numeric-ended fragment toward the next sentence end.
+                # Exact limits and offsets remain validated on the serialized data.
+                for part_index, (start, passage) in enumerate(selected):
+                    end = start + len(passage)
+                    if end >= len(source.text):
+                        continue
+                    numeric_end = re.search(r"\d(?:[\d.,]*)(?:\s*(?:percent|billion|million|thousand|%|％))?\s*$", passage, re.IGNORECASE)
+                    next_quantity = re.match(r"[ \t\n]{0,8}(?:[$€£¥]\s*)?[-−]?\d+(?:,\d{3})*(?:\.\d+)?\s*(?:(?:percent|billion|million|thousand)\b|%|％)", source.text[end:end + 80], re.IGNORECASE)
+                    if not numeric_end and not next_quantity:
+                        continue
+                    limit = min(len(source.text), end + 160)
+                    if part_index + 1 < len(selected):
+                        limit = min(limit, selected[part_index + 1][0])
+                    if "\f" in source.text[end:limit]:
+                        limit = end + source.text[end:limit].index("\f")
+                    tail = source.text[end:limit]
+                    boundary = re.search(r"[.!?。！？](?=\s|$)", tail)
+                    if boundary:
+                        limit = end + boundary.end()
+                    lo, hi = end, limit
+                    while lo < hi:
+                        middle = (lo + hi + 1) // 2
+                        trial = list(selected)
+                        trial[part_index] = (start, source.text[start:middle])
+                        if can_expand(trial):
+                            lo = middle
+                        else:
+                            hi = middle - 1
+                    while lo > end and partial_ascii_token(source.text, start, lo):
+                        lo -= 1
+                    numeric_tail = _NUMERIC_WINDOW_TAIL.search(source.text[start:lo])
+                    following_unit = _NUMERIC_UNIT_PREFIX.match(source.text[lo:lo + 64]) if numeric_tail else None
+                    if following_unit:
+                        trial = list(selected)
+                        candidate_end = lo + following_unit.end()
+                        trial[part_index] = (start, source.text[start:candidate_end])
+                        if candidate_end <= limit and can_expand(trial):
+                            lo = candidate_end
+                        else:
+                            # Never introduce a new number while truncating its
+                            # immediately following recognized unit.
+                            lo = max(end, start + numeric_tail.start())
+                    if lo > end:
+                        selected[part_index] = (start, source.text[start:lo])
+                return selected
+            # First preserve the complete long-ID selection, then spend only
+            # the additional short-reference savings on adjacent context.
+            selected = expand_selected(selected, short_refs=False)
+            if prompt_refs[source.source_id] != source.source_id:
+                selected = expand_selected(selected, short_refs=True)
         if not selected:
             limitations.append(f"Source {source.source_id}: exceeds the current input budget; not processed.")
             continue
         model_text[source.source_id] = selected
         remaining -= sum(len(_prompt_source_text(passage, source.retrieval_method == "user_pdf")) for _, passage in selected)
         processed.append(source)
-        data["sources"].extend(source_payload(selected, compact_metadata=compact_metadata))
+        data["sources"].extend(source_payload(selected, compact_metadata=compact_metadata, short_refs=True))
         if sum(len(passage) for _, passage in selected) < len(source.text):
             ranges = ", ".join(f"{start}–{start + len(passage)}" for start, passage in selected)
             limitations.append(f"Source {source.source_id}: only character ranges {ranges} were analyzed; remaining text was not examined.")
@@ -1477,7 +1504,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     if should_stop is not None and should_stop():
         raise AnalysisInterrupted()
     prompt = serialize()
-    segments = [{"source_id": s.source_id, "character_start": start, "character_end": start + len(passage)}
+    segments = [{"source_id": s.source_id, "character_start": start, "character_end": start + len(passage),
+                 **({"model_source_id": prompt_refs[s.source_id]} if prompt_refs[s.source_id] != s.source_id else {})}
                 for s in processed for start, passage in model_text[s.source_id]]
     if on_prepare is not None:
         on_prepare(segments)
@@ -1579,6 +1607,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append("Model-generated date or unit observations were retained as unverified claims, not numeric facts.")
             result = result.model_copy(update={"claims": [*result.claims, *text_observations[:room]]})
     source_map = {source.source_id: source for source in processed}
+    source_map.update({prompt_refs[source.source_id]: source for source in processed})
     ambiguous: set[tuple[str, str]] = set()
 
     def quotation_location(source: ResearchSource, quotation: str) -> tuple[dict[str, Any], str, str]:
@@ -1839,7 +1868,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                 recovered = []
                                 break
                             partial = partial_boundary(source, loc)
-                            recovered.append({"source_id": citation.source_id, "location": loc,
+                            recovered.append({"source_id": source.source_id, "location": loc,
                                 "quotation_match": "split_conjunction", "quotation": original,
                                 **({"partial_token": True} if partial else {}),
                                 "support_status": "not_independently_verified"})
@@ -1852,7 +1881,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     continue
                 if matching == "table_markup_expanded":
                     incomplete_boundary = True
-                entry = {"source_id": citation.source_id,
+                entry = {"source_id": source.source_id,
                          "location": location, "quotation_match": matching,
                          "support_status": "not_independently_verified"}
                 if partial_boundary(source, location):

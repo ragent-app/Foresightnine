@@ -1559,3 +1559,59 @@ def test_multiple_windows_share_metadata_and_stay_within_serialized_budget():
     for segment in result.segments:
         a,b=segment["character_start"],segment["character_end"]
         assert 0<=a<b<=len(text) and text[a:b]
+
+
+def test_short_model_source_reference_resolves_to_owned_source_and_is_auditable():
+    import json
+    source_id = "source_" + "a" * 32
+    report = source(source_id, text="Revenue was 100 million in 2023.")
+    seen = []
+    def generate(prompt):
+        data = json.loads(prompt)
+        ref = data["sources"][0]["source_id"]
+        seen.append(ref)
+        assert ref == "ref-1" and source_id not in prompt
+        cite = {"source_id":ref,"quotation":"Revenue was 100 million in 2023."}
+        return {"claims":[{"text":"Revenue was 100 million.","citations":[cite]}],
+                "facts":[{"fact_id":"f1","label":"Revenue","value":"100","unit":"million",
+                          "currency":None,"period":"2023","citation":cite}]}, 10
+    result=analyze("What was revenue?",[report],None,generate)
+    assert seen == ["ref-1"] and result.source_ids == [source_id]
+    assert result.claims[0]["citations"][0]["source_id"] == source_id
+    assert result.facts[0]["source_id"] == source_id
+    assert result.segments[0]["source_id"] == source_id and result.segments[0]["model_source_id"] == "ref-1"
+
+
+def test_reference_alias_cannot_authorize_an_unselected_source():
+    source_id = "source_" + "b" * 32
+    report = source(source_id, text="Revenue was 100.")
+    def generate(_prompt):
+        return {"claims":[{"text":"Fabricated finding.","citations":[{"source_id":"ref-2","quotation":"Revenue was 100."}]}]}, 10
+    result=analyze("What was revenue?",[report],None,generate)
+    assert not result.claims
+    assert any("omitted" in note for note in result.limitations)
+
+
+def test_multiple_opaque_sources_retain_distinct_original_identifiers():
+    import json
+    first, second = "source_" + "c" * 32, "source_" + "d" * 32
+    reports=[source(first,text="Revenue was 100."),source(second,text="Revenue was 200.")]
+    def generate(prompt):
+        ids={entry["source_id"] for entry in json.loads(prompt)["sources"]}
+        assert ids == {first, second}
+        return {"claims":[{"text":"First source revenue was 100.","citations":[{"source_id":first,"quotation":"Revenue was 100."}]}]}, 10
+    result=analyze("Compare revenue.",reports,None,generate)
+    assert result.claims[0]["citations"][0]["source_id"] == first
+    assert all("model_source_id" not in item for item in result.segments)
+
+
+def test_short_model_reference_is_resolved_for_split_quotation_recovery():
+    source_id = "source_" + "e" * 32
+    report = source(source_id, text="Revenue was 100. Profit was 20.")
+    def generate(_prompt):
+        return {"claims":[{"text":"Revenue and profit were reported.","citations":[
+            {"source_id":"ref-1","quotation":"Revenue was 100 and Profit was 20"}]}]}, 10
+    result=analyze("What were revenue and profit?",[report],None,generate)
+    citations=result.claims[0]["citations"]
+    assert len(citations)==2 and all(item["source_id"]==source_id for item in citations)
+    assert all(item["quotation_match"]=="split_conjunction" for item in citations)
