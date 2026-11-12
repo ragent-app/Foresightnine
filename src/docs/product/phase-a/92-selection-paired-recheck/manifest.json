@@ -1,0 +1,88 @@
+{
+  "implementation_commit": "2dc938567b531da1ea2e5f8c97751a0889e9fce9",
+  "assessment": "Nonblind development check; Microsoft data are previously used derived SEC observations, not a full filing, and current copies do not prove historical availability. Fed PDF is a retained public primary source. Not an independent test or formal phase acceptance.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "MSFT_REVENUE",
+      "input_sha256": "d0ced7c09df7ed8b4791247373108dc7308297f81cd1c55c518ceed797e2cad4"
+    },
+    {
+      "id": "FED_POLICY",
+      "input_sha256": "0c9dd9462f75e1373b84c5bd166fcab27580d63c40f0dcf1e46d9956d3bbf346"
+    }
+  ],
+  "msft_snapshot_sha256": "a46d6f7767d87a6bf3b0d2b546ed1b9dd352de1d92c9139fdde266fc01c21c60",
+  "source_attributions": {
+    "MSFT_REVENUE": "SEC EDGAR companyfacts, derived Microsoft observations; not an original filing.",
+    "FED_POLICY": "Board of Governors of the Federal Reserve System; public FOMC statement."
+  },
+  "script_sha256": {
+    "prepare.py": "0ad625602505580e3f202b3705ce7eb65078d24029193fa106fcbe39f3f79ce4",
+    "run.py": "f95d6be632aa61758691f2b8f56ee0b90df5b35813b3a422f2e8173e2a65ca55",
+    "score.py": "84d60060d7320b23a330467f4da1ac1908bf2e07dff65460b953c751c6b80564",
+    "validate_scorer.py": "fd82bf002cc86f81178b8745c55ed654a77266b5f272f2ab0d44418181d3699c"
+  },
+  "references_sha256": "0bd3c13d500cf551e039470bc0f37e0ed28a06c3b78e7b30fa069ca634ab54fd",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v11",
+  "prompt_sha256_by_task": {
+    "MSFT_REVENUE": "cbe024f45d2a15d0f84233d761b02e9938657be2afa70cd8ef6476cb6196e2fd",
+    "FED_POLICY": "213539e52f53a2e81fe1ef5645451015566581f6c1ce4981f64e9bcb755b6d2e"
+  },
+  "preselected_segments": {
+    "MSFT_REVENUE": [
+      {
+        "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+        "character_start": 51,
+        "character_end": 200
+      },
+      {
+        "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+        "character_start": 646,
+        "character_end": 777
+      },
+      {
+        "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+        "character_start": 887,
+        "character_end": 1018
+      }
+    ],
+    "FED_POLICY": [
+      {
+        "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+        "character_start": 692,
+        "character_end": 981
+      },
+      {
+        "source_id": "source_274a2a991bc64c4ab611f803546d77d7",
+        "character_start": 3267,
+        "character_end": 3547
+      }
+    ]
+  },
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 20000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "pass_rule": "All fixed checks per task and a completed result are needed for a narrow mechanical pass; this does not establish semantic support or stage B acceptance."
+}
