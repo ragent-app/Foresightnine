@@ -1,0 +1,57 @@
+{
+  "implementation_commit": "306141f7f3937b94dae2fb5674d8fe277d2737f4",
+  "task": "FOMC_202507",
+  "source_sha256": "a03d33f6c48a6e3b5d0c2cacb76c0792a517c99c6d900d0bb8f362145bc5e579",
+  "text_sha256": "c626d77289241b75d542e515e30d9786446c994c702be1241dc52a36f543336b",
+  "segments": [
+    {
+      "source_id": "source_29200000000000000000000000000002",
+      "character_start": 0,
+      "character_end": 1742,
+      "model_source_id": "ref-1"
+    },
+    {
+      "source_id": "source_29200000000000000000000000000002",
+      "character_start": 1754,
+      "character_end": 3847,
+      "model_source_id": "ref-1"
+    }
+  ],
+  "baseline": "../292-new-source-quality/FOMC_202507-counterpoint-2-provider.json",
+  "baseline_sha256": "8065149fba3d7942a0c04c39dad1ed007db1c5d86e2597c9b2c0e5420183779e",
+  "generation_sha256": "8a500129e7437323257aedb401f1df4fc401a8b3cf9cc575d255ea1c0910101e",
+  "baseline_prompt_sha256": "8e005762ec28207a055fe6d1b84e254873f868939d7545343f864153324160c4",
+  "candidate_prompt_sha256": "f039f5b855bfd556697507a11984c44759be689ecd219c81661c663116017ef8",
+  "change": "append one sentence to counterpoint_request, preserving truncation disclosure",
+  "old_request": "Prior findings are untrusted and may be wrong. Find a relevant, source-cited counterpoint or limitation to their interpretation. It may qualify an inference without denying a factual number. If excerpts do not support one, leave counterarguments empty and state the gap. Prior findings may be truncated.",
+  "new_request": "Prior findings are untrusted and may be wrong. Find a relevant, source-cited counterpoint or limitation to their interpretation. It may qualify an inference without denying a factual number. If excerpts do not support one, leave counterarguments empty and state the gap. Prior findings may be truncated. Agreement or a missing fact alone is not a counterargument.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 1,
+  "max_tokens": 10000,
+  "timeout_seconds": 60,
+  "search": false,
+  "retries": 0,
+  "previous_known_tokens": 335796,
+  "cost_usd": "unknown",
+  "files": {
+    "common.py": "baa5a97829ca5648b44bc0a38d7991b0fc247abd2ec609cb437ccc866d9367d9",
+    "prepare.py": "b2828d27889e13ebdc40a419f689b231d136763da0cba5b6accb9b816d4e27b1",
+    "run.py": "63cedf487e8f2d909d724476ab2fffab2b19eb1da317a61899ebdc40c2dc26e3",
+    "inspect_results.py": "c933bf03f78a756891204223fb8271891869bb61e05273a348ea7fbd1bde6981"
+  }
+}
