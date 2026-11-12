@@ -1,0 +1,106 @@
+{
+  "implementation_commit": "20a6b25f99921ca35ae88f47c53fc07a6f09c7e5",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v22",
+  "files": {
+    "common.py": "71f358a385cde479478ef9ec2fc259c7d4e51e9beef69be76c8b49b27aa55064",
+    "prepare.py": "22e672d0875398d4169eb6f31d34f84cbb49eb31223cf179f148a2509d0e3ed8",
+    "run.py": "b5d8d479729fbbc88b96a6511d1775bb178d7f59cc2ae4e9a2c3496d5fea45ad",
+    "score.py": "5cc11c57994c263c163db33c9e3124f19e25eebbf1ed30d50638d3f958a86c33",
+    "original-prompt.json": "fc0ec727ff2565f3264510f36d410774a71492ebae00a742b01ad09f80266449",
+    "local-prompt.json": "b2975c05783daa753cb8bdb1b88b02445e552b8bf1607f21667e2986972340c4"
+  },
+  "source_files": {
+    "168-full-review-diagnostic/common.py": "cdb45bc0e70412f1af3cf3d46c40fddcc51ff77beb6930169d64a8607f7960d4",
+    "168-full-review-diagnostic/PCE_2022_07-result.json": "227cfa6da438c75e09fb7d197177f82c5be79f3c27b16daadcb68388691ccd2e",
+    "161-fresh-source-evaluation/tasks.json": "e3c96d73bab1f5c1ac0c849e312c6fbb6dce82fe9ea3cfe7e42e0f9b6ea47cc0",
+    "161-fresh-source-evaluation/bea-2022-07.pdf": "4afb1bf8ddacd6526104b6897b4b8c24e5c7366479f749ad1eb9c05838473e1e"
+  },
+  "source_hashes": {
+    "source_16100000000000000000000000000001": "62f9844d79c63ed4d75120e7c7b7905a62224bc8dc83d387c60b71b76e750181"
+  },
+  "original_indexes": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "segments": [
+    {
+      "claim_index": 1,
+      "source_id": "source_16100000000000000000000000000001",
+      "character_start": 1844,
+      "character_end": 2406,
+      "context_radius": 180
+    },
+    {
+      "claim_index": 2,
+      "source_id": "source_16100000000000000000000000000001",
+      "character_start": 2444,
+      "character_end": 2964,
+      "context_radius": 180
+    },
+    {
+      "claim_index": 3,
+      "source_id": "source_16100000000000000000000000000001",
+      "character_start": 470,
+      "character_end": 1108,
+      "context_radius": 180
+    },
+    {
+      "claim_index": 4,
+      "source_id": "source_16100000000000000000000000000001",
+      "character_start": 7662,
+      "character_end": 8324,
+      "context_radius": 180
+    },
+    {
+      "claim_index": 5,
+      "source_id": "source_16100000000000000000000000000001",
+      "character_start": 976,
+      "character_end": 1496,
+      "context_radius": 180
+    }
+  ],
+  "omissions": [
+    {
+      "claim_index": 0,
+      "reason": "not_reviewable"
+    }
+  ],
+  "conditions": [
+    {
+      "name": "original",
+      "prompt_sha256": "fc0ec727ff2565f3264510f36d410774a71492ebae00a742b01ad09f80266449",
+      "prompt_bytes": 4675
+    },
+    {
+      "name": "local",
+      "prompt_sha256": "b2975c05783daa753cb8bdb1b88b02445e552b8bf1607f21667e2986972340c4",
+      "prompt_bytes": 4675
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "per_call_max_tokens": 10000,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 189041
+}
