@@ -3436,7 +3436,7 @@ def test_auto_sec_filing_respects_shared_rate_limit(monkeypatch):
     assert not result['claims'] and not result['facts']
 
 
-@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields', 'warning'])
+@pytest.mark.parametrize('mode', ['followup_and_review', 'call_budget', 'followup_failure', 'unlocated', 'extra_fields', 'warning', 'extra_citation_leads'])
 def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeypatch, mode):
     import json
     from uuid import uuid4
@@ -3468,9 +3468,17 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
                 if mode == 'warning':
                     return {'counterarguments':[{'text':'Costs increased because of a supplier.', 'citations':[
                         {'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
+                if mode == 'extra_citation_leads':
+                    return {'counterarguments':[{'text':'Costs increased.', 'citations':[
+                        {'source_id':source_id,'quotation':'Costs increased.'}]}],
+                        'answer':{'inflation':{'text':'Untrusted extra assertion.', 'citations':[
+                            {'source_id':source_id,'quotation':'Inflation was below 2 percent.'}]},
+                            'secret':{'text':'Must not persist', 'citations':[
+                                {'source_id':source_id,'quotation':'invented 2 percent.'}]}}}, 70
                 return {'counterarguments':[{'text':'Costs also increased.', 'citations':[
                     {'source_id':source_id,'quotation':'Costs increased.'}]}]}, 70
-            return {'claims':[{'text':'Revenue increased.', 'citations':[
+            text = 'Revenue increased and inflation was below 2 percent.' if mode == 'extra_citation_leads' else 'Revenue increased.'
+            return {'claims':[{'text':text, 'citations':[
                 {'source_id':source_id,'quotation':'Revenue increased.'}]}]}, 50
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
@@ -3480,7 +3488,7 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
         'password':'correct horse battery staple!'}).json()
     headers = {'Authorization':'Bearer '+reg['access_token']}
     source_id = client.post('/v2/research/sources', headers=headers, json={'title':'Report',
-        'text':'Revenue increased. Costs increased.', 'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+        'text':'Revenue increased. Costs increased. Inflation was below 2 percent.', 'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
     topic = client.post('/v2/research/topics', headers=headers, json={'question':'Assess revenue.', 'source_ids':[source_id]}).json()
     path = '/v2/research/topics/'+topic['topic_id']
     budget = 1 if mode == 'call_budget' else 3
@@ -3496,7 +3504,7 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
     assert state == 'completed'
     versions = client.get(path,headers=headers).json()['versions']
     content = versions[-1]['content']; run = content['run']
-    assert content['claims'][0]['text'] == 'Revenue increased.'
+    assert content['claims'][0]['text'].startswith('Revenue increased')
     if mode == 'followup_and_review':
         assert len(prompts)==3 and run['counterpoint_status']=='completed'
         assert run['model_calls']==3 and run['generation_tokens']==50 and run['counterpoint_tokens']==70
@@ -3517,10 +3525,17 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
         assert len(prompts)==2 and run['counterpoint_status']=='completed' and run['counterpoint_discarded_fields']==2
         assert 'Discard me' not in str(content) and 'untrusted extra' not in str(content)
         assert any(x.get('role')=='counterargument' and x['text']=='Costs increased.' for x in content['claims'])
-        assert any('Extra fields from the counterpoint response' in x for x in content['limitations'])
-    else:
+        assert any('Extra counterpoint response fields' in x for x in content['limitations'])
+    elif mode == 'warning':
         assert run['counterpoint_status']=='needs_review' and run['status']=='partial'
         assert any(x.get('role')=='counterargument' and x.get('causal_attribution_unverified') for x in content['claims'])
+    else:
+        claim=content['claims'][0]
+        assert claim['uncited_percentages'] == ['2 percent']
+        assert claim['suggested_related_quotations'][0]['quotation'] == 'Inflation was below 2 percent.'
+        assert claim['suggested_related_quotations'][0]['from_claim_index'] == -1
+        assert len(claim['citations']) == 1 and run['status'] == 'partial'
+        assert 'Untrusted extra assertion' not in str(content) and 'Must not persist' not in str(content)
     replay = client.post(path+'/runs',headers={**headers,'Idempotency-Key':'counterpoint-run'},json=body)
     assert replay.status_code==202 and replay.json()['operation']['operation_id']==op
 

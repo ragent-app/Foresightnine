@@ -8,7 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import json
+from itertools import islice
 from typing import Any
+from pydantic import ValidationError
+from .research_analysis import Claim
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,27 @@ class CounterpointPrompt:
     @property
     def prompt_sha256(self) -> str:
         return sha256(self.prompt.encode('utf-8')).hexdigest()
+
+
+def extract_answer_candidates(raw: object) -> list[dict[str, Any]]:
+    """Read bounded claim-shaped entries solely as untrusted citation leads.
+
+    Their text is never promoted to a research finding. Subsequent analysis
+    must independently locate every quotation within authorized excerpts.
+    """
+    if not isinstance(raw, dict) or not isinstance(raw.get('answer'), dict):
+        return []
+    candidates = []
+    for value in islice(raw['answer'].values(), 20):
+        if not isinstance(value, dict) or 'text' not in value or 'citations' not in value:
+            continue
+        try:
+            item = Claim.model_validate({'text': value['text'], 'citations': value['citations']})
+        except ValidationError:
+            continue
+        if item.citations:
+            candidates.append(item.model_dump(exclude_none=True))
+    return candidates
 
 
 def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]], max_bytes: int) -> CounterpointPrompt | None:

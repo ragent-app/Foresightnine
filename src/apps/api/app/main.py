@@ -107,7 +107,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
-from .research_counterpoint import prepare_counterpoint_prompt
+from .research_counterpoint import extract_answer_candidates, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
@@ -2749,6 +2749,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             analysis = AnalysisResult([], [], [*source_notes, "Research analysis could not be completed: " + unavailable_reason],
                                       selected_ids, usage, **attempted_prompt)
         _raise_if_operation_cancelled(operation_id)
+        supplemental_citation_leads: list[dict[str, Any]] = []
         def prepare_claims() -> list[dict[str, Any]]:
             claims = [{**item, "role": "support"} for item in analysis.claims]
             claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
@@ -2761,7 +2762,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             eligible_comparison_sources, _ = prepare_sources(sources, topic.request.as_of)
             claims = suggest_cross_source_comparison_evidence(claims, analysis.facts,
                         [source for source in eligible_comparison_sources if source.source_id in analysis.source_ids])
-            claims = suggest_related_claim_quotations(claims, sources)
+            claim_count = len(claims)
+            claims = suggest_related_claim_quotations([*claims, *supplemental_citation_leads], sources)[:claim_count]
+            for claim in claims:
+                for candidate in claim.get('suggested_related_quotations', []):
+                    if candidate['from_claim_index'] >= claim_count:
+                        candidate['from_claim_index'] = -1
             claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
             claims = flag_component_direction(flag_citation_subject_context(claims, sources), sources)
             claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(claims, sources), sources)
@@ -2874,6 +2880,17 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
                                 if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
                                     raise InvalidAnalysis('Counterpoint source selection changed.')
+                                raw_leads = extract_answer_candidates(raw_counterpoint)
+                                if raw_leads:
+                                    try:
+                                        checked_leads = analyze(effective_question, sources, topic.request.as_of,
+                                            lambda _: ({'claims':raw_leads}, None), max_prompt_chars=max_prompt_chars,
+                                            should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
+                                        if checked_leads.prompt_sha256 == analysis.prompt_sha256 and checked_leads.segments == analysis.segments:
+                                            supplemental_citation_leads = checked_leads.claims
+                                    except (InvalidAnalysis, AnalysisInterrupted):
+                                        # Leads are optional; retain the validated follow-up on failure.
+                                        supplemental_citation_leads = []
                                 first_followup_index = len(analysis.claims) + len(analysis.counterarguments)
                                 room = 20 - len(analysis.counterarguments)
                                 retained_counterpoints = checked.counterarguments[:room]
@@ -2881,7 +2898,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *retained_counterpoints],
                                     limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
                                         'Counterpoint follow-up uses a model and is not independent verification.',
-                                        *(['Extra fields from the counterpoint response were discarded.'] if counterpoint_discarded_fields else []),
+                                        *(['Extra counterpoint response fields were not used as findings; any citation leads require review.'] if counterpoint_discarded_fields else []),
                                         *(['Some follow-up counterpoints were omitted because the result limit was reached.'] if truncated_counterpoints else [])])))
                                 claims = prepare_claims()
                                 followup_claims = claims[first_followup_index:]

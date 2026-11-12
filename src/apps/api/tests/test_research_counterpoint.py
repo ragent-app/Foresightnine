@@ -1,6 +1,6 @@
 import json
 
-from app.research_counterpoint import prepare_counterpoint_prompt
+from app.research_counterpoint import extract_answer_candidates, prepare_counterpoint_prompt
 
 
 def test_counterpoint_prompt_preserves_sources_question_and_cutoff():
@@ -38,3 +38,12 @@ def test_counterpoint_prompt_marks_truncation_and_does_not_mutate_inputs():
     assert 'truncated' in payload['counterpoint_request']
     assert payload['previous_findings_untrusted']==['A'*240,'B'*240]
     assert len(findings)==3 and raw['sources'][0]['text']=='Evidence'
+
+
+def test_extra_answer_leads_are_bounded_and_not_yet_evidence():
+    valid = {'text':'Untrusted assertion', 'citations':[{'source_id':'s','quotation':'Source text'}], 'secret':'discard'}
+    payload = {'answer': {'bad': {'text':'x','citations':'invalid'}, **{str(i):valid for i in range(25)}}}
+    candidates = extract_answer_candidates(payload)
+    assert len(candidates) == 19
+    assert all('secret' not in item and item['citations'][0]['quotation'] == 'Source text' for item in candidates)
+    assert extract_answer_candidates({'answer':['not a mapping']}) == []
