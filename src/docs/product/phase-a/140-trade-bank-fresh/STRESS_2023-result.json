@@ -1,0 +1,227 @@
+{
+  "task": "STRESS_2023",
+  "manifest_sha256": "b99d33c95a4976e4c018fed7d94c91d322206563fcd91ef775f7e4f9b6eb7265",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 1690,
+  "prompt_sha256": "8223e256de99d014e535c6b09a5fe9ac3bd45a48d522a51d4ca03dccee0919de",
+  "segments": [
+    {
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "character_start": 10197,
+      "character_end": 10496
+    },
+    {
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "character_start": 27136,
+      "character_end": 27438
+    }
+  ],
+  "claims": [
+    {
+      "text": "Under the 2023 severely adverse scenario, the aggregate CET1 capital ratio of the 23 tested banks fell from an actual level (2022:Q4) that the source identifies as 12.4 percent, and both aggregate and individual bank post-stress CET1 ratios remained well above required minimum levels throughout the projection horizon.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 10214,
+            "character_end": 10383,
+            "page": 9
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "The aggregate and individual bank post-stress\ncommon equity tier 1 (CET1) capital ratios remain well above the required minimum levels\nthroughout the projection horizon."
+        },
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 10384,
+            "character_end": 10495,
+            "page": 9
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from\nan actual 12.4"
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "The projections are hypothetical, not actual outcomes: the source labels the data as 'actual 2022:Q4' versus 'projected 2023:Q1–2025:Q1' under the severely adverse scenario, and states the projection covers 2023:Q1 to 2025:Q1.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 27218,
+            "character_end": 27333,
+            "page": 17
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "Table 5. Capital ratios, actual 2022:Q4 and projected 2023:Q1–2025:Q1 under the severely adverse\nscenario: 23 banks"
+        },
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 27137,
+            "character_end": 27174,
+            "page": 16
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "is for the period 2023:Q1 to 2025:Q1."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "counterarguments": [
+    {
+      "text": "The source excerpt is truncated before giving the post-stress aggregate CET1 trough value; only the starting actual 12.4 percent is evidenced. The magnitude of the decline, the post-stress minimum, and the specific buffers at individual banks cannot be quantified from the supplied text, so 'well above minimums' is asserted by the Fed but the exact margin is not verifiable here.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 10384,
+            "character_end": 10495,
+            "page": 9
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from\nan actual 12.4"
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "Stress test projections rest on modeled assumptions over a forward horizon (2023:Q1–2025:Q1); actual capital performance could deviate if the economy or bank balance sheets behave differently than assumed.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 27137,
+            "character_end": 27174,
+            "page": 16
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "is for the period 2023:Q1 to 2025:Q1."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "fact_aggregate_cet1_actual_2022q4",
+      "value": "12.4",
+      "unit": "percent",
+      "currency": null,
+      "period": "2022:Q4",
+      "label": "Aggregate CET1 capital ratio, 23 banks, actual, severely adverse scenario starting point",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from\nan actual 12.4",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 10384,
+        "character_end": 10495,
+        "page": 9
+      },
+      "verification": "model_extraction_not_independently_verified"
+    }
+  ],
+  "calculations": [],
+  "limitations": [
+    "Source source_ce54ed6136754051baf2406f5be2a98c: only character ranges 10197–10496, 27136–27438 were analyzed; remaining text was not examined.",
+    "A requested calculation was omitted because its input facts were unavailable.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "Model-reported limitation (not independently verified): The excerpt cuts off mid-number after the 12.4 percent figure, so the post-stress aggregate CET1 trough and the size of the decline are not provided in the supplied text.",
+    "Model-reported limitation (not independently verified): Individual bank results (Table 5 rows) are referenced by the table header but no bank-specific values are included in the supplied excerpts.",
+    "Model-reported limitation (not independently verified): Source coverage is declared 'partial'; excerpts are not the whole document.",
+    "Model-reported limitation (not independently verified): Required minimum CET1 levels (e.g., 4.5 percent) are commonly known but not explicitly stated in the supplied text.",
+    "Model-reported limitation (not independently verified): The start value 12.4 is described as actual 2022:Q4; this period designation is declared by the source, not independently verified."
+  ],
+  "raw": {
+    "claims": [
+      {
+        "text": "Under the 2023 severely adverse scenario, the aggregate CET1 capital ratio of the 23 tested banks fell from an actual level (2022:Q4) that the source identifies as 12.4 percent, and both aggregate and individual bank post-stress CET1 ratios remained well above required minimum levels throughout the projection horizon.",
+        "citations": [
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "The aggregate and individual bank post-stress common equity tier 1 (CET1) capital ratios remain well above the required minimum levels throughout the projection horizon."
+          },
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from an actual 12.4"
+          }
+        ]
+      },
+      {
+        "text": "The projections are hypothetical, not actual outcomes: the source labels the data as 'actual 2022:Q4' versus 'projected 2023:Q1–2025:Q1' under the severely adverse scenario, and states the projection covers 2023:Q1 to 2025:Q1.",
+        "citations": [
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "Table 5. Capital ratios, actual 2022:Q4 and projected 2023:Q1–2025:Q1 under the severely adverse scenario: 23 banks"
+          },
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "is for the period 2023:Q1 to 2025:Q1."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The source excerpt is truncated before giving the post-stress aggregate CET1 trough value; only the starting actual 12.4 percent is evidenced. The magnitude of the decline, the post-stress minimum, and the specific buffers at individual banks cannot be quantified from the supplied text, so 'well above minimums' is asserted by the Fed but the exact margin is not verifiable here.",
+        "citations": [
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from an actual 12.4"
+          }
+        ]
+      },
+      {
+        "text": "Stress test projections rest on modeled assumptions over a forward horizon (2023:Q1–2025:Q1); actual capital performance could deviate if the economy or bank balance sheets behave differently than assumed.",
+        "citations": [
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "is for the period 2023:Q1 to 2025:Q1."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The excerpt cuts off mid-number after the 12.4 percent figure, so the post-stress aggregate CET1 trough and the size of the decline are not provided in the supplied text.",
+      "Individual bank results (Table 5 rows) are referenced by the table header but no bank-specific values are included in the supplied excerpts.",
+      "Source coverage is declared 'partial'; excerpts are not the whole document.",
+      "Required minimum CET1 levels (e.g., 4.5 percent) are commonly known but not explicitly stated in the supplied text.",
+      "The start value 12.4 is described as actual 2022:Q4; this period designation is declared by the source, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_aggregate_cet1_actual_2022q4",
+        "label": "Aggregate CET1 capital ratio, 23 banks, actual, severely adverse scenario starting point",
+        "value": 12.4,
+        "unit": "percent",
+        "currency": null,
+        "period": "2022:Q4",
+        "citation": {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from an actual 12.4"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "post-stress aggregate CET1 trough value — NOT PROVIDED in supplied sources; request the supported value before computing",
+        "second_fact_id": "fact_aggregate_cet1_actual_2022q4"
+      }
+    ]
+  },
+  "elapsed_seconds": 20.893
+}
