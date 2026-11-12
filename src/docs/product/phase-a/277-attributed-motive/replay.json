@@ -1,0 +1,9 @@
+{
+  "model_calls": 0,
+  "result_sha256": "53243f51034b13766669d27d6ca448e20d8da7b7b456ae8db82e9d8ddba6b512",
+  "source_sha256": "5dde60049483d3f7e7c662a5d18e07b30580d7e00ce700afac25e8f3e274937c",
+  "flagged_claim_indexes": [
+    4
+  ],
+  "meaning": "The warning identifies an uncited cue; it does not establish the correct motive."
+}

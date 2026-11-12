@@ -23,6 +23,11 @@ _CAUSAL_CUE = re.compile(
     r"result(?:ed|s|ing)?\s+in|caus(?:e|es|ed|ing)|led\s+to|leads?\s+to)\b|"
     r"\breflect(?:s|ed|ing)\s+(?:the\s+)?[^.;\n]{1,70}?\b(?:effects?|impact)\b|"
     r"(?:由于|由於|因为|因為|导致|導致|造成|归因于|歸因於|受[^。；\n]{1,25}影响)", re.IGNORECASE)
+_MOTIVE_CUE = re.compile(
+    r"\b(?:reason|motivation|motive|concern)s?\s+(?:behind|for)\s+[^.;\n]{1,100}?"
+    r"\b(?:dissent|vote|decision|opposition|objection)\b|"
+    r"\b(?:dissent(?:ed)?|voted|objected)\s+(?:because|due\s+to)\b|"
+    r"(?:反对|反對|异议|異議|投票|决定|決定)[^。；\n]{0,30}(?:原因|动机|動機)", re.IGNORECASE)
 
 
 def flag_uncited_causal_attribution(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
@@ -38,8 +43,9 @@ def flag_uncited_causal_attribution(claims: list[dict], sources: list[ResearchSo
         entry = deepcopy(claim)
         entry.pop("causal_attribution_unverified", None)
         text, citations = entry.get("text"), entry.get("citations")
-        if isinstance(text, str) and len(text) <= 3000 and _CAUSAL_CUE.search(text):
-            found = False
+        if isinstance(text, str) and len(text) <= 3000 and (_CAUSAL_CUE.search(text) or _MOTIVE_CUE.search(text)):
+            found_causal = not bool(_CAUSAL_CUE.search(text))
+            found_motive = not bool(_MOTIVE_CUE.search(text))
             if isinstance(citations, list):
                 for citation in citations[:10]:
                     if not isinstance(citation, dict) or citation.get("partial_token"):
@@ -50,10 +56,10 @@ def flag_uncited_causal_attribution(claims: list[dict], sources: list[ResearchSo
                         continue
                     start, end = location.get("character_start"), location.get("character_end")
                     if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text) and
-                            source.text[start:end] == quote and not partial_ascii_token(source.text, start, end) and _CAUSAL_CUE.search(quote)):
-                        found = True
-                        break
-            if not found:
+                            source.text[start:end] == quote and not partial_ascii_token(source.text, start, end)):
+                        found_causal = found_causal or bool(_CAUSAL_CUE.search(quote))
+                        found_motive = found_motive or bool(_MOTIVE_CUE.search(quote))
+            if not found_causal or not found_motive:
                 entry["causal_attribution_unverified"] = True
         output.append(entry)
     return output

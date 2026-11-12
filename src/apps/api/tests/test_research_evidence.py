@@ -70,6 +70,25 @@ def test_causal_wording_requires_located_permitted_quotation_cue():
     assert not flag_uncited_causal_attribution([{'text':'Consumption fell.', 'causal_attribution_unverified':True}], [src])[0].get('causal_attribution_unverified')
 
 
+def test_inferred_dissent_motive_is_not_established_by_unrelated_inflation_fact():
+    from app.research_evidence import flag_uncited_causal_attribution
+    text = ('Inflation compensation remained low. The committee acted because conditions improved. '
+            'A member dissented because inflation remained low.')
+    src = ResearchSource(source_id='s', owner_id='owner', title='Statement', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash', permissions=SourcePermissions(store=True, display=True))
+    def cite(quote):
+        start = text.index(quote)
+        return {'source_id':'s','quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)}}
+    claim = {'text':"Low inflation was the implied concern behind the member's dissent.",
+             'citations':[cite('Inflation compensation remained low.')]}
+    assert flag_uncited_causal_attribution([claim],[src])[0]['causal_attribution_unverified']
+    unrelated_cause = {**claim, 'citations':[cite('The committee acted because conditions improved.')]}
+    assert flag_uncited_causal_attribution([unrelated_cause],[src])[0]['causal_attribution_unverified']
+    direct = {**claim, 'citations':[cite('A member dissented because inflation remained low.')]}
+    assert not flag_uncited_causal_attribution([direct],[src])[0].get('causal_attribution_unverified')
+    assert flag_uncited_causal_attribution([{**direct, 'citations':[{**direct['citations'][0], 'partial_token':True}]}],[src])[0]['causal_attribution_unverified']
+
+
 def test_rate_level_percentage_points_are_review_candidates_not_verdicts():
     for text in ("联邦基金利率目标区间维持在4-1/4至4-1/2个百分点。",
                  "利率区间为4.25至4.50个百分点。",

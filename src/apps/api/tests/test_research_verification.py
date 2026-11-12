@@ -45,6 +45,15 @@ def test_review_cannot_clear_an_uncited_causal_assertion():
     assert result[0]['support_review']['diagnostic_only'] is True
 
 
+def test_review_cannot_clear_an_unquoted_dissent_motive():
+    item = {**claim(), 'text':"Revenue was the concern behind the member's dissent."}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.guarded == {0:['causal_attribution_unverified']}
+    reviewed = apply_support_review([item], batch, {'reviews':[{'claim_index':0,'verdict':'supports'}]})
+    assert reviewed[0]['support_review']['verdict'] == 'uncertain'
+    assert reviewed[0]['support_review']['reported_verdict'] == 'supports'
+
+
 def test_review_does_not_clear_full_source_absence_from_partial_excerpts():
     item = {**claim(), 'text': 'The source does not provide a breakdown.', 'source_scope_absence_unverified': True}
     batch = prepare_support_review([item], [source()], 3000)
