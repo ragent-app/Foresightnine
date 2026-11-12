@@ -820,3 +820,44 @@ def test_qualified_percent_currency_is_not_used_for_automatic_calculation():
     result = analyze("Rate?", [report], None, lambda _: (raw, 1))
     assert len(result.facts) == 2 and all(item["currency_context_unverified"] for item in result.facts)
     assert not result.calculations
+
+
+def test_financial_table_keeps_original_header_and_total_when_rows_are_long():
+    header = ("ACME CORP\nConsolidated Statements of Operations\n(in millions)\n"
+              "| Years Ended | July 31, 2024 | July 31, 2023 |\n")
+    middle = "| Product | 150 | 140 |\n" + "| Other item | 5 | 4 |\n" * 10
+    total = "| Total revenue | 200 | 190 |\n"
+    unrelated = ("pro forma information\n(in millions)\n| Years Ended | 2024 | 2023 |\n"
+                 "| Revenue | 500 | 400 |\n")
+    text = "unrelated " * 80 + unrelated + "other material " * 30 + header + middle + total
+    parts = _financial_table_windows(text, "2024 与 2023 财年营收多少？", 240)
+    assert parts and len(parts) == 2
+    assert sum(len(part) for _, part in parts) <= 240
+    assert all(text[start:start + len(part)] == part for start, part in parts)
+    assert "ACME CORP" in parts[0][1] and "millions" in parts[0][1]
+    assert "2024" in parts[0][1] and "2023" in parts[0][1]
+    assert "200" in parts[1][1] and "190" in parts[1][1]
+    assert "500" not in ''.join(part for _, part in parts)
+
+
+def test_vote_retrieval_keeps_full_names_and_policy_preference_with_initials():
+    action = "The Committee decided to lower the target range for the federal funds rate to 2.0 percent."
+    vote = ("Voting against the action were Jane A. Smith and Robert B. Jones, "
+            "who preferred to maintain the target range at 2.25 percent.")
+    text = "intro " * 50 + action + " other " * 120 + vote + " more " * 30
+    parts = _policy_vote_windows(text, "美联储的反对票与利率偏好是什么？", 360)
+    assert parts and len(parts) == 2
+    assert action in parts[0][1] and vote in parts[1][1]
+    assert all(text[start:start + len(part)] == part for start, part in parts)
+    assert sum(len(part) for _, part in parts) <= 360
+
+
+def test_third_estimate_selection_keeps_current_and_prior_values():
+    text = ("unrelated " * 70 +
+            'Real GDP increased at an annual rate of 2.0 percent in the first quarter, according to the "third" estimate. ' +
+            "background " * 15 + "In the second estimate, real GDP increased 1.3 percent. " +
+            "unrelated " * 100)
+    parts = _select_windows(text, "2023 GDP 第三次估计和第二次估计是多少？", 220, 2)
+    assert any("2.0 percent" in part and 'third" estimate' in part for _, part in parts)
+    assert any("second estimate" in part and "1.3 percent" in part for _, part in parts)
+    assert all(text[start:start + len(part)] == part for start, part in parts)

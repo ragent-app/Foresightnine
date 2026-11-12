@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v15"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v16"
 
 
 class Citation(BaseModel):
@@ -384,7 +384,7 @@ def _policy_vote_windows(text: str, question: str, size: int,
     if (not any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against")) or
             not any(term in lower for term in ("货币政策", "利率", "美联储", "monetary policy", "federal reserve", "fomc"))):
         return None
-    vote_pattern = r"\bvoting\s+against\s+this\s+action\s*:\s*[^.\n\f]{1,100}\."
+    vote_pattern = r"\bvoting\s+against\s+(?:this|the)\s+action(?:\s*:\s*|\s+were\s+)"
     action_pattern = (r"\b(?:members|committee)\s+(?:agreed|decided|voted)\s+to\s+"
                       r"(?:raise|lower|maintain|increase|reduce|hold)\s+(?:the\s+)?target\s+range\s+for\s+"
                       r"(?:the\s+)?federal\s+funds\s+rate\b")
@@ -403,7 +403,14 @@ def _policy_vote_windows(text: str, question: str, size: int,
         sentence_end = re.search(r"[.!?](?=\s|$)", tail)
         if not sentence_end:
             continue
-        spans = [[action.start(), action.end() + sentence_end.end()], [vote.start(), vote.end()]]
+        # Initials and decimal points are not sentence endings. Keep the
+        # complete vote sentence, including any stated dissenting preference.
+        vote_tail = text[vote.end():min(len(text), vote.end() + 500)]
+        vote_end = re.search(r"(?<!\b[A-Z])\.(?=\s|$)", vote_tail)
+        if not vote_end or "\f" in vote_tail[:vote_end.end()]:
+            continue
+        spans = [[action.start(), action.end() + sentence_end.end()],
+                 [vote.start(), vote.end() + vote_end.end()]]
         if spans[0][1] > spans[1][0] or sum(end - start for start, end in spans) > size:
             continue
         remaining = size - sum(end - start for start, end in spans)
@@ -434,7 +441,7 @@ def _financial_table_windows(text: str, question: str, size: int,
     if len(years) != 2:
         return None
     pattern = r"(?im)^[ \t]*\|[ \t]*(?:\[colspan=\d+\][ \t]*)?(?:total[ \t]+)?(?:revenue|sales)[ \t]*\|[^\n]{1,500}"
-    choices: list[tuple[int, int]] = []
+    choices: list[tuple[int, int, tuple[int, int] | None, int]] = []
     for index, match in enumerate(re.finditer(pattern, text)):
         if index >= 256:
             break
@@ -446,19 +453,38 @@ def _financial_table_windows(text: str, question: str, size: int,
         if any(position < 0 for position in positions):
             continue
         first_year = min(positions)
-        context_start = max(0, first_year - 75)
+        # Units may precede the year header, as in many financial statements.
+        unit_matches = list(re.finditer(r"\b(?:million|billion|thousand)s?\b", previous, re.IGNORECASE))
+        unit = next((item for item in reversed(unit_matches) if item.start() <= first_year), None)
+        context_start = max(0, min(first_year - 75, unit.start() - 100 if unit else first_year - 75))
         header = previous[context_start:]
         if not re.search(r"\b(?:year|years)\s+ended\b", header, re.IGNORECASE):
             continue
-        if not re.search(r"\b(?:million|billion|thousand)s?\b", previous[first_year:], re.IGNORECASE):
+        if not re.search(r"\b(?:million|billion|thousand)s?\b", previous[context_start:], re.IGNORECASE):
             continue
         start = previous_start + context_start
         end = match.end()
+        nearby = text[max(0, start - 300):match.start()].casefold()
+        priority = (int("consolidated statements of operations" in nearby) * 2 +
+                    int("total revenue" in match.group().casefold()) -
+                    int("pro forma" in nearby and "pro forma" not in lower) * 3)
         if end - start <= size:
-            choices.append((start, end))
+            choices.append((start, end, None, priority))
+        else:
+            # Preserve the header and total row as separate, original spans
+            # only when every intervening line belongs to the same table.
+            header_end = previous_start + previous.find("\n", max(positions)) + 1
+            middle = text[header_end:match.start()]
+            if (header_end > start and all(not line.strip() or line.lstrip().startswith("|")
+                                           for line in middle.splitlines()) and
+                    header_end - start + end - match.start() <= size):
+                choices.append((start, end, (header_end, match.start()), priority))
     if not choices:
         return None
-    start, end = min(choices, key=lambda pair: (pair[1] - pair[0], pair[0]))
+    start, end, gap, _ = min(choices, key=lambda pair: (-pair[3], pair[1] - pair[0] -
+                              (pair[2][1] - pair[2][0] if pair[2] else 0), pair[0]))
+    if gap:
+        return [(start, text[start:gap[0]]), (gap[1], text[gap[1]:end])]
     spare = size - (end - start)
     left = min(start, spare // 2)
     start -= left
@@ -523,6 +549,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
     wants_revision = any(term in lower for term in ("修订", "revision", "revised", "revise", "第二次估计", "second estimate"))
     wants_vote = any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against"))
     wants_second_estimate = any(term in lower for term in ("第二次估计", "second estimate"))
+    wants_third_estimate = any(term in lower for term in ("第三次估计", "third estimate"))
     wants_decision = (any(term in lower for term in ("决定", "decision", "decided")) or
                       ("目标区间" in lower and any(term in lower for term in ("下调", "上调", "变化幅度"))))
     metric_terms = set()
@@ -564,12 +591,14 @@ def _select_windows(text: str, question: str, length: int, count: int,
                             (wants_previous_period, r"\bchange\s+from\s+(?:the\s+)?preceding\s+(?:month|period)\b"),
                             (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b"),
                             (wants_vote, r"\bvoting\s+against\s+this\s+action\b"),
+                            (wants_third_estimate, r"\bthird[\"']?\s+estimate\b"),
                             (wants_second_estimate, r"\bin\s+the\s+second\s+estimate\b")):
         if wanted:
             for index, match in enumerate(re.finditer(pattern, text, re.IGNORECASE)):
                 if index >= 64:
                     break
-                candidates.append((match.start(), True))
+                candidates.append((max(0, match.start() - length // 2) if pattern.startswith(r"\bthird")
+                                   else match.start(), True))
     for iteration, (candidate, anchored) in enumerate(candidates):
         if iteration % 64 == 0 and should_stop is not None and should_stop():
             raise AnalysisInterrupted()
@@ -601,6 +630,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
             score += 1000
         if wants_second_estimate and re.search(r"\bin\s+the\s+second\s+estimate\b", passage):
             score += 1000
+        if wants_third_estimate and re.search(r"\d+(?:\.\d+)?\s*(?:percent|%)\b[\s\S]{0,250}?\bthird[\"']?\s+estimate\b", passage):
+            score += 1200
         if wants_revision and any(re.search(r"\b" + re.escape(term) + r"\b[\s\S]{0,35}?\brevis(?:ed|ion)\b", passage)
                                   for term in metric_terms):
             score += 250
