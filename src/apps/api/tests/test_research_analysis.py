@@ -398,7 +398,21 @@ def test_expanded_ellipsis_does_not_hide_ambiguity_or_cross_the_length_limit():
     ambiguous = analyze("Revenue?", [source("s", text="Unit USD; Revenue 100. Unit USD; Revenue 100.")], None, model)
     assert ambiguous.claims[0]["citations"][0]["location"]["status"] == "ambiguous"
     distant = analyze("Revenue?", [source("s", text="Unit USD" + "x" * 1200 + "Revenue 100")], None, model)
-    assert distant.claims == [] and any("quotation" in item and "omitted" in item for item in distant.limitations)
+    assert distant.claims[0]["support_status"] == "incomplete"
+    assert [c["quotation_match"] for c in distant.claims[0]["citations"]] == ["split_ellipsis", "split_ellipsis"]
+
+
+def test_split_ellipsis_requires_unique_ordered_fragments_in_analyzed_passage():
+    report = source("s", text="Issuer Example. " + "Context. " * 140 + "Revenue 100.")
+    def run(text, quote):
+        return analyze("Issuer and revenue?", [source("s", text=text)], None, lambda _: ({"claims": [{"text": "Revenue",
+            "citations": [{"source_id": "s", "quotation": quote}]}]}, 1))
+    result = run(report.text, "Issuer Example ... Revenue 100")
+    assert result.claims[0]["support_status"] == "incomplete"
+    assert [c["quotation"] for c in result.claims[0]["citations"]] == ["Issuer Example", "Revenue 100"]
+    assert not run(report.text, "Revenue 100 ... Issuer Example").claims
+    assert not run(report.text + " Issuer Example.", "Issuer Example ... Revenue 100").claims
+    assert not run(report.text, "Issuer Example ... Revenue 101").claims
 
 
 def test_literal_ellipsis_is_not_expanded_when_it_matches_exactly():

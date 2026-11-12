@@ -2262,6 +2262,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     # "and". Preserve them only as separate, unique original
                     # quotations; never stitch them into invented source text.
                     fragments = re.split(r"\s+and\s+", citation.quotation, flags=re.IGNORECASE)
+                    split_kind = "split_conjunction"
+                    if len(fragments) == 1:
+                        fragments = re.split(r"\s*(?:\.{3}|…)\s*", citation.quotation)
+                        split_kind = "split_ellipsis"
                     remaining_citations = len(item.citations) - citation_index - 1
                     recovered = []
                     if (2 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments) and
@@ -2277,9 +2281,19 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                 break
                             partial = partial_boundary(source, loc)
                             recovered.append({"source_id": source.source_id, "location": loc,
-                                "quotation_match": "split_conjunction", "quotation": original,
+                                "quotation_match": split_kind, "quotation": original,
                                 **({"partial_token": True} if partial else {}),
                                 "support_status": "not_independently_verified"})
+                    if recovered and split_kind == "split_ellipsis":
+                        # Preserve ordered fragments only within one analyzed
+                        # passage. Do not imply that distant, reordered, or
+                        # separately selected passages form one quotation.
+                        spans = [(part["location"]["character_start"], part["location"]["character_end"]) for part in recovered]
+                        if (any(left[1] > right[0] for left, right in zip(spans, spans[1:])) or
+                                spans[-1][1] - spans[0][0] > 5000 or
+                                not any(offset <= spans[0][0] and spans[-1][1] <= offset + len(passage)
+                                        for offset, passage in model_text[source.source_id])):
+                            recovered = []
                     if recovered and len({(part["location"]["character_start"], part["location"]["character_end"]) for part in recovered}) == len(recovered):
                         citations.extend(recovered)
                         limitations.append("A joined quotation was split into separately located passages; support requires review.")
