@@ -8,6 +8,24 @@ def fact(fact_id, source_id, value, *, label="Revenue", period="FY2023", unit="U
             "label": label, "period": period, "unit": unit, "currency": currency}
 
 
+def test_absence_claim_requires_full_source_coverage_before_generalizing():
+    from app.research_evidence import flag_partial_source_absence
+    text = 'The economy grew. Later, services increased while goods decreased.'
+    source = ResearchSource(source_id='s', owner_id='owner', title='Report', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+        permissions=SourcePermissions(store=True, display=True, model_input=True))
+    claim = {'text': 'The source does not provide a breakdown of services and goods.', 'citations': [{'source_id':'s'}]}
+    partial = [{'source_id':'s', 'character_start':0, 'character_end':18}]
+    assert flag_partial_source_absence([claim], [source], partial)[0]['source_scope_absence_unverified']
+    assert flag_partial_source_absence([{**claim, 'text':'该报告没有提供服务和商品的拆分。'}], [source], partial)[0]['source_scope_absence_unverified']
+    assert not flag_partial_source_absence([{**claim, 'text':'The provided excerpts do not include a breakdown.'}], [source], partial)[0].get('source_scope_absence_unverified')
+    full = [{'source_id':'s', 'character_start':0, 'character_end':18}, {'source_id':'s', 'character_start':18, 'character_end':len(text)}]
+    assert not flag_partial_source_absence([claim], [source], full)[0].get('source_scope_absence_unverified')
+    gap = [{**full[0], 'character_end':17}, full[1]]
+    assert flag_partial_source_absence([claim], [source], gap)[0]['source_scope_absence_unverified']
+    assert not flag_partial_source_absence([{**claim, 'authorship':'user'}], [source], partial)[0].get('source_scope_absence_unverified')
+
+
 def test_causal_wording_requires_located_permitted_quotation_cue():
     from app.research_evidence import flag_uncited_causal_attribution
     text = 'Consumption fell. Costs fell because demand weakened.'

@@ -2002,6 +2002,20 @@ def test_contrast_retrieval_requires_topical_opposite_movements():
         _contrast_sentence_spans(text,question,lambda:True)
 
 
+def test_same_direction_question_finds_contrary_component_passage():
+    from app.research_analysis import _contrast_sentence_spans, _select_windows
+    sentence = 'Consumer spending reflected an increase in services partly offset by a decrease in goods.'
+    text = ('Background and unrelated material. ' * 100) + sentence + ('Other material. ' * 100)
+    question = 'Assess whether both goods and services consumption increased in the quarter.'
+    spans = _contrast_sentence_spans(text, question)
+    assert any(sentence in text[start:end] for start, end in spans)
+    assert any(sentence in excerpt for _, excerpt in _select_windows(text, question, 300, 2))
+    assert not _contrast_sentence_spans(text, 'Compare goods and services consumption.')
+    assert not _contrast_sentence_spans('Goods and services both increased.', question)
+    chinese = '消费者的服务支出在本季度增加，而商品消费支出同期下降。'
+    assert _contrast_sentence_spans(chinese, '判断商品和服务消费是否都增加。')
+
+
 def test_quoted_numbers_accept_sentence_punctuation_but_not_version_fragments():
     from decimal import Decimal
     from app.research_analysis import _quoted_numbers

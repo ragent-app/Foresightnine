@@ -25,7 +25,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v28"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v29"
 ISOLATED_REVIEW_METHOD = REVIEW_METHOD + "_isolated"
 _DIAGNOSTIC_GUIDANCE = {
     "uncited_quarters": "A quarter stated in the claim was not matched in the cited passages. Check whether the cited text explicitly supports the period.",
@@ -107,7 +107,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         citations = claim.get("citations")
         text = claim.get("text")
         if (any(warning.get("context_metric") == "related unquoted sentence" for warning in claim.get("citation_context_warnings", [])) or
-                claim.get("support_status") == "incomplete" or claim.get("uncited_exact_dates") or claim.get("rate_unit_warnings") or claim.get("publication_date_warnings") or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_dollar_amounts") or claim.get("balance_direction_warnings") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or claim.get("reused_percentages") or claim.get("uncited_percentage_bounds") or
+                claim.get("support_status") == "incomplete" or claim.get("source_scope_absence_unverified") or claim.get("uncited_exact_dates") or claim.get("rate_unit_warnings") or claim.get("publication_date_warnings") or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_dollar_amounts") or claim.get("balance_direction_warnings") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or claim.get("reused_percentages") or claim.get("uncited_percentage_bounds") or
                 claim.get("numeric_discrepancy_for_review") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)

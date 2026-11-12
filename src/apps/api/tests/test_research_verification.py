@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v28"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v29"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -43,6 +43,12 @@ def test_review_cannot_clear_an_uncited_causal_assertion():
     assert result[0]['support_review']['verdict'] == 'uncertain'
     assert result[0]['support_review']['reported_verdict'] == 'supports'
     assert result[0]['support_review']['diagnostic_only'] is True
+
+
+def test_review_does_not_clear_full_source_absence_from_partial_excerpts():
+    item = {**claim(), 'text': 'The source does not provide a breakdown.', 'source_scope_absence_unverified': True}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert not batch.indexes and batch.omissions == [{'claim_index':0, 'reason':'not_reviewable'}]
 
 
 @pytest.mark.parametrize("item,src", [

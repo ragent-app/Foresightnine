@@ -13,6 +13,7 @@ export interface ResearchClaim {
   role?: string;
   support_status?: string;
   causal_attribution_unverified?: boolean;
+  source_scope_absence_unverified?: boolean;
   support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false; diagnostic_only?: boolean; reported_verdict?: string; guard_reasons?: string[] };
   citations?: { source_id: string; quotation?: string; quotation_match?: string; partial_token?: boolean; support_status?: string; location?: SourceLocation }[];
   suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];

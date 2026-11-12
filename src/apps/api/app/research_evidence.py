@@ -59,6 +59,51 @@ def flag_uncited_causal_attribution(claims: list[dict], sources: list[ResearchSo
     return output
 
 
+_SOURCE_ABSENCE = re.compile(
+    r"\b(?:the\s+|this\s+|these\s+)?(?:source|sources|document|documents|report|reports|filing|release)\s+"
+    r"(?:does\s+not|do\s+not|did\s+not|doesn't|don't|didn't|never)\s+"
+    r"(?:explicitly\s+)?(?:provide|include|contain|mention|state|show|give|describe|disclose|detail|break\s+down)\b|"
+    r"\b(?:the\s+|this\s+)?(?:source|document|report|filing|release)\s+"
+    r"(?:provides?|includes?|contains?|mentions?|states?|shows?)\s+no\b|"
+    r"(?:来源|來源|资料|資料|文件|报告|報告|原文|公告)(?:中)?(?:并|並)?(?:没有|沒有|未|不曾|不)"
+    r"(?:提供|包含|提及|说明|說明|披露|列出|展示|给出|給出)", re.IGNORECASE)
+
+
+def flag_partial_source_absence(claims: list[dict], sources: list[ResearchSource], segments: list[dict]) -> list[dict]:
+    """Flag global absence claims when generation only saw source excerpts.
+
+    Coverage is computed from recorded source offsets, never inferred from a
+    model statement. The warning does not prove that the missing information
+    exists; it only prohibits generalizing beyond examined text.
+    """
+    source_map = {s.source_id: s for s in sources if s.permissions.model_input and not s.is_simulated}
+    coverage: dict[str, bool] = {}
+    for source_id, source in source_map.items():
+        intervals = sorted((part.get('character_start'), part.get('character_end')) for part in segments
+                           if isinstance(part, dict) and part.get('source_id') == source_id and
+                           type(part.get('character_start')) is int and type(part.get('character_end')) is int and
+                           0 <= part['character_start'] < part['character_end'] <= len(source.text))
+        end = 0
+        for start, stop in intervals:
+            if start > end:
+                break
+            end = max(end, stop)
+        coverage[source_id] = end >= len(source.text)
+    result = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop('source_scope_absence_unverified', None)
+        text = entry.get('text')
+        citations = entry.get('citations')
+        ids = {item.get('source_id') for item in citations if isinstance(item, dict) and isinstance(item.get('source_id'), str)} if isinstance(citations, list) else set()
+        relevant = ids & source_map.keys() if ids else source_map.keys()
+        if (entry.get('authorship') != 'user' and isinstance(text, str) and len(text) <= 3000 and
+                _SOURCE_ABSENCE.search(text) and any(not coverage[source_id] for source_id in relevant)):
+            entry['source_scope_absence_unverified'] = True
+        result.append(entry)
+    return result
+
+
 
 _MONTH_NUMBER = {name.casefold(): index for index, names in enumerate((
     ("January", "Jan"), ("February", "Feb"), ("March", "Mar"), ("April", "Apr"),

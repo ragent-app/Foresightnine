@@ -37,7 +37,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v46"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v47"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1198,7 +1198,14 @@ def _contrast_sentence_spans(text: str, question: str, should_stop: Callable[[],
     the direction of each component still require interpretation.
     """
     intent = _query_intent(question[:2000])
-    if not re.search(r"\b(?:contrary|opposing|counter(?:\s*arguments?|evidence|points?)|refut\w*|challeng\w*|risks?)\b|反方|反证|反證|相反|质疑|質疑|風險|风险", intent):
+    explicit_counterpoint = re.search(r"\b(?:contrary|opposing|counter(?:\s*arguments?|evidence|points?)|refut\w*|challeng\w*|risks?)\b|反方|反证|反證|相反|质疑|質疑|風險|风险", intent)
+    # A question asking whether multiple components all moved in the same
+    # direction also calls for searching for contrary component evidence,
+    # even when it does not use the words "counterargument" or "risk".
+    same_direction_question = (re.search(r"\b(?:whether|if)\b.{0,120}\b(?:both|all)\b", intent, re.DOTALL) or
+                               re.search(r"(?:是否|有没有|有沒有).{0,60}(?:都|均|同时|同時)", intent, re.DOTALL)) and re.search(
+                                   r"\b(?:increas\w*|decreas\w*|r[io]se|rose|fell|fall\w*|grew|declin\w*)\b|增加|增长|增長|上升|减少|減少|下降", intent)
+    if not explicit_counterpoint and not same_direction_question:
         return []
     ignored = {"claim", "claims", "source", "sources", "passage", "passages", "evidence", "contrary", "opposing",
                "counterargument", "counterarguments", "counterevidence", "evaluate", "explain", "supporting", "support",
