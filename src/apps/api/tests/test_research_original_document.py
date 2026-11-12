@@ -391,3 +391,33 @@ def test_pdf_page_hints_preserve_frozen_research_excerpt_budget(task_id):
         if "p" in item:
             first = text.count("\f", 0, start) + 1
             assert item["p"] == [first, first + text[start:end].count("\f")]
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+def test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review():
+    from app.research_verification import prepare_support_review
+    root = Path(__file__).resolve().parents[3] / "docs/product/phase-a"
+    baseline = root / "231-new-cross-domain-check"
+    task = next(item for item in json.loads((baseline / "tasks.json").read_text()) if item["id"] == "BEA_2020")
+    raw = (baseline / task["source"]).read_bytes()
+    manifest = json.loads((baseline / "manifest.json").read_text())
+    assert sha256(raw).hexdigest() == manifest["source_files"][task["source"]]
+    text = _extract_text(raw, text_order="layout")
+    report = ResearchSource(source_id=task["source_id"], owner_id="test", title=task["source"], text=text,
+        kind="user_supplied", obtained_at=datetime(2026, 11, 12, tzinfo=timezone.utc),
+        content_sha256=sha256(text.encode()).hexdigest(), retrieval_method="user_pdf", pdf_text_order="layout",
+        permissions=SourcePermissions(store=True, model_input=True, display=True))
+    payload = json.loads((root / "238-pdf-page-single-recheck/BEA_2020-generation-1-provider.json").read_text())["payload"]
+    result = analyze(task["question"], [report], None, lambda _: (payload, 0),
+                     max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+    assert len(result.counterarguments) == 1
+    counterargument = result.counterarguments[0]
+    assert counterargument["support_status"] == "incomplete"
+    assert len(counterargument["citations"]) == 3
+    ambiguous = counterargument["citations"][0]["location"]
+    assert ambiguous["status"] == "ambiguous" and len(ambiguous["matches"]) > 1
+    for citation in counterargument["citations"][1:]:
+        loc = citation["location"]
+        assert report.text[loc["character_start"]:loc["character_end"]] == citation["quotation"]
+    batch = prepare_support_review([counterargument], [report], 4000)
+    assert not batch.indexes and batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]
