@@ -1,0 +1,63 @@
+{
+  "batch": {
+    "status": "completed",
+    "verdicts": {
+      "0": "supports",
+      "1": "contradicts",
+      "2": "supports",
+      "3": "uncertain"
+    },
+    "checks": {
+      "0": true,
+      "1": true,
+      "2": true,
+      "3": true
+    },
+    "passed": 4,
+    "total": 4
+  },
+  "isolated-0": {
+    "status": "completed",
+    "verdicts": {
+      "0": "supports"
+    },
+    "checks": {
+      "0": true
+    },
+    "passed": 1,
+    "total": 1
+  },
+  "isolated-1": {
+    "status": "completed",
+    "verdicts": {
+      "1": "contradicts"
+    },
+    "checks": {
+      "1": true
+    },
+    "passed": 1,
+    "total": 1
+  },
+  "isolated-2": {
+    "status": "completed",
+    "verdicts": {
+      "2": "supports"
+    },
+    "checks": {
+      "2": true
+    },
+    "passed": 1,
+    "total": 1
+  },
+  "isolated-3": {
+    "status": "completed",
+    "verdicts": {
+      "3": "does_not_support"
+    },
+    "checks": {
+      "3": true
+    },
+    "passed": 1,
+    "total": 1
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "condition": "isolated-0",
+  "manifest_sha256": "2a2ae4e032c90dfcdd93d5eb74209eed997e0ae9f4f2fbae6a9695e893a19d51",
+  "prompt_sha256": "17786ad775b2acecd79b359309522e71e35d6515d277787ed7f18dcad881a487",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 358,
+  "raw": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      }
+    ]
+  },
+  "elapsed_seconds": 2.145
+}
