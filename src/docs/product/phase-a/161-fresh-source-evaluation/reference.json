@@ -1,0 +1,12 @@
+{
+  "PCE_2022_07": {
+    "facts": ["Current-dollar PCE increased $23.7 billion from the preceding month.", "Services increased $33.3 billion while goods decreased $9.6 billion.", "The personal saving rate was 5.0 percent."],
+    "source_location": "BEA release, pages 1–2; PDF reading-order extracted text. The PCE spending changes are in the paragraph beginning 'The $23.7 billion increase' and the saving rate is in the following paragraph.",
+    "risks": ["Do not substitute price-index change or real PCE for current-dollar spending.", "Do not assert that both goods and services increased."]
+  },
+  "FOMC_2022_06": {
+    "facts": ["The committee selected a target range of 1-1/2 to 1-3/4 percent.", "Esther L. George dissented and preferred a 0.5 percentage point increase to a range of 1-1/4 to 1-1/2 percent.", "The interest paid on reserve balances was set at 1.65 percent effective June 16, a distinct rate."],
+    "source_location": "Federal Reserve release, pages 1–3; committee decision on page 1, dissent on page 2 and reserve balances on page 3.",
+    "risks": ["Do not conflate the target range with the reserve-balance rate or the dissenting alternative.", "Do not report a unanimous FOMC decision."]
+  }
+}

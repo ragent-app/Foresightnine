@@ -1,0 +1,14 @@
+[
+  {
+    "id": "PCE_2022_07",
+    "question": "According to this July 2022 release, how did current-dollar personal consumption expenditures change from the preceding month, what were the changes in goods and services spending that contributed to it, and what was the personal saving rate? Cite the relevant source passages and distinguish nominal spending from the price index.",
+    "source": "bea-2022-07.pdf",
+    "source_id": "source_16100000000000000000000000000001"
+  },
+  {
+    "id": "FOMC_2022_06",
+    "question": "According to this June 15, 2022 Federal Reserve statement, what target range did the committee choose, and who dissented and what alternative did that person prefer? Distinguish the committee's target range from the interest rate paid on reserve balances and cite the relevant passages.",
+    "source": "fed-2022-06.pdf",
+    "source_id": "source_16100000000000000000000000000002"
+  }
+]
