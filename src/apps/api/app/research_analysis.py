@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v31"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v32"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -414,6 +414,54 @@ def _trim_partial_ascii_words(text: str, start: int, passage: str) -> tuple[int,
         if right > left and letter(text[right - 1]):
             right = end
     return (left, text[left:right]) if right - left >= 50 else (start, passage)
+
+
+_NUMERIC_WINDOW_TAIL = re.compile(r"(?<![\w.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?[ \t\n]*$")
+_NUMERIC_UNIT_PREFIX = re.compile(r"^[ \t\n]{0,8}(?:%|％|percentage\s+points?\b|percent\b|basis\s+points?\b|bps\b|trillion\b|billion\b|million\b|thousand\b|个?百分[点點]|个?基[点點]|万亿|亿|万)(?![A-Za-z])", re.IGNORECASE)
+
+
+def _preserve_numeric_units(text: str, windows: list[tuple[int, str]], question: str) -> list[tuple[int, str]]:
+    """Trade a safe fragment of another window for an immediately adjacent unit.
+
+    Work only with two non-overlapping generic windows. Do not drop numbers,
+    currency symbols, sentence endings, table markup or the last occurrence
+    of a query word. Offsets still refer to the original selection text.
+    """
+    if len(windows) != 2:
+        return windows
+    result = list(windows)
+    terms = {term for term in re.findall(r"[A-Za-z]{4,}", question[:1000].casefold())}
+    for index in range(2):
+        start, passage = result[index]
+        end = start + len(passage)
+        if end >= len(text) or not _NUMERIC_WINDOW_TAIL.search(passage):
+            continue
+        unit = _NUMERIC_UNIT_PREFIX.match(text[end:end + 64])
+        if unit is None or "\f" in unit.group():
+            continue
+        extension = unit.end()
+        donor = 1 - index
+        donor_start, donor_text = result[donor]
+        donor_end = donor_start + len(donor_text)
+        if start < donor_end and donor_start < end + extension:
+            continue
+        cut = donor_end - extension
+        while cut > donor_start + 80 and not text[cut - 1].isspace():
+            cut -= 1
+        if cut <= donor_start + 80:
+            continue
+        trimmed = text[donor_start:cut].rstrip()
+        cut = donor_start + len(trimmed)
+        removed = text[cut:donor_end]
+        if re.search(r"\d|[$€£¥%％|.!?。！？]", removed):
+            continue
+        before = (passage + " " + donor_text).casefold()
+        after = (text[start:end + extension] + " " + trimmed).casefold()
+        if any(term in before and term not in after for term in terms):
+            continue
+        result[index] = (start, text[start:end + extension])
+        result[donor] = (donor_start, trimmed)
+    return result
 
 
 def _compact_pdf_with_offsets(text: str, should_stop: Callable[[], bool] | None = None) -> tuple[str, Callable[[int], int]]:
@@ -1247,6 +1295,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         policy_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                             for start, part in policy_parts] if policy_parts else None)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
+            generic_selection = False
             windows = (structured_parts if structured_parts and
                        sum(len(part) for _, part in structured_parts) <= size else None)
             if windows is None:
@@ -1262,9 +1311,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         windows = _comparison_windows(selection_text, question, size, should_stop)
                     if windows is None:
                         windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop, source_title=source.title), key=lambda item: item[0])
+                        generic_selection = True
                 else:
                     windows = [_select_window(selection_text, question, size, should_stop, source_title=source.title)]
             windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
+            if generic_selection:
+                windows = _preserve_numeric_units(selection_text, windows, question)
             return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                     for start, part in windows]
 

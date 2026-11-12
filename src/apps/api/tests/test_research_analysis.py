@@ -1509,3 +1509,35 @@ def test_blank_line_compaction_keeps_page_and_nonblank_rows():
     assert compact == "Year 2023\nRevenue 10\n\n  Cost 5\fPage two\n\nEnd"
     assert offset(len(compact)) == len(original)
     assert [line for line in compact.splitlines() if line] == [line for line in original.splitlines() if line]
+
+
+def test_generic_windows_preserve_adjacent_numeric_unit_within_budget():
+    from app.research_analysis import _preserve_numeric_units
+    first = "Revenue information. " + "ordinary context " * 6 + "value 12.4"
+    continuation = " percent and further details."
+    filler = " omitted " * 30
+    donor = "Risk and policy context. " + "other context " * 8 + "secondary context fragment"
+    text = first + continuation + filler + donor
+    start = text.index(donor)
+    original = [(0, first), (start, donor)]
+    windows = _preserve_numeric_units(text, original, "What is the revenue value and risk?")
+    assert windows[0][1].endswith("12.4 percent")
+    assert sum(len(x[1]) for x in windows) <= sum(len(x[1]) for x in original)
+    assert all(text[pos:pos+len(part)] == part for pos,part in windows)
+    assert "Risk" in windows[1][1]
+
+
+def test_numeric_unit_extension_fails_closed_if_donor_contains_numbers_or_unique_query_terms():
+    from app.research_analysis import _preserve_numeric_units
+    first = "Report context " * 9 + "value $1.6"
+    extra = " billion. " + " omitted " * 30
+    for tail in ("marker 777", "uniqueindicator"):
+        donor = "Other source material " * 8 + tail
+        text = first + extra + donor
+        original = [(0,first),(text.index(donor),donor)]
+        assert _preserve_numeric_units(text,original,"Explain uniqueindicator and value") == original
+    # A page boundary is never removed to join a value to a unit.
+    donor = "Other source material " * 8 + "filler"
+    text = first + "\f billion. " + " omitted " * 30 + donor
+    original = [(0,first),(text.index(donor),donor)]
+    assert _preserve_numeric_units(text,original,"Explain value") == original
