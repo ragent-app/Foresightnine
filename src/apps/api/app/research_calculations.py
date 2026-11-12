@@ -459,6 +459,22 @@ def calculate(request: CalculationRequest) -> dict:
             "rounding": "half_up", "decimal_places": request.decimal_places}
 
 
+def _positive_percentage_describes_decrease(text: str, number_start: int, raw: str) -> bool:
+    """Recognize only an immediately stated decrease, not its magnitude or cause."""
+    if raw.startswith(("-", "+", "−")):
+        return False
+    prefix = text[max(0, number_start - 80):number_start]
+    cue = re.search(r"(?:减少|減少|下降|下滑|下跌|降低)(?:了)?\s*(?:约|約|大约|大約)?\s*$"
+                    r"|\b(?:declined|decreased|fell|dropped)\s+by\s+(?:(?:about|approximately)\s+)?$",
+                    prefix, re.IGNORECASE)
+    if cue is None:
+        return False
+    prior = prefix[max(0, cue.start() - 16):cue.start()]
+    if re.search(r"未|不|没|沒|無|无|并非|並非|\b(?:not|never|no)\b", prior, re.IGNORECASE):
+        return False
+    return True
+
+
 def claim_calculation_differences(claims: list[dict], calculations: list[dict], facts: list[dict]) -> list[dict]:
     """Flag narrow numerical mismatches for review, without asserting entailment.
 
@@ -511,11 +527,15 @@ def claim_calculation_differences(claims: list[dict], calculations: list[dict], 
             continue
         calculation_index, request = candidates[0]
         seen: set[tuple[str, str]] = set()
-        for raw in raw_values:
+        for match, raw in zip(percentages, raw_values):
             precision = len(raw.rsplit(".", 1)[1]) if "." in raw else 0
             try:
                 expected = calculate(request.model_copy(update={"decimal_places": precision}))["value"]
-                if Decimal(raw) == Decimal(expected) or (raw, expected) in seen:
+                if (Decimal(raw) == Decimal(expected) or
+                        (request.formula == "growth_percent" and Decimal(raw) > 0 and
+                         -Decimal(raw) == Decimal(expected) and
+                         _positive_percentage_describes_decrease(text, match.start(1), raw)) or
+                        (raw, expected) in seen):
                     continue
             except (CalculationError, InvalidOperation):
                 continue
@@ -597,7 +617,12 @@ def suggest_percentage_calculations(claims: list[dict], calculations: list[dict]
             if len(value) > 40 or precision > 8:
                 continue
             try:
-                matching = by_result.get((precision, Decimal(value)), [])
+                stated = Decimal(value)
+                matching = by_result.get((precision, stated), [])
+                text = entry.get("text")
+                if (not matching and stated > 0 and isinstance(text, str) and text.count(raw) == 1 and
+                        _positive_percentage_describes_decrease(text, text.index(raw) + match.start(1), value)):
+                    matching = [item for item in by_result.get((precision, -stated), []) if item[1].formula == "growth_percent"]
             except InvalidOperation:
                 continue
             for index, request, source_facts in matching:

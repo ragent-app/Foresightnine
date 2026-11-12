@@ -324,3 +324,37 @@ def test_spanned_table_period_conflict_needs_complete_unique_consistent_columns(
                     text.replace(unit, 'Intervening narrative\n'),
                     text.replace('Year Ended', 'Year Beginning', 1)]:
         assert check(changed) is None
+
+
+def test_decrease_wording_matches_negative_growth_only_with_local_unnegated_cue():
+    current, prior = fact('current','5641','2023'), fact('prior','9108','2022')
+    calculation = calculate(CalculationRequest(formula='growth_percent', first=current, second=prior))
+    def compare(text):
+        return claim_calculation_differences([{'text': text}], [calculation], [current, prior])
+    for text in ('经营现金流从9108降至5641，同比减少约38.1%。',
+                 'On 9108, cash flow declined by approximately 38.1%.'):
+        assert compare(text) == []
+    for text in ('经营现金流从9108降至5641，同比增加约38.1%。',
+                 '经营现金流从9108降至5641，同比没有减少约38.1%。',
+                 'On 9108, cash flow did not decrease by 38.1%.',
+                 '经营现金流从9108降至5641，同比减少38.2%。',
+                 'On 9108, cash flow declined by +38.1%.'):
+        assert compare(text), text
+
+
+def test_decrease_calculation_suggestion_still_requires_evidence_and_unique_wording():
+    from app.research_calculations import suggest_percentage_calculations
+    current = {**fact('current','5641','2023'), 'verification':'model_extraction_not_independently_verified',
+               'source_id':'s','quotation':'current 5641','location':{'character_start':0,'character_end':12}}
+    prior = {**fact('prior','9108','2022'), 'verification':'model_extraction_not_independently_verified',
+             'source_id':'s','quotation':'prior 9108','location':{'character_start':20,'character_end':30}}
+    calculation = calculate(CalculationRequest(formula='growth_percent', first=fact('current','5641','2023'), second=fact('prior','9108','2022')))
+    claim = {'text':'现金流同比减少约38.1%。','uncited_percentages':['38.1%'], 'citations':[
+        {'source_id':'s','location':{'character_start':0,'character_end':12}},
+        {'source_id':'s','location':{'character_start':20,'character_end':30}}]}
+    result = suggest_percentage_calculations([claim],[calculation],[current,prior])[0]
+    assert result['suggested_calculations'][0]['status'] == 'requires_semantic_review'
+    assert result['uncited_percentages'] == ['38.1%']
+    assert not suggest_percentage_calculations([{**claim,'text':'现金流并未减少约38.1%。'}],[calculation],[current,prior])[0].get('suggested_calculations')
+    assert not suggest_percentage_calculations([{**claim,'text':'现金流同比减少约38.1%，另有38.1%。'}],[calculation],[current,prior])[0].get('suggested_calculations')
+    assert not suggest_percentage_calculations([{**claim,'citations':claim['citations'][:1]}],[calculation],[current,prior])[0].get('suggested_calculations')
