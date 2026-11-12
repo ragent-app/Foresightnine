@@ -1588,6 +1588,25 @@ def test_generated_table_markup_expands_only_to_a_complete_original_row():
     assert not marker_only.facts
 
 
+def test_table_row_label_and_single_numeric_cell_locate_only_unique_original_row():
+    from app.research_analysis import _table_markup_rows
+    row = '| [colspan=3] Total revenue | [colspan=2] 53,803 | | [colspan=2] 56,998 |'
+    text = 'Header\n' + row + '\n'
+    quote = 'Total revenue | [colspan=2] 56,998'
+    start = text.index(row)
+    assert _table_markup_rows(text, [(0, text)], quote) == [(start, start + len(row))]
+    assert not _table_markup_rows(text, [(0, text)], quote.replace('Total revenue', 'Net revenue'))
+    assert not _table_markup_rows(text, [(0, text)], quote.replace('56,998', '56,999'))
+    repeated = text.replace('53,803', '56,998')
+    assert not _table_markup_rows(repeated, [(0, repeated)], quote)
+    # A partial excerpt cannot establish the complete row.
+    assert not _table_markup_rows(text, [(start + 2, text[start + 2:])], quote)
+    result = analyze('Revenue?', [source('s', text=text)], None, lambda _: ({
+        'claims':[{'text':'Revenue was 56,998.', 'citations':[{'source_id':'s','quotation':quote}]}]}, 1))
+    assert result.claims[0]['citations'][0]['quotation'] == row
+    assert result.claims[0]['support_status'] == 'incomplete'
+
+
 def test_joined_table_heading_and_row_keeps_review_candidate_without_calculating():
     header = 'Annual statements of operations (in millions)'
     row = '| [colspan=3] Total revenue | [colspan=2] 53,803 | | [colspan=3] | [colspan=2] 56,998 | |'

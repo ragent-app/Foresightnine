@@ -1,0 +1,86 @@
+{
+  "source_sha256": "2cf482f78cce5038a1e750ca7b53ba96409854cb56e21eb2081532dcaa04ecf6",
+  "provider_output_sha256": "08055d4c3da706b9394af86841ea2f528827d3f9112647629e127f2788cbedbf",
+  "model_calls": 0,
+  "facts": [
+    {
+      "fact_id": "rev-2024",
+      "value": "53803",
+      "period": "FY2024 (year ended July 27, 2024)",
+      "quotation_match": "exact",
+      "verification": "model_extraction_not_independently_verified",
+      "table_structure_alignment": {
+        "status": "matched",
+        "column_date": "2024-07-27",
+        "declared_date": "2024-07-27",
+        "value_column_start": 3,
+        "value_column_end": 5
+      },
+      "source_tag_consistent": true
+    },
+    {
+      "fact_id": "rev-2023",
+      "value": "56998",
+      "period": "FY2023 (year ended July 29, 2023)",
+      "quotation_match": "table_markup_expanded",
+      "verification": "model_extraction_not_independently_verified",
+      "table_structure_alignment": {
+        "status": "matched",
+        "column_date": "2023-07-29",
+        "declared_date": "2023-07-29",
+        "value_column_start": 9,
+        "value_column_end": 11
+      },
+      "source_tag_consistent": true
+    }
+  ],
+  "calculations": [
+    {
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "period_order_check": "recognized_formats_only",
+      "period_granularity_check": "not_established",
+      "inputs": [
+        {
+          "fact_id": "rev-2024",
+          "value": "53803",
+          "unit": "millions",
+          "currency": "USD",
+          "period": "FY2024 (year ended July 27, 2024)"
+        },
+        {
+          "fact_id": "rev-2023",
+          "value": "56998",
+          "unit": "millions",
+          "currency": "USD",
+          "period": "FY2023 (year ended July 29, 2023)"
+        }
+      ],
+      "value": "-5.61",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2,
+      "input_status": "matched"
+    }
+  ],
+  "claim_count": 4,
+  "counterargument_count": 0,
+  "limitations": [
+    "Source source_26300000000000000000000000000001: only character ranges 298841–302667 were analyzed; remaining text was not examined.",
+    "A table fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.",
+    "Table column alignment is not established; verify each value, period and unit against the source before relying on calculations.",
+    "A fact matches the source filing’s inline XBRL tag, period and unit; source authenticity and accuracy are not independently verified.",
+    "A model quotation omitted table markup or cells; the full original row was restored and requires column review.",
+    "A table-normalized fact agrees with the source's inline XBRL value, metric, period and unit; the filing and its accuracy remain independently unverified.",
+    "A model-generated quotation did not match the supplied source and was omitted.",
+    "A model-generated claim without a valid quotation was omitted.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "Model-reported limitation (not independently verified): 所提供的节选仅为合并经营报表部分，未包含管理层讨论与分析（MD&A）中解释收入同比变化原因的原文，因此无法引用原文说明收入变化的具体限制或原因；此为资料缺口，不构成任何证明。",
+    "Model-reported limitation (not independently verified): 来源标注为 partial，表格经过压缩转换（colspan 结构），列对应关系虽可读但建议核对原始文件。",
+    "Model-reported limitation (not independently verified): 文件日期为申报的期间日期，未经验证；本分析依据声明的财年结束日。"
+  ]
+}

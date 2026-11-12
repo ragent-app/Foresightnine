@@ -81,6 +81,23 @@ def test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth():
     assert not xbrl_source_consistent(changed)
 
 
+def test_single_cell_citations_can_be_cross_checked_against_original_xbrl():
+    from app.research_analysis import analyze
+    from app.research_calculations import xbrl_source_consistent
+    source = source_for(xbrl_fixture())
+    source.permissions.model_input = True
+    def fact(value, year, day):
+        return {'fact_id':year, 'label':'total_revenue_fy' + year, 'value':value, 'unit':'millions', 'currency':'USD',
+                'period':'FY' + year + ' (year ended ' + day + ')',
+                'citation':{'source_id':'s', 'quotation':'Total revenue | [colspan=2] ' + value}}
+    payload = {'facts':[fact('100','2024','July 27, 2024'),fact('90','2023','July 29, 2023')],
+               'calculations':[{'formula':'growth_percent','first_fact_id':'2024','second_fact_id':'2023'}]}
+    result = analyze('Compare revenue.', [source], None, lambda _: (payload, 1))
+    assert len(result.facts) == 2 and all(xbrl_source_consistent(item) for item in result.facts)
+    assert result.calculations[0]['value'] == '11.11' and result.calculations[0]['input_status'] == 'matched'
+    assert all(item['verification'] == 'model_extraction_not_independently_verified' for item in result.facts)
+
+
 def test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts():
     original = xbrl_fixture()
     variants = [original.replace('http://www.xbrl.org/2013/inlineXBRL', 'https://example.test/fake'),

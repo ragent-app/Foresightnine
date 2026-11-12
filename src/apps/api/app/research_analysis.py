@@ -318,10 +318,12 @@ _TABLE_SPAN_MARKER = re.compile(r"\[(?:colspan|rowspan)=(?:[2-9]|[1-9]\d)\]")
 
 def _table_markup_rows(source_text: str, passages: list[tuple[int, str]], quotation: str,
                        should_stop: Callable[[], bool] | None = None) -> list[tuple[int, int]]:
-    """Find whole analyzed rows after ignoring only span markers and empty cells.
+    """Find whole analyzed rows after ignoring span markers and empty cells.
 
     The original full row is returned, not a reconstructed quotation. Matching
-    cell strings cannot establish column alignment or support for a claim.
+    cell strings cannot establish column alignment or support for a claim. A
+    label and a uniquely occurring numeric cell can also locate a row when
+    the model has omitted intervening columns; the row stays a review cue.
     """
     if len(quotation) > 1000 or "\n" in quotation or "|" not in quotation or not re.search(r"\d", quotation):
         return []
@@ -348,7 +350,15 @@ def _table_markup_rows(source_text: str, passages: list[tuple[int, str]], quotat
             row = cells(line)
             if len(row) > 100:
                 continue
-            if any(row[i:i + len(wanted)] == wanted for i in range(len(row) - len(wanted) + 1)):
+            numeric_target = (len(wanted) == 2 and bool(re.fullmatch(
+                r"[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", wanted[1])))
+            if numeric_target and row[1:].count(wanted[1]) != 1:
+                continue
+            contiguous = any(row[i:i + len(wanted)] == wanted for i in range(len(row) - len(wanted) + 1))
+            isolated_cell = (len(wanted) == 2 and row and row[0] == wanted[0] and
+                             bool(re.search(r"[A-Za-z\u3400-\u9fff]", wanted[0])) and
+                             numeric_target)
+            if contiguous or isolated_cell:
                 found.append((start, end))
                 if len(found) >= 6:
                     return found
@@ -2148,7 +2158,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 record(0, source.text, start, end)
             table_markup_expanded = bool(positions)
             if table_markup_expanded:
-                note = "A model quotation omitted table markup or empty cells; the full original row was restored and requires column review."
+                note = "A model quotation omitted table markup or cells; the full original row was restored and requires column review."
                 if note not in limitations:
                     limitations.append(note)
         if (not positions and source.retrieval_method == "user_supplied" and len(source.text) <= 100_000
@@ -2350,7 +2360,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                            if table_alignment_unverified else None)
         structure_alignment = None
         inline_match = None
-        if (matching == "table_markup_expanded" and table_alignment_unverified and
+        if (matching in {"exact", "whitespace_normalized", "table_markup_expanded"} and table_alignment_unverified and
                 source.permissions.display and source.original_html_base64 and type(quote_start) is int and
                 type(location.get("character_end")) is int):
             row_start = source.text.rfind("\n", 0, quote_start) + 1

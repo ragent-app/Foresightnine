@@ -206,6 +206,7 @@ def match_inline_fact(trace: dict, alignment: dict | None, *, value: Decimal, la
     if not isinstance(rows, list) or not rows or not isinstance(rows[-1].get('cells'), list):
         return None
     def clean(text: str) -> str:
+        text = text.replace('_', ' ')
         text = re.sub(r'\bfy\s*(?:19|20)\d{2}\b', ' ', text, flags=re.IGNORECASE)
         return ' '.join(re.sub(r'[^a-z0-9]+', ' ', text.casefold()).split())
     row_labels = [clean(cell.get('text', '')) for cell in rows[-1]['cells'] if cell.get('text')]

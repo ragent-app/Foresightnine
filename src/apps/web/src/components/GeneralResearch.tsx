@@ -57,6 +57,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "A claim percentage-point figure is absent from its quotations; check the source and any calculation.": "结论中的百分点数值未出现在引文中，请核对来源与可能的计算。",
     "A claim's basis-point figure is absent from its quotations; check the source and any calculation.": "结论中的基点数值未出现在引文中，请核对来源与可能的计算。",
     "A model quotation omitted table markup or empty cells; the full original row was restored and requires column review.": "模型引文省略了表格标记或空单元格；已恢复完整原始行，需核对列对齐。",
+    "A model quotation omitted table markup or cells; the full original row was restored and requires column review.": "模型引文省略了表格标记或单元格；已恢复完整原始行，需核对列对齐。",
     "A table-normalized fact was omitted until column alignment is verified.": "表格事实在列对齐核实前已省略。",
     "Model-generated date or unit observations were retained as unverified claims, not numeric facts.": "模型生成的日期或单位声明作为待核验结论保留，不作为数值事实。",
     "Some model-generated text observations were omitted because the claim limit was reached.": "部分模型文字观察因结论数量上限被省略。",
