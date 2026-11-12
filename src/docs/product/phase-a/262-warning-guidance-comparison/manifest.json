@@ -1,0 +1,89 @@
+{
+  "implementation_commit": "4d477fe469697df4758e594590c8887d0c68da97",
+  "claims_sha256": "3b4c0eb5ad479c30f241ef121e29f0dfff8c2484b36e0a637558aafd1ebf7f47",
+  "source_sha256": "403caea1ac737cc9617984489cef398b9ed6ddbc98c716b320b0a8e68a03cfe1",
+  "source_text_sha256": "edced6a4a3ffc8d576d0ee4fa446eb711e70dd0401f9bf79710d03861020880e",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "review_method": "bounded_quotation_context_model_review_v28",
+  "system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_input_limit": 6000,
+  "max_calls": 3,
+  "max_total_tokens": 12000,
+  "timeout_seconds": 60,
+  "elapsed_seconds": 120,
+  "search": false,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 275516,
+  "files": {
+    "common.py": "9c4cea65c34660040c5e93c4276b2dd4f3747ceaed2354c1151107de1f2e9479",
+    "prepare.py": "c4b46615c197fb1b1b4a2e80b397c0e1a8c007be006bcf4db197ca9084e2ecb4",
+    "run.py": "7babc665221d7c8964e034f14340974fc7e9bb9803a61e9f5a4f532513a013db",
+    "score.py": "ed39979926f10a3db258b5073b77c0cf31312c49b689b103db4654de287b10f8"
+  },
+  "batches": [
+    {
+      "index": 0,
+      "prompt_sha256": "2db6b4e6f9ca3037c1a2a51eb7cf35fafc52f2522b0e3c5b862d8a9adebc32b6",
+      "prompt_bytes": 1379,
+      "guards": [
+        "uncited_quarters"
+      ],
+      "segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_19900000000000000000000000000001",
+          "character_start": 2478,
+          "character_end": 3237,
+          "context_radius": 180
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "prompt_sha256": "a9046a565b257de2db3c5dfcf2a147a7c8173eb5a6b89afe6137aa76e562be1f",
+      "prompt_bytes": 1165,
+      "guards": [
+        "uncited_quarters"
+      ],
+      "segments": [
+        {
+          "claim_index": 2,
+          "source_id": "source_19900000000000000000000000000001",
+          "character_start": 2223,
+          "character_end": 2753,
+          "context_radius": 180
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "prompt_sha256": "cb761a8d2e448dc9f4890a6b1d51946c8a467468525fde8f5fdf43bfabd2c7cf",
+      "prompt_bytes": 1431,
+      "guards": [
+        "causal_attribution_unverified"
+      ],
+      "segments": [
+        {
+          "claim_index": 1,
+          "source_id": "source_19900000000000000000000000000001",
+          "character_start": 440,
+          "character_end": 1174,
+          "context_radius": 180
+        }
+      ]
+    }
+  ]
+}
