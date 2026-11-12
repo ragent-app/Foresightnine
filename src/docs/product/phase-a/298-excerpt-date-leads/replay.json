@@ -1,0 +1,55 @@
+{
+  "checks": {
+    "original_date_warning_retained": true,
+    "release_date_line_found": true,
+    "candidate_not_attached": true,
+    "leads_marked_as_unverified": true
+  },
+  "all_checks_pass": true,
+  "candidates": [
+    {
+      "source_id": "source_29200000000000000000000000000002",
+      "quotation": "For release at 2:00 p.m. EDT                                                          July 30, 2025",
+      "location": {
+        "character_start": 0,
+        "character_end": 99,
+        "page": 1
+      },
+      "matched_amounts": [
+        "July 30, 2025"
+      ],
+      "from_claim_index": -2,
+      "status": "requires_semantic_review"
+    },
+    {
+      "source_id": "source_29200000000000000000000000000002",
+      "quotation": "For release at 2:00 p.m. EDT                                                            July 30, 2025",
+      "location": {
+        "character_start": 2525,
+        "character_end": 2626,
+        "page": 3
+      },
+      "matched_amounts": [
+        "July 30, 2025"
+      ],
+      "from_claim_index": -2,
+      "status": "requires_semantic_review"
+    },
+    {
+      "source_id": "source_29200000000000000000000000000002",
+      "quotation": "announced by the Federal Open Market Committee in its statement on July 30, 2025:",
+      "location": {
+        "character_start": 2796,
+        "character_end": 2877,
+        "page": 3
+      },
+      "matched_amounts": [
+        "July 30, 2025"
+      ],
+      "from_claim_index": -2,
+      "status": "requires_semantic_review"
+    }
+  ],
+  "model_calls": 0,
+  "note": "Publication date can be different from meeting or event date; the candidate does not establish their equivalence."
+}

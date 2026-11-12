@@ -46,6 +46,45 @@ def test_research_does_not_complete_when_percentage_only_matches_a_currency_amou
     assert content['claims'][0]['percentage_unit_unverified'] == ['5 percent']
 
 
+def test_date_lead_is_a_reviewable_source_location_and_survives_version_save(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    source_id = ''
+    class Provider:
+        name = 'date-lead'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {'claims':[{'text':'On July 30, 2025 policy remained unchanged.', 'citations':[
+                {'source_id':source_id, 'quotation':'Policy remained unchanged.'}]}]}, 20
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email':f'date-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json()
+    headers = {'Authorization':'Bearer '+auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title':'Statement',
+        'text':'For release July 30, 2025\nPolicy remained unchanged.\n',
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question':'What happened?', 'source_ids':[source_id]}).json()
+    path = '/v2/research/topics/'+topic['topic_id']
+    receipt = client.post(path+'/runs', headers={**headers,'Idempotency-Key':'date-lead'}, json={
+        'parent_version_id':topic['versions'][0]['version_id'], 'require_counterarguments':False}).json()['operation']
+    for _ in range(100):
+        state = client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'): break
+        time.sleep(.02)
+    assert state == 'completed'
+    version = client.get(path,headers=headers).json()['versions'][-1]
+    content = version['content']; claim = content['claims'][0]
+    assert content['run']['status'] == 'partial' and claim['uncited_exact_dates'] == ['July 30, 2025']
+    assert claim['suggested_related_quotations'][0]['from_claim_index'] == -2 and len(claim['citations']) == 1
+    saved = client.post(path+'/versions',headers=headers,json={'parent_version_id':version['version_id'],
+        'content':content,'note':'Review date source'})
+    assert saved.status_code == 201
+    saved_claim = saved.json()['versions'][-1]['content']['claims'][0]
+    assert saved_claim['uncited_exact_dates'] == ['July 30, 2025'] and len(saved_claim['citations']) == 1
+    assert saved_claim['suggested_related_quotations'][0]['from_claim_index'] == -2
+
+
 @pytest.mark.parametrize('mode', ['batch', 'isolated'])
 def test_review_of_flagged_claim_is_diagnostic_only_even_if_model_says_supports(monkeypatch, mode):
     from uuid import uuid4

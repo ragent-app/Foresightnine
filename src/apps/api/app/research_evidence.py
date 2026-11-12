@@ -1520,6 +1520,88 @@ def previous_supplemental_leads(claims: list[dict]) -> list[dict]:
     return leads
 
 
+def suggest_excerpt_dates(claims: list[dict], sources: list[ResearchSource], segments: list[dict]) -> list[dict]:
+    """Suggest source lines containing uncited dates, without attaching them.
+
+    Search only analyzed excerpts of a source already cited by the claim. A
+    date match does not establish whether it is a meeting, publication,
+    reporting-period, or other date. Line and search bounds are deliberate.
+    """
+    output = [deepcopy(claim) for claim in claims]
+    source_map = {s.source_id:s for s in sources if s.permissions.display and s.permissions.model_input and not s.is_simulated}
+    if not isinstance(segments, list) or len(segments) > 100:
+        return output
+    demands: dict[str, dict[date, list[tuple[int, str]]]] = defaultdict(lambda: defaultdict(list))
+    for index, claim in enumerate(output):
+        missing, citations = claim.get('uncited_exact_dates'), claim.get('citations')
+        if not isinstance(missing, list) or not isinstance(citations, list):
+            continue
+        for citation in citations[:10]:
+            if not isinstance(citation, dict) or citation.get('partial_token'):
+                continue
+            sid, quote, loc = citation.get('source_id'), citation.get('quotation'), citation.get('location')
+            source = source_map.get(sid) if isinstance(sid, str) else None
+            if source is None or not isinstance(quote, str) or not isinstance(loc, dict) or loc.get('status') == 'ambiguous':
+                continue
+            a, b = loc.get('character_start'), loc.get('character_end')
+            if (type(a) is not int or type(b) is not int or not 0 <= a < b <= len(source.text) or
+                    source.text[a:b] != quote or partial_ascii_token(source.text, a, b)):
+                continue
+            for raw in missing[:5]:
+                if isinstance(raw, str):
+                    for value, _ in _explicit_dates(raw):
+                        pair = (index, raw)
+                        if pair not in demands[sid][value]:
+                            demands[sid][value].append(pair)
+    remaining = 100_000
+    checked = 0
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        sid, a, b = segment.get('source_id'), segment.get('character_start'), segment.get('character_end')
+        source = source_map.get(sid) if isinstance(sid, str) else None
+        if source is None or sid not in demands or type(a) is not int or type(b) is not int or not 0 <= a < b <= len(source.text):
+            continue
+        if b - a > remaining:
+            break
+        remaining -= b - a
+        for match in _FULL_DATE.finditer(source.text, a, b):
+            dates = _explicit_dates(match.group(0))
+            if len(dates) != 1 or dates[0][0] not in demands[sid]:
+                continue
+            checked += 1
+            if checked > 100:
+                return output
+            left = source.text.rfind('\n', a, match.start()) + 1
+            if left <= a and a != 0 and source.text[a-1] != '\n':
+                continue
+            left = max(left, a)
+            right = source.text.find('\n', match.end(), b)
+            if right < 0:
+                if b != len(source.text):
+                    continue
+                right = b
+            while left < right and source.text[left].isspace(): left += 1
+            while right > left and source.text[right-1].isspace(): right -= 1
+            quote = source.text[left:right]
+            if (not 1 <= len(quote) <= 300 or source.text.find(quote) != left or
+                    source.text.find(quote, left+1) >= 0 or partial_ascii_token(source.text, left, right)):
+                continue
+            location = {'character_start':left,'character_end':right}
+            if source.retrieval_method == 'user_pdf':
+                location['page'] = source.text[:left].count('\f') + 1
+            for index, raw in demands[sid][dates[0][0]]:
+                claim = output[index]
+                if any(isinstance(c, dict) and c.get('source_id') == sid and c.get('quotation') == quote for c in claim.get('citations', [])):
+                    continue
+                candidates = claim.setdefault('suggested_related_quotations', [])
+                if len(candidates) >= 5 or any(isinstance(c, dict) and c.get('source_id') == sid and c.get('quotation') == quote for c in candidates):
+                    continue
+                candidates.append({'source_id':sid,'quotation':quote,'location':location,
+                    'matched_amounts':[raw],'from_claim_index':-2,'status':'requires_semantic_review'})
+    return output
+
+
 def _difference_label(label: str) -> str:
     # Ignore only an explicit, trailing release qualifier; accounting basis,
     # geography and other parenthetical details remain part of the label.

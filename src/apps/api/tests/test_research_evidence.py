@@ -1077,3 +1077,26 @@ def test_percentage_suggestion_limit_does_not_skip_later_unit_warnings():
     result = suggest_percentage_evidence([item],facts)[0]
     assert len(result['suggested_fact_evidence']) == 5
     assert len(result['uncited_percentages']) == 5 and result['percentage_unit_unverified'] == ['99%']
+
+
+def test_date_leads_stay_within_authorized_analyzed_excerpt_and_are_not_attached():
+    from app.research_evidence import suggest_excerpt_dates
+    text = 'For release July 30, 2025\nPolicy remained unchanged.\nOutside: August 1, 2025\n'
+    source = ResearchSource(source_id='s', owner_id='owner', title='Statement', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+        permissions=SourcePermissions(store=True,display=True,model_input=True))
+    quote='Policy remained unchanged.'; start=text.index(quote)
+    claim={'text':'At the July 30, 2025 meeting policy remained unchanged.', 'uncited_exact_dates':['July 30, 2025'],
+           'citations':[{'source_id':'s','quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)}}]}
+    segments=[{'source_id':'s','character_start':0,'character_end':text.index('Outside:')}]
+    result=suggest_excerpt_dates([claim],[source],segments)[0]
+    lead=result['suggested_related_quotations'][0]
+    assert lead['quotation']=='For release July 30, 2025' and lead['from_claim_index']==-2
+    assert len(result['citations'])==1 and result['uncited_exact_dates']==['July 30, 2025']
+    assert not suggest_excerpt_dates([claim],[source],[],)[0].get('suggested_related_quotations')
+    withheld=source.model_copy(update={'permissions':SourcePermissions(store=True,display=True,model_input=False)})
+    assert not suggest_excerpt_dates([claim],[withheld],segments)[0].get('suggested_related_quotations')
+    outside={**claim,'uncited_exact_dates':['August 1, 2025']}
+    assert not suggest_excerpt_dates([outside],[source],segments)[0].get('suggested_related_quotations')
+    ambiguous={**claim,'citations':[{**claim['citations'][0],'location':{'status':'ambiguous'}}]}
+    assert not suggest_excerpt_dates([ambiguous],[source],segments)[0].get('suggested_related_quotations')
