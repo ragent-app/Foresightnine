@@ -1,0 +1,67 @@
+{
+  "implementation_commit": "8c64774608b7627b4a6c10212e797971aa8c0739",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "review_method": "bounded_quotation_context_model_review_v29",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "650a55db76e4c2fbb93176f61060a429bff1ccade452936f32770cdaad36633e",
+    "prepare.py": "088ea53d9bd7e1969e1d895df12765f878a58e0b688d8603cd534799222fe686",
+    "run.py": "202b6e8e9772b12004e89391cf5d7db4daf5be7ab413a15207d58ffb21ff04ac",
+    "score.py": "260ced0fd1e3fdf999f4e4314f1b7d29df21b8279de16b93148cf54951366cac"
+  },
+  "source_files": {
+    "tasks.json": "87458b2df18e793885798d21987bdead007f4a97c1a67c78d3a1ef02eded66a8",
+    "reference.json": "a3cd18fcd038dac1bc23476a0b87d36f05dbccaf5cc4e07fcf64548309db7054",
+    "bea-gdp4q22.pdf": "314b1a39f0b701c2b3239b5a9fbe406c31bdcd2b5282d0ee79fae3694f7e6a50",
+    "fomc-20170614.pdf": "5dde60049483d3f7e7c662a5d18e07b30580d7e00ce700afac25e8f3e274937c"
+  },
+  "conditions": [
+    {
+      "task": "COMPANY_CISCO_2024",
+      "set": "development_recheck",
+      "source_sha256": "2cf482f78cce5038a1e750ca7b53ba96409854cb56e21eb2081532dcaa04ecf6",
+      "text_sha256": "38106fd55c9ba6935d7e24ac5c6342af3c005b519f9a7b13e8d49b010774c219",
+      "prompt_sha256": "a7fe2a6526bbd4fecfd38f687b34b6cca542dfc5cad2b12fc6e98a17f0f11514",
+      "prompt_bytes": 4987,
+      "segments": [
+        {
+          "source_id": "source_26300000000000000000000000000001",
+          "character_start": 170198,
+          "character_end": 170755,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_26300000000000000000000000000001",
+          "character_start": 299181,
+          "character_end": 302357,
+          "model_source_id": "ref-1"
+        }
+      ]
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls_per_task": 2,
+  "max_tokens_per_task": 20000,
+  "max_calls_total": 2,
+  "max_tokens_total": 20000,
+  "timeout_seconds": 60,
+  "elapsed_seconds": 120,
+  "search": false,
+  "retries": 0,
+  "previous_known_tokens": 309430,
+  "cost_usd": "unknown"
+}
