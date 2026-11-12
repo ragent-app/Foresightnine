@@ -1,6 +1,6 @@
 import json
 
-from app.research_counterpoint import extract_answer_candidates, prepare_counterpoint_prompt
+from app.research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 
 
 def test_counterpoint_prompt_preserves_sources_question_and_cutoff():
@@ -47,3 +47,14 @@ def test_extra_answer_leads_are_bounded_and_not_yet_evidence():
     assert len(candidates) == 19
     assert all('secret' not in item and item['citations'][0]['quotation'] == 'Source text' for item in candidates)
     assert extract_answer_candidates({'answer':['not a mapping']}) == []
+
+
+def test_counterpoint_rows_keep_valid_entries_and_count_invalid_without_promoting_them():
+    valid = {'text':'Costs increased.', 'citations':[{'source_id':'s','quotation':'Costs increased.'}], 'status':'unverified'}
+    result = filter_counterpoint_rows([valid, {'text':'secret', 'citations':'bad'}, None])
+    assert result is not None
+    rows, omitted = result
+    assert omitted == 2 and len(rows) == 1 and rows[0]['text'] == 'Costs increased.'
+    assert 'status' not in rows[0] and 'secret' not in str(rows)
+    assert filter_counterpoint_rows([valid] * 21) is None
+    assert filter_counterpoint_rows({'text':'not a list'}) is None

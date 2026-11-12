@@ -46,6 +46,28 @@ def extract_answer_candidates(raw: object) -> list[dict[str, Any]]:
     return candidates
 
 
+def filter_counterpoint_rows(raw: object) -> tuple[list[dict[str, Any]], int] | None:
+    """Keep individually valid rows, with bounded and explicit omissions.
+
+    This does not validate a quotation against its source; the normal analysis
+    pipeline must still do that before the results can be returned.
+    """
+    if not isinstance(raw, list) or len(raw) > 20:
+        return None
+    valid: list[dict[str, Any]] = []
+    omitted = 0
+    for row in raw:
+        if isinstance(row, dict) and isinstance(row.get('status'), str) and len(row['status']) <= 100:
+            row = {key: value for key, value in row.items() if key != 'status'}
+        try:
+            item = Claim.model_validate(row)
+        except ValidationError:
+            omitted += 1
+            continue
+        valid.append(item.model_dump(exclude_none=True))
+    return valid, omitted
+
+
 def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]], max_bytes: int) -> CounterpointPrompt | None:
     """Retain the original question and source excerpts within the byte budget.
 

@@ -79,6 +79,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "Counterpoint follow-up uses a model and is not independent verification.": "反方补充由模型生成，不构成独立核验。",
     "Extra fields from the counterpoint response were discarded.": "反方补充返回了额外字段，已忽略。",
     "Extra counterpoint response fields were not used as findings; any citation leads require review.": "反方补充的额外字段未作为结论使用；其中的候选引文仍需核查。",
+    "Some malformed counterpoints were omitted; review the remaining results.": "部分格式无效的反方意见已省略，请核查保留的内容。",
     "Some follow-up counterpoints were omitted because the result limit was reached.": "反方数量达到上限，部分补充意见未保留。",
     "Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.": "跨来源数值差异需要核对研究对象和统计口径，不能直接认定为冲突。",
     "At most 50 candidate differences are shown.": "最多展示 50 组待核查差异。",

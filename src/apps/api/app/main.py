@@ -107,7 +107,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
-from .research_counterpoint import extract_answer_candidates, prepare_counterpoint_prompt
+from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
@@ -2780,6 +2780,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         counterpoint_hash: str | None = None
         counterpoint_error: str | None = None
         counterpoint_discarded_fields = 0
+        counterpoint_omitted_rows = 0
         if request.counterpoint_followup:
             counterpoint_status = "not_needed" if calls and analysis.claims else "unavailable"
             initial_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
@@ -2875,6 +2876,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 allowed_fields = {'counterarguments', 'limitations'}
                                 counterpoint_discarded_fields = len(set(raw_counterpoint) - allowed_fields)
                                 restricted_counterpoint = {key:raw_counterpoint[key] for key in allowed_fields if key in raw_counterpoint}
+                                filtered_rows = filter_counterpoint_rows(restricted_counterpoint['counterarguments'])
+                                if filtered_rows is None:
+                                    raise InvalidAnalysis('Counterpoint rows exceed the allowed structure or limit.')
+                                restricted_counterpoint['counterarguments'], counterpoint_omitted_rows = filtered_rows
                                 checked = analyze(effective_question, sources, topic.request.as_of,
                                     lambda _: (restricted_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
                                     should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
@@ -2899,6 +2904,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
                                         'Counterpoint follow-up uses a model and is not independent verification.',
                                         *(['Extra counterpoint response fields were not used as findings; any citation leads require review.'] if counterpoint_discarded_fields else []),
+                                        *(['Some malformed counterpoints were omitted; review the remaining results.'] if counterpoint_omitted_rows else []),
                                         *(['Some follow-up counterpoints were omitted because the result limit was reached.'] if truncated_counterpoints else [])])))
                                 claims = prepare_claims()
                                 followup_claims = claims[first_followup_index:]
@@ -2908,7 +2914,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                             if item['claim_index'] >= first_followup_index}
                                 if not any(item.get('citations') for item in retained_counterpoints):
                                     counterpoint_status = 'no_evidence'
-                                elif truncated_counterpoints:
+                                elif truncated_counterpoints or counterpoint_omitted_rows:
                                     counterpoint_status = 'partial'
                                 elif not has_usable_counterpoint(followup_claims, excluded):
                                     counterpoint_status = 'needs_review'
@@ -2996,6 +3002,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
                                      "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                      "counterpoint_discarded_fields":counterpoint_discarded_fields,
+                                     "counterpoint_omitted_rows":counterpoint_omitted_rows,
                                      "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                      "support_review_requested": True, "support_review_mode": "isolated",
                                      "support_review_status": "pending", "support_review_method": ISOLATED_REVIEW_METHOD,
@@ -3163,6 +3170,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
                                          "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                          "counterpoint_discarded_fields":counterpoint_discarded_fields,
+                                         "counterpoint_omitted_rows":counterpoint_omitted_rows,
                                          "require_counterarguments": request.require_counterarguments,
                                          "support_review_status": "pending", "support_review_indexes": batch.indexes,
                                          "support_review_method": REVIEW_METHOD, "support_review_prompt_sha256": batch.prompt_sha256,
@@ -3310,6 +3318,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
                      "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                      "counterpoint_discarded_fields":counterpoint_discarded_fields,
+                     "counterpoint_omitted_rows":counterpoint_omitted_rows,
                      "counterpoint_error":counterpoint_error,
                      "require_counterarguments": request.require_counterarguments,
                      "support_review_requested": request.support_review, "support_review_status": review_status,
