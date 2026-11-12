@@ -394,6 +394,62 @@ def _joined_adjacent_table_rows(source_text: str, passages: list[tuple[int, str]
     return list(next(iter(candidates))) if len(candidates) == 1 else []
 
 
+def _split_long_pdf_table_quote(source: ResearchSource, passages: list[tuple[int, str]], quotation: str,
+                                source_page: int | None, should_stop: Callable[[], bool] | None = None) -> list[dict[str, Any]]:
+    """Locate a long PDF table quote as two contiguous original fragments.
+
+    This does not validate the table's column alignment or claim semantics.
+    Each fragment must be unique and at most 1,000 original characters.
+    """
+    lines = quotation.splitlines()
+    if (source.retrieval_method != 'user_pdf' or source.pdf_text_order != 'layout' or
+            len(quotation) > 1000 or not 2 <= len(lines) <= 12 or
+            not re.search(r'\btable\s+\d+\b', quotation, re.IGNORECASE) or
+            not re.search(r'(?m)^\s*\d+\s+[A-Za-z]', quotation)):
+        return []
+    candidates = []
+    for index in range(1, len(lines)):
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        fragments = ['\n'.join(lines[:index]).strip(), '\n'.join(lines[index:]).strip()]
+        if any(len(part) < 8 for part in fragments):
+            continue
+        located = []
+        for fragment in fragments:
+            pattern = re.compile('(?=(' + r'\s+'.join(re.escape(part) for part in re.split(r'\s+', fragment)) + '))')
+            matches = []
+            for offset, passage in passages:
+                for match in pattern.finditer(passage):
+                    start, end = offset + match.start(1), offset + match.end(1)
+                    if end - start > 1000 or partial_ascii_token(source.text, start, end):
+                        continue
+                    page = source.text.count('\f', 0, start) + 1
+                    if source_page is not None and page != source_page:
+                        continue
+                    matches.append((start, end, page))
+                    if len(matches) > 1:
+                        break
+                if len(matches) > 1:
+                    break
+            if len(matches) != 1:
+                break
+            located.append(matches[0])
+        if len(located) != 2:
+            continue
+        a, b = located
+        if (a[1] > b[0] or a[2] != b[2] or b[1] - a[0] > 3000 or '\f' in source.text[a[0]:b[1]] or
+                source.text[a[1]:b[0]].strip() or
+                not any(offset <= a[0] and b[1] <= offset + len(part) for offset, part in passages)):
+            continue
+        candidates.append((max(a[1] - a[0], b[1] - b[0]), a, b))
+    if not candidates:
+        return []
+    _, *spans = min(candidates)
+    return [{'source_id':source.source_id, 'location':{'character_start':start, 'character_end':end, 'page':page},
+             'quotation_match':'split_pdf_layout', 'quotation':source.text[start:end],
+             'support_status':'not_independently_verified'} for start, end, page in spans]
+
+
 def _counterargument_absence_only(text: str) -> bool:
     """Recognize a narrow absence statement, not a supported counterargument.
 
@@ -2558,6 +2614,14 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     location, quotation, matching = quotation_location(source, citation.quotation, citation.source_page)
                 except InvalidAnalysis:
                     remaining_citations = len(item.citations) - citation_index - 1
+                    pdf_parts = (_split_long_pdf_table_quote(source, model_text[source.source_id],
+                                                            citation.quotation, citation.source_page, should_stop)
+                                 if citation.source_page is None or citation.source_page in shown_pages.get(source.source_id, set()) else [])
+                    if pdf_parts and len(citations) + len(pdf_parts) + remaining_citations <= 10:
+                        citations.extend(pdf_parts)
+                        limitations.append("A joined quotation was split into separately located passages; support requires review.")
+                        incomplete_boundary = True
+                        continue
                     joined_rows = _joined_adjacent_table_rows(source.text, model_text[source.source_id],
                                                                citation.quotation, should_stop)
                     if joined_rows and len(citations) + len(joined_rows) + remaining_citations <= 10:

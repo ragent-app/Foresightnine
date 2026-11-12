@@ -438,6 +438,30 @@ def test_split_ellipsis_requires_unique_ordered_fragments_in_analyzed_passage():
     assert not run(report.text, "Issuer Example ... Revenue 101").claims
 
 
+def test_long_pdf_layout_table_quote_splits_only_at_original_whitespace():
+    from app.research_analysis import _split_long_pdf_table_quote
+    text = ('Table 2. Income\n' + ' ' * 440 + 'Billions of dollars\n' + ' ' * 440 +
+            '2024 2023\n' + ' ' * 440 + '1 Income 100 90\n')
+    quote = 'Table 2. Income\nBillions of dollars\n2024 2023\n1 Income 100 90'
+    report = source('s', text=text).model_copy(update={'retrieval_method':'user_pdf', 'pdf_text_order':'layout'})
+    parts = _split_long_pdf_table_quote(report, [(0,text)], quote, None)
+    assert len(parts) == 2
+    assert all(report.text[x['location']['character_start']:x['location']['character_end']] == x['quotation'] for x in parts)
+    assert not _split_long_pdf_table_quote(report, [(0,text)], quote.replace('100 90', '100 91'), None)
+    assert not _split_long_pdf_table_quote(report, [(0,text)], quote, 2)
+    assert not _split_long_pdf_table_quote(report, [(0,text[:900]),(900,text[900:])], quote, None)
+    duplicated = report.model_copy(update={'text':text + '\n' + text})
+    assert not _split_long_pdf_table_quote(duplicated, [(0,duplicated.text)], quote, None)
+    altered = report.model_copy(update={'text':text.replace('Billions of dollars', 'Billions of dollars\nNot part of the quote')})
+    assert not _split_long_pdf_table_quote(altered, [(0,altered.text)], quote, None)
+    cross_page = report.model_copy(update={'text':text.replace('2024 2023', '\f2024 2023')})
+    assert not _split_long_pdf_table_quote(cross_page, [(0,cross_page.text)], quote, None)
+    result = analyze('What was income?', [report], None, lambda _: ({'claims':[{'text':'Income was 100.',
+        'citations':[{'source_id':'s','quotation':quote}]}]}, 1))
+    assert result.claims[0]['support_status'] == 'incomplete'
+    assert [x['quotation_match'] for x in result.claims[0]['citations']] == ['split_pdf_layout','split_pdf_layout']
+
+
 def test_literal_ellipsis_is_not_expanded_when_it_matches_exactly():
     report = source("s", text="Unit USD ... Revenue 100")
     result = analyze("Revenue?", [report], None, lambda _: ({"claims": [{"text": "Revenue", "citations": [
