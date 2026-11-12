@@ -119,6 +119,35 @@ def quotation_is_table_row(source_text: str, start: object, quotation: object) -
     return row.startswith("|") and row.endswith("|") and row.count("|") >= 3
 
 
+
+def quotation_is_pdf_layout_row(source_text: str, start: object, quotation: object) -> bool:
+    """Identify a possible multi-column row in layout-preserving PDF text.
+
+    A formatting cue only: it cannot establish table boundaries, column
+    identity, units or whether the selected value supports the fact.
+    """
+    if (type(start) is not int or not isinstance(quotation, str) or not quotation or
+            len(quotation) > 1000 or start < 0 or source_text[start:start + len(quotation)] != quotation):
+        return False
+    if "\n" in quotation or "\f" in quotation:
+        cursor = start
+        for part in quotation.splitlines(keepends=True):
+            line = part.rstrip("\r\n\f")
+            if line and quotation_is_pdf_layout_row(source_text, cursor, line):
+                return True
+            cursor += len(part)
+        return False
+    line_start = max(source_text.rfind("\n", 0, start), source_text.rfind("\f", 0, start)) + 1
+    ends = [end for end in (source_text.find("\n", start), source_text.find("\f", start)) if end >= 0]
+    line_end = min(ends) if ends else len(source_text)
+    line = source_text[line_start:line_end]
+    if len(line) > 2000 or start + len(quotation) > line_end:
+        return False
+    cells = re.split(r"(?: {2,}|\t+)", line.strip())
+    amount = re.compile(r"[\$€£¥]?\(?[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\)?%?")
+    numeric_cells = [index for index, cell in enumerate(cells) if amount.fullmatch(cell.strip())]
+    return len(numeric_cells) >= 2 and any(re.search(r"[A-Za-z\u3400-\u9fff]", cell) for cell in cells[:numeric_cells[0]])
+
 def _spanned_table_period_conflict(source_text: str, start: int, value: Decimal,
                                    period: str) -> dict[str, str] | None:
     """Flag a possible mismatch in a tightly bounded extracted HTML table.

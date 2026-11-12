@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 
 
 SYSTEM_PROMPT = (
@@ -2314,7 +2314,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                   table_currency_quote_missing(item.currency,
                                       ("|" + quotation) if table_substring else quotation))
         table_alignment_unverified = (location.get("status") != "ambiguous" and
-                                      quotation_is_table_row(source.text, quote_start, quotation))
+                                      (quotation_is_table_row(source.text, quote_start, quotation) or
+                                       (source.retrieval_method == "user_pdf" and source.pdf_text_order == "layout" and
+                                        quotation_is_pdf_layout_row(source.text, quote_start, quotation))))
         period_conflict = (table_period_conflict(source.text, quote_start, quotation, item.value, item.period)
                            if table_alignment_unverified else None)
         currency_conflict = currency_value_conflict(item.currency, item.value, quotation)

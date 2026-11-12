@@ -359,3 +359,17 @@ def test_decrease_calculation_suggestion_still_requires_evidence_and_unique_word
     assert not suggest_percentage_calculations([{**claim,'text':'现金流并未减少约38.1%。'}],[calculation],[current,prior])[0].get('suggested_calculations')
     assert not suggest_percentage_calculations([{**claim,'text':'现金流同比减少约38.1%，另有38.1%。'}],[calculation],[current,prior])[0].get('suggested_calculations')
     assert not suggest_percentage_calculations([{**claim,'citations':claim['citations'][:1]}],[calculation],[current,prior])[0].get('suggested_calculations')
+
+
+def test_pdf_layout_table_detection_is_a_bounded_formatting_cue():
+    from app.research_calculations import quotation_is_pdf_layout_row
+    row = "Revenue                        1,200       1,000"
+    text = "Header\n" + row + "\nOther text."
+    start = text.index("1,200")
+    assert quotation_is_pdf_layout_row(text, start, "1,200")
+    assert quotation_is_pdf_layout_row(text, 0, "Header\n" + row)
+    assert not quotation_is_pdf_layout_row(text, start, "1,201")
+    sentence = "Revenue rose from 1,000 to 1,200 in 2024."
+    assert not quotation_is_pdf_layout_row(sentence, sentence.index("1,200"), "1,200")
+    assert not quotation_is_pdf_layout_row("2024    2023", 0, "2024")
+    assert not quotation_is_pdf_layout_row("Revenue  1,200\f  1,000", 9, "1,200")

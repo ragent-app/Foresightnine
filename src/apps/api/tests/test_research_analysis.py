@@ -2071,3 +2071,15 @@ def test_research_instruction_requires_opposing_evidence_and_reports_missing_evi
     assert "otherwise record the gap" in SYSTEM_PROMPT
     assert "Never treat a gap as proof" in SYSTEM_PROMPT
     assert len(SYSTEM_PROMPT.encode("utf-8")) == 433
+
+
+def test_pdf_layout_table_fact_is_marked_for_column_review():
+    text = "Revenue                        1,200       1,000"
+    report = source("s", text=text).model_copy(update={"retrieval_method": "user_pdf", "pdf_text_order": "layout"})
+    payload = {"facts": [{"fact_id": "rev", "label": "Revenue", "value": "1200", "unit": "USD millions",
+        "currency": "USD", "period": "2024", "citation": {"source_id": "s", "quotation": "1,200"}}]}
+    result = analyze("Revenue?", [report], None, lambda _: (payload, 1))
+    assert result.facts[0]["table_alignment_unverified"] is True
+    assert any("Table column alignment is not established" in note for note in result.limitations)
+    reading = report.model_copy(update={"pdf_text_order": "reading"})
+    assert not analyze("Revenue?", [reading], None, lambda _: (payload, 1)).facts[0].get("table_alignment_unverified")

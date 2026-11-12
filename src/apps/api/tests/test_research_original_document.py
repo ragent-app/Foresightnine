@@ -410,6 +410,7 @@ def test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_
     payload = json.loads((root / "238-pdf-page-single-recheck/BEA_2020-generation-1-provider.json").read_text())["payload"]
     result = analyze(task["question"], [report], None, lambda _: (payload, 0),
                      max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+    assert result.facts and all(item.get("table_alignment_unverified") for item in result.facts)
     assert len(result.counterarguments) == 1
     counterargument = result.counterarguments[0]
     assert counterargument["support_status"] == "incomplete"
