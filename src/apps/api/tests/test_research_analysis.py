@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
@@ -710,3 +710,28 @@ def test_fred_endpoint_variants_are_not_sent_to_models(url):
         raise AssertionError("FRED is not an authorized model input")
     result = analyze("GDP?", [source("fred", url=url)], None, must_not_call)
     assert result.source_ids == []
+
+
+def test_fiscal_revenue_table_keeps_both_years_and_row_within_budget():
+    table = ("Year Ended\n| January 29, 2023 | January 30, 2022 |\n"
+             "| (USD in millions) |\n| Revenue | 26,974 | 26,914 |\n")
+    text = "Unrelated notes. " * 70 + table + " Other text. " * 70
+    selected = _financial_table_windows(text, "2023 与 2022 财年收入多少？", 200)
+    assert selected is not None
+    start, passage = selected[0]
+    assert len(passage) <= 200 and text[start:start + len(passage)] == passage
+    assert all(term in passage for term in ("2023", "2022", "millions", "26,974", "26,914"))
+    assert _financial_table_windows(text, "2023 年现金是多少？", 200) is None
+    assert _financial_table_windows(text, "2023 与 2021 财年收入多少？", 200) is None
+    assert _financial_table_windows(text, "2023 与 2022 财年收入多少？", 30) is None
+
+
+def test_vote_and_second_estimate_anchors_find_requested_passages():
+    report = ("unrelated business commentary " * 50 +
+              "In the second estimate, real GDP increased 2.9 percent. " +
+              "unrelated commentary " * 50 +
+              "Voting against this action: None. " + "unrelated commentary " * 50)
+    estimates = _select_windows(report, "2022 GDP 第二次估计是多少？", 180, 2)
+    assert any("second estimate" in part and "2.9 percent" in part for _, part in estimates)
+    votes = _select_windows(report, "该行动有委员投反对票吗？", 180, 2)
+    assert any("Voting against this action: None" in part for _, part in votes)

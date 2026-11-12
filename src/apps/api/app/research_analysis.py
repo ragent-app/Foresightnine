@@ -35,7 +35,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v13"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v14"
 
 
 class Citation(BaseModel):
@@ -348,6 +348,52 @@ def _comparison_windows(text: str, question: str, size: int,
     return [(start, text[start:end]) for start, end in spans]
 
 
+def _financial_table_windows(text: str, question: str, size: int,
+                             should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
+    """Keep a fiscal-year header, units and a matching total row together.
+
+    This is a bounded retrieval hint for extracted tables, not a claim that
+    a column belongs to a period or that the cited passage proves a result.
+    """
+    lower = question.casefold()
+    if not any(term in lower for term in ("revenue", "sales", "收入", "营收")):
+        return None
+    years = list(dict.fromkeys(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", lower)))
+    if len(years) != 2:
+        return None
+    pattern = r"(?im)^[ \t]*\|[ \t]*(?:\[colspan=\d+\][ \t]*)?(?:total[ \t]+)?(?:revenue|sales)[ \t]*\|[^\n]{1,500}"
+    choices: list[tuple[int, int]] = []
+    for index, match in enumerate(re.finditer(pattern, text)):
+        if index >= 256:
+            break
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        previous_start = max(0, match.start() - 800)
+        previous = text[previous_start:match.start()]
+        positions = [previous.rfind(year) for year in years]
+        if any(position < 0 for position in positions):
+            continue
+        first_year = min(positions)
+        context_start = max(0, first_year - 75)
+        header = previous[context_start:]
+        if not re.search(r"\b(?:year|years)\s+ended\b", header, re.IGNORECASE):
+            continue
+        if not re.search(r"\b(?:million|billion|thousand)s?\b", previous[first_year:], re.IGNORECASE):
+            continue
+        start = previous_start + context_start
+        end = match.end()
+        if end - start <= size:
+            choices.append((start, end))
+    if not choices:
+        return None
+    start, end = min(choices, key=lambda pair: (pair[1] - pair[0], pair[0]))
+    spare = size - (end - start)
+    left = min(start, spare // 2)
+    start -= left
+    end = min(len(text), end + spare - left)
+    return [(start, text[start:end])]
+
+
 def _select_windows(text: str, question: str, length: int, count: int,
                     should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
     """Select bounded, non-overlapping passages with original-text offsets."""
@@ -372,6 +418,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "下调": ("lower", "decrease"), "上调": ("raise", "increase"),
         "变化幅度": ("lower", "increase", "decrease"), "当期美元": ("current", "dollars"),
         "前月": ("preceding", "month"), "修订": ("revised", "previous"),
+        "投票": ("voting", "vote"), "反对票": ("against", "dissent"), "异议": ("against", "dissent"),
     }.items():
         if chinese in lower:
             terms.update(english)
@@ -401,7 +448,9 @@ def _select_windows(text: str, question: str, length: int, count: int,
     wants_year_comparison = any(term in lower for term in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))
     wants_monetary_amount = any(term in lower for term in ("金额", "美元", "dollar amount", "monetary amount"))
     wants_previous_period = any(term in lower for term in ("前月", "上月", "preceding month", "previous month"))
-    wants_revision = any(term in lower for term in ("修订", "revision", "revised", "revise"))
+    wants_revision = any(term in lower for term in ("修订", "revision", "revised", "revise", "第二次估计", "second estimate"))
+    wants_vote = any(term in lower for term in ("投票", "反对票", "异议", "voting", "dissent", "voted against"))
+    wants_second_estimate = any(term in lower for term in ("第二次估计", "second estimate"))
     wants_decision = (any(term in lower for term in ("决定", "decision", "decided")) or
                       ("目标区间" in lower and any(term in lower for term in ("下调", "上调", "变化幅度"))))
     metric_terms = set()
@@ -441,7 +490,9 @@ def _select_windows(text: str, question: str, length: int, count: int,
     for wanted, pattern in ((wants_month_comparison, r"\b(?:preceding|previous)\s+month\b"),
                             (wants_year_comparison, r"\bsame\s+month\s+one\s+year\b"),
                             (wants_previous_period, r"\bchange\s+from\s+(?:the\s+)?preceding\s+(?:month|period)\b"),
-                            (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b")):
+                            (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b"),
+                            (wants_vote, r"\bvoting\s+against\s+this\s+action\b"),
+                            (wants_second_estimate, r"\bin\s+the\s+second\s+estimate\b")):
         if wanted:
             for index, match in enumerate(re.finditer(pattern, text, re.IGNORECASE)):
                 if index >= 64:
@@ -474,6 +525,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
         if (wants_monetary_amount and re.search(r"\b(?:millions?|billions?|trillions?)\s+of\s+dollars\b", passage) and
                 re.search(r"\b(?:dollars|income|revenue|sales)\b[^\n]{0,120}\d", passage)):
             score += 250
+        if wants_vote and re.search(r"\bvoting\s+against\s+this\s+action\b", passage):
+            score += 1000
+        if wants_second_estimate and re.search(r"\bin\s+the\s+second\s+estimate\b", passage):
+            score += 1000
         if wants_revision and any(re.search(r"\b" + re.escape(term) + r"\b[\s\S]{0,35}?\brevis(?:ed|ion)\b", passage)
                                   for term in metric_terms):
             score += 250
@@ -564,7 +619,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         source_budget_limit = current_bytes + max(0, max_prompt_chars - current_bytes) // (len(eligible) - index)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             if split and size >= 2:
-                windows = _comparison_windows(selection_text, question, size, should_stop)
+                windows = _financial_table_windows(selection_text, question, size, should_stop)
+                if windows is None:
+                    windows = _comparison_windows(selection_text, question, size, should_stop)
                 if windows is None:
                     windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop), key=lambda item: item[0])
             else:
