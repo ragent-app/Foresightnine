@@ -99,7 +99,7 @@ from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
-from .research_table_provenance import bounded_table_trace
+from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, suggest_percentage_evidence, suggest_related_claim_quotations, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
@@ -1967,6 +1967,7 @@ def confirm_research_table(topic_id: str, request: ConfirmDirectionRequest,
         if (source_id not in set(previous.source_ids) or not isinstance(quote, str) or not quote or
                 not isinstance(location, dict) or location.get("status") == "ambiguous" or
                 fact.get("source_value_warnings") or fact.get("table_period_conflict") or
+                isinstance(fact.get("table_structure_alignment"), dict) and fact["table_structure_alignment"].get("status") == "conflict" or
                 fact.get("currency_conflict_unverified") or fact.get("currency_context_unverified") or
                 fact.get("direction_context_unverified")):
             raise ApiProblem(422, "invalid_request", "The fact or its source requires further review.")
@@ -1983,6 +1984,11 @@ def confirm_research_table(topic_id: str, request: ConfirmDirectionRequest,
                 not quotation_is_table_row(source.text, located.get("character_start"), quote)):
             raise ApiProblem(422, "invalid_request", "A unique complete table row is required.")
         numeric = NumericFact.model_validate({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})
+        if source.original_html_base64:
+            traced = bounded_table_trace(source, located["character_start"], located["character_end"])
+            alignment = annual_table_value_alignment(traced, numeric.value, numeric.period)
+            if alignment and alignment.get("status") == "conflict":
+                raise ApiProblem(422, "invalid_request", "The fact's period conflicts with the original table column.")
         original_cells = re.sub(r"\[(?:colspan|rowspan)=\d+\]", "", quote, flags=re.IGNORECASE)
         if numeric.value not in _quoted_numbers(original_cells):
             raise ApiProblem(422, "invalid_request", "The quoted row does not contain the value.")
@@ -2019,6 +2025,8 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
             raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before calculation.")
         if fact.get("table_period_conflict"):
             raise ApiProblem(422, "invalid_request", "Table period and column require review before calculation.")
+        if isinstance(fact.get("table_structure_alignment"), dict) and fact["table_structure_alignment"].get("status") == "conflict":
+            raise ApiProblem(422, "invalid_request", "Table period and original column require review before calculation.")
         if fact.get("direction_context_unverified") and not direction_user_confirmed(fact):
             raise ApiProblem(422, "invalid_request", "Value direction and subject require review before calculation.")
         if currency_value_conflict(fact.get("currency"), fact.get("value"), fact.get("quotation")):
@@ -3014,6 +3022,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         differences = evidence_differences(analysis.facts)
         calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
         amount_differences = claim_amount_differences(claims, analysis.facts)
+        unverified_calculations = any(calculation_input_status(calculation, analysis.facts) != "matched"
+                                      for calculation in analysis.calculations)
         processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
             "not processed", "remaining text was not examined", "was omitted", "were omitted",
             "permission is not granted", "not established", "not authorized", "quotation location is ambiguous",
@@ -3023,10 +3033,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
-                        and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
+                        and not processing_incomplete and not unverified_calculations and not differences and not calculation_differences and not amount_differences and
                         not any(c.get("causal_attribution_unverified") or c.get("uncited_exact_dates") or c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_claim_amounts") or c.get("uncited_dollar_amounts") or c.get("uncited_quarters") or c.get("balance_direction_warnings") or c.get("uncited_percentages") or c.get("uncited_percentage_bounds") or c.get("reused_percentages") or c.get("uncited_basis_points") or c.get("uncited_percentage_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
+        if unverified_calculations:
+            limitations.append("A calculation has inputs that cannot be verified against the saved facts; the result is provisional.")
         if not analysis.counterarguments:
             limitations.append("No counterarguments were provided; this does not establish that none exist.")
         if request.support_review:

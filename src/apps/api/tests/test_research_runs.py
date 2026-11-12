@@ -15,6 +15,74 @@ from app.research_analysis import AnalysisInterrupted
 from app.research_verification import REVIEW_SYSTEM_PROMPT
 
 
+def test_provisional_html_calculation_remains_partial_through_export_and_edit(monkeypatch):
+    import base64
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    source_id = ''
+    class Provider:
+        name = 'table-provisional-lifecycle'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def fact(key, value, period):
+                return {'fact_id': key, 'label': 'Revenue', 'value': value, 'unit': 'USD million', 'currency': 'USD',
+                        'period': period, 'citation': {'source_id': source_id, 'quotation': 'Revenue | 100 | 80'}}
+            return {'claims': [{'text': 'Revenue is reported.', 'citations': [
+                        {'source_id': source_id, 'quotation': 'Revenue is reported.'}]}],
+                    'facts': [fact('current', '100', 'Fiscal year ended July 27, 2024'),
+                              fact('prior', '80', 'Fiscal year ended July 29, 2023')],
+                    'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}, 20
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    original_analyze = api.analyze
+    def without_diagnostic_wording(*args, **kwargs):
+        from dataclasses import replace
+        return replace(original_analyze(*args, **kwargs), limitations=[])
+    # Completion must depend on input status, not matching a warning string.
+    monkeypatch.setattr(api, 'analyze', without_diagnostic_wording)
+    client = TestClient(api.app)
+    reg = client.post('/v1/auth/local/register', json={'email': f'provisional-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + reg['access_token']}
+    html = ('<p>Revenue is reported.</p><table><tr><th colspan="2">Years Ended</th>'
+            '<th colspan="2">July 27, 2024</th><th colspan="2">July 29, 2023</th></tr>'
+            '<tr><td colspan="2">Revenue</td><td colspan="2">100</td><td colspan="2">80</td></tr></table>')
+    source_id = client.post('/v2/research/sources/html', headers=headers, json={'title': 'Report',
+        'html_base64': base64.b64encode(html.encode()).decode(),
+        'permissions': {'store': True, 'model_input': True, 'display': True, 'export': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    run = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'provisional-html'},
+        json={'parent_version_id': topic['versions'][0]['version_id'], 'require_counterarguments': False})
+    assert run.status_code == 202
+    op = run.json()['operation']['operation_id']
+    for _ in range(100):
+        status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    original = client.get(path, headers=headers).json()['versions'][-1]
+    assert original['content']['run']['status'] == 'partial'
+    calculation = original['content']['calculations'][0]
+    assert calculation['value'] == '25.00' and calculation['input_status'] == 'unverifiable'
+    assert any('provisional' in item for item in original['content']['limitations'])
+    export = client.get(path + '/versions/' + original['version_id'] + '/export', headers=headers)
+    assert export.status_code == 200
+    assert export.json()['version']['content']['calculations'][0]['input_status'] == 'unverifiable'
+    edited = deepcopy(original['content'])
+    edited['facts'][0]['period'] = 'Fiscal year ended July 28, 2024'
+    edited['facts'][0]['table_structure_alignment'] = {'status': 'matched'}
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': original['version_id'], 'content': edited})
+    assert saved.status_code == 201, saved.text
+    latest = saved.json()['versions'][-1]
+    assert 'table_structure_alignment' not in latest['content']['facts'][0]
+    assert latest['content']['calculations'][0]['input_status'] == 'unverifiable'
+    assert saved.json()['versions'][-2]['content']['facts'][0]['table_structure_alignment']['status'] == 'matched'
+    assert client.post(path + '/facts/confirm-table', headers=headers,
+        json={'parent_version_id': latest['version_id'], 'fact_id': 'current'}).status_code == 422
+    assert client.post(path + '/calculations/recalculate', headers=headers,
+        json={'parent_version_id': latest['version_id'], 'calculation_index': 0}).status_code == 422
+
+
 @pytest.mark.parametrize("required,bad_citation,expected", [
     (True, False, "partial"),
     (False, False, "completed"),

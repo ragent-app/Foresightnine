@@ -42,3 +42,5 @@
 [253 号记录](253-html-table-original-structure.md)补充对保存 HTML 原件的单元格与跨列追溯；不受支持的结构拒绝确认，财务含义和研究结论仍需核验。
 
 [254 号记录](254-provisional-html-table-calculation.md)使用原件结构生成带未核验输入标记的暂定计算；旧 Cisco 模型输出离线重放得到 −5.61%，不代表独立测试或语义验收通过。
+
+[255 号记录](255-provisional-calculation-lifecycle.md)补充暂定计算的部分完成、导出与编辑边界，以及表格确认时的原件日期冲突检查。

@@ -482,6 +482,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
                 return "missing_or_ambiguous"
             if (candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or
                 candidates[0].get("quotation_match") == "table_markup_expanded" and not table_user_confirmed(candidates[0]) or
+                isinstance(candidates[0].get("table_structure_alignment"), dict) and candidates[0]["table_structure_alignment"].get("status") == "conflict" or
                 candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation"))):
                 return "unverifiable"
