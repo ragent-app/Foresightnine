@@ -14,6 +14,7 @@ export interface ResearchClaim {
   suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];
   citation_context_warnings?: { source_id: string; citation_index: number; context_metric: string; context_character_start?: number; context_character_end?: number; status: string }[];
   uncited_percentages?: string[];
+  uncited_basis_points?: string[];
   suggested_calculations?: { calculation_index: number; claimed_percentage: string; formula_id: string; input_fact_ids: string[]; status: string }[];
   uncited_amounts?: string[];
   uncited_fact_values?: string[];

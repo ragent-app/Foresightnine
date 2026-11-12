@@ -323,3 +323,24 @@ def test_unfinished_quoted_phrase_is_flagged_without_claiming_it_is_false():
         "location": {"character_start": text.index("nonresidential"), "character_end": len(text)}}]}
     assert all(item["context_metric"] != "unfinished quoted phrase" for item in
                flag_citation_subject_context([complete], [source])[0].get("citation_context_warnings", []))
+
+
+def test_fractional_rate_levels_are_not_percentage_point_changes():
+    for text in ('目标利率区间上调至 1/4 至 1/2 个百分点。',
+                 '目标区间为1-1/4至1-1/2个百分点。',
+                 'The target range is 1/4 to 1/2 percentage points.'):
+        assert flag_rate_level_point_warnings([{'text': text}])[0]['rate_unit_warnings']
+    for text in ('目标区间上调了1/4至1/2个百分点。', '目标区间为1/4至1/2%。'):
+        assert not flag_rate_level_point_warnings([{'text': text}])[0].get('rate_unit_warnings')
+
+
+def test_basis_points_require_equivalent_explicit_quotation():
+    from app.research_evidence import flag_uncited_basis_points
+    item = {'text': '政策加息25个基点。', 'citations': [{'quotation': 'ongoing increases will be appropriate'}]}
+    assert flag_uncited_basis_points([item])[0]['uncited_basis_points'] == ['25个基点']
+    for quote in ('raised by 25 basis points', 'raised by 0.25 percentage point', 'raised by 1/4 percentage point', '增加25个基点'):
+        assert not flag_uncited_basis_points([{**item, 'citations': [{'quotation': quote}]}])[0].get('uncited_basis_points')
+    for quote in ('target range is 0.25 percent', 'raised by 0.5 percentage point', 'rates changed in 2025'):
+        assert flag_uncited_basis_points([{**item, 'citations': [{'quotation': quote}]}])[0]['uncited_basis_points'] == ['25个基点']
+    stale = {**item, 'text': 'No rate change stated', 'uncited_basis_points': ['old']}
+    assert not flag_uncited_basis_points([stale])[0].get('uncited_basis_points')

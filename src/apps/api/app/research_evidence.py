@@ -22,7 +22,9 @@ _ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "千亿": Decimal("100000")
                        "千": Decimal("0.001"), "百": Decimal("0.0001"), "": Decimal("0.000001")}
 _ZH_PUBLICATION = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*年\s*(1[0-2]|0?[1-9])\s*月(?:\s*(3[01]|[12]\d|0?[1-9])\s*日)?\s*(?:发布|公布|发表|刊登)")
 _EN_PUBLICATION = re.compile(r"\b(?:published|released|issued)\s+(?:on|in)\s+((?:19|20)\d{2})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?(?![-\d])", re.IGNORECASE)
-_RATE_NUMBER = r"\d+(?:-\d+/\d+|\.\d+)?"
+_RATE_NUMBER = r"\d+(?:-\d+/\d+|/\d+|\.\d+)?"
+_BASIS_POINTS = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?\d+(?:\.\d+)?)\s*(?:个\s*)?(?:基点|basis\s+points?\b|bps\b)", re.IGNORECASE)
+_POINTS = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.\d+)?))\s*(?:个百分点|percentage\s+points?\b)", re.IGNORECASE)
 _RATE_LEVEL_POINTS = re.compile(
     rf"(?:利率目标区间|目标利率区间|联邦基金利率目标区间|利率区间|目标区间|"
     rf"(?:interest\s+rate|federal\s+funds\s+rate|target)\s+(?:target\s+)?range)"
@@ -187,9 +189,47 @@ def flag_rate_level_point_warnings(claims: list[dict]) -> list[dict]:
         if isinstance(text, str) and len(text) <= 3000:
             warnings = [{"claimed_text": match.group(0), "status": "requires_review"}
                         for match in _RATE_LEVEL_POINTS.finditer(text)
-                        if not _RATE_CHANGE.search(match.group("between"))][:5]
+                        if (not _RATE_CHANGE.search(match.group("between")) or
+                            re.search(r"(?:至|到|\bto)\s*$", match.group("between"), re.IGNORECASE))][:5]
             if warnings:
                 entry["rate_unit_warnings"] = warnings
+        output.append(entry)
+    return output
+
+
+def flag_uncited_basis_points(claims: list[dict]) -> list[dict]:
+    """Flag basis-point figures missing from quotations, not semantic support."""
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("uncited_basis_points", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
+            output.append(entry)
+            continue
+        quoted: set[Decimal] = set()
+        for citation in citations:
+            quote = citation.get("quotation") if isinstance(citation, dict) else None
+            if not isinstance(quote, str):
+                continue
+            for match in _BASIS_POINTS.finditer(quote):
+                if len(match.group(1)) <= 20:
+                    quoted.add(Decimal(match.group(1).replace("−", "-")))
+            for match in _POINTS.finditer(quote):
+                if len(match.group(1)) > 20:
+                    continue
+                values = _quoted_numbers(match.group(1).replace("−", "-"))
+                if len(values) == 1:
+                    quoted.add(next(iter(values)) * 100)
+        missing = []
+        for match in _BASIS_POINTS.finditer(text):
+            value = Decimal(match.group(1).replace("−", "-")) if len(match.group(1)) <= 20 else None
+            if (value is None or value not in quoted) and match.group(0) not in missing:
+                missing.append(match.group(0))
+            if len(missing) == 5:
+                break
+        if missing:
+            entry["uncited_basis_points"] = missing
         output.append(entry)
     return output
 

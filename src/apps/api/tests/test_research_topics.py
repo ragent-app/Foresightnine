@@ -200,3 +200,25 @@ def test_recalculation_rejects_an_explicitly_ambiguous_fact_location(monkeypatch
     response = client.post(path + "/calculations/recalculate", headers=headers,
                            json={"parent_version_id": version["version_id"], "calculation_index": 0})
     assert response.status_code == 422
+
+
+def test_basis_point_warnings_recompute_after_edit_and_preserve_history(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'basis-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Statement', 'text': 'The rate increased by 0.25 percentage point. Further increases are anticipated.', 'permissions': {'store': True, 'display': True, 'model_input': True}}).json()
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What happened?', 'source_ids': [source['source_id']]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    content = {'claims': [{'text': 'Rates increased by 25 basis points.', 'citations': [{'source_id': source['source_id'], 'quotation': 'Further increases are anticipated.'}]}]}
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': content})
+    assert saved.status_code == 201, saved.text
+    current = saved.json()['versions'][-1]
+    assert current['content']['claims'][0]['uncited_basis_points'] == ['25 basis points']
+    edited = deepcopy(current['content'])
+    edited['claims'][0]['citations'] = [{'source_id': source['source_id'], 'quotation': 'increased by 0.25 percentage point'}]
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': edited})
+    assert saved.status_code == 201, saved.text
+    assert not saved.json()['versions'][-1]['content']['claims'][0].get('uncited_basis_points')
+    assert saved.json()['versions'][-2]['content']['claims'][0]['uncited_basis_points'] == ['25 basis points']

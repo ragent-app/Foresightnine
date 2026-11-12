@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v10"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v11"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -184,3 +184,9 @@ def test_review_keeps_metric_prefix_and_qualifier_when_quotation_splits_subject(
     complete_item = claim(quotation=complete, location={'character_start': full_start, 'character_end': full_start + len(complete)})
     full_batch = prepare_support_review([complete_item], [report], 3000)
     assert 'required_context_start' not in full_batch.segments[0]
+
+
+def test_review_does_not_accept_unquoted_basis_point_figures():
+    item = {**claim(), 'text': 'Rates increased by 25 basis points'}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omissions[0]['reason'] == 'not_reviewable'
