@@ -1,0 +1,95 @@
+{
+  "manifest_sha256": "0c74796f71702a63cc5f909994c6fdd16702f6d7b4bdb5177aabb9e4f7e95411",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "思科 2024 财年总收入为 53,803 百万美元（截至 2024 年 7 月 27 日的财年）。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Total revenue | [colspan=2] 53,803"
+          }
+        ]
+      },
+      {
+        "text": "思科 2023 财年总收入为 56,998 百万美元（截至 2023 年 7 月 29 日的财年）。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Total revenue | [colspan=2] 56,998"
+          }
+        ]
+      },
+      {
+        "text": "报表注明单位为百万美元（每股金额除外）。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "(in millions, except per-share amounts)"
+          }
+        ]
+      },
+      {
+        "text": "期间为截至 2024 年 7 月 27 日和 2023 年 7 月 29 日的财年。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Years Ended | July 27, 2024 | July 29, 2023"
+          }
+        ]
+      },
+      {
+        "text": "分项：2024 财年产品收入 39,253、服务收入 14,550；2023 财年产品收入 43,142、服务收入 13,856（百万美元）。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Product | $ | 39,253 | $ | 43,142 | Services | [colspan=2] 14,550 | [colspan=2] 13,856"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "所提供的节选仅为合并经营报表部分，未包含管理层讨论与分析（MD&A）中解释收入同比变化原因的原文，因此无法引用原文说明收入变化的具体限制或原因；此为资料缺口，不构成任何证明。",
+      "来源标注为 partial，表格经过压缩转换（colspan 结构），列对应关系虽可读但建议核对原始文件。",
+      "文件日期为申报的期间日期，未经验证；本分析依据声明的财年结束日。"
+    ],
+    "facts": [
+      {
+        "fact_id": "rev-2024",
+        "label": "total_revenue_fy2024",
+        "value": "53803",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2024 (year ended July 27, 2024)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Total revenue | [colspan=2] 53,803"
+        }
+      },
+      {
+        "fact_id": "rev-2023",
+        "label": "total_revenue_fy2023",
+        "value": "56998",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "FY2023 (year ended July 29, 2023)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Total revenue | [colspan=2] 56,998"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "rev-2024",
+        "second_fact_id": "rev-2023"
+      }
+    ]
+  },
+  "reported_tokens": 3009,
+  "prompt_sha256": "41c91088538ab09ef6cb7bbbc88359724794ad025f8311a9ba1b8fc8efa0faea",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

@@ -193,7 +193,7 @@ def test_direction_context_blocks_treating_a_saved_calculation_as_verified():
     assert calculation_input_status(calculation, [current, {**prior, "quotation_match": "table_markup_expanded"}]) == "unverifiable"
 
 
-@pytest.mark.parametrize("unit", ["percent (annual rate)", "percent, annualized", "percentage (quarterly rate)", "百分比", "annual percent", "annualized percentage", "annualised percent", "percent annual rate", "percent at an annual rate", "percentage annualised"])
+@pytest.mark.parametrize("unit", ["percent (annual rate)", "percent, annualized", "percentage (quarterly rate)", "百分比", "annual percent", "annualized percentage", "annualised percent", "percent annual rate", "percent at an annual rate", "percentage annualised", "percent, seasonally adjusted annual rate", "percent at a seasonally adjusted annual rate", "percent seasonally adjusted annualized rate"])
 def test_qualified_percentage_difference_is_percentage_points(unit):
     current = fact("current", "3.2", "2023", unit=unit, currency=None)
     prior = fact("prior", "2.9", "2023", unit=unit, currency=None)
@@ -213,6 +213,18 @@ def test_legacy_annual_percent_difference_requires_recalculation():
     assert legacy_percentage_difference_unit(legacy)
     assert calculation_input_status(legacy, [current, prior]) == 'unverifiable'
     assert not legacy_percentage_difference_unit(corrected)
+
+
+def test_saved_seasonally_adjusted_percent_difference_is_not_misrepresented():
+    from app.research_calculations import legacy_percentage_difference_unit
+    unit = 'percent, seasonally adjusted annual rate'
+    current = fact('q4', '2.7', '2022 Q4', unit=unit, currency=None)
+    prior = fact('q3', '3.2', '2022 Q3', unit=unit, currency=None)
+    correct = calculate(CalculationRequest(formula='difference', first=current, second=prior))
+    assert correct['value'] == '-0.50' and correct['unit'] == 'percentage points'
+    legacy = {**correct, 'formula_version':'1', 'unit':unit}
+    assert legacy_percentage_difference_unit(legacy)
+    assert calculation_input_status(legacy, [current, prior]) == 'unverifiable'
 
 
 def test_annual_rate_suffix_difference_from_gdp_regression():

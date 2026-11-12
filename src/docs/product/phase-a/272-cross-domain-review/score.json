@@ -1,0 +1,64 @@
+{
+  "results": [
+    {
+      "task": "COMPANY_CISCO_2024",
+      "set": "development_recheck",
+      "status": "completed",
+      "checks": {
+        "all_claims_located": false,
+        "no_claim_warnings": false,
+        "counterargument_cited": false,
+        "research_completed": false,
+        "budget": true,
+        "revenue_current": true,
+        "revenue_previous": false,
+        "calculation": false
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 3539,
+      "semantic_support": "requires separate source-level assessment"
+    },
+    {
+      "task": "MACRO_GDP_2022Q4",
+      "set": "development_recheck",
+      "status": "completed",
+      "checks": {
+        "all_claims_located": true,
+        "no_claim_warnings": false,
+        "counterargument_cited": true,
+        "research_completed": false,
+        "budget": true,
+        "q4": true,
+        "q3": true,
+        "services": true,
+        "goods_counter": false
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 3112,
+      "semantic_support": "requires separate source-level assessment"
+    },
+    {
+      "task": "POLICY_FOMC_201706",
+      "set": "development_recheck",
+      "status": "completed",
+      "checks": {
+        "all_claims_located": true,
+        "no_claim_warnings": false,
+        "counterargument_cited": true,
+        "research_completed": false,
+        "budget": true,
+        "target_lower": true,
+        "target_upper": true,
+        "dissenter": false,
+        "preferred_unchanged": false
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 2593,
+      "semantic_support": "requires separate source-level assessment"
+    }
+  ],
+  "mechanical_pass": false,
+  "known_tokens": 9244,
+  "unknown_usage": false,
+  "semantic_support": "not established by numeric or lexical matches"
+}

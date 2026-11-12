@@ -1,0 +1,78 @@
+{
+  "manifest_sha256": "0c74796f71702a63cc5f909994c6fdd16702f6d7b4bdb5177aabb9e4f7e95411",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The FOMC decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "the Committee decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent"
+          }
+        ]
+      },
+      {
+        "text": "Neel Kashkari dissented, preferring to maintain the existing target range for the federal funds rate.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Voting against the action was Neel Kashkari, who preferred at this meeting to maintain the existing target range for the federal funds rate."
+          }
+        ]
+      },
+      {
+        "text": "A key uncertainty about the future policy path is inflation: the Committee expects inflation to remain somewhat below 2 percent in the near term and is monitoring inflation developments closely, while the pace of future adjustments depends on realized and expected economic conditions.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Near-term risks to the economic outlook appear roughly balanced, but the Committee is monitoring inflation developments closely."
+          }
+        ]
+      },
+      {
+        "text": "The Committee will base the timing and size of future rate adjustments on an assessment of realized and expected economic conditions relative to its objectives.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "In determining the timing and size of future adjustments to the target range for the federal funds rate, the Committee will assess realized and expected economic conditions"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "A counterpoint to the rate hike is that inflation remained soft — market-based measures of inflation compensation were low and inflation was expected to stay below 2 percent near term — which is the implied concern behind Kashkari's dissent to hold rates steady. The dissent itself is the cited opposing evidence in the document.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Market-based measures of inflation compensation remain low; survey-based measures of\nlonger-term inflation expectations are little changed, on balance."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source excerpts are partial; the full statement is not provided.",
+      "The exact reason (e.g., inflation concern) Kashkari gave for his dissent is not stated in the source; only his preferred action is documented.",
+      "The publication date of June 14, 2017 is declared in the source metadata, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr_range",
+        "label": "federal funds rate target range",
+        "value": "1 to 1-1/4 percent",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "June 14, 2017 decision (effective June 15, 2017)",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the Committee decided to raise the target range for the federal funds rate to 1 to 1-1/4 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1862,
+  "prompt_sha256": "76562237740b708dda6af64f94e3b7191d1d48e32a435ca96691e1ad157477bd",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

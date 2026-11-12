@@ -71,11 +71,14 @@ _SOURCE_ABSENCE = re.compile(
     r"(?:sources?|documents?|reports?|filings?|releases?)\b|"
     r"\bnone\s+of\s+(?:the\s+|these\s+)?(?:sources|documents|reports|filings|releases)\s+"
     r"(?:provides?|includes?|contains?|mentions?|states?|shows?|discloses?)\b|"
+    r"\bno\s+(?:(?:available|provided|supplied)\s+)?(?:source|document|report|filing|release)\s+"
+    r"(?:disputes?|contradicts?|mentions?|confirms?|supports?|provides?|includes?|contains?|states?|shows?|discloses?)\b|"
     r"(?:来源|來源|资料|資料|文件|报告|報告|原文|公告)(?:中)?(?:并|並)?(?:没有|沒有|未|不曾|不)"
     r"(?:提供|包含|提及|说明|說明|披露|列出|展示|给出|給出)", re.IGNORECASE)
 
 _PLURAL_SOURCE_SCOPE = re.compile(
     r"\b(?:sources|documents|reports|filings|releases)\b|"
+    r"\bno\s+(?:(?:available|provided|supplied)\s+)?(?:source|document|report|filing|release)\b|"
     r"(?:所有|全部|这些|這些|各个|各個)(?:来源|來源|资料|資料|文件|报告|報告|原文|公告)", re.IGNORECASE)
 
 

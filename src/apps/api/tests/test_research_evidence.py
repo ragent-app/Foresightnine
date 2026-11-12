@@ -45,6 +45,8 @@ def test_plural_source_absence_requires_coverage_of_all_sources_not_only_cited_o
     assert flag_partial_source_absence([claim], [first, withheld], [full_first, full_second])[0]['source_scope_absence_unverified']
     none = {**claim, 'text':'None of the documents mention an opposing view.'}
     assert flag_partial_source_absence([none], [first, second], [full_first])[0]['source_scope_absence_unverified']
+    none = {**claim, 'text':'No source disputes that revision.'}
+    assert flag_partial_source_absence([none], [first, second], [full_first])[0]['source_scope_absence_unverified']
     singular = {**claim, 'text':'The source does not mention an opposing view.'}
     assert not flag_partial_source_absence([singular], [first, second], [full_first])[0].get('source_scope_absence_unverified')
 
