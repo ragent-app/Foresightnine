@@ -106,7 +106,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
                                     prepare_isolated_support_reviews, parse_isolated_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_topics import ResearchContent
-from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
+from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
 from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
 
@@ -2534,8 +2534,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             for candidate in discovered:
                 parts = urlsplit(candidate["url"])
                 if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov"}
-                        or parts.username is not None or parts.password is not None or parts.port not in (None, 443)
-                        or parts.path.casefold().endswith(".pdf")):
+                        or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
                     continue
                 remaining = deadline - monotonic()
                 if remaining <= 0:
@@ -2553,7 +2552,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
                         break
                     official_fetch_calls = 1
-                    fetched = fetch_official_text(source_request, timeout_seconds=min(15.0, remaining))
+                    if parts.path.casefold().endswith(".pdf"):
+                        fetched = fetch_official_pdf(source_request, timeout_seconds=min(15.0, remaining))
+                        retrieval = {"retrieval_method": "user_pdf", "original_pdf_base64": fetched.original_pdf_base64,
+                                     "pdf_text_order": "layout"}
+                    else:
+                        fetched = fetch_official_text(source_request, timeout_seconds=min(15.0, remaining))
+                        retrieval = {"retrieval_method": "official_html", "original_html_base64": fetched.original_html_base64}
                     _raise_if_operation_cancelled(operation_id)
                     # This planned ID is part of the immutable run-input
                     # receipt before the request, so a saved source remains
@@ -2561,14 +2566,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     source_id = "source_" + sha256((operation_id + ":official-source:0").encode()).hexdigest()[:32]
                     source = research_sources.create(account.account_id, SourceInput(title=source_request.title,
                         text=fetched.text, url=source_request.url, kind="official", permissions=permissions),
-                        retrieval_method="official_html", response_sha256=fetched.response_sha256,
-                        response_content_type=fetched.content_type, original_html_base64=fetched.original_html_base64, source_id=source_id)
+                        **retrieval, response_sha256=fetched.response_sha256,
+                        response_content_type=fetched.content_type, source_id=source_id)
                     sources.append(source)
                     source_ids.append(source.source_id)
                     official_fetch_status = "completed"
                     candidate["status"] = "retrieved_unverified"
                     candidate["source_id"] = source.source_id
-                    discovery_notes.append("The official page was retrieved with user-granted model permission; its content and dates remain unverified.")
+                    discovery_notes.append("The official document was retrieved with user-granted model permission; its content and dates remain unverified.")
                 except (FetchFailure, ValidationError, ValueError, ApiProblem):
                     _raise_if_operation_cancelled(operation_id)
                     official_fetch_status = "failed"

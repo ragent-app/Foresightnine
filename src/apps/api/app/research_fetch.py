@@ -10,7 +10,7 @@ import re
 from typing import Callable
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from .openai_compatible import HttpResponse, _TransportFailure, _TransportTimeout, _default_transport
 from .research_sources import SourcePermissions
@@ -155,3 +155,56 @@ def fetch_official_text(request: FetchSourceRequest,
     original = response.body.encode("utf-8")
     return FetchedText(text=text, response_sha256=sha256(original).hexdigest(), content_type=content_type,
                        original_html_base64=base64.b64encode(original).decode("ascii") if content_type == "text/html" else None)
+
+
+@dataclass(frozen=True)
+class FetchedPdf:
+    text: str
+    response_sha256: str
+    content_type: str
+    original_pdf_base64: str
+
+
+def fetch_official_pdf(request: FetchSourceRequest, *, timeout_seconds: float = 15.0,
+                       transport: Callable[..., object] | None = None) -> FetchedPdf:
+    """Retrieve and extract one bounded official PDF without redirects."""
+    from time import monotonic
+    from .openai_compatible import _default_binary_transport
+    from .research_uploads import MAX_PDF_BYTES, PdfFailure, PdfUploadRequest, extract_pdf
+    if not request.permissions.store:
+        raise FetchFailure("source_permission_unknown")
+    if not 0 < timeout_seconds <= 15:
+        raise FetchFailure("source_timeout")
+    if urlsplit(str(request.url)).hostname not in {"www.bea.gov", "www.federalreserve.gov"}:
+        raise FetchFailure("source_unavailable")
+    deadline = monotonic() + timeout_seconds
+    send = transport or (lambda method, address, headers, body, timeout:
+                         _default_binary_transport(method, address, headers, body, timeout,
+                                                   max_response_bytes=MAX_PDF_BYTES))
+    try:
+        response = send("GET", str(request.url), {"Accept": "application/pdf",
+            "User-Agent": "ForesightNine-Research/1.0"}, b"", timeout_seconds)
+    except _TransportTimeout as error:
+        raise FetchFailure("source_timeout") from error
+    except (_TransportFailure, OSError) as error:
+        raise FetchFailure("source_unavailable") from error
+    if response.status_code == 429:
+        raise FetchFailure("source_rate_limited")
+    if not 200 <= response.status_code < 300:
+        raise FetchFailure("source_unavailable")
+    if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "application/pdf":
+        raise FetchFailure("source_format_unsupported")
+    raw = response.body
+    if not isinstance(raw, bytes) or len(raw) > MAX_PDF_BYTES or not raw.startswith(b"%PDF-"):
+        raise FetchFailure("source_invalid")
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise FetchFailure("source_timeout")
+    try:
+        extracted = extract_pdf(PdfUploadRequest(title=request.title,
+            pdf_base64=base64.b64encode(raw).decode("ascii"), permissions=request.permissions,
+            text_order="layout"), timeout_seconds=min(15.0, remaining))
+    except (PdfFailure, ValidationError) as error:
+        raise FetchFailure("source_timeout" if isinstance(error, PdfFailure) and error.code == "pdf_timeout" else "source_invalid") from error
+    return FetchedPdf(text=extracted.text, response_sha256=extracted.original_sha256,
+                      content_type="application/pdf", original_pdf_base64=extracted.original_base64)

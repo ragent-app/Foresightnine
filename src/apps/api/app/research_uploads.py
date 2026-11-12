@@ -143,7 +143,7 @@ class ExtractedPdf:
     original_sha256: str
 
 
-def extract_pdf(request: PdfUploadRequest) -> ExtractedPdf:
+def extract_pdf(request: PdfUploadRequest, *, timeout_seconds: float = 15.0) -> ExtractedPdf:
     if not request.permissions.store:
         raise PdfFailure("source_permission_unknown")
     try:
@@ -155,14 +155,16 @@ def extract_pdf(request: PdfUploadRequest) -> ExtractedPdf:
     if not _PDF_WORKERS.acquire(blocking=False):
         raise PdfFailure("pdf_busy")
     try:
-        text = _extract_text(raw, text_order=request.text_order)
+        text = _extract_text(raw, text_order=request.text_order, timeout_seconds=timeout_seconds)
     finally:
         _PDF_WORKERS.release()
     return ExtractedPdf(text=text, original_base64=base64.b64encode(raw).decode("ascii"),
                         original_sha256=sha256(raw).hexdigest())
 
 
-def _extract_text(raw: bytes, *, text_order: Literal["layout", "reading"] = "layout") -> str:
+def _extract_text(raw: bytes, *, text_order: Literal["layout", "reading"] = "layout", timeout_seconds: float = 15.0) -> str:
+    if not 0 < timeout_seconds <= 15:
+        raise PdfFailure("pdf_timeout")
     if text_order not in {"layout", "reading"}:
         raise PdfFailure("pdf_extraction_mode_invalid")
     extractor = shutil.which("pdftotext")
@@ -177,7 +179,7 @@ def _extract_text(raw: bytes, *, text_order: Literal["layout", "reading"] = "lay
             result = subprocess.run([limiter, "--as=536870912", "--cpu=10", f"--fsize={MAX_TEXT_BYTES + 1}",
                 "--", extractor, "-layout" if text_order == "layout" else "-raw", "-enc", "UTF-8", str(input_file), str(output_file)],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                timeout=15, check=False)
+                timeout=timeout_seconds, check=False)
         except subprocess.TimeoutExpired as error:
             raise PdfFailure("pdf_timeout") from error
         except OSError as error:

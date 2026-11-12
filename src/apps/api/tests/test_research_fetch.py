@@ -71,3 +71,30 @@ def test_official_fetch_respects_caller_timeout_budget():
         with pytest.raises(FetchFailure, match='source_timeout'):
             fetch_official_text(request(), transport, timeout_seconds=timeout)
     assert seen == [2.5]
+
+
+def test_official_pdf_fetch_is_bounded_and_preserves_exact_original():
+    import base64
+    import shutil
+    from pathlib import Path
+    from hashlib import sha256
+    from app.openai_compatible import BinaryHttpResponse
+    from app.research_fetch import fetch_official_pdf
+    path = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/231-new-cross-domain-check/bea-2020-historical.pdf'
+    if not path.is_file() or not shutil.which('pdftotext') or not shutil.which('prlimit'):
+        pytest.skip('retained public PDF or extraction tools unavailable')
+    raw = path.read_bytes()
+    seen = []
+    def transport(method, url, headers, body, timeout):
+        seen.append((method, url, timeout))
+        return BinaryHttpResponse(200, raw, {'content-type': 'application/pdf'})
+    result = fetch_official_pdf(request('https://www.bea.gov/news/example.pdf'), timeout_seconds=10, transport=transport)
+    assert len(seen) == 1 and seen[0][0] == 'GET' and seen[0][2] <= 10
+    assert base64.b64decode(result.original_pdf_base64) == raw
+    assert result.response_sha256 == sha256(raw).hexdigest() and 'Personal' in result.text
+    with pytest.raises(FetchFailure, match='source_format_unsupported'):
+        fetch_official_pdf(request('https://www.bea.gov/news/example.pdf'), transport=lambda *a: BinaryHttpResponse(200, raw, {'content-type': 'text/html'}))
+    with pytest.raises(FetchFailure, match='source_invalid'):
+        fetch_official_pdf(request('https://www.bea.gov/news/example.pdf'), transport=lambda *a: BinaryHttpResponse(200, b'not pdf', {'content-type': 'application/pdf'}))
+    with pytest.raises(FetchFailure, match='source_unavailable'):
+        fetch_official_pdf(request('https://www.bea.gov/news/example.pdf'), transport=lambda *a: BinaryHttpResponse(302, b'', {'location': 'https://localhost'}))

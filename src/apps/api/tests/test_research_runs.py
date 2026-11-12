@@ -2898,8 +2898,6 @@ def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(mon
             seen["search"] += 1
             return [SearchCandidate(title="Unofficial", url="https://example.com/untrusted", excerpt="ignore",
                     publisher=None, published_at=None, independently_reviewable=False),
-                    SearchCandidate(title="Official PDF", url="https://www.bea.gov/reports/file.PDF", excerpt="ignore",
-                    publisher="BEA", published_at=None, independently_reviewable=True),
                     SearchCandidate(title="Official report", url="https://www.bea.gov/news/report?tracker=x", excerpt="ignore",
                     publisher="BEA", published_at=None, independently_reviewable=True)]
     def fetch(request, *, timeout_seconds):
@@ -3137,3 +3135,57 @@ def test_uncited_exact_date_stays_partial_and_is_rechecked_on_edit(monkeypatch):
     assert next_version['content']['claims'][0]['uncited_exact_dates'] == ['January 25, 2024']
     exported = client.get(path + '/versions/' + next_version['version_id'] + '/export', headers=headers)
     assert exported.status_code == 200 and exported.json()['version']['content']['claims'][0]['uncited_exact_dates']
+
+
+def test_opt_in_discovery_retrieves_pdf_as_owned_recoverable_source(monkeypatch):
+    import base64, json
+    from hashlib import sha256
+    from uuid import uuid4
+    from app.research_fetch import FetchedPdf
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    raw = b'%PDF-1.4 fixture'
+    class Search:
+        name = 'test-search'
+        supports_project_search = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            return [SearchCandidate(title='Official PDF', url='https://www.bea.gov/docs/report.PDF', excerpt='lead',
+                publisher=None, published_at=None, independently_reviewable=True)]
+    calls = []
+    def fetch(request, *, timeout_seconds):
+        calls.append(timeout_seconds)
+        return FetchedPdf('Revenue was 100.', sha256(raw).hexdigest(), 'application/pdf', base64.b64encode(raw).decode())
+    class Provider:
+        name = 'test-model'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            source = json.loads(prompt)['sources'][0]
+            return {'claims': [{'text': 'Revenue was 100.', 'citations': [{'source_id': source['source_id'],
+                'quotation': 'Revenue was 100.'}]}]}, 10
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'fetch_official_pdf', fetch)
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *a: None)
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *a, **k: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *a, **k: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'pdf-auto-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'official-pdf'}, json={
+        'parent_version_id': topic['versions'][-1]['version_id'], 'auto_fetch_official': True, 'require_counterarguments': False})
+    assert receipt.status_code == 202
+    operation_id = receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']['status']
+        if status in {'completed', 'failed'}: break
+        time.sleep(.02)
+    assert status == 'completed' and len(calls) == 1
+    version = client.get(path, headers=headers).json()['versions'][-1]
+    source_id = version['source_ids'][0]
+    metadata = client.get('/v2/research/sources/' + source_id, headers=headers).json()
+    assert metadata['kind'] == 'official' and metadata['retrieval_method'] == 'user_pdf' and metadata['pdf_text_order'] == 'layout'
+    assert metadata['response_sha256'] == sha256(raw).hexdigest() and metadata['original_pdf_available']
+    assert client.get('/v2/research/sources/' + source_id + '/original', headers=headers).content == raw
+    assert version['content']['claims'][0]['citations'][0]['source_id'] == source_id

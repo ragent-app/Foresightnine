@@ -92,6 +92,13 @@ class HttpResponse:
     headers: Mapping[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class BinaryHttpResponse:
+    status_code: int
+    body: bytes
+    headers: Mapping[str, str] = field(default_factory=dict)
+
+
 class _TransportFailure(OSError):
     """Internal transport error whose text is intentionally not exposed."""
 
@@ -444,7 +451,7 @@ class OpenAICompatibleSettings:
         )
 
 
-def _default_transport(
+def _default_binary_transport(
     method: str,
     url: str,
     headers: Mapping[str, str],
@@ -453,7 +460,7 @@ def _default_transport(
     *,
     allow_private_network: bool = False,
     max_response_bytes: int = _MAX_RESPONSE_BYTES,
-) -> HttpResponse:
+) -> BinaryHttpResponse:
     if not 1 <= max_response_bytes <= 5_000_000:
         raise _TransportFailure("invalid response limit")
     parsed = urlsplit(url)
@@ -506,14 +513,10 @@ def _default_transport(
         if len(content) > max_response_bytes:
             raise _TransportFailure("response too large")
         if response.status < 200 or response.status >= 300:
-            return HttpResponse(response.status, "", {str(key).lower(): str(value) for key, value in response.headers.items()})
-        try:
-            decoded = content.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise _TransportFailure() from error
-        return HttpResponse(
+            return BinaryHttpResponse(response.status, b"", {str(key).lower(): str(value) for key, value in response.headers.items()})
+        return BinaryHttpResponse(
             response.status,
-            decoded,
+            content,
             {str(key).lower(): str(value) for key, value in response.headers.items()},
         )
     except (TimeoutError, socket.timeout) as error:
@@ -522,6 +525,19 @@ def _default_transport(
         raise _TransportFailure() from error
     finally:
         connection.close()
+
+
+def _default_transport(
+    method: str, url: str, headers: Mapping[str, str], body: bytes, timeout: float, *,
+    allow_private_network: bool = False, max_response_bytes: int = _MAX_RESPONSE_BYTES,
+) -> HttpResponse:
+    response = _default_binary_transport(method, url, headers, body, timeout,
+        allow_private_network=allow_private_network, max_response_bytes=max_response_bytes)
+    try:
+        decoded = response.body.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise _TransportFailure() from error
+    return HttpResponse(response.status_code, decoded, response.headers)
 
 
 def _endpoint(base_url: str) -> str:

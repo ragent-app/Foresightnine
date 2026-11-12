@@ -760,3 +760,26 @@ def test_research_input_budget_is_bounded_and_does_not_change_shared_provider(mo
         monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", raw)
         with pytest.raises(ProviderFailure, match="configuration"):
             provider.for_research()
+
+
+def test_binary_transport_preserves_bytes_without_weakening_text_or_size_limits(monkeypatch):
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', lambda *args, **kwargs: ('1.1.1.1',))
+    class Sock:
+        def settimeout(self, timeout): pass
+    class Response:
+        status = 200
+        headers = {'content-type': 'application/pdf'}
+        def read(self, size): return b'%PDF-\xff'[:size]
+    class Connection:
+        def __init__(self, host, port, address, timeout): self.sock = Sock()
+        def connect(self): pass
+        def request(self, *args, **kwargs): pass
+        def getresponse(self): return Response()
+        def close(self): pass
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', Connection)
+    result = openai_compatible._default_binary_transport('GET', 'https://example.org/file.pdf', {}, b'', 5)
+    assert result.body == b'%PDF-\xff' and result.headers['content-type'] == 'application/pdf'
+    with pytest.raises(openai_compatible._TransportFailure):
+        openai_compatible._default_transport('GET', 'https://example.org/file.pdf', {}, b'', 5)
+    with pytest.raises(openai_compatible._TransportFailure):
+        openai_compatible._default_binary_transport('GET', 'https://example.org/file.pdf', {}, b'', 5, max_response_bytes=4)
