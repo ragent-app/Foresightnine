@@ -2320,3 +2320,47 @@ def test_model_omitted_review_is_partial_and_returned_verdict_is_retained(monkey
     assert content["claims"][0]["support_review"]["independently_verified"] is False
     assert "support_review" not in content["claims"][1]
     assert versions[-2]["content"]["run"]["checkpoint"]=="generation"
+
+
+def test_pdf_line_hyphen_caution_survives_claim_edits(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "pdf-hyphen-edit-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {"claims":[{"text":"The estimates are hypothetical.", "citations":[{"source_id":source_id,
+                "quotation":"These are hypothetical estimates that may differ."}]}]}, 20
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    reg=client.post("/v1/auth/local/register",json={"email":f"hyphen-edit-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+reg["access_token"]}
+    original="These are hypothetical esti-\nmates that may differ."
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":original,
+        "permissions":{"store":True,"model_input":True,"display":True}}).json()["source_id"]
+    source=api.RESEARCH_SOURCES.get(source_id)
+    api.RESEARCH_SOURCES.put(source_id,source.model_copy(update={"retrieval_method":"user_pdf"}))
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Are estimates hypothetical?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    response=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"hyphen-edit"},json={
+        "parent_version_id":topic["versions"][0]["version_id"],"require_counterarguments":False})
+    assert response.status_code==202, response.text
+    op=response.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed"
+    version=client.get(path,headers=headers).json()["versions"][-1]
+    claim=version["content"]["claims"][0]
+    assert claim["support_status"]=="incomplete"
+    assert claim["citations"][0]["quotation_match"]=="pdf_line_hyphen_restored"
+    edited=deepcopy(version["content"]);edited["claims"][0]["text"]="The projected estimates may differ."
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
+    assert saved.status_code==201, saved.text
+    latest=saved.json()["versions"][-1]
+    assert latest["content"]["claims"][0]["support_status"]=="incomplete"
+    assert latest["content"]["claims"][0]["citations"][0]["quotation"]==original
+    assert latest["content"]["claims"][0]["authorship"]=="user"
+    assert saved.json()["versions"][-2]["content"]["claims"][0]["support_status"]=="incomplete"
