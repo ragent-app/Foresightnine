@@ -212,6 +212,12 @@ def test_html_table_context_preserves_offsets_and_permissions(monkeypatch):
     assert table['before'] + table['selected'] + table['after'] == text[table['context_start']:table['context_end']]
     assert not table['truncated_before']
     assert client.get(path, headers=other, params={"start": start, "end": start + 7}).status_code == 404
+    structure_path = '/v2/research/sources/' + item['source_id'] + '/table-structure'
+    structure = client.get(structure_path, headers=first, params={"start": start, "end": start + 7})
+    assert structure.status_code == 200 and structure.json()['status'] == 'available'
+    assert structure.json()['rows'][-1]['cells'][0]['text'] == 'Revenue'
+    assert client.get(structure_path, headers=other, params={"start": start, "end": start + 7}).status_code == 404
+    assert client.get(structure_path, headers=first, params={"start": start, "end": start + 10000}).status_code == 422
 
 
 def test_table_context_bounded_and_does_not_cross_narrative():

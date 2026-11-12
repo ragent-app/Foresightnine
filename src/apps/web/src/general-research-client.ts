@@ -6,6 +6,7 @@ export const MAX_RESEARCH_PDF_BYTES = 5_000_000;
 export interface SourcePosition { page?: number; character_start?: number; character_end?: number }
 export interface SourceLocation extends SourcePosition { status?: string; matches?: SourcePosition[]; truncated?: boolean; same_page_candidate_index?: number }
 export interface SourceContextResult { title: string; before: string; selected: string; after: string; page_start: number | null; page_end: number | null; table_context?: { context_start: number; context_end: number; before: string; selected: string; after: string; truncated_before: boolean } }
+export interface SourceTableStructure { status: "available" | "unavailable" | "busy" | "timeout"; source_sha256?: string; truncated_before?: boolean; rows?: { text: string; width: number; cells: { start: number; end: number; text: string; kind: "td" | "th" }[] }[] }
 export interface ResearchClaim {
   text: string;
   authorship?: string;
@@ -150,6 +151,8 @@ export function researchClient(baseUrl: string) {
       `/v2/research/topics/${encodeURIComponent(topicId)}/versions/${encodeURIComponent(versionId)}/sources/${encodeURIComponent(sourceId)}/text`),
     sourceContext: (sourceId: string, start: number, end: number) => request<SourceContextResult>(
       `/v2/research/sources/${encodeURIComponent(sourceId)}/context?start=${start}&end=${end}`),
+    sourceTableStructure: (sourceId: string, start: number, end: number) => request<SourceTableStructure>(
+      `/v2/research/sources/${encodeURIComponent(sourceId)}/table-structure?start=${start}&end=${end}`),
     createSource: (title: string, text: string, url: string, modelInput: boolean, allowExport: boolean, publishedAt: string, eventAt = "", revisedAt = "", isSimulated = false) =>
       request<{ source_id: string }>("/v2/research/sources", { title, text, ...(url ? { url } : {}),
         ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated,
