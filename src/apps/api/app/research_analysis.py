@@ -6,6 +6,8 @@ claim follows from it. This module has no network access or implicit provider.
 """
 from __future__ import annotations
 
+from array import array
+from bisect import bisect_right
 import json
 import re
 from collections import Counter
@@ -33,7 +35,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v10"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v11"
 
 
 class Citation(BaseModel):
@@ -197,6 +199,32 @@ def _select_window(text: str, question: str, length: int,
     return _select_windows(text, question, length, 1, should_stop)[0]
 
 
+def _compact_pdf_with_offsets(text: str, should_stop: Callable[[], bool] | None = None) -> tuple[str, Callable[[int], int]]:
+    """Compact horizontal PDF gaps while preserving every original boundary.
+
+    Each collapsed run becomes one tab. A normalized position maps to an
+    original boundary, never into the middle of a collapsed run. Arrays keep
+    the map bounded even for documents with many short whitespace runs.
+    """
+    ends, deltas = array("I"), array("I")
+    delta = 0
+    for index, match in enumerate(re.finditer(r"[ \t]{2,}", text)):
+        if index % 4096 == 0 and should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        ends.append(match.start() - delta + 1)
+        delta += match.end() - match.start() - 1
+        deltas.append(delta)
+    compacted = re.sub(r"[ \t]{2,}", "\t", text)
+
+    def original_offset(position: int) -> int:
+        if not 0 <= position <= len(compacted):
+            raise ValueError("Normalized offset is out of range")
+        index = bisect_right(ends, position)
+        return position + (deltas[index - 1] if index else 0)
+
+    return compacted, original_offset
+
+
 def _comparison_windows(text: str, question: str, size: int,
                         should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
     """Keep unequal comparison passages intact when extracted columns add whitespace.
@@ -310,6 +338,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
                            bool(re.search(r"\bannual\s+(?:real\s+)?(?:gdp|growth|revenue|income)\b", lower)))
     wants_month_comparison = any(term in lower for term in ("环比", "较上月", "month-on-month", "preceding month", "monthly"))
     wants_year_comparison = any(term in lower for term in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))
+    wants_monetary_amount = any(term in lower for term in ("金额", "美元", "dollar amount", "monetary amount"))
+    wants_previous_period = any(term in lower for term in ("前月", "上月", "preceding month", "previous month"))
     ranked: list[tuple[int, int]] = []
     seen: set[int] = set()
     # Cap scanning work for multi-megabyte material; unexamined ranges remain
@@ -320,6 +350,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
     # bounded anchors at explicit period phrases, retaining original offsets.
     for wanted, pattern in ((wants_month_comparison, r"\b(?:preceding|previous)\s+month\b"),
                             (wants_year_comparison, r"\bsame\s+month\s+one\s+year\b"),
+                            (wants_previous_period, r"\bchange\s+from\s+(?:the\s+)?preceding\s+(?:month|period)\b"),
                             (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b")):
         if wanted:
             for index, match in enumerate(re.finditer(pattern, text, re.IGNORECASE)):
@@ -348,6 +379,9 @@ def _select_windows(text: str, question: str, length: int, count: int,
         year_counts = [passage.count(year) for year in years]
         score = (sum(100 + min(count, 4) * 3 for count in counts if count) +
                  sum(25 + min(count, 4) * 5 for count in year_counts if count))
+        if (wants_monetary_amount and re.search(r"\b(?:millions?|billions?|trillions?)\s+of\s+dollars\b", passage) and
+                re.search(r"\b(?:dollars|income|revenue|sales)\b[^\n]{0,120}\d", passage)):
+            score += 250
         if wants_annual_levels and re.search(r"\b(?:annual (?:level|average)|calendar year|full[- ]year|year ended)\b", passage):
             score += 350
             if re.search(r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b", passage):
@@ -404,7 +438,11 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Share the source-character allowance so an early long filing does
         # not crowd every later comparison source out of the prompt.
         share = remaining // (len(eligible) - index)
-        max_size = min(len(source.text), MAX_SOURCE_CHARS, share)
+        if source.retrieval_method == "user_pdf":
+            selection_text, original_offset = _compact_pdf_with_offsets(source.text, should_stop)
+        else:
+            selection_text, original_offset = source.text, lambda value: value
+        max_size = min(len(selection_text), MAX_SOURCE_CHARS, share)
         # Character quotas alone do not partition the provider's byte budget:
         # Chinese text and JSON escaping can consume several bytes per character.
         # Reserve an equal share of the remaining serialized bytes for each
@@ -413,11 +451,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         source_budget_limit = current_bytes + max(0, max_prompt_chars - current_bytes) // (len(eligible) - index)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             if split and size >= 2:
-                comparisons = _comparison_windows(source.text, question, size, should_stop)
-                if comparisons is not None:
-                    return comparisons
-                return sorted(_select_windows(source.text, question, size // 2, 2, should_stop), key=lambda item: item[0])
-            return [_select_window(source.text, question, size, should_stop)]
+                windows = _comparison_windows(selection_text, question, size, should_stop)
+                if windows is None:
+                    windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop), key=lambda item: item[0])
+            else:
+                windows = [_select_window(selection_text, question, size, should_stop)]
+            return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
+                    for start, part in windows]
 
         def source_payload(parts: list[tuple[int, str]]) -> list[dict[str, Any]]:
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
@@ -435,10 +475,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Prefer the entire document when it fits. Otherwise choose the
         # number of windows before searching the byte budget, avoiding a
         # discontinuity when the available size happens to be below 1000.
-        if max_size == len(source.text) and fits([(0, source.text)]):
+        if max_size == len(selection_text) and fits([(0, source.text)]):
             selected = [(0, source.text)]
         else:
-            split = len(source.text) > 2000
+            split = len(selection_text) > 2000
             def budget_for(split_windows: bool) -> int:
                 lo, hi = 0, max_size
                 while lo < hi:
@@ -460,7 +500,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append(f"Source {source.source_id}: exceeds the current input budget; not processed.")
             continue
         model_text[source.source_id] = selected
-        remaining -= sum(len(passage) for _, passage in selected)
+        remaining -= sum(len(re.sub(r"[ \t]{2,}", "\t", passage)) if source.retrieval_method == "user_pdf" else len(passage)
+                         for _, passage in selected)
         processed.append(source)
         data["sources"].extend(source_payload(selected))
         if sum(len(passage) for _, passage in selected) < len(source.text):

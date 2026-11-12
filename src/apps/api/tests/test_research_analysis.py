@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, analyze, _comparison_windows, _select_window, _select_windows, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _select_window, _select_windows, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions
 
@@ -378,6 +378,18 @@ def test_pdf_horizontal_spacing_is_compacted_only_in_prompt_and_offsets_stay_ori
     assert citation["quotation"] == quote and citation["quotation_match"] == "whitespace_normalized"
     assert citation["location"]["character_end"] == len(quote)
     assert result.segments[0]["character_end"] == len(quote)
+
+
+def test_compacted_pdf_offsets_map_all_boundaries_back_to_original():
+    import re
+    original = "前  \t  📈  100\nQ\t\t3   end"
+    compacted, offset = _compact_pdf_with_offsets(original)
+    assert compacted == "前\t📈\t100\nQ\t3\tend"
+    for start in range(len(compacted) + 1):
+        for end in range(start, len(compacted) + 1):
+            assert re.sub(r"[ \t]{2,}", "\t", original[offset(start):offset(end)]) == compacted[start:end]
+    with pytest.raises(ValueError):
+        offset(len(compacted) + 1)
 
 
 def test_two_pdf_tables_keep_labels_and_values_under_shared_budget():

@@ -1,0 +1,50 @@
+{
+  "method": "ranked_nonoverlapping_windows_v11",
+  "kind": "offline selection only; no model call or rescoring",
+  "results": [
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 0,
+      "value_visible": true,
+      "segments": [
+        [
+          5491,
+          6053
+        ]
+      ]
+    },
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 1,
+      "value_visible": true,
+      "segments": [
+        [
+          5805,
+          6359
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 0,
+      "value_visible": true,
+      "segments": [
+        [
+          5510,
+          6134
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 1,
+      "value_visible": true,
+      "segments": [
+        [
+          5836,
+          6396
+        ]
+      ]
+    }
+  ]
+}
