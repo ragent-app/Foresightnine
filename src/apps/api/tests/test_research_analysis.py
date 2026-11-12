@@ -185,6 +185,7 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
         assert "missing evidence in limitations" in payload["evidence_guidance"]
         assert "one continuous source passage" in payload["evidence_guidance"]
         assert "never join passages or quote metadata" in payload["evidence_guidance"]
+        assert "cite relevant headers, units and numeric rows separately" in payload["evidence_guidance"]
         return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
 
     result = analyze("What would contradict this?", [source("s")], None, model)

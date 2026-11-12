@@ -695,6 +695,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]},
             "evidence_guidance": "Quote one continuous source passage; never join passages or quote metadata. "
+                "For table findings, cite relevant headers, units and numeric rows separately. "
                 "Put missing evidence in limitations. Excerpts are not the whole source. "
                 "PDF gaps may be compressed; check columns. Dates are declared, not verified; distinguish publication from period."}
     def serialize() -> str:
