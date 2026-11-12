@@ -1,0 +1,89 @@
+{
+  "implementation_commit": "42027f4d6da9f0f41a91d706dccdf0c7c4a61c84",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "source_hashes": {
+    "source_16100000000000000000000000000001": "62f9844d79c63ed4d75120e7c7b7905a62224bc8dc83d387c60b71b76e750181"
+  },
+  "files": {
+    "common.py": "b5c399bc88f953bd27ee158d5bbf6010250e84cbf2370420e587af585763406b",
+    "prepare.py": "f025531b601264fedc1db5a3fcb2672d8b0ff8201096c7665c9cac09be0092f1",
+    "run.py": "7adc14c617fe2ca19dff7073009ad11b432113648b796815824f7a9ffbd31dbb",
+    "score.py": "7830139da6c4e9290a64773c7e4ce7e8d1981961017a145ae4ff7a933746190f"
+  },
+  "source_files": {
+    "tasks.json": "e3c96d73bab1f5c1ac0c849e312c6fbb6dce82fe9ea3cfe7e42e0f9b6ea47cc0",
+    "reference.json": "76bf591f6b8c7315546f1f6be795047ec118cb7697e6720b39ce8ed6f05c73b5",
+    "bea-2022-07.pdf": "4afb1bf8ddacd6526104b6897b4b8c24e5c7366479f749ad1eb9c05838473e1e",
+    "common.py": "17838d9b5fb9ddaa14aa03224982a4edf0cbaf89673c81437d24a38bcfe4fc1a",
+    "score.py": "6ec0940899c038324610203b6dcadfcd688c931344ef8eb1cc63223fd5424e61"
+  },
+  "conditions": [
+    {
+      "name": "baseline",
+      "prompt_sha256": "b2929085dbb1a52a837b1efc1ca941ca424e6ba053cd6e4d430372de52cf0ab4",
+      "prompt_bytes": 4961,
+      "segments": [
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 381,
+          "character_end": 2146,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 2633,
+          "character_end": 4404,
+          "model_source_id": "ref-1"
+        }
+      ]
+    },
+    {
+      "name": "candidate",
+      "prompt_sha256": "1503ac99f9988936836860031c5a233839b86002f78fcc9d82857b64064467dd",
+      "prompt_bytes": 4901,
+      "segments": [
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 286,
+          "character_end": 1421,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 2024,
+          "character_end": 3162,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 7045,
+          "character_end": 8164,
+          "model_source_id": "ref-1"
+        }
+      ]
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "per_call_max_tokens": 10000,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "retries": 0,
+  "search_calls": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 178711
+}
