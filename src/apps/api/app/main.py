@@ -2081,7 +2081,9 @@ def upload_research_pdf(request: PdfUploadRequest, authorization: str | None = H
 
 
 @app.post("/v2/research/sources/{source_id}/reextract", status_code=201, include_in_schema=False)
-def reextract_research_pdf(source_id: str, request: PdfReextractRequest, authorization: str | None = Header(default=None)) -> dict:
+def reextract_research_pdf(source_id: str, request: PdfReextractRequest, response: Response,
+                           authorization: str | None = Header(default=None),
+                           idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", min_length=8, max_length=128)] = None) -> dict:
     """Create a separate source from the owner's retained PDF and its original permissions."""
     account = _authenticated_account(authorization)
     try:
@@ -2091,26 +2093,49 @@ def reextract_research_pdf(source_id: str, request: PdfReextractRequest, authori
     if original.retrieval_method != "user_pdf" or not original.original_pdf_base64:
         raise ApiProblem(422, "invalid_request", "The retained original PDF is unavailable.")
     title = original.title[:470] + (" — layout" if request.text_order == "layout" else " — reading")
-    try:
-        document = extract_pdf(PdfUploadRequest(title=title, pdf_base64=original.original_pdf_base64,
-            text_order=request.text_order, permissions=original.permissions))
-        if original.response_sha256 and original.response_sha256 != document.original_sha256:
-            raise ApiProblem(422, "invalid_request", "The retained original PDF does not match its recorded hash.")
-        source = research_sources.create(account.account_id, SourceInput(title=title, text=document.text,
-            url=original.url, kind=original.kind, is_simulated=original.is_simulated,
-            published_at=original.published_at, event_at=original.event_at, revised_at=original.revised_at,
-            permissions=original.permissions), retrieval_method="user_pdf", response_sha256=document.original_sha256,
-            response_content_type="application/pdf", original_pdf_base64=document.original_base64,
-            pdf_text_order=request.text_order, derived_from_source_id=original.source_id)
-        metadata = _visible_research_source(source)
-        metadata.pop("text", None)
-        return metadata
-    except PdfFailure as error:
-        if error.code in {"pdf_extractor_unavailable", "pdf_timeout", "pdf_busy"}:
-            raise ApiProblem(503, "internal_error", "PDF extraction is unavailable or timed out.", retryable=True) from error
-        raise ApiProblem(422, "invalid_request", "The retained PDF could not be extracted.") from error
-    except SourcePermissionError as error:
-        raise ApiProblem(422, "invalid_request", str(error)) from error
+    stable_id = ("source_" + sha256(f"pdf-reextract-v1\0{account.account_id}\0{idempotency_key}".encode()).hexdigest()[:32]
+                 if idempotency_key is not None else None)
+
+    def create_or_replay() -> tuple[str, Any]:
+        if stable_id:
+            existing = research_sources.repository.get(stable_id)
+            if existing is not None:
+                if (existing.owner_id == account.account_id and existing.derived_from_source_id == original.source_id and
+                        existing.pdf_text_order == request.text_order and
+                        (original.response_sha256 is None or existing.response_sha256 == original.response_sha256)):
+                    return "replayed", existing
+                return "conflict", None
+        try:
+            document = extract_pdf(PdfUploadRequest(title=title, pdf_base64=original.original_pdf_base64,
+                text_order=request.text_order, permissions=original.permissions))
+            if original.response_sha256 and original.response_sha256 != document.original_sha256:
+                return "invalid_hash", None
+            source = research_sources.create(account.account_id, SourceInput(title=title, text=document.text,
+                url=original.url, kind=original.kind, is_simulated=original.is_simulated,
+                published_at=original.published_at, event_at=original.event_at, revised_at=original.revised_at,
+                permissions=original.permissions), retrieval_method="user_pdf", response_sha256=document.original_sha256,
+                response_content_type="application/pdf", original_pdf_base64=document.original_base64,
+                pdf_text_order=request.text_order, derived_from_source_id=original.source_id, source_id=stable_id)
+            return "created", source
+        except (PdfFailure, SourcePermissionError, ValidationError) as error:
+            # Return expected failures through the storage lock so PostgreSQL
+            # does not wrap a user-facing error as a storage failure.
+            return "error", error
+
+    outcome, result = (research_sources.repository.with_advisory_lock("pdf-reextract:" + stable_id, create_or_replay)
+                       if stable_id else create_or_replay())
+    if outcome == "conflict":
+        raise ApiProblem(409, "idempotency_conflict", "This key was used for a different PDF extraction.")
+    if outcome == "invalid_hash":
+        raise ApiProblem(422, "invalid_request", "The retained original PDF does not match its recorded hash.")
+    if outcome == "error":
+        if isinstance(result, PdfFailure) and result.code in {"pdf_extractor_unavailable", "pdf_timeout", "pdf_busy"}:
+            raise ApiProblem(503, "internal_error", "PDF extraction is unavailable or timed out.", retryable=True) from result
+        raise ApiProblem(422, "invalid_request", "The retained PDF could not be extracted.") from result
+    _mark_replay(response, outcome == "replayed")
+    metadata = _visible_research_source(result)
+    metadata.pop("text", None)
+    return metadata
 
 
 @app.get("/v2/research/sources/{source_id}/original", include_in_schema=False)

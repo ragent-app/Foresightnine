@@ -182,10 +182,10 @@ class ResearchSources:
     def create(self, owner: str, request: SourceInput, *, retrieval_method: Literal["user_supplied", "official_html", "sec_companyconcept", "user_pdf"] = "user_supplied",
                response_sha256: str | None = None, response_content_type: str | None = None,
                original_pdf_base64: str | None = None, pdf_text_order: Literal["layout", "reading"] | None = None,
-               derived_from_source_id: str | None = None) -> ResearchSource:
+               derived_from_source_id: str | None = None, source_id: str | None = None) -> ResearchSource:
         if not request.permissions.store:
             raise SourcePermissionError("Source storage permission is required.")
-        item = ResearchSource(source_id=f"source_{uuid4().hex}", owner_id=owner,
+        item = ResearchSource(source_id=source_id or f"source_{uuid4().hex}", owner_id=owner,
             obtained_at=datetime.now(timezone.utc), content_sha256=sha256(request.text.encode("utf-8")).hexdigest(),
             retrieval_method=retrieval_method, response_sha256=response_sha256, response_content_type=response_content_type,
             original_pdf_base64=original_pdf_base64, pdf_text_order=pdf_text_order,

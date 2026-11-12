@@ -165,8 +165,8 @@ export function researchClient(baseUrl: string) {
       request<{ source_id: string }>("/v2/research/sources/pdf", { title, pdf_base64: pdfBase64,
         ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated, text_order: textOrder,
         permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
-    reextractPdf: (sourceId: string, textOrder: "layout" | "reading") => request<{ source_id: string }>(
-      `/v2/research/sources/${encodeURIComponent(sourceId)}/reextract`, { text_order: textOrder }),
+    reextractPdf: (sourceId: string, textOrder: "layout" | "reading", key: string) => request<{ source_id: string }>(
+      `/v2/research/sources/${encodeURIComponent(sourceId)}/reextract`, { text_order: textOrder }, key),
     search: (query: string) => request<{ project_search_available: boolean; candidates: DiscoveryCandidate[] }>(
       `/v1/search/candidates?query=${encodeURIComponent(Array.from(query).slice(0, 70).join(""))}&limit=5`),
     create: (question: string, sourceIds: string[], asOf: string, scope = "") => request<ResearchTopic>("/v2/research/topics", { question, source_ids: sourceIds,

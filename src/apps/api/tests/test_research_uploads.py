@@ -193,6 +193,39 @@ def test_reextract_pdf_preserves_original_permissions_and_account_boundary(monke
     assert client.post(path,headers=owner,json={"text_order":"layout"}).status_code==422
 
 
+@pytest.mark.skipif(not shutil.which("prlimit") or not shutil.which("pdftotext"), reason="PDF extraction tools unavailable")
+def test_reextract_idempotency_serializes_concurrent_requests(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Lock
+    import app.research_uploads as uploads
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client=TestClient(app)
+    def auth():
+        account=client.post("/v1/auth/local/register",json={"email":f"reextract-key-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
+        return {"Authorization":"Bearer "+account["access_token"]}
+    owner,other=auth(),auth()
+    original=client.post("/v2/research/sources/pdf",headers=owner,json={**body(tiny_pdf()),"text_order":"reading"}).json()
+    foreign=client.post("/v2/research/sources/pdf",headers=other,json={**body(tiny_pdf()),"text_order":"reading"}).json()
+    path="/v2/research/sources/"+original["source_id"]+"/reextract"
+    call_count=0;guard=Lock();extract=uploads._extract_text
+    def counted(*args,**kwargs):
+        nonlocal call_count
+        with guard:call_count+=1
+        return extract(*args,**kwargs)
+    monkeypatch.setattr(uploads,"_extract_text",counted)
+    request_headers={**owner,"Idempotency-Key":"same-reextract-key"}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses=list(pool.map(lambda _:client.post(path,headers=request_headers,json={"text_order":"layout"}),range(4)))
+    assert all(r.status_code==201 for r in responses)
+    assert len({r.json()["source_id"] for r in responses})==1 and call_count==1
+    assert sorted(r.headers["Idempotency-Replayed"] for r in responses)==["false","true","true","true"]
+    assert client.post(path,headers=request_headers,json={"text_order":"reading"}).status_code==409
+    other_path="/v2/research/sources/"+foreign["source_id"]+"/reextract"
+    distinct=client.post(other_path,headers={**other,"Idempotency-Key":"same-reextract-key"},json={"text_order":"layout"})
+    assert distinct.status_code==201 and distinct.json()["source_id"]!=responses[0].json()["source_id"]
+    assert client.post(path,headers={**owner,"Idempotency-Key":"short"},json={"text_order":"layout"}).status_code==422
+
+
 def test_pdf_rejects_missing_rights_and_invalid_content():
     with pytest.raises(PdfFailure, match="source_permission_unknown"):
         extract_pdf(PdfUploadRequest(title="x", pdf_base64="eA==", permissions={"store": False}))

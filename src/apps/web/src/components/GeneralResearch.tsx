@@ -225,7 +225,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [pollNotice, setPollNotice] = useState("");
   const pendingRun = useRef<{ topicId: string; versionId: string; key: string; budget: RunBudget } | null>(null);
   const pendingSource = useRef<{ fingerprint: string; sourceId: string; file: File | null } | null>(null);
-  const pendingReextract = useRef<{ topicId: string; sourceId: string; textOrder: "layout" | "reading"; newSourceId: string } | null>(null);
+  const pendingReextract = useRef<{ accountId: string; topicId: string; sourceId: string; textOrder: "layout" | "reading"; key: string; newSourceId?: string } | null>(null);
   const sourceDetails = useRef<HTMLDetailsElement>(null);
   const latest = topic?.versions[topic.versions.length - 1];
   const current = topic?.versions.find((item) => item.version_id === selectedVersionId) ?? latest;
@@ -402,29 +402,66 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     finally { setBusy(false); }
   }
   async function reextractSource(source: SourceMetadata) {
-    if (!api || !topic || !current || !isLatest || running || busy) return;
+    if (!api || !accountId || !topic || !current || !isLatest || running || busy) return;
     if (hasUnsavedReview) { setNotice(en ? "Save your edits before changing material." : "请先保存当前修改，再调整资料。"); return; }
     const textOrder = source.pdf_text_order === "layout" ? "reading" : "layout";
+    const storageKey = "foresightnine.research.reextract-pending.v1";
+    function remember(value: typeof pendingReextract.current) {
+      pendingReextract.current = value;
+      try { if (value) sessionStorage.setItem(storageKey, JSON.stringify(value)); else sessionStorage.removeItem(storageKey); } catch { /* retry remains available in this tab's memory */ }
+    }
     setBusy(true); setNotice("");
     try {
       let pending = pendingReextract.current;
-      if (!pending || pending.topicId !== topic.topic_id || pending.sourceId !== source.source_id || pending.textOrder !== textOrder) {
-        const result = await api.reextractPdf(source.source_id, textOrder);
-        pending = { topicId: topic.topic_id, sourceId: source.source_id, textOrder, newSourceId: result.source_id };
-        pendingReextract.current = pending;
+      if (!pending) {
+        try {
+          const stored: unknown = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
+          if (stored && typeof stored === "object") {
+            const item = stored as Record<string, unknown>;
+            if (item.accountId === accountId && item.topicId === topic.topic_id && item.sourceId === source.source_id &&
+                item.textOrder === textOrder && typeof item.key === "string" && item.key.length >= 8 && item.key.length <= 128 &&
+                (item.newSourceId === undefined || typeof item.newSourceId === "string")) {
+              pending = item as typeof pendingReextract.current;
+            }
+          }
+        } catch { /* unavailable or malformed local state; create a fresh request */ }
+      }
+      if (!pending || pending.accountId !== accountId || pending.topicId !== topic.topic_id || pending.sourceId !== source.source_id || pending.textOrder !== textOrder) {
+        pending = { accountId, topicId: topic.topic_id, sourceId: source.source_id, textOrder, key: crypto.randomUUID() };
+        remember(pending);
+      }
+      else if (pendingReextract.current !== pending) remember(pending);
+      if (!pending.newSourceId) {
+        const result = await api.reextractPdf(source.source_id, textOrder, pending.key);
+        pending.newSourceId = result.source_id;
+        remember(pending);
       }
       const newSourceId = pending.newSourceId;
-      const updated = await api.attach(topic.topic_id, current.version_id, [newSourceId]);
-      pendingReextract.current = null;
+      let updated = topic;
+      if (!current.source_ids?.includes(newSourceId)) {
+        try { updated = await api.attach(topic.topic_id, current.version_id, [newSourceId]); }
+        catch (error) {
+          // An attach response may be lost after commit. Inspect the latest
+          // version before retrying, to avoid creating a duplicate version.
+          const fresh = await api.get(topic.topic_id);
+          if (!fresh.versions[fresh.versions.length - 1]?.source_ids?.includes(newSourceId)) throw error;
+          updated = fresh;
+        }
+      }
+      remember(null);
       setTopic(updated); setSelectedVersionId("");
       setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
       setExcludedSourceIds((items) => Array.from(new Set([...items, source.source_id])).filter((id) => id !== newSourceId));
       setFocusChoice("");
       setNotice(en ? "Alternative extraction added and selected for the next run. The original remains in history." : "已添加另一种提取结果并用于下次研究，原资料仍保留在历史中。");
-    } catch {
-      setNotice(pendingReextract.current?.sourceId === source.source_id
-        ? (en ? "Extraction was created but could not be attached. Reload the research and retry." : "提取结果已创建但未能添加，请刷新研究后重试。")
-        : (en ? "Could not extract the retained PDF. Check the original and try again." : "无法重新提取已保存的 PDF，请核对原文件后重试。"));
+    } catch (error) {
+      const pending = pendingReextract.current;
+      if (pending?.sourceId === source.source_id && pending.newSourceId) {
+        setNotice(en ? "Extraction was created but could not be attached. Reload the research and retry." : "提取结果已创建但未能添加，请刷新研究后重试。");
+      } else {
+        if (error instanceof ResearchRequestError && error.status === 409) remember(null);
+        setNotice(en ? "Could not confirm extraction. Retry to reuse the same request, or check the original PDF." : "无法确认提取是否完成；可重试同一请求，或核对原 PDF。 ");
+      }
     } finally { setBusy(false); }
   }
 

@@ -443,7 +443,7 @@ raw=Path("docs/product/phase-a/209-cross-domain-frozen/bea-2021-may.pdf").read_b
 r=client.post("/v2/research/sources/pdf",headers=headers,json={"title":"Report","text_order":"reading","pdf_base64":base64.b64encode(raw).decode(),
  "permissions":{"store":True,"display":True,"model_input":True,"export":True}});assert r.status_code==201,r.text
 old=r.json()["source_id"]
-r=client.post("/v2/research/sources/"+old+"/reextract",headers=headers,json={"text_order":"layout"});assert r.status_code==201,r.text
+r=client.post("/v2/research/sources/"+old+"/reextract",headers={**headers,"Idempotency-Key":"persist-extract-key"},json={"text_order":"layout"});assert r.status_code==201,r.text
 new=r.json()["source_id"];assert r.json()["derived_from_source_id"]==old
 t=client.post("/v2/research/topics",headers=headers,json={"question":"Consumer spending?","source_ids":[old,new]});assert t.status_code==201,t.text
 topic=t.json();path="/v2/research/topics/"+topic["topic_id"];parent=topic["versions"][0]["version_id"]
@@ -474,6 +474,9 @@ client=TestClient(api.app);headers={"Authorization":s["token"]};path=s["path"]
 r=client.get("/v2/research/sources/"+s["new"],headers=headers);assert r.status_code==200,r.text
 assert r.json()["derived_from_source_id"]==s["old"] and r.json()["pdf_text_order"]=="layout"
 old=client.get("/v2/research/sources/"+s["old"],headers=headers);assert old.status_code==200 and old.json()["pdf_text_order"]=="reading"
+reextract=client.post("/v2/research/sources/"+s["old"]+"/reextract",headers={**headers,"Idempotency-Key":"persist-extract-key"},json={"text_order":"layout"})
+assert reextract.status_code==201 and reextract.headers["Idempotency-Replayed"]=="true" and reextract.json()["source_id"]==s["new"]
+assert client.post("/v2/research/sources/"+s["old"]+"/reextract",headers={**headers,"Idempotency-Key":"persist-extract-key"},json={"text_order":"reading"}).status_code==409
 assert client.get("/v2/research/sources/"+s["new"]+"/original",headers=headers).status_code==200
 topic=client.get(path,headers=headers).json();assert set(topic["versions"][-1]["source_ids"])=={s["old"],s["new"]}
 inputs=client.get(path+"/runs/"+s["op"]+"/inputs",headers=headers).json()
@@ -487,3 +490,54 @@ assert client.delete("/v1/auth/local/account",headers=headers).status_code==200
     for script in (start,recover):
         result=subprocess.run([sys.executable,"-c",script],cwd=root,env=env,capture_output=True,text=True,timeout=60)
         assert result.returncode==0,result.stderr
+
+
+@pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
+def test_concurrent_reextraction_idempotency_across_postgres_processes(tmp_path):
+    """Two independent workers with the same key commit one PDF derivative."""
+    env=dict(os.environ,FORESIGHTNINE_STORAGE_MODE="postgres",FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
+             FORESIGHTNINE_POSTGRES_DSN=os.environ["FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"],
+             STAGEB_TEST_STATE=str(tmp_path/"concurrent-reextract.json"))
+    root=Path(__file__).resolve().parents[3]
+    seed=r'''
+import base64,json,os,sys
+from pathlib import Path
+from uuid import uuid4
+sys.path.insert(0,"apps/api")
+from fastapi.testclient import TestClient
+import app.main as api
+c=TestClient(api.app);r=c.post("/v1/auth/local/register",json={"email":f"concurrent-pdf-{uuid4().hex}@example.test","password":"correct horse battery staple!"})
+assert r.status_code==201,r.text
+h={"Authorization":"Bearer "+r.json()["access_token"]}
+raw=Path("docs/product/phase-a/209-cross-domain-frozen/bea-2021-may.pdf").read_bytes()
+r=c.post("/v2/research/sources/pdf",headers=h,json={"title":"Report","text_order":"reading","pdf_base64":base64.b64encode(raw).decode(),
+ "permissions":{"store":True,"display":True,"model_input":True,"export":True}});assert r.status_code==201,r.text
+with open(os.environ["STAGEB_TEST_STATE"],"w") as f:json.dump({"token":h["Authorization"],"source":r.json()["source_id"]},f)
+'''
+    worker=r'''
+import json,os,sys
+sys.path.insert(0,"apps/api")
+from fastapi.testclient import TestClient
+import app.main as api
+with open(os.environ["STAGEB_TEST_STATE"]) as f:s=json.load(f)
+r=TestClient(api.app).post("/v2/research/sources/"+s["source"]+"/reextract",
+ headers={"Authorization":s["token"],"Idempotency-Key":"parallel-pdf-reextract"},json={"text_order":"layout"})
+assert r.status_code==201,r.text
+print(json.dumps({"source_id":r.json()["source_id"],"replayed":r.headers["Idempotency-Replayed"]}))
+'''
+    seeded=subprocess.run([sys.executable,"-c",seed],cwd=root,env=env,capture_output=True,text=True,timeout=60)
+    assert seeded.returncode==0,seeded.stderr
+    workers=[subprocess.Popen([sys.executable,"-c",worker],cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) for _ in range(2)]
+    outputs=[]
+    try:
+        for process in workers:
+            stdout,stderr=process.communicate(timeout=60)
+            assert process.returncode==0,stderr
+            outputs.append(__import__("json").loads(stdout))
+    finally:
+        for process in workers:
+            if process.poll() is None:
+                process.kill()
+                process.communicate()
+    assert outputs[0]["source_id"]==outputs[1]["source_id"]
+    assert sorted(item["replayed"] for item in outputs)==["false","true"]

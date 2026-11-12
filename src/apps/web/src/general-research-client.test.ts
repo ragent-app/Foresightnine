@@ -8,9 +8,10 @@ describe("research operation polling", () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 201 }));
     vi.stubGlobal("fetch", fetcher);
-    await researchClient("https://api.example.com").reextractPdf("source/one", "layout");
+    await researchClient("https://api.example.com").reextractPdf("source/one", "layout", "retry-key-one");
     expect(String(fetcher.mock.calls[0]?.[0])).toContain("/sources/source%2Fone/reextract");
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({text_order:"layout"});
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Idempotency-Key")).toBe("retry-key-one");
   });
   it("distinguishes default sources from an explicit empty or filtered selection", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
