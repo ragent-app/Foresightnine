@@ -1,0 +1,50 @@
+{
+  "implementation_commit": "c8a728e24cff291f968ebf75cdcae196dc1eb2dd",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "review_method": "bounded_quotation_context_model_review_v23",
+  "system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "prepare.py": "7b18931657dba272cfb13184dd3cc60737397aa426096ad83aa049c66484235a",
+    "run.py": "1d3466aca0e6ed242313c85cc81fce560f73db7bd235822a9f24e6bfd0ba8e53",
+    "score.py": "914d58b7b2a5927573d8a4e22d1a0c12af49390371316e57c510c6a033442aac",
+    "batched-prompt.json": "a335f882cdc27fc316fe537cfe535453e99351b13a65a2ac59f9a085f1eee7da",
+    "isolated-prompt.json": "12dcaa92c4c3506b027ec2f29780a56ca454d2a4a1004ca3b7fde90e9c925a48"
+  },
+  "source_files": {
+    "174-subject-context-paired/required_only-prompt.json": "a335f882cdc27fc316fe537cfe535453e99351b13a65a2ac59f9a085f1eee7da",
+    "174-subject-context-paired/manifest.json": "61d6204e59de1755af81514c8e25fbf2e4f27ec1da6caeb3120d7fca05056fc0"
+  },
+  "conditions": [
+    {
+      "name": "batched",
+      "prompt_sha256": "a335f882cdc27fc316fe537cfe535453e99351b13a65a2ac59f9a085f1eee7da",
+      "prompt_bytes": 1648
+    },
+    {
+      "name": "isolated",
+      "prompt_sha256": "12dcaa92c4c3506b027ec2f29780a56ca454d2a4a1004ca3b7fde90e9c925a48",
+      "prompt_bytes": 792
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "per_call_max_tokens": 10000,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 196157
+}
