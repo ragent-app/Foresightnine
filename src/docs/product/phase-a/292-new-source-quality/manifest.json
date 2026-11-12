@@ -1,0 +1,85 @@
+{
+  "implementation_commit": "41b9da70235a23130d55915f643d74b1afc5169b",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "review_method": "bounded_quotation_context_model_review_v30",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "ebc297c13cc25840575428b314974143e16fbbac33b7a6a93cf5b48a4efef1f3",
+    "prepare.py": "6a58b37476051369636c310cc0339e5994aeab1df34c847e1f079931a8bcda6e",
+    "run.py": "38dae8c4dd010bc1696a7c8688a32971eab9f2dd6388aea4a9ec715229068574",
+    "score.py": "28b5c72f9068b0bb771c36c0029af887146e5a5b0865e7cb83e65d77ac438e47",
+    "tasks.json": "d7b4c9ced0d9f0d854ac07f7dc90c2c1b6ebb53855c7ebfd9a24658d17438005",
+    "reference.json": "b4e69691d014f37266212f49e643067723d688d88cd6e671a4dc8f2043ebb373"
+  },
+  "conditions": [
+    {
+      "task": "BEA_2026Q1",
+      "set": "new_source_development_evaluation",
+      "source_sha256": "1ddc4ece3dd487408ee7fe21929ea67b9c4a4b98939a1c599dfc892edfd4d879",
+      "text_sha256": "9327ddbba22b9b1fd5407044d04b9fadf008f3cada7d136652bfb8f138c216e1",
+      "prompt_sha256": "fdda02404046f219ad35b378766b63d0c1c68db721b6314a139e72585319aa05",
+      "prompt_bytes": 4986,
+      "segments": [
+        {
+          "source_id": "source_29200000000000000000000000000001",
+          "character_start": 407,
+          "character_end": 2670,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_29200000000000000000000000000001",
+          "character_start": 4177,
+          "character_end": 6791,
+          "model_source_id": "ref-1"
+        }
+      ]
+    },
+    {
+      "task": "FOMC_202507",
+      "set": "new_source_development_evaluation",
+      "source_sha256": "a03d33f6c48a6e3b5d0c2cacb76c0792a517c99c6d900d0bb8f362145bc5e579",
+      "text_sha256": "c626d77289241b75d542e515e30d9786446c994c702be1241dc52a36f543336b",
+      "prompt_sha256": "a630eec56b955dd8f588be3e6c3569364ac745c2b94764afedd60205a62cef0c",
+      "prompt_bytes": 4956,
+      "segments": [
+        {
+          "source_id": "source_29200000000000000000000000000002",
+          "character_start": 0,
+          "character_end": 1742,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_29200000000000000000000000000002",
+          "character_start": 1754,
+          "character_end": 3847,
+          "model_source_id": "ref-1"
+        }
+      ]
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls_per_task": 2,
+  "max_tokens_per_task": 20000,
+  "max_calls_total": 4,
+  "max_tokens_total": 40000,
+  "timeout_seconds": 60,
+  "elapsed_seconds": 120,
+  "search": false,
+  "retries": 0,
+  "previous_known_tokens": 322886,
+  "cost_usd": "unknown"
+}
