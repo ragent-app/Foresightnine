@@ -1,0 +1,11 @@
+{
+  "id": "FED_DISS",
+  "question": "根据所附美联储 2019 年 7 月声明，谁对本次货币政策行动投反对票？他们倾向于什么政策？引用资料并说明局限。",
+  "source_kind": "original_pdf",
+  "source_file": "fed-2019-07.pdf",
+  "source_title": "Federal Reserve July 2019 FOMC statement",
+  "published_at": "2019-07-31T18:00:00Z",
+  "text_order": "reading",
+  "source_sha256": "83e8a08b473a278bb7a5cb2535f57a4a261fe89bbab78834dcae55bba450875d",
+  "source_text_sha256": "4aa492f643dc2e2574f657d57bb060dd624d53b38f9da9258c7459268ebbe960"
+}
