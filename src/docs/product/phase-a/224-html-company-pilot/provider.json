@@ -1,0 +1,66 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Cisco FY2024 total revenue was $53,803 million vs FY2023 $56,998 million, a decrease.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Years Ended | July 27, 2024 | July 29, 2023 ... Total revenue | 53,803 |  | 56,998"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Services revenue actually increased year-over-year (13,856 to 14,550), so the total decline is driven by the product line.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Product | $ | 39,253 |  | $ | 43,142 ... Services | 14,550 |  | 13,856"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The excerpt provides revenue figures but does not include management's discussion of the reasons for the revenue decline, so no explanatory quotation about the change is available from this excerpt.",
+      "The table header declares units as 'in millions, except per-share amounts'; period end dates (July 27, 2024; July 29, 2023) are declared in the table but not independently verified.",
+      "Excerpts are not the whole source; other sections of the 10-K may discuss revenue change drivers."
+    ],
+    "facts": [
+      {
+        "fact_id": "rev_fy24",
+        "label": "total revenue FY2024",
+        "value": "53,803",
+        "unit": "millions of USD",
+        "currency": "USD",
+        "period": "fiscal year ended July 27, 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Consolidated Statements of Operations (in millions, except per-share amounts) ... Total revenue | 53,803"
+        }
+      },
+      {
+        "fact_id": "rev_fy23",
+        "label": "total revenue FY2023",
+        "value": "56,998",
+        "unit": "millions of USD",
+        "currency": "USD",
+        "period": "fiscal year ended July 29, 2023",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Total revenue | 53,803 |  | 56,998"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "rev_fy24",
+        "second_fact_id": "rev_fy23"
+      }
+    ]
+  },
+  "reported_tokens": 2707,
+  "prompt_sha256": "26b7cc144dcd0aa2abd21efc8d033005d6c812649d93fdae4fa5f5a9adcfdb26"
+}
