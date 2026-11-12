@@ -1,0 +1,61 @@
+{
+  "purpose": "Nonblind paired development diagnostic of missing versus present original subject context for the same two saved claims. Both prompts use identical claim text, quotations, indexes and system instructions. This is not a full implementation comparison or independent acceptance.",
+  "implementation_commit": "d51ffa4aebd6196264b78772475ff74d221d7bbc",
+  "method": "bounded_quotation_context_model_review_v5",
+  "input_sha256": {
+    "BEA_Q3-result.json": "aa3d095e06ea47ee0c4f04c86aa9dd728ac89b03f016b7285f9dc9656001cf35",
+    "BEA_Q3-input.json": "e8796d4013dbadc3d9f6ce899854251159616b7dd4aade7264af465c6459aef5",
+    "BEA_Q3-source.txt": "67bd545226cfd451f8210d4026bb8769ae29137462b255f4ddbc720ba7d59693",
+    "replay-result.json": "d05516043250c2c12d09bf288904e6146241c9606c95449d91d95c543ad790fd"
+  },
+  "common_sha256": "461991e5abef47a649dcca67dc7a995f53927ba0e9c79e1ea1cf1363a4f4a6ce",
+  "runner_sha256": "e2eee36c5564212d8aa70e1dedf8a2a2906ff0a69f5b9d1127fe2a009b45066f",
+  "prepare_sha256": "1a8b912a5bdb7d75e4dc432b60c2b3ca58236908baf83332f0f5c3f8dd814a47",
+  "system_prompt_sha256": "deacbe17348931bf0b8c9d48b8fdff11067001f58b71c50e9ba6e22874662566",
+  "prompts_sha256": {
+    "without_subject": "40064b3f4ca102ada5befe1d2b32d9a560a4dc3bca84de4af36ef63649170a97",
+    "with_subject": "f47f1a436d13ddedd6609c4f6163cc15be2e9d3535ff52e024712f4547e6c5ac"
+  },
+  "max_prompt_bytes": 1770,
+  "claim_indexes": [
+    0,
+    1
+  ],
+  "segments_with_subject": [
+    {
+      "claim_index": 0,
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "character_start": 204,
+      "character_end": 705,
+      "context_radius": 180
+    },
+    {
+      "claim_index": 1,
+      "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+      "character_start": 4769,
+      "character_end": 5024,
+      "context_radius": 90,
+      "required_context_start": 4769
+    }
+  ],
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "max_calls_total": 2,
+  "max_tokens_per_call": 10000,
+  "max_tokens_total": 20000,
+  "timeout_seconds": 60,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "scoring_rule": "Predefined narrow target: verdict for claim index 1 must be does_not_support, contradicts or uncertain; supports fails. Record index 0 and all outputs. One sample per condition, no general semantic or phase acceptance claim."
+}
