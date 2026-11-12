@@ -414,7 +414,9 @@ def test_invalid_model_output_retains_prompt_provenance_without_output(monkeypat
     headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
     source = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
         "permissions": {"store": True, "model_input": True, "display": True}}).json()
-    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source["source_id"]]}).json()
+    excluded = client.post("/v2/research/sources", headers=headers, json={"title": "Not authorized", "text": "Private source.",
+        "permissions": {"store": True, "model_input": False, "display": True}}).json()
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source["source_id"], excluded["source_id"]]}).json()
     path = "/v2/research/topics/" + topic["topic_id"]
     response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "invalid-provenance-test"},
                            json={"parent_version_id": topic["versions"][0]["version_id"]})
@@ -429,6 +431,11 @@ def test_invalid_model_output_retains_prompt_provenance_without_output(monkeypat
     assert run["error"] == "invalid_model_output"
     assert run["analysis_error_detail"] == "Model output did not match the research schema."
     assert len(run["prompt_sha256"]) == 64 and run["selected_segments"][0]["source_id"] == source["source_id"]
+    assert run["status"] == "partial" and run["model_calls"] == 1
+    assert [entry["source_id"] for entry in content["sources"]] == [source["source_id"]]
+    assert content["sources"][0]["content_sha256"] == source["content_sha256"]
+    assert any("processing permission is not granted" in note for note in content["limitations"])
+    assert any("selected for analysis" in note for note in content["limitations"])
     assert "sensitive model output" not in str(content)
 
 
@@ -1103,3 +1110,35 @@ def test_uncited_amounts_are_candidates_and_rechecked_after_adding_quotes(monkey
     assert len(versions[-1]["content"]["claims"][0]["citations"]) == 3
     assert versions[-2]["content"]["claims"][0]["uncited_amounts"]
     assert versions[-1]["content"]["claims"][0]["support_status"] == "not_independently_verified"
+
+
+def test_budget_exhaustion_keeps_selected_source_without_claiming_a_call(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    class Provider:
+        name = "no-call-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            raise AssertionError("budget disallows this call")
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    registered = client.post("/v1/auth/local/register", json={"email": "no-call-source@example.test",
+        "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + registered["access_token"]}
+    src = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [src["source_id"]]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "no-call-source-test"},
+                           json={"parent_version_id": topic["versions"][0]["version_id"], "max_model_calls": 0})
+    operation = response.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + operation, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert status == "completed"
+    content = client.get(path, headers=headers).json()["versions"][-1]["content"]
+    assert content["run"]["status"] == "partial" and content["run"]["model_calls"] == 0
+    assert content["run"]["error"] == "provider_budget_exhausted"
+    assert content["run"]["prompt_sha256"] is None
+    assert [item["source_id"] for item in content["sources"]] == [src["source_id"]]
+    assert any("selected for analysis" in note for note in content["limitations"])

@@ -98,7 +98,7 @@ from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence, suggest_usd_amount_evidence
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_support_review, prepare_support_review)
@@ -2126,19 +2126,23 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             analysis = analyze(topic.request.question, sources, topic.request.as_of, generate,
                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
                                on_prepare=lambda segments: attempted_prompt.update({"segments": segments}))
-        except AnalysisInterrupted:
-            unavailable_reason = "provider_budget_exhausted"
-            from .research_analysis import AnalysisResult
-            analysis = AnalysisResult([], [], ["Research analysis could not be completed: provider_budget_exhausted"], [], usage)
-        except (ProviderFailure, InvalidAnalysis) as error:
-            unavailable_reason = error.code if isinstance(error, ProviderFailure) else "invalid_model_output"
+        except (AnalysisInterrupted, ProviderFailure, InvalidAnalysis) as error:
+            unavailable_reason = ("provider_budget_exhausted" if isinstance(error, AnalysisInterrupted) else
+                                  error.code if isinstance(error, ProviderFailure) else "invalid_model_output")
             if isinstance(error, InvalidAnalysis):
                 # InvalidAnalysis messages are fixed internal diagnostics and
                 # contain neither source text nor provider output.
                 analysis_error_detail = str(error)
             from .research_analysis import AnalysisResult
-            analysis = AnalysisResult([], [], ["Research analysis could not be completed: " + unavailable_reason], [], usage,
-                                      **attempted_prompt)
+            # on_prepare records only eligible, bounded source selections. A
+            # selected source is not evidence that a model call succeeded (or
+            # even started); the operation and model-call record show that.
+            selected_ids = list(dict.fromkeys(segment["source_id"] for segment in attempted_prompt.get("segments", [])))
+            _, source_notes = prepare_sources(sources, topic.request.as_of)
+            if selected_ids:
+                source_notes.append("Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.")
+            analysis = AnalysisResult([], [], [*source_notes, "Research analysis could not be completed: " + unavailable_reason],
+                                      selected_ids, usage, **attempted_prompt)
         _raise_if_operation_cancelled(operation_id)
         claims = [{**item, "role": "support"} for item in analysis.claims]
         claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
