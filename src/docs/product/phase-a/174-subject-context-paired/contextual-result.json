@@ -1,0 +1,29 @@
+{
+  "condition": "contextual",
+  "manifest_sha256": "61d6204e59de1755af81514c8e25fbf2e4f27ec1da6caeb3120d7fca05056fc0",
+  "prompt_sha256": "823aab44b2b5ed77e203e2b1e7accd7922d1624d10ba1226c0ecaded2db0fb82",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 909,
+  "raw": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 1,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 2,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 3,
+        "verdict": "contradicts"
+      }
+    ]
+  },
+  "elapsed_seconds": 2.995
+}

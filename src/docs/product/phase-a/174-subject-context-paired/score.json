@@ -1,0 +1,32 @@
+{
+  "contextual": {
+    "valid": true,
+    "verdicts": {
+      "0": "supports",
+      "1": "supports",
+      "2": "supports",
+      "3": "contradicts"
+    },
+    "checks": {
+      "0": true,
+      "1": false,
+      "2": true,
+      "3": true
+    }
+  },
+  "required_only": {
+    "valid": true,
+    "verdicts": {
+      "0": "supports",
+      "1": "supports",
+      "2": "supports",
+      "3": "does_not_support"
+    },
+    "checks": {
+      "0": true,
+      "1": false,
+      "2": true,
+      "3": true
+    }
+  }
+}
