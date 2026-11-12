@@ -188,7 +188,7 @@ class SecurityConfig:
     allowed_origins: tuple[str, ...] = ()
     trusted_proxies: TrustedProxyConfig = TrustedProxyConfig()
     require_captcha: bool = False
-    max_pdf_body_bytes: int = 2_100_000
+    max_pdf_body_bytes: int = 4_100_000
     max_research_source_body_bytes: int = 2_100_000
 
 
@@ -200,9 +200,9 @@ def build_security_config() -> SecurityConfig:
     except ValueError:
         max_body = 256 * 1024
     try:
-        max_pdf_body = int(os.getenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES", "2100000"))
+        max_pdf_body = int(os.getenv("FORESIGHTNINE_MAX_PDF_BODY_BYTES", "4100000"))
     except ValueError:
-        max_pdf_body = 2_100_000
+        max_pdf_body = 4_100_000
     try:
         max_source_body = int(os.getenv("FORESIGHTNINE_MAX_RESEARCH_SOURCE_BODY_BYTES", "2100000"))
     except ValueError:
@@ -216,7 +216,7 @@ def build_security_config() -> SecurityConfig:
         allowed_origins=origins,
         trusted_proxies=TrustedProxyConfig(_parse_networks(os.getenv("FORESIGHTNINE_TRUSTED_PROXY_CIDRS", ""))),
         require_captcha=require_captcha,
-        max_pdf_body_bytes=min(2_100_000, max(1024, max_pdf_body)),
+        max_pdf_body_bytes=min(4_100_000, max(1024, max_pdf_body)),
         max_research_source_body_bytes=min(2_100_000, max(1024, max_source_body)),
     )
 

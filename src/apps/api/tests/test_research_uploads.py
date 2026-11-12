@@ -110,3 +110,21 @@ def test_pdf_rejects_missing_rights_and_invalid_content():
         extract_pdf(PdfUploadRequest(title="x", pdf_base64="eA==", permissions={"store": False}))
     with pytest.raises(PdfFailure, match="invalid_pdf"):
         extract_pdf(PdfUploadRequest(title="x", pdf_base64="eA==", permissions={"store": True}))
+
+
+@pytest.mark.skipif(not shutil.which('prlimit') or not shutil.which('pdftotext'), reason='PDF extraction tools unavailable')
+def test_larger_pdf_upload_is_bounded_and_original_is_recoverable(monkeypatch):
+    from app.research_uploads import MAX_PDF_BYTES
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(app)
+    account = client.post('/v1/auth/local/register', json={'email': 'pdf-large@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + account['access_token']}
+    # Preserve a valid PDF and inflate it without bringing in external data.
+    raw = tiny_pdf() + b' ' * 1_510_000
+    response = client.post('/v2/research/sources/pdf', headers=headers, json=body(raw))
+    assert response.status_code == 201, response.text
+    source_id = response.json()['source_id']
+    assert client.get('/v2/research/sources/' + source_id + '/original', headers=headers).content == raw
+    too_large = tiny_pdf() + b' ' * MAX_PDF_BYTES
+    response = client.post('/v2/research/sources/pdf', headers=headers, json=body(too_large))
+    assert response.status_code in (413, 422)

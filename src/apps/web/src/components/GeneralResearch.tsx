@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { researchClient, sourceDiscoveryQuery, searchCandidateDate, ResearchRequestError, researchPollingDelay, type DiscoveryCandidate, type ResearchClaim, type ResearchFact, type ResearchOperation, type ResearchTopic, type SourceMetadata, type RunBudget, type RunInputSnapshot, type IssuerCandidate } from "../general-research-client";
+import { MAX_RESEARCH_PDF_BYTES, researchClient, sourceDiscoveryQuery, searchCandidateDate, ResearchRequestError, researchPollingDelay, type DiscoveryCandidate, type ResearchClaim, type ResearchFact, type ResearchOperation, type ResearchTopic, type SourceMetadata, type RunBudget, type RunInputSnapshot, type IssuerCandidate } from "../general-research-client";
 import type { Language } from "../types";
 import { Button, Field, Input, Textarea } from "./Controls";
 import { Header } from "./AppShell";
@@ -290,7 +290,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     const sourceTitle = title.trim() || (en ? "Provided material" : "用户提供的资料");
     const source = sourceMode === "sec" ? await api.fetchSecConcept(cik.trim(), taxonomy, concept.trim(), unit.trim(), filingBefore, modelInput, allowExport)
       : sourceMode === "file" && file ? await (async () => {
-          if (file.size > 1_500_000) throw new Error("file_too_large");
+          if (file.size > MAX_RESEARCH_PDF_BYTES) throw new Error("file_too_large");
           if (!file.name.toLowerCase().endsWith(".pdf")) throw new Error("invalid_file");
           const bytes = new Uint8Array(await file.arrayBuffer());
           let binary = "";
@@ -357,7 +357,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       setQuestion(""); setScope(""); setDiscoverScope(false); setRunSearchScope(false); setAsOf(""); clearMaterial();
     } catch (error) {
       if (error instanceof Error && error.message === "file_too_large") {
-        setNotice(en ? "PDF files must be no larger than 1.5 MB." : "PDF 文件不能超过 1.5 MB。");
+        setNotice(en ? "PDF files must be no larger than 3 MB." : "PDF 文件不能超过 3 MB。");
       } else if (sourceMode === "sec" && error instanceof Error && error.message === "request_503") {
         setNotice(en ? "SEC access is unavailable. Ask the service administrator to check its configuration." : "SEC 访问暂不可用，请联系服务管理员检查配置。");
       } else if (error instanceof Error && error.message === "request_429") {
@@ -528,7 +528,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
             <Field label={en ? "Filed strictly before (optional)" : "提交日期早于（可选）"}><Input type="date" value={filingBefore} onChange={(event) => setFilingBefore(event.target.value)} /></Field>
             <p>{en ? "SEC access requires a server-configured contact. Filing dates do not prove the exact public availability time." : "SEC 访问需要服务端配置联系信息。提交日期不能证明资料的精确公开时刻。"}</p>
           </> : sourceMode === "file" ? <>
-            <Field label={en ? "PDF file (maximum 1.5 MB)" : "PDF 文件（最大 1.5 MB）"}><Input key={fileInputKey} type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field>
+            <Field label={en ? "PDF file (maximum 3 MB)" : "PDF 文件（最大 3 MB）"}><Input key={fileInputKey} type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></Field>
             <Field label={en ? "PDF text order" : "PDF 文字读取方式"}><select className="text-input select-input" value={pdfTextOrder} onChange={(event) => setPdfTextOrder(event.target.value as "layout" | "reading")}><option value="layout">{en ? "Preserve layout (tables)" : "保留版式（表格）"}</option><option value="reading">{en ? "Reading order (prose)" : "阅读顺序（正文）"}</option></select></Field>
             <p>{en ? "Extraction order can change table or paragraph meaning. Check the original PDF; choosing another order creates a separate source." : "读取方式可能改变表格或段落顺序，请对照原 PDF；更换方式会创建一份独立资料。"}</p>
             <Field label={en ? "Title (optional)" : "资料标题（可选）"}><Input value={title} onChange={(event) => setTitle(event.target.value)} /></Field>

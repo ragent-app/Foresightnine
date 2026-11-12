@@ -1,0 +1,10 @@
+{
+  "source_attribution": "U.S. Bureau of Economic Analysis; third-quarter 2024 second and third official GDP estimates.",
+  "id": "GDP_REVISION",
+  "manifest_sha256": "03122dbd52e57e3ad406e2806e3827e29e8ead3667723993c86942c4f6b8b04e",
+  "operation_status": "local_failure",
+  "phase": "source_setup_failed",
+  "operation_id": null,
+  "poll_errors": [],
+  "cost_usd": "unknown"
+}

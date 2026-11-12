@@ -1,6 +1,8 @@
 import { sameOriginOAuthFetcher } from "./api-runtime";
 import type { ResearchV2 } from "@foresightnine/contracts";
 
+export const MAX_RESEARCH_PDF_BYTES = 3_000_000;
+
 export interface SourcePosition { page?: number; character_start?: number; character_end?: number }
 export interface SourceLocation extends SourcePosition { status?: string; matches?: SourcePosition[]; truncated?: boolean }
 export interface SourceContextResult { title: string; before: string; selected: string; after: string; page_start: number | null; page_end: number | null }
@@ -190,7 +192,7 @@ export function researchClient(baseUrl: string) {
       const response = await fetcher(new URL(`/v2/research/sources/${encodeURIComponent(sourceId)}/original`, `${baseUrl.replace(/\/+$/, "")}/`), { method: "GET", headers: { Accept: "application/pdf" } });
       if (!response.ok || !response.headers.get("content-type")?.toLowerCase().startsWith("application/pdf")) throw new Error("original_unavailable");
       const blob = await response.blob();
-      if (blob.size > 1_500_000) throw new Error("original_too_large");
+      if (blob.size > MAX_RESEARCH_PDF_BYTES) throw new Error("original_too_large");
       return blob;
     },
   };

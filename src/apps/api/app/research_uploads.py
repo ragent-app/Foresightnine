@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .research_sources import SourcePermissions
 
 
-MAX_PDF_BYTES = 1_500_000
+MAX_PDF_BYTES = 3_000_000
 MAX_TEXT_BYTES = 2_000_000
 _PDF_WORKERS = BoundedSemaphore(2)
 
@@ -26,7 +26,7 @@ _PDF_WORKERS = BoundedSemaphore(2)
 class PdfUploadRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=500)
-    pdf_base64: str = Field(min_length=1, max_length=2_000_000)
+    pdf_base64: str = Field(min_length=1, max_length=4 * ((MAX_PDF_BYTES + 2) // 3))
     text_order: Literal["layout", "reading"] = "layout"
     is_simulated: bool = False
     published_at: datetime | None = None
