@@ -788,3 +788,28 @@ def test_related_claim_quotation_is_limited_to_unique_visible_matching_source():
     assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(claims,[duplicated]),[duplicated])[1].get("suggested_related_quotations")
     changed=[claims[0],{**claims[1],"text":"Goods fell $9.6 million."}]
     assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(changed,[src]),[src])[1].get("suggested_related_quotations")
+
+
+def test_related_quotation_suggests_percentages_from_table_for_ambiguous_target():
+    from app.research_evidence import suggest_related_claim_quotations
+    note="The projections are hypothetical."
+    table="Bank capital ratios, percent: actual 14.6, projected 15.0, minimum 12.6."
+    text=note+" "+table+" "+note
+    source=ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
+    start=text.index(table);last=text.rindex(note)
+    donor={"text":"Bank ratios","citations":[{"source_id":"s","quotation":table,
+        "location":{"character_start":start,"character_end":start+len(table)}}]}
+    ambiguous={"source_id":"s","quotation":note,"location":{"status":"ambiguous","matches":[
+        {"character_start":0,"character_end":len(note)},{"character_start":last,"character_end":last+len(note)}]}}
+    target={"text":"Actual 14.6%, projected 15.0%, minimum 12.6%.","uncited_percentages":["14.6%","15.0%","12.6%"],"citations":[ambiguous]}
+    out=suggest_related_claim_quotations([donor,target],[source])
+    candidate=out[1]["suggested_related_quotations"][0]
+    assert candidate["quotation"]==table and set(candidate["matched_amounts"])=={"14.6%","15.0%","12.6%"}
+    assert candidate["status"]=="requires_semantic_review" and len(out[1]["citations"])==1
+    assert "suggested_related_quotations" not in target
+    bad={**ambiguous,"location":{"status":"ambiguous","matches":[{"character_start":1,"character_end":len(note)}]}}
+    assert not suggest_related_claim_quotations([donor,{**target,"citations":[bad]}],[source])[1].get("suggested_related_quotations")
+    assert not suggest_related_claim_quotations([donor,target],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[1].get("suggested_related_quotations")
+    duplicated=source.model_copy(update={"text":text+" "+table})
+    assert not suggest_related_claim_quotations([donor,target],[duplicated])[1].get("suggested_related_quotations")

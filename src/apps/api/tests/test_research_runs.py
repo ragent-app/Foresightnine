@@ -2627,3 +2627,44 @@ def test_related_claim_candidate_can_fill_a_missing_counterargument_quote(monkey
     assert not target.get("uncited_dollar_amounts") and not target.get("suggested_related_quotations")
     assert target["authorship"]=="user" and target["support_status"]=="not_independently_verified"
     assert counter["uncited_dollar_amounts"]
+
+
+def test_related_percentage_candidate_can_replace_ambiguous_quotation(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")
+    source_id="";table="Bank ratios, percent: actual 14.6, projected 15.0, minimum 12.6 percent."
+    note="The projections are hypothetical."
+    class Provider:
+        name="related-percent-test"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {"claims":[{"text":"Bank ratios are reported.","citations":[{"source_id":source_id,"quotation":table}]},
+                    {"text":"The actual ratio was 14.6%, projected 15.0%, minimum 12.6%.",
+                     "citations":[{"source_id":source_id,"quotation":note}]}]},20
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    account=client.post("/v1/auth/local/register",json={"email":f"percent-candidate-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+account["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":table+" "+note+" "+note,
+        "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Capital ratios?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"related-percent"},json={
+        "parent_version_id":topic["versions"][0]["version_id"],"require_counterarguments":False}).json()["operation"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+receipt["operation_id"],headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed"
+    version=client.get(path,headers=headers).json()["versions"][-1];content=version["content"]
+    target=content["claims"][1]
+    assert target["citations"][0]["location"]["status"]=="ambiguous"
+    assert set(target["suggested_related_quotations"][0]["matched_amounts"])=={"14.6%","15.0%","12.6%"}
+    assert content["run"]["status"]=="partial"
+    edited=deepcopy(content);edited["claims"][1]["citations"]=[{"source_id":source_id,"quotation":table}]
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
+    assert saved.status_code==201,saved.text
+    target=saved.json()["versions"][-1]["content"]["claims"][1]
+    assert not target.get("uncited_percentages") and not target.get("suggested_related_quotations")
+    assert target["authorship"]=="user" and target["support_status"]=="not_independently_verified"
+    assert content["claims"][1]["uncited_percentages"]

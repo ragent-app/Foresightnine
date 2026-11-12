@@ -17,6 +17,7 @@ from .research_sources import ResearchSource, partial_ascii_token
 _PERCENT = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.\d+)?))\s*(?:%|％|percent\b)", re.IGNORECASE)
 _STRICT_UPPER_BOUND = re.compile(r"(?:\bless\s+than|\bbelow|\bunder|<|小于|小於|低于|低於|少于|少於)\s*$", re.IGNORECASE)
 _DECIMAL_TOKEN = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?![\w.])")
+_RELATED_DECIMAL = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?!\w|\.\d)")
 
 
 def _strict_upper_percentages(text: str) -> list[tuple[Decimal, str]]:
@@ -1057,15 +1058,15 @@ def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources
 
 
 def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
-    """Suggest other claims' uniquely located dollar excerpts, never support.
+    """Suggest other claims' uniquely located numeric excerpts, never support.
 
     Candidates come only from a source already cited by the target claim;
-    equal amounts do not establish entity, currency, period or meaning. The
+    equal numbers do not establish entity, currency, unit, period or meaning. The
     source scan is capped and is deliberately not an exhaustive search.
     """
     source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
     output = [deepcopy(claim) for claim in claims]
-    demands: dict[tuple[str, Decimal], dict[int, list[str]]] = defaultdict(dict)
+    demands: dict[tuple[str, str, Decimal], dict[int, list[str]]] = defaultdict(dict)
 
     def located(citation: object) -> tuple[str, str, dict, ResearchSource] | None:
         if not isinstance(citation, dict) or citation.get("partial_token"):
@@ -1081,22 +1082,49 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
             return None
         return sid, quote, loc, source
 
+    def target_source(citation: object) -> str | None:
+        found = located(citation)
+        if found is not None:
+            return found[0]
+        if not isinstance(citation, dict) or citation.get("partial_token"):
+            return None
+        sid, quote, loc = citation.get("source_id"), citation.get("quotation"), citation.get("location")
+        source = source_map.get(sid) if isinstance(sid, str) else None
+        if source is None or not isinstance(quote, str) or not 1 <= len(quote) <= 1000 or not isinstance(loc, dict):
+            return None
+        matches = loc.get("matches")
+        if loc.get("status") != "ambiguous" or not isinstance(matches, list) or not 1 <= len(matches) <= 5:
+            return None
+        for item in matches:
+            if not isinstance(item, dict):
+                continue
+            a, b = item.get("character_start"), item.get("character_end")
+            if (type(a) is int and type(b) is int and 0 <= a < b <= len(source.text) and
+                    source.text[a:b] == quote and not partial_ascii_token(source.text, a, b)):
+                return sid
+        return None
+
     for index, claim in enumerate(output):
         claim.pop("suggested_related_quotations", None)
-        citations, missing = claim.get("citations"), claim.get("uncited_dollar_amounts")
-        if not isinstance(citations, list) or not isinstance(missing, list):
+        citations = claim.get("citations")
+        if not isinstance(citations, list):
             continue
-        cited_sources = {result[0] for citation in citations[:10] if (result := located(citation)) is not None}
-        for raw in missing[:5]:
-            if not isinstance(raw, str):
+        cited_sources = {sid for citation in citations[:10] if (sid := target_source(citation)) is not None}
+        for kind, field in (("dollar", "uncited_dollar_amounts"), ("percent", "uncited_percentages")):
+            missing = claim.get(field)
+            if not isinstance(missing, list):
                 continue
-            for _, value in _dollar_amounts(raw):
-                for sid in sorted(cited_sources):
-                    demands[(sid, value)].setdefault(index, []).append(raw)
+            for raw in missing[:5]:
+                if not isinstance(raw, str):
+                    continue
+                values = [v for _, v in _dollar_amounts(raw)] if kind == "dollar" else [v for match in _PERCENT.finditer(raw) for v in _quoted_numbers(match.group(1).replace("−", "-"))]
+                for value in values:
+                    for sid in sorted(cited_sources):
+                        demands[(sid, kind, value)].setdefault(index, []).append(raw)
     if not demands:
         return output
     checked = 0
-    seen: set[tuple[int, str, int, int]] = set()
+    seen: dict[tuple[int, str, int, int], dict] = {}
     for source_index, claim in enumerate(output):
         citations = claim.get("citations")
         if not isinstance(citations, list):
@@ -1108,8 +1136,14 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
             sid, quote, loc, source = found
             if citation.get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded", "split_conjunction"}:
                 continue
-            values = {value for _, value in _dollar_amounts(quote)}
-            matching = sorted(value for value in values if (sid, value) in demands)
+            # A period may terminate a sentence immediately after a decimal.
+            # These are candidates only: a bare number does not establish a unit.
+            percent_values = _quoted_numbers(quote)
+            for match in _RELATED_DECIMAL.finditer(quote):
+                if len(match.group()) <= 100:
+                    percent_values.add(Decimal(match.group().replace("−", "-")))
+            values = {("dollar", value) for _, value in _dollar_amounts(quote)} | {("percent", value) for value in percent_values}
+            matching = sorted((kind, value) for kind, value in values if (sid, kind, value) in demands)
             if not matching:
                 continue
             checked += 1
@@ -1118,19 +1152,24 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
             start, end = loc["character_start"], loc["character_end"]
             if source.text.find(quote) != start or source.text.find(quote, start + 1) >= 0:
                 continue
-            for value in matching:
-                for target_index, raws in demands[(sid, value)].items():
+            for kind, value in matching:
+                for target_index, raws in demands[(sid, kind, value)].items():
                     key = (target_index, sid, start, end)
-                    if target_index == source_index or key in seen:
+                    if target_index == source_index:
+                        continue
+                    if key in seen:
+                        candidate = seen[key]
+                        candidate["matched_amounts"] = list(dict.fromkeys([*candidate["matched_amounts"], *raws]))[:5]
                         continue
                     target = output[target_index]
                     candidates = target.setdefault("suggested_related_quotations", [])
                     if len(candidates) >= 5:
                         continue
-                    candidates.append({"source_id": sid, "quotation": quote, "location": deepcopy(loc),
+                    candidate = {"source_id": sid, "quotation": quote, "location": deepcopy(loc),
                                        "matched_amounts": list(dict.fromkeys(raws))[:5],
-                                       "from_claim_index": source_index, "status": "requires_semantic_review"})
-                    seen.add(key)
+                                       "from_claim_index": source_index, "status": "requires_semantic_review"}
+                    candidates.append(candidate)
+                    seen[key] = candidate
     return output
 
 
