@@ -886,9 +886,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             "evidence_guidance": "Quote one continuous source passage; never join passages or quote metadata. "
                 "Cite table headers, units and rows separately. "
                 "Put missing evidence in limitations. Excerpts are not the whole source. "
-                "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period. "
-                "Include enough context to distinguish repeated quotes. For percentage facts set currency to null; "
-                "describe any monetary context in the label. Do not state calculated results before calculation."}
+                "Check PDF columns. Dates are declared, not verified; distinguish publication from period. "
+                "Use unique context for repeated quotes; set percentage currency to null; "
+                "do not state calculated results before calculation."}
     if as_of is not None:
         data["research_cutoff"] = as_of.isoformat()
         data["evidence_guidance"] += " Do not use events after research_cutoff."
