@@ -1,0 +1,226 @@
+{
+  "id": "NVDA_REV",
+  "operation_status": "completed",
+  "manifest_sha256": "132eb1629eed73d0a55e00f800bd995e6ebbaad7e1236acd812e78d3d477f013",
+  "input_sha256": "057344493f628b2c5a27d1ea034cabc267488577977034477b0d33fc3503c0dc",
+  "elapsed_seconds_observed": 20.235,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+        "title": "NVIDIA 2023 Form 10-K SEC HTML text extraction; table separators generated",
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581023000017/nvda-20230129.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T06:38:26.886297+00:00",
+        "revised_at": null,
+        "content_sha256": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fy2023_revenue",
+        "value": "26974",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 29, 2023",
+        "label": "Revenue",
+        "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+        "quotation": "Fiscal Year 2023 Summary\n|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |\n| [colspan=3]   | [colspan=15] Year Ended |\n| [colspan=3]   | [colspan=3] January 29, 2023 | [colspan=3]  | [colspan=3] January 30, 2022 | [colspan=3]  | [colspan=3] Change |\n| [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  |\n| [colspan=3]  | [colspan=15] ($ in millions, except per share data) |\n| [colspan=3] Revenue | $ | 26,974",
+        "quotation_match": "expanded_ellipsis",
+        "numeric_normalization": "thousands_separator",
+        "location": {
+          "character_start": 186021,
+          "character_end": 186474
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fy2022_revenue",
+        "value": "26914",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 30, 2022",
+        "label": "Revenue",
+        "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+        "quotation": "January 30, 2022 | [colspan=3]  | [colspan=3] Change |\n| [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  |\n| [colspan=3]  | [colspan=15] ($ in millions, except per share data) |\n| [colspan=3] Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914",
+        "quotation_match": "expanded_ellipsis",
+        "numeric_normalization": "thousands_separator",
+        "location": {
+          "character_start": 186222,
+          "character_end": 186506
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "period_order_check": "recognized_formats_only",
+        "inputs": [
+          {
+            "fact_id": "fy2023_revenue",
+            "value": "26974",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year Ended January 29, 2023"
+          },
+          {
+            "fact_id": "fy2022_revenue",
+            "value": "26914",
+            "unit": "millions",
+            "currency": "USD",
+            "period": "Year Ended January 30, 2022"
+          }
+        ],
+        "value": "0.22",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "NVIDIA FY2023（截至2023年1月29日）营收为269.74亿美元，FY2022（截至2022年1月30日）营收为269.14亿美元，表中变动显示为“— %”，即基本持平。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "location": {
+              "character_start": 186454,
+              "character_end": 186546
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914  |  | [colspan=3]  | [colspan=2] —  | %"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "suggested_fact_evidence": [
+          {
+            "fact_id": "fy2023_revenue",
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "value": "26974",
+            "unit": "millions",
+            "period": "Year Ended January 29, 2023",
+            "quotation": "Fiscal Year 2023 Summary\n|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |\n| [colspan=3]   | [colspan=15] Year Ended |\n| [colspan=3]   | [colspan=3] January 29, 2023 | [colspan=3]  | [colspan=3] January 30, 2022 | [colspan=3]  | [colspan=3] Change |\n| [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  |\n| [colspan=3]  | [colspan=15] ($ in millions, except per share data) |\n| [colspan=3] Revenue | $ | 26,974",
+            "location": {
+              "character_start": 186021,
+              "character_end": 186474
+            },
+            "status": "requires_semantic_review"
+          },
+          {
+            "fact_id": "fy2022_revenue",
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "value": "26914",
+            "unit": "millions",
+            "period": "Year Ended January 30, 2022",
+            "quotation": "January 30, 2022 | [colspan=3]  | [colspan=3] Change |\n| [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  | [colspan=3]  |\n| [colspan=3]  | [colspan=15] ($ in millions, except per share data) |\n| [colspan=3] Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914",
+            "location": {
+              "character_start": 186222,
+              "character_end": 186506
+            },
+            "status": "requires_semantic_review"
+          }
+        ],
+        "uncited_amounts": [
+          "269.74亿美元",
+          "269.14亿美元"
+        ]
+      },
+      {
+        "text": "营收持平可能掩盖盈利能力恶化：同一期间毛利率同比下降8.0个百分点，表明尽管收入几乎未变，盈利质量显著下滑。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "location": {
+              "character_start": 186563,
+              "character_end": 186680
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Gross margin | [colspan=2] 56.9  | % | [colspan=3]  | [colspan=2] 64.9  | % | [colspan=3]  | [colspan=3] Down 8.0 pts"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_25b4e5ca3b804a22b053b61c8b8b37af: only character ranges 185927–186734 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源为部分提取（source_coverage: partial），表格列被压缩/生成，仅能确认营收与毛利率行，无法核实其他财务明细。",
+      "提供的摘录未包含分部收入或同比增长的百分数值（表中仅显示“— %”），精确增长率需基于引用的原始数值另行计算。",
+      "未提供申报材料的完整上下文（如期间内Arm收购终止付款write-off等对营收对比的影响细节，文中仅提及“write-off of the prepayment”但未完整展示）。",
+      "日期为申报文本声明，未经独立核实。",
+      "A matched amount fact passage is not fully covered by attached quotations; check evidence and context.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:2f8b9927357f77a21b5ea3ef",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1582,
+      "cost_usd": null,
+      "generation_tokens": 1582,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 20.002,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "a2c9b1fc6a838f5dd189b1eef8074a49678f0f7a87eb39345233badc87ce1e96",
+      "prompt_characters": 1961,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v15",
+      "system_prompt_sha256": "3064ad5ca2ecfd077b86858b95881e9678c84a1edcc869bf13a184845e92622d",
+      "selected_segments": [
+        {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "character_start": 185927,
+          "character_end": 186734
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_25b4e5ca3b804a22b053b61c8b8b37af": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

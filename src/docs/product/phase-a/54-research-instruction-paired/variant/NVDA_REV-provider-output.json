@@ -1,0 +1,66 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "NVIDIA FY2023（截至2023年1月29日）营收为269.74亿美元，FY2022（截至2022年1月30日）营收为269.14亿美元，表中变动显示为“— %”，即基本持平。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914  |  | [colspan=3]  | [colspan=2] —  | %"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "营收持平可能掩盖盈利能力恶化：同一期间毛利率同比下降8.0个百分点，表明尽管收入几乎未变，盈利质量显著下滑。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "Gross margin | [colspan=2] 56.9  | % | [colspan=3]  | [colspan=2] 64.9  | % | [colspan=3]  | [colspan=3] Down 8.0 pts"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源为部分提取（source_coverage: partial），表格列被压缩/生成，仅能确认营收与毛利率行，无法核实其他财务明细。",
+      "提供的摘录未包含分部收入或同比增长的百分数值（表中仅显示“— %”），精确增长率需基于引用的原始数值另行计算。",
+      "未提供申报材料的完整上下文（如期间内Arm收购终止付款write-off等对营收对比的影响细节，文中仅提及“write-off of the prepayment”但未完整展示）。",
+      "日期为申报文本声明，未经独立核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fy2023_revenue",
+        "label": "Revenue",
+        "value": "26,974",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 29, 2023",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "Fiscal Year 2023 Summary ... January 29, 2023 ... Revenue | $ | 26,974"
+        }
+      },
+      {
+        "fact_id": "fy2022_revenue",
+        "label": "Revenue",
+        "value": "26,914",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 30, 2022",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "January 30, 2022 ... Revenue | $ | 26,974 | ... | $ | 26,914"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fy2023_revenue",
+        "second_fact_id": "fy2022_revenue"
+      }
+    ]
+  },
+  "reported_tokens": 1582
+}

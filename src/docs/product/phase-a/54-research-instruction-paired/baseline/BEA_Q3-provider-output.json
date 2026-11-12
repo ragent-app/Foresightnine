@@ -1,0 +1,97 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据 BEA 第三次估计，2022 年第三季度实际 GDP 折年增长率为 3.2%。",
+        "citations": [
+          {
+            "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the third quarter of 2022 (table 1), according to the \"third\""
+          }
+        ]
+      },
+      {
+        "text": "第二次估计为 2.9% 的增长，第三次估计较第二次估计上调了 0.3 个百分点。",
+        "citations": [
+          {
+            "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+            "quotation": "In the second estimate, the increase in real GDP was 2.9 percent."
+          }
+        ]
+      },
+      {
+        "text": "第三次估计基于比第二次估计更完整的源数据。",
+        "citations": [
+          {
+            "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+            "quotation": "The “third” estimate of GDP released today is based on more complete source data than were available for the \"second\" estimate issued last month."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "修订幅度（0.3 个百分点）较小，未必改变对该季度经济状况的整体判断；作为对照，2022 年第二季度实际 GDP 下降了 0.6%，显示季度间波动较大，单一季度数据的解读需谨慎。",
+        "citations": [
+          {
+            "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+            "quotation": "In the second quarter, real GDP decreased 0.6 percent."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源文本仅为部分摘录，未包含表格 1 的完整分项构成（消费、投资、净出口等）及公司利润与行业数据细节。",
+      "来源未说明 2.9%→3.2% 修订的具体驱动因素（如消费支出或库存的修正）。",
+      "发布日期（2022-12-22）为声明日期，未经独立验证；季度期间（2022 年 Q3）与发布时间应加以区分。",
+      "折年增长率是年化统计口径，不能直接等同于该季度内的实际增长速度。",
+      "文本提示 PDF 存在压缩或缺口风险，引用的摘录不能保证涵盖完整原文。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_q3_2022_third_estimate",
+        "label": "real GDP annualized growth rate, third estimate",
+        "value": "3.2",
+        "unit": "percent",
+        "currency": null,
+        "period": "2022 Q3",
+        "citation": {
+          "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the third quarter of 2022"
+        }
+      },
+      {
+        "fact_id": "fact_q3_2022_second_estimate",
+        "label": "real GDP annualized growth rate, second estimate",
+        "value": "2.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2022 Q3",
+        "citation": {
+          "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+          "quotation": "In the second estimate, the increase in real GDP was 2.9 percent."
+        }
+      },
+      {
+        "fact_id": "fact_q2_2022_growth",
+        "label": "real GDP change, second quarter 2022",
+        "value": "-0.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "2022 Q2",
+        "citation": {
+          "source_id": "source_50bc8202c2d84f0d9ca7599367f17b0b",
+          "quotation": "In the second quarter, real GDP decreased 0.6 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact_q3_2022_third_estimate",
+        "second_fact_id": "fact_q3_2022_second_estimate"
+      }
+    ]
+  },
+  "reported_tokens": 1682
+}

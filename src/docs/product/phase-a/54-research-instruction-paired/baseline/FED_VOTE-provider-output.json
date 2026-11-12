@@ -1,0 +1,77 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "会议纪要明确记录了对本次货币政策行动（将联邦基金利率目标区间上调至5至5¼ percent）'Voting against this action: None'，即没有委员投反对票。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "Voting against this action: None."
+          }
+        ]
+      },
+      {
+        "text": "纪要列出了投赞成票的委员名单（包括 Cook、Goolsbee、Harker、Jefferson、Kashkari、Logan、Waller 等），与'无异议'的记录一致。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "D. Cook, Austan D. Goolsbee, Patrick Harker, Philip N. Jefferson, Neel Kashkari, Lorie K. Logan, and Christopher J. Waller."
+          }
+        ]
+      },
+      {
+        "text": "成员们同意将联邦基金利率目标区间上调至5至5¼ percent，以支持最大就业和2 percent的长期通胀目标，此即被表决的行动。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "the members agreed to raise the target range for the federal funds rate to 5 to 5¼ percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无实质性反方论点；唯一保留意见是所提供文本为部分摘录，无法确认名单开头是否完整，但'Voting against this action: None'这一句直接且明确。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "Voting against this action: None."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的文本为部分摘录（source_coverage: partial），可能不包含完整表决名单的起始部分（名单以 'D. Cook' 开头，疑为 'Michael S. Barr' 或 'Michelle W. Bowman' 等之前的文本被截断，具体无法确认）。",
+      "来源声明发布日期为2023-05-24，为声明值，未经独立核实；会议本身日期未在摘录中直接出现。",
+      "摘录未包含理事会（Board of Governors）利率行动（如贴现率）的表决情况，该部分文本被截断。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_funds_rate_target",
+        "label": "联邦基金利率目标区间",
+        "value": "5 to 5¼",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2023年5月会议",
+        "citation": {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "quotation": "the members agreed to raise the target range for the federal funds rate to 5 to 5¼ percent"
+        }
+      },
+      {
+        "fact_id": "fact_dissent_count",
+        "label": "反对票数",
+        "value": "0",
+        "unit": "票",
+        "currency": null,
+        "period": "2023年5月会议",
+        "citation": {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "quotation": "Voting against this action: None."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1325
+}

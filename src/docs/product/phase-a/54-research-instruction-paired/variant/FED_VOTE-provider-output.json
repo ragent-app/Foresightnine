@@ -1,0 +1,66 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "会议纪要明确记载对加息行动无反对票（'Voting against this action: None.'）。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "Voting against this action: None."
+          }
+        ]
+      },
+      {
+        "text": "纪要列出投赞成票的委员名单，包括 D. Cook、Austan D. Goolsbee、Patrick Harker、Philip N. Jefferson、Neel Kashkari、Lorie K. Logan 和 Christopher J. Waller。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "D. Cook, Austan D. Goolsbee, Patrick Harker, Philip\nN. Jefferson, Neel Kashkari, Lorie K. Logan, and\nChristopher J. Waller."
+          }
+        ]
+      },
+      {
+        "text": "本次会议将联邦基金利率目标区间上调至 5 至 5¼%。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "the members agreed to raise the target range for\nthe federal funds rate to 5 to 5¼ percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "所提供摘录为部分文本（source_coverage: partial），未包含完整投票名单及会议日期等细节；文中提及的 Harker、Goolsbee 等在 2023 年公开报道中有过不同意见表态，但纪要摘录本身明确记录本次行动无反对票，未提供其他异议证据。",
+      "发布时间（2023-05-24）为声明值，未经独立核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_ffr_range",
+        "label": "联邦基金利率目标区间",
+        "value": "5 to 5¼",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2023年5月会议",
+        "citation": {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "quotation": "raise the target range for the federal funds rate to 5 to 5¼ percent"
+        }
+      },
+      {
+        "fact_id": "fact_dissent",
+        "label": "反对票数量",
+        "value": "None",
+        "unit": "票",
+        "currency": null,
+        "period": "2023年5月会议",
+        "citation": {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "quotation": "Voting against this action: None."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1174
+}

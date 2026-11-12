@@ -1,0 +1,79 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据 NVIDIA FY 2023 Form 10-K，FY 2023 Revenue 为 $26,974 百万，FY 2022 Revenue 为 $26,914 百万，公司披露的变化为「— %」（约持平）。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914  |  | [colspan=3]  | [colspan=2] —  | %"
+          }
+        ]
+      },
+      {
+        "text": "两期收入单位为百万美元（$ in millions），FY 2023 期间截至 2023 年 1 月 29 日，FY 2022 期间截至 2022 年 1 月 30 日。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "January 29, 2023 | [colspan=3]  | [colspan=3] January 30, 2022"
+          },
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "($ in millions, except per share data)"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "虽然收入基本持平，但公司披露 FY 2023 毛利率同比下降 8.0 个百分点（56.9% vs 64.9%），说明收入持平的同时盈利能力显著恶化，「收入持平」不代表整体经营状况持平。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "Gross margin | [colspan=2] 56.9  | % | [colspan=3]  | [colspan=2] 64.9  | % | [colspan=3]  | [colspan=3] Down 8.0 pts"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源为「partial（部分摘录）」的表格文本抽取，可能存在列压缩或错位，无法验证全部上下文；本回答仅基于所给摘录。",
+      "摘录中未包含各业务分部（如 Gaming、Data Center）的收入明细，无法解释收入持平的驱动因素。",
+      "摘录中提到 fiscal year 2023 有一笔预付款注销（write-off of the prepayment），但上下文不完整，无法确定其完整影响。",
+      "无法独立验证申报文件发布日期与期间日期；期间日期以文件声明为准。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_fy2023_revenue",
+        "label": "Revenue FY 2023",
+        "value": "26,974",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Fiscal year ended January 29, 2023",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "Revenue | $ | 26,974"
+        }
+      },
+      {
+        "fact_id": "fact_fy2022_revenue",
+        "label": "Revenue FY 2022",
+        "value": "26,914",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Fiscal year ended January 30, 2022",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "$ | 26,914"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_fy2023_revenue",
+        "second_fact_id": "fact_fy2022_revenue"
+      }
+    ]
+  },
+  "reported_tokens": 1795
+}
