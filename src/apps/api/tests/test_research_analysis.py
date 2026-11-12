@@ -224,8 +224,9 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
         payload = json.loads(prompt)
         example = payload["output_schema"]["counterarguments"][0]
         assert example["citations"][0]["quotation"] == "quote"
-        assert "missing evidence in limitations" in payload["evidence_guidance"]
-        assert "one continuous source passage" in payload["evidence_guidance"]
+        assert "all requested facts in claims" in payload["evidence_guidance"]
+        assert "gaps in limitations" in payload["evidence_guidance"]
+        assert "Quote continuous passages" in payload["evidence_guidance"]
         assert "never join passages or quote metadata" in payload["evidence_guidance"]
         assert "Cite table headers, units and rows separately" in payload["evidence_guidance"]
         return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
@@ -240,7 +241,7 @@ def test_prompt_distinguishes_full_source_from_partial_excerpts():
         def generate(prompt):
             payload = json.loads(prompt)
             assert all(entry["source_coverage"] == expected for entry in payload["sources"])
-            assert "not the whole source" in payload["evidence_guidance"]
+            assert "Excerpts are partial" in payload["evidence_guidance"]
             return {"claims": []}, 10
         return generate
     analyze("Revenue?", [source("short")], None, inspect("complete"))

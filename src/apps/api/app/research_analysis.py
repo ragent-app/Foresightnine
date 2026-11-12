@@ -1554,9 +1554,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                            "citation": {"source_id": "id", "quotation": "quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}]},
-            "evidence_guidance": "Quote one continuous source passage; never join passages or quote metadata. "
+            "evidence_guidance": "Quote continuous passages; never join passages or quote metadata. "
                 "Cite table headers, units and rows separately. "
-                "Put missing evidence in limitations. Excerpts are not the whole source. "
+                "Put all requested facts in claims; put gaps in limitations. Excerpts are partial. "
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
     if as_of is not None:
         data["research_cutoff"] = as_of.isoformat()
