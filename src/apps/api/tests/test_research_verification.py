@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v23"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v24"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -444,3 +444,16 @@ def test_percentage_bound_must_be_cited_as_a_bound_before_review():
         "location":{"character_start":0,"character_end":len(quote)}}]}
     batch = prepare_support_review([item],[report],3000)
     assert batch.omissions == [{"claim_index":0,"reason":"not_reviewable"}]
+
+
+def test_model_review_recomputes_rate_unit_and_declared_publication_mismatch():
+    from datetime import datetime, timezone
+    report = source().model_copy(update={"published_at": datetime(2023, 10, 27, tzinfo=timezone.utc)})
+    bad_date = {**claim(), "text": "BEA 2023年9月发布的公告", "publication_date_warnings": []}
+    bad_rate = {**claim(), "text": "利率区间为4.25至4.50个百分点。", "rate_unit_warnings": []}
+    ok = {**claim(), "text": "BEA 2023年10月发布的公告", "publication_date_warnings": [{"stale": True}]}
+    for item in (bad_date, bad_rate):
+        batch = prepare_support_review([item], [report], 3000)
+        assert batch.indexes == []
+        assert batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]
+    assert prepare_support_review([ok], [report], 3000).indexes == [0]
