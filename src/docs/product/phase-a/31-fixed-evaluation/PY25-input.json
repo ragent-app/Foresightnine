@@ -1,0 +1,8 @@
+{
+  "id": "PY25",
+  "question": "使用提供的 PayPal 2024 和 2025 财年净收入，列示金额、期间和单位，计算同比增长率，并说明资料限制。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"PayPal Holdings Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2024\":\"2024-12-31\",\"2025\":\"2025-12-31\"},\"net_revenues\":{\"2024\":31797,\"2025\":33172}}",
+  "source_title": "PayPal 2025 SEC 10-K: derived net revenue facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/1633917/000163391726000024/pypl-20251231.htm"
+}

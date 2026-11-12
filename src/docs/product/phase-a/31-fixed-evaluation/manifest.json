@@ -1,0 +1,45 @@
+{
+  "assessment": "New nonblind development tasks; PDF extraction order predetermined per task. No independent validation, no causal comparison to earlier prompts and no broad quality acceptance. F25J maintain-versus-adjust semantic support requires separate review.",
+  "cost_usd": "unknown; no monetary cap asserted",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "269494e6eaaa06961c35b77aa92cf3f1c3c7ef89",
+  "inputs": [
+    {
+      "id": "PY25",
+      "sha256": "c255aa754c6a5b70dcf0a12a51deadbbdb4e0f15e929c12219e44c189bdce1bb"
+    },
+    {
+      "id": "P25A",
+      "sha256": "fb5fda4fbd0abcf46bd203d39172b3218db57558953bba434191934f7dd35cc6"
+    },
+    {
+      "id": "F25J",
+      "sha256": "9140a908685604a1248a8a49a510fa728a4beb1eee79c3838e28422361ce3a12"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 3,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "Every required fact matches value, period, unit, source position and contextual qualifier; each has a corresponding located support citation; every supporting claim is cited; company calculations match inputs/formula/value; no unrecognized percentage, omitted citation or program-reported numeric, amount or publication-date warning; budget respected. Three of three mechanical passes are required for this small set. This does not prove natural-language entailment, historical byte identity, full-document coverage or overall product quality.",
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "e25aa71a29408f8e8231fd785c4b35e427455403d41df04b2ba65d8f8aeec25a",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "cbfe286c97a2822e9d37f8064771ace9e06cf3b86e0c6972b6888d767313c065",
+  "scorer_sha256": "e01d44c35f69837046f560478e550c9367b90972aaf66136ca28ef8b00ade872",
+  "search_calls": 0
+}

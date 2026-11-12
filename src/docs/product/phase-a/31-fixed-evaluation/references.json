@@ -1,0 +1,81 @@
+{
+  "PY25": {
+    "allowed_percentages": [
+      "4.32"
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "33172",
+        "31797"
+      ],
+      "value": "4.32"
+    },
+    "facts": [
+      {
+        "literal": "31797",
+        "period": "2024",
+        "value": "31797"
+      },
+      {
+        "literal": "33172",
+        "period": "2025",
+        "value": "33172"
+      }
+    ],
+    "kind": "company",
+    "unit": "USD millions"
+  },
+  "P25A": {
+    "allowed_percentages": [
+      "0.3",
+      "2.7",
+      "0.2",
+      "2.9"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "literal": "0.3",
+        "period": "2025",
+        "value": "0.3",
+        "basis": [
+          "preceding month"
+        ]
+      },
+      {
+        "literal": "2.7",
+        "period": "2025",
+        "value": "2.7",
+        "basis": [
+          "same month one year",
+          "one year ago"
+        ]
+      }
+    ],
+    "kind": "macro",
+    "unit": "percent"
+  },
+  "F25J": {
+    "allowed_percentages": [
+      "4.25",
+      "4.5",
+      "2"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "literal": "4-1/4",
+        "period": "2025",
+        "value": "4.25"
+      },
+      {
+        "literal": "4-1/2",
+        "period": "2025",
+        "value": "4.5"
+      }
+    ],
+    "kind": "macro",
+    "unit": "percent"
+  }
+}

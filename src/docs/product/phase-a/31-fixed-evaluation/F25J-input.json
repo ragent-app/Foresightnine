@@ -1,0 +1,11 @@
+{
+  "id": "F25J",
+  "question": "根据提供的美联储 2025 年 1 月 29 日声明，联邦基金利率目标区间是多少，本次决定是维持还是调整？",
+  "source_kind": "original_pdf",
+  "source_file": "fed-jan-2025.pdf",
+  "source_title": "Federal Reserve FOMC statement January 29, 2025",
+  "published_at": "2025-01-29T19:00:00Z",
+  "text_order": "layout",
+  "source_sha256": "fbb886257e82c1ef1c21b34f235dfe9435eefc902c04d53356874784d6691a21",
+  "source_text_sha256": "c51f35e13ab23ef4388e4ca35f2e8423293c9be27e64afb87bc5d60343a21c1c"
+}

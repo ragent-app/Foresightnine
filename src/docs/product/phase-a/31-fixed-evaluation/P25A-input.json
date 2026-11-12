@@ -1,0 +1,11 @@
+{
+  "id": "P25A",
+  "question": "根据提供的美国经济分析局公告，2025 年 8 月总体 PCE 价格指数较上月和较上年同期分别变化多少？区分两种比较口径。",
+  "source_kind": "original_pdf",
+  "source_file": "bea-august-2025.pdf",
+  "source_title": "BEA Personal Income and Outlays August 2025",
+  "published_at": "2025-09-26T12:30:00Z",
+  "text_order": "reading",
+  "source_sha256": "3308842a2c5eb813444b05d83820aed19e8e673cf301e838327ff7fffe4106e3",
+  "source_text_sha256": "636171fbb53eab5a44e7b05a0f04a0fdd56cb6b751cfe89c533a1f2444256c8a"
+}
