@@ -64,7 +64,7 @@ export interface ResearchOperation {
   status: string;
   cancel_token: string;
 }
-export interface SourceMetadata { source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
+export interface SourceMetadata { pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string; published_at?: string | null }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
 export interface RunBudget { questionOverride?: string; search: boolean; supportReview: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean }

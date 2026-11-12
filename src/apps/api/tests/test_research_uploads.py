@@ -10,6 +10,9 @@ from app.research_analysis import analyze
 from app.research_sources import ResearchSource, SourcePermissions
 from app.research_uploads import PdfFailure, PdfUploadRequest, extract_pdf
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from uuid import uuid4
+import time
 
 
 def tiny_pdf() -> bytes:
@@ -103,6 +106,54 @@ def test_pdf_reading_order_is_explicit_and_keeps_original_evidence(monkeypatch):
     assert citation["quotation_match"] == "whitespace_normalized"
     assert source["text"][location["character_start"]:location["character_end"]] == citation["quotation"]
     assert location["page"] == 2
+
+
+@pytest.mark.skipif(not shutil.which("prlimit") or not shutil.which("pdftotext"), reason="PDF extraction tools unavailable")
+def test_pdf_spacing_warning_is_visible_and_marks_research_partial(monkeypatch):
+    import app.main as api
+    from app.research_sources import pdf_text_spacing_suspect
+    from app.research_uploads import _extract_text
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    raw=(Path(__file__).resolve().parents[3]/"docs/product/phase-a/209-cross-domain-frozen/bea-2021-may.pdf").read_bytes()
+    reading=_extract_text(raw,text_order="reading");layout=_extract_text(raw,text_order="layout")
+    def report(text, method="user_pdf"):
+        return ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+            obtained_at=datetime.now(timezone.utc),content_sha256="hash",retrieval_method=method,
+            permissions=SourcePermissions(store=True,display=True,model_input=True,export=True))
+    assert pdf_text_spacing_suspect(report(reading))
+    assert not pdf_text_spacing_suspect(report(layout))
+    assert not pdf_text_spacing_suspect(report(reading,"user_supplied"))
+    assert not pdf_text_spacing_suspect(report("中文资料"*1000))
+    client=TestClient(app)
+    reg=client.post("/v1/auth/local/register",json={"email":f"pdf-spacing-{uuid4().hex}@example.test","password":"correct horse battery staple!"})
+    headers={"Authorization":"Bearer "+reg.json()["access_token"]}
+    uploaded=client.post("/v2/research/sources/pdf",headers=headers,json={**body(raw),"text_order":"reading"})
+    assert uploaded.status_code==201 and uploaded.json()["pdf_text_spacing_warning"] is True
+    sid=uploaded.json()["source_id"]
+    assert client.get("/v2/research/sources/"+sid,headers=headers).json()["pdf_text_spacing_warning"] is True
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"How did spending change?","source_ids":[sid]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    sources=client.get(path+"/versions/"+topic["versions"][0]["version_id"]+"/sources",headers=headers).json()
+    assert sources[0]["pdf_text_spacing_warning"] is True
+    quote="Current-dollarconsumerspendingincreasedinMay,reflectingan increasein servicesthatwas partly\noffsetbyadecreaseingoods."
+    class Provider:
+        name="pdf-spacing-test"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {"claims":[{"text":"Consumer spending changed.","citations":[{"source_id":sid,"quotation":quote}]}]},10
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"pdf-spacing"},json={
+        "parent_version_id":topic["versions"][0]["version_id"],"require_counterarguments":False}).json()["operation"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+receipt["operation_id"],headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed"
+    version=client.get(path,headers=headers).json()["versions"][-1]
+    assert version["content"]["run"]["status"]=="partial"
+    assert any("PDF text may have missing word spacing" in x for x in version["content"]["limitations"])
+    exported=client.get(path+"/versions/"+version["version_id"]+"/export",headers=headers).json()
+    assert exported["source_provenance"][0]["pdf_text_spacing_warning"] is True
 
 
 def test_pdf_rejects_missing_rights_and_invalid_content():

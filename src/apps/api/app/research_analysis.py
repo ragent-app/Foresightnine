@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .research_sources import ResearchSource, partial_ascii_token
+from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
 
 
@@ -1503,6 +1503,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     for index, source in enumerate(eligible):
         if should_stop is not None and should_stop():
             raise AnalysisInterrupted()
+        if pdf_text_spacing_suspect(source):
+            limitations.append(f"Source {source.source_id}: PDF text may have missing word spacing; check the original and consider another extraction order.")
         # Share the source-character allowance so an early long filing does
         # not crowd every later comparison source out of the prompt.
         share = remaining // (len(eligible) - index)

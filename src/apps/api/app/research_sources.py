@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from hashlib import sha256
+import re
 from typing import Literal
 from uuid import uuid4
 
@@ -89,6 +90,25 @@ class SourceNotFound(Exception):
 
 class SourcePermissionError(ValueError):
     pass
+
+
+def pdf_text_spacing_suspect(source: ResearchSource) -> bool:
+    """Conservative signal for heavily joined Latin words, not a quality verdict.
+
+    Sample at most 100,000 characters across the document. Other scripts and
+    short excerpts are not assessed; false positives and false negatives remain.
+    """
+    if source.retrieval_method != "user_pdf":
+        return False
+    text = source.text
+    if len(text) <= 100_000:
+        sample = text
+    else:
+        sample = " ".join(text[(len(text) - 20_000) * i // 4: (len(text) - 20_000) * i // 4 + 20_000] for i in range(5))
+    words = re.findall(r"[A-Za-z]{2,}", sample)
+    total = sum(len(word) for word in words)
+    long_words = [word for word in words if len(word) >= 25]
+    return total >= 1000 and len(long_words) >= 6 and sum(map(len, long_words)) * 100 >= total * 12
 
 
 def partial_ascii_token(text: str, start: int, end: int) -> bool:
