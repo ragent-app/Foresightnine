@@ -36,12 +36,13 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v28"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v29"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
     "儲": "储", "幣": "币", "對": "对", "異": "异", "調": "调", "變": "变", "購": "购",
     "買": "买", "國": "国", "貸": "贷", "債": "债", "減": "减", "額": "额", "較": "较",
+    "現": "现", "動": "动", "淨": "净", "產": "产", "經": "经",
     "實": "实", "長": "长", "總": "总", "網": "网", "銷": "销", "價": "价", "類": "类",
     "業": "业", "預": "预", "來": "来", "繼": "继", "續": "续", "點": "点", "個": "个",
     "潤": "润", "營": "营", "訂": "订", "計": "计"})
@@ -543,18 +544,35 @@ def _asset_purchase_window(text: str, question: str, size: int,
 
 def _financial_table_windows(text: str, question: str, size: int,
                              should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
-    """Keep a fiscal-year header, units and a matching total row together.
+    """Keep requested statement rows, period header and units as retrieval hints.
 
-    This is a bounded retrieval hint for extracted tables, not a claim that
-    a column belongs to a period or that the cited passage proves a result.
+    Only one unambiguous metric at a time is handled; column alignment,
+    accounting basis and evidence support remain unverified.
     """
     lower = _query_intent(question)
-    if not any(term in lower for term in ("revenue", "sales", "收入", "营收")):
+    if (any(term in lower for term in ("margin", "利润率", "毛利率", "净利率", "季度", "季报", "季報", "quarter")) or
+            re.search(r"(?<![a-z0-9])q[1-4](?![a-z0-9])", lower)):
         return None
+    choices_by_metric = {
+        "operating_cash": (any(term in lower for term in ("operating cash flow", "cash from operating", "cash flows from operating", "经营活动现金", "经营现金流", "经营活动产生的现金")),
+            r"net[ \t]+cash[ \t]+(?:provided[ \t]+by|used[ \t]+in|from)[ \t]+operating[ \t]+activities"),
+        "operating_income": (any(term in lower for term in ("operating income", "operating profit", "营业利润", "经营利润")),
+            r"operating[ \t]+(?:income|profit)(?:[ \t]*\(loss\))?"),
+        "net_income": (any(term in lower for term in ("net income", "net profit", "净利润", "净收益")),
+            r"net[ \t]+(?:income|profit)(?:[ \t]*\(loss\))?"),
+        "gross_profit": (any(term in lower for term in ("gross profit", "毛利润", "毛利")),
+            r"gross[ \t]+profit"),
+        "revenue": (any(term in lower for term in ("revenue", "sales", "收入", "营收")),
+            r"(?:total[ \t]+)?(?:revenue|sales)"),
+    }
+    matched = [(name, pattern) for name, (wanted, pattern) in choices_by_metric.items() if wanted]
+    if len(matched) != 1:
+        return None
+    metric_name, row_pattern = matched[0]
     years = list(dict.fromkeys(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", lower)))
     if len(years) != 2:
         return None
-    pattern = r"(?im)^[ \t]*\|[ \t]*(?:\[colspan=\d+\][ \t]*)?(?:total[ \t]+)?(?:revenue|sales)[ \t]*\|[^\n]{1,500}"
+    pattern = r"(?im)^[ \t]*\|[ \t]*(?:\[colspan=\d+\][ \t]*)?" + row_pattern + r"[ \t]*\|[^\n]{1,500}"
     choices: list[tuple[int, int, tuple[int, int] | None, int]] = []
     for index, match in enumerate(re.finditer(pattern, text)):
         if index >= 256:
@@ -567,27 +585,43 @@ def _financial_table_windows(text: str, question: str, size: int,
         if any(position < 0 for position in positions):
             continue
         first_year = min(positions)
-        # Units may precede the year header, as in many financial statements.
+        # Some statements put units after the year row. Prefer a nearby
+        # following unit over one that may belong to a preceding table.
         unit_matches = list(re.finditer(r"\b(?:million|billion|thousand)s?\b", previous, re.IGNORECASE))
-        unit = next((item for item in reversed(unit_matches) if item.start() <= first_year), None)
-        context_start = max(0, min(first_year - 75, unit.start() - 100 if unit else first_year - 75))
-        header = previous[context_start:]
-        if not re.search(r"\b(?:year|years)\s+ended\b", header, re.IGNORECASE):
+        headings = [item for item in re.finditer(r"\b(?:year|years)\s+ended\b", previous, re.IGNORECASE)
+                    if item.start() <= first_year]
+        if not headings:
             continue
-        if not re.search(r"\b(?:million|billion|thousand)s?\b", previous[context_start:], re.IGNORECASE):
+        heading = headings[-1]
+        after = next((item for item in unit_matches if max(positions) < item.start() <= max(positions) + 300), None)
+        if after:
+            # A prose break between the year row and units may indicate a
+            # different table; do not associate the two through that break.
+            between = previous[max(positions):after.start()].splitlines()[1:]
+            if any(line.strip() and not line.lstrip().startswith("|") for line in between):
+                continue
+        unit = after or next((item for item in reversed(unit_matches) if item.start() <= first_year), None)
+        if unit is None or (after is None and heading.start() - unit.start() > 250):
+            continue
+        context_start = max(0, min(heading.start() - 25, unit.start() - 100 if unit.start() < first_year else heading.start() - 25))
+        header_tail = max(max(positions), unit.end() if unit.start() > max(positions) else max(positions))
+        header_newline = previous.find("\n", header_tail)
+        if header_newline < 0:
             continue
         start = previous_start + context_start
         end = match.end()
         nearby = text[max(0, start - 300):match.start()].casefold()
-        priority = (int("consolidated statements of operations" in nearby) * 2 +
-                    int("total revenue" in match.group().casefold()) -
+        statement_cue = ("consolidated statements of cash flows" if metric_name == "operating_cash" else
+                         "consolidated statements of operations")
+        priority = (int(statement_cue in nearby) * 2 +
+                    int(metric_name == "revenue" and "total revenue" in match.group().casefold()) -
                     int("pro forma" in nearby and "pro forma" not in lower) * 3)
         if end - start <= size:
             choices.append((start, end, None, priority))
         else:
             # Preserve the header and total row as separate, original spans
             # only when every intervening line belongs to the same table.
-            header_end = previous_start + previous.find("\n", max(positions)) + 1
+            header_end = previous_start + header_newline + 1
             middle = text[header_end:match.start()]
             if (header_end > start and all(not line.strip() or line.lstrip().startswith("|")
                                            for line in middle.splitlines()) and

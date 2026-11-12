@@ -1278,3 +1278,37 @@ def test_model_growth_with_different_period_labels_is_explicitly_flagged():
     assert len(result.facts) == 2 and len(result.calculations) == 1
     assert result.calculations[0]['period_granularity_check'] == 'different_labels_verify_stock_or_flow'
     assert any('Period comparability is not established' in note for note in result.limitations)
+
+
+def test_financial_metric_table_selects_matching_single_metric_and_nearby_units():
+    # The earlier unit belongs to a different table and must not displace the
+    # unit explicitly shown below this table's year columns.
+    older = '| Previous balance sheet |\n| (in billions) |\n| Other | 700 | 600 |\n' + '| other | 1 | 2 |\n' * 10
+    header = '| Year Ended |\n| January 29, 2024 | January 30, 2023 |\n| (in millions) |\n'
+    rows = ('| Net cash provided by operating activities | 120 | 100 |\n'
+            '| Operating income (loss) | 50 | 40 |\n'
+            '| Net income | 30 | 25 |\n'
+            '| Gross profit | 70 | 60 |\n'
+            '| Revenue | 200 | 190 |\n')
+    text = 'Other information. ' * 50 + older + header + rows + 'Other information. ' * 50
+    for question, expected in [
+        ('对比2024年和2023年经营活动现金流', 'Net cash provided by operating activities'),
+        ('比较2024年和2023年营业利润', 'Operating income (loss)'),
+        ('Compare 2024 and 2023 net income', 'Net income'),
+        ('比较2024和2023年毛利润', 'Gross profit'),
+    ]:
+        parts = _financial_table_windows(text, question, 500)
+        assert parts
+        selected = ''.join(part for _, part in parts)
+        assert expected in selected and '2024' in selected and '2023' in selected and 'millions' in selected
+        assert all(text[start:start+len(part)] == part for start, part in parts)
+    cash = _financial_table_windows(text, '对比2024年和2023年经营活动现金流', 500)
+    assert cash and 'billions' not in ''.join(part for _, part in cash)
+    assert _financial_table_windows(text, '比较2024和2023年的营收及净利润', 500) is None
+    assert _financial_table_windows(text, '比较2024和2023年的净利润率', 500) is None
+    assert _financial_table_windows(text, 'Compare 2024 Q1 and 2023 Q1 net income', 500) is None
+    assert _financial_table_windows(text, '比较2024年和2023年第一季度的经营现金流', 500) is None
+    separated = '| Year Ended |\n| 2024 | 2023 |\nUnrelated discussion.\n| (in millions) |\n| Net income | 30 | 25 |\n'
+    assert _financial_table_windows(separated, 'Compare 2024 and 2023 net income', 500) is None
+    distant_unit = '| (in millions) |\n' + '| unrelated row | 1 | 2 |\n' * 20 + '| Year Ended | 2024 | 2023 |\n| Net income | 30 | 25 |\n'
+    assert _financial_table_windows(distant_unit, 'Compare 2024 and 2023 net income', 1000) is None
