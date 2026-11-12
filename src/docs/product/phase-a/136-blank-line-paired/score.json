@@ -1,0 +1,15 @@
+{
+  "FED_PURCHASES-6000": {
+    "signals": {
+      "target_range": true,
+      "treasury_amount": true,
+      "mortgage_amount": true,
+      "risk_any_claim": true
+    },
+    "all_retained_claims_located": true,
+    "valid_claims": 5,
+    "claims_total": 5,
+    "counter_count": 1,
+    "semantic_support": "not independently established"
+  }
+}

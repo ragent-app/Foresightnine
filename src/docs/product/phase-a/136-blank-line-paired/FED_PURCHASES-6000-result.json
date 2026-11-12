@@ -1,0 +1,287 @@
+{
+  "task": "FED_PURCHASES",
+  "input_limit": 6000,
+  "manifest_sha256": "51bf74a84027e23325326c344f2fb42fe63764df5e0a80a0a702e462e37f5f1a",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 2141,
+  "prompt_sha256": "41be9a55ce94ff9709873e21a0c264e2c70092ad68339706b48481bb2f2d6d71",
+  "segments": [
+    {
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "character_start": 2758,
+      "character_end": 6468
+    },
+    {
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "character_start": 6575,
+      "character_end": 8344
+    }
+  ],
+  "claims": [
+    {
+      "text": "The FOMC kept the target range for the federal funds rate at 0 to 1/4 percent and expects to maintain this range until labor market conditions reach levels consistent with maximum employment and inflation has risen to 2 percent and is on track to moderately exceed 2 percent for some time.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 6782,
+            "character_end": 7155
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent and expects it will be appropriate to maintain this target range until labor market conditions have reached levels consistent with the Committee's assessments of maximum employment and inflation has risen to 2 percent and is on track to moderately exceed 2 percent for some time."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "The Fed continues to increase its holdings of Treasury securities by at least $80 billion per month and agency mortgage-backed securities by at least $40 billion per month, continuing until substantial further progress toward its maximum employment and price stability goals.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 7156,
+            "character_end": 7480
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "Last December, the Committee indicated that it would continue to increase its holdings of Treasury securities by at least $80 billion per month and of agency mortgage‑backed securities by at least $40 billion per month until substantial further progress has been made toward its maximum employment and price stability goals."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "The Committee identified that risks to the economic outlook remain, despite vaccination progress likely reducing the effects of the public health crisis, and that the path of the economy continues to depend on the course of the virus.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 6058,
+            "character_end": 6283
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "The path of the economy continues to depend on the course of the virus. Progress on vaccinations will likely continue to reduce the effects of the public health crisis on the economy, but risks to the economic outlook remain."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    },
+    {
+      "text": "The Committee stated it would be prepared to adjust the stance of monetary policy if risks emerge that could impede attainment of its goals, monitoring public health, labor market conditions, inflation pressures and expectations, and financial and international developments.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 7947,
+            "character_end": 8108
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "The Committee would be prepared to adjust the stance of monetary policy as appropriate if risks emerge that could impede the attainment of the Committee's goals."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "counterarguments": [
+    {
+      "text": "The statement describes inflation as rising 'largely reflecting transitory factors,' implying limited concern about persistent inflation, but the source is the Committee's own characterization and later data could contradict the transitory view; the excerpt does not include dissenting views.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "location": {
+            "character_start": 5828,
+            "character_end": 5887
+          },
+          "quotation_match": "exact",
+          "support_status": "not_independently_verified",
+          "quotation": "Inflation has risen, largely reflecting transitory factors."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "fed_funds_target:lower",
+      "value": "0",
+      "unit": "percent",
+      "currency": "USD",
+      "period": "as of 2021-07-28",
+      "label": "federal funds target range (lower bound)",
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent",
+      "quotation_match": "exact",
+      "currency_context_unverified": true,
+      "numeric_normalization": "exact_range_bound",
+      "range_parent_id": "fed_funds_target",
+      "location": {
+        "character_start": 6782,
+        "character_end": 6875
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "fed_funds_target:upper",
+      "value": "0.25",
+      "unit": "percent",
+      "currency": "USD",
+      "period": "as of 2021-07-28",
+      "label": "federal funds target range (upper bound)",
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent",
+      "quotation_match": "exact",
+      "currency_context_unverified": true,
+      "numeric_normalization": "exact_range_bound",
+      "range_parent_id": "fed_funds_target",
+      "location": {
+        "character_start": 6782,
+        "character_end": 6875
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "treasury_purchases",
+      "value": "80",
+      "unit": "billion USD per month (at least)",
+      "currency": "USD",
+      "period": "continuing from December 2020 until substantial further progress",
+      "label": "Treasury securities purchases",
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "quotation": "continue to increase its holdings of Treasury securities by at least $80 billion per month",
+      "quotation_match": "exact",
+      "location": {
+        "character_start": 7209,
+        "character_end": 7299
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "mbs_purchases",
+      "value": "40",
+      "unit": "billion USD per month (at least)",
+      "currency": "USD",
+      "period": "continuing from December 2020 until substantial further progress",
+      "label": "agency mortgage-backed securities purchases",
+      "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+      "quotation": "of agency mortgage‑backed securities by at least $40 billion per month",
+      "quotation_match": "exact",
+      "location": {
+        "character_start": 7304,
+        "character_end": 7374
+      },
+      "verification": "model_extraction_not_independently_verified"
+    }
+  ],
+  "calculations": [],
+  "limitations": [
+    "Source source_8a668505f5fe4d16b9694d2dfce28713: only character ranges 2758–6468, 6575–8344 were analyzed; remaining text was not examined.",
+    "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "Model-reported limitation (not independently verified): The source excerpt is partial and may not include the full statement (e.g., voting details, balance sheet totals).",
+    "Model-reported limitation (not independently verified): Publication date (2021-07-28) is declared, not independently verified.",
+    "Model-reported limitation (not independently verified): No end date for asset purchases is given; duration is condition-based ('until substantial further progress')."
+  ],
+  "raw": {
+    "claims": [
+      {
+        "text": "The FOMC kept the target range for the federal funds rate at 0 to 1/4 percent and expects to maintain this range until labor market conditions reach levels consistent with maximum employment and inflation has risen to 2 percent and is on track to moderately exceed 2 percent for some time.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent and expects it will be appropriate to maintain this target range until labor market conditions have reached levels consistent with the Committee's assessments of maximum employment and inflation has risen to 2 percent and is on track to moderately exceed 2 percent for some time."
+          }
+        ]
+      },
+      {
+        "text": "The Fed continues to increase its holdings of Treasury securities by at least $80 billion per month and agency mortgage-backed securities by at least $40 billion per month, continuing until substantial further progress toward its maximum employment and price stability goals.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "Last December, the Committee indicated that it would continue to increase its holdings of Treasury securities by at least $80 billion per month and of agency mortgage‑backed securities by at least $40 billion per month until substantial further progress has been made toward its maximum employment and price stability goals."
+          }
+        ]
+      },
+      {
+        "text": "The Committee identified that risks to the economic outlook remain, despite vaccination progress likely reducing the effects of the public health crisis, and that the path of the economy continues to depend on the course of the virus.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "The path of the economy continues to depend on the course of the virus. Progress on vaccinations will likely continue to reduce the effects of the public health crisis on the economy, but risks to the economic outlook remain."
+          }
+        ]
+      },
+      {
+        "text": "The Committee stated it would be prepared to adjust the stance of monetary policy if risks emerge that could impede attainment of its goals, monitoring public health, labor market conditions, inflation pressures and expectations, and financial and international developments.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "The Committee would be prepared to adjust the stance of monetary policy as appropriate if risks emerge that could impede the attainment of the Committee's goals."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The statement describes inflation as rising 'largely reflecting transitory factors,' implying limited concern about persistent inflation, but the source is the Committee's own characterization and later data could contradict the transitory view; the excerpt does not include dissenting views.",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "Inflation has risen, largely reflecting transitory factors."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source excerpt is partial and may not include the full statement (e.g., voting details, balance sheet totals).",
+      "Publication date (2021-07-28) is declared, not independently verified.",
+      "No end date for asset purchases is given; duration is condition-based ('until substantial further progress')."
+    ],
+    "facts": [
+      {
+        "fact_id": "fed_funds_target",
+        "label": "federal funds target range",
+        "value": "0 to 1/4",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "as of 2021-07-28",
+        "citation": {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent"
+        }
+      },
+      {
+        "fact_id": "treasury_purchases",
+        "label": "Treasury securities purchases",
+        "value": 80,
+        "unit": "billion USD per month (at least)",
+        "currency": "USD",
+        "period": "continuing from December 2020 until substantial further progress",
+        "citation": {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "quotation": "continue to increase its holdings of Treasury securities by at least $80 billion per month"
+        }
+      },
+      {
+        "fact_id": "mbs_purchases",
+        "label": "agency mortgage-backed securities purchases",
+        "value": 40,
+        "unit": "billion USD per month (at least)",
+        "currency": "USD",
+        "period": "continuing from December 2020 until substantial further progress",
+        "citation": {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "quotation": "of agency mortgage‑backed securities by at least $40 billion per month"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "elapsed_seconds": 17.426
+}
