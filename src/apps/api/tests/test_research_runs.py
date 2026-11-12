@@ -339,6 +339,7 @@ def test_selection_timeout_produces_partial_result_without_calling_model(monkeyp
     (5000, "supports", -1, 1500, 1, "budget_exhausted"),
     (9000, "supports", None, 1500, 2, "complete"),
     (9000, "invalid", 55, 1500, 2, "failed"),
+    (9000, "provider_failure", 55, 1500, 2, "failed"),
     (10000, "supports", 3000, 4000, 2, "complete"),
     (10000, "supports", 3001, 4000, 1, "budget_exhausted"),
 ])
@@ -353,6 +354,9 @@ def test_optional_support_review_is_bounded_and_preserves_initial_research(monke
             calls.append(system)
             if system == REVIEW_SYSTEM_PROMPT:
                 assert "Revenue was 100" in prompt
+                if second_verdict == "provider_failure":
+                    from app.phase3 import ProviderFailure
+                    raise ProviderFailure("invalid_provider_output", "Invalid output.", retryable=False, reported_tokens=12)
                 return {"reviews": [{"claim_index": 0, "verdict": "supports"},
                                     {"claim_index": 1, "verdict": second_verdict}]}, 12
             citation = {"source_id": source_id, "quotation": "Revenue was 100"}
