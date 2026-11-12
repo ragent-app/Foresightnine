@@ -11,6 +11,7 @@ export interface ResearchClaim {
   support_status?: string;
   support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false };
   citations?: { source_id: string; quotation?: string; quotation_match?: string; support_status?: string; location?: SourceLocation }[];
+  suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];
 }
 export interface ResearchFact { fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
 export interface ResearchContent {

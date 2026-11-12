@@ -456,6 +456,52 @@ def test_claim_calculation_difference_is_saved_and_rechecked_after_edit(monkeypa
     assert len(saved.json()["versions"][-2]["content"]["calculation_differences"]) == 1
 
 
+def test_candidate_numeric_evidence_is_separate_and_recomputed_after_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "candidate-evidence-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def cite(quote): return {"source_id": source_id, "quotation": quote}
+            return {"claims": [{"text": "Annual growth was 2.5 percent and quarter growth was 3.2 percent.",
+                                "citations": [cite("Quarter growth 3.2 percent")]}],
+                    "counterarguments": [{"text": "Periods differ", "citations": [cite("Annual growth 2.5 percent")]}],
+                    "facts": [{"fact_id": "annual", "label": "Annual", "value": "2.5", "unit": "percent", "period": "2023",
+                               "citation": cite("Annual growth 2.5 percent")},
+                              {"fact_id": "quarter", "label": "Quarter", "value": "3.2", "unit": "percent", "period": "Q4 2023",
+                               "citation": cite("Quarter growth 3.2 percent")}], "calculations": [], "limitations": []}, 20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    registered = client.post("/v1/auth/local/register", json={"email": "candidate-fact-evidence@example.test", "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Annual growth 2.5 percent. Quarter growth 3.2 percent.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Growth?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "candidate-evidence-001"},
+        json={"parent_version_id": topic["versions"][0]["version_id"]}).json()
+    op = receipt["operation"]["operation_id"]
+    for _ in range(100):
+        state = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if state in {"completed", "failed"}: break
+        time.sleep(0.02)
+    assert state == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    claim = current["content"]["claims"][0]
+    assert len(claim["citations"]) == 1 and claim["suggested_fact_evidence"][0]["fact_id"] == "annual"
+    assert claim["suggested_fact_evidence"][0]["status"] == "requires_semantic_review"
+    edited = deepcopy(current["content"])
+    edited["facts"][0]["value"] = "2.6"
+    edited["claims"][0]["suggested_fact_evidence"] = [{"fabricated": True}]
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": edited})
+    assert saved.status_code == 201, saved.text
+    assert not saved.json()["versions"][-1]["content"]["claims"][0].get("suggested_fact_evidence")
+    assert current["content"]["claims"][0]["suggested_fact_evidence"][0]["fact_id"] == "annual"
+
+
 def test_research_lease_recovery_keeps_ambiguous_charge_and_does_not_replay():
     api.reset_state()
     entered, release, finished = Event(), Event(), Event()

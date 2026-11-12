@@ -99,7 +99,7 @@ from .research_topics import AttachSourcesInput, ResearchInput, ResearchMetadata
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze
-from .research_evidence import evidence_differences
+from .research_evidence import evidence_differences, suggest_percentage_evidence
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_support_review, prepare_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult
@@ -1635,6 +1635,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         entry.pop("numeric_normalization", None)
         for entry in content.calculations:
             entry["input_status"] = calculation_input_status(entry, content.facts)
+        content.claims = suggest_percentage_evidence(content.claims, content.facts)
         content.evidence_differences = evidence_differences(content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         retained = previous.content.model_copy(deep=True)
@@ -2023,6 +2024,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         _raise_if_operation_cancelled(operation_id)
         claims = [{**item, "role": "support"} for item in analysis.claims]
         claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
+        claims = suggest_percentage_evidence(claims, analysis.facts)
         generation_usage = usage
         review_usage: int | None = None
         review_status = "not_requested"
