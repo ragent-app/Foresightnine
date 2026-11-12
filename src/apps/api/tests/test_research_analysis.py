@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 import json
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -815,6 +817,29 @@ def test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ran
     assert result.prompt_bytes <= 2000
     limited = analyze("Explain revenue and debt.", [report], None, lambda _: ({}, 0), max_prompt_chars=1350)
     assert limited.prompt_bytes <= 1350
+
+
+def test_additional_sentence_never_shrinks_expanded_baseline_source_ranges():
+    from app.research_analysis import SYSTEM_PROMPT
+    directory = Path(__file__).resolve().parents[3] / "docs/product/phase-a/140-trade-bank-fresh"
+    task = json.loads((directory / "STRESS_2023-input.json").read_text())
+    report = source(task["source"]["source_id"], text=(directory / task["source"]["text_file"]).read_text()).model_copy(
+        update={"title": task["source"]["title"], "retrieval_method": "user_pdf", "pdf_text_order": "reading"})
+    budget = 3000 - len(SYSTEM_PROMPT.encode()) - 512
+    with patch("app.research_analysis._additional_query_sentences", return_value=[]):
+        baseline = analyze(task["question"], [report], None, lambda _: ({}, 0), max_prompt_chars=budget)
+    result = analyze(task["question"], [report], None, lambda _: ({}, 0), max_prompt_chars=budget)
+    actual = [(segment["character_start"], segment["character_end"]) for segment in result.segments]
+    for segment in baseline.segments:
+        assert any(start <= segment["character_start"] and end >= segment["character_end"] for start, end in actual)
+    assert any("12.4" in report.text[start:end] and "9.9" in report.text[start:end] for start, end in actual)
+    assert result.prompt_bytes <= budget
+
+
+def test_additional_sentence_rejects_table_of_contents_fragment():
+    selected = [(0, "The central bank discusses capital ratios.")]
+    text = selected[0][1] + "\n3\nStress Test Process .\n"
+    assert _additional_query_sentences(text, "Explain the bank stress test process", selected) == []
 
 
 def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote():

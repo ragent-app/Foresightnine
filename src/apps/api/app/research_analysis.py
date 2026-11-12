@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v37"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v38"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -982,6 +982,8 @@ def _additional_query_sentences(text: str, question: str, selected: list[tuple[i
         if not 20 <= end - start <= 240 or any(start < offset + len(part) and offset < end for offset, part in selected):
             continue
         sentence = text[start:end]
+        if "\f" in sentence or len(re.findall(r"[A-Za-z]{2,}", sentence)) < 6:
+            continue
         found = hits(sentence)
         novel, shared = found - covered, found & covered
         if novel and shared:
@@ -1521,17 +1523,6 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # baseline selected ranges intact, then spend any saved bytes only on
         # adjacent original context, so no previously selected text is lost.
         compact_metadata = len(selected) > 1
-        if focus is None and selected and sum(len(part) for _, part in selected) < len(source.text):
-            # Preserve all baseline excerpts. Use only remaining source and
-            # serialized-input budget for one complete additional sentence.
-            candidates = _additional_query_sentences(source.text, question, selected, should_stop)
-            for candidate in candidates:
-                trial = sorted([*selected, candidate], key=lambda item: item[0])
-                normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in trial)
-                if normalized <= max_size and fits(trial, compact_metadata=True, short_refs=True):
-                    selected = trial
-                    compact_metadata = True
-                    break
         ordered_disjoint = all(selected[i][0] + len(selected[i][1]) <= selected[i + 1][0]
                                for i in range(len(selected) - 1))
         if compact_metadata and ordered_disjoint and fits(selected, compact_metadata=True):
@@ -1605,6 +1596,17 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             selected = expand_selected(selected, short_refs=False)
             if prompt_refs[source.source_id] != source.source_id:
                 selected = expand_selected(selected, short_refs=True)
+        if focus is None and selected and sum(len(part) for _, part in selected) < len(source.text):
+            # Keep both the baseline excerpts and their expanded context;
+            # additional evidence can use only budget left after expansion.
+            candidates = _additional_query_sentences(source.text, question, selected, should_stop)
+            for candidate in candidates:
+                trial = sorted([*selected, candidate], key=lambda item: item[0])
+                normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in trial)
+                if normalized <= max_size and fits(trial, compact_metadata=True, short_refs=True):
+                    selected = trial
+                    compact_metadata = True
+                    break
         if not selected:
             limitations.append(f"Source {source.source_id}: exceeds the current input budget; not processed.")
             continue
