@@ -394,3 +394,29 @@ def test_relative_clause_flags_omitted_subject_even_when_quote_mentions_another_
     denied = source.model_copy(update={'permissions':SourcePermissions(store=True, display=False)})
     assert not flag_citation_subject_context([claim], [denied])[0].get('citation_context_warnings')
     assert not flag_citation_subject_context([{**claim, 'citations':[{**claim['citations'][0], 'location':{'status':'ambiguous'}}]}], [source])[0].get('citation_context_warnings')
+
+
+def test_table_header_warning_handles_separate_date_and_unit_rows_and_row_fragments():
+    text = ('| [colspan=3] | [colspan=9] Year Ended |\n'
+            '| [colspan=3] | January 29, 2023 | January 30, 2022 |\n'
+            '| [colspan=3] | (In millions) |\n'
+            '| Net cash provided by operating activities | $ | 5,641 | $ | 9,108 |\n')
+    source = ResearchSource(source_id='s', owner_id='owner', title='Report', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash',
+        permissions=SourcePermissions(store=True, display=True, model_input=True))
+    def citation(quote):
+        start = text.index(quote)
+        return {'source_id': 's', 'quotation': quote, 'location': {'character_start': start, 'character_end': start + len(quote)}}
+    row = citation('Net cash provided by operating activities | $ | 5,641')
+    claim = {'text': 'Cash flow was 5,641 million in 2023', 'citations': [row]}
+    warning = flag_citation_subject_context([claim], [source])[0]['citation_context_warnings'][0]
+    context = text[warning['context_character_start']:warning['context_character_end']]
+    assert warning['context_metric'] == 'financial table header'
+    assert all(value in context for value in ('Year Ended', '2023', '2022', 'millions'))
+    header = citation(text[:text.index('| [colspan=3] | (In millions)')])
+    unit = citation('(In millions)')
+    assert not flag_citation_subject_context([{**claim, 'citations': [row, header, unit]}], [source])[0].get('citation_context_warnings')
+    separated = source.model_copy(update={'text': text.replace('| [colspan=3] | (In millions) |', 'Narrative break')})
+    moved = separated.text.index(row['quotation'])
+    changed = {**claim, 'citations': [{**row, 'location': {'character_start': moved, 'character_end': moved + len(row['quotation'])}}]}
+    assert not flag_citation_subject_context([changed], [separated])[0].get('citation_context_warnings')

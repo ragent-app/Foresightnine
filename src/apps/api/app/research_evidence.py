@@ -9,7 +9,7 @@ import re
 
 from pydantic import ValidationError
 
-from .research_calculations import NumericFact, _is_ratio_scale_factor
+from .research_calculations import NumericFact, _is_ratio_scale_factor, quotation_is_inside_table_row
 from .research_analysis import _quoted_numbers
 from .research_sources import ResearchSource, partial_ascii_token
 
@@ -50,7 +50,8 @@ def _table_header_context(source: ResearchSource, start: int, quotation: str,
     This is a bounded cue, not validation of column alignment or table units.
     Only consecutive extracted table lines are considered part of the table.
     """
-    if not quotation.lstrip().startswith("|") or not re.search(r"\d", quotation):
+    if (not quotation.lstrip().startswith("|") and
+            not quotation_is_inside_table_row(source.text, start, quotation)) or not re.search(r"\d", quotation):
         return None
     if re.search(r"(?<!\d)(?:19|20)\d{2}(?!\d)", quotation):
         return None
@@ -60,14 +61,34 @@ def _table_header_context(source: ResearchSource, start: int, quotation: str,
     if not headers:
         return None
     header = headers[-1]
-    if len(set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", header.group()))) < 2:
+    tail = before[header.end():]
+    if any(line.strip() and not line.lstrip().startswith("|") for line in tail.splitlines()):
         return None
-    if any(line.strip() and not line.lstrip().startswith("|") for line in before[header.end():].splitlines()):
+    # Extractors often place the year labels on the next table line rather
+    # than on the "Year Ended" line. Only inspect a few adjacent rows.
+    header_end_in_before = header.end()
+    years = set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", header.group()))
+    if len(years) < 2:
+        for row in list(re.finditer(r"(?m)^[ \t]*\|[^\n]*", tail))[:4]:
+            years.update(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", row.group()))
+            if len(years) >= 2:
+                header_end_in_before = header.end() + row.end()
+                break
+    if len(years) < 2:
         return None
-    header_start, header_end = left + header.start(), left + header.end()
-    unit_before = source.text[max(0, header_start - 250):header_start]
-    units = list(re.finditer(r"\b(?:millions?|billions?|thousands?)\b", unit_before, re.IGNORECASE))
-    unit_start = max(0, header_start - 250) + units[-1].start() if units else header_start
+    header_start, header_end = left + header.start(), left + header_end_in_before
+    unit_before_start = max(0, header_start - 250)
+    unit_before = source.text[unit_before_start:header_start]
+    units_before = list(re.finditer(r"\b(?:millions?|billions?|thousands?)\b", unit_before, re.IGNORECASE))
+    unit_after = source.text[header_end:min(start, header_end + 250)]
+    units_after = list(re.finditer(r"\b(?:millions?|billions?|thousands?)\b", unit_after, re.IGNORECASE))
+    if units_after:
+        unit_start = header_end + units_after[0].start()
+    elif units_before:
+        unit_start = unit_before_start + units_before[-1].start()
+    else:
+        unit_start = header_start
+    has_unit = bool(units_after or units_before)
     def covered(a: int, b: int) -> bool:
         for citation in citations:
             if not isinstance(citation, dict) or citation.get("source_id") != source.source_id or citation.get("partial_token"):
@@ -79,11 +100,13 @@ def _table_header_context(source: ResearchSource, start: int, quotation: str,
             if type(x) is int and type(y) is int and 0 <= x <= a < b <= y <= len(source.text) and source.text[x:y] == quote:
                 return True
         return False
-    if covered(header_start, header_end) and (not units or covered(unit_start, unit_start + len(units[-1].group()))):
+    unit_match = units_after[0] if units_after else units_before[-1] if units_before else None
+    if covered(header_start, header_end) and (unit_match is None or covered(unit_start, unit_start + len(unit_match.group()))):
         return None
-    # Include a little preceding title context when the unit is present;
-    # the caller still treats it as context, not as an attached quotation.
-    return max(left, unit_start - 100) if units else header_start, header_end
+    # Include header and unit whether the unit occurs before or after years.
+    context_start = min(header_start, max(left, unit_start - 100)) if has_unit else header_start
+    context_end = max(header_end, unit_start + len(unit_match.group())) if unit_match else header_end
+    return context_start, context_end
 
 
 def _unfinished_quote_context(source: ResearchSource, end: int, quotation: str) -> int | None:
