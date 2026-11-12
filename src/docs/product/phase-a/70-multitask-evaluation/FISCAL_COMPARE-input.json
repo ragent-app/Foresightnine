@@ -1,0 +1,20 @@
+{
+  "id": "FISCAL_COMPARE",
+  "question": "比较 Walmart FY2024 与 Coca-Cola 2024 年收入增长；它们是否属于完全相同的期间？列出各自财年结束日期、来源和比较局限。",
+  "sources": [
+    {
+      "kind": "text",
+      "title": "Walmart FY2024 SEC filing: derived financial facts",
+      "text": "{\"issuer\":\"Walmart\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"January 31\",\"FY2023\":{\"total_revenues\":611289},\"FY2024\":{\"total_revenues\":648125,\"net_sales\":642637,\"membership_and_other_income\":5488,\"operating_income\":27012}}",
+      "url": "https://www.sec.gov/Archives/edgar/data/104169/000010416924000056/wmt-20240131.htm",
+      "source_id": "source_1da5607402944bdbb603c2d4047f67a9"
+    },
+    {
+      "kind": "text",
+      "title": "Coca-Cola 2024 SEC filing: derived revenue facts",
+      "text": "{\"issuer\":\"The Coca-Cola Company\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}}",
+      "url": "https://www.sec.gov/Archives/edgar/data/21344/000002134425000011/ko-20241231.htm",
+      "source_id": "source_7e04856831c643078c0ff6d78bdc67b9"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "FED_PURCHASES",
+  "question": "根据所附 2021 年 12 月美联储声明，分别列出国债和机构抵押贷款支持证券的月度购买速度减幅及次年一月的购买速度，并说明限制。",
+  "sources": [
+    {
+      "kind": "pdf",
+      "file": "fed-dec-2021.pdf",
+      "title": "Federal Reserve FOMC statement December 2021",
+      "published_at": "2021-12-15T19:00:00Z",
+      "source_id": "source_1a84b0bf99f64453afcf735ceb9f5685",
+      "sha256": "f26cd5c0ab7af30bbceaf0fdab6d8a35bbe77f805b6121a104e04da28209a45d",
+      "text_sha256": "dbf306180131c25ed9d8c3f6f89eafe6a9d06287ed8e818818e78d6b27030eac"
+    }
+  ]
+}

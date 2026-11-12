@@ -1,0 +1,51 @@
+{
+  "implementation_commit": "b2833171c4bc79457f5c5291f647ba29d907a108",
+  "assessment": "Nonblind evaluation on two previously used derived company snapshots and two public PDFs. BEA source is related to previously tested GDP data. No independent human review or general accuracy claim.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "FISCAL_COMPARE",
+      "input_sha256": "72016a7e5226f1b7178183d2962c52db2cf5c0804ce2df14b8e8d4aef4d8198f"
+    },
+    {
+      "id": "GDP_ESTIMATE",
+      "input_sha256": "a3fef5683e6988fbde606658c939e07e4967e28b178d3aa1914ad2f5225c78d4"
+    },
+    {
+      "id": "FED_PURCHASES",
+      "input_sha256": "10b681121667e8c52cdf4ea53a9327e6b8be999902bbec0f93c4a095ba5b4de7"
+    }
+  ],
+  "script_sha256": {
+    "prepare.py": "9e774cc0b07ab64a757e2609a9979d7ceb5ffee102886833ecedb0a5112ee92e",
+    "run.py": "c047069f99953b7e2959921f8d894f3584fa8e6bbf1f4b8bbc435a02c51f5f96",
+    "score.py": "cbd29a2a602f6c29ca0935fb107cb500de5efe27768ce6474c8ea3e223f67d76"
+  },
+  "references_sha256": "9920e5e14322ff3a1a1846f767dfab76cad47271edc4b3dc30af91ff6d5984a4",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v8",
+  "max_calls_per_task": 2,
+  "max_calls_total": 6,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 30000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "pass_rule": "All three tasks must meet their fixed mechanical checks, correct source positions, complete review coverage with supports verdicts and call budgets. This narrow check does not establish semantic quality or full phase B acceptance."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "GDP_ESTIMATE",
+  "question": "根据所附 BEA 公告，2022 年第三季度实际 GDP 的第二次和初次估计分别是多少？说明期间、折年口径和估计局限。",
+  "sources": [
+    {
+      "kind": "pdf",
+      "file": "bea-gdp-2022q3-second.pdf",
+      "title": "BEA GDP third quarter 2022 second estimate",
+      "published_at": "2022-11-30T13:30:00Z",
+      "source_id": "source_4e54ed4e0d914756b2641cff6be275ad",
+      "sha256": "47bdeb0fba503d17535874fed330724ee9712a9907b7bf180ab64c022bfc38f8",
+      "text_sha256": "329d343112be15712a767742cd110c3906a05b3331e897b1f410714dab3bd78c"
+    }
+  ]
+}

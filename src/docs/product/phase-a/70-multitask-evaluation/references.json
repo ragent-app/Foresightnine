@@ -1,0 +1,23 @@
+{
+  "FISCAL_COMPARE": {
+    "dates": {
+      "source_0": "January 31",
+      "source_1": "December 31"
+    }
+  },
+  "GDP_ESTIMATE": {
+    "facts": [
+      "2.9",
+      "2.6"
+    ],
+    "period": "2022"
+  },
+  "FED_PURCHASES": {
+    "facts": [
+      "10",
+      "20",
+      "40"
+    ],
+    "unit": "billion"
+  }
+}
