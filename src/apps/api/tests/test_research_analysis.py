@@ -1387,3 +1387,26 @@ def test_spanned_table_year_conflict_does_not_feed_automatic_calculation():
     assert [f['table_period_conflict']['column_year'] for f in result.facts] == ['2023','2022']
     assert not result.calculations
     assert any('excluded from automatic calculations' in note for note in result.limitations)
+
+
+def test_date_and_unit_observations_are_source_located_claims_not_calculation_inputs():
+    text = '| January 29, 2023 | January 30, 2022 |\n| (In millions) |\nRevenue was 100.'
+    def observation(fid, label, value, unit, quotation):
+        return {'fact_id':fid, 'label':label, 'value':value, 'unit':unit, 'currency':None, 'period':'Year Ended', 'citation':{'source_id':'s','quotation':quotation}}
+    raw = {'facts': [
+        observation('date','Period end','January 29, 2023','date','January 29, 2023'),
+        observation('unit','Units','In millions','unit declaration','(In millions)'),
+        observation('bad-date','Bad date','February 30, 2023','date','February 30, 2023'),
+        observation('uncited','Other date','January 30, 2022','date','January 29, 2023'),
+        observation('extended','Misleading year','January 29, 2023','date','January 29, 20230'),
+        observation('invented','Other date','January 29, 2023','date','Invented January 29, 2023'),
+        {'fact_id':'revenue','label':'Revenue','value':'100','unit':'million','currency':'USD','period':'2023','citation':{'source_id':'s','quotation':'Revenue was 100'}}],
+        'calculations':[{'formula':'difference','first_fact_id':'date','second_fact_id':'revenue'}]}
+    result = analyze('Review reporting details.', [source('s', text=text)], None, lambda _: (raw,1))
+    assert [claim['text'] for claim in result.claims] == ['Period end: January 29, 2023','Units: In millions']
+    assert all(c['kind'] == 'model_interpretation' and c['support_status'] == 'not_independently_verified' for c in result.claims)
+    assert len(result.facts) == 1 and result.facts[0]['fact_id'] == 'revenue'
+    assert not result.calculations
+    assert any('retained as unverified claims' in note for note in result.limitations)
+    assert any('fact(s) were omitted' in note for note in result.limitations)
+    assert any('unlocatable' in note or 'did not match' in note for note in result.limitations)

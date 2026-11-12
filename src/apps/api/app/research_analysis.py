@@ -70,6 +70,39 @@ class ModelFact(NumericFact):
     citation: Citation
 
 
+class TextObservation(BaseModel):
+    """A narrowly typed model observation, never an input to calculations."""
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    fact_id: str = Field(min_length=1, max_length=200)
+    label: str = Field(min_length=1, max_length=300)
+    value: str = Field(min_length=1, max_length=100)
+    unit: Literal["date", "unit declaration"]
+    currency: None = None
+    period: str = Field(min_length=1, max_length=100)
+    citation: Citation
+
+
+def _text_observation_as_claim(raw: object) -> Claim | None:
+    try:
+        observation = TextObservation.model_validate(raw)
+    except ValidationError:
+        return None
+    if observation.unit == "date":
+        try:
+            datetime.strptime(observation.value, "%B %d, %Y")
+        except ValueError:
+            return None
+    elif not re.fullmatch(r"(?:in\s+)?(?:thousands?|millions?|billions?)", observation.value, re.IGNORECASE):
+        return None
+    # The value must appear verbatim (apart from case/whitespace) in the
+    # submitted quotation; locating that quotation is checked separately.
+    normalize = lambda text: " ".join(text.casefold().split())
+    if not re.search(r"(?<!\w)" + re.escape(normalize(observation.value)) + r"(?!\w)",
+                     normalize(observation.citation.quotation)):
+        return None
+    return Claim(text=f"{observation.label}: {observation.value}", citations=[observation.citation])
+
+
 class CalculationPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     formula: Literal["growth_percent", "margin_percent", "difference"]
@@ -1251,6 +1284,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     normalized_fraction_ids: set[str] = set()
     normalized_equivalent_ids: set[str] = set()
     normalized_range_ids: dict[str, str] = {}
+    text_observations: list[Claim] = []
     if isinstance(raw, dict) and isinstance(raw.get("facts"), list) and len(raw["facts"]) <= 100:
         valid_facts = []
         omitted_facts = 0
@@ -1297,8 +1331,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 else:
                     omitted_facts += 1
             except ValidationError:
-                omitted_facts += 1
-        if omitted_facts or normalized_grouped_ids or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids:
+                observation = _text_observation_as_claim(fact)
+                if observation is None:
+                    omitted_facts += 1
+                else:
+                    text_observations.append(observation)
+        if omitted_facts or text_observations or normalized_grouped_ids or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids:
             raw = {**raw, "facts": valid_facts}
         if omitted_facts:
             limitations.append(f"{omitted_facts} model-generated numeric fact(s) were omitted because their format was invalid.")
@@ -1306,6 +1344,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         result = AnalysisOutput.model_validate(raw)
     except ValidationError as error:
         raise InvalidAnalysis("Model output did not match the research schema.") from error
+    if text_observations:
+        room = max(0, 30 - len(result.claims))
+        if len(text_observations) > room:
+            limitations.append("Some model-generated text observations were omitted because the claim limit was reached.")
+        if room:
+            limitations.append("Model-generated date or unit observations were retained as unverified claims, not numeric facts.")
+            result = result.model_copy(update={"claims": [*result.claims, *text_observations[:room]]})
     source_map = {source.source_id: source for source in processed}
     ambiguous: set[tuple[str, str]] = set()
 
