@@ -1,0 +1,44 @@
+{
+  "mechanical_signals": {
+    "requested_numbers_in_claims_and_quotes": true,
+    "goods_and_services_named": true
+  },
+  "all_claims_located": true,
+  "research_status": "partial",
+  "model_calls": 3,
+  "reported_tokens": 3964,
+  "semantic_support": "not independently established",
+  "review_status": "partial",
+  "review_omissions": [
+    {
+      "claim_index": 0,
+      "reason": "not_reviewable"
+    },
+    {
+      "claim_index": 3,
+      "reason": "not_reviewable"
+    }
+  ],
+  "reviewed_verdicts": [
+    {
+      "index": 0,
+      "role": "support",
+      "verdict": null
+    },
+    {
+      "index": 1,
+      "role": "support",
+      "verdict": "supports"
+    },
+    {
+      "index": 2,
+      "role": "support",
+      "verdict": "supports"
+    },
+    {
+      "index": 3,
+      "role": "counterargument",
+      "verdict": null
+    }
+  ]
+}

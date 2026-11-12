@@ -1,0 +1,15 @@
+{
+  "manifest_sha256": "d1db28946b865b0604ff497a0aecb47e53ec8d67aafb0fd86b45b8510a0739c6",
+  "kind": "review",
+  "payload": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      }
+    ]
+  },
+  "reported_tokens": 414,
+  "prompt_sha256": "fc0a17d2ce2d8872259b1130357c0c995406abe3529fb5d14d7ad35c1236c3cc",
+  "system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407"
+}

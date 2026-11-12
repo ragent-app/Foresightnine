@@ -1,0 +1,155 @@
+{
+  "manifest_sha256": "d1db28946b865b0604ff497a0aecb47e53ec8d67aafb0fd86b45b8510a0739c6",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Current-dollar (nominal) PCE increased $23.7 billion (0.1 percent) in July 2022 from the preceding month, driven by a $33.3 billion increase in services spending partly offset by a $9.6 billion decrease in goods spending.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal consumption expenditures (PCE) increased $23.7 billion (0.1 percent)."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "$23.7 billion increase in current-dollar PCE in July reflected an increase of $33.3 billion in spending for services that was partly offset by a decrease of $9.6 billion in spending for goods (table 3)."
+          }
+        ]
+      },
+      {
+        "text": "The personal saving rate in July 2022 was 5.0 percent, with personal saving of $932.3 billion.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal saving was $932.3 billion in July and the personal saving rate—personal saving as a percentage of disposable personal income—was 5.0 percent (table 1)."
+          }
+        ]
+      },
+      {
+        "text": "The 0.1 percent monthly PCE change in current dollars is a nominal spending change and must be distinguished from the PCE price index, which decreased 0.1 percent in July; real (chained-dollar) PCE increased 0.2 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The PCE price index decreased 0.1 percent. Excluding food and energy, the PCE price index increased 0.1 percent (table 9). Real DPI increased 0.3 percent in July and real PCE increased 0.2 percent; goods increased 0.2 percent and services increased 0.2 percent (tables 5 and 7)."
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "Current-dollar estimates are valued in the prices of the period when the transactions occurred—that is, at “market value.” Also referred to as “nominal estimates” or as “current-price estimates.”"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The 0.1 percent PCE increase is a nominal (current-dollar) figure; someone reading it as inflation-adjusted growth would be wrong—real PCE growth was separately reported as 0.2 percent, and the PCE price index actually fell 0.1 percent.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Personal consumption expenditures (PCE):\nCurrent dollars 1.2 0.4 0.5 1.0 0.1\nChained (2012) dollars 0.3 0.2 -0.1 0.0 0.2"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source text is partial coverage of the full BEA release; some tables (e.g., tables 1, 3, 5, 7, 9) are referenced but not fully shown.",
+      "The 0.2 percent figure for current-dollar personal income/DPI growth appears only in prose; compressed PDF table columns were not verified beyond the quoted rows.",
+      "The release date (July 2022 publication covering July data) is declared in the title, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "current-dollar PCE monthly change",
+        "value": 23.7,
+        "unit": "billion USD (0.1 percent)",
+        "currency": "USD",
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "personal consumption expenditures (PCE) increased $23.7 billion (0.1 percent)."
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "services spending change (current dollars)",
+        "value": 33.3,
+        "unit": "billion USD (increase)",
+        "currency": "USD",
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "an increase of $33.3 billion in spending for services"
+        }
+      },
+      {
+        "fact_id": "f3",
+        "label": "goods spending change (current dollars)",
+        "value": -9.6,
+        "unit": "billion USD (decrease)",
+        "currency": "USD",
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "partly offset by a decrease of $9.6 billion in spending for goods (table 3)"
+        }
+      },
+      {
+        "fact_id": "f4",
+        "label": "personal saving rate",
+        "value": 5.0,
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "the personal saving rate—personal saving as a percentage of disposable personal income—was 5.0 percent (table 1)"
+        }
+      },
+      {
+        "fact_id": "f5",
+        "label": "PCE price index monthly change",
+        "value": -0.1,
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "From the preceding month, the PCE price index for July decreased 0.1 percent (table 9)."
+        }
+      },
+      {
+        "fact_id": "f6",
+        "label": "real PCE monthly change",
+        "value": 0.2,
+        "unit": "percent",
+        "currency": null,
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real DPI increased 0.3 percent in July and real PCE increased 0.2 percent"
+        }
+      },
+      {
+        "fact_id": "f7",
+        "label": "personal saving (level)",
+        "value": 932.3,
+        "unit": "billion USD",
+        "currency": "USD",
+        "period": "July 2022",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Personal saving was $932.3 billion in July"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "f2",
+        "second_fact_id": "f3"
+      }
+    ]
+  },
+  "reported_tokens": 2866,
+  "prompt_sha256": "1503ac99f9988936836860031c5a233839b86002f78fcc9d82857b64064467dd",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
