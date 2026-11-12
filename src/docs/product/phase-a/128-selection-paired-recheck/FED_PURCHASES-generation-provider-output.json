@@ -1,0 +1,100 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System, 2021-07-28 statement, extracted HTML text.",
+  "payload": {
+    "claims": [
+      {
+        "text": "联邦基金利率目标区间维持在0至1/4%。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent"
+          }
+        ]
+      },
+      {
+        "text": "每月至少增持800亿美元国债。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "it would continue to increase its holdings of Treasury securities by at least $80 billion per month"
+          }
+        ]
+      },
+      {
+        "text": "每月至少增持400亿美元机构抵押贷款支持证券。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "and of agency mortgage‑backed securities by at least $40 billion per month until substantial further progress has been made toward its maximum employment and price stability goals."
+          }
+        ]
+      },
+      {
+        "text": "经济路径仍取决于疫情走向，即疫情仍是声明中指出的经济风险。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "The path of the economy continues to depend on the course of the virus."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "所提供节选未包含关于就业或通胀尚未完全恢复的明确表述；资产购买将持续'直到在最大就业和价格稳定目标方面取得实质性进一步进展'，这暗示这些目标尚未完全实现，但仅为推断。",
+        "citations": [
+          {
+            "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+            "quotation": "until substantial further progress has been made toward its maximum employment and price stability goals."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的来源为节选（source_coverage 为 partial），并非2021年7月28日FOMC声明的全文，无法核实声明中其他风险或未恢复领域的表述（如就业缺口、通胀等具体措辞）。",
+      "来源声明的发布时间为声明标注时间，未经独立核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fed_funds_range_upper",
+        "label": "联邦基金利率目标区间上限",
+        "value": "0.25",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2021年7月FOMC会议",
+        "citation": {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "quotation": "keep the target range for the federal funds rate at 0 to 1/4 percent"
+        }
+      },
+      {
+        "fact_id": "treasury_purchases",
+        "label": "每月国债增持下限",
+        "value": "80",
+        "unit": "billion USD per month",
+        "currency": "USD",
+        "period": "2021年7月FOMC会议",
+        "citation": {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "quotation": "Treasury securities by at least $80 billion per month"
+        }
+      },
+      {
+        "fact_id": "mbs_purchases",
+        "label": "每月机构抵押贷款支持证券增持下限",
+        "value": "40",
+        "unit": "billion USD per month",
+        "currency": "USD",
+        "period": "2021年7月FOMC会议",
+        "citation": {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "quotation": "agency mortgage‑backed securities by at least $40 billion per month"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1338,
+  "prompt_sha256": "965c28bc174ea1412206a0061cb15bc740b9cf3eefa8c6abb413e6d82f708904",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

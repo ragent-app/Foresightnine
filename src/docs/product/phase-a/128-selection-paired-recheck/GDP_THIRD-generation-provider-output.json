@@ -1,0 +1,87 @@
+{
+  "source_attribution": "U.S. Bureau of Economic Analysis, 2023 Q4 third estimate, original PDF.",
+  "payload": {
+    "claims": [
+      {
+        "text": "根据 BEA 第三次估计，2023 年第四季度实际 GDP 年化增长率为 3.4%。",
+        "citations": [
+          {
+            "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.4 percent in the fourth quarter of 2023 (table 1), according to the \"third\" estimate"
+          }
+        ]
+      },
+      {
+        "text": "第二次估计为 3.2%，因此第三次估计较第二次估计上修。",
+        "citations": [
+          {
+            "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+            "quotation": "In the second estimate, the increase in real GDP was 3.2 percent."
+          }
+        ]
+      },
+      {
+        "text": "上修主要来自消费者支出和非住宅固定投资的上调，部分被私人库存投资的下调所抵消。",
+        "citations": [
+          {
+            "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+            "quotation": "The update primarily reflected upward revisions to consumer spending and nonresidential fixed investment that were partly offset by a downward revision to private inventory investment"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "上修并非全面上调：私人库存投资的下调部分抵消了消费和非住宅投资的上修，因此净上修（约 0.2 个百分点，需计算确认）小于各分项上修幅度。",
+        "citations": [
+          {
+            "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+            "quotation": "The update primarily reflected upward revisions to consumer spending and nonresidential fixed investment that were partly offset by a downward revision to private inventory investment (refer to \"Updates to GDP\")."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源仅提供部分摘录，未包含完整的 'Updates to GDP' 表格，因此无法得知消费支出、非住宅固定投资和私人库存投资各分项上修/下修的具体数值。",
+      "来源覆盖标记为 partial，可能未包含全部修正细节或背景信息。",
+      "宣布的发布日期为 2024-03-28，未经独立验证。",
+      "第二次估计（3.2%）与第一次估计之间的历史修正数据未在所提供文本中给出。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_third_estimate",
+        "label": "Q4 2023 real GDP annualized growth (third estimate)",
+        "value": "3.4",
+        "unit": "percent, annual rate",
+        "currency": null,
+        "period": "2023 Q4",
+        "citation": {
+          "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.4 percent in the fourth quarter of 2023"
+        }
+      },
+      {
+        "fact_id": "fact_second_estimate",
+        "label": "Q4 2023 real GDP annualized growth (second estimate)",
+        "value": "3.2",
+        "unit": "percent, annual rate",
+        "currency": null,
+        "period": "2023 Q4",
+        "citation": {
+          "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+          "quotation": "In the second estimate, the increase in real GDP was 3.2 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact_third_estimate",
+        "second_fact_id": "fact_second_estimate"
+      }
+    ]
+  },
+  "reported_tokens": 1470,
+  "prompt_sha256": "c7860e637f2804e6bf0cf674978c3c839f2487d221d0eaf0ee54eccbec9d82d7",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
