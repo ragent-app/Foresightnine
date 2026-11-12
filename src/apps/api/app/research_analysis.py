@@ -37,7 +37,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v47"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v48"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1219,13 +1219,16 @@ def _contrast_sentence_spans(text: str, question: str, should_stop: Callable[[],
                ("expense", ("expense", "expenses", "cost", "costs", "费用", "費用", "成本")),
                ("profit", ("profit", "profits", "利润", "利潤")))
     groups: list[tuple[str, ...]] = []
+    component_groups: list[tuple[str, ...]] = []
     for name, variants in aliases:
         if name.rstrip("s") in terms or any(alias in intent for alias in variants if re.search(r"[^a-z ]", alias)):
             groups.append(variants)
+            component_groups.append(variants)
             terms.difference_update(alias.rstrip("s") for alias in variants if re.fullmatch(r"[a-z]+", alias))
     groups.extend((term,) for term in sorted(terms)[:24])
     if len(groups) < 2:
         return []
+    wants_consumption = bool(re.search(r"\b(?:consumption|consumer\s+spending|personal\s+consumption)\b|消费|消費", intent))
     positive = re.compile(r"\b(?:increas\w*|ris(?:e|es|ing)|rose|grew|growth|higher)\b|增加|增长|增長|上升", re.IGNORECASE)
     negative = re.compile(r"\b(?:decreas\w*|declin\w*|fell|fall\w*|drop\w*|lower)\b|减少|減少|下降|下跌", re.IGNORECASE)
     spans: list[tuple[int, int]] = []
@@ -1242,8 +1245,15 @@ def _contrast_sentence_spans(text: str, question: str, should_stop: Callable[[],
             continue
         folded = sentence.casefold()
         words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", folded)}
-        hits = sum(any((alias in folded if re.search(r"[^a-z ]", alias) or " " in alias else alias.rstrip("s") in words)
-                       for alias in group) for group in groups)
+        def matches(group: tuple[str, ...]) -> bool:
+            return any((alias in folded if re.search(r"[^a-z ]", alias) or " " in alias else alias.rstrip("s") in words)
+                       for alias in group)
+        if same_direction_question and len(component_groups) >= 2 and not all(matches(group) for group in component_groups):
+            continue
+        if same_direction_question and wants_consumption and not re.search(
+                r"\b(?:consumer\s+spending|personal\s+consumption|consumption)\b|消费|消費", folded):
+            continue
+        hits = sum(matches(group) for group in groups)
         if hits >= 2:
             spans.append((start - len(sentence), end))
     return spans
@@ -1374,6 +1384,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
     for span_start, span_end in contrast_spans:
         if span_end - span_start <= length:
             candidates.append((max(0, min(span_start, span_end - length + length // 5)), True))
+            # Place the comparison near the beginning as well: this can
+            # coexist with a preceding headline window instead of overlapping
+            # and displacing it under the same total input budget.
+            candidates.append((max(0, span_start - min(length // 6, length - (span_end - span_start))), True))
     # A coarse stride can place a high-scoring keyword at the very end of a
     # window, cutting off its associated value. Center bounded windows near
     # actual query terms as well; all ranges still come from the original
@@ -1438,7 +1452,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
         score = (sum(100 + min(count, 4) * 3 for count in counts if count) +
                  sum(25 + min(count, 4) * 5 for count in year_counts if count))
         if any(start <= span_start and span_end <= end for span_start, span_end in contrast_spans):
-            score += 1200
+            # A question about opposed movements needs the actual comparison,
+            # not a dense but unrelated table that happens to repeat dates and
+            # estimate labels. Other windows can still supply the headline.
+            score += 3500
         if partial_ascii_token(text, start, min(len(text), start + length)):
             score -= 4
         if (wants_monetary_amount and re.search(r"\b(?:millions?|billions?|trillions?)\s+of\s+dollars\b", passage) and
@@ -1468,6 +1485,10 @@ def _select_windows(text: str, question: str, length: int, count: int,
             score += 1000
         if wants_second_estimate and re.search(r"\d+(?:\.\d+)?\s*percent\b[\s\S]{0,200}?\bsecond[\"']?\s+estimate\b", passage):
             score += 1200
+            if contrast_spans and re.search(r"\breal\s+gross\s+domestic\s+product\s*\(gdp\)[\s\S]{0,160}?\bannual\s+rate\b", passage):
+                # Preserve the requested headline estimate in a separate
+                # window before allocating space to a contrast passage.
+                score += 2000
         if wants_advance_estimate and re.search(r"\bin\s+the\s+advance\s+estimate\b[\s\S]{0,150}?\d+(?:\.\d+)?\s*percent\b", passage):
             score += 1200
         if wants_third_estimate and re.search(r"\d+(?:\.\d+)?\s*(?:percent|%)\b[\s\S]{0,250}?\bthird[\"']?\s+estimate\b", passage):

@@ -91,7 +91,7 @@ def is_percent_unit(unit: str) -> bool:
     normalized = " ".join(unit.strip().casefold().split())
     if re.search(r"\bpoints?\b|百分点", normalized):
         return False
-    return bool(re.fullmatch(r"(?:(?:annual|annualized|annualised)\s+)?(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|,\s*(?:annualized|annualised|annual rate))?", normalized))
+    return bool(re.fullmatch(r"(?:(?:annual|annualized|annualised)\s+)?(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|(?:,\s*|\s+)(?:at\s+an?\s+)?(?:annualized|annualised|annual rate))?", normalized))
 
 
 def quotation_is_inside_table_row(source_text: str, start: object, quotation: object) -> bool:

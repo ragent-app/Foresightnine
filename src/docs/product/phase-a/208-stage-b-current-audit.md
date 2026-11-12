@@ -64,3 +64,5 @@
 [265 号记录](265-fiscal-period-and-review-budget.md)补充带 FY 标签的年度结束日期解析，以及启用复查时的 Web 默认预算。263 公司模型输出离线重放得到未核验的暂定计算；旧评分和质量验收状态不变。
 
 [266 号固定预算开发回归](266-cross-domain-recheck/README.md)仍为 0/3；它揭示了消费和进出口对照混淆，以及另一种年化百分比表述的差值单位错误。264 号对消费句已入选的离线判断已更正。
+
+[267 号记录](267-consumption-context-and-rate-unit.md)针对消费语境和 `percent annual rate` 差值单位进行了修复；旧成绩不变，尚无修复后的真实模型质量结果。

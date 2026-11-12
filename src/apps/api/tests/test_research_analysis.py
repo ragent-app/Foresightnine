@@ -2014,6 +2014,29 @@ def test_same_direction_question_finds_contrary_component_passage():
     assert not _contrast_sentence_spans('Goods and services both increased.', question)
     chinese = '消费者的服务支出在本季度增加，而商品消费支出同期下降。'
     assert _contrast_sentence_spans(chinese, '判断商品和服务消费是否都增加。')
+    trade = 'Exports of goods decreased while services exports increased. Imports of consumer goods decreased while services rose.'
+    assert not _contrast_sentence_spans(trade, question)
+    mixed = trade + ' ' + sentence
+    assert all(sentence in mixed[start:end] for start, end in _contrast_sentence_spans(mixed, question))
+
+
+def test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately():
+    from app.research_analysis import SYSTEM_PROMPT
+    from app.research_uploads import _extract_text
+    pdf = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/263-holdout-candidates/bea-gdp4q22.pdf'
+    text = _extract_text(pdf.read_bytes(), text_order='layout')
+    report = source('s', text=text).model_copy(update={'retrieval_method':'user_pdf', 'pdf_text_order':'layout'})
+    question = ('According to the attached BEA second estimate, compare annualized real GDP growth in the fourth '
+                'and third quarters of 2022. Assess whether both goods and services consumption increased in the '
+                'fourth quarter; cite evidence and distinguish a revision to an estimate from an actual change.')
+    captured = []
+    analyze(question, [report], None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 0),
+            max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+    excerpts = [item['text'] for item in captured[0]['sources']]
+    import re
+    assert any('2.7 percent' in part and '3.2 percent' in part for part in excerpts)
+    pattern = r'increase\s+in\s+consumer\s+spending\s+reflected\s+an\s+increase\s+in\s+services\s+that\s+was\s+partly\s+offset\s+by\s+a\s+decrease\s+in\s+goods'
+    assert any(re.search(pattern, part, re.IGNORECASE) for part in excerpts)
 
 
 def test_quoted_numbers_accept_sentence_punctuation_but_not_version_fragments():
