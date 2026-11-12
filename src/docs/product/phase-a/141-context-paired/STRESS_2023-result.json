@@ -1,0 +1,283 @@
+{
+  "task": "STRESS_2023",
+  "manifest_sha256": "b5d542622aaeb9e39991806c37c692681788dcbb953b1ff4b081ebd6af3ba7ed",
+  "cost_usd": "unknown",
+  "status": "completed",
+  "reported_tokens": 2408,
+  "prompt_sha256": "db538c32822fab823420e34f385b0d8bef32ff0f6293e369809a5c03a38e4a9c",
+  "segments": [
+    {
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "character_start": 8765,
+      "character_end": 10511
+    },
+    {
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "character_start": 23161,
+      "character_end": 24909
+    }
+  ],
+  "claims": [
+    {
+      "text": "Under the 2023 Fed stress test severely adverse scenario, the aggregate CET1 capital ratio of the 23 tested banks declined from an actual 12.4 percent at the start of the projection horizon (2022:Q4) to a projected minimum of 9.9 percent, then rose to 10.5 percent by the end of nine quarters (2025:Q1), and aggregate and individual post-stress CET1 ratios remained well above required minimums throughout the horizon.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 24493,
+            "character_end": 24729,
+            "page": 15
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio is projected to decline from\n12.4 percent at the start of the projection horizon to a minimum of 9.9 percent before rising to\n10.5 percent at the end of nine quarters"
+        },
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "character_start": 10214,
+            "character_end": 10383,
+            "page": 9
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "The aggregate and individual bank post-stress\ncommon equity tier 1 (CET1) capital ratios remain well above the required minimum levels\nthroughout the projection horizon."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "counterarguments": [
+    {
+      "text": "The 12.4 percent starting point is an actual 2022:Q4 value, while the 9.9 percent minimum and 10.5 percent ending ratio are projections under a hypothetical scenario, not observed outcomes; results also depend on scenario assumptions and model choices. Additionally, some figures (projected 2025:Q1 and projected minimum columns, AOCI rows) were revised in the report, so earlier-published values may differ.",
+      "kind": "model_interpretation",
+      "citations": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "location": {
+            "status": "ambiguous",
+            "matches": [
+              {
+                "character_start": 8821,
+                "character_end": 8902,
+                "page": 8
+              },
+              {
+                "character_start": 9331,
+                "character_end": 9412,
+                "page": 8
+              }
+            ],
+            "truncated": false
+          },
+          "quotation_match": "whitespace_normalized",
+          "support_status": "not_independently_verified",
+          "quotation": "the data in the “Projected 2025:Q1” and “Projected minimum”\ncolumns were revised."
+        }
+      ],
+      "support_status": "not_independently_verified"
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "f1",
+      "value": "12.4",
+      "unit": "percent",
+      "currency": null,
+      "period": "2022:Q4",
+      "label": "aggregate CET1 actual starting ratio",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "the aggregate CET1 capital ratio of the 23 banks falls from\nan actual 12.4 percent",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 10421,
+        "character_end": 10503,
+        "page": 9
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "f2",
+      "value": "9.9",
+      "unit": "percent",
+      "currency": null,
+      "period": "2023:Q1–2025:Q1 projection horizon",
+      "label": "aggregate CET1 projected minimum",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "projected to decline from\n12.4 percent at the start of the projection horizon to a minimum of 9.9 percent",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 24566,
+        "character_end": 24671,
+        "page": 15
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "f3",
+      "value": "10.5",
+      "unit": "percent",
+      "currency": null,
+      "period": "2025:Q1",
+      "label": "aggregate CET1 projected ending ratio",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "before rising to\n10.5 percent at the end of nine quarters",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 24672,
+        "character_end": 24729,
+        "page": 15
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "f4",
+      "value": "540",
+      "unit": "billions of dollars (more than)",
+      "currency": "USD",
+      "period": "2023:Q1–2025:Q1 projection horizon",
+      "label": "projected losses absorbed by 23 banks",
+      "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+      "quotation": "the 23 large banks subject to the test this year have sufficient\ncapital to absorb more than $540 billion in losses",
+      "quotation_match": "whitespace_normalized",
+      "location": {
+        "character_start": 9808,
+        "character_end": 9923,
+        "page": 9
+      },
+      "verification": "model_extraction_not_independently_verified"
+    }
+  ],
+  "calculations": [
+    {
+      "formula_id": "difference",
+      "formula_version": "2",
+      "expression": "first - second",
+      "input_verification": "not_verified_by_calculator",
+      "input_precision_status": "not_established",
+      "inputs": [
+        {
+          "fact_id": "f1",
+          "value": "12.4",
+          "unit": "percent",
+          "currency": null,
+          "period": "2022:Q4"
+        },
+        {
+          "fact_id": "f2",
+          "value": "9.9",
+          "unit": "percent",
+          "currency": null,
+          "period": "2023:Q1–2025:Q1 projection horizon"
+        }
+      ],
+      "value": "2.50",
+      "unit": "percentage points",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2
+    }
+  ],
+  "limitations": [
+    "Source source_ce54ed6136754051baf2406f5be2a98c: only character ranges 8765–10511, 23161–24909 were analyzed; remaining text was not examined.",
+    "Source source_ce54ed6136754051baf2406f5be2a98c: quotation location is ambiguous in the analyzed passages.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "Model-reported limitation (not independently verified): The excerpts do not include the individual bank-level CET1 minimums (appendix A), so per-bank ratios cannot be cited.",
+    "Model-reported limitation (not independently verified): The exact required regulatory minimum CET1 level is not quoted in the excerpts.",
+    "Model-reported limitation (not independently verified): The revised projected minimum/ending values after the report correction are not shown; only that revisions occurred.",
+    "Model-reported limitation (not independently verified): Excerpts are partial; details on the exploratory market shock for G-SIBs and CRE exposures (boxes 3–4) are not provided."
+  ],
+  "raw": {
+    "claims": [
+      {
+        "text": "Under the 2023 Fed stress test severely adverse scenario, the aggregate CET1 capital ratio of the 23 tested banks declined from an actual 12.4 percent at the start of the projection horizon (2022:Q4) to a projected minimum of 9.9 percent, then rose to 10.5 percent by the end of nine quarters (2025:Q1), and aggregate and individual post-stress CET1 ratios remained well above required minimums throughout the horizon.",
+        "citations": [
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "Under the severely adverse scenario, the aggregate CET1 capital ratio is projected to decline from 12.4 percent at the start of the projection horizon to a minimum of 9.9 percent before rising to 10.5 percent at the end of nine quarters"
+          },
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "The aggregate and individual bank post-stress common equity tier 1 (CET1) capital ratios remain well above the required minimum levels throughout the projection horizon."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The 12.4 percent starting point is an actual 2022:Q4 value, while the 9.9 percent minimum and 10.5 percent ending ratio are projections under a hypothetical scenario, not observed outcomes; results also depend on scenario assumptions and model choices. Additionally, some figures (projected 2025:Q1 and projected minimum columns, AOCI rows) were revised in the report, so earlier-published values may differ.",
+        "citations": [
+          {
+            "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+            "quotation": "the data in the “Projected 2025:Q1” and “Projected minimum” columns were revised."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The excerpts do not include the individual bank-level CET1 minimums (appendix A), so per-bank ratios cannot be cited.",
+      "The exact required regulatory minimum CET1 level is not quoted in the excerpts.",
+      "The revised projected minimum/ending values after the report correction are not shown; only that revisions occurred.",
+      "Excerpts are partial; details on the exploratory market shock for G-SIBs and CRE exposures (boxes 3–4) are not provided."
+    ],
+    "facts": [
+      {
+        "fact_id": "f1",
+        "label": "aggregate CET1 actual starting ratio",
+        "value": "12.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "2022:Q4",
+        "citation": {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "quotation": "the aggregate CET1 capital ratio of the 23 banks falls from an actual 12.4 percent"
+        }
+      },
+      {
+        "fact_id": "f2",
+        "label": "aggregate CET1 projected minimum",
+        "value": "9.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023:Q1–2025:Q1 projection horizon",
+        "citation": {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "quotation": "projected to decline from 12.4 percent at the start of the projection horizon to a minimum of 9.9 percent"
+        }
+      },
+      {
+        "fact_id": "f3",
+        "label": "aggregate CET1 projected ending ratio",
+        "value": "10.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025:Q1",
+        "citation": {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "quotation": "before rising to 10.5 percent at the end of nine quarters"
+        }
+      },
+      {
+        "fact_id": "f4",
+        "label": "projected losses absorbed by 23 banks",
+        "value": "540",
+        "unit": "billions of dollars (more than)",
+        "currency": "USD",
+        "period": "2023:Q1–2025:Q1 projection horizon",
+        "citation": {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "quotation": "the 23 large banks subject to the test this year have sufficient capital to absorb more than $540 billion in losses"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "f1",
+        "second_fact_id": "f2"
+      }
+    ]
+  },
+  "elapsed_seconds": 19.929
+}
