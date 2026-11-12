@@ -1,0 +1,56 @@
+{
+  "implementation_commit": "cdccf7b3a31bbf2e8728ba6df7446bc37a5f6880",
+  "task": "BEA_2026Q1",
+  "source_sha256": "1ddc4ece3dd487408ee7fe21929ea67b9c4a4b98939a1c599dfc892edfd4d879",
+  "text_sha256": "9327ddbba22b9b1fd5407044d04b9fadf008f3cada7d136652bfb8f138c216e1",
+  "segments": [
+    {
+      "source_id": "source_29200000000000000000000000000001",
+      "character_start": 407,
+      "character_end": 2670,
+      "model_source_id": "ref-1"
+    },
+    {
+      "source_id": "source_29200000000000000000000000000001",
+      "character_start": 4177,
+      "character_end": 6791,
+      "model_source_id": "ref-1"
+    }
+  ],
+  "baseline": "../292-new-source-quality/BEA_2026Q1-generation-1-provider.json",
+  "baseline_sha256": "a18960b7ae30b5f78154333dd73ccee7aa3a4d0cad4f5d9263a30fb6ee946d69",
+  "baseline_prompt_sha256": "fdda02404046f219ad35b378766b63d0c1c68db721b6314a139e72585319aa05",
+  "candidate_prompt_sha256": "8ff188c056bc0a56f800e8ec7bc288443cec278cd0892eba8972b20c3cda9c0c",
+  "change": "one evidence-guidance sentence only",
+  "old_guidance": "Quote continuous passages; never join passages or quote metadata. Cite table headers, units and rows separately. Put all requested facts in claims; put gaps in limitations. Excerpts are partial. Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period.",
+  "candidate_guidance": "Quote continuous passages; never join passages or quote metadata. Cite table headers, units and rows separately. Put each fact in its own claim; quote its value, period and relationships. Put gaps in limitations. Excerpts are partial. Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 1,
+  "max_tokens": 10000,
+  "timeout_seconds": 60,
+  "search": false,
+  "retries": 0,
+  "previous_known_tokens": 331509,
+  "cost_usd": "unknown",
+  "files": {
+    "common.py": "baa5a97829ca5648b44bc0a38d7991b0fc247abd2ec609cb437ccc866d9367d9",
+    "prepare.py": "8c30a0c4e28b76c561bc8f8846ac565315faff60877426b95ff59eaa570d04e5",
+    "run.py": "751d5e777cc80b26d5df4c17b471fe660aa0c4be7e95ce25ea49de183a25dc9e",
+    "inspect_results.py": "4904895edcf7176cd2119c4160fd67344825a2b90fc0b03380225b484b875c15"
+  }
+}
