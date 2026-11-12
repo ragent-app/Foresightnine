@@ -731,8 +731,11 @@ def _select_windows(text: str, question: str, length: int, count: int,
 def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None,
             generate: Callable[[str], tuple[dict[str, Any], int | None]], *,
             max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
-            on_prepare: Callable[[list[dict[str, Any]]], None] | None = None) -> AnalysisResult:
+            on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
+            focus: tuple[str, int, int] | None = None) -> AnalysisResult:
     eligible, limitations = prepare_sources(sources, as_of)
+    if focus is not None and not any(s.source_id == focus[0] and 0 <= focus[1] < focus[2] <= len(s.text) for s in eligible):
+        return AnalysisResult([], [], limitations + ["The requested focus is unavailable; no model call was made."], [], None)
     if not eligible:
         return AnalysisResult([], [], limitations + ["No permitted, time-eligible source was available for model analysis."], [], None)
     data = {"question": question, "sources": [],
@@ -808,7 +811,27 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Prefer the entire document when it fits. Otherwise choose the
         # number of windows before searching the byte budget, avoiding a
         # discontinuity when the available size happens to be below 1000.
-        if max_size == len(selection_text) and fits([(0, source.text)]):
+        if focus is not None and source.source_id == focus[0]:
+            start, end = focus[1], focus[2]
+            def focused(radius: int) -> list[tuple[int, str]]:
+                left = max(0, start - radius)
+                right = min(len(source.text), end + radius)
+                return [(left, source.text[left:right])]
+            def focused_fits(radius: int) -> bool:
+                passage = focused(radius)[0][1]
+                size = len(re.sub(r"[ \t]{2,}", "\t", passage)) if source.retrieval_method == "user_pdf" else len(passage)
+                return size <= max_size and fits(focused(radius))
+            if not focused_fits(0):
+                return AnalysisResult([], [], limitations + ["The requested focus exceeds the input budget; no model call was made."], [], None)
+            lo, hi = 0, 300
+            while lo < hi:
+                middle = (lo + hi + 1) // 2
+                if focused_fits(middle):
+                    lo = middle
+                else:
+                    hi = middle - 1
+            selected = focused(lo)
+        elif max_size == len(selection_text) and fits([(0, source.text)]):
             selected = [(0, source.text)]
         else:
             split = len(selection_text) > 2000

@@ -2020,6 +2020,23 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     run_request_payload = _request_payload(request)
     if request.require_counterarguments:
         run_request_payload.pop("require_counterarguments", None)
+    focus = None
+    if request.focus_citation is None:
+        run_request_payload.pop("focus_citation", None)
+    else:
+        try:
+            parent = next(v for v in topic.versions if v.version_id == request.parent_version_id)
+            citation = parent.content.claims[request.focus_citation.claim_index]["citations"][request.focus_citation.citation_index]
+            source = next(s for s in sources if s.source_id == citation["source_id"] and
+                          s.source_id in {*topic.request.source_ids, *parent.source_ids})
+            eligible, _ = prepare_sources(sources, topic.request.as_of)
+            checked = locate_user_quotation(source, citation["quotation"])
+            location = checked["location"]
+            if source.source_id not in {s.source_id for s in eligible} or checked.get("partial_token") or "character_start" not in location:
+                raise ValueError()
+            focus = (source.source_id, location["character_start"], location["character_end"])
+        except (StopIteration, IndexError, KeyError, TypeError, ValueError) as error:
+            raise ApiProblem(422, "invalid_request", "The selected quotation is unavailable for focused research.") from error
 
     def source_summaries(analyzed_ids: list[str]) -> list[dict[str, Any]]:
         return [{"source_id": s.source_id, "title": s.title,
@@ -2167,7 +2184,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             max_prompt_chars = max(1, min(48000, int(max_input_tokens) - len(RESEARCH_SYSTEM_PROMPT.encode("utf-8")) - 512))
             analysis = analyze(topic.request.question, sources, topic.request.as_of, generate,
                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
-                               on_prepare=lambda segments: attempted_prompt.update({"segments": segments}))
+                               on_prepare=lambda segments: attempted_prompt.update({"segments": segments}), focus=focus)
         except (AnalysisInterrupted, ProviderFailure, InvalidAnalysis) as error:
             unavailable_reason = ("provider_budget_exhausted" if isinstance(error, AnalysisInterrupted) else
                                   error.code if isinstance(error, ProviderFailure) else "invalid_model_output")

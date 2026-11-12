@@ -53,10 +53,10 @@ export interface ResearchOperation {
   status: string;
   cancel_token: string;
 }
-export interface SourceMetadata { source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean } }
+export interface SourceMetadata { source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
-export interface RunBudget { search: boolean; supportReview: boolean; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxCostUsd?: string }
+export interface RunBudget { search: boolean; supportReview: boolean; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number } }
 export interface RunInputSnapshot {
   captured_at: string;
   parent_version_id: string;
@@ -147,6 +147,7 @@ export function researchClient(baseUrl: string) {
         max_search_calls: budget.search ? 1 : 0, max_elapsed_seconds: budget.maxElapsedSeconds,
         max_total_tokens: budget.maxTotalTokens, max_model_calls: budget.supportReview ? 2 : 1, support_review: budget.supportReview,
         require_counterarguments: budget.requireCounterarguments,
+        ...(budget.focusCitation ? { focus_citation: budget.focusCitation } : {}),
         ...(budget.maxCostUsd ? { max_cost_usd: budget.maxCostUsd } : {}) } satisfies ResearchV2.ResearchRunRequest, key),
     operation: (topicId: string, operationId: string) => request<{ operation: ResearchOperation }>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}`),

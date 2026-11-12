@@ -1363,3 +1363,43 @@ def test_partial_support_review_records_omissions_and_leaves_other_claims_unrevi
     assert content["claims"][0]["support_review"]["verdict"] == "supports"
     assert "support_review" not in content["claims"][1]
     assert versions[-2]["content"]["run"]["support_review_omissions"] == [{"claim_index": 1, "reason": "not_reviewable"}]
+
+
+def test_run_can_focus_on_saved_unique_quotation(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+    quote = 'The overlooked finding is 123 dollars.'
+    prompts = []
+    class Provider:
+        name = 'focus-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            prompts.append(prompt)
+            return {'claims': [{'text': 'The finding is 123 dollars.', 'citations': [{'source_id': source_id, 'quotation': quote}]}]}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    account = client.post('/v1/auth/local/register', json={'email': 'focus-run@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + account['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': 'Other material. ' * 500 + quote, 'permissions': {'store': True, 'model_input': True, 'display': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What is the finding?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'claims': [{'text': 'Check finding', 'citations': [{'source_id': source_id, 'quotation': quote}]}]}})
+    assert saved.status_code == 201, saved.text
+    parent = saved.json()['versions'][-1]['version_id']
+    payload = {'parent_version_id': parent, 'focus_citation': {'claim_index': 0, 'citation_index': 0}, 'require_counterarguments': False}
+    request_headers = {**headers, 'Idempotency-Key': 'focus-test-key'}
+    invalid = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'focus-invalid-key'}, json={**payload, 'focus_citation': {'claim_index': 9, 'citation_index': 0}})
+    assert invalid.status_code == 422 and not prompts
+    started = client.post(path + '/runs', headers=request_headers, json=payload)
+    assert started.status_code == 202, started.text
+    operation_id = started.json()['operation']['operation_id']
+    for _ in range(100):
+        state = client.get(path + '/runs/' + operation_id, headers=headers).json()['operation']['status']
+        if state in {'completed', 'failed'}: break
+        time.sleep(0.02)
+    assert state == 'completed' and len(prompts) == 1 and quote in prompts[0]
+    snapshot = client.get(path + '/runs/' + operation_id + '/inputs', headers=headers).json()
+    assert snapshot['budget']['focus_citation'] == payload['focus_citation']
+    replay = client.post(path + '/runs', headers=request_headers, json=payload)
+    assert replay.status_code == 202 and replay.headers['Idempotency-Replayed'] == 'true' and len(prompts) == 1

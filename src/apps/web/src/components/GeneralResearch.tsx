@@ -5,6 +5,7 @@ import { Button, Field, Input, Textarea } from "./Controls";
 import { Header } from "./AppShell";
 import { SourceContext } from "./SourceContext";
 import { CitationEditor } from "./CitationEditor";
+import { canUseCitationSource } from "../source-text-search";
 
 interface Props { baseUrl: string | null; accountId: string | null; language: Language }
 
@@ -14,6 +15,8 @@ function localizeLimitation(value: string, en: boolean): string {
   if (value.startsWith(modelPrefix)) return `模型报告（尚未独立核实）：${value.slice(modelPrefix.length)}`;
   const fixed: Record<string, string> = {
     "No permitted, time-eligible source was available for model analysis.": "没有可供模型分析且符合时间要求的授权资料。",
+    "The requested focus exceeds the input budget; no model call was made.": "所选引文超出输入预算，未调用模型。",
+    "The requested focus is unavailable; no model call was made.": "所选引文不可用，未调用模型。",
     "The research is partial: supported claims or counterarguments are incomplete.": "研究尚未完成：有依据的结论或反方材料不足。",
     "Matching a quotation does not independently establish that it supports a claim.": "原文匹配不代表已独立核实该资料支持结论。",
     "A joined quotation was split into separately located passages; support requires review.": "拼接的引文已拆为分别定位的原文；是否支持结论仍需核查。",
@@ -151,6 +154,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [allowSearch, setAllowSearch] = useState(true);
   const [supportReview, setSupportReview] = useState(false);
   const [requireCounterarguments, setRequireCounterarguments] = useState(true);
+  const [focusChoice, setFocusChoice] = useState("");
   const [maxElapsed, setMaxElapsed] = useState("60");
   const [maxTokens, setMaxTokens] = useState("10000");
   const [maxCost, setMaxCost] = useState("");
@@ -164,6 +168,12 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const latest = topic?.versions[topic.versions.length - 1];
   const current = topic?.versions.find((item) => item.version_id === selectedVersionId) ?? latest;
   const isLatest = current?.version_id === latest?.version_id;
+  useEffect(() => { setFocusChoice(""); }, [current?.version_id]);
+  const focusOptions = (current?.content.claims ?? []).flatMap((claim, claimIndex) => (claim.citations ?? []).flatMap((citation, citationIndex) => {
+    const source = sourceMetadata.find((item) => item.source_id === citation.source_id);
+    if (!source || !source.permissions?.model_input || !canUseCitationSource(source, topic?.request.as_of) || !citation.quotation || citation.partial_token || citation.location?.status === "ambiguous" || citation.location?.character_start === undefined) return [];
+    return [{ value: `${claimIndex}:${citationIndex}`, label: `${source.title || source.source_id}: ${citation.quotation.slice(0, 100)}`, claim_index: claimIndex, citation_index: citationIndex }];
+  }));
   const parent = reviewedAncestor(topic, current?.parent_version_id);
   const originalClaims = useMemo(() => new Set((current?.content.claims ?? []).map((item) => JSON.stringify(item))), [current]);
   const originalFacts = useMemo(() => new Set((current?.content.facts ?? []).map((item) => JSON.stringify(item))), [current]);
@@ -370,6 +380,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   async function run() {
     if (!api || !topic || !current) return;
     if (hasUnsavedReview) { setNotice(en ? "Save your edits before running research." : "请先保存当前修改，再运行研究。"); return; }
+    const focus = focusChoice ? focusOptions.find((item) => item.value === focusChoice) : undefined;
+    if (focusChoice && !focus) { setNotice(en ? "The selected quotation is no longer available." : "所选引文已不可用，请重新选择。"); return; }
     if (!/^\d+$/.test(maxElapsed) || Number(maxElapsed) < 1 || Number(maxElapsed) > 180 ||
         !/^\d+$/.test(maxTokens) || Number(maxTokens) > 20000 ||
         (maxCost !== "" && !/^\d+(?:\.\d{1,6})?$/.test(maxCost))) {
@@ -378,7 +390,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -533,6 +545,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (up to one additional paid call; not independent verification)." : "请求模型复查引用是否支持结论（最多增加一次付费调用；不等于独立核验）。"}</label>
       {supportReview ? <p><small>{en ? "The review remains subject to token and time budgets; unknown initial usage requires reserving both call limits." : "复查仍受 Token 和时间预算限制；首次用量未知时需预留两次调用上限。"}</small></p> : null}
       <label><input type="checkbox" checked={requireCounterarguments} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRequireCounterarguments(event.target.checked)} /> {en ? "Require a cited counterargument for a complete result (turn off for straightforward fact checks)." : "完成研究需要有引文的反方意见（简单事实核验可关闭）。"}</label>
+      {focusOptions.length ? <Field label={en ? "Focus on a saved quotation (optional)" : "优先分析已保存的引文（可选）"} helper={en ? "The selected passage and nearby context are included in the next analysis." : "下次分析将包含所选原文及附近上下文。"}><select value={focusChoice} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setFocusChoice(event.target.value)}><option value="">{en ? "No selected quotation" : "不指定引文"}</option>{focusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field> : null}
       <details className="general-source"><summary>{en ? "Research budget" : "研究预算"}</summary>
         <Field label={en ? "Time limit in seconds (1–180)" : "时间上限（秒，1–180）"}><Input type="number" min="1" max="180" value={maxElapsed} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxElapsed(event.target.value)} /></Field>
         <Field label={en ? "Maximum model tokens" : "模型 Token 上限"}><Input type="number" min="0" max="20000" value={maxTokens} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxTokens(event.target.value)} /></Field>

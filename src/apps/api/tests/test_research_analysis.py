@@ -902,3 +902,23 @@ def test_monthly_table_retrieval_prefers_complete_row_with_header():
     assert "Change from Preceding Period (Months)" in selected[1]
     assert "Sept." in selected[1] and "74.4" in selected[1] and "147.4" in selected[1]
     assert text[selected[0]:selected[0] + len(selected[1])] == selected[1]
+
+
+def test_focused_passage_is_included_and_budget_failure_never_calls_model():
+    quote = 'Special finding: revenue was 123 dollars.'
+    report = source('focus', text='unrelated text. ' * 500 + quote + ' context. ' * 100)
+    start = report.text.index(quote)
+    prompts = []
+    def generate(prompt):
+        prompts.append(json.loads(prompt))
+        return {'claims': [{'text': 'Revenue was 123', 'citations': [{'source_id': 'focus', 'quotation': quote}]}]}, 10
+    result = analyze('Revenue?', [report], None, generate, focus=('focus', start, start + len(quote)))
+    assert quote in prompts[0]['sources'][0]['text']
+    assert result.claims[0]['citations'][0]['location']['character_start'] == start
+    assert any(segment['character_start'] <= start and segment['character_end'] >= start + len(quote) for segment in result.segments)
+    prompts.clear()
+    result = analyze('Revenue?', [report], None, generate, focus=('focus', start, start + len(quote)), max_prompt_chars=50)
+    assert not prompts and any('no model call was made' in item for item in result.limitations)
+    denied = source('focus', text=report.text, model_input=False)
+    result = analyze('Revenue?', [denied], None, generate, focus=('focus', start, start + len(quote)))
+    assert not prompts and any('no model call was made' in item for item in result.limitations)
