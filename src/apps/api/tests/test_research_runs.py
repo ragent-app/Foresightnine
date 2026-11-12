@@ -1330,7 +1330,8 @@ def test_recalculation_refreshes_claim_calculation_candidates_without_changing_h
     assert versions[-3]["content"]["claims"][0]["suggested_calculations"]
 
 
-def test_partial_support_review_records_omissions_and_leaves_other_claims_unreviewed(monkeypatch):
+@pytest.mark.parametrize("bad_first", [False, True])
+def test_partial_support_review_records_omissions_and_leaves_other_claims_unreviewed(monkeypatch, bad_first):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     source_id = ""
     class Provider:
@@ -1338,13 +1339,16 @@ def test_partial_support_review_records_omissions_and_leaves_other_claims_unrevi
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             if system == REVIEW_SYSTEM_PROMPT:
+                import json
+                assert [item["claim_index"] for item in json.loads(prompt)["claims"]] == [0]
                 return {"reviews": [{"claim_index": 0, "verdict": "supports"}]}, 10
             cite = {"source_id": source_id, "quotation": "Revenue was 100"}
-            return {"claims": [{"text": "Revenue was 100", "citations": [cite]},
-                               {"text": "Revenue was reported", "citations": [cite] * 4}], "counterarguments": []}, 20
+            good = {"text": "Revenue was 100", "citations": [cite]}
+            bad = {"text": "Revenue was reported", "citations": [cite] * 4}
+            return {"claims": [bad, good] if bad_first else [good, bad], "counterarguments": []}, 20
     monkeypatch.setattr(api, "challenge_provider", Provider())
     client = TestClient(api.app)
-    account = client.post("/v1/auth/local/register", json={"email": "partial-review-coverage@example.test", "password": "correct horse battery staple!"}).json()
+    account = client.post("/v1/auth/local/register", json={"email": f"partial-review-{bad_first}@example.test", "password": "correct horse battery staple!"}).json()
     headers = {"Authorization": "Bearer " + account["access_token"]}
     source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
         "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
@@ -1362,11 +1366,17 @@ def test_partial_support_review_records_omissions_and_leaves_other_claims_unrevi
     versions = client.get(path, headers=headers).json()["versions"]
     content = versions[-1]["content"]
     assert content["run"]["status"] == "partial" and content["run"]["support_review_status"] == "partial"
-    assert content["run"]["support_review_indexes"] == [0]
-    assert content["run"]["support_review_omissions"] == [{"claim_index": 1, "reason": "not_reviewable"}]
-    assert content["claims"][0]["support_review"]["verdict"] == "supports"
-    assert "support_review" not in content["claims"][1]
-    assert versions[-2]["content"]["run"]["support_review_omissions"] == [{"claim_index": 1, "reason": "not_reviewable"}]
+    reviewed, omitted = (1, 0) if bad_first else (0, 1)
+    assert content["run"]["support_review_indexes"] == [reviewed]
+    assert content["run"]["support_review_omissions"] == [{"claim_index": omitted, "reason": "not_reviewable"}]
+    assert content["claims"][reviewed]["support_review"]["verdict"] == "supports"
+    assert "support_review" not in content["claims"][omitted]
+    checkpoint = versions[-2]["content"]["run"]
+    assert checkpoint["support_review_omissions"] == [{"claim_index": omitted, "reason": "not_reviewable"}]
+    assert checkpoint["support_review_method"] == content["run"]["support_review_method"]
+    assert len(checkpoint["support_review_prompt_sha256"]) == 64
+    assert checkpoint["support_review_indexes"] == [reviewed]
+    assert checkpoint["support_review_segments"][0]["claim_index"] == reviewed
 
 
 def test_run_can_focus_on_saved_unique_quotation(monkeypatch):

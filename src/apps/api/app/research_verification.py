@@ -24,7 +24,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v21"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v22"
 
 
 class ReviewEntry(BaseModel):
@@ -148,6 +148,11 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     segments = []
     for (index, text, located), radius in zip(accepted, radii):
         segments.extend(_review_item(index, text, located, radius)[1])
+    # The model sees dense batch-local indexes. `indexes` remains the ordered
+    # mapping back to original claims and is recorded with the run; selected
+    # source segment metadata and omissions always use original indexes.
+    for local_index, item in enumerate(payload["claims"]):
+        item["claim_index"] = local_index
     return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions)
 
 
@@ -171,10 +176,10 @@ def _validated_review_verdicts(batch: ReviewBatch, raw: dict[str, Any]) -> dict[
         result = ReviewOutput.model_validate(raw)
     except ValidationError as error:
         raise InvalidReview("Review output did not match the schema.") from error
-    verdicts = {item.claim_index: item.verdict for item in result.reviews}
-    if not verdicts or len(verdicts) != len(result.reviews) or not set(verdicts).issubset(batch.indexes):
+    local_verdicts = {item.claim_index: item.verdict for item in result.reviews}
+    if not local_verdicts or len(local_verdicts) != len(result.reviews) or not set(local_verdicts).issubset(range(len(batch.indexes))):
         raise InvalidReview("Review indexes must be unique and belong to the submitted claims.")
-    return verdicts
+    return {batch.indexes[local]: verdict for local, verdict in local_verdicts.items()}
 
 
 def _apply_verdicts(claims: list[dict], verdicts: dict[int, str]) -> list[dict]:

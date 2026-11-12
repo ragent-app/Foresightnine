@@ -2367,6 +2367,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "generation_tokens": generation_usage, "support_review_requested": True,
                                          "require_counterarguments": request.require_counterarguments,
                                          "support_review_status": "pending", "support_review_indexes": batch.indexes,
+                                         "support_review_method": REVIEW_METHOD, "support_review_prompt_sha256": batch.prompt_sha256,
+                                         "support_review_segments": batch.segments,
                                          "support_review_omissions": batch.omissions, "search_calls": search_calls,
                                          "model": getattr(getattr(provider, "settings", None), "model", None),
                                          "provider": getattr(provider, "name", None),

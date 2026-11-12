@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v21"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v22"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -94,7 +94,7 @@ def test_review_balances_support_and_counterarguments_under_input_budget():
     batch = prepare_support_review(items, [report], budget)
     assert batch.indexes == [0, 2]
     assert batch.omissions == [{"claim_index": 1, "reason": "input_budget", "required_subject_context": False}]
-    assert [item["claim_index"] for item in json.loads(batch.prompt)["claims"]] == [0, 2]
+    assert [item["claim_index"] for item in json.loads(batch.prompt)["claims"]] == [0, 1]
     assert len(batch.prompt.encode()) <= budget
     invalid_counter = {**items[2], "citations": []}
     batch = prepare_support_review([*items[:2], invalid_counter], [report], budget)
@@ -334,3 +334,24 @@ def test_partial_review_retains_only_unique_submitted_verdicts_and_reports_missi
                 {"reviews":[{"claim_index":0,"verdict":"supports","reason":"unsupported extra field"}]}):
         with pytest.raises(InvalidReview):
             apply_partial_support_review(original,batch,bad)
+
+
+def test_batch_local_indexes_map_to_original_claims_and_omissions():
+    from app.research_verification import apply_partial_support_review
+    items = [{**claim(), "citations": []}, claim(), {**claim(), "citations": []}, claim()]
+    batch = prepare_support_review(items, [source()], 3000)
+    assert batch.indexes == [1, 3]
+    assert batch.omitted == [0, 2]
+    assert [entry["claim_index"] for entry in json.loads(batch.prompt)["claims"]] == [0, 1]
+    assert [segment["claim_index"] for segment in batch.segments] == [1, 3]
+    reviewed, missing = apply_partial_support_review(items, batch, {"reviews": [
+        {"claim_index": 1, "verdict": "contradicts"}, {"claim_index": 0, "verdict": "supports"}]})
+    assert missing == []
+    assert reviewed[1]["support_review"]["verdict"] == "supports"
+    assert reviewed[3]["support_review"]["verdict"] == "contradicts"
+    assert all("support_review" not in reviewed[index] for index in (0, 2))
+    partial, missing = apply_partial_support_review(items, batch, {"reviews": [{"claim_index": 1, "verdict": "uncertain"}]})
+    assert missing == [1] and partial[3]["support_review"]["verdict"] == "uncertain"
+    assert "support_review" not in partial[1]
+    with pytest.raises(InvalidReview):
+        apply_partial_support_review(items, batch, {"reviews": [{"claim_index": 3, "verdict": "supports"}]})
