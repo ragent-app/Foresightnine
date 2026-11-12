@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v34"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v35"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -952,6 +952,47 @@ def _structured_observation_windows(text: str, question: str, size: int,
         return None
 
 
+def _replace_empty_table_with_counterpoint(text: str, question: str, windows: list[tuple[int, str]],
+                                           should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
+    """Use a complete topical qualification in place of an empty table header.
+
+    This is only a retrieval cue. It does not establish that the passage is
+    relevant counterevidence, or that the remaining table is unimportant.
+    """
+    intent = _query_intent(question)
+    if len(windows) != 2 or not re.search(r"\b(?:counterarguments?|counterpoints?|counterevidence|risks?)\b|反方|反证|反證|风险|風險", intent):
+        return windows
+    first, second = windows
+    header = second[1]
+    if not re.search(r"\btable\s+\d+\b|表\s*\d+", header, re.IGNORECASE):
+        return windows
+    # A recognizable numeric row may answer the question; do not replace it.
+    if re.search(r"(?m)^\s*[^\n]{1,100}?(?:\s+[-−]?\d[\d,.]*%?){2,}\s*$", header):
+        return windows
+    ignored = {"according", "under", "above", "below", "what", "happened", "give", "material", "counterpoint", "counterargument", "counterevidence", "risk", "risks", "actual", "projected", "values", "their", "were", "does", "with", "from", "that", "this", "into", "about"}
+    terms = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", intent) if word not in ignored}
+    if len(terms) < 2:
+        return windows
+    candidates = []
+    pattern = r"\b(?:however|nevertheless|although|despite)\b[^.!?。！？]{1,500}[.!?。！？]"
+    for number, match in enumerate(re.finditer(pattern, text, re.IGNORECASE)):
+        if number >= 256:
+            break
+        if should_stop is not None and number % 32 == 0 and should_stop():
+            raise AnalysisInterrupted()
+        start, end = match.span()
+        if end - start > len(header) or start < first[0] + len(first[1]) and first[0] < end:
+            continue
+        words = {word.rstrip("s") for word in re.findall(r"[a-z]{4,}", match.group().casefold())}
+        hits = len(terms & words)
+        if hits >= 2:
+            candidates.append((-hits, start, end))
+    if not candidates:
+        return windows
+    _, start, end = min(candidates)
+    return [first, (start, text[start:end])]
+
+
 def _select_windows(text: str, question: str, length: int, count: int,
                     should_stop: Callable[[], bool] | None = None, *, source_title: str = "") -> list[tuple[int, str]]:
     """Select bounded, non-overlapping passages with original-text offsets."""
@@ -1325,7 +1366,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     if windows is None:
                         windows = _comparison_windows(selection_text, question, size, should_stop)
                     if windows is None:
-                        windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop, source_title=source.title), key=lambda item: item[0])
+                        windows = _select_windows(selection_text, question, size // 2, 2, should_stop, source_title=source.title)
+                        windows = _replace_empty_table_with_counterpoint(selection_text, question, windows, should_stop)
+                        windows = sorted(windows, key=lambda item: item[0])
                         generic_selection = True
                 else:
                     windows = [_select_window(selection_text, question, size, should_stop, source_title=source.title)]

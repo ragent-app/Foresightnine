@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _replace_empty_table_with_counterpoint, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
@@ -738,6 +738,26 @@ def test_vote_and_second_estimate_anchors_find_requested_passages():
     assert any("second estimate" in part and "2.9 percent" in part for _, part in estimates)
     votes = _select_windows(report, "该行动有委员投反对票吗？", 180, 2)
     assert any("Voting against this action: None" in part for _, part in votes)
+
+
+def test_counterpoint_replaces_only_empty_table_header_when_requested():
+    primary = "Bank capital ratio was 12 percent."
+    risk = "However, banks with concentrated loans had larger capital ratio declines."
+    header = "Table 5. Capital ratios for 2023\nBank\nCapital ratio\nAdditional information and definitions\n"
+    text = primary + " " * 30 + risk + " " * 30 + header
+    windows = [(0, primary), (text.index(header), header)]
+    selected = _replace_empty_table_with_counterpoint(text, "Bank capital ratio and risk?", windows)
+    assert selected[0] == windows[0]
+    assert selected[1] == (text.index(risk), risk)
+    assert all(text[start:start + len(part)] == part for start, part in selected)
+    assert _replace_empty_table_with_counterpoint(text, "Bank capital ratio?", windows) == windows
+    assert _replace_empty_table_with_counterpoint(text, "Insurance premium risk?", windows) == windows
+    row = header + "Bank A 12.4 9.9\n"
+    report = text + row
+    row_windows = [windows[0], (len(text), row)]
+    assert _replace_empty_table_with_counterpoint(report, "Bank capital ratio and risk?", row_windows) == row_windows
+    short_windows = [windows[0], (windows[1][0], "Table 5.")]
+    assert _replace_empty_table_with_counterpoint(text, "Bank capital ratio and risk?", short_windows) == short_windows
 
 
 def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote():
