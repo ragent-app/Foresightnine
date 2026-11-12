@@ -25,7 +25,8 @@ try:
  rows=[]
  for item in candidates:
   p=urlsplit(item.url)
-  safe_url=urlunsplit((p.scheme,p.netloc,p.path,'',''))
+  host=p.hostname or ''
+  safe_url=urlunsplit((p.scheme,host,p.path,'',''))
   rows.append({'title':item.title,'url':safe_url,'publisher':item.publisher,
                'published_at':item.published_at.isoformat() if item.published_at else None,
                'excerpt_sha256':sha256(item.excerpt.encode()).hexdigest(),
@@ -34,4 +35,6 @@ try:
 except (ProviderFailure,ValueError,subprocess.SubprocessError) as error:
  out={'status':'failed','error_code':error.code if isinstance(error,ProviderFailure) else type(error).__name__}
 out.update({'http_methods':calls,'elapsed_seconds':round(monotonic()-started,3),'checked_at':datetime.now(timezone.utc).isoformat(),'model_calls':0,'cost_usd':'unknown'})
-(HERE/'result.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n');print(json.dumps({'status':out['status'],'candidate_count':len(out.get('candidates',[])),'http_methods':calls,'elapsed_seconds':out['elapsed_seconds']}))
+serialized=json.dumps(out,ensure_ascii=False,indent=2)
+if 'key' in locals() and key:serialized=serialized.replace(key,'[REDACTED]')
+(HERE/'result.json').write_text(serialized+'\n');print(json.dumps({'status':out['status'],'candidate_count':len(out.get('candidates',[])),'http_methods':calls,'elapsed_seconds':out['elapsed_seconds']}))
