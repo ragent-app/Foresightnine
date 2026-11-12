@@ -1,0 +1,9 @@
+from pathlib import Path
+from datetime import datetime, timezone
+from hashlib import sha256
+import json, subprocess,sys,types
+from app.research_sources import ResearchSource, SourcePermissions
+from app.research_verification import prepare_support_review,REVIEW_SYSTEM_PROMPT
+p=Path('docs/product/phase-a/45-reserved-cross-domain-rerun');old_result=json.loads((p/'BEA_Q3-result.json').read_text());task=json.loads((p/'BEA_Q3-input.json').read_text());text=(p/'BEA_Q3-source.txt').read_text();sid=next(iter(old_result['content']['run']['source_hashes']));source=ResearchSource(source_id=sid,owner_id='test',title=task['source_title'],text=text,kind='user_supplied',obtained_at=datetime.now(timezone.utc),content_sha256=sha256(text.encode()).hexdigest(),retrieval_method='user_pdf',permissions=SourcePermissions(store=True,display=True,model_input=True));r=json.loads(Path('docs/product/phase-a/50-extra-metadata-replay/result.json').read_text());claims=r['claims']+r['counterarguments'];old_code=subprocess.check_output(['git','show','1c351a5:src/apps/api/app/research_verification.py'],text=True);module=types.ModuleType('app._old_verification');module.__package__='app';sys.modules[module.__name__]=module;exec(compile(old_code,'<old>','exec'),module.__dict__);assert module.REVIEW_SYSTEM_PROMPT==REVIEW_SYSTEM_PROMPT;budget=3000-len(REVIEW_SYSTEM_PROMPT.encode())-512
+for name,fn in [('old',module.prepare_support_review),('new',prepare_support_review)]:
+ b=fn(claims,[source],budget);data=json.loads(b.prompt);subject=[{'index':item['claim_index'],'context_has_subject':any('personal saving rate' in excerpt['text'].lower() for excerpt in item['excerpts'])} for item in data['claims'] if item['claim_index']==1];print(name,'budget',budget,'bytes',len(b.prompt.encode()),'indexes',b.indexes,'omitted',b.omitted,'subject',subject,'segments',b.segments)

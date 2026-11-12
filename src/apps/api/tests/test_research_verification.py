@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v4"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v5"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -81,3 +81,38 @@ def test_review_reserves_budget_for_multiple_claims_before_extra_context():
     for entry in json.loads(batch.prompt)["claims"]:
         excerpt = entry["excerpts"][0]
         assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == "Revenue 100"
+
+
+def test_review_preserves_required_subject_context_or_omits_claim():
+    text = "Personal saving rate was 2.7 percent in the third quarter, a downward revision of 0.1 percentage point."
+    quotation = "quarter, a downward revision of 0.1 percentage point."
+    start = text.index(quotation)
+    item = {"text": "GDP was revised downward", "citations": [{"source_id": "s", "quotation": quotation,
+        "location": {"character_start": start, "character_end": start + len(quotation)}}]}
+    report = source().model_copy(update={"text": text})
+    batch = prepare_support_review([item], [report], 2000)
+    assert batch.indexes == [0] and not batch.omitted
+    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
+    assert "Personal saving rate" in excerpt["text"]
+    assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == quotation
+    assert batch.segments[0]["required_context_start"] == 0
+    assert report.text[batch.segments[0]["character_start"]:batch.segments[0]["character_end"]] == excerpt["text"]
+    neutral = report.model_copy(update={"text": text.replace("Personal saving rate", "x" * len("Personal saving rate"))})
+    # Exact quote alone fits, but the identified subject context does not.
+    for budget in range(200, 700):
+        if prepare_support_review([item], [neutral], budget).indexes and not prepare_support_review([item], [report], budget).indexes:
+            break
+    else:
+        pytest.fail("expected a budget that admits only the context-free quote")
+    limited = prepare_support_review([item], [report], budget)
+    assert limited.indexes == [] and limited.omitted == [0]
+    assert "Personal saving rate" not in limited.prompt
+
+
+def test_review_ignores_caller_supplied_context_warning_and_excludes_simulation():
+    item = {**claim(), "citation_context_warnings": [{"citation_index": 0, "context_character_start": 0}]}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [0] and "required_context_start" not in batch.segments[0]
+    simulated = source().model_copy(update={"is_simulated": True})
+    blocked = prepare_support_review([item], [simulated], 3000)
+    assert not blocked.indexes and blocked.omitted == [0]

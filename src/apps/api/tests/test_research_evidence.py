@@ -184,7 +184,8 @@ def test_citation_subject_context_is_an_explicit_bounded_review_hint():
         "location": {"character_start": start, "character_end": start + len(quote)}}]}
     result = flag_citation_subject_context([claim], [source])[0]
     assert result["citation_context_warnings"] == [{"source_id": "s", "citation_index": 0,
-        "context_metric": "personal saving rate", "status": "requires_review"}]
+        "context_metric": "personal saving rate", "context_character_start": 0,
+        "context_character_end": len("Personal saving rate"), "status": "requires_review"}]
     assert "citation_context_warnings" not in claim
     full = {**claim, "citations": [{"source_id": "s", "quotation": text,
         "location": {"character_start": 0, "character_end": len(text)}}], "citation_context_warnings": [{"fake": True}]}

@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource
+from .research_evidence import flag_citation_subject_context
 
 
 REVIEW_SYSTEM_PROMPT = (
@@ -22,7 +23,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v4"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v5"
 
 
 class ReviewEntry(BaseModel):
@@ -54,23 +55,28 @@ class ReviewBatch:
 
 def prepare_support_review(claims: list[dict], sources: list[ResearchSource], max_bytes: int) -> ReviewBatch:
     """Assemble only authorized, uniquely located original excerpts within budget."""
-    source_map = {item.source_id: item for item in sources if item.permissions.model_input and item.permissions.display}
+    source_map = {item.source_id: item for item in sources if item.permissions.model_input and item.permissions.display and not item.is_simulated}
+    # Recompute cues from authorized original sources; never trust a caller's
+    # preexisting warning or a synthetic source to supply review context.
+    review_claims = flag_citation_subject_context(claims, list(source_map.values()))
     payload: dict[str, Any] = {"claims": [], "output_schema": {"reviews": [
         {"claim_index": 0, "verdict": "supports|does_not_support|contradicts|uncertain"}]}}
     indexes: list[int] = []
     omitted: list[int] = []
-    accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int]]]] = []
+    accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int, int]]]] = []
     def serialize() -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    for index, claim in enumerate(claims):
+    for index, claim in enumerate(review_claims):
         citations = claim.get("citations")
         text = claim.get("text")
         if (claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)
             continue
+        context_starts = {item["citation_index"]: item["context_character_start"]
+                          for item in claim.get("citation_context_warnings", [])}
         located = []
-        for citation in citations:
+        for citation_index, citation in enumerate(citations):
             if not isinstance(citation, dict):
                 break
             source = source_map.get(citation.get("source_id")) if isinstance(citation.get("source_id"), str) else None
@@ -82,12 +88,13 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             if (type(start) is not int or type(end) is not int or start < 0 or end <= start or end > len(source.text) or
                     end - start > 1000 or source.text[start:end] != quotation):
                 break
-            located.append((source, start, end))
+            context_start = context_starts.get(citation_index, start)
+            located.append((source, start, end, context_start))
         if len(located) != len(citations):
             omitted.append(index)
             continue
-        # Reserve exact quotations for as many claims as fit before spending
-        # the remaining budget on extra context for earlier claims.
+        # Reserve exact quotations and any recognized subject context before
+        # spending the remaining budget on optional surrounding text.
         payload["claims"].append(_review_item(index, text, located, 0)[0])
         if len(serialize().encode("utf-8")) > max_bytes:
             payload["claims"].pop()
@@ -112,16 +119,17 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments)
 
 
-def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int, int]], radius: int) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
+def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int, int, int]], radius: int) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
     excerpts = []
     segments: list[dict[str, int | str]] = []
-    for source, start, end in located:
-        left, right = max(0, start - radius), min(len(source.text), end + radius)
+    for source, start, end, context_start in located:
+        left, right = min(max(0, start - radius), context_start), min(len(source.text), end + radius)
         excerpts.append({"source_id": source.source_id, "text": source.text[left:right],
                          "quotation": source.text[start:end], "quotation_start": start - left,
                          "quotation_end": end - left, "context_radius_characters": radius})
         segments.append({"claim_index": index, "source_id": source.source_id,
-                         "character_start": left, "character_end": right, "context_radius": radius})
+                         "character_start": left, "character_end": right, "context_radius": radius,
+                         **({"required_context_start": context_start} if context_start < start else {})})
     return {"claim_index": index, "text": text, "excerpts": excerpts}, segments
 
 

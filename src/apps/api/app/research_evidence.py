@@ -79,11 +79,14 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
             # A page break or distant sentence start is insufficient context.
             if "\f" in before or len(before) >= 400:
                 continue
-            subject_matches = [name for name, pattern in _METRIC_SUBJECTS.items() if pattern.search(before)]
+            subject_matches = [(name, match) for name, pattern in _METRIC_SUBJECTS.items()
+                               if (match := pattern.search(before)) is not None]
             if len(subject_matches) != 1:
                 continue
+            name, match = subject_matches[0]
             warnings.append({"source_id": source.source_id, "citation_index": index,
-                             "context_metric": subject_matches[0], "status": "requires_review"})
+                             "context_metric": name, "context_character_start": left + match.start(),
+                             "context_character_end": left + match.end(), "status": "requires_review"})
             if len(warnings) >= 5:
                 break
         if warnings:
