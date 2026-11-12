@@ -46,6 +46,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
 def test_review_omits_unauthorized_unlocated_or_unsupported_claims(item, src):
     batch = prepare_support_review([item], [src], 3000)
     assert batch.indexes == [] and batch.omitted == [0]
+    assert batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]
     assert "Revenue 100" not in batch.prompt
 
 
@@ -59,6 +60,7 @@ def test_review_enforces_budget_and_exact_result_coverage():
             apply_support_review([claim(), claim()], batch, bad)
     limited = prepare_support_review([claim()], [source()], 100)
     assert not limited.indexes and limited.omitted == [0]
+    assert limited.omissions == [{"claim_index": 0, "reason": "input_budget", "required_subject_context": False}]
 
 
 def test_review_reduces_context_to_fit_without_truncating_the_quote():
@@ -106,6 +108,7 @@ def test_review_preserves_required_subject_context_or_omits_claim():
         pytest.fail("expected a budget that admits only the context-free quote")
     limited = prepare_support_review([item], [report], budget)
     assert limited.indexes == [] and limited.omitted == [0]
+    assert limited.omissions == [{"claim_index": 0, "reason": "input_budget", "required_subject_context": True}]
     assert "Personal saving rate" not in limited.prompt
 
 

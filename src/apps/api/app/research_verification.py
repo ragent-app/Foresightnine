@@ -47,6 +47,7 @@ class ReviewBatch:
     indexes: list[int]
     omitted: list[int]
     segments: list[dict[str, int | str]]
+    omissions: list[dict[str, int | str | bool]]
 
     @property
     def prompt_sha256(self) -> str:
@@ -63,6 +64,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         {"claim_index": 0, "verdict": "supports|does_not_support|contradicts|uncertain"}]}}
     indexes: list[int] = []
     omitted: list[int] = []
+    omissions: list[dict[str, int | str | bool]] = []
     accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int, int]]]] = []
     def serialize() -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -72,6 +74,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         if (claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)
+            omissions.append({"claim_index": index, "reason": "not_reviewable"})
             continue
         context_starts = {item["citation_index"]: item["context_character_start"]
                           for item in claim.get("citation_context_warnings", [])}
@@ -92,6 +95,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             located.append((source, start, end, context_start))
         if len(located) != len(citations):
             omitted.append(index)
+            omissions.append({"claim_index": index, "reason": "not_reviewable"})
             continue
         # Reserve exact quotations and any recognized subject context before
         # spending the remaining budget on optional surrounding text.
@@ -99,6 +103,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         if len(serialize().encode("utf-8")) > max_bytes:
             payload["claims"].pop()
             omitted.append(index)
+            omissions.append({"claim_index": index, "reason": "input_budget", "required_subject_context": bool(context_starts)})
             continue
         indexes.append(index)
         accepted.append((index, text, located))
@@ -116,7 +121,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     segments = []
     for (index, text, located), radius in zip(accepted, radii):
         segments.extend(_review_item(index, text, located, radius)[1])
-    return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments)
+    return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions)
 
 
 def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int, int, int]], radius: int) -> tuple[dict[str, Any], list[dict[str, int | str]]]:

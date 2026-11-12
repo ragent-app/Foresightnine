@@ -2167,6 +2167,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         review_hash: str | None = None
         review_segments: list[dict[str, int | str]] = []
         review_indexes: list[int] = []
+        review_omissions: list[dict[str, Any]] = ([{"claim_index": index, "reason": "not_started"}
+                                                   for index in range(len(claims))] if request.support_review else [])
+        review_failed_indexes: list[int] = []
         if request.support_review:
             review_status = "not_reviewable"
             policy = getattr(provider, "policy", None)
@@ -2175,16 +2178,20 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             timeout = getattr(policy, "timeout_seconds", None)
             if calls and claims and request.max_model_calls < 2:
                 review_status = "budget_exhausted"
+                review_omissions = [{"claim_index": index, "reason": "call_budget"} for index in range(len(claims))]
             elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
                 per_call = input_limit + output_limit
                 first_charge = max(per_call, generation_usage if generation_usage is not None else per_call)
                 if request.max_total_tokens < first_charge + per_call or monotonic() >= deadline:
                     review_status = "budget_exhausted"
+                    budget_reason = "token_budget" if request.max_total_tokens < first_charge + per_call else "time_budget"
+                    review_omissions = [{"claim_index": index, "reason": budget_reason} for index in range(len(claims))]
                 else:
                     # Only sources already admitted by the first analysis can
                     # be reviewed; no extra retrieval or permission escalation.
                     review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
                     batch = prepare_support_review(claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
+                    review_omissions = batch.omissions
                     if batch.indexes:
                         def save_generation_checkpoint() -> None:
                             nonlocal checkpoint_parent
@@ -2205,7 +2212,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                          "generation_tokens": generation_usage, "support_review_requested": True,
                                          "require_counterarguments": request.require_counterarguments,
-                                         "support_review_status": "pending", "search_calls": search_calls,
+                                         "support_review_status": "pending", "support_review_indexes": batch.indexes,
+                                         "support_review_omissions": batch.omissions, "search_calls": search_calls,
                                          "model": getattr(getattr(provider, "settings", None), "model", None),
                                          "provider": getattr(provider, "name", None),
                                          "prompt_sha256": analysis.prompt_sha256,
@@ -2244,6 +2252,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             review_status = "partial" if batch.omitted else "complete"
                         except (ProviderFailure, InvalidReview, ApiProblem) as error:
                             review_status = "failed"
+                            review_failed_indexes = batch.indexes
                             review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
                         if calls == 2:
                             usage = generation_usage + review_usage if generation_usage is not None and review_usage is not None else None
@@ -2311,6 +2320,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      "support_review_error": review_error, "support_review_method": REVIEW_METHOD if request.support_review else None,
                      "analysis_error_detail": analysis_error_detail,
                      "support_review_prompt_sha256": review_hash, "support_review_indexes": review_indexes,
+                     "support_review_omissions": review_omissions, "support_review_failed_indexes": review_failed_indexes,
                      "support_review_segments": review_segments,
                      "support_review_system_sha256": sha256(REVIEW_SYSTEM_PROMPT.encode("utf-8")).hexdigest() if request.support_review else None,
                      "search_calls": search_calls, "search_status": search_status,
