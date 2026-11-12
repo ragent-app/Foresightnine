@@ -10,9 +10,9 @@ export interface ResearchClaim {
   role?: string;
   support_status?: string;
   support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false };
-  citations?: { source_id: string; quotation?: string; support_status?: string; location?: SourceLocation }[];
+  citations?: { source_id: string; quotation?: string; quotation_match?: string; support_status?: string; location?: SourceLocation }[];
 }
-export interface ResearchFact { fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; verification: string; authorship?: string; location?: SourceLocation }
+export interface ResearchFact { fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
 export interface ResearchContent {
   summary: string;
   sources: { source_id: string; title?: string; url?: string | null; published_at?: string | null; obtained_at?: string }[];

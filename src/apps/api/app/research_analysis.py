@@ -366,33 +366,73 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     ambiguous: set[tuple[str, str]] = set()
 
     def quotation_location(source: ResearchSource, quotation: str) -> tuple[dict[str, Any], str, str]:
-        positions = []
-        originals = []
+        positions: list[dict[str, Any]] = []
+        originals: list[str] = []
+        scan_truncated = False
         # PDF extraction introduces line breaks inside sentences. Accept only
         # whitespace differences, and return the exact original text rather
         # than storing the model's normalized quotation as source material.
-        pattern = re.compile("(?=(" + r"\s+".join(re.escape(part) for part in re.split(r"\s+", quotation)) + "))")
+        def pattern_for(text: str) -> re.Pattern[str]:
+            return re.compile("(?=(" + r"\s+".join(re.escape(part) for part in re.split(r"\s+", text)) + "))")
+
+        def record(offset: int, passage: str, left: int, right: int) -> None:
+            start = offset + left
+            positions.append({"character_start": start, "character_end": offset + right,
+                **({"page": source.text[:start].count("\f") + 1} if source.retrieval_method == "user_pdf" else {})})
+            originals.append(passage[left:right])
+
+        pattern = pattern_for(quotation)
         for offset, passage in model_text[source.source_id]:
             for match in pattern.finditer(passage):
-                start = offset + match.start(1)
-                positions.append({"character_start": start, "character_end": offset + match.end(1),
-                    **({"page": source.text[:start].count("\f") + 1} if source.retrieval_method == "user_pdf" else {})})
-                originals.append(match.group(1))
+                if match.end(1) - match.start(1) <= 1000:
+                    record(offset, passage, match.start(1), match.end(1))
                 if len(positions) == 6:
                     break
             if len(positions) == 6:
                 break
+        expanded = False
+        if not positions:
+            # A model sometimes uses an explicit ellipsis between excerpts.
+            # Accept it only when every fragment occurs in order in ONE
+            # analyzed passage and replace it with the entire continuous
+            # original span. Never stitch passages or hide intervening text.
+            fragments = re.split(r"\s+(?:\.{3}|…)\s+", quotation)
+            if 2 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments):
+                patterns = [pattern_for(part.strip()) for part in fragments]
+                first_count = 0
+                for offset, passage in model_text[source.source_id]:
+                    def extend(index: int, left: int, right: int) -> None:
+                        if len(positions) >= 6:
+                            return
+                        if index == len(patterns):
+                            record(offset, passage, left, right)
+                            return
+                        for match in patterns[index].finditer(passage, right, min(len(passage), left + 1000)):
+                            extend(index + 1, left, match.end(1))
+                            if len(positions) >= 6:
+                                return
+                    for match in patterns[0].finditer(passage):
+                        first_count += 1
+                        if first_count > 128:
+                            scan_truncated = True
+                            break
+                        extend(1, match.start(1), match.end(1))
+                        if len(positions) >= 6:
+                            break
+                    if len(positions) >= 6 or scan_truncated:
+                        break
+                expanded = bool(positions)
         if not positions:
             raise InvalidAnalysis("Model cited a missing source or quotation.")
         original = originals[0]
-        matching = "exact" if original == quotation else "whitespace_normalized"
-        if len(positions) == 1:
+        matching = "expanded_ellipsis" if expanded else "exact" if original == quotation else "whitespace_normalized"
+        if len(positions) == 1 and not scan_truncated:
             return positions[0], original, matching
         identity = (source.source_id, quotation)
         if identity not in ambiguous:
             limitations.append(f"Source {source.source_id}: quotation location is ambiguous in the analyzed passages.")
             ambiguous.add(identity)
-        return {"status": "ambiguous", "matches": positions[:5], "truncated": len(positions) > 5}, original, matching
+        return {"status": "ambiguous", "matches": positions[:5], "truncated": len(positions) > 5 or scan_truncated}, original, matching
 
     checked_facts: list[dict[str, Any]] = []
     numeric_facts: dict[str, NumericFact] = {}

@@ -126,6 +126,39 @@ def test_pdf_line_wrap_matches_only_whitespace_and_preserves_original():
     assert any("quotation" in item and "omitted" in item for item in rejected.limitations)
 
 
+def test_expands_ellipsis_only_to_a_unique_continuous_original_span():
+    report = source("s", text="Unit USD millions; intervening context; Revenue 91471 in 2023.")
+    quote = "Unit USD millions ... Revenue 91471"
+    def model(_):
+        citation = {"source_id": "s", "quotation": quote}
+        return {"claims": [{"text": "Revenue", "citations": [citation]}],
+                "facts": [{"fact_id": "r", "label": "Revenue", "value": "91471", "unit": "USD millions",
+                           "period": "2023", "citation": citation}]}, 10
+    result = analyze("Revenue?", [report], None, model)
+    for item in (result.claims[0]["citations"][0], result.facts[0]):
+        loc = item["location"]
+        assert item["quotation_match"] == "expanded_ellipsis"
+        assert item["quotation"] == "Unit USD millions; intervening context; Revenue 91471"
+        assert report.text[loc["character_start"]:loc["character_end"]] == item["quotation"]
+
+
+def test_expanded_ellipsis_does_not_hide_ambiguity_or_cross_the_length_limit():
+    def model(_):
+        return {"claims": [{"text": "Revenue", "citations": [
+            {"source_id": "s", "quotation": "Unit USD ... Revenue 100"}]}]}, 10
+    ambiguous = analyze("Revenue?", [source("s", text="Unit USD; Revenue 100. Unit USD; Revenue 100.")], None, model)
+    assert ambiguous.claims[0]["citations"][0]["location"]["status"] == "ambiguous"
+    distant = analyze("Revenue?", [source("s", text="Unit USD" + "x" * 1200 + "Revenue 100")], None, model)
+    assert distant.claims == [] and any("quotation" in item and "omitted" in item for item in distant.limitations)
+
+
+def test_literal_ellipsis_is_not_expanded_when_it_matches_exactly():
+    report = source("s", text="Unit USD ... Revenue 100")
+    result = analyze("Revenue?", [report], None, lambda _: ({"claims": [{"text": "Revenue", "citations": [
+        {"source_id": "s", "quotation": "Unit USD ... Revenue 100"}]}]}, 10))
+    assert result.claims[0]["citations"][0]["quotation_match"] == "exact"
+
+
 def test_future_or_unknown_publication_is_not_sent():
     cutoff = datetime(2023, 1, 1, tzinfo=timezone.utc)
     later = source("later", published_at=datetime(2024, 1, 1, tzinfo=timezone.utc))
@@ -253,6 +286,17 @@ def test_separate_passages_cannot_be_stitched_into_a_fake_quotation():
     rejected = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
     assert rejected.claims == []
     assert any("quotation" in item and "omitted" in item for item in rejected.limitations)
+
+
+def test_ellipsis_does_not_stitch_two_selected_passages():
+    report = source("s", text="2023 Revenue 100. " + "background " * 1200 +
+                    "2023 Profit 200. " + "irrelevant " * 1200)
+    def model(prompt):
+        assert len(json.loads(prompt)["sources"]) == 2
+        return {"claims": [{"text": "Both", "citations": [{"source_id": "s",
+                "quotation": "2023 Revenue 100. ... 2023 Profit 200."}]}]}, 10
+    result = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
+    assert result.claims == [] and any("quotation" in item and "omitted" in item for item in result.limitations)
 
 
 def test_long_document_uses_two_windows_under_a_thousand_character_allowance():
