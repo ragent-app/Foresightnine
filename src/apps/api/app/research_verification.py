@@ -24,7 +24,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v17"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v18"
 
 
 class ReviewEntry(BaseModel):
@@ -151,14 +151,34 @@ def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int,
     return {"claim_index": index, "text": text, "excerpts": excerpts}, segments
 
 
-def apply_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> list[dict]:
+
+def _validated_review_verdicts(batch: ReviewBatch, raw: dict[str, Any]) -> dict[int, str]:
     try:
         result = ReviewOutput.model_validate(raw)
     except ValidationError as error:
         raise InvalidReview("Review output did not match the schema.") from error
     verdicts = {item.claim_index: item.verdict for item in result.reviews}
-    if len(verdicts) != len(result.reviews) or set(verdicts) != set(batch.indexes):
-        raise InvalidReview("Review must cover exactly the submitted claims once.")
-    return [{**claim, **({"support_review": {"verdict": verdicts[index], "method": REVIEW_METHOD,
+    if not verdicts or len(verdicts) != len(result.reviews) or not set(verdicts).issubset(batch.indexes):
+        raise InvalidReview("Review indexes must be unique and belong to the submitted claims.")
+    return verdicts
+
+
+def _apply_verdicts(claims: list[dict], verdicts: dict[int, str]) -> list[dict]:
+    return [{**{key: value for key, value in claim.items() if key != "support_review"},
+             **({"support_review": {"verdict": verdicts[index], "method": REVIEW_METHOD,
                                                "independently_verified": False}}
                          if index in verdicts else {})} for index, claim in enumerate(claims)]
+
+
+def apply_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> list[dict]:
+    verdicts = _validated_review_verdicts(batch, raw)
+    if set(verdicts) != set(batch.indexes):
+        raise InvalidReview("Review must cover exactly the submitted claims once.")
+    return _apply_verdicts(claims, verdicts)
+
+
+def apply_partial_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> tuple[list[dict], list[int]]:
+    """Retain well-formed returned assessments while explicitly reporting omissions."""
+    verdicts = _validated_review_verdicts(batch, raw)
+    missing = [index for index in batch.indexes if index not in verdicts]
+    return _apply_verdicts(claims, verdicts), missing

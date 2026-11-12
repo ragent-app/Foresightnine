@@ -101,7 +101,7 @@ from .research_sources import ResearchSource, ResearchSources, SourceInput, Sour
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_trade_balance_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
-                                    apply_support_review, prepare_support_review)
+                                    apply_partial_support_review, prepare_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
@@ -2396,8 +2396,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 raise
                             finally:
                                 _settle_model_call(http_request, review_call_id, review_usage)
-                            claims = apply_support_review(claims, batch, raw_review)
-                            review_status = "partial" if batch.omitted else "complete"
+                            claims, missing_reviews = apply_partial_support_review(claims, batch, raw_review)
+                            review_omissions.extend({"claim_index": index, "reason": "model_omitted"} for index in missing_reviews)
+                            review_status = "partial" if batch.omitted or missing_reviews else "complete"
                         except (ProviderFailure, InvalidReview, ApiProblem) as error:
                             review_status = "failed"
                             review_failed_indexes = batch.indexes

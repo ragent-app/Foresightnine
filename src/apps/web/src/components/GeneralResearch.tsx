@@ -90,6 +90,7 @@ function reviewOmissionHint(run: Record<string, unknown>, index: number, en: boo
   const item = entries.find((value): value is { claim_index: number; reason: string; required_subject_context?: boolean } =>
     typeof value === "object" && value !== null && value.claim_index === index && typeof value.reason === "string");
   if (!item) return null;
+  if (item.reason === "model_omitted") return en ? "The model did not return an assessment for this submitted finding." : "该结论已提交复查，但模型未返回判断。";
   if (item.reason === "not_reviewable") return en ? "The citations or evidence did not meet the review input requirements." : "引文或证据未满足模型复查的输入要求。";
   if (item.reason === "input_budget") return item.required_subject_context
     ? (en ? "The quotation and required context did not fit the review input budget." : "完整引文及所需上下文超出复查输入预算。")

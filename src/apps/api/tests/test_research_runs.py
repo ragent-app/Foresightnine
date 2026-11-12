@@ -2030,3 +2030,43 @@ def test_trade_balance_direction_warning_is_recomputed_after_edit(monkeypatch):
     saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
     assert saved.status_code==201 and not saved.json()["versions"][-1]["content"]["claims"][0].get("balance_direction_warnings")
     assert content["claims"][0]["balance_direction_warnings"]
+
+
+def test_model_omitted_review_is_partial_and_returned_verdict_is_retained(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    class Provider:
+        name="model-omitted-review-test"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            if system==REVIEW_SYSTEM_PROMPT:
+                return {"reviews":[{"claim_index":0,"verdict":"supports"}]},10
+            cite={"source_id":source_id,"quotation":"Revenue was 100."}
+            return {"claims":[{"text":"Revenue was 100.","citations":[cite]},
+                              {"text":"The report stated revenue.","citations":[cite]}]},20
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    user=client.post("/v1/auth/local/register",json={"email":"review-model-omission@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+user["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue was 100.",
+        "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Revenue?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"model-omitted-review"},json={
+        "parent_version_id":topic["versions"][0]["version_id"],"require_counterarguments":False,
+        "support_review":True,"max_model_calls":2,"max_total_tokens":9000})
+    assert receipt.status_code==202
+    op=receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+op,headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed"
+    versions=client.get(path,headers=headers).json()["versions"]
+    content=versions[-1]["content"];run=content["run"]
+    assert run["status"]=="partial" and run["support_review_status"]=="partial"
+    assert run["support_review_indexes"]==[0,1] and run["support_review_omissions"]==[{"claim_index":1,"reason":"model_omitted"}]
+    assert run["total_tokens"]==30 and run["model_calls"]==2
+    assert content["claims"][0]["support_review"]["verdict"]=="supports"
+    assert content["claims"][0]["support_review"]["independently_verified"] is False
+    assert "support_review" not in content["claims"][1]
+    assert versions[-2]["content"]["run"]["checkpoint"]=="generation"

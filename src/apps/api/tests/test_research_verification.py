@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v17"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v18"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -301,3 +301,21 @@ def test_review_omits_trade_balance_direction_conflict():
          "location":{"character_start":0,"character_end":len(text)}}]}
     batch=prepare_support_review([item],[report],3000)
     assert not batch.indexes and batch.omitted==[0]
+
+
+def test_partial_review_retains_only_unique_submitted_verdicts_and_reports_missing():
+    from app.research_verification import apply_partial_support_review
+    original=[claim(), claim()]
+    batch=prepare_support_review(original,[source()],3000)
+    reviewed,missing=apply_partial_support_review(original,batch,{"reviews":[{"claim_index":0,"verdict":"supports"}]})
+    assert missing==[1] and reviewed[0]["support_review"]["independently_verified"] is False
+    assert "support_review" not in reviewed[1] and all("support_review" not in item for item in original)
+    stale=[original[0], {**original[1],"support_review":{"verdict":"supports"}}]
+    checked,_=apply_partial_support_review(stale,batch,{"reviews":[{"claim_index":0,"verdict":"uncertain"}]})
+    assert "support_review" not in checked[1] and stale[1]["support_review"]["verdict"]=="supports"
+    for bad in ({"reviews":[]},
+                {"reviews":[{"claim_index":0,"verdict":"supports"},{"claim_index":0,"verdict":"contradicts"}]},
+                {"reviews":[{"claim_index":2,"verdict":"supports"}]},
+                {"reviews":[{"claim_index":0,"verdict":"supports","reason":"unsupported extra field"}]}):
+        with pytest.raises(InvalidReview):
+            apply_partial_support_review(original,batch,bad)
