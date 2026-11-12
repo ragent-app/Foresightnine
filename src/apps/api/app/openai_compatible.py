@@ -454,7 +454,7 @@ def _default_transport(
     allow_private_network: bool = False,
     max_response_bytes: int = _MAX_RESPONSE_BYTES,
 ) -> HttpResponse:
-    if not 1 <= max_response_bytes <= 2 * 1024 * 1024:
+    if not 1 <= max_response_bytes <= 5_000_000:
         raise _TransportFailure("invalid response limit")
     parsed = urlsplit(url)
     if not parsed.hostname:

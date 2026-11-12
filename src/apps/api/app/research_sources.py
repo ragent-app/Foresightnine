@@ -76,7 +76,7 @@ class ResearchSource(BaseModel):
     revised_at: datetime | None = None
     obtained_at: datetime
     content_sha256: str
-    retrieval_method: Literal["user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html"] = "user_supplied"
+    retrieval_method: Literal["user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html", "sec_filing_html"] = "user_supplied"
     pdf_text_order: Literal["layout", "reading"] | None = None
     derived_from_source_id: str | None = None
     response_sha256: str | None = None
@@ -180,7 +180,7 @@ class ResearchSources:
     def __init__(self, repository: JsonDocumentRepository[ResearchSource]):
         self.repository = repository
 
-    def create(self, owner: str, request: SourceInput, *, retrieval_method: Literal["user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html"] = "user_supplied",
+    def create(self, owner: str, request: SourceInput, *, retrieval_method: Literal["user_supplied", "official_html", "sec_companyconcept", "user_pdf", "user_html", "sec_filing_html"] = "user_supplied",
                response_sha256: str | None = None, response_content_type: str | None = None,
                original_pdf_base64: str | None = None, original_html_base64: str | None = None, pdf_text_order: Literal["layout", "reading"] | None = None,
                derived_from_source_id: str | None = None, source_id: str | None = None) -> ResearchSource:

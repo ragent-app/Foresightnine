@@ -107,7 +107,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
-from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, search_sec_identities, reserve_sec_request, validate_user_agent
+from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
 from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
 
 
@@ -1507,7 +1507,7 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
         metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
         if source.retrieval_method == "user_pdf":
             metadata["original_pdf_available"] = bool(source.original_pdf_base64)
-        if source.retrieval_method == "user_html":
+        if source.retrieval_method in {"user_html", "sec_filing_html"}:
             metadata["original_html_available"] = bool(source.original_html_base64)
         if pdf_text_spacing_suspect(source):
             metadata["pdf_text_spacing_warning"] = True
@@ -1516,7 +1516,7 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
             metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
         metadata["status"] = "available"
         metadata["verification"] = "user_declared_not_verified"
-        if source.retrieval_method in {"official_html", "user_html"}:
+        if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
             metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
         result.append(metadata)
     return result
@@ -1585,7 +1585,7 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
                 parts = urlsplit(str(source.url))
                 metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
             metadata["verification"] = "user_declared_not_verified"
-            if source.retrieval_method in {"official_html", "user_html"}:
+            if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
                 metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
             sources.append(metadata)
     except SourceNotFound as error:
@@ -2104,7 +2104,7 @@ def _visible_research_source(source: ResearchSource) -> dict:
     result = source.model_dump(mode="json", exclude={"original_pdf_base64", "original_html_base64"})
     if source.retrieval_method == "user_pdf":
         result["original_pdf_available"] = bool(source.original_pdf_base64)
-    if source.retrieval_method == "user_html":
+    if source.retrieval_method in {"user_html", "sec_filing_html"}:
         result["original_html_available"] = bool(source.original_html_base64)
     if pdf_text_spacing_suspect(source):
         result["pdf_text_spacing_warning"] = True
@@ -2112,7 +2112,7 @@ def _visible_research_source(source: ResearchSource) -> dict:
         result.pop("text", None)
     # User-supplied provenance and permissions are declarations, not proof.
     result["verification"] = "user_declared_not_verified"
-    if source.retrieval_method in {"official_html", "user_html"}:
+    if source.retrieval_method in {"official_html", "user_html", "sec_filing_html"}:
         result["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
     return result
 
@@ -2235,7 +2235,7 @@ def get_research_source_original(source_id: str, authorization: str | None = Hea
     if not raw or not source.permissions.display or not source.permissions.export:
         raise ApiProblem(403, "invalid_request", "The original document is not available for download.")
     import base64
-    is_html = source.retrieval_method == "user_html"
+    is_html = source.retrieval_method in {"user_html", "sec_filing_html"}
     return Response(content=base64.b64decode(raw), media_type="application/octet-stream" if is_html else "application/pdf",
                     headers={"Content-Disposition": 'attachment; filename="source.html"' if is_html else 'attachment; filename="source.pdf"',
                              "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
@@ -2274,6 +2274,29 @@ def fetch_research_source(request: FetchSourceRequest, http_request: Request) ->
     account = _authenticated_account(http_request.headers.get("Authorization"))
     if not request.permissions.store:
         raise ApiProblem(422, "invalid_request", "Source storage permission is required.")
+    if urlsplit(str(request.url)).hostname == "www.sec.gov":
+        try:
+            agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
+            _reserve_search_call(http_request)
+            if not reserve_sec_request(SOURCE_RATE_LIMITS):
+                raise ApiProblem(429, "rate_limited", "SEC request limit reached; retry later.", retryable=True, retry_after=1)
+            data = fetch_sec_filing(request, agent)
+            source = research_sources.create(account.account_id, SourceInput(title=request.title, text=data.text,
+                url=request.url, kind="official", permissions=request.permissions, published_at=request.published_at,
+                event_at=request.event_at, revised_at=request.revised_at, is_simulated=request.is_simulated),
+                retrieval_method="sec_filing_html", response_sha256=data.response_sha256, response_content_type="text/html",
+                original_html_base64=data.original_base64)
+            result = _visible_research_source(source)
+            result.pop("text", None)
+            return result
+        except SecFailure as error:
+            if error.code == "sec_contact_unconfigured":
+                raise ApiProblem(503, "internal_error", "SEC source contact is not configured.", retryable=False) from error
+            if error.code == "source_rate_limited":
+                raise ApiProblem(429, "rate_limited", "SEC source rate limited.", retryable=True, retry_after=1) from error
+            if error.code in {"source_timeout", "source_unavailable"}:
+                raise ApiProblem(503, "internal_error", "SEC source unavailable or timed out.", retryable=True) from error
+            raise ApiProblem(422, "invalid_request", "SEC filing data could not be used.") from error
     _reserve_search_call(http_request)
     try:
         fetched = fetch_official_text(request)

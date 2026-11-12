@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import math
 import re
 from dataclasses import dataclass
@@ -9,11 +10,14 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Callable, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .openai_compatible import HttpResponse, _TransportFailure, _TransportTimeout, _default_transport
 from .research_sources import SourcePermissions
+from .research_fetch import FetchSourceRequest
+from .research_uploads import HtmlUploadRequest, PdfFailure, extract_uploaded_html
 
 
 class SecConceptRequest(BaseModel):
@@ -58,6 +62,48 @@ class SecResult:
     title: str
     text: str
     response_sha256: str
+
+
+@dataclass(frozen=True)
+class SecFilingResult:
+    text: str
+    response_sha256: str
+    original_base64: str
+
+
+def fetch_sec_filing(request: FetchSourceRequest, user_agent: str | None,
+                     transport: Callable[..., HttpResponse] | None = None) -> SecFilingResult:
+    """Retrieve one validated SEC HTML filing, preserving the exact UTF-8 body."""
+    if not request.permissions.store:
+        raise SecFailure("source_permission_unknown")
+    if urlsplit(str(request.url)).hostname != "www.sec.gov":
+        raise SecFailure("source_invalid")
+    agent = validate_user_agent(user_agent)
+    send = transport or (lambda method, address, headers, body, timeout:
+                         _default_transport(method, address, headers, body, timeout,
+                                            max_response_bytes=5_000_000))
+    try:
+        response = send("GET", str(request.url), {"User-Agent": agent, "Accept": "text/html"}, b"", 15.0)
+    except _TransportTimeout as error:
+        raise SecFailure("source_timeout") from error
+    except (_TransportFailure, OSError) as error:
+        raise SecFailure("source_unavailable") from error
+    if response.status_code == 429:
+        raise SecFailure("source_rate_limited")
+    if not 200 <= response.status_code < 300:
+        raise SecFailure("source_unavailable")
+    if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "text/html":
+        raise SecFailure("source_format_unsupported")
+    raw = response.body.encode("utf-8")
+    if len(raw) > 5_000_000:
+        raise SecFailure("source_invalid")
+    encoded = base64.b64encode(raw).decode("ascii")
+    try:
+        text, raw_hash = extract_uploaded_html(HtmlUploadRequest(title=request.title, html_base64=encoded,
+            permissions=request.permissions))
+    except PdfFailure as error:
+        raise SecFailure("source_unavailable" if error.code == "html_busy" else "source_invalid") from error
+    return SecFilingResult(text=text, response_sha256=raw_hash, original_base64=encoded)
 
 
 def search_sec_identities(request: SecIdentityRequest, user_agent: str | None,

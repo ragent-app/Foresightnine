@@ -15,7 +15,7 @@ from .openai_compatible import HttpResponse, _TransportFailure, _TransportTimeou
 from .research_sources import SourcePermissions
 
 
-ALLOWED_HOSTS = frozenset({"www.bea.gov", "www.federalreserve.gov"})
+ALLOWED_HOSTS = frozenset({"www.bea.gov", "www.federalreserve.gov", "www.sec.gov"})
 HTML_EXTRACTION_DISCLOSURE = ("Webpage text is extracted; table separators and span markers, when present, "
                               "are generated. Check the original document for layout.")
 
@@ -45,6 +45,9 @@ class FetchSourceRequest(BaseModel):
                 parts.username is not None or parts.password is not None or
                 parts.port not in (None, 443) or parts.fragment):
             raise ValueError("Only supported official HTTPS sources are available.")
+        if parts.hostname == "www.sec.gov" and (parts.query or not re.fullmatch(
+                r"/Archives/edgar/data/\d{1,10}/\d{18}/[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.html?", parts.path)):
+            raise ValueError("Only direct SEC filing HTML paths are available.")
         return value
 
 
@@ -115,6 +118,8 @@ def fetch_official_text(request: FetchSourceRequest,
                         transport: Callable[..., HttpResponse] = _default_transport) -> FetchedText:
     if not request.permissions.store:
         raise FetchFailure("source_permission_unknown")
+    if urlsplit(str(request.url)).hostname == "www.sec.gov":
+        raise FetchFailure("source_unavailable")
     try:
         response = transport("GET", str(request.url), {"Accept": "text/html, text/plain",
             "User-Agent": "ForesightNine-Research/1.0"}, b"", 15.0)
