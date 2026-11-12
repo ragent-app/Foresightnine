@@ -31,6 +31,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "The requested focus exceeds the input budget; no model call was made.": "所选引文超出输入预算，未调用模型。",
     "The requested focus is unavailable; no model call was made.": "所选引文不可用，未调用模型。",
     "Matching a quotation does not independently establish that it supports a claim.": "原文匹配不代表已独立核实该资料支持结论。",
+    "A model quotation used different quote glyphs; the exact original text was restored.": "模型引文使用了不同的引号字形；已恢复原文。",
     "A joined quotation was split into separately located passages; support requires review.": "拼接的引文已拆为分别定位的原文；是否支持结论仍需核查。",
     "A second model assessment is not independent proof that evidence supports a claim.": "模型二次判断不能独立证明证据支持结论。",
     "A claim percentage may differ from a deterministic calculation; review the wording and calculation.": "结论中的百分比可能与确定性计算不一致，请核对表述和计算。",

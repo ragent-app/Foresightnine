@@ -74,6 +74,20 @@ def test_causal_wording_requires_located_permitted_quotation_cue():
     assert not flag_uncited_causal_attribution([{'text':'Consumption fell.', 'causal_attribution_unverified':True}], [src])[0].get('causal_attribution_unverified')
 
 
+def test_offset_claim_requires_offset_cue_not_only_component_values():
+    from app.research_evidence import flag_uncited_causal_attribution
+    text = 'Revenue fell. Acquisition added revenue. The decline was offset by the acquisition.'
+    src = ResearchSource(source_id='s',owner_id='owner',title='Report',text=text,kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc),content_sha256='hash',permissions=SourcePermissions(store=True,display=True))
+    def citation(quote):
+        start=text.index(quote)
+        return {'source_id':'s','quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)}}
+    finding={'text':'下降被收购贡献部分抵消。','citations':[citation('Revenue fell. Acquisition added revenue.')]}
+    assert flag_uncited_causal_attribution([finding],[src])[0]['causal_attribution_unverified']
+    direct={**finding,'citations':[citation('The decline was offset by the acquisition.')]}
+    assert not flag_uncited_causal_attribution([direct],[src])[0].get('causal_attribution_unverified')
+
+
 def test_inferred_dissent_motive_is_not_established_by_unrelated_inflation_fact():
     from app.research_evidence import flag_uncited_causal_attribution
     text = ('Inflation compensation remained low. The committee acted because conditions improved. '

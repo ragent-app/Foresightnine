@@ -2003,6 +2003,23 @@ def test_quote_initial_case_restores_original_and_preserves_ambiguity():
     assert not rejected.claims
 
 
+def test_typographic_quote_variants_restore_exact_source_and_keep_ambiguity():
+    text = 'The issuer acquired “Example” and recorded the company’s revenue.'
+    quote = 'The issuer acquired "Example" and recorded the company\'s revenue.'
+    def run(value, quotation=quote):
+        return analyze('What happened?', [source('s',text=value)], None, lambda _: ({'claims':[{
+            'text':'An acquisition was reported.', 'citations':[{'source_id':'s','quotation':quotation}]}]},1))
+    result = run(text)
+    citation = result.claims[0]['citations'][0]
+    assert citation['quotation'] == text and citation['quotation_match'] == 'typographic_quote_normalized'
+    assert any('quote glyphs' in item for item in result.limitations)
+    duplicate = run(text + ' ' + text)
+    assert duplicate.claims[0]['citations'][0]['location']['status'] == 'ambiguous'
+    assert not run(text, quote.replace('revenue', 'profit')).claims
+    exact = run(text, text)
+    assert exact.claims[0]['citations'][0]['quotation_match'] == 'exact'
+
+
 def test_pdf_line_hyphen_restores_original_continuous_quotation_and_keeps_review_caution():
     passage = "Capital ratios, actual 2023:Q4. These are hypothetical esti-\nmates that may differ."
     report = source("s", text=passage).model_copy(update={"retrieval_method":"user_pdf"})

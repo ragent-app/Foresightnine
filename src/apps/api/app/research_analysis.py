@@ -2267,7 +2267,29 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         table_markup_expanded = False
         trimmed_json_closure = False
         initial_case_normalized = False
+        typographic_quote_normalized = False
         pdf_line_hyphen_restored = False
+        if not positions and any(char in quotation for char in "\"'“”‘’"):
+            # Normalize only quote glyphs and whitespace. Never reconstruct the
+            # source: store the exact located original and retain ambiguity.
+            glyphs = {'"':r'["“”]', '“':r'["“”]', '”':r'["“”]',
+                      "'":r"['‘’]", '‘':r"['‘’]", '’':r"['‘’]"}
+            parts = [''.join(glyphs.get(char, re.escape(char)) for char in word)
+                     for word in re.split(r'\s+', quotation)]
+            glyph_pattern = re.compile('(?=(' + r'\s+'.join(parts) + '))')
+            for offset, passage in passages:
+                for match in glyph_pattern.finditer(passage):
+                    if match.end(1) - match.start(1) <= 1000:
+                        record(offset, passage, match.start(1), match.end(1))
+                    if len(positions) == 6:
+                        break
+                if len(positions) == 6:
+                    break
+            typographic_quote_normalized = bool(positions)
+            if typographic_quote_normalized:
+                note = 'A model quotation used different quote glyphs; the exact original text was restored.'
+                if note not in limitations:
+                    limitations.append(note)
         if not positions and quotation[0].isascii() and quotation[0].isalpha():
             # Models sometimes capitalize an excerpt taken from the middle of
             # a sentence. Only the first ASCII letter may differ in case;
@@ -2397,7 +2419,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if not positions:
             raise InvalidAnalysis("Model cited a missing source or quotation.")
         original = originals[0]
-        matching = ("pdf_line_hyphen_restored" if pdf_line_hyphen_restored else "initial_case_normalized" if initial_case_normalized else "table_markup_expanded" if table_markup_expanded else "trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
+        matching = ("pdf_line_hyphen_restored" if pdf_line_hyphen_restored else "initial_case_normalized" if initial_case_normalized else "typographic_quote_normalized" if typographic_quote_normalized else "table_markup_expanded" if table_markup_expanded else "trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
                     "exact" if original == quotation else "whitespace_normalized")
         if len(positions) == 1 and not scan_truncated:
             return positions[0], original, matching
