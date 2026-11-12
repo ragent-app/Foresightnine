@@ -1,0 +1,102 @@
+{
+  "source_attribution": "SEC EDGAR companyfacts, derived Microsoft observations; not an original filing.",
+  "id": "MSFT_REVENUE",
+  "manifest_sha256": "7b6053055c64a42c882327fa3a0f729867270722e8679c350051a0822e8ad35e",
+  "operation_status": "completed",
+  "operation_id": "operation:a67aacf9d9c02311a9f24756",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 58.268,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+        "title": "Microsoft: SEC 2023 filing revenue facts (derived extract)",
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T09:36:06.137962+00:00",
+        "revised_at": null,
+        "content_sha256": "a46d6f7767d87a6bf3b0d2b546ed1b9dd352de1d92c9139fdde266fc01c21c60",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [],
+    "limitations": [
+      "Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.",
+      "Research analysis could not be completed: invalid_provider_output",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:a67aacf9d9c02311a9f24756",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": null,
+      "cost_usd": null,
+      "generation_tokens": null,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 57.496,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "097a8c60e07ce1b403835a63c39ff2dcd47f8ccfa96d292e382a7d7640b67908",
+      "prompt_characters": 1914,
+      "prompt_bytes": 2050,
+      "selection_method": "ranked_nonoverlapping_windows_v25",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+          "character_start": 51,
+          "character_end": 200
+        },
+        {
+          "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+          "character_start": 646,
+          "character_end": 777
+        },
+        {
+          "source_id": "source_a8b030ff2377499ca814bb0e604c5714",
+          "character_start": 887,
+          "character_end": 1018
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_a8b030ff2377499ca814bb0e604c5714": "a46d6f7767d87a6bf3b0d2b546ed1b9dd352de1d92c9139fdde266fc01c21c60"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": "invalid_provider_output"
+    }
+  }
+}
