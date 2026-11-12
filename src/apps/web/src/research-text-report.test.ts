@@ -36,6 +36,7 @@ describe("authorized readable research export", () => {
         balance_direction_warnings:[{basis:"revision_vs_change",status:"requires_review"}],
         suggested_related_quotations:[{source_id:"s",quotation:"Goods $9.6 billion",status:"requires_semantic_review"}]}],
       facts: [{fact_id:"f1", direction_context_unverified:true, quotation_match:"pdf_line_hyphen_restored",
+        xbrl_source_consistency:{method:"inline_xbrl_source_consistency_v1",currency:"USD"},
         direction_confirmation:{confirmed_by:"user",fact_sha256:"fingerprint",confirmed_at:"2026-01-01T00:00:00Z"},
         table_confirmation:{confirmed_by:"user",fact_sha256:"tablehash",confirmed_at:"2026-01-01T00:00:00Z"}}]}};
     const report = formatResearchTextReport({...sample, version}, false);
@@ -47,6 +48,7 @@ describe("authorized readable research export", () => {
     expect(report).toContain('suggested_related_quotations: [{"source_id":"s","quotation":"Goods $9.6 billion","status":"requires_semantic_review"}]');
     expect(report).toContain('引文定位方式: pdf_line_hyphen_restored');
     expect(report).toContain('direction_context_unverified: true');
+    expect(report).toContain('xbrl_source_consistency: {"method":"inline_xbrl_source_consistency_v1","currency":"USD"}');
     expect(report).toContain('direction_confirmation: {"confirmed_by":"user","fact_sha256":"fingerprint","confirmed_at":"2026-01-01T00:00:00Z"}');
     expect(report).toContain('table_confirmation: {"confirmed_by":"user","fact_sha256":"tablehash","confirmed_at":"2026-01-01T00:00:00Z"}');
     expect(report).toContain('内容: A\\nB');

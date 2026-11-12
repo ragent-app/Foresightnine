@@ -97,7 +97,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
+from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
@@ -1853,6 +1853,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         entry.pop("direction_confirmation", None)
                         entry.pop("table_confirmation", None)
                         entry.pop("table_structure_alignment", None)
+                        entry.pop("xbrl_source_consistency", None)
                         entry.pop("numeric_normalization", None)
                         entry.pop("range_parent_id", None)
         for entry in content.calculations:
@@ -2037,7 +2038,7 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
         fact = candidates[0]
         if fact.get("source_value_warnings"):
             raise ApiProblem(422, "invalid_request", "The fact's source quotation requires review before calculation.")
-        if fact.get("quotation_match") == "pdf_line_hyphen_restored" or (fact.get("quotation_match") == "table_markup_expanded" and not table_user_confirmed(fact)):
+        if fact.get("quotation_match") == "pdf_line_hyphen_restored" or (fact.get("quotation_match") == "table_markup_expanded" and not (table_user_confirmed(fact) or xbrl_source_consistent(fact))):
             raise ApiProblem(422, "invalid_request", "The restored quotation requires review before calculation.")
         location = fact.get("location")
         if isinstance(location, dict) and location.get("status") == "ambiguous":
@@ -2072,6 +2073,8 @@ def create_research_calculation(topic_id: str, request: CreateResearchCalculatio
         spec = CalculationRequest.model_validate({"formula": request.formula, "first": facts[0], "second": facts[1],
                                                   "decimal_places": request.decimal_places})
         result = calculate(spec)
+        if calculation_input_status(result, previous.content.facts) != "matched":
+            raise ApiProblem(422, "invalid_request", "Calculation input evidence requires review.")
         result.update({"input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
         content.calculations.append(result)
@@ -2108,6 +2111,8 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
         spec = CalculationRequest.model_validate({"formula": old.get("formula_id"), "first": facts[0],
             "second": facts[1], "decimal_places": old.get("decimal_places", 2)})
         result = calculate(spec)
+        if calculation_input_status(result, previous.content.facts) != "matched":
+            raise ApiProblem(422, "invalid_request", "Calculation input evidence requires review.")
         result.update({"input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
         content.calculations[request.calculation_index] = result

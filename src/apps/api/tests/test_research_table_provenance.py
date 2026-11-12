@@ -17,6 +17,32 @@ def source_for(html):
         retrieval_method='user_html', response_sha256=raw_hash, original_html_base64=encoded, permissions=permissions)
 
 
+def xbrl_fixture():
+    return ('''<html xmlns:ix="http://www.xbrl.org/2013/inlineXBRL"
+      xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+      xmlns:ixt="http://www.xbrl.org/inlineXBRL/transformation/2020-02-12" xmlns:us-gaap="http://fasb.org/us-gaap/2024">
+      <ix:header>
+      <xbrli:context id="c1"><xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0000858877</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2023-07-30</xbrli:startDate><xbrli:endDate>2024-07-27</xbrli:endDate></xbrli:period></xbrli:context>
+      <xbrli:context id="c2"><xbrli:entity><xbrli:identifier scheme="http://www.sec.gov/CIK">0000858877</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2022-07-31</xbrli:startDate><xbrli:endDate>2023-07-29</xbrli:endDate></xbrli:period></xbrli:context>
+      <xbrli:unit id="usd"><xbrli:measure>iso4217:USD</xbrli:measure></xbrli:unit>
+      </ix:header><p>In millions</p><table><tr><th colspan="2">Years Ended</th><th colspan="2">July 27, 2024</th><th colspan="2">July 29, 2023</th></tr>
+      <tr><td colspan="2">Total revenue</td>
+      <td colspan="2"><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" unitRef="usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">100</ix:nonFraction></td>
+      <td colspan="2"><ix:nonFraction name="us-gaap:Revenues" contextRef="c2" unitRef="usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">90</ix:nonFraction></td></tr></table></html>''')
+
+
+def analyze_xbrl(source):
+    from app.research_analysis import analyze
+    source.permissions.model_input = True
+    def fact(key, value, year, date):
+        return {'fact_id': key, 'label': 'Total revenue FY' + year, 'value': value, 'unit': 'USD million', 'currency': 'USD',
+                'period': 'FY' + year + ' (year ended ' + date + ')',
+                'citation': {'source_id': 's', 'quotation': 'Total revenue | 100 | 90'}}
+    payload = {'facts': [fact('a', '100', '2024', 'July 27, 2024'), fact('b', '90', '2023', 'July 29, 2023')],
+               'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'a', 'second_fact_id': 'b'}]}
+    return analyze('Compare total revenue in FY2024 and FY2023.', [source], None, lambda _: (payload, 1))
+
+
 def trace(source):
     start = source.text.index('100')
     return trace_html_table(source, start, start + 3)
@@ -31,6 +57,67 @@ def test_original_html_structure_traces_selected_row_and_actual_spans():
     assert result['rows'][0]['cells'][0] == {'start': 0, 'end': 2, 'text': 'Years Ended', 'kind': 'th'}
     assert result['rows'][2]['cells'][0]['text'] == '100'
     assert source.text[result['row_start']:result['row_end']] == result['rows'][-1]['text']
+
+
+def test_html_trace_preserves_inline_fact_attributes_without_executing_markup():
+    source = source_for('<table><tr><td>Revenue</td><td><ix:nonFraction name="us-gaap:Revenues" '
+        'contextRef="c-1" unitRef="usd" format="ixt:num-dot-decimal" scale="6" decimals="-6">100'
+        '</ix:nonFraction></td></tr></table>')
+    result = trace(source)
+    fact = result['rows'][-1]['cells'][1]['inline_facts'][0]
+    assert fact['text'] == '100' and fact['contextref'] == 'c-1' and fact['unitref'] == 'usd'
+    assert fact['name'] == 'us-gaap:Revenues' and fact['scale'] == '6'
+
+
+def test_xbrl_tags_can_confirm_source_consistency_but_not_source_truth():
+    from app.research_calculations import xbrl_source_consistent
+    result = analyze_xbrl(source_for(xbrl_fixture()))
+    assert len(result.facts) == 2 and all(xbrl_source_consistent(item) for item in result.facts)
+    assert all(item['verification'] == 'model_extraction_not_independently_verified' for item in result.facts)
+    assert result.calculations[0]['value'] == '11.11' and result.calculations[0]['input_status'] == 'matched'
+    assert any('not independently verified' in note for note in result.limitations)
+    assert not any('any calculation is provisional' in note for note in result.limitations)
+    changed = {**result.facts[0], 'value': '101'}
+    assert not xbrl_source_consistent(changed)
+
+
+def test_xbrl_metadata_fails_closed_for_namespace_context_units_and_entity_conflicts():
+    original = xbrl_fixture()
+    variants = [original.replace('http://www.xbrl.org/2013/inlineXBRL', 'https://example.test/fake'),
+                original.replace('iso4217:USD', 'iso4217:CAD'),
+                original.replace('decimals="-6"', 'decimals="-3"'),
+                original.replace('<xbrli:endDate>2024-07-27', '<xbrli:endDate>2024-07-26'),
+                original.replace('</xbrli:entity><xbrli:period>', '<xbrli:segment>dimension</xbrli:segment></xbrli:entity><xbrli:period>', 1),
+                original.replace('</ix:header>', '<xbrli:context id="c1"></xbrli:context></ix:header>')]
+    for html in variants:
+        result = analyze_xbrl(source_for(html))
+        assert result.calculations and result.calculations[0]['input_status'] == 'unverifiable'
+    # Even valid tags cannot make different reporting entities comparable.
+    mixed = original.replace('0000858877</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2022',
+                             '0000000001</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:startDate>2022')
+    result = analyze_xbrl(source_for(mixed))
+    assert all(item.get('xbrl_source_consistency') for item in result.facts)
+    assert result.calculations[0]['input_status'] == 'unverifiable'
+    overlapping = original.replace('2023-07-30</xbrli:startDate>', '2023-07-24</xbrli:startDate>')
+    result = analyze_xbrl(source_for(overlapping))
+    assert all(item.get('xbrl_source_consistency') for item in result.facts)
+    assert result.calculations[0]['input_status'] == 'unverifiable'
+
+
+def test_inline_consistency_requires_correct_metric_currency_and_scale():
+    from decimal import Decimal
+    from app.research_xbrl import match_inline_fact
+    source = source_for(xbrl_fixture())
+    raw = {'status':'available', **trace(source)}
+    alignment = annual_table_value_alignment(raw, Decimal('100'), 'FY2024 (year ended July 27, 2024)')
+    def match(**kwargs):
+        args = {'value':Decimal('100'), 'label':'Total revenue FY2024', 'unit':'USD million', 'currency':'USD'}
+        return match_inline_fact(raw, alignment, **{**args, **kwargs})
+    assert match()['entity_cik'] == '0000858877'
+    assert match(label='net income') is None
+    assert match(unit='USD billion') is None
+    assert match(currency='CAD') is None
+    assert match(value=Decimal('101')) is None
 
 
 def test_original_trace_fails_closed_for_forgery_or_ambiguous_markup():

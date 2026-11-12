@@ -82,6 +82,26 @@ def table_user_confirmed(fact: dict) -> bool:
         return confirmation.get("fact_sha256") == direction_confirmation_fingerprint(fact)
     except (TypeError, ValueError):
         return False
+
+
+def xbrl_source_consistent(fact: dict) -> bool:
+    """Check a server-issued source-tag consistency record for this exact fact.
+
+    This is not an attestation of source authenticity or independent accuracy.
+    Client edits are required to discard the record at the API boundary.
+    """
+    proof = fact.get('xbrl_source_consistency')
+    alignment = fact.get('table_structure_alignment')
+    if (not isinstance(proof, dict) or proof.get('method') != 'inline_xbrl_source_consistency_v1' or
+            not re.fullmatch(r'[0-9a-f]{64}', str(proof.get('source_sha256', ''))) or
+            not re.fullmatch(r'\d{10}', str(proof.get('entity_cik', ''))) or
+            not re.fullmatch(r'us-gaap:[A-Za-z][A-Za-z0-9]{0,120}', str(proof.get('concept', ''))) or
+            proof.get('currency') != fact.get('currency') or not isinstance(alignment, dict) or alignment.get('status') != 'matched'):
+        return False
+    try:
+        return proof.get('fact_sha256') == direction_confirmation_fingerprint(fact)
+    except (TypeError, ValueError):
+        return False
 class CalculationError(ValueError):
     """The available inputs do not support the requested calculation."""
 
@@ -500,7 +520,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             if len(candidates) != 1:
                 return "missing_or_ambiguous"
             if (candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or
-                candidates[0].get("quotation_match") == "table_markup_expanded" and not table_user_confirmed(candidates[0]) or
+                candidates[0].get("quotation_match") == "table_markup_expanded" and not (table_user_confirmed(candidates[0]) or xbrl_source_consistent(candidates[0])) or
                 isinstance(candidates[0].get("table_structure_alignment"), dict) and candidates[0]["table_structure_alignment"].get("status") == "conflict" or
                 candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation"))):
@@ -510,6 +530,22 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
                 return "changed"
             if candidates[0].get("source_value_warnings"):
                 return "unverifiable"
+        proofs = [by_id[item.fact_id][0].get('xbrl_source_consistency') if xbrl_source_consistent(by_id[item.fact_id][0]) else None for item in expected]
+        if any(proofs):
+            if not all(proofs) or proofs[0].get('entity_cik') != proofs[1].get('entity_cik') or proofs[0].get('source_sha256') != proofs[1].get('source_sha256'):
+                return 'unverifiable'
+            if calculation.get('formula_id') in {'growth_percent', 'difference'} and proofs[0].get('concept') != proofs[1].get('concept'):
+                return 'unverifiable'
+            try:
+                periods = [(date.fromisoformat(proof['period_start']), date.fromisoformat(proof['period_end'])) for proof in proofs]
+            except (KeyError, ValueError, TypeError):
+                return 'unverifiable'
+            if calculation.get('formula_id') in {'growth_percent', 'difference'}:
+                if (not (periods[0][0] > periods[1][1] or periods[1][0] > periods[0][1]) or
+                        abs((periods[0][1] - periods[0][0]).days - (periods[1][1] - periods[1][0]).days) > 7):
+                    return 'unverifiable'
+            elif calculation.get('formula_id') == 'margin_percent' and periods[0] != periods[1]:
+                return 'unverifiable'
     except (ValidationError, TypeError, ValueError):
         return "unverifiable"
     return "matched"

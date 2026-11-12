@@ -66,3 +66,5 @@
 [266 号固定预算开发回归](266-cross-domain-recheck/README.md)仍为 0/3；它揭示了消费和进出口对照混淆，以及另一种年化百分比表述的差值单位错误。264 号对消费句已入选的离线判断已更正。
 
 [267 号记录](267-consumption-context-and-rate-unit.md)针对消费语境和 `percent annual rate` 差值单位进行了修复；旧成绩不变，尚无修复后的真实模型质量结果。
+
+[268 号记录](268-inline-xbrl-source-consistency.md)增加对原件内嵌 XBRL 标签、年度期间、实体和单位的来源一致性检查；Cisco 离线重放的计算输入可与原件标签匹配，但源文件和模型结论仍未独立核验，不改变阶段 B 的质量验收状态。

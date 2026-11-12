@@ -22,8 +22,9 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
+from .research_xbrl import match_inline_fact
 
 
 SYSTEM_PROMPT = (
@@ -2348,6 +2349,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         period_conflict = (table_period_conflict(source.text, quote_start, quotation, item.value, item.period)
                            if table_alignment_unverified else None)
         structure_alignment = None
+        inline_match = None
         if (matching == "table_markup_expanded" and table_alignment_unverified and
                 source.permissions.display and source.original_html_base64 and type(quote_start) is int and
                 type(location.get("character_end")) is int):
@@ -2361,9 +2363,14 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     raise AnalysisInterrupted()
             if key in table_traces:
                 structure_alignment = annual_table_value_alignment(table_traces[key], item.value, item.period)
+                inline_match = match_inline_fact(table_traces[key], structure_alignment, value=item.value,
+                                                label=item.label, unit=item.unit, currency=item.currency)
         structure_matched = bool(structure_alignment and structure_alignment.get("status") == "matched")
         if matching == "table_markup_expanded":
-            note = ("A table-normalized fact's value and annual date occupy the same original HTML column. "
+            note = ("A table-normalized fact agrees with the source's inline XBRL value, metric, period and unit; "
+                    "the filing and its accuracy remain independently unverified."
+                    if inline_match else
+                    "A table-normalized fact's value and annual date occupy the same original HTML column. "
                     "Its metric, currency, unit and meaning remain unverified; any calculation is provisional."
                     if structure_matched else
                     "A table-normalized fact was excluded from automatic calculations pending column and source review.")
@@ -2396,7 +2403,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if (not currency_context and not currency_conflict and not ambiguous_fact and not direction_context and
                 not period_conflict and (matching not in {"pdf_line_hyphen_restored", "table_markup_expanded"} or structure_matched)):
             numeric_facts[item.fact_id] = numeric
-        checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
+        checked_fact = {**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
             **({"currency_context_unverified": True} if currency_context else {}),
             **({"currency_quote_missing": True} if currency_quote_missing else {}),
@@ -2411,7 +2418,14 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             **({"numeric_normalization": "exact_range_bound", "range_parent_id": normalized_range_ids[item.fact_id]}
                if item.fact_id in normalized_range_ids else {}),
             "location": location,
-            "verification": "model_extraction_not_independently_verified"})
+            "verification": "model_extraction_not_independently_verified"}
+        if inline_match:
+            checked_fact['xbrl_source_consistency'] = {**inline_match, 'method': 'inline_xbrl_source_consistency_v1',
+                                                        'fact_sha256': direction_confirmation_fingerprint(checked_fact)}
+            note = 'A fact matches the source filing’s inline XBRL tag, period and unit; source authenticity and accuracy are not independently verified.'
+            if note not in limitations:
+                limitations.append(note)
+        checked_facts.append(checked_fact)
 
     checked_calculations: list[dict[str, Any]] = []
     for plan in result.calculations:

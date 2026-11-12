@@ -20,6 +20,7 @@ from .research_fetch import _TextParser
 from .research_calculations import parse_annual_period_end, quotation_is_inside_table_row, quotation_is_table_row
 from .research_sources import ResearchSource
 from .research_uploads import MAX_PDF_BYTES, MAX_TEXT_BYTES, _UploadedHtmlParser
+from .research_xbrl import resolve_inline_annual_facts
 
 _TABLE_TRACE_WORKERS = BoundedSemaphore(2)
 
@@ -32,6 +33,7 @@ class _TraceMixin:
         self.table: dict | None = None
         self.row: dict | None = None
         self.cell: dict | None = None
+        self.inline: dict | None = None
         self.matches: list[tuple[dict, list[dict], int]] = []
 
     def visible(self) -> bool:
@@ -63,18 +65,37 @@ class _TraceMixin:
                     any(value is None or not value.isascii() or not value.isdigit() or int(value) != 1 for value in rowspans)):
                 self.row["invalid"] = True
             width = int(span) if span is not None and span.isascii() and span.isdigit() and 1 <= int(span) <= 99 else 1
-            self.cell = {"part_start": len(self.parts), "span": width, "kind": tag}
+            self.cell = {"part_start": len(self.parts), "span": width, "kind": tag, "inline_facts": [], "inline_invalid": False}
+        elif tag == "ix:nonfraction" and self.table_depth == 1 and self.cell is not None:
+            allowed = {"name", "contextref", "unitref", "format", "scale", "decimals", "sign", "id"}
+            pairs = [(name, value) for name, value in attrs if name in allowed]
+            if self.inline is not None or len({name for name, _ in pairs}) != len(pairs) or any(
+                    not isinstance(value, str) or not value or len(value) > 200 for _, value in pairs):
+                self.cell["inline_invalid"] = True
+            else:
+                self.inline = {"part_start": len(self.parts), "attributes": dict(pairs)}
 
     def handle_endtag(self, tag: str) -> None:
         if self.visible() and self.table_depth == 1:
-            if tag in {"td", "th"} and self.cell is not None and self.row is not None:
+            if tag == "ix:nonfraction" and self.inline is not None and self.cell is not None:
+                content = "".join(self.parts[self.inline["part_start"]:]).strip()
+                if len(content) > 1000 or "\n" in content:
+                    self.cell["inline_invalid"] = True
+                else:
+                    self.cell["inline_facts"].append({"text": content, **self.inline["attributes"]})
+                self.inline = None
+            elif tag in {"td", "th"} and self.cell is not None and self.row is not None:
                 content = "".join(self.parts[self.cell["part_start"]:]).strip()
                 width = self.cell["span"]
                 if (len(content) > 1000 or "|" in content or "\n" in content or
                         re.search(r"\[(?:colspan|rowspan)=", content, re.IGNORECASE)):
                     self.row["invalid"] = True
+                if self.inline is not None:
+                    self.cell["inline_invalid"] = True
+                    self.inline = None
                 self.row["cells"].append({"start": self.row["width"], "end": self.row["width"] + width,
-                                          "text": content, "kind": self.cell["kind"]})
+                    "text": content, "kind": self.cell["kind"],
+                    **({"inline_facts": self.cell["inline_facts"]} if self.cell["inline_facts"] and not self.cell["inline_invalid"] else {})})
                 self.row["width"] += width
                 if self.row["width"] > 120 or len(self.row["cells"]) > 120:
                     self.row["invalid"] = True
@@ -154,9 +175,11 @@ def trace_html_table(source: ResearchSource, start: int, end: int) -> dict | Non
             return None
         while len(rows) > 1 and sum(len(row["text"]) for row in rows) > 10_000:
             rows.pop(0)
+        xbrl_facts = resolve_inline_annual_facts(html, rows)
         return {"source_sha256": source.response_sha256, "row_start": line_start, "row_end": line_end,
                 "truncated_before": prior_rows > len(rows) - 1,
-                "rows": [{"text": row["text"], "width": row["width"], "cells": row["cells"]} for row in rows]}
+                "rows": [{"text": row["text"], "width": row["width"], "cells": row["cells"]} for row in rows],
+                **({"inline_xbrl_annual_facts": xbrl_facts} if xbrl_facts else {})}
     except (binascii.Error, UnicodeError, ValueError, RecursionError, OverflowError):
         return None
 
