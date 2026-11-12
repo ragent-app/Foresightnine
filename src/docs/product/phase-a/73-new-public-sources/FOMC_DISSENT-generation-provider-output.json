@@ -1,0 +1,75 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "反对票为 James Bullard，其建议加息 0.5 个百分点至 1/2 至 3/4 百分比的目标区间。",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "quotation": "Voting against this action was James Bullard, who preferred at this meeting to raise the target range for the federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "提供的摘录未直接包含多数派通过的目标区间原文（如 1/4 至 1/2 百分比），该区间仅可由 Bullard 的表述（建议区间比多数通过区间高 0.5 个百分点）推断，即 0 至 1/4 + 0.5 = 1/2 至 3/4 不成立，多数区间应为 1/4 至 1/2 百分比，但这是推断而非引文证据。",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "quotation": "who preferred at this meeting to raise the target range for the federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的摘录为部分文本，未包含委员会多数通过的目标区间原文（如 1/4 至 1/2 percent 的实际加息表述）。",
+      "摘要截断了 Bullard 投票段之前的上下文，无法引用完整决议句。",
+      "摘录提到 Patrick Harker 以替补身份投票，但未提供其余投票委员信息。",
+      "第二次方文本关于 3 月 16 日准备金余额利率上调至 0.4 percent，属理事会决定，不是目标区间本身。",
+      "发布时间为声明所示（2022-03-16），未独立核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "bullard_dissent_bp",
+        "label": "Bullard preferred rate hike",
+        "value": "0.5",
+        "unit": "percentage point",
+        "currency": "USD",
+        "period": "March 16, 2022 meeting",
+        "citation": {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "quotation": "preferred at this meeting to raise the target range for the federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent"
+        }
+      },
+      {
+        "fact_id": "bullard_target_range",
+        "label": "Bullard preferred target range",
+        "value": "0.5-0.75",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "March 16, 2022 meeting",
+        "citation": {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "quotation": "raise the target range for the federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent"
+        }
+      },
+      {
+        "fact_id": "iorb_rate",
+        "label": "interest rate paid on reserve balances",
+        "value": "0.4",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective March 17, 2022",
+        "citation": {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "quotation": "raise the interest rate paid on reserve balances to 0.4 percent, effective March 17, 2022"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1368,
+  "prompt_sha256": "19f2f6d0431a0de6d63b03dd292bc50f031211127a58cac404ca87b773b92aae",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

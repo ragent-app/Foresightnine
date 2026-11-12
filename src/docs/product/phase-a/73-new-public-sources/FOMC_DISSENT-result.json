@@ -1,0 +1,206 @@
+{
+  "id": "FOMC_DISSENT",
+  "manifest_sha256": "6012f8650ea8fabe858274b1aa06bcf7fe5796bc68dad837cec0ffd298c7d41a",
+  "operation_status": "completed",
+  "operation_id": "operation:6f7f754b20c880c4d06f488d",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 26.24,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+        "title": "FOMC statement March 16 2022",
+        "url": null,
+        "event_at": null,
+        "published_at": "2022-03-16T18:00:00+00:00",
+        "obtained_at": "2026-11-12T08:31:57.383338+00:00",
+        "revised_at": null,
+        "content_sha256": "2c1ec0e948b7cfa58e411445bae7e9d0537fdea3c7b44c2d779471936554ced1",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "bullard_dissent_bp",
+        "value": "0.5",
+        "unit": "percentage point",
+        "currency": "USD",
+        "period": "March 16, 2022 meeting",
+        "label": "Bullard preferred rate hike",
+        "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+        "quotation": "preferred at this meeting to raise the target range for\nthe federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 2172,
+          "character_end": 2296,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "iorb_rate",
+        "value": "0.4",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective March 17, 2022",
+        "label": "interest rate paid on reserve balances",
+        "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+        "quotation": "raise\nthe interest rate paid on reserve balances to 0.4 percent, effective March 17, 2022",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 2707,
+          "character_end": 2796,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "反对票为 James Bullard，其建议加息 0.5 个百分点至 1/2 至 3/4 百分比的目标区间。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "location": {
+              "character_start": 2122,
+              "character_end": 2297,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this\naction was James Bullard, who preferred at this meeting to raise the target range for\nthe federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_quotation_context_model_review_v9",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "提供的摘录未直接包含多数派通过的目标区间原文（如 1/4 至 1/2 百分比），该区间仅可由 Bullard 的表述（建议区间比多数通过区间高 0.5 个百分点）推断，即 0 至 1/4 + 0.5 = 1/2 至 3/4 不成立，多数区间应为 1/4 至 1/2 百分比，但这是推断而非引文证据。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+            "location": {
+              "character_start": 2168,
+              "character_end": 2297,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "who preferred at this meeting to raise the target range for\nthe federal funds rate by 0.5 percentage point to 1/2 to 3/4 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument",
+        "support_review": {
+          "verdict": "contradicts",
+          "method": "bounded_quotation_context_model_review_v9",
+          "independently_verified": false
+        }
+      }
+    ],
+    "limitations": [
+      "Source source_403c0fc29c5349c98c369cba7f099309: only character ranges 2110–2414, 2520–2815 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 提供的摘录为部分文本，未包含委员会多数通过的目标区间原文（如 1/4 至 1/2 percent 的实际加息表述）。",
+      "Model-reported limitation (not independently verified): 摘要截断了 Bullard 投票段之前的上下文，无法引用完整决议句。",
+      "Model-reported limitation (not independently verified): 摘录提到 Patrick Harker 以替补身份投票，但未提供其余投票委员信息。",
+      "Model-reported limitation (not independently verified): 第二次方文本关于 3 月 16 日准备金余额利率上调至 0.4 percent，属理事会决定，不是目标区间本身。",
+      "Model-reported limitation (not independently verified): 发布时间为声明所示（2022-03-16），未独立核实。",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:6f7f754b20c880c4d06f488d",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 2210,
+      "cost_usd": null,
+      "generation_tokens": 1368,
+      "support_review_tokens": 842,
+      "require_counterarguments": true,
+      "support_review_requested": true,
+      "support_review_status": "complete",
+      "support_review_error": null,
+      "support_review_method": "bounded_quotation_context_model_review_v9",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": "a2c8576f333efd1b611f254225f43a8a108ce5135ad52df8f11d237561ad745a",
+      "support_review_indexes": [
+        0,
+        1
+      ],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "character_start": 2032,
+          "character_end": 2387,
+          "context_radius": 90
+        },
+        {
+          "claim_index": 1,
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "character_start": 2078,
+          "character_end": 2387,
+          "context_radius": 90
+        }
+      ],
+      "support_review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 25.707,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "19f2f6d0431a0de6d63b03dd292bc50f031211127a58cac404ca87b773b92aae",
+      "prompt_characters": 1934,
+      "prompt_bytes": 2050,
+      "selection_method": "ranked_nonoverlapping_windows_v18",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "character_start": 2110,
+          "character_end": 2414
+        },
+        {
+          "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+          "character_start": 2520,
+          "character_end": 2815
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_403c0fc29c5349c98c369cba7f099309": "2c1ec0e948b7cfa58e411445bae7e9d0537fdea3c7b44c2d779471936554ced1"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}

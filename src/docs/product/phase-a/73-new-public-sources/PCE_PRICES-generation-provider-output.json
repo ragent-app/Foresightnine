@@ -1,0 +1,69 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "2023年2月PCE总物价指数环比上涨0.3%（与上月比较）。",
+        "citations": [
+          {
+            "source_id": "source_fa19d151852f4b6c90667b2db03a6b50",
+            "quotation": "From the preceding month, the PCE price index for February increased 0.3 percent (table 9)."
+          }
+        ]
+      },
+      {
+        "text": "2023年2月PCE总物价指数同比上涨5.0%（与一年前同月比较）。",
+        "citations": [
+          {
+            "source_id": "source_fa19d151852f4b6c90667b2db03a6b50",
+            "quotation": "From the same month one year ago, the PCE price index for February increased 5.0 percent (table 11)."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该比较是2月份数据于2023年3月31日发布；若公告其他部分被引用为其他指数（如核心PCE），其0.3%不适用于总指数，需区分总指数与扣除食品能源的指数。",
+        "citations": [
+          {
+            "source_id": "source_fa19d151852f4b6c90667b2db03a6b50",
+            "quotation": "index\nincreased 0.3 percent."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "无法仅由该数据推断物价变化的月度路径或趋势持续性：环比0.3%和同比5.0%仅为两个比较点，不能推断期间内各月变化或是否放缓/加速。",
+      "来源为部分覆盖，未提供完整表格（table 9、11）数值列细节；发布日期为声明值，未经独立验证。"
+    ],
+    "facts": [
+      {
+        "fact_id": "pce_mom",
+        "label": "PCE价格指数环比变化",
+        "value": 0.3,
+        "unit": "percent",
+        "currency": null,
+        "period": "2023年2月 vs 2023年1月",
+        "citation": {
+          "source_id": "source_fa19d151852f4b6c90667b2db03a6b50",
+          "quotation": "From the preceding month, the PCE price index for February increased 0.3 percent (table 9)."
+        }
+      },
+      {
+        "fact_id": "pce_yoy",
+        "label": "PCE价格指数同比变化",
+        "value": 5.0,
+        "unit": "percent",
+        "currency": null,
+        "period": "2023年2月 vs 2022年2月",
+        "citation": {
+          "source_id": "source_fa19d151852f4b6c90667b2db03a6b50",
+          "quotation": "From the same month one year ago, the PCE price index for February increased 5.0 percent (table 11)."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1188,
+  "prompt_sha256": "b97608c991ab056b887df7eac1541c6d157af9b200ff7370b9c5f2b0d86ef69f",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

@@ -1,0 +1,41 @@
+{
+  "manifest_sha256": "6012f8650ea8fabe858274b1aa06bcf7fe5796bc68dad837cec0ffd298c7d41a",
+  "semantic_support": "not established",
+  "tasks": {
+    "PCE_PRICES": {
+      "status": "completed",
+      "research_status": "partial",
+      "expected": {
+        "monthly_0_3": true,
+        "annual_5": true,
+        "comparison_periods": true
+      },
+      "citations_located": true,
+      "model_review_coverage": false,
+      "warnings": true,
+      "budget_ok": true,
+      "provenance_ok": true,
+      "reported_tokens": 1817,
+      "mechanical_pass": false
+    },
+    "FOMC_DISSENT": {
+      "status": "completed",
+      "research_status": "partial",
+      "expected": {
+        "target_low": false,
+        "target_high": true,
+        "dissenter": true,
+        "dissent_high": true
+      },
+      "citations_located": true,
+      "model_review_coverage": false,
+      "warnings": false,
+      "budget_ok": true,
+      "provenance_ok": true,
+      "reported_tokens": 2210,
+      "mechanical_pass": false
+    }
+  },
+  "passed": 0,
+  "total": 2
+}

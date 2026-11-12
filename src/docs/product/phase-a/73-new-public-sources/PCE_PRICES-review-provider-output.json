@@ -1,0 +1,17 @@
+{
+  "payload": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 1,
+        "verdict": "supports"
+      }
+    ]
+  },
+  "reported_tokens": 629,
+  "prompt_sha256": "1d0cafeae3bbba715b841a256fb78b384c2574162a0627b9e0455423472de78a",
+  "system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407"
+}
