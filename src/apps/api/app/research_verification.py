@@ -24,7 +24,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v8"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v9"
 
 
 class ReviewEntry(BaseModel):
@@ -66,7 +66,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     indexes: list[int] = []
     omitted: list[int] = []
     omissions: list[dict[str, int | str | bool]] = []
-    accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int, int]]]] = []
+    accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int, int, int]]]] = []
     def serialize() -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     for index, claim in enumerate(review_claims):
@@ -78,8 +78,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             omitted.append(index)
             omissions.append({"claim_index": index, "reason": "not_reviewable"})
             continue
-        context_starts = {item["citation_index"]: item["context_character_start"]
-                          for item in claim.get("citation_context_warnings", [])}
+        context_warnings = {item["citation_index"]: item for item in claim.get("citation_context_warnings", [])}
         located = []
         for citation_index, citation in enumerate(citations):
             if not isinstance(citation, dict):
@@ -93,8 +92,12 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             if (type(start) is not int or type(end) is not int or start < 0 or end <= start or end > len(source.text) or
                     end - start > 1000 or source.text[start:end] != quotation):
                 break
-            context_start = context_starts.get(citation_index, start)
-            located.append((source, start, end, context_start))
+            warning = context_warnings.get(citation_index, {})
+            context_start = min(start, warning.get("context_character_start", start))
+            context_end = max(end, warning.get("context_character_end", end))
+            if not 0 <= context_start <= start < end <= context_end <= len(source.text):
+                break
+            located.append((source, start, end, context_start, context_end))
         if len(located) != len(citations):
             omitted.append(index)
             omissions.append({"claim_index": index, "reason": "not_reviewable"})
@@ -105,7 +108,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         if len(serialize().encode("utf-8")) > max_bytes:
             payload["claims"].pop()
             omitted.append(index)
-            omissions.append({"claim_index": index, "reason": "input_budget", "required_subject_context": bool(context_starts)})
+            omissions.append({"claim_index": index, "reason": "input_budget", "required_subject_context": bool(context_warnings)})
             continue
         indexes.append(index)
         accepted.append((index, text, located))
@@ -126,16 +129,17 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions)
 
 
-def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int, int, int]], radius: int) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
+def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int, int, int, int]], radius: int) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
     excerpts = []
     segments: list[dict[str, int | str]] = []
-    for source, start, end, context_start in located:
-        left, right = min(max(0, start - radius), context_start), min(len(source.text), end + radius)
+    for source, start, end, context_start, context_end in located:
+        left, right = min(max(0, start - radius), context_start), max(context_end, min(len(source.text), end + radius))
         excerpts.append({"source_id": source.source_id, "preceding_context": source.text[left:start],
                          "quotation": source.text[start:end], "following_context": source.text[end:right]})
         segments.append({"claim_index": index, "source_id": source.source_id,
                          "character_start": left, "character_end": right, "context_radius": radius,
-                         **({"required_context_start": context_start} if context_start < start else {})})
+                         **({"required_context_start": context_start} if context_start < start else {}),
+                         **({"required_context_end": context_end} if context_end > end else {})})
     return {"claim_index": index, "text": text, "excerpts": excerpts}, segments
 
 

@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v8"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v9"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -141,5 +141,26 @@ def test_review_keeps_required_table_header_or_omits_the_claim():
             break
     else:
         pytest.fail("expected the required table context to exceed some budget")
+    limited = prepare_support_review([item], [report], budget)
+    assert limited.omissions == [{"claim_index": 0, "reason": "input_budget", "required_subject_context": True}]
+
+
+def test_review_preserves_following_context_for_unfinished_quoted_phrase():
+    quote = "Consumer spending and nonresidential"
+    text = quote + " fixed investment increased. Other context."
+    report = source().model_copy(update={"text": text})
+    item = {"text": "Consumer spending and investment increased", "citations": [{"source_id": "s", "quotation": quote,
+        "location": {"character_start": 0, "character_end": len(quote)}}]}
+    batch = prepare_support_review([item], [report], 2000)
+    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
+    assert batch.indexes == [0] and excerpt["quotation"] == quote
+    assert "fixed investment increased" in excerpt["following_context"]
+    assert batch.segments[0]["required_context_end"] > len(quote)
+    neutral = report.model_copy(update={"text": quote + ". Other context."})
+    for budget in range(180, 700):
+        if prepare_support_review([item], [neutral], budget).indexes and not prepare_support_review([item], [report], budget).indexes:
+            break
+    else:
+        pytest.fail("expected the required continuation to exceed some budget")
     limited = prepare_support_review([item], [report], budget)
     assert limited.omissions == [{"claim_index": 0, "reason": "input_budget", "required_subject_context": True}]

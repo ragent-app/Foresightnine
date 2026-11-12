@@ -84,6 +84,21 @@ def _table_header_context(source: ResearchSource, start: int, quotation: str,
     return max(left, unit_start - 100) if units else header_start, header_end
 
 
+def _unfinished_quote_context(source: ResearchSource, end: int, quotation: str) -> int | None:
+    """Identify a narrow dangling conjunction/phrase as a review cue."""
+    if not re.search(r"\b(?:and|or)(?:\s+[A-Za-z]+(?:[-‑][A-Za-z]+)?)?\s*$", quotation, re.IGNORECASE):
+        return None
+    tail = source.text[end:min(len(source.text), end + 200)]
+    if not re.match(r"\s+[A-Za-z]", tail) or "\f" in tail[:20]:
+        return None
+    boundary = re.search(r"[.!?](?=\s|$)|\f", tail)
+    if boundary:
+        return end + (boundary.start() if boundary.group() == "\f" else boundary.end())
+    # Do not cut the required continuation in the middle of a word.
+    last_space = max(tail.rfind(" "), tail.rfind("\n"))
+    return end + last_space if last_space > 0 else None
+
+
 def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
     """Flag selected quotations that omit a recognizable surrounding subject.
 
@@ -118,6 +133,14 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
             if table_context:
                 warnings.append({"source_id": source_id, "citation_index": index, "context_metric": "financial table header",
                                  "context_character_start": table_context[0], "context_character_end": table_context[1],
+                                 "status": "requires_review"})
+                if len(warnings) >= 5:
+                    break
+                continue
+            unfinished_end = _unfinished_quote_context(source, end, quote)
+            if unfinished_end is not None and unfinished_end > end:
+                warnings.append({"source_id": source_id, "citation_index": index, "context_metric": "unfinished quoted phrase",
+                                 "context_character_start": start, "context_character_end": unfinished_end,
                                  "status": "requires_review"})
                 if len(warnings) >= 5:
                     break

@@ -306,3 +306,20 @@ def test_revision_candidates_keep_original_label_and_publication_metadata():
     assert not evidence_differences([earlier, {**later, "label": "2024年9月个人收入环比变化（实际值）"}])
     assert not evidence_differences([earlier, {**later, "period": "2024年10月（较9月变化）；发布于2024-12-20"}])
     assert not evidence_differences([earlier, {**later, "unit": "millions"}])
+
+
+def test_unfinished_quoted_phrase_is_flagged_without_claiming_it_is_false():
+    text = "GDP revisions included consumer spending and nonresidential fixed investment."
+    quote = "consumer spending and nonresidential"
+    start = text.index(quote)
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="hash", permissions=SourcePermissions(store=True, display=True))
+    claim = {"text": "Investment was revised", "citations": [{"source_id": "s", "quotation": quote,
+        "location": {"character_start": start, "character_end": start + len(quote)}}]}
+    warning = flag_citation_subject_context([claim], [source])[0]["citation_context_warnings"][0]
+    assert warning["context_metric"] == "unfinished quoted phrase" and warning["status"] == "requires_review"
+    assert "fixed investment" in text[start:warning["context_character_end"]]
+    complete = {**claim, "citations": [{"source_id": "s", "quotation": "nonresidential fixed investment.",
+        "location": {"character_start": text.index("nonresidential"), "character_end": len(text)}}]}
+    assert all(item["context_metric"] != "unfinished quoted phrase" for item in
+               flag_citation_subject_context([complete], [source])[0].get("citation_context_warnings", []))
