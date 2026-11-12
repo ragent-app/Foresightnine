@@ -1,0 +1,187 @@
+{
+  "META_G": {
+    "facts": [
+      {
+        "value": "164501",
+        "period": "2024",
+        "unit": "million",
+        "literal": "164501"
+      },
+      {
+        "value": "200966",
+        "period": "2025",
+        "unit": "million",
+        "literal": "200966"
+      }
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "200966",
+        "164501"
+      ],
+      "value": "22.17"
+    },
+    "allowed_percentages": [
+      "22.17"
+    ]
+  },
+  "META_M": {
+    "facts": [
+      {
+        "value": "83276",
+        "period": "2025",
+        "unit": "million",
+        "literal": "83276"
+      },
+      {
+        "value": "200966",
+        "period": "2025",
+        "unit": "million",
+        "literal": "200966"
+      }
+    ],
+    "calculation": {
+      "formula_id": "margin_percent",
+      "inputs": [
+        "83276",
+        "200966"
+      ],
+      "value": "41.44"
+    },
+    "allowed_percentages": [
+      "41.44"
+    ]
+  },
+  "GDP_AQ": {
+    "facts": [
+      {
+        "value": "2.1",
+        "period": "2025",
+        "unit": "percent",
+        "literal": "2.1",
+        "basis": [
+          "annual level"
+        ]
+      },
+      {
+        "value": "0.7",
+        "period": "2025",
+        "unit": "percent",
+        "literal": "0.7",
+        "basis": [
+          "fourth quarter"
+        ]
+      }
+    ],
+    "allowed_percentages": [
+      "2.1",
+      "0.7",
+      "4.4"
+    ]
+  },
+  "GDP_REV": {
+    "facts": [
+      {
+        "value": "0.7",
+        "period": "2025",
+        "unit": "percent",
+        "literal": "0.7",
+        "basis": [
+          "fourth quarter"
+        ]
+      },
+      {
+        "value": "0.7",
+        "period": "2025",
+        "unit": "point",
+        "literal": "0.7",
+        "basis": [
+          "revised down",
+          "downward revision"
+        ]
+      }
+    ],
+    "allowed_percentages": [
+      "0.7",
+      "4.4"
+    ]
+  },
+  "FED_RATE": {
+    "facts": [
+      {
+        "value": "3.5",
+        "period": "2025",
+        "unit": "percent",
+        "literal": "3-1/2",
+        "claim_aliases": [
+          "3-1/2",
+          "3½"
+        ]
+      },
+      {
+        "value": "3.75",
+        "period": "2025",
+        "unit": "percent",
+        "literal": "3-3/4",
+        "claim_aliases": [
+          "3-3/4",
+          "3¾"
+        ]
+      },
+      {
+        "value": "0.25",
+        "period": "2025",
+        "unit": "point",
+        "literal": "1/4",
+        "claim_aliases": [
+          "1/4",
+          "25个基点",
+          "25 basis points"
+        ]
+      }
+    ],
+    "allowed_percentages": [
+      "3.5",
+      "3.75",
+      "0.25",
+      "2"
+    ]
+  },
+  "FED_DISS": {
+    "facts": [
+      {
+        "value": "0.5",
+        "period": "2025",
+        "unit": "point",
+        "literal": "1/2",
+        "basis": [
+          "miran"
+        ],
+        "claim_aliases": [
+          "1/2",
+          "half",
+          "半个"
+        ]
+      }
+    ],
+    "name_checks": [
+      {
+        "claim_aliases": [
+          "miran",
+          "米兰",
+          "米朗",
+          "米兰恩"
+        ],
+        "quote_term": "miran"
+      }
+    ],
+    "allowed_percentages": [
+      "0.5",
+      "0.25",
+      "3.5",
+      "3.75",
+      "2"
+    ]
+  }
+}

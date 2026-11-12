@@ -1,0 +1,11 @@
+{
+  "id": "GDP_REV",
+  "question": "根据提供的 BEA 第二次估计，2025 年第四季度实际 GDP 环比折年增长多少？该季度增速相对初次估计修订了多少个百分点？",
+  "source_kind": "original_pdf",
+  "source_file": "bea-gdp-2025.pdf",
+  "source_title": "BEA GDP second estimate fourth quarter and year 2025",
+  "published_at": "2026-03-13T12:30:00Z",
+  "text_order": "reading",
+  "source_sha256": "dfbbe0786d9af4be2a8307767b8777882f84c28de6e4ba881fbd9c2550ff7ae2",
+  "source_text_sha256": "2e623f2113575dd98376699548184eec919ce0b8313713112440fb8a63ee0f08"
+}

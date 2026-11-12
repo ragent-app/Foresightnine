@@ -1,0 +1,8 @@
+{
+  "id": "META_G",
+  "question": "使用给定的 Meta 2024 和 2025 财年收入，列示金额、期间和单位，计算同比增长率，并说明资料限制。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"Meta Platforms, Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2024\":\"2024-12-31\",\"2025\":\"2025-12-31\"},\"revenue\":{\"2024\":164501,\"2025\":200966},\"income_from_operations\":{\"2024\":69380,\"2025\":83276}}",
+  "source_title": "Meta 2025 SEC 10-K: derived revenue and operating income facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/1326801/000162828026025534/meta-12312025x10kars.htm"
+}

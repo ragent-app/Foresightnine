@@ -1,0 +1,58 @@
+{
+  "assessment": "Six new task inputs; developer knows answers, shared documents and derived company data; no independent human validation, causal comparison, broad acceptance or claim of historical byte identity.",
+  "cost_usd": "unknown; no monetary cap asserted",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "bb0a6c669411206a49dd69c1c1d80007cb2501a7",
+  "inputs": [
+    {
+      "id": "META_G",
+      "sha256": "cbacc2e41e371b3fe94002379c17a89d7a481493a1e2ec165bd93634e8dca950"
+    },
+    {
+      "id": "META_M",
+      "sha256": "7bece8310613d12d606e894786c576f00564196d940f6698e0cea74403ab914e"
+    },
+    {
+      "id": "GDP_AQ",
+      "sha256": "3632fb5e81095886493d4660bb588d10f152ef55d2b551f3fff1be1c935ff41c"
+    },
+    {
+      "id": "GDP_REV",
+      "sha256": "63ddb5f9638a83cad3be2870d94fbad99d92a67be629902f31b95c0a480087de"
+    },
+    {
+      "id": "FED_RATE",
+      "sha256": "9a9a52e6dce28b72c3ceef4e648f8f356eb5fdf3d6fe621f8eb3f95ae206deb7"
+    },
+    {
+      "id": "FED_DISS",
+      "sha256": "a1026d832260ea2e851f84e9793eacce1e6670399884c1843b3bd597a8b2960d"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 6,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "Six of six pass fixed mechanical checks for required facts, same-claim numeric mentions and located source quotations, applicable calculations, names, warnings and budgets. Exact quotation matching and these checks do not prove semantic support, causality, completeness, independent quality or investment performance. Unknown usage stops the run; do not retry uncertain calls.",
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "c9e590002a92d58f78ae82706081d1cb61c9995f8a43395c71389f8156c41eb0",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "5c4274ef621fb0f10f092d605506832ffc5600e2a4ccd8913306b5a2148cac9e",
+  "scorer_sha256": "81e625a174ad5f0e21b90f90e9c84ff4b80d5aa4b5ee1d569109936381da8284",
+  "search_calls": 0,
+  "max_tokens_total": 60000
+}
