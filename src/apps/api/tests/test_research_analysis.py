@@ -1186,3 +1186,40 @@ def test_policy_factor_selection_covers_decision_and_considerations():
     assert 'decided to maintain the target range' in combined
     assert 'cumulative tightening' in combined and 'lags' in combined and 'economic and financial developments' in combined
     assert result.prompt_bytes <= 2055
+
+
+def test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget():
+    from datetime import datetime, timezone
+    q = '比较第二次估计与第三次估计的GDP，说明修订原因和抵消因素。'
+    first_text = ('Other context. ' * 20 + 'Real gross domestic product (GDP) increased at an annual rate of 2.8 percent in the third quarter of 2024, according to the "second" estimate released by the U.S. Bureau of Economic Analysis. ' + 'Other information. ' * 200)
+    third_text = ('Other context. ' * 20 + 'Real gross domestic product (GDP) increased at an annual rate of 3.1 percent in the third quarter of 2024, according to the "third" estimate released by the U.S. Bureau of Economic Analysis. ' +
+        'Other preliminary information. ' * 15 + 'The update primarily reflected upward revisions to exports and consumer spending that were partly offset by a downward revision to private inventory investment. ' + 'Other information. ' * 200)
+    sources = [source('second', text=first_text).model_copy(update={'title':'GDP second estimate', 'published_at':datetime(2024, 11, 27, tzinfo=timezone.utc)}),
+               source('third', text=third_text).model_copy(update={'title':'GDP third estimate', 'published_at':datetime(2024, 12, 19, tzinfo=timezone.utc)})]
+    captured = []
+    result = analyze(q, sources, None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 1), max_prompt_chars=2055)
+    parts = captured[0]['sources']
+    assert any(p['source_id'] == 'second' and '2.8 percent' in p['text'] and 'GDP' in p['text'] for p in parts)
+    assert any(p['source_id'] == 'third' and '3.1 percent' in p['text'] and 'third' in p['text'] for p in parts)
+    assert any(p['source_id'] == 'third' and 'upward revisions' in p['text'] and 'downward revision' in p['text'] for p in parts)
+    assert result.prompt_bytes <= 2055
+    for segment, part in zip(result.segments, parts):
+        original = next(s.text for s in sources if s.source_id == segment['source_id'])
+        assert original[segment['character_start']:segment['character_end']] == part['text']
+    assert any('remaining text was not examined' in note for note in result.limitations)
+
+
+def test_revision_excerpts_require_opposing_drivers_and_retain_context():
+    from app.research_analysis import _revision_summary_windows
+    q = 'Explain the GDP revision and offsetting factors.'
+    text = ('Real gross domestic product (GDP) increased at an annual rate of 3.1 percent, according to the "third" estimate released by the U.S. Bureau of Economic Analysis. '
+            'The update primarily reflected upward revisions to exports that were partly offset by a downward revision to inventories. Further remarks.')
+    parts = _revision_summary_windows(text, q, 1000)
+    assert parts and len(parts) == 2 and '3.1 percent' in parts[0][1] and 'third" estimate' in parts[0][1]
+    assert parts[1][1].endswith('inventories.')
+    assert all(text[start:start + len(part)] == part for start, part in parts)
+    assert _revision_summary_windows(text, q, 30) is None
+    assert _revision_summary_windows(text.replace('partly offset', 'unrelated'), q, 1000) is None
+    assert _revision_summary_windows(text.replace('downward revision', 'upward revision'), q, 1000) is None
+    assert _revision_summary_windows(text.replace('that were partly offset', '. Other information was partly offset'), q, 1000) is None
+    assert _revision_summary_windows(text, 'Explain annual GDP.', 1000) is None

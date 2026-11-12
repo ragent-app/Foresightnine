@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v27"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v28"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -452,6 +452,51 @@ def _policy_vote_windows(text: str, question: str, size: int,
     return None
 
 
+
+def _revision_summary_windows(text: str, question: str, size: int,
+                              should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
+    """Select a reported level and its opposing revision drivers, not a verdict.
+
+    The level can end at its explicit estimate label; drivers retain a full
+    sentence. The bounded pattern may miss alternative wording or caveats.
+    """
+    intent = _query_intent(question)
+    if not (any(x in intent for x in ("修订", "revision", "revised")) and
+            any(x in intent for x in ("原因", "因素", "抵消", "drivers", "factors", "offset"))):
+        return None
+    metrics = []
+    if any(x in intent for x in ("gdp", "国内生产")):
+        metrics.append(r"(?:gross\s+domestic\s+product\s*\(gdp\)|gdp)")
+    if any(x in intent for x in ("revenue", "收入", "营收")):
+        metrics.append(r"(?:revenue|sales)")
+    if not metrics:
+        return None
+    if should_stop is not None and should_stop():
+        raise AnalysisInterrupted()
+    sample = text[:100_000]
+    metric = r"(?:" + "|".join(metrics) + r")"
+    inside = r"(?:(?!(?<!U\.S)[.!?](?=\s|$))[\s\S])"
+    level = re.search(r"(?i)\b(?:real\s+)?" + metric +
+                      r"\s+(?:increased|decreased|rose|fell|grew|declined)\b" + inside +
+                      r"{0,180}?\b(?:percent\b|%)" + inside + r"{0,180}?(?<!U\.S)[.!?](?=\s|$)", sample)
+    driver = re.search(r"(?i)\b(?:the\s+update|the\s+revision|the\s+estimate)" + inside +
+                       r"{0,140}?\b(?P<first>upward|downward)\s+revisions?\b" + inside +
+                       r"{0,140}?\boffset\b" + inside +
+                       r"{0,120}?\b(?P<second>upward|downward)\s+revisions?\b" + inside +
+                       r"{0,120}?(?<!U\.S)[.!?](?=\s|$)", sample)
+    if (not level or not driver or level.end() > driver.start() or
+            driver.group('first').casefold() == driver.group('second').casefold()):
+        return None
+    level_end = level.end()
+    estimate_label = re.search(r"(?i)\baccording\s+to\s+the\s+[\"']?(?:advance|first|second|third)[\"']?\s+estimate\b", level.group())
+    if estimate_label:
+        level_end = level.start() + estimate_label.end()
+    spans = [(level.start(), level_end), (driver.start(), driver.end())]
+    if sum(end - start for start, end in spans) > size:
+        return None
+    return [(start, text[start:end]) for start, end in spans]
+
+
 def _asset_purchase_window(text: str, question: str, size: int,
                            should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
     """Keep a bounded policy purchase decision and its following sentence together."""
@@ -729,6 +774,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
     # When a comparison asks for both releases, a source's user-supplied
     # title can be a retrieval cue for its own estimate. It does not establish
     # identity or override source evidence, and ambiguous titles do nothing.
+    title_second = title_third = False
     if wants_second_estimate and wants_third_estimate:
         title = _query_intent(source_title[:500])
         title_second = bool(re.search(r"\bsecond\s+estimate\b|第二次估计", title))
@@ -778,6 +824,7 @@ def _select_windows(text: str, question: str, length: int, count: int,
                             (wants_annual_levels, r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b"),
                             (wants_vote, r"\bvoting\s+against\s+this\s+action\b"),
                             (wants_policy_factors, r"\bcumulative\s+tightening\b"),
+                            (title_second or title_third, r"\breal\s+gross\s+domestic\s+product\s*\(gdp\)"),
                             (wants_third_estimate, r"\bthird[\"']?\s+estimate\b"),
                             (wants_second_estimate, r"\bsecond[\"']?\s+estimate\b"),
                             (wants_advance_estimate, r"\bin\s+the\s+advance\s+estimate\b"),
@@ -830,6 +877,11 @@ def _select_windows(text: str, question: str, length: int, count: int,
                     break
         if wants_vote and re.search(r"\bvoting\s+against\s+this\s+action\b", passage):
             score += 1000
+        if ((title_second or title_third) and re.search(r"\breal\s+gross\s+domestic\s+product\s*\(gdp\)", passage) and
+                re.search(r"\bannual\s+rate\s+of\s+\d+(?:\.\d+)?\s+percent\b", passage)):
+            score += 2500
+            if re.match(r"\s*real\s+gross\s+domestic\s+product\s*\(gdp\)", passage):
+                score += 200
         if wants_second_estimate and re.search(r"\bin\s+the\s+second\s+estimate\b", passage):
             score += 1000
         if wants_second_estimate and re.search(r"\d+(?:\.\d+)?\s*percent\b[\s\S]{0,200}?\bsecond[\"']?\s+estimate\b", passage):
@@ -946,9 +998,21 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Reserve an equal share of the remaining serialized bytes for each
         # remaining source; unused shares roll forward to later sources.
         current_bytes = len(serialize().encode("utf-8"))
-        source_budget_limit = current_bytes + max(0, max_prompt_chars - current_bytes) // (len(eligible) - index)
+        available_bytes = max(0, max_prompt_chars - current_bytes)
+        # For a two-source revision, reserve somewhat more room for the later
+        # declared release, which may contain both the result and its drivers.
+        # Dates are unverified retrieval hints, not proof of chronology.
+        revision_compare = (len(eligible) == 2 and index == 0 and source.published_at is not None and
+                            eligible[1].published_at is not None and source.published_at < eligible[1].published_at and
+                            any(term in _query_intent(question) for term in ("修订", "revision", "revised")) and
+                            any(term in _query_intent(question) for term in ("原因", "因素", "抵消", "drivers", "factors", "offset")))
+        source_budget_limit = current_bytes + (available_bytes * 37 // 100 if revision_compare else
+                                               available_bytes // (len(eligible) - index))
         structured_parts = (_structured_observation_windows(selection_text, question, max_size, should_stop)
                             if source.retrieval_method != "user_pdf" else None)
+        revision_parts = _revision_summary_windows(selection_text, question, max_size, should_stop)
+        revision_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
+                              for start, part in revision_parts] if revision_parts else None)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             windows = (structured_parts if structured_parts and
                        sum(len(part) for _, part in structured_parts) <= size else None)
@@ -971,7 +1035,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
 
         def source_payload(parts: list[tuple[int, str]]) -> list[dict[str, Any]]:
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
-            structured = structured_parts is not None and parts == structured_parts
+            structured = (structured_parts is not None and parts == structured_parts or
+                          revision_original is not None and parts == revision_original)
             return [{"source_id": source.source_id,
                      **({"title": source.title} if not structured or position == 0 else {}),
                      "source_coverage": coverage,
@@ -1016,6 +1081,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             selected = focused(lo)
         elif max_size == len(selection_text) and fits([(0, source.text)]):
             selected = [(0, source.text)]
+        elif revision_original and fits(revision_original):
+            selected = revision_original
         else:
             split = len(selection_text) > 2000
             def budget_for(split_windows: bool) -> int:
