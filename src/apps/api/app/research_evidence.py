@@ -268,6 +268,33 @@ def flag_citation_subject_context(claims: list[dict], sources: list[ResearchSour
                                  "status": "requires_review"})
                 if len(warnings) >= 5:
                     break
+            # A selected excerpt may begin with "of America" while the
+            # preceding word "Bank" remains outside the quote. Warn only
+            # when the omitted word plus the quoted name also occur in the
+            # claim; this is context discovery, not entity resolution.
+            name_tail = re.match(r"\s*((?:of|and)\s+[A-Z][A-Za-z0-9&.'-]{2,})\b", quote)
+            prefix_start = max(0, start - 120)
+            name_prefix = re.search(r"\b([A-Z][A-Za-z0-9&.'-]{2,})\s+$", source.text[prefix_start:start])
+            if name_tail and name_prefix and isinstance(claim_text, str):
+                name = re.escape(name_prefix.group(1)) + r"\s+" + re.escape(name_tail.group(1)).replace(r"\ ", r"\s+")
+                entity_start = prefix_start + name_prefix.start(1)
+                entity_end = prefix_start + name_prefix.end(1)
+                covered = any(
+                    isinstance(other, dict) and other.get("source_id") == source_id and not other.get("partial_token") and
+                    isinstance(other.get("location"), dict) and other["location"].get("status") != "ambiguous" and
+                    type(other["location"].get("character_start")) is int and type(other["location"].get("character_end")) is int and
+                    0 <= other["location"]["character_start"] <= entity_start < entity_end <= other["location"]["character_end"] <= len(source.text) and
+                    isinstance(other.get("quotation"), str) and
+                    source.text[other["location"]["character_start"]:other["location"]["character_end"]] == other["quotation"] and
+                    not partial_ascii_token(source.text, other["location"]["character_start"], other["location"]["character_end"])
+                    for other in citations)
+                if re.search(r"(?<![A-Za-z])" + name + r"(?![A-Za-z])", claim_text, re.IGNORECASE) and not covered:
+                    warnings.append({"source_id": source_id, "citation_index": index, "context_metric": "named entity prefix",
+                                     "context_character_start": entity_start, "context_character_end": start,
+                                     "status": "requires_review"})
+                    if len(warnings) >= 5:
+                        break
+                    continue
             # A pronoun or leading amount can omit the subject and period in
             # the preceding part of the same sentence. This is a context cue,
             # never a conclusion that the citation supports a claim.

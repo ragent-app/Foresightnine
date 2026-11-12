@@ -299,3 +299,20 @@ def test_contrary_evidence_selection_keeps_qualitative_component_comparison():
     assert any("increase in services that was partly offset by a decrease in goods" in part for part in normalized)
     for segment, sent in zip(result.segments,captured[0]["sources"]):
         assert _prompt_source_text(text[segment["character_start"]:segment["character_end"]],True)==sent["text"]
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+def test_company_name_prefix_warning_on_recorded_original_pdf():
+    from app.research_evidence import flag_citation_subject_context
+    folder=Path(__file__).resolve().parents[3]/"docs/product/phase-a/209-cross-domain-frozen"
+    raw=(folder/"fed-2025-stress.pdf").read_bytes()
+    manifest=json.loads((folder/"manifest.json").read_text())
+    assert sha256(raw).hexdigest()==manifest["source_files"]["fed-2025-stress.pdf"]
+    text=_extract_text(raw,text_order="reading")
+    recorded=json.loads((folder/"BANK_2025-result.json").read_text())["content"]["claims"]
+    source=ResearchSource(source_id="source_20900000000000000000000000000001",owner_id="test",title="Report",text=text,
+        kind="user_supplied",obtained_at=datetime.now(timezone.utc),content_sha256="test",retrieval_method="user_pdf",
+        permissions=SourcePermissions(store=True,display=True,model_input=True))
+    warning=flag_citation_subject_context(recorded,[source])[0]["citation_context_warnings"][0]
+    assert warning["context_metric"]=="named entity prefix"
+    assert text[warning["context_character_start"]:warning["context_character_end"]]=="Bank "

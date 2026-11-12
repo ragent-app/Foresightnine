@@ -628,6 +628,28 @@ def test_revision_contradiction_warning_requires_original_located_revision():
     assert not flag_component_direction([claim],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("balance_direction_warnings")
 
 
+def test_named_entity_prefix_context_requires_a_matching_claim_and_original_source():
+    from app.research_evidence import flag_citation_subject_context
+    text="Table A.2. Bank of America Corporation reported 11.9 percent."
+    source=ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
+    quote="of America Corporation reported 11.9 percent."
+    start=text.index(quote)
+    citation={"source_id":"s","quotation":quote,"location":{"character_start":start,"character_end":start+len(quote)}}
+    claim={"text":"Bank of America Corporation reported 11.9 percent.","citations":[citation]}
+    flagged=flag_citation_subject_context([claim],[source])[0]
+    warning=flagged["citation_context_warnings"][0]
+    assert warning["context_metric"]=="named entity prefix"
+    assert text[warning["context_character_start"]:warning["context_character_end"]]=="Bank "
+    assert "citation_context_warnings" not in claim
+    assert not flag_citation_subject_context([{**claim,"text":"America Corporation reported 11.9 percent."}],[source])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([claim],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("citation_context_warnings")
+    assert not flag_citation_subject_context([{**claim,"citations":[{**citation,"location":{"status":"ambiguous"}}]}],[source])[0].get("citation_context_warnings")
+    full="Bank of America Corporation reported 11.9 percent.";full_start=text.index(full)
+    corrected={"source_id":"s","quotation":full,"location":{"character_start":full_start,"character_end":full_start+len(full)}}
+    assert not flag_citation_subject_context([{**claim,"citations":[corrected]}],[source])[0].get("citation_context_warnings")
+
+
 def test_component_direction_flags_chinese_trade_claims_against_english_or_chinese_sources():
     from app.research_evidence import flag_component_direction
     quotes=["A decrease in the goods deficit and a decrease in the services surplus.",
