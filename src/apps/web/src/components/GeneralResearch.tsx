@@ -4,6 +4,7 @@ import type { Language } from "../types";
 import { Button, Field, Input, Textarea } from "./Controls";
 import { Header } from "./AppShell";
 import { SourceContext } from "./SourceContext";
+import { formatResearchTextReport } from "../research-text-report";
 import { CitationEditor } from "./CitationEditor";
 import { canUseCitationSource } from "../source-text-search";
 
@@ -480,15 +481,16 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     catch { setNotice(en ? "Cancellation could not be confirmed." : "无法确认取消结果。"); }
     finally { setBusy(false); }
   }
-  async function exportResearch(metadataOnly: boolean) {
+  async function exportResearch(metadataOnly: boolean, textReport = false) {
     if (!api || !topic || !current) return;
     if (hasUnsavedReview) { setNotice(en ? "Save your edits before exporting." : "请先保存当前修改，再导出。"); return; }
     setBusy(true); setNotice("");
     try {
       const result = metadataOnly ? await api.exportMetadata(topic.topic_id, current.version_id) : await api.exportVersion(topic.topic_id, current.version_id);
       const link = document.createElement("a");
-      const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: "application/json" }));
-      link.href = objectUrl; link.download = metadataOnly ? "research-metadata.json" : "research.json"; link.click();
+      const content = textReport && !metadataOnly ? formatResearchTextReport(result as Awaited<ReturnType<typeof api.exportVersion>>, en) : JSON.stringify(result, null, 2);
+      const objectUrl = URL.createObjectURL(new Blob([content], { type: textReport ? "text/plain;charset=utf-8" : "application/json" }));
+      link.href = objectUrl; link.download = textReport ? "research-report.txt" : metadataOnly ? "research-metadata.json" : "research.json"; link.click();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch { setNotice(en ? "Export is unavailable; check source permissions. A metadata-only record is available separately." : "无法导出完整研究，请检查资料权限；也可以单独导出不含研究内容的记录摘要。"); }
     finally { setBusy(false); }
@@ -637,7 +639,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.created_by === "agent" && (current.content.summary || current.note) ? <p>{en ? "Your summary and review notes were carried forward from the previous version and have not been reviewed against this run." : "总结和复核意见沿用自上一版本，尚未结合本次研究重新确认。"}</p> : null}
       <Field label={en ? "Your summary" : "你的总结"}><Textarea value={summary} disabled={!isLatest || running} onChange={(event) => setSummary(event.target.value)} /></Field>
       <Field label={en ? "Review notes" : "复核意见"}><Textarea value={note} disabled={!isLatest || running} onChange={(event) => setNote(event.target.value)} /></Field>
-      <div className="general-actions"><Button disabled={busy || running || !isLatest} onClick={() => void save("draft")}>{en ? "Save draft" : "保存草稿"}</Button><Button disabled={busy || running || !isLatest} onClick={() => void save("confirmed")}>{en ? "Confirm" : "确认"}</Button><Button disabled={busy || running || !isLatest} onClick={() => void save("reservation")}>{en ? "Save reservation" : "保留异议"}</Button><Button disabled={busy} onClick={() => void exportResearch(false)}>{en ? "Export research JSON" : "导出研究 JSON"}</Button><Button disabled={busy} onClick={() => void exportResearch(true)}>{en ? "Export record only" : "导出记录摘要"}</Button></div>
+      <div className="general-actions"><Button disabled={busy || running || !isLatest} onClick={() => void save("draft")}>{en ? "Save draft" : "保存草稿"}</Button><Button disabled={busy || running || !isLatest} onClick={() => void save("confirmed")}>{en ? "Confirm" : "确认"}</Button><Button disabled={busy || running || !isLatest} onClick={() => void save("reservation")}>{en ? "Save reservation" : "保留异议"}</Button><Button disabled={busy} onClick={() => void exportResearch(false, true)}>{en ? "Export readable report" : "导出可读报告"}</Button><Button disabled={busy} onClick={() => void exportResearch(false)}>{en ? "Export research JSON" : "导出研究 JSON"}</Button><Button disabled={busy} onClick={() => void exportResearch(true)}>{en ? "Export record only" : "导出记录摘要"}</Button></div>
       <p>{en ? "The record-only export excludes research text and source content." : "记录摘要不包含研究正文和来源内容。"}</p>
     </section> : null}
   </section>;
