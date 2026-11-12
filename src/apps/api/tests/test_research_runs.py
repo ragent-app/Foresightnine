@@ -3189,3 +3189,102 @@ def test_opt_in_discovery_retrieves_pdf_as_owned_recoverable_source(monkeypatch)
     assert metadata['response_sha256'] == sha256(raw).hexdigest() and metadata['original_pdf_available']
     assert client.get('/v2/research/sources/' + source_id + '/original', headers=headers).content == raw
     assert version['content']['claims'][0]['citations'][0]['source_id'] == source_id
+
+
+@pytest.mark.parametrize('configured', [False, True])
+def test_auto_sec_filing_uses_configured_contact_or_falls_back(monkeypatch, configured):
+    import base64, json
+    from hashlib import sha256
+    from uuid import uuid4
+    from app.research_fetch import FetchedText
+    from app.research_sec import SecFilingResult
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.delenv('SEC_USER_AGENT', raising=False)
+    if configured: monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Fixture test@example.test')
+    else: monkeypatch.delenv('FORESIGHTNINE_SEC_USER_AGENT', raising=False)
+    sec_url = 'https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm'
+    class Search:
+        name = 'test-search'
+        supports_project_search = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            return [SearchCandidate(title='SEC filing', url=sec_url, excerpt='lead', publisher=None,
+                    published_at=None, independently_reviewable=True),
+                    SearchCandidate(title='BEA release', url='https://www.bea.gov/news/report', excerpt='lead',
+                    publisher=None, published_at=None, independently_reviewable=True)]
+    raw=b'<html><p>Revenue was 100.</p></html>'; calls=[]
+    def sec_fetch(request, agent, *, timeout_seconds):
+        calls.append('sec')
+        assert configured and agent == 'Fixture test@example.test' and 0 < timeout_seconds <= 15
+        return SecFilingResult('Revenue was 100.', sha256(raw).hexdigest(), base64.b64encode(raw).decode())
+    def bea_fetch(request, *, timeout_seconds):
+        calls.append('bea')
+        assert not configured and 0 < timeout_seconds <= 15
+        return FetchedText('Revenue was 100.', sha256(raw).hexdigest(), 'text/html', base64.b64encode(raw).decode())
+    class Provider:
+        name='test-model';policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            source=json.loads(prompt)['sources'][0]
+            return {'claims':[{'text':'Revenue was 100.','citations':[{'source_id':source['source_id'],
+                    'quotation':'Revenue was 100.'}]}]},10
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(api, 'fetch_sec_filing', sec_fetch)
+    monkeypatch.setattr(api, 'fetch_official_text', bea_fetch)
+    monkeypatch.setattr(api, 'reserve_sec_request', lambda *args: True)
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+    client=TestClient(api.app)
+    auth=client.post('/v1/auth/local/register',json={'email':f'sec-auto-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json();headers={'Authorization':'Bearer '+auth['access_token']}
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?'}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'sec-auto'},json={
+        'parent_version_id':topic['versions'][-1]['version_id'],'auto_fetch_official':True,'require_counterarguments':False})
+    assert receipt.status_code==202
+    operation_id=receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status=client.get(path+'/runs/'+operation_id,headers=headers).json()['operation']['status']
+        if status in {'completed','failed'}:break
+        time.sleep(.02)
+    assert status=='completed' and calls==(['sec'] if configured else ['bea'])
+    version=client.get(path,headers=headers).json()['versions'][-1]
+    source_id=version['source_ids'][0]
+    source=client.get('/v2/research/sources/'+source_id,headers=headers).json()
+    assert source['retrieval_method']==('sec_filing_html' if configured else 'official_html')
+    assert client.get('/v2/research/sources/'+source_id+'/original',headers=headers).content==raw
+    assert version['content']['run']['official_fetch_calls']==1
+    assert any('SEC access is not configured' in note for note in version['content']['limitations']) is (not configured)
+    assert 'test@example.test' not in json.dumps(version)
+
+
+def test_auto_sec_filing_respects_shared_rate_limit(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Fixture test@example.test')
+    class Search:
+        name='test-search';supports_project_search=True
+        def search(self,query,*,limit,deadline,cancel_event):
+            return [SearchCandidate(title='SEC filing',url='https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm',
+                excerpt='lead',publisher=None,published_at=None,independently_reviewable=True)]
+    monkeypatch.setattr(api,'evidence_provider',Search())
+    monkeypatch.setattr(api,'_reserve_search_call',lambda *args:None)
+    monkeypatch.setattr(api,'reserve_sec_request',lambda *args:False)
+    def forbidden(*args,**kwargs):raise AssertionError('rate-limited SEC request must not be made')
+    monkeypatch.setattr(api,'fetch_sec_filing',forbidden)
+    client=TestClient(api.app)
+    auth=client.post('/v1/auth/local/register',json={'email':f'sec-limit-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json();headers={'Authorization':'Bearer '+auth['access_token']}
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?'}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'sec-rate-limit'},json={
+        'parent_version_id':topic['versions'][-1]['version_id'],'auto_fetch_official':True})
+    operation_id=receipt.json()['operation']['operation_id']
+    for _ in range(200):
+        status=client.get(path+'/runs/'+operation_id,headers=headers).json()['operation']['status']
+        if status in {'completed','failed'}:break
+        time.sleep(.02)
+    assert status=='completed'
+    result=client.get(path,headers=headers).json()['versions'][-1]['content']
+    assert result['run']['official_fetch_status']=='failed' and result['run']['official_fetch_calls']==0
+    assert not result['claims'] and not result['facts']

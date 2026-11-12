@@ -9,10 +9,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
+from threading import Event, Thread
+from time import monotonic
 from typing import Callable, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .openai_compatible import HttpResponse, _TransportFailure, _TransportTimeout, _default_transport
 from .research_sources import SourcePermissions
@@ -72,18 +74,22 @@ class SecFilingResult:
 
 
 def fetch_sec_filing(request: FetchSourceRequest, user_agent: str | None,
-                     transport: Callable[..., HttpResponse] | None = None) -> SecFilingResult:
+                     transport: Callable[..., HttpResponse] | None = None, *,
+                     timeout_seconds: float = 15.0) -> SecFilingResult:
     """Retrieve one validated SEC HTML filing, preserving the exact UTF-8 body."""
     if not request.permissions.store:
         raise SecFailure("source_permission_unknown")
+    if not 0 < timeout_seconds <= 15:
+        raise SecFailure("source_timeout")
     if urlsplit(str(request.url)).hostname != "www.sec.gov":
         raise SecFailure("source_invalid")
     agent = validate_user_agent(user_agent)
+    deadline = monotonic() + timeout_seconds
     send = transport or (lambda method, address, headers, body, timeout:
                          _default_transport(method, address, headers, body, timeout,
                                             max_response_bytes=5_000_000))
     try:
-        response = send("GET", str(request.url), {"User-Agent": agent, "Accept": "text/html"}, b"", 15.0)
+        response = send("GET", str(request.url), {"User-Agent": agent, "Accept": "text/html"}, b"", timeout_seconds)
     except _TransportTimeout as error:
         raise SecFailure("source_timeout") from error
     except (_TransportFailure, OSError) as error:
@@ -99,10 +105,33 @@ def fetch_sec_filing(request: FetchSourceRequest, user_agent: str | None,
         raise SecFailure("source_invalid")
     encoded = base64.b64encode(raw).decode("ascii")
     try:
-        text, raw_hash = extract_uploaded_html(HtmlUploadRequest(title=request.title, html_base64=encoded,
-            permissions=request.permissions))
-    except PdfFailure as error:
-        raise SecFailure("source_unavailable" if error.code == "html_busy" else "source_invalid") from error
+        upload = HtmlUploadRequest(title=request.title, html_base64=encoded, permissions=request.permissions)
+    except ValidationError as error:
+        raise SecFailure("source_invalid") from error
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise SecFailure("source_timeout")
+    done = Event()
+    state: dict[str, object] = {}
+    def parse() -> None:
+        try:
+            state["result"] = extract_uploaded_html(upload)
+        except Exception as error:
+            state["error"] = error
+        finally:
+            done.set()
+    Thread(target=parse, name="foresight-sec-html", daemon=True).start()
+    if not done.wait(remaining):
+        # HTML extraction uses a shared bounded semaphore. A timed-out parse
+        # may finish later but cannot submit another external request.
+        raise SecFailure("source_timeout")
+    error = state.get("error")
+    if error is not None:
+        raise SecFailure("source_unavailable" if isinstance(error, PdfFailure) and error.code == "html_busy" else "source_invalid") from error
+    result = state.get("result")
+    if not isinstance(result, tuple) or len(result) != 2:
+        raise SecFailure("source_invalid")
+    text, raw_hash = result
     return SecFilingResult(text=text, response_sha256=raw_hash, original_base64=encoded)
 
 

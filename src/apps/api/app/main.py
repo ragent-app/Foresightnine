@@ -2525,7 +2525,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     search_status = "failed"
                     discovery_notes.append("Source discovery failed or was rate limited; attach source material manually.")
         _raise_if_operation_cancelled(operation_id)
-        # The optional batch permission applies only to the two official
+        # The optional batch permission applies only to supported official
         # hosts in this bounded path; discovered snippets are never evidence.
         # Historical content may have changed since its published date, so no
         # automatic source is attached to a cutoff-constrained research run.
@@ -2533,9 +2533,24 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 topic.request.as_of is None and request.max_cost_usd is None):
             for candidate in discovered:
                 parts = urlsplit(candidate["url"])
-                if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov"}
+                if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov", "www.sec.gov"}
                         or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
                     continue
+                permissions = SourcePermissions(store=True, display=True, model_input=True, export=True)
+                try:
+                    source_request = FetchSourceRequest(url=candidate["url"], title=candidate["title"][:500],
+                                                        permissions=permissions)
+                except ValidationError:
+                    continue
+                sec_agent = None
+                if parts.hostname == "www.sec.gov":
+                    try:
+                        sec_agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
+                    except SecFailure:
+                        official_fetch_status = "sec_contact_unconfigured"
+                        if "SEC access is not configured; other supported sources may still be available." not in discovery_notes:
+                            discovery_notes.append("SEC access is not configured; other supported sources may still be available.")
+                        continue
                 remaining = deadline - monotonic()
                 if remaining <= 0:
                     official_fetch_status = "time_budget"
@@ -2543,22 +2558,27 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     break
                 try:
                     _reserve_search_call(http_request)
-                    permissions = SourcePermissions(store=True, display=True, model_input=True, export=True)
-                    source_request = FetchSourceRequest(url=candidate["url"], title=candidate["title"][:500],
-                                                        permissions=permissions)
+                    if sec_agent is not None and not reserve_sec_request(SOURCE_RATE_LIMITS):
+                        raise ApiProblem(429, "rate_limited", "SEC request limit reached.", retryable=True)
                     remaining = deadline - monotonic()
                     if remaining <= 0:
                         official_fetch_status = "time_budget"
                         discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
                         break
                     official_fetch_calls = 1
-                    if parts.path.casefold().endswith(".pdf"):
+                    if sec_agent is not None:
+                        fetched = fetch_sec_filing(source_request, sec_agent, timeout_seconds=min(15.0, remaining))
+                        retrieval = {"retrieval_method": "sec_filing_html", "original_html_base64": fetched.original_base64}
+                        content_type = "text/html"
+                    elif parts.path.casefold().endswith(".pdf"):
                         fetched = fetch_official_pdf(source_request, timeout_seconds=min(15.0, remaining))
                         retrieval = {"retrieval_method": "user_pdf", "original_pdf_base64": fetched.original_pdf_base64,
                                      "pdf_text_order": "layout"}
+                        content_type = fetched.content_type
                     else:
                         fetched = fetch_official_text(source_request, timeout_seconds=min(15.0, remaining))
                         retrieval = {"retrieval_method": "official_html", "original_html_base64": fetched.original_html_base64}
+                        content_type = fetched.content_type
                     _raise_if_operation_cancelled(operation_id)
                     # This planned ID is part of the immutable run-input
                     # receipt before the request, so a saved source remains
@@ -2567,14 +2587,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     source = research_sources.create(account.account_id, SourceInput(title=source_request.title,
                         text=fetched.text, url=source_request.url, kind="official", permissions=permissions),
                         **retrieval, response_sha256=fetched.response_sha256,
-                        response_content_type=fetched.content_type, source_id=source_id)
+                        response_content_type=content_type, source_id=source_id)
                     sources.append(source)
                     source_ids.append(source.source_id)
                     official_fetch_status = "completed"
                     candidate["status"] = "retrieved_unverified"
                     candidate["source_id"] = source.source_id
                     discovery_notes.append("The official document was retrieved with user-granted model permission; its content and dates remain unverified.")
-                except (FetchFailure, ValidationError, ValueError, ApiProblem):
+                except (FetchFailure, SecFailure, ValidationError, ValueError, ApiProblem):
                     _raise_if_operation_cancelled(operation_id)
                     official_fetch_status = "failed"
                     discovery_notes.append("The official source could not be retrieved; the search result remains an unverified lead.")

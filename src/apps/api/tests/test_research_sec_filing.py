@@ -75,3 +75,42 @@ def test_sec_filing_endpoint_requires_contact_and_enforces_source_permissions(mo
     assert download.status_code==200 and download.content==raw and download.headers['content-type']=='application/octet-stream'
     assert client.get(path,headers=other).status_code==404
     assert client.post('/v2/research/sources/fetch',headers=owner,json={**body,'permissions':{'store':False}}).status_code==422
+
+
+def test_sec_filing_respects_caller_timeout_budget():
+    seen = []
+    def transport(method, url, headers, body, timeout):
+        seen.append(timeout)
+        return HttpResponse(200, '<html><p>Revenue 100</p></html>', {'content-type': 'text/html'})
+    result = fetch_sec_filing(request(), 'Fixture test@example.test', transport, timeout_seconds=3.0)
+    assert result.text and seen == [3.0]
+    for value in (0, -1, 16):
+        with pytest.raises(SecFailure, match='source_timeout'):
+            fetch_sec_filing(request(), 'Fixture test@example.test', transport, timeout_seconds=value)
+    assert seen == [3.0]
+
+
+def test_sec_filing_timeout_includes_html_extraction(monkeypatch):
+    from threading import Event
+    from time import monotonic
+    entered, release, finished = Event(), Event(), Event()
+    def slow_extract(upload):
+        entered.set()
+        try:
+            release.wait(2)
+            return ('Revenue 100', 'a' * 64)
+        finally:
+            finished.set()
+    monkeypatch.setattr('app.research_sec.extract_uploaded_html', slow_extract)
+    calls = []
+    def transport(*args):
+        calls.append(1)
+        return HttpResponse(200, '<html><p>Revenue 100</p></html>', {'content-type': 'text/html'})
+    started = monotonic()
+    try:
+        with pytest.raises(SecFailure, match='source_timeout'):
+            fetch_sec_filing(request(), 'Fixture test@example.test', transport, timeout_seconds=.05)
+        assert entered.is_set() and monotonic() - started < 1 and calls == [1]
+    finally:
+        release.set()
+        assert finished.wait(2)
