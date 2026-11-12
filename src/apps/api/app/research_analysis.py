@@ -254,12 +254,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     data = {"question": question, "sources": [],
             "output_schema": {"claims": [{"text": "interpretation", "citations": [
                 {"source_id": "id", "quotation": "exact quotation from supplied text"}]}],
-                "counterarguments": [{"text": "interpretation", "citations": []}], "limitations": ["text"],
+                "counterarguments": [{"text": "interpretation", "citations": [
+                    {"source_id": "id", "quotation": "exact quotation from supplied text"}]}], "limitations": ["text"],
                 "facts": [{"fact_id": "unique id", "label": "metric", "value": "numeric value exactly in quote",
                            "unit": "original unit", "currency": "currency or null", "period": "period",
                            "citation": {"source_id": "id", "quotation": "exact contextual quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
-                                  "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]}}
+                                  "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]},
+            "evidence_guidance": "Cite the supplied evidence for source-based counterarguments. "
+                "Put unanswered questions and missing evidence in limitations; do not invent evidence."}
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 

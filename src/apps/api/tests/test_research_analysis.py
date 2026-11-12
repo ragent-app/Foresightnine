@@ -66,6 +66,19 @@ def test_only_authorized_sources_are_sent_and_quotes_must_be_real():
     assert result.total_tokens == 42
 
 
+def test_research_prompt_requests_counterevidence_and_preserves_gaps():
+    def model(prompt):
+        payload = json.loads(prompt)
+        example = payload["output_schema"]["counterarguments"][0]
+        assert example["citations"][0]["quotation"] == "exact quotation from supplied text"
+        assert "missing evidence in limitations" in payload["evidence_guidance"]
+        return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
+
+    result = analyze("What would contradict this?", [source("s")], None, model)
+    assert result.counterarguments == []
+    assert "No opposing evidence supplied." in result.limitations
+
+
 def test_rejects_fabricated_citations_and_respects_display_permission():
     hidden = source("hidden", display=False)
     visible = source("hidden", display=True)
