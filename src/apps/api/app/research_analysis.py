@@ -694,6 +694,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     # A nonnumeric or incomplete fact cannot be used by the deterministic
     # calculator. Drop only those facts, disclose the omission, and continue
     # validating all remaining claims and citations against the source.
+    normalized_grouped_ids: set[str] = set()
     normalized_fraction_ids: set[str] = set()
     normalized_equivalent_ids: set[str] = set()
     normalized_range_ids: dict[str, str] = {}
@@ -701,6 +702,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         valid_facts = []
         omitted_facts = 0
         for fact in raw["facts"]:
+            normalized_grouped = False
             normalized_fraction = False
             normalized_equivalent = False
             if isinstance(fact, dict) and isinstance(fact.get("value"), str) and isinstance(fact.get("unit"), str):
@@ -718,7 +720,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     continue
                 equivalent = _equivalent_scalar(value, unit)
                 match = _FRACTION.fullmatch(value) if len(value) <= 160 else None
-                if equivalent is not None:
+                if re.fullmatch(r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?", value) and len(value) <= 160:
+                    fact = {**fact, "value": value.replace(",", "")}
+                    normalized_grouped = True
+                elif equivalent is not None:
                     fact = {**fact, "value": str(equivalent)}
                     normalized_equivalent = True
                 elif match:
@@ -728,6 +733,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         normalized_fraction = True
             try:
                 validated = ModelFact.model_validate(fact)
+                if normalized_grouped:
+                    normalized_grouped_ids.add(validated.fact_id)
                 if normalized_fraction:
                     normalized_fraction_ids.add(validated.fact_id)
                 if normalized_equivalent:
@@ -738,7 +745,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     omitted_facts += 1
             except ValidationError:
                 omitted_facts += 1
-        if omitted_facts or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids:
+        if omitted_facts or normalized_grouped_ids or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids:
             raw = {**raw, "facts": valid_facts}
         if omitted_facts:
             limitations.append(f"{omitted_facts} model-generated numeric fact(s) were omitted because their format was invalid.")
@@ -864,6 +871,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
             **({"currency_context_unverified": True} if currency_context else {}),
+            **({"numeric_normalization": "thousands_separator"} if item.fact_id in normalized_grouped_ids else {}),
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),
             **({"numeric_normalization": "equivalent_decimal_fraction"} if item.fact_id in normalized_equivalent_ids else {}),
             **({"numeric_normalization": "exact_range_bound", "range_parent_id": normalized_range_ids[item.fact_id]}

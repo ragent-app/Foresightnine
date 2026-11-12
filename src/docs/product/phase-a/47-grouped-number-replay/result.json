@@ -1,0 +1,104 @@
+{
+  "kind": "offline replay of saved model output; no model call, original score unchanged; no semantic certification",
+  "prompt_sha256_unchanged": true,
+  "facts": [
+    {
+      "fact_id": "revenue_fy2023",
+      "value": "26974",
+      "unit": "millions",
+      "currency": "USD",
+      "period": "Year Ended January 29, 2023",
+      "label": "Revenue",
+      "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+      "quotation": "| [colspan=3] Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914  |",
+      "quotation_match": "exact",
+      "numeric_normalization": "thousands_separator",
+      "location": {
+        "character_start": 186440,
+        "character_end": 186509
+      },
+      "verification": "model_extraction_not_independently_verified"
+    },
+    {
+      "fact_id": "revenue_fy2022",
+      "value": "26914",
+      "unit": "millions",
+      "currency": "USD",
+      "period": "Year Ended January 30, 2022",
+      "label": "Revenue",
+      "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+      "quotation": "$ | 26,914  |  | [colspan=3]  | [colspan=2] —  | % |",
+      "quotation_match": "exact",
+      "numeric_normalization": "thousands_separator",
+      "location": {
+        "character_start": 186496,
+        "character_end": 186548
+      },
+      "verification": "model_extraction_not_independently_verified"
+    }
+  ],
+  "calculations": [
+    {
+      "formula_id": "growth_percent",
+      "formula_version": "1",
+      "expression": "(first / second - 1) * 100",
+      "input_verification": "not_verified_by_calculator",
+      "period_order_check": "not_checked",
+      "inputs": [
+        {
+          "fact_id": "revenue_fy2023",
+          "value": "26974",
+          "unit": "millions",
+          "currency": "USD",
+          "period": "Year Ended January 29, 2023"
+        },
+        {
+          "fact_id": "revenue_fy2022",
+          "value": "26914",
+          "unit": "millions",
+          "currency": "USD",
+          "period": "Year Ended January 30, 2022"
+        }
+      ],
+      "value": "0.22",
+      "unit": "percent",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2
+    },
+    {
+      "formula_id": "difference",
+      "formula_version": "2",
+      "expression": "first - second",
+      "input_verification": "not_verified_by_calculator",
+      "inputs": [
+        {
+          "fact_id": "gross_margin_fy2023",
+          "value": "56.9",
+          "unit": "percent",
+          "currency": null,
+          "period": "Year Ended January 29, 2023"
+        },
+        {
+          "fact_id": "gross_margin_fy2022",
+          "value": "64.9",
+          "unit": "percent",
+          "currency": null,
+          "period": "Year Ended January 30, 2022"
+        }
+      ],
+      "value": "-8.00",
+      "unit": "percentage points",
+      "currency": null,
+      "rounding": "half_up",
+      "decimal_places": 2
+    }
+  ],
+  "limitations": [
+    "Source source_25b4e5ca3b804a22b053b61c8b8b37af: only character ranges 185927–186734 were analyzed; remaining text was not examined.",
+    "Matching a quotation does not independently establish that it supports a claim.",
+    "提供的文本仅为节选（partial coverage），未包含完整 10-K；缺少同比变化率的明确数值，仅显示 '—%'，精确增长率需基于所列事实发起计算验证。",
+    "表中部分单元格可能因 PDF 压缩而缺失，'Change' 列数值显示为 '—'，可能被截断。",
+    "来源为文本抽取，表格分隔符为生成，日期为申报所声明而非独立核实。"
+  ]
+}

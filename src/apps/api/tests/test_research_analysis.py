@@ -735,3 +735,21 @@ def test_vote_and_second_estimate_anchors_find_requested_passages():
     assert any("second estimate" in part and "2.9 percent" in part for _, part in estimates)
     votes = _select_windows(report, "该行动有委员投反对票吗？", 180, 2)
     assert any("Voting against this action: None" in part for _, part in votes)
+
+
+def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote():
+    report = source("s", text="Revenue was 26,974 in 2023 and 26,914 in 2022.")
+    def item(fact_id, value, period, quotation):
+        return {"fact_id": fact_id, "label": "Revenue", "value": value, "unit": "USD million",
+                "currency": "USD", "period": period, "citation": {"source_id": "s", "quotation": quotation}}
+    raw = {"facts": [item("current", "26,974", "2023", "Revenue was 26,974 in 2023"),
+                     item("prior", "26,914", "2022", "26,914 in 2022"),
+                     item("invalid", "26,91", "2022", "26,914 in 2022"),
+                     item("wrong", "26,973", "2023", "Revenue was 26,974 in 2023")],
+           "calculations": [{"formula": "growth_percent", "first_fact_id": "current", "second_fact_id": "prior"}]}
+    result = analyze("Revenue?", [report], None, lambda _: (raw, 1))
+    assert [(fact["fact_id"], fact["value"], fact["numeric_normalization"]) for fact in result.facts] == [
+        ("current", "26974", "thousands_separator"), ("prior", "26914", "thousands_separator")]
+    assert result.calculations[0]["value"] == "0.22"
+    assert any("format was invalid" in note for note in result.limitations)
+    assert any("absent from its quotation" in note for note in result.limitations)
