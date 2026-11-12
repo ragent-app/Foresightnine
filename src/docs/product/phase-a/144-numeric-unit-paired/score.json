@@ -1,0 +1,25 @@
+{
+  "TRADE_FEB": {
+    "signals": {
+      "four_values": false,
+      "goods_services": true,
+      "counter_evidence": true
+    },
+    "all_claims_located": true,
+    "claim_count": 4,
+    "counter_count": 1,
+    "semantic_support": "not independently established"
+  },
+  "STRESS_2023": {
+    "signals": {
+      "actual_and_minimum": false,
+      "scenario_qualifier": true,
+      "individual_minimum": true,
+      "counter_evidence": false
+    },
+    "all_claims_located": true,
+    "claim_count": 3,
+    "counter_count": 1,
+    "semantic_support": "not independently established"
+  }
+}
