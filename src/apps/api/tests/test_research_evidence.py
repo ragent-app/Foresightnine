@@ -1,11 +1,26 @@
 from datetime import datetime, timezone
-from app.research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, suggest_percentage_evidence
+from app.research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, suggest_percentage_evidence
 from app.research_sources import ResearchSource, SourcePermissions
 
 
 def fact(fact_id, source_id, value, *, label="Revenue", period="FY2023", unit="USD million", currency="USD"):
     return {"fact_id": fact_id, "source_id": source_id, "value": value,
             "label": label, "period": period, "unit": unit, "currency": currency}
+
+
+def test_rate_level_percentage_points_are_review_candidates_not_verdicts():
+    for text in ("联邦基金利率目标区间维持在4-1/4至4-1/2个百分点。",
+                 "利率区间为4.25至4.50个百分点。",
+                 "The target range is 4.25 to 4.5 percentage points."):
+        original = {"text": text}
+        result = flag_rate_level_point_warnings([original])[0]
+        assert result["rate_unit_warnings"][0]["status"] == "requires_review"
+        assert "rate_unit_warnings" not in original
+    for text in ("利率区间为4.25%至4.50%。", "目标区间下调了0.25至0.50个百分点。",
+                 "The target range was lowered by 0.25 to 0.50 percentage points.",
+                 "利率下调0.25个百分点。"):
+        result = flag_rate_level_point_warnings([{"text": text, "rate_unit_warnings": [{"fake": True}]}])[0]
+        assert "rate_unit_warnings" not in result
 
 
 def test_explicit_publication_dates_are_compared_only_with_one_declared_source():

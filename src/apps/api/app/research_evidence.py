@@ -21,6 +21,31 @@ _ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "亿": Decimal("100"), "千
                        "千": Decimal("0.001"), "": Decimal("0.000001")}
 _ZH_PUBLICATION = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*年\s*(1[0-2]|0?[1-9])\s*月(?:\s*(3[01]|[12]\d|0?[1-9])\s*日)?\s*(?:发布|公布|发表|刊登)")
 _EN_PUBLICATION = re.compile(r"\b(?:published|released|issued)\s+(?:on|in)\s+((?:19|20)\d{2})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?(?![-\d])", re.IGNORECASE)
+_RATE_NUMBER = r"\d+(?:-\d+/\d+|\.\d+)?"
+_RATE_LEVEL_POINTS = re.compile(
+    rf"(?:利率目标区间|目标利率区间|联邦基金利率目标区间|利率区间|目标区间|"
+    rf"(?:interest\s+rate|federal\s+funds\s+rate|target)\s+(?:target\s+)?range)"
+    rf"(?P<between>[^。！？.!?;；\n]{{0,48}}?)(?P<range>{_RATE_NUMBER}\s*(?:至|到|to|–|—)\s*{_RATE_NUMBER})\s*(?:个百分点|percentage\s+points?)",
+    re.IGNORECASE)
+_RATE_CHANGE = re.compile(r"上调|下调|上升|下降|扩大|缩小|增加|减少|升高|降低|调整|"
+                          r"\b(?:adjust|increase|decrease|narrow|widen|change|cut|rise|raise|lower)\w*\b", re.IGNORECASE)
+
+
+def flag_rate_level_point_warnings(claims: list[dict]) -> list[dict]:
+    """Flag a narrow possible level-versus-change unit confusion, not a verdict."""
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("rate_unit_warnings", None)
+        text = entry.get("text")
+        if isinstance(text, str) and len(text) <= 3000:
+            warnings = [{"claimed_text": match.group(0), "status": "requires_review"}
+                        for match in _RATE_LEVEL_POINTS.finditer(text)
+                        if not _RATE_CHANGE.search(match.group("between"))][:5]
+            if warnings:
+                entry["rate_unit_warnings"] = warnings
+        output.append(entry)
+    return output
 
 
 def flag_publication_date_mismatches(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:

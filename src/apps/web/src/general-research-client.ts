@@ -13,6 +13,7 @@ export interface ResearchClaim {
   citations?: { source_id: string; quotation?: string; quotation_match?: string; support_status?: string; location?: SourceLocation }[];
   suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];
   uncited_percentages?: string[];
+  rate_unit_warnings?: { claimed_text: string; status: string }[];
   publication_date_warnings?: { claimed_text: string; source_id: string; declared_published_at: string; status: string }[];
 }
 export interface ResearchFact { fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }

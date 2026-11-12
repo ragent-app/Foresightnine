@@ -958,3 +958,43 @@ def test_publication_date_candidate_persists_and_is_recomputed_after_edit(monkey
     versions = saved.json()["versions"]
     assert not versions[-1]["content"]["claims"][0].get("publication_date_warnings")
     assert versions[-2]["content"]["claims"][0]["publication_date_warnings"]
+
+
+def test_rate_unit_candidate_makes_run_partial_and_recomputes_on_edit(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    class Provider:
+        name = "rate-unit-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            citation = {"source_id": source_id, "quotation": "target range at 4-1/4 to 4-1/2 percent"}
+            return {"claims": [{"text": "目标区间维持在4-1/4至4-1/2个百分点。", "citations": [citation]}],
+                    "counterarguments": [{"text": "未来政策存在不确定性。", "citations": [citation]}]}, 30
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post("/v1/auth/local/register", json={"email": "rate-unit@example.test", "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Statement", "text": "target range at 4-1/4 to 4-1/2 percent",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Rate?", "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "rate-unit-run"},
+                          json={"parent_version_id": topic["versions"][0]["version_id"]})
+    assert receipt.status_code == 202
+    op = receipt.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    current = client.get(path, headers=headers).json()["versions"][-1]
+    assert current["content"]["run"]["status"] == "partial"
+    assert current["content"]["claims"][0]["rate_unit_warnings"]
+    changed = deepcopy(current["content"])
+    changed["claims"][0]["text"] = "目标区间维持在4.25%至4.50%。"
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
+    assert saved.status_code == 201, saved.text
+    versions = saved.json()["versions"]
+    assert not versions[-1]["content"]["claims"][0].get("rate_unit_warnings")
+    assert versions[-2]["content"]["claims"][0]["rate_unit_warnings"]
