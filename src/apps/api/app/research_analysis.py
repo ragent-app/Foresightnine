@@ -675,8 +675,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             continue
         try:
             checked_calculations.append(calculate(CalculationRequest(formula=plan.formula, first=first, second=second)))
-        except CalculationError:
-            limitations.append("A requested calculation was omitted because its inputs were not comparable.")
+        except CalculationError as error:
+            limitations.append(f"A requested calculation was omitted: {error}")
 
     def check_claims(items: list[Claim]) -> list[dict[str, Any]]:
         checked = []

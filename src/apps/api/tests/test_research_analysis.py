@@ -216,6 +216,19 @@ def test_duplicate_model_fact_ids_cannot_feed_a_calculation():
     assert any("ambiguous identifier" in item for item in result.limitations)
 
 
+def test_reversed_growth_periods_omit_calculation_but_retain_source_facts():
+    report = source("s", text="Revenue in 2023 was 80. Revenue in 2024 was 100.")
+    def item(fact_id, value, period, quote):
+        return {"fact_id": fact_id, "label": "Revenue", "value": value, "unit": "USD",
+                "currency": "USD", "period": period, "citation": {"source_id": "s", "quotation": quote}}
+    output = {"facts": [item("old", "80", "2023", "Revenue in 2023 was 80"),
+                        item("new", "100", "2024", "Revenue in 2024 was 100")],
+              "calculations": [{"formula": "growth_percent", "first_fact_id": "old", "second_fact_id": "new"}]}
+    result = analyze("Revenue growth?", [report], None, lambda _: (output, 10))
+    assert len(result.facts) == 2 and not result.calculations
+    assert any("current period must be later" in text for text in result.limitations)
+
+
 def test_pdf_line_wrap_matches_only_whitespace_and_preserves_original():
     report = source("s", text="GDP increased 3.3 percent in the fourth quarter of\n2023.")
     def generate(quotation):

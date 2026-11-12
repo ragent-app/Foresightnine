@@ -18,6 +18,7 @@ def test_growth_and_margin_keep_reproducible_inputs_and_formula():
     assert growth["expression"] == "(first / second - 1) * 100"
     assert [item["fact_id"] for item in growth["inputs"]] == ["current", "prior"]
     assert growth["input_verification"] == "not_verified_by_calculator"
+    assert growth["period_order_check"] == "recognized_formats_only"
     margin = calculate(CalculationRequest(formula="margin_percent",
         first=fact("income", "88523", "FY2023"), second=fact("revenue", "211915", "FY2023")))
     assert margin["value"] == "41.77"
@@ -98,6 +99,25 @@ def test_nonfinite_values_rejected():
     with pytest.raises(ValidationError):
         CalculationRequest(formula="difference", first=fact("a", Decimal("NaN"), "2023"),
                            second=fact("b", "2", "2022"))
+
+
+@pytest.mark.parametrize("current,baseline", [
+    ("2023", "2024"), ("FY2023", "fy2024"), ("2023-Q4", "2024-Q1"),
+    ("2024-01", "2024-02"), ("2024-12-30", "2024-12-31"), ("FY2024", "fy2024"),
+])
+def test_growth_rejects_reversed_or_equivalent_recognized_periods(current, baseline):
+    with pytest.raises(CalculationError, match="later than its baseline"):
+        calculate(CalculationRequest(formula="growth_percent", first=fact("a", "100", current),
+                                     second=fact("b", "80", baseline)))
+
+
+def test_growth_does_not_guess_order_across_fiscal_and_calendar_or_free_text():
+    for current, baseline in [("FY2023", "2024"), ("earlier estimate", "later estimate"),
+                              ("2024-02-31", "2024-03-01")]:
+        result = calculate(CalculationRequest(formula="growth_percent", first=fact("a", "100", current),
+                                              second=fact("b", "80", baseline)))
+        assert result["value"] == "25.00" and result["input_verification"] == "not_verified_by_calculator"
+        assert result["period_order_check"] == "not_checked"
 
 
 def test_retained_calculation_detects_changed_missing_and_ambiguous_facts():

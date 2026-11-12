@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
+from datetime import date
 import re
 from typing import Literal
 
@@ -40,6 +41,24 @@ class RecalculateRequest(BaseModel):
 
 class CalculationError(ValueError):
     """The available inputs do not support the requested calculation."""
+
+
+def _comparable_period(period: str) -> tuple[str, tuple[int, ...]] | None:
+    """Parse only unambiguous matching period formats, without guessing fiscal calendars."""
+    value = period.strip()
+    if match := re.fullmatch(r"(FY)?((?:19|20)\d{2})", value, re.IGNORECASE):
+        return ("fiscal_year" if match.group(1) else "calendar_year", (int(match.group(2)),))
+    if match := re.fullmatch(r"((?:19|20)\d{2})[- ]?Q([1-4])", value, re.IGNORECASE):
+        return ("calendar_quarter", (int(match.group(1)), int(match.group(2))))
+    if match := re.fullmatch(r"((?:19|20)\d{2})-(0[1-9]|1[0-2])", value):
+        return ("calendar_month", (int(match.group(1)), int(match.group(2))))
+    if re.fullmatch(r"(?:19|20)\d{2}-\d{2}-\d{2}", value):
+        try:
+            day = date.fromisoformat(value)
+        except ValueError:
+            return None
+        return ("date", (day.year, day.month, day.day))
+    return None
 
 
 _TEXT_NUMBER = re.compile(r"(?<![A-Za-z0-9_.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
@@ -98,6 +117,7 @@ def calculate(request: CalculationRequest) -> dict:
     The second input is the baseline for growth and denominator for margin.
     """
     a, b = request.first, request.second
+    period_order_check = "not_checked"
     if a.fact_id == b.fact_id:
         raise CalculationError("Inputs must identify distinct facts.")
     if a.unit != b.unit or a.currency != b.currency:
@@ -106,6 +126,12 @@ def calculate(request: CalculationRequest) -> dict:
         raise CalculationError("Margin inputs must have the same period.")
     if request.formula == "growth_percent" and a.period == b.period:
         raise CalculationError("Growth inputs must refer to different periods.")
+    if request.formula == "growth_percent":
+        current, baseline = _comparable_period(a.period), _comparable_period(b.period)
+        if current is not None and baseline is not None and current[0] == baseline[0]:
+            if current[1] <= baseline[1]:
+                raise CalculationError("Growth current period must be later than its baseline.")
+            period_order_check = "recognized_formats_only"
     if request.formula == "growth_percent" and b.value <= 0:
         raise CalculationError("Growth requires a positive baseline.")
     if request.formula == "margin_percent" and b.value <= 0:
@@ -137,6 +163,7 @@ def calculate(request: CalculationRequest) -> dict:
         raise CalculationError("Calculation exceeds supported precision.") from error
     return {"formula_id": request.formula, "formula_version": formula_version, "expression": expression,
             "input_verification": "not_verified_by_calculator",
+            **({"period_order_check": period_order_check} if request.formula == "growth_percent" else {}),
             "inputs": [a.model_dump(mode="json"), b.model_dump(mode="json")],
             "value": str(rounded), "unit": unit,
             "currency": None if unit in {"percent", "percentage points"} else a.currency,
