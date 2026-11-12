@@ -286,9 +286,26 @@ def test_new_user_citations_respect_historical_cutoff(monkeypatch):
     future = create("future", published_at="2023-03-01T00:00:00Z")
     revised = create("revised", published_at="2023-01-01T00:00:00Z", revised_at="2023-03-01T00:00:00Z")
     unknown = create("unknown")
+    microfuture = create("microfuture", published_at="2023-02-01T00:00:00.000001Z")
+    simulated = create("simulated", published_at="2023-01-01T00:00:00Z", is_simulated=True)
+    hidden = client.post("/v2/research/sources", headers=headers, json={"title": "hidden", "text": "hidden quote",
+        "published_at": "2023-01-01T00:00:00Z", "permissions": {"store": True, "display": False}}).json()["source_id"]
+    unattached = create("unattached", published_at="2023-01-01T00:00:00Z")
     topic = client.post("/v2/research/topics", headers=headers, json={"question": "Before February?",
-        "source_ids": [before, future, revised, unknown], "as_of": "2023-02-01T00:00:00Z"}).json()
+        "source_ids": [before, future, revised, unknown, microfuture, simulated, hidden], "as_of": "2023-02-01T00:00:00Z"}).json()
     path = "/v2/research/topics/" + topic["topic_id"] + "/versions"
+    source_path = path + "/" + topic["versions"][0]["version_id"] + "/sources/"
+    visible = client.get(source_path + before + "/text", headers=headers)
+    assert visible.status_code == 200 and visible.json()["text"] == "before quote"
+    assert visible.headers["cache-control"] == "no-store"
+    for source_id in (future, revised, unknown, microfuture, simulated, hidden):
+        denied = client.get(source_path + source_id + "/text", headers=headers)
+        assert denied.status_code == 403 and "quote" not in denied.text
+    assert client.get(source_path + unattached + "/text", headers=headers).status_code == 404
+    assert client.get(source_path + before + "/text").status_code == 401
+    other = client.post("/v1/auth/local/register", json={"email": "citation-cutoff-other@example.test",
+        "password": "correct horse battery staple!"}).json()
+    assert client.get(source_path + before + "/text", headers={"Authorization": "Bearer " + other["access_token"]}).status_code == 404
     def save(source_id, quote):
         return client.post(path, headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"],
             "content": {"claims": [{"text": "Finding", "citations": [{"source_id": source_id, "quotation": quote}]}]}})

@@ -1514,6 +1514,32 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
     return result
 
 
+@app.get("/v2/research/topics/{topic_id}/versions/{version_id}/sources/{source_id}/text", include_in_schema=False)
+def get_research_version_source_text(topic_id: str, version_id: str, source_id: str,
+                                     authorization: str | None = Header(default=None)) -> dict:
+    """Read attached source text only when display and research cutoff permit it."""
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    version = next((item for item in topic.versions if item.version_id == version_id), None)
+    if version is None:
+        raise ApiProblem(404, "not_found", "Research version not found.")
+    if source_id not in version.source_ids:
+        raise ApiProblem(404, "not_found", "Research source not found.")
+    try:
+        source = research_sources.get(account.account_id, source_id)
+    except SourceNotFound as error:
+        raise ApiProblem(404, "not_found", "Research source not found.") from error
+    cutoff = topic.request.as_of
+    if (not source.permissions.display or source.is_simulated or
+            cutoff is not None and (source.published_at is None or source.published_at > cutoff or
+                                    source.revised_at is not None and source.revised_at > cutoff)):
+        raise ApiProblem(403, "invalid_request", "Source text is not available for this research version.")
+    return {"source_id": source.source_id, "text": source.text, "content_sha256": source.content_sha256}
+
+
 @app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export", response_model=ResearchFullExport, include_in_schema=False)
 def export_research_version(topic_id: str, version_id: str, authorization: str | None = Header(default=None)) -> ResearchFullExport:
     account = _authenticated_account(authorization)

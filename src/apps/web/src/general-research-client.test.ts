@@ -25,6 +25,16 @@ describe("research operation polling", () => {
 });
 
 describe("research source timestamps", () => {
+  it("loads source text through its research-version scope", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{"source_id":"s","text":"data"}', { status: 200 }));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await researchClient("https://api.example.com").sourceText("topic", "version", "s");
+    expect(result.text).toBe("data");
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe("https://api.example.com/v2/research/topics/topic/versions/version/sources/s/text");
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
+  });
+
   it("sends distinct event, publication and revision times for text, official pages and PDFs", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{"source_id":"s"}', { status: 201 }));
