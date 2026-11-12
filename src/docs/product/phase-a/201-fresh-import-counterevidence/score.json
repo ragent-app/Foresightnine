@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "research_status": "partial",
+  "mechanical_checks": {
+    "gdp": false,
+    "goods": false,
+    "opposing_services": false,
+    "all_claims_located_and_complete": false
+  },
+  "mechanical_pass": false,
+  "model_calls": 1,
+  "reported_tokens": 1978,
+  "review_status": "not_reviewable",
+  "review_omissions": [],
+  "candidate_count": 0,
+  "semantic_support": "not independently established"
+}

@@ -1,0 +1,71 @@
+{
+  "manifest_sha256": "91849e717cf32e53c276c9bfd1499b09454a2ce97fbfcd9cf9b1a85202e2adb9",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The claim that both goods and services imports decreased in Q3 2025 is not supported: BEA reports goods imports decreased but services imports increased.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Within imports, a decrease in goods (led by nondurable consumer goods) was partly offset by an increase in services (led by other business services)."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One could argue the claim is partly correct, since total imports decreased overall — BEA states 'Imports, which are a subtraction in the calculation of GDP, decreased.' But the component detail contradicts the claim that both goods and services fell.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Imports, which are a subtraction in the calculation of GDP, decreased."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source text does not provide specific numeric values for the magnitude of the goods imports decrease or services imports increase.",
+      "Excerpts are partial; the full BEA release, including detailed import tables, is not supplied.",
+      "The declared publication date (2025-12-23) is not independently verified.",
+      "This is an initial estimate; figures are subject to revision."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact-gdp-q3-2025",
+        "label": "Real GDP growth, Q3 2025 (annual rate)",
+        "value": 4.3,
+        "unit": "percent",
+        "currency": null,
+        "period": "2025 Q3",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 4.3 percent in the third quarter of 2025 (July, August, and September), according to the initial estimate released by the U.S. Bureau of Economic Analysis."
+        }
+      },
+      {
+        "fact_id": "fact-gdp-q2-2025",
+        "label": "Real GDP growth, Q2 2025 (annual rate)",
+        "value": 3.8,
+        "unit": "percent",
+        "currency": null,
+        "period": "2025 Q2",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "In the second quarter, real GDP increased 3.8 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact-gdp-q3-2025",
+        "second_fact_id": "fact-gdp-q2-2025"
+      }
+    ],
+    "explanation": "GDP growth alone cannot establish the import claim: the 4.3 percent figure is a net aggregate. It shows the combined effect of consumer spending, exports, government spending, investment, and imports, but does not decompose imports into goods versus services. In fact, the claim is false on component detail: goods imports decreased while services imports increased, per the BEA passage. A supporting counterpoint is that total imports decreased overall, but the aggregate decline masks opposing movements in the two components. Additionally, because imports are subtracted in GDP calculations, a decrease in imports can mechanically raise measured GDP growth without necessarily reflecting stronger domestic production; GDP growth alone cannot establish the direction of any individual component, including imports."
+  },
+  "reported_tokens": 1978,
+  "prompt_sha256": "283f98fe124fc85de1107648a45cfb4a74c5408584f517f80d26bfa04992dac8",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}
