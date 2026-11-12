@@ -204,3 +204,9 @@ def test_review_keeps_relative_clause_antecedent_with_verbatim_quote():
     excerpt = json.loads(batch.prompt)['claims'][0]['excerpts'][0]
     assert 'Imports,' in excerpt['preceding_context'] and excerpt['quotation'] == quotation
     assert report.text[batch.segments[0]['required_context_start']:start].strip() == 'Imports,'
+
+
+def test_review_rechecks_usd_amount_without_fact_or_trusting_saved_warning():
+    item = {**claim(), "text": "Revenue was 100万美元", "uncited_claim_amounts": []}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omitted == [0]

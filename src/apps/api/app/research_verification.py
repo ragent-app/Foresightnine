@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource
-from .research_evidence import flag_citation_subject_context, flag_uncited_basis_points
+from .research_evidence import flag_citation_subject_context, flag_uncited_basis_points, flag_uncited_usd_amounts
 
 
 REVIEW_SYSTEM_PROMPT = (
@@ -60,7 +60,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     source_map = {item.source_id: item for item in sources if item.permissions.model_input and item.permissions.display and not item.is_simulated}
     # Recompute cues from authorized original sources; never trust a caller's
     # preexisting warning or a synthetic source to supply review context.
-    review_claims = flag_uncited_basis_points(flag_citation_subject_context(claims, list(source_map.values())))
+    review_claims = flag_uncited_usd_amounts(flag_uncited_basis_points(flag_citation_subject_context(claims, list(source_map.values()))), list(source_map.values()))
     payload: dict[str, Any] = {"claims": [], "output_schema": {"reviews": [
         {"claim_index": 0, "verdict": "supports|does_not_support|contradicts|uncertain"}]}}
     indexes: list[int] = []
@@ -72,7 +72,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     for index, claim in enumerate(review_claims):
         citations = claim.get("citations")
         text = claim.get("text")
-        if (claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or
+        if (claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or
                 claim.get("numeric_discrepancy_for_review") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)

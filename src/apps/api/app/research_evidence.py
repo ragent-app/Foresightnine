@@ -239,6 +239,62 @@ def flag_rate_level_point_warnings(claims: list[dict]) -> list[dict]:
     return output
 
 
+_EN_EXPLICIT_USD = re.compile(r"(?<![A-Za-z0-9_])(?:USD|US\$)\s*([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(trillion|billion|million|thousand)?\b|(?<![A-Za-z0-9_])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(trillion|billion|million|thousand)?\s*(?:USD|U\.S\. dollars?)\b", re.IGNORECASE)
+_USD_SCALE = {"": Decimal("0.000001"), "thousand": Decimal("0.001"), "million": Decimal("1"), "billion": Decimal("1000"), "trillion": Decimal("1000000")}
+
+
+def _explicit_usd_amounts(text: str) -> list[tuple[str, Decimal]]:
+    amounts = []
+    for match in _ZH_USD_AMOUNT.finditer(text):
+        raw = match.group(1).replace(",", "").replace("−", "-")
+        if len(raw) <= 40:
+            with localcontext() as context:
+                context.prec = 100
+                amounts.append((match.group(0), Decimal(raw) * _ZH_USD_TO_MILLIONS[match.group(2) or ""]))
+    for match in _EN_EXPLICIT_USD.finditer(text):
+        raw = (match.group(1) or match.group(3)).replace(",", "").replace("−", "-")
+        if len(raw) <= 40:
+            with localcontext() as context:
+                context.prec = 100
+                amounts.append((match.group(0), Decimal(raw) * _USD_SCALE[(match.group(2) or match.group(4) or "").lower()]))
+    return amounts
+
+
+def flag_uncited_usd_amounts(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag explicit USD amounts absent from located quotations, not semantic support."""
+    source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("uncited_claim_amounts", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if not isinstance(text, str) or len(text) > 3000 or not isinstance(citations, list):
+            output.append(entry)
+            continue
+        quoted = set()
+        for citation in citations:
+            if not isinstance(citation, dict) or citation.get("partial_token"):
+                continue
+            source = source_map.get(citation.get("source_id")) if isinstance(citation.get("source_id"), str) else None
+            quote, location = citation.get("quotation"), citation.get("location")
+            if source is None or not isinstance(quote, str) or not isinstance(location, dict) or location.get("status") == "ambiguous":
+                continue
+            start, end = location.get("character_start"), location.get("character_end")
+            if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text)
+                    and source.text[start:end] == quote and not partial_ascii_token(source.text, start, end)):
+                quoted.update(value for _, value in _explicit_usd_amounts(quote))
+        missing = []
+        for raw, value in _explicit_usd_amounts(text):
+            if value not in quoted and raw not in missing:
+                missing.append(raw)
+                if len(missing) == 5:
+                    break
+        if missing:
+            entry["uncited_claim_amounts"] = missing
+        output.append(entry)
+    return output
+
+
 def flag_uncited_basis_points(claims: list[dict]) -> list[dict]:
     """Flag basis-point figures missing from quotations, not semantic support."""
     output = []

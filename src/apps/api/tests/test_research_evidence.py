@@ -420,3 +420,33 @@ def test_table_header_warning_handles_separate_date_and_unit_rows_and_row_fragme
     moved = separated.text.index(row['quotation'])
     changed = {**claim, 'citations': [{**row, 'location': {'character_start': moved, 'character_end': moved + len(row['quotation'])}}]}
     assert not flag_citation_subject_context([changed], [separated])[0].get('citation_context_warnings')
+
+
+def test_uncited_usd_amounts_are_checked_without_extracted_facts():
+    from app.research_evidence import flag_uncited_usd_amounts
+    text = "Purchases continue. USD 80 billion and 40 billion U.S. dollars."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Statement", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    quote = "Purchases continue."
+    citation = {"source_id": "s", "quotation": quote, "location": {"character_start": 0, "character_end": len(quote)}}
+    claim = {"text": "每月购买800亿美元及400亿美元。", "citations": [citation]}
+    result = flag_uncited_usd_amounts([claim], [source])[0]
+    assert result["uncited_claim_amounts"] == ["800亿美元", "400亿美元"]
+    assert "uncited_claim_amounts" not in claim
+    quote = "USD 80 billion and 40 billion U.S. dollars"
+    start = text.index(quote)
+    located = {"source_id": "s", "quotation": quote, "location": {"character_start": start, "character_end": start + len(quote)}}
+    assert not flag_uncited_usd_amounts([{**result, "citations": [located]}], [source])[0].get("uncited_claim_amounts")
+    for changed in ({**located, "partial_token": True}, {**located, "location": {**located["location"], "status": "ambiguous"}}, {**located, "quotation": "USD 80 billion"}):
+        assert len(flag_uncited_usd_amounts([{**claim, "citations": [changed]}], [source])[0]["uncited_claim_amounts"]) == 2
+    assert len(flag_uncited_usd_amounts([{**claim, "citations": [located]}], [source.model_copy(update={"permissions": SourcePermissions(store=True)})])[0]["uncited_claim_amounts"]) == 2
+
+
+def test_usd_amount_comparison_is_exact_and_dollar_sign_alone_is_ambiguous():
+    from app.research_evidence import flag_uncited_usd_amounts
+    text = "$80 billion; USD 80.01 billion."
+    source = ResearchSource(source_id="s", owner_id="owner", title="Report", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="test", permissions=SourcePermissions(store=True, display=True))
+    citation = {"source_id": "s", "quotation": text, "location": {"character_start": 0, "character_end": len(text)}}
+    result = flag_uncited_usd_amounts([{"text": "800亿美元。", "citations": [citation]}], [source])[0]
+    assert result["uncited_claim_amounts"] == ["800亿美元"]

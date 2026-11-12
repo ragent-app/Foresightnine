@@ -99,7 +99,7 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_percent, _quoted_numbers
-from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
+from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_usd_amounts, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_support_review, prepare_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
@@ -1814,6 +1814,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         citation_sources[source_id] = research_sources.get(account.account_id, source_id)
                     except SourceNotFound:
                         pass
+        content.claims = flag_uncited_usd_amounts(content.claims, list(citation_sources.values()))
         content.claims = suggest_usd_amount_evidence(content.claims, content.facts, list(citation_sources.values()))
         content.claims = suggest_uncited_numeric_facts(content.claims, content.facts, list(citation_sources.values()))
         content.claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(content.claims, list(citation_sources.values())))
@@ -2285,6 +2286,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         claims = suggest_percentage_evidence(claims, analysis.facts)
         claims = flag_uncited_basis_points(claims)
         claims = suggest_percentage_calculations(claims, analysis.calculations, analysis.facts)
+        claims = flag_uncited_usd_amounts(claims, sources)
         claims = suggest_usd_amount_evidence(claims, analysis.facts, sources)
         claims = suggest_uncited_numeric_facts(claims, analysis.facts, sources)
         claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
@@ -2414,7 +2416,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
-                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_percentages") or c.get("uncited_basis_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
+                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_claim_amounts") or c.get("uncited_percentages") or c.get("uncited_basis_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if not analysis.counterarguments:
@@ -2437,6 +2439,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("An interest rate level may be expressed as percentage points; review the unit and context.")
         if any(c.get("uncited_amounts") for c in claims):
             limitations.append("A matched amount fact passage is not fully covered by attached quotations; check evidence and context.")
+        if any(c.get("uncited_claim_amounts") for c in claims):
+            limitations.append("An explicit USD amount could not be confirmed from the attached quotations; check currency, units, source and any calculation.")
         if any(c.get("uncited_fact_values") for c in claims):
             limitations.append("A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.")
         if any(c.get("uncited_percentages") for c in claims):
