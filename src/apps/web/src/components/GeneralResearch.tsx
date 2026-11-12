@@ -23,6 +23,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "A matched amount fact passage is not fully covered by attached quotations; check evidence and context.": "所附引文未完整覆盖匹配的金额事实片段，请核对证据和上下文。",
     "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.": "已引用的来源中有匹配事实，但所附引文未覆盖其原文；请核对候选资料及其含义。",
     "A quotation may omit a relevant subject or table header; review the source context and claim.": "引文可能遗漏相关指标或表头，请核对原文上下文及结论。",
+    "A quotation may omit relevant context; review the source and claim.": "引文可能遗漏相关上下文，请核对原文及结论。",
     "A table fact's currency identifier is absent from its quotation; verify the source and currency before relying on the calculation.": "表格事实的引文未标明币种；使用计算结果前请核对原文及币种。",
     "No counterarguments were provided; this does not establish that none exist.": "未提供反方材料；这不代表不存在反方意见。",
     "A claimed publication date may differ from the source's declared date; review both.": "结论中的发布日期可能与来源声明的日期不一致，请核对两者。",

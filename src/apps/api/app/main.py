@@ -2317,7 +2317,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if any(c.get("uncited_percentages") for c in claims):
             limitations.append("A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.")
         if any(c.get("citation_context_warnings") for c in claims):
-            limitations.append("A quotation may omit a relevant subject or table header; review the source context and claim.")
+            limitations.append("A quotation may omit relevant context; review the source and claim.")
         if len(differences) == 50:
             limitations.append("At most 50 candidate differences are shown.")
         if monotonic() > deadline:
