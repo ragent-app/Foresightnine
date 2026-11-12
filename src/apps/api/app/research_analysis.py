@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v45"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v46"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -57,6 +57,7 @@ class Citation(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     source_id: str = Field(min_length=1, max_length=100)
     quotation: str = Field(min_length=1, max_length=1000)
+    source_page: int | None = Field(default=None, ge=1, le=100000, strict=True)
 
 
 class Claim(BaseModel):
@@ -1882,6 +1883,39 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         return AnalysisResult([], [], limitations + ["No source could fit the model input budget."], [], None)
     if should_stop is not None and should_stop():
         raise AnalysisInterrupted()
+    # Select exactly the baseline excerpts first. Optional PDF page labels may
+    # consume only unused prompt bytes and can never evict selected evidence.
+    # Form feeds in the supplied text denote page boundaries. Labels are
+    # hints for the model, not a verification of any interpretation.
+    shown_pages: dict[str, set[int]] = {}
+    guidance = " PDF p=[first,last] pages; form feed breaks pages; cite integer source_page."
+    baseline_guidance = data["evidence_guidance"]
+    baseline_sources = [dict(item) for item in data["sources"]]
+    excerpt_map = [(source, start, passage) for source in processed for start, passage in model_text[source.source_id]]
+    # Later entries repeat metadata for the same source. Removing only those
+    # repetitions after selection can make space for page labels without
+    # removing the source's title, coverage, or any excerpt text.
+    seen_sources: set[str] = set()
+    for index, (source, _, _) in enumerate(excerpt_map):
+        if source.retrieval_method == "user_pdf" and source.source_id in seen_sources:
+            data["sources"][index].pop("title", None)
+            data["sources"][index].pop("source_coverage", None)
+        seen_sources.add(source.source_id)
+    for index, (source, start, passage) in enumerate(excerpt_map):
+        if source.retrieval_method != "user_pdf" or passage.count("\f") > 20:
+            continue
+        first_page = source.text.count("\f", 0, start) + 1
+        last_page = first_page + passage.count("\f")
+        data["sources"][index]["p"] = [first_page, last_page]
+        data["evidence_guidance"] = baseline_guidance + guidance
+        if len(serialize().encode("utf-8")) <= max_prompt_chars:
+            shown_pages.setdefault(source.source_id, set()).update(range(first_page, last_page + 1))
+        else:
+            del data["sources"][index]["p"]
+            if not shown_pages:
+                data["evidence_guidance"] = baseline_guidance
+    if not shown_pages:
+        data["sources"] = baseline_sources
     prompt = serialize()
     segments = [{"source_id": s.source_id, "character_start": start, "character_end": start + len(passage),
                  **({"model_source_id": prompt_refs[s.source_id]} if prompt_refs[s.source_id] != s.source_id else {})}
@@ -2003,7 +2037,27 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     source_map.update({prompt_refs[source.source_id]: source for source in processed})
     ambiguous: set[tuple[str, str]] = set()
 
-    def quotation_location(source: ResearchSource, quotation: str) -> tuple[dict[str, Any], str, str]:
+    def quotation_location(source: ResearchSource, quotation: str, source_page: int | None = None) -> tuple[dict[str, Any], str, str]:
+        passages = model_text[source.source_id]
+        if source_page is not None:
+            if source.retrieval_method != "user_pdf" or source_page not in shown_pages.get(source.source_id, set()):
+                raise InvalidAnalysis("Model cited an unavailable source page.")
+            page_start = 0
+            for _ in range(source_page - 1):
+                position = source.text.find("\f", page_start)
+                if position < 0:
+                    raise InvalidAnalysis("Model cited an unavailable source page.")
+                page_start = position + 1
+            page_end = source.text.find("\f", page_start)
+            if page_end < 0:
+                page_end = len(source.text)
+            passages = [(max(start, page_start), source.text[max(start, page_start):min(start + len(text), page_end)])
+                        for start, text in passages if max(start, page_start) < min(start + len(text), page_end)]
+            if not passages:
+                raise InvalidAnalysis("Model cited a source page outside analyzed passages.")
+            note = "The model selected the cited PDF page; page selection and semantic support are not independently verified."
+            if note not in limitations:
+                limitations.append(note)
         positions: list[dict[str, Any]] = []
         originals: list[str] = []
         scan_truncated = False
@@ -2020,7 +2074,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             originals.append(passage[left:right])
 
         pattern = pattern_for(quotation)
-        for offset, passage in model_text[source.source_id]:
+        for offset, passage in passages:
             for match in pattern.finditer(passage):
                 if match.end(1) - match.start(1) <= 1000:
                     record(offset, passage, match.start(1), match.end(1))
@@ -2039,7 +2093,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             # preserve the original and the usual ambiguity checks.
             rest = r"\s+".join(re.escape(part) for part in re.split(r"\s+", quotation[1:]))
             initial_pattern = re.compile("(?=((?i:" + re.escape(quotation[0]) + ")" + rest + "))")
-            for offset, passage in model_text[source.source_id]:
+            for offset, passage in passages:
                 for match in initial_pattern.finditer(passage):
                     if match.end(1) - match.start(1) <= 1000:
                         record(offset, passage, match.start(1), match.end(1))
@@ -2053,7 +2107,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 if note not in limitations:
                     limitations.append(note)
         if not positions:
-            for start, end in _table_markup_rows(source.text, model_text[source.source_id], quotation, should_stop):
+            for start, end in _table_markup_rows(source.text, passages, quotation, should_stop):
                 record(0, source.text, start, end)
             table_markup_expanded = bool(positions)
             if table_markup_expanded:
@@ -2076,7 +2130,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         and source.text.find(prefix, start + 1) < 0
                         and any(offset <= start and end <= offset + len(passage) and
                                 re.match(r'\s*,\s*"(?:[^"\\]|\\.)+"\s*:', passage[end - offset:])
-                                for offset, passage in model_text[source.source_id])):
+                                for offset, passage in passages)):
                     record(0, source.text, start, end)
                     trimmed_json_closure = True
                     note = "A model-added JSON closing brace was removed from a quotation; check the original context."
@@ -2093,7 +2147,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if 2 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments):
                 patterns = [pattern_for(part.strip()) for part in fragments]
                 first_count = 0
-                for offset, passage in model_text[source.source_id]:
+                for offset, passage in passages:
                     def extend(index: int, left: int, right: int) -> None:
                         if len(positions) >= 6:
                             return
@@ -2123,7 +2177,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if 1 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments):
                 patterns = [pattern_for(part.strip()) for part in fragments]
                 first_count = 0
-                for offset, passage in model_text[source.source_id]:
+                for offset, passage in passages:
                     if should_stop is not None and should_stop():
                         raise AnalysisInterrupted()
                     breaks = list(re.finditer(r"(?<=[A-Za-z])-\r?\n(?=[A-Za-z])", passage))
@@ -2193,7 +2247,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append("A model-generated fact had an invalid source or ambiguous identifier and was omitted.")
             continue
         try:
-            location, quotation, matching = quotation_location(source, item.citation.quotation)
+            location, quotation, matching = quotation_location(source, item.citation.quotation, item.citation.source_page)
         except InvalidAnalysis:
             # Keep a table row as a review candidate when a model joined a
             # uniquely located heading and row with an explicit ellipsis.
@@ -2203,7 +2257,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if 2 <= len(fragments) <= 3 and all(len(fragment.strip()) >= 4 for fragment in fragments):
                 for fragment in fragments:
                     try:
-                        loc, original, kind = quotation_location(source, fragment.strip())
+                        loc, original, kind = quotation_location(source, fragment.strip(), item.citation.source_page)
                     except InvalidAnalysis:
                         recovered = []
                         break
@@ -2335,7 +2389,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     omitted = True
                     continue
                 try:
-                    location, quotation, matching = quotation_location(source, citation.quotation)
+                    location, quotation, matching = quotation_location(source, citation.quotation, citation.source_page)
                 except InvalidAnalysis:
                     # Some models join independently quoted passages with
                     # "and". Preserve them only as separate, unique original
@@ -2351,7 +2405,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             len(citations) + len(fragments) + remaining_citations <= 10):
                         for fragment in fragments:
                             try:
-                                loc, original, match_kind = quotation_location(source, fragment.strip())
+                                loc, original, match_kind = quotation_location(source, fragment.strip(), citation.source_page)
                             except InvalidAnalysis:
                                 recovered = []
                                 break
