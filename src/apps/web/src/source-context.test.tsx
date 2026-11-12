@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SourceContext } from './components/SourceContext';
+import { ExtractedTableContext, SourceContext } from './components/SourceContext';
 
 const load = async () => ({title:'Report',before:'',selected:'',after:'',page_start:null,page_end:null});
 describe('ambiguous PDF citation', () => {
@@ -18,5 +18,17 @@ describe('ambiguous PDF citation', () => {
       location:{status:'ambiguous',matches:[{character_start:10,character_end:20}],same_page_candidate_index:7}}));
     expect(html).not.toContain('is near another citation');
     expect(html).toContain('View location 1');
+  });
+});
+
+describe('extracted HTML table context', () => {
+  it('displays selected text and disclosed limits without executing source markup', () => {
+    const html = renderToStaticMarkup(createElement(ExtractedTableContext, {en: false, table: {
+      context_start: 0, context_end: 40, before: '| 年份 | 2024 |\n| ', selected: '<script>', after: ' | 100 |', truncated_before: true,
+    }}));
+    expect(html).toContain('表头和含义尚未核验');
+    expect(html).toContain('此前还有未显示的行');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).not.toContain('<script>');
   });
 });

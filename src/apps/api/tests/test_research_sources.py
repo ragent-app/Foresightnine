@@ -189,6 +189,45 @@ def test_source_context_uses_unicode_offsets_and_enforces_display_ownership(monk
                       params={"start": 0, "end": 6}).status_code == 403
 
 
+def test_html_table_context_preserves_offsets_and_permissions(monkeypatch):
+    import base64
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    client = TestClient(app)
+    def auth(email):
+        response = client.post("/v1/auth/local/register", json={"email": email, "password": "correct horse battery staple!"})
+        return {"Authorization": "Bearer " + response.json()["access_token"]}
+    first, other = auth("table-context-a@example.test"), auth("table-context-b@example.test")
+    html = '<p>In millions</p><table><tr><th>Year ended</th><th>2024</th><th>2023</th></tr><tr><td>Revenue</td><td>100</td><td>90</td></tr></table>'
+    upload = client.post('/v2/research/sources/html', headers=first, json={"title": "Report",
+        "html_base64": base64.b64encode(html.encode()).decode(), "permissions": {"store": True, "display": True}})
+    assert upload.status_code == 201, upload.text
+    item = upload.json()
+    text = client.get('/v2/research/sources/' + item['source_id'], headers=first).json()['text']
+    start = text.index('Revenue')
+    path = '/v2/research/sources/' + item['source_id'] + '/context'
+    response = client.get(path, headers=first, params={"start": start, "end": start + len('Revenue')})
+    assert response.status_code == 200
+    table = response.json()['table_context']
+    assert 'Year ended' in table['before'] and '2024' in table['before']
+    assert table['before'] + table['selected'] + table['after'] == text[table['context_start']:table['context_end']]
+    assert not table['truncated_before']
+    assert client.get(path, headers=other, params={"start": start, "end": start + 7}).status_code == 404
+
+
+def test_table_context_bounded_and_does_not_cross_narrative():
+    from app.research_sources import table_context_window
+    text = 'Unrelated\n' + ''.join(f'| row {i} | {i} |\n' for i in range(30)) + '| target | 123 |\nAfter'
+    start = text.index('target')
+    context = table_context_window(text, start, start + len('target'))
+    assert context is not None and context['truncated_before']
+    assert len(context['before'] + context['selected'] + context['after']) <= 10_000
+    assert 'Unrelated' not in context['before'] and '| row 0 |' not in context['before']
+    assert table_context_window('ordinary prose', 0, 8) is None
+    separate = '| old | 1 |\nNarrative\n| new | 2 |\n'
+    pos = separate.index('new')
+    assert table_context_window(separate, pos, pos + 3) is None
+
+
 def test_attach_source_preserves_prior_version_and_rejects_cross_account(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     client = TestClient(app)

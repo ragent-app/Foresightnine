@@ -13,6 +13,15 @@ interface Props {
   load: (sourceId: string, start: number, end: number) => Promise<SourceContextResult>;
 }
 
+export function ExtractedTableContext({ table, en }: { table: NonNullable<SourceContextResult["table_context"]>; en: boolean }) {
+  return <details>
+    <summary>{en ? "Show preceding extracted table rows" : "查看此前提取的表格行"}</summary>
+    <p>{en ? "These are adjacent extracted lines; column alignment, headings and meaning are not verified. Check the original document." : "以下是相邻的提取文本；列对齐、表头和含义尚未核验，请对照原始文件。"}</p>
+    {table.truncated_before ? <p>{en ? "Earlier rows were omitted." : "此前还有未显示的行。"}</p> : null}
+    <pre>{table.before}<mark>{table.selected}</mark>{table.after}</pre>
+  </details>;
+}
+
 export function SourceContext({ sourceId, location, quotation, en, load, candidate, onUseContext, onAddSelected }: Props) {
   const [open, setOpen] = useState(false);
   const [context, setContext] = useState<SourceContextResult | null>(null);
@@ -50,6 +59,7 @@ export function SourceContext({ sourceId, location, quotation, en, load, candida
       <p>{context.title}{context.page_start !== null ? ` · ${en ? "page" : "第"} ${context.page_start}${context.page_end !== context.page_start ? `–${context.page_end}` : ""}${en ? "" : " 页"}` : ""}</p>
       {quotation === undefined ? <p role="status">{onAddSelected ? (en ? "This is a suggested source passage. Check its relevance before adding it." : "这是候选原文，请核对相关性后再添加。") : (en ? "No saved quotation is available for comparison." : "没有可供比对的已保存引文。")}</p> : quotation !== context.selected ? <p role="status">{en ? "The saved quotation does not match the selected source text." : "保存的引文与所选原文位置不一致。"}</p> : <p>{en ? "The quotation matches this text; its support for the finding is not independently verified." : "引文与此处原文一致；是否支持结论尚未独立核验。"}</p>}
       <pre>{context.before}<mark>{context.selected}</mark>{context.after}</pre>
+      {context.table_context ? <ExtractedTableContext table={context.table_context} en={en} /> : null}
       {onAddSelected && context.selected.trim() && Array.from(context.selected).length <= 1000 ? <Button onClick={() => onAddSelected(context.selected)}>{en ? "Add selected passage as quotation" : "添加所选原文作为引文"}</Button> : null}
       {candidate && onUseContext && quotation === context.selected && Array.from(context.before + context.selected + context.after).length <= 1000 ? <>
         <p>{en ? "You can use the displayed context as a quotation. Check that it supports the finding; saving will check its location again." : "可将显示的上下文作为引文。请核对其是否支持结论；保存时会重新检查位置。"}</p>

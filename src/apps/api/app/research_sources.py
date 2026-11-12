@@ -94,6 +94,48 @@ class SourcePermissionError(ValueError):
     pass
 
 
+def table_context_window(text: str, start: int, end: int) -> dict | None:
+    """Return bounded preceding rows for a selected pipe-formatted row.
+
+    This is extracted text only: pipe characters and span markers may also
+    appear in source content, and neither table identity nor alignment is
+    established. Keep exact text and offsets so callers cannot accidentally
+    present a reconstructed table as an original quotation.
+    """
+    if not 0 <= start < end <= len(text) or "\n" in text[start:end]:
+        return None
+    row_start = text.rfind("\n", 0, start) + 1
+    row_end = text.find("\n", end)
+    row_end = len(text) if row_end < 0 else row_end
+
+    def row(line: str) -> bool:
+        line = line.strip()
+        return len(line) <= 4000 and line.startswith("|") and line.endswith("|") and line.count("|") >= 3
+
+    if not row(text[row_start:row_end]):
+        return None
+    left = row_start
+    rows = 1
+    while left and rows < 16:
+        prior_end = left - 1
+        prior_start = text.rfind("\n", 0, prior_end) + 1
+        if not row(text[prior_start:prior_end]) or row_end - prior_start > 10_000:
+            break
+        left = prior_start
+        rows += 1
+    if left == row_start:
+        return None
+    prior_end = left - 1
+    prior_start = text.rfind("\n", 0, prior_end) + 1 if left else 0
+    truncated = bool(left and row(text[prior_start:prior_end]))
+    # A short neighbouring heading or unit sentence may explain the rows.
+    # It is presented as adjacent text, never as a verified table heading.
+    if left and not truncated and prior_end - prior_start <= 500 and row_end - prior_start <= 10_000:
+        left = prior_start
+    return {"context_start": left, "context_end": row_end, "before": text[left:start],
+            "selected": text[start:end], "after": text[end:row_end], "truncated_before": truncated}
+
+
 def pdf_text_spacing_suspect(source: ResearchSource) -> bool:
     """Conservative signal for heavily joined Latin words, not a quality verdict.
 
