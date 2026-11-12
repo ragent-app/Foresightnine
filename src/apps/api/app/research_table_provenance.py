@@ -8,12 +8,16 @@ from __future__ import annotations
 import base64
 import binascii
 from collections import deque
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 import re
 from threading import BoundedSemaphore, Event, Thread
+from time import monotonic
+from typing import Callable
 
 from .research_fetch import _TextParser
-from .research_calculations import quotation_is_inside_table_row
+from .research_calculations import quotation_is_inside_table_row, quotation_is_table_row
 from .research_sources import ResearchSource
 from .research_uploads import MAX_PDF_BYTES, MAX_TEXT_BYTES, _UploadedHtmlParser
 
@@ -122,7 +126,8 @@ def trace_html_table(source: ResearchSource, start: int, end: int) -> dict | Non
     if (source.retrieval_method not in {"user_html", "sec_filing_html", "official_html"} or
             not source.original_html_base64 or not source.response_sha256 or
             not 0 <= start < end <= len(source.text) or
-            not quotation_is_inside_table_row(source.text, start, source.text[start:end])):
+            not (quotation_is_inside_table_row(source.text, start, source.text[start:end]) or
+                 quotation_is_table_row(source.text, start, source.text[start:end]))):
         return None
     line_start = source.text.rfind("\n", 0, start) + 1
     line_end = source.text.find("\n", end)
@@ -156,7 +161,8 @@ def trace_html_table(source: ResearchSource, start: int, end: int) -> dict | Non
         return None
 
 
-def bounded_table_trace(source: ResearchSource, start: int, end: int, timeout: float = 5.0) -> dict:
+def bounded_table_trace(source: ResearchSource, start: int, end: int, timeout: float = 5.0,
+                        should_stop: Callable[[], bool] | None = None) -> dict:
     """Inspect locally in bounded daemon workers; timed-out work keeps its slot."""
     if not _TABLE_TRACE_WORKERS.acquire(blocking=False):
         return {"status": "busy"}
@@ -175,6 +181,85 @@ def bounded_table_trace(source: ResearchSource, start: int, end: int, timeout: f
     except RuntimeError:
         _TABLE_TRACE_WORKERS.release()
         return {"status": "busy"}
-    if not done.wait(max(0, min(timeout, 5.0))):
-        return {"status": "timeout"}
+    deadline = monotonic() + max(0, min(timeout, 5.0))
+    while not done.is_set():
+        if should_stop is not None and should_stop():
+            return {"status": "cancelled"}
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return {"status": "timeout"}
+        done.wait(min(0.05, remaining))
     return {"status": "available", **result[0]} if result and result[0] is not None else {"status": "unavailable"}
+
+
+def annual_table_value_alignment(trace: dict, value: Decimal, period: str) -> dict | None:
+    """Compare a value's original cell to an explicitly annual dated column.
+
+    The check establishes only a possible structural relation in a narrow
+    HTML pattern. It does not establish units, issuer, metric or accounting
+    comparability. Fail closed when any relevant column is ambiguous.
+    """
+    if trace.get("status") != "available" or not isinstance(trace.get("rows"), list):
+        return None
+    rows = trace["rows"]
+    if not 2 <= len(rows) <= 16:
+        return None
+    period_match = re.fullmatch(r"(?:fiscal\s+)?year\s+ended\s+([A-Za-z]+\s+\d{1,2},?\s+(?:19|20)\d{2})", period.strip(), re.IGNORECASE)
+    if not period_match:
+        return None
+    try:
+        declared = datetime.strptime(period_match.group(1).replace(",", ""), "%B %d %Y").date()
+    except ValueError:
+        return None
+    width = rows[-1].get("width")
+    if not isinstance(width, int) or width <= 0 or any(row.get("width") != width for row in rows):
+        return None
+    def parse_amount(text: str) -> Decimal | None:
+        if not re.fullmatch(r"[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", text):
+            return None
+        try:
+            return Decimal(text.replace(",", ""))
+        except InvalidOperation:
+            return None
+    values = [cell for cell in rows[-1].get("cells", []) if parse_amount(cell.get("text", "")) == value]
+    if len(values) != 1:
+        return None
+    selected = values[0]
+    for index in range(len(rows) - 2, -1, -1):
+        dates = []
+        for cell in rows[index].get("cells", []):
+            try:
+                parsed = datetime.strptime(cell.get("text", ""), "%B %d, %Y").date()
+            except ValueError:
+                continue
+            dates.append((cell, parsed))
+        if len(dates) < 2:
+            continue
+        date_cells = rows[index].get("cells", [])
+        # Some statements put the annual label in the first cell of the
+        # date row. Require every other nonempty cell in that row to be a
+        # date, so mixed quarterly columns cannot borrow the annual label.
+        inline = (date_cells and re.fullmatch(r"years?\s+ended", date_cells[0].get("text", ""), re.IGNORECASE) and
+                  all(not cell.get("text") or any(cell is date_cell for date_cell, _ in dates)
+                      for cell in date_cells[1:]))
+        if inline:
+            group_dates = dates
+        else:
+            # Other statements have a spanning heading in the preceding row,
+            # potentially alongside quarterly groups with repeated dates.
+            headers = rows[index - 1].get("cells", []) if index else []
+            annual = [cell for cell in headers if re.fullmatch(r"years?\s+ended", cell.get("text", ""), re.IGNORECASE)]
+            groups = [cell for cell in annual if cell["start"] <= selected["start"] and selected["end"] <= cell["end"]]
+            if len(groups) != 1:
+                return None
+            group = groups[0]
+            group_dates = [(cell, date) for cell, date in dates if group["start"] <= cell["start"] and cell["end"] <= group["end"]]
+        if len(group_dates) < 2 or len({date for _, date in group_dates}) != len(group_dates):
+            return None
+        selected_dates = [date for cell, date in group_dates if cell["start"] <= selected["start"] and selected["end"] <= cell["end"]]
+        if len(selected_dates) != 1:
+            return None
+        return {"status": "matched" if selected_dates[0] == declared else "conflict",
+                "column_date": selected_dates[0].isoformat(), "declared_date": declared.isoformat(),
+                "value_column_start": selected["start"], "value_column_end": selected["end"]}
+    return None

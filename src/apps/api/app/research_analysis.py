@@ -22,7 +22,8 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 
 
 SYSTEM_PROMPT = (
@@ -2247,6 +2248,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     currency_conflict_noted = False
     directional_context_noted = False
     ambiguous_fact_noted = False
+    table_traces: dict[tuple[str, int], dict] = {}
     fact_ids = Counter(item.fact_id for item in result.facts)
     for item in result.facts:
         source = source_map.get(item.citation.source_id)
@@ -2282,8 +2284,6 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             location, quotation, _ = rows[0]
             matching = "table_markup_expanded"
             limitations.append("A joined table fact quotation was separated; the row is a review candidate, not verified context.")
-        if matching == "table_markup_expanded":
-            limitations.append("A table-normalized fact was excluded from automatic calculations pending column and source review.")
         if matching == "pdf_line_hyphen_restored":
             note = "A fact with a restored PDF line-break hyphen was excluded from automatic calculations pending review."
             if note not in limitations:
@@ -2319,6 +2319,28 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                         quotation_is_pdf_layout_row(source.text, quote_start, quotation))))
         period_conflict = (table_period_conflict(source.text, quote_start, quotation, item.value, item.period)
                            if table_alignment_unverified else None)
+        structure_alignment = None
+        if (matching == "table_markup_expanded" and table_alignment_unverified and
+                source.permissions.display and source.original_html_base64 and type(quote_start) is int and
+                type(location.get("character_end")) is int):
+            row_start = source.text.rfind("\n", 0, quote_start) + 1
+            key = (source.source_id, row_start)
+            if key not in table_traces and len(table_traces) < 2:
+                if should_stop is not None and should_stop():
+                    raise AnalysisInterrupted()
+                table_traces[key] = bounded_table_trace(source, quote_start, location["character_end"], should_stop=should_stop)
+                if table_traces[key].get("status") == "cancelled":
+                    raise AnalysisInterrupted()
+            if key in table_traces:
+                structure_alignment = annual_table_value_alignment(table_traces[key], item.value, item.period)
+        structure_matched = bool(structure_alignment and structure_alignment.get("status") == "matched")
+        if matching == "table_markup_expanded":
+            note = ("A table-normalized fact's value and annual date occupy the same original HTML column. "
+                    "Its metric, currency, unit and meaning remain unverified; any calculation is provisional."
+                    if structure_matched else
+                    "A table-normalized fact was excluded from automatic calculations pending column and source review.")
+            if note not in limitations:
+                limitations.append(note)
         currency_conflict = currency_value_conflict(item.currency, item.value, quotation)
         ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:
@@ -2344,7 +2366,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
             ambiguous_fact_noted = True
         if (not currency_context and not currency_conflict and not ambiguous_fact and not direction_context and
-                not period_conflict and matching not in {"pdf_line_hyphen_restored", "table_markup_expanded"}):
+                not period_conflict and (matching not in {"pdf_line_hyphen_restored", "table_markup_expanded"} or structure_matched)):
             numeric_facts[item.fact_id] = numeric
         checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,
@@ -2352,6 +2374,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             **({"currency_quote_missing": True} if currency_quote_missing else {}),
             **({"table_alignment_unverified": True} if table_alignment_unverified else {}),
             **({"table_period_conflict": period_conflict} if period_conflict else {}),
+            **({"table_structure_alignment": structure_alignment} if structure_alignment else {}),
             **({"currency_conflict_unverified": True} if currency_conflict else {}),
             **({"direction_context_unverified": True} if direction_context else {}),
             **({"numeric_normalization": "thousands_separator"} if item.fact_id in normalized_grouped_ids else {}),
@@ -2370,6 +2393,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             continue
         try:
             calculated = calculate(CalculationRequest(formula=plan.formula, first=first, second=second))
+            # A structural column match does not attest the metric, units or
+            # semantic meaning. Never present the result as verified or let it
+            # support a claim until its inputs have been independently reviewed.
+            calculated["input_status"] = calculation_input_status(calculated, checked_facts)
             checked_calculations.append(calculated)
             if calculated.get("period_granularity_check") == "different_labels_verify_stock_or_flow":
                 note = "Period comparability is not established: different year, quarter or month labels may refer to stock or flow figures."

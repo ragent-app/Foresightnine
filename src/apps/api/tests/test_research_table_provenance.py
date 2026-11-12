@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 
 from app.research_sources import ResearchSource, SourcePermissions
-from app.research_table_provenance import trace_html_table
+from app.research_table_provenance import annual_table_value_alignment, trace_html_table
 from app.research_uploads import HtmlUploadRequest, extract_uploaded_html
 
 
@@ -66,3 +66,60 @@ def test_trace_deadline_retains_worker_slot_until_work_finishes(monkeypatch):
     release.set()
     assert slots.acquire(timeout=2)
     slots.release()
+    entered.clear()
+    release.clear()
+    assert module.bounded_table_trace(source, 0, 3, should_stop=lambda: entered.is_set()) == {'status': 'cancelled'}
+    assert module.bounded_table_trace(source, 0, 3, timeout=0.01) == {'status': 'busy'}
+    release.set()
+    assert slots.acquire(timeout=2)
+    slots.release()
+
+
+def test_annual_alignment_checks_original_column_and_exact_date():
+    from decimal import Decimal
+    html = ('<table><tr><th>Metric</th><th colspan="2">Years Ended</th></tr>'
+            '<tr><th></th><th>July 27, 2024</th><th>July 29, 2023</th></tr>'
+            '<tr><td>Revenue</td><td>100</td><td>90</td></tr></table>')
+    source = source_for(html)
+    data = {'status': 'available', **trace(source)}
+    matched = annual_table_value_alignment(data, Decimal('100'), 'Fiscal year ended July 27, 2024')
+    assert matched['status'] == 'matched' and matched['column_date'] == '2024-07-27'
+    assert annual_table_value_alignment(data, Decimal('100'), 'Fiscal year ended July 29, 2023')['status'] == 'conflict'
+    assert annual_table_value_alignment(data, Decimal('100'), 'Fiscal year ended July 28, 2024')['status'] == 'conflict'
+    assert annual_table_value_alignment(data, Decimal('100'), 'FY2024') is None
+    assert annual_table_value_alignment(data, Decimal('90'), 'fiscal year ended July 29, 2023')['status'] == 'matched'
+    duplicate = source_for(html.replace('<td>90</td>', '<td>100</td>'))
+    assert annual_table_value_alignment({'status': 'available', **trace(duplicate)}, Decimal('100'), 'Fiscal year ended July 27, 2024') is None
+
+
+def test_analysis_keeps_structural_calculation_provisional_and_fails_closed():
+    from app.research_analysis import analyze
+    html = ('<p>In millions</p><table><tr><th colspan="2">Years Ended</th>'
+            '<th colspan="2">July 27, 2024</th><th colspan="2">July 29, 2023</th></tr>'
+            '<tr><td colspan="2">Revenue</td><td colspan="2">100</td><td colspan="2">90</td></tr></table>')
+    source = source_for(html)
+    def fact(key, value, period):
+        return {'fact_id': key, 'label': 'Revenue', 'value': value, 'unit': 'USD million', 'currency': 'USD',
+                'period': period, 'citation': {'source_id': 's', 'quotation': 'Revenue | 100 | 90'}}
+    facts = [fact('a', '100', 'Fiscal year ended July 27, 2024'), fact('b', '90', 'Fiscal year ended July 29, 2023')]
+    def run(material, facts=facts):
+        return analyze('Compare revenue.', [material], None, lambda _: ({'facts': facts,
+            'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'a', 'second_fact_id': 'b'}]}, 1))
+    # Source permission is separate from the user request and must allow the
+    # model to see the material; original bytes stay in the source repository.
+    source.permissions.model_input = True
+    result = run(source)
+    assert len(result.facts) == 2
+    assert all(f['table_structure_alignment']['status'] == 'matched' for f in result.facts)
+    assert all(f['table_alignment_unverified'] for f in result.facts)
+    assert result.calculations[0]['value'] == '11.11'
+    assert result.calculations[0]['input_status'] == 'unverifiable'
+    assert any('provisional' in note for note in result.limitations)
+    assert not run(source.model_copy(update={'original_html_base64': None})).calculations
+    wrong = [facts[0], {**facts[1], 'period': 'Fiscal year ended July 28, 2023'}]
+    mismatch = run(source, wrong)
+    assert not mismatch.calculations
+    assert mismatch.facts[1]['table_structure_alignment']['status'] == 'conflict'
+    restricted = source.model_copy(deep=True)
+    restricted.permissions.display = False
+    assert not run(restricted).calculations

@@ -1833,6 +1833,7 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         # any edit invalidates the prior attestation.
                         entry.pop("direction_confirmation", None)
                         entry.pop("table_confirmation", None)
+                        entry.pop("table_structure_alignment", None)
                         entry.pop("numeric_normalization", None)
                         entry.pop("range_parent_id", None)
         for entry in content.calculations:
