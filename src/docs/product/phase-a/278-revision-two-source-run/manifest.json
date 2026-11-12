@@ -1,0 +1,77 @@
+{
+  "implementation_commit": "4b850e86db7f34ad19924fcd3054a0f20b5dd09f",
+  "task_sha256": "5ef408f82f6a10d5579bb9ee38c653cd64415c9083f56b8f6e5efc17f7aa39e5",
+  "sources": [
+    {
+      "pdf": "bea-sep-2023.pdf",
+      "text": "bea-sep-2023.txt",
+      "title": "BEA September 2023 PIO release, published October 27 2023",
+      "published_at": "2023-10-27T12:30:00Z",
+      "pdf_sha256": "4061885585b9d409556978d8b0272710e6989e95e8723d52cf3c25259ad19ed9",
+      "text_sha256": "db8789fc7deb24a94a2e60cc5a416e82de70b4412ab0c6afd43f9b815b06a514"
+    },
+    {
+      "pdf": "bea-oct-2023.pdf",
+      "text": "bea-oct-2023.txt",
+      "title": "BEA October 2023 PIO release, published November 30 2023",
+      "published_at": "2023-11-30T13:30:00Z",
+      "pdf_sha256": "8fa9fb6d91c15e3af76ef49bc1210b992fc2a92a2dfd4a72c50ef9f20e7d7afe",
+      "text_sha256": "be5b402ced86f16c0cc5a0c69dd74b7e6872edf3fb1cce03afd22a338baf99db"
+    }
+  ],
+  "files": {
+    "common.py": "7225962ede9a1a3c5995392dd8637babe3335f32ea3b614903a96c04d771e3cd",
+    "prepare.py": "ad2cc24a7ce09ebf9dbc22276f754a8600c5d89480e44bd03fa6c0d1b17cc3a9",
+    "run.py": "5f256686272e244bf7d1bf7701681dbb269d9ed011c067831d3d231912bb00b5",
+    "score.py": "54371c52e48a6c566c144af63ef974d67bdc0662a8526e41d4628f7c2f754e40"
+  },
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "review_method": "bounded_quotation_context_model_review_v30",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "prompt_sha256": "6b17da2d3e936b759cc26b5eb2ae14092c9c023df5633825afc54123f5044629",
+  "segments": [
+    {
+      "source_id": "source_00000000000000000000000000000001",
+      "character_start": 13952,
+      "character_end": 16391
+    },
+    {
+      "source_id": "source_00000000000000000000000000000001",
+      "character_start": 29315,
+      "character_end": 31271
+    },
+    {
+      "source_id": "source_00000000000000000000000000000002",
+      "character_start": 13951,
+      "character_end": 16373
+    },
+    {
+      "source_id": "source_00000000000000000000000000000002",
+      "character_start": 29633,
+      "character_end": 31596
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "max_tokens": 20000,
+  "timeout_seconds": 60,
+  "elapsed_seconds": 120,
+  "search": false,
+  "retries": 0,
+  "previous_known_tokens": 313227,
+  "cost_usd": "unknown"
+}
