@@ -1,0 +1,10 @@
+{
+  "id": "STRESS_2023",
+  "question": "According to the 2023 Federal Reserve stress test, what happened to the aggregate CET1 ratio under the severely adverse scenario, and did individual banks remain above minimums? Give a material counterpoint or risk, and distinguish actual and projected values.",
+  "source": {
+    "kind": "pdf",
+    "title": "Federal Reserve 2023 stress test results",
+    "text_file": "fed-stress-source.txt",
+    "source_id": "source_ce54ed6136754051baf2406f5be2a98c"
+  }
+}

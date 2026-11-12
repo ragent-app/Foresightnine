@@ -1,0 +1,84 @@
+{
+  "implementation_commit": "3462b9ed4f33dcd8be933500b364c3987f32a0e4",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_method": "bounded_quotation_context_model_review_v13",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "extract.py": "5f8f0af565f6c04903ed1667c6c8c8568466c12ee37689d79562caf45002a7aa",
+    "common.py": "0a91e358cc9c2ed664dee9a7f20683bf768aa3a661c37616cd87ddf6f7f76976",
+    "prepare.py": "71370d50de2f5e8d85106fb5707cac950cb6612753790b8afad15004d64f3b20",
+    "run.py": "804e7f091c21cd37277bb534da45a64faa566a29c97def93976869371ea50706",
+    "score.py": "949dbcc4e6492ef94c9c99df498613334bd3dc2298dd53768e148ad7c421e7cf",
+    "validate_score.py": "f9c44d5ca431fe859cca995e99c8f08e1a70f9ad0e966a92fe9ed8a4ffbfa4cc",
+    "bea-trade.html": "f89c4f70d0f81f35312beab7dd02fd68c3264c886858086d53044a3c403552f1",
+    "bea-trade-source.txt": "aa3a1117eaa785c5fdd682b071da28ebe2f448aef4483e2fb82dcba3857f369b",
+    "fed-stress.pdf": "4b2cf22214bc1cff5a200efd2a3ca6186aa0b906d26d15b6a0ec0037537ecce9",
+    "fed-stress-source.txt": "ef16be2912417b7e1d033e6863222be713759cd35acc48927cc2c17a4f143a07",
+    "TRADE_FEB-input.json": "57fc8b79bd17d9b4a34d571a2202cb726bb7b3069ead105937d6b035ba231322",
+    "STRESS_2023-input.json": "798f703d39cb172fd534c1bacfa65a57b1349b041ce5739f56e8726023e818f8"
+  },
+  "conditions": [
+    {
+      "task": "TRADE_FEB",
+      "prompt_sha256": "77c4d69974fe49d6d7ed4953a460cc610528970583d2ef35bfc43e93e66ea1c2",
+      "prompt_bytes": 2049,
+      "segments": [
+        {
+          "source_id": "source_0652c1a906a34214bde1c9f31bc9d6a3",
+          "character_start": 1906,
+          "character_end": 2211
+        },
+        {
+          "source_id": "source_0652c1a906a34214bde1c9f31bc9d6a3",
+          "character_start": 2625,
+          "character_end": 2886
+        }
+      ],
+      "source_hashes": {
+        "source_0652c1a906a34214bde1c9f31bc9d6a3": "aa3a1117eaa785c5fdd682b071da28ebe2f448aef4483e2fb82dcba3857f369b"
+      }
+    },
+    {
+      "task": "STRESS_2023",
+      "prompt_sha256": "8223e256de99d014e535c6b09a5fe9ac3bd45a48d522a51d4ca03dccee0919de",
+      "prompt_bytes": 2054,
+      "segments": [
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 10197,
+          "character_end": 10496
+        },
+        {
+          "source_id": "source_ce54ed6136754051baf2406f5be2a98c",
+          "character_start": 27136,
+          "character_end": 27438
+        }
+      ],
+      "source_hashes": {
+        "source_ce54ed6136754051baf2406f5be2a98c": "ef16be2912417b7e1d033e6863222be713759cd35acc48927cc2c17a4f143a07"
+      }
+    }
+  ],
+  "input_limit": 3000,
+  "max_calls": 2,
+  "per_call_max_total_tokens": 10000,
+  "max_total_tokens": 20000,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 148116
+}

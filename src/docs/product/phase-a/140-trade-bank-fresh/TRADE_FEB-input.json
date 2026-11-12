@@ -1,0 +1,10 @@
+{
+  "id": "TRADE_FEB",
+  "question": "According to this release, what were the February 2024 goods and services deficit, exports and imports and the revised January deficit? Explain how changes in the goods deficit and services surplus contributed, including an offsetting fact.",
+  "source": {
+    "kind": "text",
+    "title": "BEA U.S. international trade in goods and services, February 2024",
+    "text_file": "bea-trade-source.txt",
+    "source_id": "source_0652c1a906a34214bde1c9f31bc9d6a3"
+  }
+}

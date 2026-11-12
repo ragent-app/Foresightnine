@@ -1,0 +1,4215 @@
+2023 Federal Reserve Stress Test Results
+June 2023
+BOARD OF GOVERNORS OF THE FEDERAL RESERVE SYSTEMThe Federal Reserve System is the central
+bank of the United States. It performs five key
+functions to promote the effective operation
+of the U.S. economy and, more generally, the
+public interest.
+The Federal Reserve
+■ conducts the nation’s monetary policy to promote maximum employment
+and stable prices in the U.S. economy;
+■ promotes the stability of the financial system and seeks to minimize
+and contain systemic risks through active monitoring and engagement in
+the U.S. and abroad;
+■ promotes the safety and soundness of individual financial institutions
+and monitors their impact on the financial system as a whole;
+■ fosters payment and settlement system safety and efficiency through
+services to the banking industry and U.S. government that facilitate
+U.S.-dollar transactions and payments; and
+■ promotes consumer protection and community development through
+consumer-focused supervision and examination, research and analysis of
+emerging consumer issues and trends, community economic development
+activities, and administration of consumer laws and regulations.
+To learn more about us, visit www.federalreserve.gov/aboutthefed.htm.Contents
+Preface .............................................................................................................................. iii
+Corrections ........................................................................................................................ v
+Executive Summary ......................................................................................................... 1
+Background ....................................................................................................................... 3
+Stress Test Process ........................................................................................................... 3
+Participating Banks ............................................................................................................ 3
+Results for Banks under the Severely Adverse Scenario ......................................... 7
+Capital .............................................................................................................................. 7
+Pre-tax Net Income ........................................................................................................... 13
+Losses ............................................................................................................................ 17
+Pre-provision Net Revenue ................................................................................................ 21
+Appendix A: Additional Bank-Specific Results ......................................................... 25
+Appendix B: Disclosure Loan Category Definitions ................................................. 51
+iPreface
+The Federal Reserve promotes a safe, sound, and efficient banking system that supports the U.S.
+economy through its supervision and regulation of domestic and foreign banks.
+As part of its supervision efforts, the Federal Reserve conducts annually a supervisory stress test.
+The stress test assesses how large banks are likely to perform under hypothetical economic
+conditions.1
+Figure 1 summarizes the stress test cycle.
+The stress tests ensure that large banks are sufficiently capitalized and able to lend to house-
+holds and businesses even in a severe recession. They evaluate the financial resilience of banks
+by estimating losses, revenues, expenses, and resulting capital levels under hypothetical eco-
+nomic conditions.
+1
+U.S. bank holding companies (BHCs), covered savings and loan holding companies (SLHCs), and intermediate holding
+companies of foreign banking organizations (IHCs) with $100 billion or more in assets are subject to the Federal
+Reserve Board’s supervisory stress test rules (12 C.F.R. pt. 238, subpt. O; 12 C.F.R. pt. 252, subpt. E) and capital plan-
+ning requirements (12 C.F.R. § 225.8; 12 C.F.R. pt. 238, subpt. S).
+Figure 1. How stress testing works for large banks
+The Federal Reserve conducts stress tests to ensure that large banks are sufficiently capitalized and able to lend to
+households and businesses even in a severe recession. The stress tests evaluate the financial resilience of banks by
+estimating losses, revenues, expenses, and resulting capital levels under hypothetical economic conditions.
+The Federal Reserve
+uses the results of the
+supervisory stress test,
+in part, to set capital
+requirements for
+participating banks
+The Federal Reserve develops
+stress test scenarios
+The Federal Reserve develops
+or selects stress test models
+Banks submit detailed bank data
+Using the scenario data and bank
+data as variables in the stress
+test models, the
+Federal Reserve projects how
+banks are likely to perform under
+hypothetical economic conditions
+iiiAs part of this cycle, the Federal Reserve publishes four documents:
+• Stress Test Scenarios describes the hypothetical economic conditions used in the supervisory
+stress test. The Stress Test Scenarios document is typically published by mid-February.
+• Supervisory Stress Test Methodology provides details about the models and methodologies used
+in the supervisory stress test.
+• Federal Reserve Stress Test Results reports the aggregate and individual bank results of the
+supervisory stress test, which assesses whether banks are sufficiently capitalized to absorb
+losses during a severe recession. The Federal Reserve Stress Test Results document is typically
+published at the end of the second quarter.
+• Large Bank Capital Requirements announces the individual capital requirements for all large
+banks, which are partially determined by the results of the supervisory stress test. The Large
+Bank Capital Requirements document is typically published during the third quarter.
+These publications can be found on the Stress Test Publications page (https://
+www.federalreserve.gov/publications/dodd-frank-act-stress-test-publications.htm).
+For information on the Federal Reserve’s supervision of large financial institutions, see https://
+www.federalreserve.gov/supervisionreg/large-financial-institutions.htm. For information on the Fed-
+eral Reserve’s supervision of capital planning processes of banks, see https://
+www.federalreserve.gov/supervisionreg/stress-tests-capital-planning.htm.
+For more information on how the Federal Reserve Board promotes the safety and soundness of
+the banking system, see https://www.federalreserve.gov/supervisionreg.htm.
+iv 2023 Federal Reserve Stress Test ResultsCorrections
+The Federal Reserve revised this report on July 27, 2023, due to two banks, Bank of America Cor-
+poration and The Bank of New York Mellon Corporation, submitting incorrect data. The revisions
+from the incorrect submissions do not result in a change to either bank’s stress capital buffer but
+do affect projected capital ratios. In its review of these banks’ data, the Federal Reserve con-
+ducted reviews of the other banks that underwent the stress test and found no errors in their sub-
+missions. The revisions are listed below:
+On page 1, paragraph 2, the data in the first two sentences were revised.
+On page 2, table 1, the data in the “Stressed minimum capital ratios, severely adverse” column
+were revised.
+On page 7, in the first paragraph under “Capital,” the data in the first sentence were revised.
+On page 7, table 3, the data in the “Projected 2025:Q1” and “Projected minimum” columns were
+revised.
+On page 8, table 4, in the “Stressed ratios with supervisory stress testing capital action assump-
+tions” column, the data for Bank of America and Bank of NY-Mellon were revised.
+On page 9, table 5, the data in the rows for Bank of America, Bank of NY-Mellon, and the
+23 banks were revised.
+On page 10, figure 4, the data for Bank of America and Bank of NY-Mellon were revised.
+On page 11, box 2, in the second paragraph, the data point in the first sentence was revised.
+On page 11, box 2, figure A, the data point for the “2023 stress test” was revised.
+On page 12, figure C, the data point for “2023 stress test,” “Minimum quarter AOCI in capital,”
+was revised.
+On page 14, table 6, the data in the “Billions of dollars” column, “Other comprehensive income”
+row, and in the “Percent of average assets” column, “AOCI included in capital (billions of dollars)”
+row, were revised.
+vOn page 16, table 7, the data in the “Memo items, Other comprehensive income” and the “Other
+effects on capital, AOCI included in capital (2025:Q1)” columns were revised for Bank of America,
+Bank of NY-Mellon, and the 23 banks.
+On page 19, in the first full sentence, the data point was revised.
+On page 26, table A.1, in the “Capital ratios and risk-weighted assets, actual 2022:Q4 and pro-
+jected 2023:Q1–2025:Q1” table, the data in the “Projected 2025:Q1” and “Projected minimum”
+columns were revised.
+On page 26, table A.1, in the “Projected losses, revenue, and net income before taxes through
+2025:Q1” table, the data in “Billions of dollars” column, “Other comprehensive income” row, and
+in the “Percent of average assets” column, “AOCI included in capital (billions of dollars)” row,
+were revised.
+On page 27, table A.2, in the “Capital ratios and risk-weighted assets, actual 2022:Q4 and pro-
+jected 2023:Q1–2025:Q1” table, the data in the “Projected 2025:Q1” and “Projected minimum”
+columns were revised.
+On page 27, table A.2, in the “Projected losses, revenue, and net income before taxes through
+2025:Q1” table, the data in “Billions of dollars” column, “Other comprehensive income” row, and
+in the “Percent of average assets” column, “AOCI included in capital (billions of dollars)” row,
+were revised.
+vi 2023 Federal Reserve Stress Test ResultsExecutive Summary
+The 2023 stress test shows that the 23 large banks subject to the test this year have sufficient
+capital to absorb more than $540 billion in losses and continue lending to households and busi-
+nesses under stressful conditions. In the immediate years after the 2007–09 Global Financial
+Crisis, banks subject to the stress test substantially increased their capital, which has remained
+largely level for the past few years (see figure 2). The aggregate and individual bank post-stress
+common equity tier 1 (CET1) capital ratios remain well above the required minimum levels
+throughout the projection horizon.
+Under the severely adverse scenario, the aggregate CET1 capital ratio of the 23 banks falls from
+an actual 12.4 percent in the fourth quarter of 2022 to its minimum of 9.9 percent, before rising
+to 10.5 percent at the end of the projection horizon (see table 1). The 2.5 percentage point aggre-
+gate decline this year is smaller than the aggregate decline of 2.7 percentage points last year, but
+comparable to aggregate declines in recent years (see box 2 for more information). While the
+decline in the aggregate capital ratio was smaller this year than last, the results vary significantly
+across different types of banks. The largest banks entered the stress test with large unrealized
+Figure 2. Aggregate common equity capital ratio for 23 banks in the 2023 stress test
+4
+6
+8
+10
+12
+14
+2023:Q1
+2022:Q1
+2021:Q1
+2020:Q1
+2019:Q1
+2018:Q1
+2017:Q1
+2016:Q1
+2015:Q1
+2014:Q1
+2013:Q1
+2012:Q1
+2011:Q1
+2010:Q1
+2009:Q1
+Percent
+Note: The Federal Reserve’s evaluation of a bank’s common equity capital was initially measured using a tier 1 common
+capital ratio but now is evaluated using a common equity tier 1 capital ratio. Not all of the banks included in the 2023
+stress test reported data for all periods since 2009.
+Source: FR Y-9C.
+1losses on securities portfolios.2
+The values of these securities appreciate in the scenario as
+interest rates are projected to decline. On average, this results in somewhat smaller capital ratio
+declines for the largest banks. However, banks with concentrations in mortgages, credit cards, and
+commercial real estate generally had larger declines in post-stress capital ratios this year.
+While stress tests are one of many supervisory tools, they are the most risk-sensitive and dynamic
+component of the regulatory capital framework. They help ensure banks can withstand acute finan-
+cial stress and still be able to lend to households and businesses. However, recent events have
+highlighted the need for humility when assessing large bank resilience. Stress tests should con-
+tinue to evolve over time to reflect an appropriately wide range of risks in today’s complex and
+interconnected financial system. The exploratory analysis conducted this year demonstrates the
+capacity of supervisory stress testing to test for a wider range of risks and the value of doing so.
+Further details of the results are provided in the “Results for Banks under the Severely Adverse
+Scenario” section of this report, which includes results presented both in the aggregate and for
+individual banks, as well as results highlights in “Box 2. Results Highlights from 2019 to 2023.”
+This report includes
+• background information regarding the 2023 stress test,
+• description of stress test model changes,
+• stress test results and highlights, and
+• bank-specific stress test results (appendix A).
+2
+Only firms subject to Category I or II standards or firms that opt in are required to include unrealized gains and losses
+on securities in the calculation of capital. Category III and IV firms are not required to include unrealized gains and
+losses on securities in the calculation of capital.
+Table 1. Aggregate capital ratios, actual, projected 2023:Q1–2025:Q1, and regulatory minimums
+Percent
+Regulatory ratio Actual 2022:Q4
+Stressed minimum capital ratios,
+severely adverse
+Minimum regulatory
+capital ratios
+Common equity tier 1 capital ratio 12.4 9.9 4.5
+Tier 1 capital ratio 14.1 11.6 6.0
+Total capital ratio 16.1 13.9 8.0
+Tier 1 leverage ratio 7.5 6.1 4.0
+Supplementary leverage ratio 6.3 5.1 3.0
+Note: The capital ratios are calculated using the capital action assumptions provided within the supervisory stress testing rules. See
+12 C.F.R. §238.132(d); 12 C.F.R. §252.44(c).These projections represent hypothetical estimates that involve an economic outcome that is
+more adverse than expected.The minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplementary leverage ratio projections
+only include estimates for banks subject to Category I, II, or III standards.
+2 2023 Federal Reserve Stress Test ResultsBackground
+The results of the 2023 stress test include information for each bank, such as capital ratios,
+pre-tax net income, losses, revenues, and expenses, projected under severely adverse economic
+and financial conditions.
+Stress Test Process
+The Federal Reserve projects these stress test results using a set of supervisory models that take
+as inputs bank-provided data on their financial conditions and risk characteristics, as well as the
+Federal Reserve’s scenarios. The stress test uses models developed or selected by the Federal
+Reserve, which may be refined each year in advance of the stress test, and these models use
+bank-provided data collected primarily through regulatory reporting.3
+This year, the supervisory
+severely adverse scenario is characterized by a severe global recession accompanied by a period
+of heightened stress in commercial and residential real estate, as well as corporate debt markets.4
+Participating Banks
+A total of 23 banks are participating in this year’s stress test.5
+Figure 3 shows when different
+types of banks are required to participate in the stress test, and table 2 lists participating banks.
+In 2022, 33 banks participated in the stress test because Category IV banks are generally
+required to participate in the test only every other year.6
+Therefore, the aggregate results reported
+for the 2023 stress test are not fully comparable with the 2022 stress test results.
+3
+For more information on the models and bank-provided data, see Board of Governors of the Federal Reserve System,
+2023 Supervisory Stress Test Methodology (Washington: Board of Governors, June 2023), https://
+www.federalreserve.gov/publications/files/2023-june-supervisory-stress-test-methodology.pdf.
+4
+For more information on the scenarios, see Board of Governors of the Federal Reserve System, 2023 Stress Test Sce-
+narios (Washington: Board of Governors, February 2023), https://www.federalreserve.gov/newsevents/pressreleases/
+files/bcreg20230209a1.pdf.
+5
+The Federal Reserve expects banks to wait until after 4:30 p.m. EDT on Friday, June 30, 2023, to publicly disclose any
+information about their planned capital actions and stress capital buffer requirements. This will give all banks sufficient
+time to examine and understand their results.
+6
+On October 10, 2019, the Board finalized a rule amending its stress test rules to subject certain banks with total con-
+solidated assets between $100 billion and $250 billion to the supervisory stress test requirements on a two-year cycle
+(Prudential Standards, 84 Fed. Reg. 59,032 (Nov. 1, 2019)). Because of this rule change, the number of banks in this
+year’s stress test is different from the 33 banks that participated in last year’s stress test. For more information on
+which banks participated in the 2022 stress test, see Board of Governors of the Federal Reserve System, Dodd-Frank
+Act Stress Test 2022: Supervisory Stress Test Results (Washington: Board of Governors, June 2022), https://
+www.federalreserve.gov/publications/files/2022-dfast-results-20220623.pdf.
+3Figure 3. When bank holding companies are required to participate in the stress test
+The Board conducts stress tests of bank holding companies it supervises on an annual or two-year cycle. Based on a
+bank holding company’s financial condition, size, complexity, risk profile, risks to the U.S. economy, or scope of opera-
+tions or activities, the Board may conduct a stress test of a bank holding company more or less frequently than
+required.
+Every 2 years
+(in years ending in an
+even number)
+Every year
+U.S. global systemically important bank holding companies (Category I)
+Domestic and foreign bank holding companies with $700 billion or more in total assets
+or $75 billion or more in cross-jurisdictional activity (Category II)
+Domestic and foreign bank holding companies with $250 billion or more in total assets
+or $75 billion or more in weighted short-term wholesale funding, nonbank assets, or
+off-balance-sheet exposure (Category III)
+Domestic and foreign bank holding companies with $100 billion or more in total assets
+that do not meet the requirements for every-year stress testing (Category IV)
+Note: Bank holding companies of this asset size may also elect to participate in a stress test in a year ending
+in an odd number.
+4 2023 Federal Reserve Stress Test ResultsTable 2. Banks participating in the 2023 stress test
+Name Risk based category
+Bank of America Corporation Category I
+The Bank of New York Mellon Corporation Category I
+Barclays US LLC Category III
+BMO Financial Corp. Category IV
+Capital One Financial Corporation Category III
+The Charles Schwab Corporation Category III
+Citigroup Inc. Category I
+Citizens Financial Group, Inc. Category IV
+Credit Suisse Holdings (USA), Inc. Category III
+DB USA Corporation Category III
+The Goldman Sachs Group, Inc. Category I
+JPMorgan Chase & Co. Category I
+M&T Bank Corporation Category IV
+Morgan Stanley Category I
+Northern Trust Corporation Category II
+The PNC Financial Services Group, Inc. Category III
+RBC US Group Holdings LLC Category IV
+State Street Corporation Category I
+TD Group US Holdings LLC Category III
+Truist Financial Corporation Category III
+UBS Americas Holding LLC Category III
+U.S. Bancorp Category III
+Wells Fargo & Company Category I
+Note: BMO Financial Corp., Citizens Financial Group, Inc., M&T Bank Corporation, and RBC US Group Holdings LLC are on a two-year stress
+test cycle; therefore, they were included in last year’s stress test and would normally be included next in 2024. In connection with their recent
+acquisitions, the Board required BMO Financial Corp., Citizens Financial Group, Inc., and M&T Bank Corporation to receive a new capital
+requirement this year based on the 2023 stress test. RBC US Group Holdings LLC elected to opt in to the 2023 stress test.
+Source: Federal Reserve Supervision and Regulation Report, table A.1.
+Background 5Box 1. Model Changes since 2022 Stress Test
+Each year, the Federal Reserve refines both the substance and process of the stress test, including its
+development and enhancement of independent supervisory models. The supervisory stress test
+models may be enhanced to reflect advances in modeling techniques; enhancements in response to
+model validation findings; incorporation of richer and more detailed data; and identification of more
+stable models or models with improved performance, particularly under stressful economic conditions.
+Each year, the Federal Reserve also makes relatively minor refinements, if necessary, to models that
+may include re-estimation with new data, re-specification based on performance testing, and other
+refinements to the code used to produce supervisory projections.
+For the 2023 stress test, the Federal Reserve made four notable updates to the supervisory models:1
+• The international other consumer, international small-business, international first mortgage, and
+international home-equity portfolios, which are components of the other retail loans model, will be
+assigned loss rates associated with a percentile of the historical loss distribution. Under the supervi-
+sory severely adverse scenario, this percentile is related to the frequency of severe recessions.
+• The commercial real estate loss given default (LGD) model was updated to make it more risk sensi-
+tive to loan-specific variation in the collateral value of a firm’s outstanding commitments. The
+updated model directly recognizes the impact of granular differences in collateral value on recoveries
+for defaulted loans.
+• The pre-provision net revenue (PPNR) model was updated to capture trading revenues based on
+FR Y-9C and FR Y-14 data. In prior exercises, trading revenues for these firms were modeled in the
+aggregate and allocated to each firm based on its market share.
+• Intermediate holding companies, which became subject to the stress test in 2018, now have suffi-
+cient PPNR data history to be modeled individually and will no longer be modeled based on industry
+aggregate performance.2
+In addition, in recent cycles, an adjustment was made to the Trading model for affordable housing
+public welfare investments. Due to recent revisions to the data collected on the FR Y-14Q report, this
+adjustment is no longer necessary.
+1
+Other than the revisions to the other retail loans model, the results for the 2023 stress test for the other revisions listed in this
+section will reflect the average output from the 2022 and 2023 models, in accordance with the stress test policy on averaging
+material model changes.
+2
+See page 76 of the 2018 stress test results for a description of the industry model: Dodd-Frank Act Stress Test 2018: Supervisory
+Stress Test Methodology and Results (Washington, Board of Governors, June 2018), https://www.federalreserve.gov/publications/
+files/2018-dfast-methodology-results-20180621.pdf.
+6 2023 Federal Reserve Stress Test ResultsResults for Banks under the Severely
+Adverse Scenario
+This section contains the Federal Reserve’s results for the 2023 stress test under the severely
+adverse scenario. The results are presented both in the aggregate and for individual banks.
+The aggregate results incorporate the combined sensitivities of capital, losses, revenues, and
+expenses across all banks to the stressed economic and financial market conditions contained in
+the severely adverse scenario. The range of results across individual banks indicates differences
+in business focus, asset composition, revenue and expense sources, and portfolio risk character-
+istics. Boxes 2 through 4 contain additional information regarding key themes in this year’s stress
+test. Box 2 contains additional insights about the results by placing them in context of results
+from recent years. A discussion of commercial real estate exposures in the 2023 test is high-
+lighted in box 3. Box 4 contains a summary of the results and lessons learned from the addi-
+tional, exploratory market shock applied to U.S. global systemically important banks (G-SIBs). The
+comprehensive 2023 stress test results for individual banks are in appendix A.
+Capital
+Under the severely adverse scenario, the aggregate CET1 capital ratio is projected to decline from
+12.4 percent at the start of the projection horizon to a minimum of 9.9 percent before rising to
+10.5 percent at the end of nine quarters (see table 3). Tables 4 and 5 present post-stress
+Table 3. Aggregate capital ratios and risk-weighted assets, actual 2022:Q4 and projected
+2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 12.4 10.5 9.9
+Tier 1 capital ratio 14.1 12.2 11.6
+Total capital ratio 16.1 14.3 13.9
+Tier 1 leverage ratio 7.5 6.4 6.1
+Supplementary leverage ratio 6.3 5.5 5.1
+Risk-weighted assets1
+(billions of dollars) 10,090.1 9,973.4
+Note: The capital ratios are calculated using the capital action assumptions provided within the supervisory stress testing rules. See 12 C.F.R.
+§ 238.132(d); 12 C.F.R. § 252.44(c).These projections represent hypothetical estimates that involve an economic outcome that is more
+adverse than expected.The minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplementary leverage ratio projections only
+include estimates for banks subject to Category I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+7minimum capital ratios for each bank, and the change from the start of the projection horizon
+varies considerably across banks (see figure 4). This variation is due to differences in banks’ busi-
+ness lines, portfolio composition, and securities and loan risk characteristics, which drive changes
+in the magnitude and timing of loss, revenue, and expense projections.
+Table 4. Projected minimum common equity tier 1 capital ratio under the severely adverse scenario,
+2023:Q1–2025:Q1: 23 banks
+Percent
+Bank
+Stressed ratios with
+supervisory stress testing
+capital action assumptions
+Bank of America 9.3
+Bank of NY-Mellon 11.7
+Barclays US 9.3
+BMO 9.3
+Capital One 8.0
+Charles Schwab Corp 22.8
+Citigroup 9.1
+Citizens 6.4
+Credit Suisse USA 20.5
+DB USA 17.4
+Goldman Sachs 10.1
+JPMorgan Chase 11.1
+M&T 7.0
+Morgan Stanley 11.2
+Northern Trust 11.4
+PNC 7.9
+RBC USA 10.8
+State Street 13.8
+TD Group 15.9
+Truist 6.7
+UBS Americas 8.0
+US Bancorp 6.6
+Wells Fargo 8.2
+Note: The capital ratios are calculated using the capital action assumptions provided within the supervisory stress testing rules. See 12 C.F.R.
+§238.132(d); 12 C.F.R. §252.44(c).These projections represent hypothetical estimates that involve an economic outcome that is more
+adverse than expected.The minimum capital ratio presented is for the period 2023:Q1 to 2025:Q1.
+8 2023 Federal Reserve Stress Test ResultsTable 5. Capital ratios, actual 2022:Q4 and projected 2023:Q1–2025:Q1 under the severely adverse
+scenario: 23 banks
+Percent
+Bank
+Common equity
+tier 1 capital ratio
+Tier 1 capital ratio Total capital ratio Tier 1 leverage ratio
+Supplementary
+leverage ratio1
+Actual
+2022:
+Q4
+Ending
+Mini-
+mum
+Actual
+2022:
+Q4
+Ending
+Mini-
+mum
+Actual
+2022:
+Q4
+Ending
+Mini-
+mum
+Actual
+2022:
+Q4
+Ending
+Mini-
+mum
+Actual
+2022:
+Q4
+Ending
+Mini-
+mum
+Bank of America 11.2 9.9 9.3 13.0 11.7 11.1 14.9 13.7 13.4 7.0 6.2 5.9 5.9 5.3 5.0
+Bank of NY-Mellon 11.3 14.9 11.7 14.4 17.9 14.7 15.3 18.9 15.8 5.8 7.2 5.9 6.8 8.5 7.0
+Barclays US 13.5 10.2 9.3 15.1 11.8 11.0 16.9 13.8 13.0 8.2 6.3 5.8 5.8 4.4 4.1
+BMO 12.6 9.3 9.3 13.5 10.2 10.2 15.0 12.2 12.2 9.9 7.4 7.4
+Capital One 12.5 8.0 8.0 13.9 9.3 9.3 15.8 11.3 11.3 11.1 7.5 7.5 9.5 6.3 6.3
+Charles Schwab Corp 21.9 27.0 22.8 28.9 34.0 29.8 28.9 34.3 29.9 7.2 8.4 7.4 7.1 8.4 7.3
+Citigroup 13.0 9.7 9.1 14.8 11.5 10.9 17.3 13.9 13.5 7.1 5.3 5.0 5.8 4.4 4.2
+Citizens 10.0 6.4 6.4 11.1 7.5 7.5 12.8 9.6 9.6 9.3 6.3 6.3
+Credit Suisse USA 27.8 20.7 20.5 29.0 21.9 21.7 29.2 21.9 21.7 19.8 14.8 14.6 16.4 12.3 12.2
+DB USA 26.1 17.5 17.4 34.4 26.7 26.6 34.4 27.0 26.9 10.4 7.4 7.3 9.5 6.7 6.7
+Goldman Sachs 15.0 12.6 10.1 16.6 14.2 11.7 19.1 16.6 14.6 7.3 6.2 5.0 5.8 4.9 4.0
+JPMorgan Chase 13.2 11.9 11.1 14.9 13.5 12.7 16.8 15.4 14.8 6.6 6.0 5.6 5.6 5.1 4.8
+M&T 10.4 7.0 7.0 11.8 8.4 8.4 13.6 10.3 10.3 9.2 6.5 6.5
+Morgan Stanley 15.3 14.9 11.2 17.2 16.8 13.2 19.3 19.0 15.5 6.7 6.5 5.0 5.5 5.4 4.1
+Northern Trust 10.8 12.2 11.4 11.8 13.2 12.3 13.9 16.0 15.0 7.1 7.9 7.4 7.9 8.8 8.3
+PNC 9.1 8.0 7.9 10.4 9.4 9.2 12.3 11.1 11.1 8.2 7.4 7.3 6.9 6.2 6.1
+RBC USA 15.0 10.8 10.8 15.0 10.8 10.8 15.6 12.0 12.0 9.9 7.0 7.0
+State Street 13.6 17.8 13.8 15.4 19.7 15.7 16.8 21.3 17.2 6.0 7.6 6.0 7.0 8.8 7.0
+TD Group 17.4 15.9 15.9 17.4 15.9 15.9 18.6 16.9 16.9 9.2 8.4 8.4 8.1 7.4 7.4
+Truist 9.0 6.7 6.7 10.5 8.2 8.2 12.4 10.8 10.8 8.5 6.6 6.6 7.3 5.7 5.7
+UBS Americas 16.1 8.0 8.0 23.3 16.1 16.1 23.4 17.4 17.4 8.5 5.3 5.3 7.7 4.8 4.8
+US Bancorp 8.4 6.9 6.6 9.8 8.4 8.1 11.9 10.5 10.3 7.9 6.7 6.4 6.4 5.4 5.2
+Wells Fargo 10.6 8.4 8.2 12.1 9.9 9.7 14.8 12.7 12.6 8.3 6.7 6.6 6.9 5.6 5.4
+23 banks 12.4 10.5 9.9 14.1 12.2 11.6 16.1 14.3 13.9 7.5 6.4 6.1 6.3 5.5 5.1
+Note: The capital ratios are calculated using the capital action assumptions provided within the supervisory stress testing rules. See 12 C.F.R.
+§238.132(d); 12 C.F.R. §252.44(c).These projections represent hypothetical estimates that involve an economic outcome that is more
+adverse than expected.The minimum capital ratios are for the period 2023:Q1 to 2025:Q1.
+1
+Supplementary leverage ratio projections only include estimates for banks subject to Category I, II, or III standards.
+Results for Banks under the Severely Adverse Scenario 9Figure 4. Change from 2022:Q4 to minimum common equity tier 1 capital ratio in the severely adverse
+scenario
+Wells Fargo
+US Bancorp
+UBSAmericas
+Truist
+TD Group
+State Street
+RBC USA
+PNC
+Northern Trust
+Morgan Stanley
+M&T
+JPMorgan Chase
+Goldman Sachs
+DB USA
+Credit Suisse USA
+Citizens
+Citigroup
+Charles Schwab Corp
+Capital One
+BMO
+Barclays US
+Bank of NY-Mellon
+Bank of America
+Percentage points
+Median=3.3
+–2 –1 0 1 2 3 4 5 6 7 8 9 10
+Note: Estimates of minimum common equity tier 1 (CET1) capital as a percent of risk-weighted assets are for the nine-
+quarter period from 2023:Q1 to 2025:Q1. Negative values indicate CET1 ratio increases.
+10 2023 Federal Reserve Stress Test ResultsBox 2. Results Highlights from 2019 to 2023
+The results of the 2023 stress test indicate large banks would experience substantial losses under the
+severely adverse scenario but would maintain capital ratios well above minimum risk-based requirements.
+The aggregate CET1 capital ratio declines by 2.5 percentage points from the start of the projection
+horizon to its minimum in the 2023 stress test. This decline is smaller than the 2.7 percentage point
+decline in the 2022 stress test, but comparable to projected declines in recent years (see figure A).
+The smaller decline in this year’s aggregate post-stress capital ratio is mostly due to the path of
+interest rates in the scenario.
+Figure A. Aggregate maximum decline in stressed common equity tier 1 capital ratio,
+severely adverse scenario
+−3.0
+−2.5
+−2.0
+−1.5
+−1.0
+−0.5
+0.0
+2023
+stress test
+2022
+stress test
+2021
+stress test
+December 2020
+stress test
+June 2020
+stress test
+2019
+stress test
+−2.1
+−2.3
+−2.6
+−2.4
+−2.7
+Percentage points
+−2.5
+Note: The bar represents the aggregate maximum common equity tier 1 (CET1) capital ratio decline of the banks in each exercise.
+The values for the 2019 stress test are estimates of the CET1 capital ratio decline had the stress capital buffer rule been in place
+at that time. For purposes of this figure, the 2019 stress test values assume (1) a constant level of assets over the projection
+horizon, (2) no common dividend payments, (3) no issuances or repurchases of common or preferred stock (except those related
+to business plan changes), and (4) fully phased-in capital deductions.
+Interest rates fall more in the 2023 scenario than in scenarios from recent years because rates were
+higher at the start of the stress test. The significant decline aligns with the typical behavior of interest
+rates in a severe recession. For example, the 3-month Treasury rate declines by 390 basis points in
+this year’s scenario. That rate did not decline in the December 2020, 2021, and 2022 scenarios, when
+interest rates were near zero at the start of the stress test (see figure B).
+The decline in interest rates in this year’s stress test has offsetting effects on bank capital: it
+increases the projected market value of securities and reduces projected net interest income. Banks
+entered the 2023 stress test with large unrealized losses on their available-for-sale (AFS) securities
+portfolios. Unrealized gains and losses on AFS securities are recognized in accumulated other compre-
+hensive income (AOCI) and flow through to the regulatory capital ratios for the largest firms.1
+(continued)
+1
+Only firms subject to Category I or II standards or firms that opt in are required to include unrealized gains and losses on securities
+in the calculation of capital. Category III and IV firms are not required to include unrealized gains and losses on securities in the
+calculation of capital.
+Results for Banks under the Severely Adverse Scenario 11Box 2—continued
+Figure B. 3-month Treasury yield, severely adverse scenario
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+2023
+stress test
+2022
+stress test
+2021
+stress test
+December 2020
+stress test
+June 2020
+stress test
+2019
+stress test
+−1.5
+−3.9
+−2.2
+0.1 0.1
+0.0
+0.1 0.1 0.1
+2.3
+1.6
+4.0
+Percent
+0.0
+0.1 0.1
+0.0
+0.1 0.1
+Minimum Start
+At the beginning of the 2023 stress test, most banks started with large unrealized losses because the
+market value of their securities fell as interest rates rose in 2022. However, under the hypothetical
+recession in the stress test, rates decline, the market values of most securities increase, and these
+unrealized losses decline. Figure C illustrates this relationship over the past few stress test cycles. In
+conjunction with the decline in interest rates during the projection horizon, interest earned on assets
+falls significantly, which somewhat offsets the projected improvement in securities values.
+(continued)
+Figure C. Accumulated other comprehensive income (AOCI) in capital to risk-weighted assets,
+starting point and stressed minimum
+−1.4
+−1.2
+−1.0
+−0.8
+−0.6
+−0.4
+−0.2
+0.0
+2023
+stress test
+2022
+stress test
+2021
+stress test
+December 2020
+stress test
+June 2020
+stress test
+2019
+stress test
+−0.5
+−0.8
+−0.5 −0.5
+−0.4
+−0.3
+Percent
+−0.5 −0.5
+−1.0
+−0.7
+Minimum quarter AOCI in capital Starting AOCI in capital
+−0.4
+−0.3
+Average
+Note: Only firms subject to Category I or II standards or firms that opt in are required to include unrealized gains and losses on
+securities in the calculation of capital. Category III and IV firms are not required to include unrealized gains and losses on securities
+in the calculation of capital.
+12 2023 Federal Reserve Stress Test ResultsPre-tax Net Income
+Projections of pre-tax net income are the largest component of post-stress changes in capital.7
+Over the nine quarters of the projection horizon, aggregate cumulative pre-tax net income is pro-
+jected to be negative $190 billion, which equals negative 1 percent of average total assets (see
+table 6). As a percent of average assets, projected cumulative pre-tax net income is negative for
+7
+For risk-based capital ratios, the numerator is capital, which is primarily impacted from pre-tax net income and gains/
+losses on AFS. The denominator for risk-based capital ratios is risk-weighted assets. Risk-weighted assets change mini-
+mally throughout the projection horizon as the result of an assumption that a bank’s assets generally remain
+unchanged.
+Box 2—continued
+In contrast to the improvement in forecasted unrealized losses on securities, projected net income in
+the stress test is roughly similar to prior years. The forecasted loss rates on consumer loans increased
+this year, driven by the larger shocks to the unemployment rate and house prices in this year’s scenario.1
+Meanwhile, the loss rates on wholesale loans, such as loans to businesses, decreased because the
+credit quality of these loans has improved since last year (see figure D). In the aggregate, these effects
+roughly offset.
+Figure D. Cumulative consumer and wholesale loss rate through stressed minimum, severely
+adverse scenario
+0
+1
+2
+3
+4
+5
+6
+7
+2023
+stress test
+2022
+stress test
+2021
+stress test
+December 2020
+stress test
+June 2020
+stress test
+2019
+stress test
+3.5
+3.1 3.0
+3.3
+3.6
+Percent
+3.4 3.2
+4.9 4.8
+4.1
+Consumer loss rate Wholesale loss rate
+5.7
+6.6
+Note: Consumer loss rate includes losses on domestic and foreign ﬁrst-lien mortgages, domestic and foreign junior-lien mortgages
+and home equity lines of credit,credit cards,automobile loans, student loans, and all other consumer loans.Wholesale loss rates
+includes losses on domestic and foreign commercial real estate and commercial and industrial loans. Losses are cumulative through
+the projection quarter at which the aggregate capital ratio is the lowest for each stress test.!
+1
+The relatively more severe unemployment and house price paths in this year’s scenario are consistent with the approach outlined in
+the Policy Statement on the Scenario Design Framework for Stress Testing (see 12 C.F.R. pt. 252, appendix A), which calls for the
+unemployment rate to increase to a level of 10 percent and house prices to fall such that the ratio of house prices to per capita
+disposable income reaches the trough experienced in the 2007–09 Global Financial Crisis. These features of the scenario design
+framework are intended to limit procyclicality in the financial system by increasing the severity of the scenario during economic
+expansions and thereby increasing the resilience of the banking system to building risks.
+Results for Banks under the Severely Adverse Scenario 1320 out of 23 banks and varies considerably across banks, ranging from negative 5.7 percent to
+positive 1.9 percent (see figure 5 and table 7). This range illustrates differences in the sensitivity
+of the various components of pre-tax net income to the economic and financial market conditions
+in the severely adverse scenario. These components include cumulative projections of losses and
+pre-provision net revenue (PPNR), which are discussed in further detail below.
+Table 6. Projected aggregate losses, revenue, and net income before taxes through 2025:Q1 under the
+severely adverse scenario
+Item Billions of dollars Percent of average assets1
+Pre-provision net revenue 349.0 1.8
+equals
+Net interest income 791.6 4.1
+Noninterest income 710.8 3.7
+less
+Noninterest expense2
+1,153.4 6.0
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 421.9
+Credit losses on investment securities (AFS/HTM)4
+5.4
+Trading and counterparty losses5
+94.0
+Other losses/gains6
+18.1
+equals
+Net income before taxes −190.4 −1.0
+Memo items
+Other comprehensive income7
+36.9
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −98.0 −61.1
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorporated its projection of expected credit losses on securities in the
+allowance for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valuation adjustment (CVA) losses and losses arising from the counter-
+party default scenario component applied to derivatives, securities lending, and repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for sale or held for investment and measured under the fair-value
+option, losses/gains on hedges on loans measured at fair value or amortized cost, and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Category I or II standards or banks that opt in to including accumu-
+lated other comprehensive income (AOCI) in their calculation of capital.
+14 2023 Federal Reserve Stress Test ResultsFigure 5. Pre-tax net income rates in the severely adverse scenario
+–6 –5 –4 –3 –2 –1 0 1 2
+Wells Fargo
+US Bancorp
+UBSAmericas
+Truist
+TD Group
+State Street
+RBC USA
+PNC
+Northern Trust
+Morgan Stanley
+M&T
+JPMorgan Chase
+Goldman Sachs
+DB USA
+Credit Suisse USA
+Citizens
+Citigroup
+Charles Schwab Corp
+Capital One
+BMO
+Barclays US
+Bank of NY-Mellon
+Bank of America
+Median=–1.2
+Percent
+Note: Estimates are for the nine-quarter period from 2023:Q1 to 2025:Q1 as a percent of average assets.
+Results for Banks under the Severely Adverse Scenario 15Table 7. Projected losses, revenue, and net income before taxes through 2025:Q1 under the severely adverse
+scenario: 23 banks
+Billions of dollars
+Bank
+Sum of revenues Minus sum of provisions and losses Equals
+Memo
+items
+Other effects
+on capital
+Pre-provision
+net revenue1
+Other
+revenue2
+Provisions for
+loan and
+lease losses
+Credit losses
+on invest-
+ment
+securities
+(AFS/HTM)3
+Trading and
+counterparty
+losses4
+Other
+losses/
+gains5
+Net income
+before
+taxes
+Other
+compre-
+hensive
+income6
+AOCI
+included
+in capital
+(2025:Q1)
+Bank of America 43.2 0.0 54.7 0.2 8.9 2.3 −23.0 4.5 −4.8
+Bank of NY-Mellon 8.5 0.0 1.8 0.3 1.3 0.0 5.1 2.1 -3.8
+Barclays US 4.1 0.0 4.6 0.0 2.1 0.0 −2.6 0.0 0.0
+BMO 2.8 0.0 7.2 0.0 0.0 0.0 −4.4 0.0 0.0
+Capital One 31.2 0.0 45.5 0.2 0.0 0.0 −14.5 0.0 0.0
+Charles Schwab Corp 11.8 0.0 1.7 -0.2 0.0 0.0 10.3 0.0 0.0
+Citigroup 22.0 0.0 42.0 0.6 13.3 1.0 −34.9 6.5 −38.0
+Citizens 5.4 0.0 11.9 0.0 0.0 0.0 −6.6 0.0 0.0
+Credit Suisse USA -0.8 0.0 0.0 0.0 2.4 0.2 −3.3 0.0 0.1
+DB USA -0.4 0.0 0.8 0.0 0.9 0.2 −2.3 0.1 −0.2
+Goldman Sachs 26.7 0.0 18.5 0.0 21.2 3.6 −16.6 2.0 −1.0
+JPMorgan Chase 65.2 0.0 71.0 1.7 17.8 4.7 −30.1 9.4 −2.3
+M&T 4.9 0.0 9.8 0.0 0.0 0.0 −4.9 0.0 0.0
+Morgan Stanley 25.0 0.0 11.3 0.0 12.5 4.8 −3.7 3.4 −2.9
+Northern Trust 3.6 0.0 3.7 0.2 0.0 0.0 −0.2 1.5 −0.1
+PNC 14.0 0.0 17.2 0.3 0.0 0.1 −3.6 0.0 −0.1
+RBC USA 2.5 0.0 6.5 0.3 0.0 0.0 −4.2 0.0 0.0
+State Street 6.3 0.0 1.4 0.1 1.2 0.0 3.6 1.5 −1.8
+TD Group 6.8 0.0 10.5 0.2 0.0 0.0 −3.9 0.0 0.0
+Truist 11.8 0.0 20.3 0.9 0.0 0.1 −9.5 0.0 0.0
+UBS Americas 1.1 0.0 3.4 0.0 0.0 0.1 −2.4 0.0 0.0
+US Bancorp 17.9 0.0 23.3 0.0 0.0 0.1 −5.5 0.0 0.0
+Wells Fargo 35.5 0.0 54.9 0.4 12.2 0.8 −32.9 6.0 −6.2
+23 banks 349.0 0.0 421.9 5.4 94.0 18.1 −190.4 36.9 −61.1
+Note: These projections represent hypothetical estimates that involve an economic outcome that is more adverse than expected.Values may not sum
+precisely because of rounding.
+1
+Pre-provision net revenue includes losses from operational-risk events and other real estate owned (OREO) costs.
+2
+Other revenue includes one-time income and (expense) items not included in pre-provision net revenue.
+3
+For banks that have adopted ASU 2016-13, the Federal Reserve incorporated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+4
+Trading and counterparty losses include mark-to-market and credit valuation adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and repurchase agreement activities.
+5
+Other losses/gains include projected change in fair value of loans held for sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost, and goodwill impairment losses.
+6
+Other comprehensive income is only calculated for banks subject to Category I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+16 2023 Federal Reserve Stress Test ResultsLosses
+Over the projection horizon, aggregate losses
+on loans and other positions are projected to
+be $541 billion. These losses comprise
+• $424 billion in loan losses, accounting for
+78 percent of total losses;
+• $18 billion in additional losses from items
+such as loans booked under the fair-value
+option (see table 6), accounting for 3 per-
+cent of total losses;
+• $94 billion in trading and counterparty
+losses at the 11 banks with substantial
+trading, processing, or custodial operations,
+accounting for 17 percent of total
+losses; and
+• $5 billion in securities losses, accounting
+for 1 percent of total losses (see figure 6).8
+For loans measured at amortized cost, projected aggregate losses are $424 billion, with the loan
+loss rate at 6.4 percent (see table 8).9
+These loan losses flow into pre-tax net income through the
+projection of provisions for loan and lease losses, which is $422 billion in aggregate and takes
+into account banks’ established allowances for credit losses at the start of the projection
+horizon.10
+Projected consumer loan losses represent a smaller share (35 percent) of total losses than com-
+mercial loan losses (42 percent). The loan portfolio that constitutes the largest amount of losses
+is credit cards, representing 22 percent of total losses.
+Total loan loss rates vary significantly across banks, ranging between 1.3 percent and 14.7 per-
+cent (see table 9). This range results from differences in loan portfolio composition, which materi-
+ally affects losses because projected loss rates vary significantly for different types of loans. For
+example, aggregate loan loss rates range from 2.7 percent on domestic first-lien mortgages to
+8
+For banks that have adopted ASU 2016-13, the Federal Reserve incorporated its projection of expected credit losses on
+securities in the allowance for credit losses, in accordance with Financial Accounting Standards Board (FASB), “Financial
+Instruments–Credit Losses (Topic 326),” FASB ASU 2016-13 (Norwalk, CT: FASB, June 2016). Prior to the adoption of
+ASU 2016-13, securities credit losses were realized through other-than-temporary impairment.
+9
+The loss rate is calculated as total projected loan losses over the nine quarters of the projection horizon divided by
+average loan balances over the horizon.
+10
+Provisions for loan and lease losses equal projected loan losses plus the amount needed for the allowance to be at an
+appropriate level at the end of each quarter.
+Figure 6. Projected losses in the severely
+adverse scenario
+Billions of dollars (percent of total losses)
+Other losses
+18 (3%) Trading and
+counterparty
+losses
+94 (17%)
+Securities
+losses
+5 (1%)
+Other
+loans
+64 (12%)
+Commercial
+real estate,
+domestic
+65 (12%)
+Commercial and
+industrial loans
+99 (18%)
+Other
+consumer
+loans
+35 (6%)
+Credit cards
+120 (22%)
+Junior liens and
+HELOCs
+7 (1%)
+First-lien mortgages, domestic
+34 (6%)
+Note: Percent of total losses may not sum to 100
+because of rounding.
+Results for Banks under the Severely Adverse Scenario 1717.4 percent on credit cards, due to the sen-
+sitivity and historical performance of these
+loans. Some loan portfolios are sensitive to
+home prices or unemployment rates and may
+experience high stressed loss rates due to the
+considerable stress on these factors in the
+severely adverse scenario.11
+Loan loss rates also reflect differences in the
+characteristics of loans within each portfolio.
+For example, the median projected loss rate
+on commercial and industrial (C&I) loans
+across all banks is 6.3 percent. The loss rate
+on C&I loans among individual firms ranges
+from 2.5 percent to 16.6 percent. For credit
+cards, the range of projected loss rates
+among banks is 15.5 percent to 24.7 percent,
+and the median is 17.8 percent.
+For loans measured at fair value, losses enter
+pre-tax net income through the other loans
+loss category (see table 7). Loans measured at amortized cost and those measured at fair value
+generally have similar risk factors, but the latter are exposed to risk from the effects of market
+fluctuations, which can lead to more severe market value losses in periods of high market volatility
+or asset illiquidity.
+Aggregate trading and counterparty losses, which also flow into pre-tax net income, are $94 billion
+for the 11 banks subject to the global market shock component and/or the largest counterparty
+default component of the severely adverse scenario. Individual bank losses range from $1 billion
+to $21 billion, resulting from the specific risk characteristics of each bank’s trading positions and
+counterparty exposures, inclusive of hedges (see table 7). Importantly, these projected losses are
+based on the trading positions and counterparty exposures held by banks on the same as-of date
+(October 14, 2022) and could have varied if they had been based on a different date.
+Aggregate credit losses on investment securities are $5 billion (see table 6). In addition, unreal-
+ized gains and losses on available-for-sale (AFS) debt securities are reflected in accumulated other
+11
+In addition, losses are calculated based on the exposure at default, which includes both outstanding balances and any
+additional drawdown of the credit line that occurs prior to default, while loss rates are calculated as a percentage of
+average outstanding balances over the projection horizon.
+Table 8. Projected aggregate loan losses, by
+type of loan, under the severely adverse
+scenario, 2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio
+loss rates
+(percent)1
+Loan losses 424.0 6.4
+First-lien mortgages, domestic 33.8 2.7
+Junior liens and HELOCs,2
+domestic 7.0 4.9
+Commercial and industrial3
+99.3 6.7
+Commercial real estate, domestic 64.9 8.8
+Credit cards 119.7 17.4
+Other consumer4
+35.1 5.4
+Other loans5
+64.2 3.8
+1
+Average loan balances used to calculate portfolio loss rates
+exclude loans held for sale, loans held for investment under
+the fair-value option, and Paycheck Protection Program loans
+and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-
+enterprise loans and corporate cards.
+4
+Other consumer loans include student loans and automobile
+loans.
+5
+Other loans include international real estate loans.
+18 2023 Federal Reserve Stress Test Resultscomprehensive income (AOCI).12
+Other comprehensive income (OCI) is projected to be $37 billion
+in aggregate.
+Table 9. Projected loan losses by type of loan for 2023:Q1–2025:Q1 under the severely adverse
+scenario: 23 banks
+Percent of average loan balances1
+Bank
+Loan
+losses
+First-lien
+mortgages,
+domestic
+Junior liens
+and
+HELOCs,2
+domestic
+Commercial
+and
+industrial3
+Commercial
+real estate,
+domestic
+Credit cards
+Other
+consumer4
+Other
+loans5
+Bank of America 5.1 2.3 4.0 5.2 9.4 15.9 2.3 3.1
+Bank of NY-Mellon 2.5 2.8 9.8 4.6 9.3 0.0 0.6 1.7
+Barclays US 10.0 0.0 0.0 16.6 3.4 16.4 16.7 0.7
+BMO 6.2 2.7 4.3 6.2 8.3 16.3 5.7 6.2
+Capital One 14.7 3.2 7.8 11.2 9.9 22.2 10.4 4.9
+Charles Schwab Corp 1.3 1.9 6.5 10.2 0.0 0.0 0.6 0.8
+Citigroup 7.2 3.7 19.1 4.6 9.3 15.6 18.3 2.8
+Citizens 7.1 3.1 5.4 5.6 12.4 18.7 7.8 6.3
+Credit Suisse USA 6.9 0.0 0.0 0.0 8.4 0.0 16.7 0.6
+DB USA 5.0 3.4 9.9 2.5 11.2 0.0 4.5 1.9
+Goldman Sachs 9.0 3.7 5.0 14.0 16.0 24.7 9.3 4.9
+JPMorgan Chase 6.4 2.8 4.2 10.0 3.9 15.5 3.3 4.1
+M&T 7.1 3.1 4.7 6.5 8.8 17.8 9.2 8.2
+Morgan Stanley 4.2 2.8 5.0 11.7 13.7 0.0 1.3 3.9
+Northern Trust 7.1 2.8 10.1 6.2 11.5 0.0 16.7 7.0
+PNC 5.5 2.5 3.4 5.8 10.0 18.8 4.6 2.8
+RBC USA 6.9 4.4 6.5 9.6 10.3 17.8 14.8 3.6
+State Street 3.6 0.0 0.0 7.7 4.1 0.0 0.6 3.0
+TD Group 5.9 2.7 5.5 6.2 7.5 21.4 2.9 3.5
+Truist 5.9 2.4 3.8 5.3 9.6 16.3 8.3 3.6
+UBS Americas 2.9 3.4 0.0 3.1 4.1 17.8 0.7 8.9
+US Bancorp 6.3 3.0 6.0 6.6 9.5 16.5 5.5 4.0
+Wells Fargo 5.7 2.1 2.8 6.4 9.7 17.8 5.1 4.5
+23 banks 6.4 2.7 4.9 6.7 8.8 17.4 5.4 3.8
+Note: These projections represent hypothetical estimates that involve an economic outcome that is more adverse than expected.Values may
+not sum precisely because of rounding.
+1
+Average loan balances used to calculate portfolio loss rates exclude loans held for sale, loans held for investment under the fair-value
+option, and Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+12
+Only firms subject to Category I or II standards or firms that opt in are required to include unrealized gains and losses
+on securities in the calculation of capital. Category III and IV firms are not required to include unrealized gains and
+losses on securities in the calculation of capital.
+Results for Banks under the Severely Adverse Scenario 19Box 3. Commercial Real Estate in Supervisory Stress Test
+The May 2023 Financial Stability Report highlights the elevated prices on commercial real estate (CRE)
+and the possibility of a large correction in property values that could lead to substantial losses for
+banks.1
+The demand for offices, downtown retail, and hotels has seen dramatic and countervailing
+changes over the past several years due largely to the pandemic and resulting changes. While many
+bank CRE loans are held by smaller banks not subject to the supervisory stress test, the banks subject
+to the stress test hold approximately 20 percent of office and downtown retail CRE loans. The 2023
+stress test results demonstrate that large banks continue to have sufficient capital to withstand a
+severe CRE downturn.
+The 2023 severely adverse scenario featured heightened stress in the CRE market, including a 40 per-
+cent decline in CRE prices. The scenario noted that declines in CRE prices should be assumed to be
+concentrated in properties most at risk of a sustained drop in income and asset values: offices that
+may be affected by remote work or hospitality sectors that continue to be affected by reduced busi-
+ness travel.
+Conditions of CRE sectors have moved in different directions over the past several years. Office vacan-
+cies are elevated relative to pre-pandemic levels and increasing, while hotel vacancies peaked during
+the pandemic in 2020 and have been falling since that time (see figure A).
+Figure A. Vacancy rate by property type
+Percent
+Hotel Ofﬁce
+0
+10
+20
+30
+40
+50
+60
+70
+80
+2022 2020 2018 2016 2014 2012 2010 2008 2006 2004 2002 2000
+Retail
+Note:Vacancy rate for each year uses the fourth quarter data only.
+Source: CBRE Econometric Advisors.!
+In the severely adverse scenario, banks are projected to lose $64.9 billion on CRE exposures, or
+8.8 percent of average balances. Overall projected CRE loss rates have fallen since 2020 as the hospi-
+tality sector recovered from the acute pandemic-related stress, but they remain elevated. Projected loss
+rates in the office sector continue to increase because of the high level of current stress in office
+market fundamentals and projected further deterioration in the scenario (see figure B). For example,
+the office loss rate under this year’s scenario was around 20 percent. The projected office loss rates in
+the last few stress test cycles are higher than the peak loss rate observed during the 2007-09 Global
+(continued)
+1
+See Board of Governors of the Federal Reserve System, Financial Stability Report, May 2023. https://www.federalreserve.gov/
+publications/files/financial-stability-report-20230508.pdf.
+20 2023 Federal Reserve Stress Test ResultsPre-provision Net Revenue
+Pre-tax net income also includes projections of post-stress income and expenses captured in
+PPNR. Over the projection horizon, banks are projected to generate an aggregate of $349 billion in
+PPNR, which is equal to 1.8 percent of their combined average assets (see table 6).
+PPNR projections are generally driven by the shape of the yield curve, the path of asset prices,
+equity market volatility, and measures of economic activity in the severely adverse scenario. In
+addition, PPNR incorporates expenses stemming from operational-risk events, such as fraud,
+employee lawsuits, litigation-related expenses, or computer system or other operating disrup-
+tions.13
+In the aggregate, operational-risk losses are $185 billion.
+13
+These operational-risk expenses are not a supervisory estimate of banks’ current or expected legal liability, as they are
+conditional on the severely adverse scenario and conservative assumptions, and they also incorporate the potential for
+substantial losses that do not involve litigation or legal exposure.
+Box 3—continued
+Financial Crisis. Despite the severe losses, each bank has sufficient capital to continue to operate
+above regulatory capital requirements. To ensure the banking system remains sound and resilient, Fed-
+eral Reserve supervisors have increased efforts to evaluate banks’ credit risk exposure with particular
+attention on CRE lending.
+Figure B. Office loss rate, cumulative 9-quarter
+Percent
+0
+5
+10
+15
+20
+25
+2023
+stress test
+2022
+stress test
+2021
+stress test
+December 2020
+stress test
+June 2020
+stress test
+2019
+stress test
+2007–09 Global Financial Crisis loss rate
+Note:The 2007–09 Global Financial Crisis loss rate is based on ofﬁce CMBS loans that became delinquent over the 9-quarter window
+in which eventual realized losses were highest.Stress test loss rates are calculated based on ﬁrms subject to the stress test each year
+and do not include owner occupied properties.
+Source: Morningstar.!
+Results for Banks under the Severely Adverse Scenario 21The ratio of PPNR to average assets varies across banks (see figure 7), primarily because of differ-
+ences in business focus. For instance, the ratio of PPNR to assets tends to be higher at banks
+focusing on credit card lending, since credit cards generally produce higher net interest income
+relative to other forms of lending.14
+Additionally, lower ratios of PPNR to assets do not necessarily
+imply lower pre-tax net income, because the same business focus and risk characteristics deter-
+mining differences in PPNR across banks could also result in offsetting projected losses.
+14
+Credit card lending also tends to generate relatively high loss rates, suggesting that the higher PPNR rates at these
+banks do not necessarily indicate higher profitability.
+Figure 7. Pre-provision net revenue rates in the severely adverse scenario
+–2 –1 0 1 2 3 4 5 6 7 8
+Wells Fargo
+US Bancorp
+UBSAmericas
+Truist
+TD Group
+State Street
+RBC USA
+PNC
+Northern Trust
+Morgan Stanley
+M&T
+JPMorgan Chase
+Goldman Sachs
+DB USA
+Credit Suisse USA
+Citizens
+Citigroup
+Charles Schwab Corp
+Capital One
+BMO
+Barclays US
+Bank of NY-Mellon
+Bank of America
+Percent
+Median=2.1
+Note: Estimates are for the nine-quarter period from 2023:Q1 to 2025:Q1 as a percent of average assets.
+22 2023 Federal Reserve Stress Test ResultsBox 4. Exploratory Market Shock—Testing Inflationary
+Pressures
+In February 2023, for the first time, the Federal Reserve published an additional, exploratory market
+shock component that applied only to U.S. G-SIBs.1
+The purpose of the stress test is to understand a
+firm’s resilience to a range of severe but plausible events, and the exploratory component furthers that
+purpose by posing a different set of risks than is probed by this year’s global market shock component.
+In contrast to this year’s global market shock component, which was characterized by a severe reces-
+sion with fading inflation expectations, the exploratory market shock is characterized by a less severe
+recession with greater inflationary pressures induced by higher inflation expectations, increases in
+interest rates, an appreciation of the U.S. dollar, and increases in commodity prices.2
+Consistent with
+the nature of an exploratory exercise, the exploratory market shock does not contribute to the capital
+requirements set by this year’s stress test.
+Results
+Both the global and exploratory market shocks affect banks through losses associated with their
+trading positions and counterparty exposures. Under the exploratory market shock, we see that the
+impact differs for firms relative to the severely adverse scenario. Full results are shown in table A.
+Most banks experience smaller trading and counterparty losses in the exploratory market shock, while
+one bank experiences larger losses. In aggregate, the trading and counterparty losses for the U.S.
+G-SIBs decline from about 1.3 percent of risk-weighted assets in the global market shock component to
+1.1 percent of risk-weighted assets in the exploratory market shock.
+(continued)
+Table A. Projected trading and counterparty losses through 2025:Q1 under the exploratory
+market shock component: U.S. G-SIBs
+Billions of dollars
+Bank
+Global market shock
+component
+Exploratory market
+shock component
+Bank of America 8.9 8.5
+Bank of NY-Mellon 1.3 0.8
+Citigroup 13.3 11.3
+Goldman Sachs 21.2 18.1
+JPMorgan Chase 17.8 15.7
+Morgan Stanley 12.5 10.7
+State Street 1.2 0.7
+Wells Fargo 12.2 12.4
+1
+The U.S. G-SIBs are Bank of America Corporation, The Bank of New York Mellon Corporation, Citigroup Inc., The Goldman Sachs
+Group, Inc., JPMorgan Chase & Co., Morgan Stanley, State Street Corporation, and Wells Fargo & Company. As in the supervisory
+stress test, The Bank of New York Mellon Corporation and State Street Corporation were required only to incorporate an additional
+counterparty default component into their exploratory market shock. The Bank of New York Mellon Corporation and State Street
+Corporation were not required to apply the exploratory market shock to calculate mark-to-market losses on their trading or credit
+valuation adjustments exposures.
+2
+The full description of the exploratory market shock is available here: Board of Governors of the Federal Reserve, 2023 Stress Test
+Scenarios (Washington: Board of Governors, February 2023), https://www.federalreserve.gov/newsevents/pressreleases/files/
+bcreg20230209a1.pdf.
+Results for Banks under the Severely Adverse Scenario 23Box 4—continued
+What Did We Learn?
+The purpose of the exploratory market shock was to assess the potential of multiple scenarios to cap-
+ture a wider array of risks. While the total loss projections from these two sets of shocks were similar,
+the underlying composition of losses varied significantly. For example, the exploratory market shock
+losses resulted in different counterparty concentrations relative to the global market shock. The
+changes were large enough to result in many banks’ largest counterparty switching. Similarly, the pro-
+file of trading profit and loss was altered, providing further evidence that the use of more than one sce-
+nario can expand the Federal Reserve’s view of risk exposures.
+24 2023 Federal Reserve Stress Test ResultsAppendix A: Additional Bank-Specific
+Results
+25Table A.1. Bank of America Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 11.2 9.9 9.3
+Tier 1 capital ratio 13.0 11.7 11.1
+Total capital ratio 14.9 13.7 13.4
+Tier 1 leverage ratio 7.0 6.2 5.9
+Supplementary leverage ratio 5.9 5.3 5.0
+Risk-weighted assets1
+(billions of dollars) 1,604.9 1,591.4
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 54.4 5.1
+First-lien mortgages, domestic 5.4 2.3
+Junior liens and HELOCs,2
+domestic 1.1 4.0
+Commercial and industrial3
+16.6 5.2
+Commercial real estate, domestic 7.2 9.4
+Credit cards 14.9 15.9
+Other consumer4
+2.1 2.3
+Other loans5
+7.2 3.1
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 43.2 1.4
+equals
+Net interest income 118.7 3.9
+Noninterest income 81.8 2.7
+less
+Noninterest expense2
+157.2 5.2
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 54.7
+Credit losses on investment securities
+(AFS/HTM)4
+0.2
+Trading and counterparty losses5
+8.9
+Other losses/gains6
+2.3
+equals
+Net income before taxes −23.0 −0.8
+Memo items
+Other comprehensive income7
+4.5
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −9.2 −4.8
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+26 2023 Federal Reserve Stress Test ResultsTable A.2. The Bank of New York Mellon Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 11.3 14.9 11.7
+Tier 1 capital ratio 14.4 17.9 14.7
+Total capital ratio 15.3 18.9 15.8
+Tier 1 leverage ratio 5.8 7.2 5.9
+Supplementary leverage ratio 6.8 8.5 7.0
+Risk-weighted assets1
+(billions of dollars) 159.1 159.1
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 1.6 2.5
+First-lien mortgages, domestic 0.3 2.8
+Junior liens and HELOCs,2
+domestic 0.0 9.8
+Commercial and industrial3
+0.1 4.6
+Commercial real estate, domestic 0.5 9.3
+Credit cards 0.0 0.0
+Other consumer4
+0.0 0.6
+Other loans5
+0.8 1.7
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 8.5 2.1
+equals
+Net interest income 8.5 2.1
+Noninterest income 27.1 6.7
+less
+Noninterest expense2
+27.1 6.7
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 1.8
+Credit losses on investment securities
+(AFS/HTM)4
+0.3
+Trading and counterparty losses5
+1.3
+Other losses/gains6
+0.0
+equals
+Net income before taxes 5.1 1.2
+Memo items
+Other comprehensive income7
+2.1
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −6.0 −3.8
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 27Table A.3. Barclays US LLC
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 13.5 10.2 9.3
+Tier 1 capital ratio 15.1 11.8 11.0
+Total capital ratio 16.9 13.8 13.0
+Tier 1 leverage ratio 8.2 6.3 5.8
+Supplementary leverage ratio 5.8 4.4 4.1
+Risk-weighted assets1
+(billions of dollars) 103.7 101.9
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 4.9 10.0
+First-lien mortgages, domestic 0.0 0.0
+Junior liens and HELOCs,2
+domestic 0.0 0.0
+Commercial and industrial3
+0.0 16.6
+Commercial real estate, domestic 0.0 3.4
+Credit cards 4.7 16.4
+Other consumer4
+0.0 16.7
+Other loans5
+0.1 0.7
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 4.1 2.4
+equals
+Net interest income 9.0 5.2
+Noninterest income 12.6 7.3
+less
+Noninterest expense2
+17.5 10.1
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 4.6
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+2.1
+Other losses/gains6
+0.0
+equals
+Net income before taxes −2.6 −1.5
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+28 2023 Federal Reserve Stress Test ResultsTable A.4. BMO Financial Corp.
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 12.6 9.3 9.3
+Tier 1 capital ratio 13.5 10.2 10.2
+Total capital ratio 15.0 12.2 12.2
+Tier 1 leverage ratio 9.9 7.4 7.4
+Supplementary leverage ratio n/a n/a n/a
+Risk-weighted assets1
+(billions of dollars) 150.4 150.6
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+n/a Not applicable.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 6.3 6.2
+First-lien mortgages, domestic 0.2 2.7
+Junior liens and HELOCs,2
+domestic 0.1 4.3
+Commercial and industrial3
+2.4 6.2
+Commercial real estate, domestic 1.1 8.3
+Credit cards 0.1 16.3
+Other consumer4
+0.5 5.7
+Other loans5
+1.9 6.2
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 2.8 1.4
+equals
+Net interest income 8.9 4.3
+Noninterest income 4.2 2.0
+less
+Noninterest expense2
+10.3 5.0
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 7.2
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes −4.4 −2.1
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 29Table A.5. Capital One Financial Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 12.5 8.0 8.0
+Tier 1 capital ratio 13.9 9.3 9.3
+Total capital ratio 15.8 11.3 11.3
+Tier 1 leverage ratio 11.1 7.5 7.5
+Supplementary leverage ratio 9.5 6.3 6.3
+Risk-weighted assets1
+(billions of dollars) 357.9 356.6
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 46.0 14.7
+First-lien mortgages, domestic 0.0 3.2
+Junior liens and HELOCs,2
+domestic 0.0 7.8
+Commercial and industrial3
+5.3 11.2
+Commercial real estate, domestic 3.0 9.9
+Credit cards 28.1 22.2
+Other consumer4
+8.2 10.4
+Other loans5
+1.4 4.9
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 31.2 6.8
+equals
+Net interest income 61.7 13.6
+Noninterest income 15.4 3.4
+less
+Noninterest expense2
+45.9 10.1
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 45.5
+Credit losses on investment securities
+(AFS/HTM)4
+0.2
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes −14.5 −3.2
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+30 2023 Federal Reserve Stress Test ResultsTable A.6. The Charles Schwab Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 21.9 27.0 22.8
+Tier 1 capital ratio 28.9 34.0 29.8
+Total capital ratio 28.9 34.3 29.9
+Tier 1 leverage ratio 7.2 8.4 7.4
+Supplementary leverage ratio 7.1 8.4 7.3
+Risk-weighted assets1
+(billions of dollars) 139.7 139.7
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 1.4 1.3
+First-lien mortgages, domestic 0.5 1.9
+Junior liens and HELOCs,2
+domestic 0.0 6.5
+Commercial and industrial3
+0.2 10.2
+Commercial real estate, domestic 0.0 0.0
+Credit cards 0.0 0.0
+Other consumer4
+0.1 0.6
+Other loans5
+0.6 0.8
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 11.8 2.1
+equals
+Net interest income 17.6 3.2
+Noninterest income 18.1 3.3
+less
+Noninterest expense2
+23.9 4.3
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 1.7
+Credit losses on investment securities
+(AFS/HTM)4
+−0.2
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes 10.3 1.9
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 31Table A.7. Citigroup Inc.
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 13.0 9.7 9.1
+Tier 1 capital ratio 14.8 11.5 10.9
+Total capital ratio 17.3 13.9 13.5
+Tier 1 leverage ratio 7.1 5.3 5.0
+Supplementary leverage ratio 5.8 4.4 4.2
+Risk-weighted assets1
+(billions of dollars) 1,143.0 1,107.9
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 47.3 7.2
+First-lien mortgages, domestic 3.5 3.7
+Junior liens and HELOCs,2
+domestic 1.1 19.1
+Commercial and industrial3
+7.1 4.6
+Commercial real estate, domestic 2.4 9.3
+Credit cards 24.6 15.6
+Other consumer4
+2.8 18.3
+Other loans5
+5.8 2.8
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 22.0 0.9
+equals
+Net interest income 109.5 4.5
+Noninterest income 43.9 1.8
+less
+Noninterest expense2
+131.4 5.4
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 42.0
+Credit losses on investment securities
+(AFS/HTM)4
+0.6
+Trading and counterparty losses5
+13.3
+Other losses/gains6
+1.0
+equals
+Net income before taxes −34.9 −1.4
+Memo items
+Other comprehensive income7
+6.5
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −44.5 −38.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+32 2023 Federal Reserve Stress Test ResultsTable A.8. Citizens Financial Group, Inc.
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 10.0 6.4 6.4
+Tier 1 capital ratio 11.1 7.5 7.5
+Total capital ratio 12.8 9.6 9.6
+Tier 1 leverage ratio 9.3 6.3 6.3
+Supplementary leverage ratio n/a n/a n/a
+Risk-weighted assets1
+(billions of dollars) 185.2 184.4
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+n/a Not applicable.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 11.1 7.1
+First-lien mortgages, domestic 0.9 3.1
+Junior liens and HELOCs,2
+domestic 0.8 5.4
+Commercial and industrial3
+2.6 5.6
+Commercial real estate, domestic 4.0 12.4
+Credit cards 0.4 18.7
+Other consumer4
+2.1 7.8
+Other loans5
+0.3 6.3
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 5.4 2.4
+equals
+Net interest income 13.3 5.8
+Noninterest income 4.5 2.0
+less
+Noninterest expense2
+12.3 5.4
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 11.9
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes −6.6 −2.9
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 33Table A.9. Credit Suisse Holdings (USA), Inc.
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 27.8 20.7 20.5
+Tier 1 capital ratio 29.0 21.9 21.7
+Total capital ratio 29.2 21.9 21.7
+Tier 1 leverage ratio 19.8 14.8 14.6
+Supplementary leverage ratio 16.4 12.3 12.2
+Risk-weighted assets1
+(billions of dollars) 44.6 44.1
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 0.0 6.9
+First-lien mortgages, domestic 0.0 0.0
+Junior liens and HELOCs,2
+domestic 0.0 0.0
+Commercial and industrial3
+0.0 0.0
+Commercial real estate, domestic 0.0 8.4
+Credit cards 0.0 0.0
+Other consumer4
+0.0 16.7
+Other loans5
+0.0 0.6
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue −0.8 −1.3
+equals
+Net interest income −0.6 −1.1
+Noninterest income 6.9 12.1
+less
+Noninterest expense2
+7.1 12.3
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 0.0
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+2.4
+Other losses/gains6
+0.2
+equals
+Net income before taxes −3.3 −5.7
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.1 0.1
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+34 2023 Federal Reserve Stress Test ResultsTable A.10. DB USA Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 26.1 17.5 17.4
+Tier 1 capital ratio 34.4 26.7 26.6
+Total capital ratio 34.4 27.0 26.9
+Tier 1 leverage ratio 10.4 7.4 7.3
+Supplementary leverage ratio 9.5 6.7 6.7
+Risk-weighted assets1
+(billions of dollars) 38.8 35.0
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+DWS USA Corporation, the second U.S. intermediate holding company sub-
+sidiary of Deutsche Bank AG, was subject to 2023 stress test and maintained
+capital above each minimum regulatory capital ratio on a post-stress basis.
+DWS USA Corporation had about $2 billion in assets as of the end of the
+fourth quarter of 2022.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 0.7 5.0
+First-lien mortgages, domestic 0.1 3.4
+Junior liens and HELOCs,2
+domestic 0.0 9.9
+Commercial and industrial3
+0.1 2.5
+Commercial real estate, domestic 0.4 11.2
+Credit cards 0.0 0.0
+Other consumer4
+0.0 4.5
+Other loans5
+0.1 1.9
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue −0.4 −0.4
+equals
+Net interest income 0.9 0.8
+Noninterest income 8.1 7.8
+less
+Noninterest expense2
+9.3 9.1
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 0.8
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+0.9
+Other losses/gains6
+0.2
+equals
+Net income before taxes −2.3 −2.3
+Memo items
+Other comprehensive income7
+0.1
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −0.2 −0.2
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 35Table A.11. The Goldman Sachs Group, Inc.
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 15.0 12.6 10.1
+Tier 1 capital ratio 16.6 14.2 11.7
+Total capital ratio 19.1 16.6 14.6
+Tier 1 leverage ratio 7.3 6.2 5.0
+Supplementary leverage ratio 5.8 4.9 4.0
+Risk-weighted assets1
+(billions of dollars) 653.4 644.2
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 19.4 9.0
+First-lien mortgages, domestic 0.2 3.7
+Junior liens and HELOCs,2
+domestic 0.0 5.0
+Commercial and industrial3
+5.9 14.0
+Commercial real estate, domestic 1.8 16.0
+Credit cards 3.9 24.7
+Other consumer4
+1.4 9.3
+Other loans5
+6.2 4.9
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 26.7 1.9
+equals
+Net interest income 24.8 1.7
+Noninterest income 77.5 5.4
+less
+Noninterest expense2
+75.6 5.2
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 18.5
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+21.2
+Other losses/gains6
+3.6
+equals
+Net income before taxes −16.6 −1.2
+Memo items
+Other comprehensive income7
+2.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −3.0 −1.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+36 2023 Federal Reserve Stress Test ResultsTable A.12. JPMorgan Chase & Co.
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 13.2 11.9 11.1
+Tier 1 capital ratio 14.9 13.5 12.7
+Total capital ratio 16.8 15.4 14.8
+Tier 1 leverage ratio 6.6 6.0 5.6
+Supplementary leverage ratio 5.6 5.1 4.8
+Risk-weighted assets1
+(billions of dollars) 1,653.5 1,640.2
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 72.9 6.4
+First-lien mortgages, domestic 6.2 2.8
+Junior liens and HELOCs,2
+domestic 0.7 4.2
+Commercial and industrial3
+19.2 10.0
+Commercial real estate, domestic 4.8 3.9
+Credit cards 25.5 15.5
+Other consumer4
+2.7 3.3
+Other loans5
+13.8 4.1
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 65.2 1.8
+equals
+Net interest income 145.0 4.0
+Noninterest income 114.5 3.1
+less
+Noninterest expense2
+194.2 5.3
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 71.0
+Credit losses on investment securities
+(AFS/HTM)4
+1.7
+Trading and counterparty losses5
+17.8
+Other losses/gains6
+4.7
+equals
+Net income before taxes −30.1 −0.8
+Memo items
+Other comprehensive income7
+9.4
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −11.7 −2.3
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 37Table A.13. M&T Bank Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 10.4 7.0 7.0
+Tier 1 capital ratio 11.8 8.4 8.4
+Total capital ratio 13.6 10.3 10.3
+Tier 1 leverage ratio 9.2 6.5 6.5
+Supplementary leverage ratio n/a n/a n/a
+Risk-weighted assets1
+(billions of dollars) 149.0 148.4
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+n/a Not applicable.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 9.3 7.1
+First-lien mortgages, domestic 0.7 3.1
+Junior liens and HELOCs,2
+domestic 0.2 4.7
+Commercial and industrial3
+2.0 6.5
+Commercial real estate, domestic 3.9 8.8
+Credit cards 0.1 17.8
+Other consumer4
+1.4 9.2
+Other loans5
+0.9 8.2
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 4.9 2.4
+equals
+Net interest income 12.0 6.0
+Noninterest income 4.9 2.4
+less
+Noninterest expense2
+12.0 6.0
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 9.8
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes −4.9 −2.5
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+38 2023 Federal Reserve Stress Test ResultsTable A.14. Morgan Stanley
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 15.3 14.9 11.2
+Tier 1 capital ratio 17.2 16.8 13.2
+Total capital ratio 19.3 19.0 15.5
+Tier 1 leverage ratio 6.7 6.5 5.0
+Supplementary leverage ratio 5.5 5.4 4.1
+Risk-weighted assets1
+(billions of dollars) 447.8 446.8
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 10.1 4.2
+First-lien mortgages, domestic 1.5 2.8
+Junior liens and HELOCs,2
+domestic 0.0 5.0
+Commercial and industrial3
+1.4 11.7
+Commercial real estate, domestic 2.0 13.7
+Credit cards 0.0 0.0
+Other consumer4
+0.5 1.3
+Other loans5
+4.7 3.9
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 25.0 2.1
+equals
+Net interest income 27.0 2.3
+Noninterest income 91.5 7.8
+less
+Noninterest expense2
+93.5 7.9
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 11.3
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+12.5
+Other losses/gains6
+4.8
+equals
+Net income before taxes −3.7 −0.3
+Memo items
+Other comprehensive income7
+3.4
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −6.2 −2.9
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 39Table A.15. Northern Trust Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 10.8 12.2 11.4
+Tier 1 capital ratio 11.8 13.2 12.3
+Total capital ratio 13.9 16.0 15.0
+Tier 1 leverage ratio 7.1 7.9 7.4
+Supplementary leverage ratio 7.9 8.8 8.3
+Risk-weighted assets1
+(billions of dollars) 88.1 88.1
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 3.0 7.1
+First-lien mortgages, domestic 0.2 2.8
+Junior liens and HELOCs,2
+domestic 0.0 10.1
+Commercial and industrial3
+0.3 6.2
+Commercial real estate, domestic 0.7 11.5
+Credit cards 0.0 0.0
+Other consumer4
+0.1 16.7
+Other loans5
+1.8 7.0
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 3.6 2.3
+equals
+Net interest income 3.9 2.5
+Noninterest income 10.5 6.8
+less
+Noninterest expense2
+10.8 6.9
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 3.7
+Credit losses on investment securities
+(AFS/HTM)4
+0.2
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes −0.2 −0.2
+Memo items
+Other comprehensive income7
+1.5
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −1.6 −0.1
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+40 2023 Federal Reserve Stress Test ResultsTable A.16. The PNC Financial Services Group, Inc.
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 9.1 8.0 7.9
+Tier 1 capital ratio 10.4 9.4 9.2
+Total capital ratio 12.3 11.1 11.1
+Tier 1 leverage ratio 8.2 7.4 7.3
+Supplementary leverage ratio 6.9 6.2 6.1
+Risk-weighted assets1
+(billions of dollars) 435.5 434.5
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 17.8 5.5
+First-lien mortgages, domestic 1.2 2.5
+Junior liens and HELOCs,2
+domestic 0.7 3.4
+Commercial and industrial3
+7.8 5.8
+Commercial real estate, domestic 4.7 10.0
+Credit cards 1.2 18.8
+Other consumer4
+1.0 4.6
+Other loans5
+1.3 2.8
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 14.0 2.5
+equals
+Net interest income 28.3 5.1
+Noninterest income 18.6 3.3
+less
+Noninterest expense2
+32.8 5.9
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 17.2
+Credit losses on investment securities
+(AFS/HTM)4
+0.3
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.1
+equals
+Net income before taxes −3.6 −0.6
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −0.1 −0.1
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 41Table A.17. RBC US Group Holdings LLC
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 15.0 10.8 10.8
+Tier 1 capital ratio 15.0 10.8 10.8
+Total capital ratio 15.6 12.0 12.0
+Tier 1 leverage ratio 9.9 7.0 7.0
+Supplementary leverage ratio n/a n/a n/a
+Risk-weighted assets1
+(billions of dollars) 111.1 108.4
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+n/a Not applicable.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 5.5 6.9
+First-lien mortgages, domestic 1.1 4.4
+Junior liens and HELOCs,2
+domestic 0.1 6.5
+Commercial and industrial3
+1.2 9.6
+Commercial real estate, domestic 2.2 10.3
+Credit cards 0.1 17.8
+Other consumer4
+0.3 14.8
+Other loans5
+0.7 3.6
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 2.5 1.5
+equals
+Net interest income 5.1 3.0
+Noninterest income 13.1 7.8
+less
+Noninterest expense2
+15.8 9.4
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 6.5
+Credit losses on investment securities
+(AFS/HTM)4
+0.3
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes −4.2 −2.5
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+42 2023 Federal Reserve Stress Test ResultsTable A.18. State Street Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 13.6 17.8 13.8
+Tier 1 capital ratio 15.4 19.7 15.7
+Total capital ratio 16.8 21.3 17.2
+Tier 1 leverage ratio 6.0 7.6 6.0
+Supplementary leverage ratio 7.0 8.8 7.0
+Risk-weighted assets1
+(billions of dollars) 107.2 106.0
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 1.2 3.6
+First-lien mortgages, domestic 0.0 0.0
+Junior liens and HELOCs,2
+domestic 0.0 0.0
+Commercial and industrial3
+0.3 7.7
+Commercial real estate, domestic 0.1 4.1
+Credit cards 0.0 0.0
+Other consumer4
+0.0 0.6
+Other loans5
+0.8 3.0
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 6.3 2.1
+equals
+Net interest income 6.1 2.0
+Noninterest income 21.4 7.1
+less
+Noninterest expense2
+21.3 7.1
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 1.4
+Credit losses on investment securities
+(AFS/HTM)4
+0.1
+Trading and counterparty losses5
+1.2
+Other losses/gains6
+0.0
+equals
+Net income before taxes 3.6 1.2
+Memo items
+Other comprehensive income7
+1.5
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −3.3 −1.8
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 43Table A.19. TD Group US Holdings LLC
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 17.4 15.9 15.9
+Tier 1 capital ratio 17.4 15.9 15.9
+Total capital ratio 18.6 16.9 16.9
+Tier 1 leverage ratio 9.2 8.4 8.4
+Supplementary leverage ratio 8.1 7.4 7.4
+Risk-weighted assets1
+(billions of dollars) 255.4 254.7
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 10.8 5.9
+First-lien mortgages, domestic 1.0 2.7
+Junior liens and HELOCs,2
+domestic 0.4 5.5
+Commercial and industrial3
+2.1 6.2
+Commercial real estate, domestic 2.2 7.5
+Credit cards 3.2 21.4
+Other consumer4
+0.8 2.9
+Other loans5
+1.3 3.5
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 6.8 1.3
+equals
+Net interest income 19.8 3.9
+Noninterest income 6.8 1.3
+less
+Noninterest expense2
+19.7 3.9
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 10.5
+Credit losses on investment securities
+(AFS/HTM)4
+0.2
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.0
+equals
+Net income before taxes −3.9 −0.8
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+44 2023 Federal Reserve Stress Test ResultsTable A.20. Truist Financial Corporation
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 9.0 6.7 6.7
+Tier 1 capital ratio 10.5 8.2 8.2
+Total capital ratio 12.4 10.8 10.8
+Tier 1 leverage ratio 8.5 6.6 6.6
+Supplementary leverage ratio 7.3 5.7 5.7
+Risk-weighted assets1
+(billions of dollars) 434.4 432.5
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 19.1 5.9
+First-lien mortgages, domestic 1.4 2.4
+Junior liens and HELOCs,2
+domestic 0.4 3.8
+Commercial and industrial3
+4.6 5.3
+Commercial real estate, domestic 5.1 9.6
+Credit cards 0.6 16.3
+Other consumer4
+5.0 8.3
+Other loans5
+2.0 3.6
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 11.8 2.1
+equals
+Net interest income 31.1 5.6
+Noninterest income 17.7 3.2
+less
+Noninterest expense2
+37.1 6.7
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 20.3
+Credit losses on investment securities
+(AFS/HTM)4
+0.9
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.1
+equals
+Net income before taxes −9.5 −1.7
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 45Table A.21. UBS Americas Holding LLC
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 16.1 8.0 8.0
+Tier 1 capital ratio 23.3 16.1 16.1
+Total capital ratio 23.4 17.4 17.4
+Tier 1 leverage ratio 8.5 5.3 5.3
+Supplementary leverage ratio 7.7 4.8 4.8
+Risk-weighted assets1
+(billions of dollars) 70.7 63.0
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 2.7 2.9
+First-lien mortgages, domestic 1.0 3.4
+Junior liens and HELOCs,2
+domestic 0.0 0.0
+Commercial and industrial3
+0.2 3.1
+Commercial real estate, domestic 0.1 4.1
+Credit cards 0.0 17.8
+Other consumer4
+0.3 0.7
+Other loans5
+1.1 8.9
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 1.1 0.5
+equals
+Net interest income 3.6 1.8
+Noninterest income 24.4 12.1
+less
+Noninterest expense2
+26.9 13.3
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 3.4
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.1
+equals
+Net income before taxes −2.4 −1.2
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+46 2023 Federal Reserve Stress Test ResultsTable A.22. U.S. Bancorp
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 8.4 6.9 6.6
+Tier 1 capital ratio 9.8 8.4 8.1
+Total capital ratio 11.9 10.5 10.3
+Tier 1 leverage ratio 7.9 6.7 6.4
+Supplementary leverage ratio 6.4 5.4 5.2
+Risk-weighted assets1
+(billions of dollars) 496.5 493.5
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 24.3 6.3
+First-lien mortgages, domestic 3.5 3.0
+Junior liens and HELOCs,2
+domestic 0.8 6.0
+Commercial and industrial3
+7.0 6.6
+Commercial real estate, domestic 5.1 9.5
+Credit cards 4.3 16.5
+Other consumer4
+2.3 5.5
+Other loans5
+1.3 4.0
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 17.9 2.6
+equals
+Net interest income 35.0 5.2
+Noninterest income 26.2 3.9
+less
+Noninterest expense2
+43.4 6.4
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 23.3
+Credit losses on investment securities
+(AFS/HTM)4
+0.0
+Trading and counterparty losses5
+0.0
+Other losses/gains6
+0.1
+equals
+Net income before taxes −5.5 −0.8
+Memo items
+Other comprehensive income7
+0.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) 0.0 0.0
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+Appendix A: Additional Bank-Specific Results 47Table A.23. Wells Fargo & Company
+Projected stressed capital ratios, loan losses, risk-weighted assets, losses, revenues, and net
+income before taxes
+Federal Reserve estimates: Severely adverse scenario
+Capital ratios and risk-weighted assets, actual 2022:Q4
+and projected 2023:Q1–2025:Q1
+Percent except as noted
+Item
+Actual
+2022:Q4
+Projected
+2025:Q1
+Projected
+minimum
+Common equity tier 1 capital ratio 10.6 8.4 8.2
+Tier 1 capital ratio 12.1 9.9 9.7
+Total capital ratio 14.8 12.7 12.6
+Tier 1 leverage ratio 8.3 6.7 6.6
+Supplementary leverage ratio 6.9 5.6 5.4
+Risk-weighted assets1
+(billions of dollars) 1,259.9 1,242.3
+Note: The capital ratios are calculated using the capital action assumptions
+provided within the supervisory stress testing rules. See 12 C.F.R. § 238.132(d);
+12 C.F.R. § 252.44(c).These projections represent hypothetical estimates
+that involve an economic outcome that is more adverse than expected.The
+minimum capital ratios are for the period 2023:Q1 to 2025:Q1. Supplemen-
+tary leverage ratio projections only include estimates for banks subject to Cat-
+egory I, II, or III standards.
+1
+For each quarter,risk-weighted assets are calculated under the Board’s standardized
+approach to risk-based capital in 12 C.F.R.pt.217,subpt.D.
+Projected loan losses, by type of loan,
+2023:Q1–2025:Q1
+Loan type
+Billions
+of dollars
+Portfolio loss
+rates
+(percent)1
+Loan losses 54.2 5.7
+First-lien mortgages, domestic 5.1 2.1
+Junior liens and HELOCs,2
+domestic 0.5 2.8
+Commercial and industrial3
+12.7 6.4
+Commercial real estate, domestic 13.6 9.7
+Credit cards 8.2 17.8
+Other consumer4
+3.7 5.1
+Other loans5
+10.3 4.5
+1
+Average loan balances used to calculate portfolio loss rates exclude loans
+held for sale, loans held for investment under the fair-value option, and
+Paycheck Protection Program loans and are calculated over nine quarters.
+2
+HELOCs (home equity lines of credit).
+3
+Commercial and industrial loans include small- and medium-enterprise
+loans and corporate cards.
+4
+Other consumer loans include student loans and automobile loans.
+5
+Other loans include international real estate loans.
+Projected losses, revenue, and net income before taxes
+through 2025:Q1
+Item
+Billions
+of dollars
+Percent of
+average
+assets1
+Pre-provision net revenue 35.5 1.9
+equals
+Net interest income 102.4 5.4
+Noninterest income 61.2 3.3
+less
+Noninterest expense2
+128.2 6.8
+Other revenue3
+0.0
+less
+Provisions for loan and lease losses 54.9
+Credit losses on investment securities
+(AFS/HTM)4
+0.4
+Trading and counterparty losses5
+12.2
+Other losses/gains6
+0.8
+equals
+Net income before taxes −32.9 −1.7
+Memo items
+Other comprehensive income7
+6.0
+Other effects on capital Actual 2022:Q4 2025:Q1
+AOCI included in capital (billions of dollars) −12.2 −6.2
+1
+Average assets is the nine-quarter average of total assets.
+2
+Noninterest expense includes losses from operational-risk events and other
+real estate owned (OREO) costs.
+3
+Other revenue includes one-time income and (expense) items not included
+in pre-provision net revenue.
+4
+For banks that have adopted ASU 2016-13, the Federal Reserve incorpo-
+rated its projection of expected credit losses on securities in the allowance
+for credit losses.AFS/HTM (available-for-sale/held-to-maturity).
+5
+Trading and counterparty losses include mark-to-market and credit valua-
+tion adjustment (CVA) losses and losses arising from the counterparty
+default scenario component applied to derivatives, securities lending, and
+repurchase agreement activities.
+6
+Other losses/gains include projected change in fair value of loans held for
+sale or held for investment and measured under the fair-value option,
+losses/gains on hedges on loans measured at fair value or amortized cost,
+and goodwill impairment losses.
+7
+Other comprehensive income is only calculated for banks subject to Cat-
+egory I or II standards or banks that opt in to including accumulated other
+comprehensive income (AOCI) in their calculation of capital.
+48 2023 Federal Reserve Stress Test ResultsTable A.24. Projected loan losses by type of loan for 2023:Q1–2025:Q1 under the severely adverse scenario: 23 banks
+Billions of dollars
+Bank
+Loan
+losses
+First-lien
+mortgages,
+domestic
+Junior liens
+and HELOCs,1
+domestic
+Commercial
+and
+industrial2
+Commercial
+real estate,
+domestic
+Credit
+cards
+Other
+consumer3
+Other
+loans4
+Bank of America 54.4 5.4 1.1 16.6 7.2 14.9 2.1 7.2
+Bank of NY-Mellon 1.6 0.3 0.0 0.1 0.5 0.0 0.0 0.8
+Barclays US 4.9 0.0 0.0 0.0 0.0 4.7 0.0 0.1
+BMO 6.3 0.2 0.1 2.4 1.1 0.1 0.5 1.9
+Capital One 46.0 0.0 0.0 5.3 3.0 28.1 8.2 1.4
+Charles Schwab Corp 1.4 0.5 0.0 0.2 0.0 0.0 0.1 0.6
+Citigroup 47.3 3.5 1.1 7.1 2.4 24.6 2.8 5.8
+Citizens 11.1 0.9 0.8 2.6 4.0 0.4 2.1 0.3
+Credit Suisse USA 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+DB USA 0.7 0.1 0.0 0.1 0.4 0.0 0.0 0.1
+Goldman Sachs 19.4 0.2 0.0 5.9 1.8 3.9 1.4 6.2
+JPMorgan Chase 72.9 6.2 0.7 19.2 4.8 25.5 2.7 13.8
+M&T 9.3 0.7 0.2 2.0 3.9 0.1 1.4 0.9
+Morgan Stanley 10.1 1.5 0.0 1.4 2.0 0.0 0.5 4.7
+Northern Trust 3.0 0.2 0.0 0.3 0.7 0.0 0.1 1.8
+PNC 17.8 1.2 0.7 7.8 4.7 1.2 1.0 1.3
+RBC USA 5.5 1.1 0.1 1.2 2.2 0.1 0.3 0.7
+State Street 1.2 0.0 0.0 0.3 0.1 0.0 0.0 0.8
+TD Group 10.8 1.0 0.4 2.1 2.2 3.2 0.8 1.3
+Truist 19.1 1.4 0.4 4.6 5.1 0.6 5.0 2.0
+UBS Americas 2.7 1.0 0.0 0.2 0.1 0.0 0.3 1.1
+US Bancorp 24.3 3.5 0.8 7.0 5.1 4.3 2.3 1.3
+Wells Fargo 54.2 5.1 0.5 12.7 13.6 8.2 3.7 10.3
+23 banks 424.0 33.8 7.0 99.3 64.9 119.7 35.1 64.2
+Note: These projections represent hypothetical estimates that involve an economic outcome that is more adverse than expected.Values may not sum precisely because
+of rounding.
+1
+HELOCs (home equity lines of credit).
+2
+Commercial and industrial loans include small- and medium-enterprise loans and corporate cards.
+3
+Other consumer loans include student loans and automobile loans.
+4
+Other loans include international real estate loans.
+Appendix A: Additional Bank-Specific Results 49Appendix B: Disclosure Loan Category
+Definitions
+Table B.1. Mapping of loan categories to disclosure categories
+Disclosure category Loan type
+First-lien mortgages, domestic Domestic first-lien mortgages
+Junior liens and home equity lines of credit (HELOCs), domestic Domestic second-lien mortgages
+Domestic HELOCs
+Credit cards Domestic cards
+International cards
+Commercial and industrial Commercial and industrial loans
+Corporate and business cards
+Small business loans
+Commercial real estate, domestic Domestic owner-occupied commercial real estate loans
+Domestic construction loans
+Domestic multifamily loans
+Domestic non-owner occupied commercial real estate loans
+Other consumer Student loans
+Domestic auto loans
+International auto loans
+Domestic other consumer loans
+International other consumer loans
+Other loans Agricultural loans
+Domestic farm loans
+International farm loans
+International owner-occupied commercial real estate loans
+International construction loans
+International multifamily loans
+International non-owner occupied commercial real estate loans
+International first-lien mortgages
+International second-lien mortgages
+Loans to foreign governments
+Loans to financial institutions
+Loans for purchasing and carrying securities
+Other non-consumer loans
+Other leases
+51Find other Federal Reserve Board publications (www.federalreserve.gov/publications.htm) or order
+those offered in print (www.federalreserve.gov/files/orderform.pdf) on our website. Also visit the site for more
+information about the Board and to learn how to stay connected with us on social media.
+www.federalreserve.gov
+0723
