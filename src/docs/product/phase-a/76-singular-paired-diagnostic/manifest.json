@@ -1,0 +1,70 @@
+{
+  "implementation_commit": "314d6a968b37edb56dbf237c575be3b3654d171d",
+  "baseline_implementation_commit": "f55c717658538d2a9c5314c04dd3ccf573dd6789",
+  "assessment": "Single nonblind paired development diagnostic; fixed input and model settings, only source passages differ in generation prompts. Not independent and does not establish causality, semantic support, or phase acceptance.",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "FOMC_DISSENT",
+      "input_sha256": "86b5617e26b95324e17dba24b458e0cfaf43cea62475ba5d9932a511a15e2fd1"
+    }
+  ],
+  "script_sha256": {
+    "prepare.py": "dddef5650c6ebf420fc5b0fbf4f10a6cd23800bb9df2d6eaaf77594d75a7c3cc",
+    "run.py": "fb8984e7aaa1fe2ea808b70e356638de3a01628d3d1a00c0f3cb97604c52cb72",
+    "score.py": "7491c1ad268c0ab6fa84c5790896bd176ce5b3807f79f157870ee0e178f4122c"
+  },
+  "references_sha256": "2a9bff4277a133f42d177b0ef84162f6207337312b9a19cb919c0404d54c0f55",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v10",
+  "old_prompt_sha256": "19f2f6d0431a0de6d63b03dd292bc50f031211127a58cac404ca87b773b92aae",
+  "new_prompt_sha256": "4d937e30843e15193c3322cc6eb6fa6271d938a0970851dc67dd51193256eb2d",
+  "old_segments": [
+    {
+      "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+      "character_start": 2110,
+      "character_end": 2414
+    },
+    {
+      "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+      "character_start": 2520,
+      "character_end": 2815
+    }
+  ],
+  "new_segments": [
+    {
+      "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+      "character_start": 894,
+      "character_end": 1198
+    },
+    {
+      "source_id": "source_403c0fc29c5349c98c369cba7f099309",
+      "character_start": 2058,
+      "character_end": 2363
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 1,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 10000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown",
+  "pass_rule": "All pre-specified checks in score.py must pass. Only generation is compared; review remains off. Mechanical checks do not prove semantic support or general quality."
+}
