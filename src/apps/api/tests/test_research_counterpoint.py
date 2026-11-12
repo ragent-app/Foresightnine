@@ -33,10 +33,15 @@ def test_counterpoint_prompt_marks_truncation_and_does_not_mutate_inputs():
     raw={'question':'Q','sources':[{'source_id':'s','text':'Evidence'}]}
     findings=[{'text':'A'*300},{'text':'B'*300},{'text':'C'}]
     result=prepare_counterpoint_prompt(json.dumps(raw),findings,5000)
-    assert result is not None and result.truncated_findings and result.prior_findings_included==2
+    assert result is not None and not result.truncated_findings and result.prior_findings_included==3
     payload=json.loads(result.prompt)
-    assert 'truncated' in payload['counterpoint_request']
-    assert payload['previous_findings_untrusted']==['A'*240,'B'*240]
+    assert 'truncated' not in payload['counterpoint_request']
+    assert payload['previous_findings_untrusted']==['A'*300,'B'*300,'C']
+    bounded=prepare_counterpoint_prompt(json.dumps(raw),findings,800)
+    assert bounded is not None and bounded.truncated_findings
+    bounded_payload=json.loads(bounded.prompt)
+    assert 'truncated' in bounded_payload['counterpoint_request']
+    assert len(bounded_payload['previous_findings_untrusted']) == bounded.prior_findings_included
     assert len(findings)==3 and raw['sources'][0]['text']=='Evidence'
 
 

@@ -113,9 +113,9 @@ def flag_uncited_causal_attribution(claims: list[dict], sources: list[ResearchSo
 
 
 _SOURCE_ABSENCE = re.compile(
-    r"\b(?:the\s+|this\s+|these\s+)?(?:source|sources|document|documents|report|reports|filing|release)\s+"
+    r"\b(?:the\s+|this\s+|these\s+)?(?:source|sources|document|documents|report|reports|filing|release|statement)\s+"
     r"(?:does\s+not|do\s+not|did\s+not|doesn't|don't|didn't|never)\s+"
-    r"(?:explicitly\s+)?(?:provide|include|contain|mention|state|show|give|describe|disclose|detail|break\s+down)\b|"
+    r"(?:explicitly\s+)?(?:provide|include|contain|mention|state|show|give|describe|disclose|detail|record|break\s+down)\b|"
     r"\b(?:the\s+|this\s+)?(?:source|document|report|filing|release)\s+"
     r"(?:provides?|includes?|contains?|mentions?|states?|shows?)\s+no\b|"
     r"\bno\s+(?:(?:opposing|contrary|supporting|relevant|additional)\s+){0,2}"

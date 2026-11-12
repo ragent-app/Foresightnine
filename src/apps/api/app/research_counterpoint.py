@@ -83,7 +83,8 @@ def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]]
     if (not isinstance(original, dict) or not isinstance(original.get('question'), str) or
             not isinstance(original.get('sources'), list) or not original['sources']):
         return None
-    texts = [item['text'].strip() for item in findings if isinstance(item, dict) and isinstance(item.get('text'), str) and item['text'].strip()][:2]
+    texts = list(islice((item['text'].strip() for item in findings
+                         if isinstance(item, dict) and isinstance(item.get('text'), str) and item['text'].strip()), 21))
     if not texts:
         return None
     data = dict(original)
@@ -94,14 +95,21 @@ def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]]
                              'limitations':['text']}
     data['evidence_guidance'] = ('Quote continuous passages from supplied sources. Never invent evidence or infer a person’s motive. '
                                  'Excerpts may be partial; do not generalize absence to a whole source.')
-    for limit in (240, 160, 100, 60):
-        data['previous_findings_untrusted'] = [text[:limit] for text in texts]
-        truncated = any(len(text) > limit for text in texts) or len([x for x in findings if isinstance(x,dict) and isinstance(x.get('text'),str) and x['text'].strip()]) > len(texts)
-        if truncated:
-            data['counterpoint_request'] = data['counterpoint_request'].removesuffix(' Prior findings may be truncated.') + ' Prior findings may be truncated.'
-        else:
-            data['counterpoint_request'] = data['counterpoint_request'].removesuffix(' Prior findings may be truncated.')
-        prompt = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        if len(prompt.encode('utf-8')) <= max_bytes:
-            return CounterpointPrompt(prompt=prompt, prior_findings_included=len(texts), truncated_findings=truncated)
+    # Prefer covering all findings when the budget permits.  A fixed two-item
+    # prefix can hide a finding that already answers a supposed omission. If
+    # space is tight, shorten each item before dropping entire findings; in
+    # every such case the prompt and returned metadata disclose truncation.
+    visible = texts[:20]
+    for count in range(len(visible), 0, -1):
+        for limit in (3000, 240, 160, 100, 60):
+            included = visible[:count]
+            data['previous_findings_untrusted'] = [text[:limit] for text in included]
+            truncated = len(texts) > count or any(len(text) > limit for text in included)
+            if truncated:
+                data['counterpoint_request'] = data['counterpoint_request'].removesuffix(' Prior findings may be truncated.') + ' Prior findings may be truncated.'
+            else:
+                data['counterpoint_request'] = data['counterpoint_request'].removesuffix(' Prior findings may be truncated.')
+            prompt = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+            if len(prompt.encode('utf-8')) <= max_bytes:
+                return CounterpointPrompt(prompt=prompt, prior_findings_included=count, truncated_findings=truncated)
     return None

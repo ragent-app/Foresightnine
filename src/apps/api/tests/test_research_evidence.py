@@ -17,6 +17,9 @@ def test_absence_claim_requires_full_source_coverage_before_generalizing():
     claim = {'text': 'The source does not provide a breakdown of services and goods.', 'citations': [{'source_id':'s'}]}
     partial = [{'source_id':'s', 'character_start':0, 'character_end':18}]
     assert flag_partial_source_absence([claim], [source], partial)[0]['source_scope_absence_unverified']
+    statement = {**claim, 'text': "The statement does not record the dissenters' reasons."}
+    assert flag_partial_source_absence([statement], [source], partial)[0]['source_scope_absence_unverified']
+    assert not flag_partial_source_absence([statement], [source], [{'source_id':'s', 'character_start':0, 'character_end':len(source.text)}])[0].get('source_scope_absence_unverified')
     mixed = {**claim, 'text': 'Consumer spending rose. No opposing evidence exists in the sources for goods rising.'}
     assert flag_partial_source_absence([mixed], [source], partial)[0]['source_scope_absence_unverified']
     assert flag_partial_source_absence([{**claim, 'text':'没有反对性证据表明数值应为最终值；相反，资料仍有修订。'}], [source], partial)[0]['source_scope_absence_unverified']

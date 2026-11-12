@@ -3797,7 +3797,7 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
             claims = [{'text':text, 'citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]
             if mode == 'truncated_findings':
                 claims += [{'text':'Costs increased.', 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]},
-                           {'text':'The preferred action was lower costs.', 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]
+                           {'text':('The preferred action was lower costs. ' * 80).strip(), 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]
             return {'claims':claims}, 50
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
