@@ -1036,6 +1036,84 @@ def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources
     return output
 
 
+def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Suggest other claims' uniquely located dollar excerpts, never support.
+
+    Candidates come only from a source already cited by the target claim;
+    equal amounts do not establish entity, currency, period or meaning. The
+    source scan is capped and is deliberately not an exhaustive search.
+    """
+    source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
+    output = [deepcopy(claim) for claim in claims]
+    demands: dict[tuple[str, Decimal], dict[int, list[str]]] = defaultdict(dict)
+
+    def located(citation: object) -> tuple[str, str, dict, ResearchSource] | None:
+        if not isinstance(citation, dict) or citation.get("partial_token"):
+            return None
+        sid, quote, loc = citation.get("source_id"), citation.get("quotation"), citation.get("location")
+        source = source_map.get(sid) if isinstance(sid, str) else None
+        if (source is None or not isinstance(quote, str) or not 1 <= len(quote) <= 1000 or
+                not isinstance(loc, dict) or loc.get("status") == "ambiguous"):
+            return None
+        a, b = loc.get("character_start"), loc.get("character_end")
+        if (type(a) is not int or type(b) is not int or not 0 <= a < b <= len(source.text) or
+                source.text[a:b] != quote or partial_ascii_token(source.text, a, b)):
+            return None
+        return sid, quote, loc, source
+
+    for index, claim in enumerate(output):
+        claim.pop("suggested_related_quotations", None)
+        citations, missing = claim.get("citations"), claim.get("uncited_dollar_amounts")
+        if not isinstance(citations, list) or not isinstance(missing, list):
+            continue
+        cited_sources = {result[0] for citation in citations[:10] if (result := located(citation)) is not None}
+        for raw in missing[:5]:
+            if not isinstance(raw, str):
+                continue
+            for _, value in _dollar_amounts(raw):
+                for sid in sorted(cited_sources):
+                    demands[(sid, value)].setdefault(index, []).append(raw)
+    if not demands:
+        return output
+    checked = 0
+    seen: set[tuple[int, str, int, int]] = set()
+    for source_index, claim in enumerate(output):
+        citations = claim.get("citations")
+        if not isinstance(citations, list):
+            continue
+        for citation in citations[:10]:
+            found = located(citation)
+            if found is None:
+                continue
+            sid, quote, loc, source = found
+            if citation.get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded", "split_conjunction"}:
+                continue
+            values = {value for _, value in _dollar_amounts(quote)}
+            matching = sorted(value for value in values if (sid, value) in demands)
+            if not matching:
+                continue
+            checked += 1
+            if checked > 200:
+                return output
+            start, end = loc["character_start"], loc["character_end"]
+            if source.text.find(quote) != start or source.text.find(quote, start + 1) >= 0:
+                continue
+            for value in matching:
+                for target_index, raws in demands[(sid, value)].items():
+                    key = (target_index, sid, start, end)
+                    if target_index == source_index or key in seen:
+                        continue
+                    target = output[target_index]
+                    candidates = target.setdefault("suggested_related_quotations", [])
+                    if len(candidates) >= 5:
+                        continue
+                    candidates.append({"source_id": sid, "quotation": quote, "location": deepcopy(loc),
+                                       "matched_amounts": list(dict.fromkeys(raws))[:5],
+                                       "from_claim_index": source_index, "status": "requires_semantic_review"})
+                    seen.add(key)
+    return output
+
+
 def _difference_label(label: str) -> str:
     # Ignore only an explicit, trailing release qualifier; accounting basis,
     # geography and other parenthetical details remain part of the label.

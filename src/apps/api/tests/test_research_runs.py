@@ -2550,3 +2550,44 @@ def test_pdf_line_hyphen_fact_requires_exact_source_selection_before_calculation
     assert result.status_code==201,result.text
     assert result.json()["versions"][-1]["content"]["calculations"][0]["value"]=="25.00"
     assert saved.json()["versions"][-2]["content"]["facts"][0]["quotation_match"]=="pdf_line_hyphen_restored"
+
+
+def test_related_claim_candidate_can_fill_a_missing_counterargument_quote(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")
+    source_id="";quote="Services increased $33.3 billion while goods decreased $9.6 billion."
+    short="Services increased $33.3 billion"
+    class Provider:
+        name="related-claim-test"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {"claims":[{"text":"Services rose while goods fell.","citations":[{"source_id":source_id,"quotation":quote}]}],
+                    "counterarguments":[{"text":"Goods spending fell $9.6 billion.","citations":[{"source_id":source_id,"quotation":short}]}]},20
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    account=client.post("/v1/auth/local/register",json={"email":f"claim-candidate-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+account["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":quote,
+        "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Spending?","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"related-claim"},json={
+        "parent_version_id":topic["versions"][0]["version_id"]}).json()["operation"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+receipt["operation_id"],headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed"
+    version=client.get(path,headers=headers).json()["versions"][-1];content=version["content"]
+    counter=next(c for c in content["claims"] if c["role"]=="counterargument")
+    assert counter["uncited_dollar_amounts"]==["$9.6 billion"]
+    assert counter["suggested_related_quotations"][0]["quotation"]==quote
+    assert content["run"]["status"]=="partial"
+    edited=deepcopy(content);target=next(c for c in edited["claims"] if c["role"]=="counterargument")
+    target["citations"].append({"source_id":source_id,"quotation":quote})
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":version["version_id"],"content":edited})
+    assert saved.status_code==201,saved.text
+    target=next(c for c in saved.json()["versions"][-1]["content"]["claims"] if c["role"]=="counterargument")
+    assert not target.get("uncited_dollar_amounts") and not target.get("suggested_related_quotations")
+    assert target["authorship"]=="user" and target["support_status"]=="not_independently_verified"
+    assert counter["uncited_dollar_amounts"]

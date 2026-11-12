@@ -749,3 +749,25 @@ def test_uncited_negative_change_can_be_suggested_without_proving_semantic_suppo
     assert not suggest_uncited_numeric_facts([claim],[{**candidate,"direction_context_unverified":False}],[source])[0].get("suggested_fact_evidence")
     assert not suggest_uncited_numeric_facts([claim],[candidate,{**candidate,"fact_id":"other"}],[source])[0].get("suggested_fact_evidence")
     assert not suggest_uncited_numeric_facts([claim],[candidate],[source.model_copy(update={"permissions":SourcePermissions(store=True)})])[0].get("suggested_fact_evidence")
+
+
+def test_related_claim_quotation_is_limited_to_unique_visible_matching_source():
+    from app.research_evidence import flag_uncited_dollar_amounts, suggest_related_claim_quotations
+    text="Services increased $33.3 billion while goods decreased $9.6 billion."
+    src=ResearchSource(source_id="s",owner_id="owner",title="Report",text=text,kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc),content_sha256="hash",permissions=SourcePermissions(store=True,display=True))
+    full=text;short="Services increased $33.3 billion"
+    claims=[{"text":"Services rose and goods fell.","citations":[{"source_id":"s","quotation":full,"location":{"character_start":0,"character_end":len(full)}}]},
+            {"text":"Goods fell $9.6 billion.","citations":[{"source_id":"s","quotation":short,"location":{"character_start":0,"character_end":len(short)}}]}]
+    flagged=flag_uncited_dollar_amounts(claims,[src]);result=suggest_related_claim_quotations(flagged,[src]);candidate=result[1]["suggested_related_quotations"][0]
+    assert candidate["quotation"]==full and candidate["matched_amounts"]==["$9.6 billion"]
+    assert candidate["from_claim_index"]==0 and candidate["status"]=="requires_semantic_review"
+    assert len(result[1]["citations"])==1 and "suggested_related_quotations" not in claims[1]
+    edited=[dict(c) for c in claims];edited[1]={**edited[1],"citations":[*edited[1]["citations"],claims[0]["citations"][0]]}
+    assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(edited,[src]),[src])[1].get("suggested_related_quotations")
+    hidden=src.model_copy(update={"permissions":SourcePermissions(store=True)})
+    assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(claims,[hidden]),[hidden])[1].get("suggested_related_quotations")
+    duplicated=src.model_copy(update={"text":text+" "+text})
+    assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(claims,[duplicated]),[duplicated])[1].get("suggested_related_quotations")
+    changed=[claims[0],{**claims[1],"text":"Goods fell $9.6 million."}]
+    assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(changed,[src]),[src])[1].get("suggested_related_quotations")

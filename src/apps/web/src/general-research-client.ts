@@ -14,6 +14,7 @@ export interface ResearchClaim {
   support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false };
   citations?: { source_id: string; quotation?: string; quotation_match?: string; partial_token?: boolean; support_status?: string; location?: SourceLocation }[];
   suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];
+  suggested_related_quotations?: { source_id: string; quotation: string; location: SourceLocation; matched_amounts: string[]; from_claim_index: number; status: string }[];
   citation_context_warnings?: { source_id: string; citation_index: number; context_metric: string; context_character_start?: number; context_character_end?: number; status: string }[];
   uncited_percentages?: string[];
   reused_percentages?: string[];
