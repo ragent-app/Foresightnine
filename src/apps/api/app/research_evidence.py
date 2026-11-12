@@ -15,6 +15,41 @@ from .research_sources import ResearchSource, partial_ascii_token
 
 
 _PERCENT = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.\d+)?))\s*(?:%|％|percent\b)", re.IGNORECASE)
+_STRICT_UPPER_BOUND = re.compile(r"(?:\bless\s+than|\bbelow|\bunder|<|小于|小於|低于|低於|少于|少於)\s*$", re.IGNORECASE)
+_DECIMAL_TOKEN = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?![\w.])")
+
+
+def _strict_upper_percentages(text: str) -> list[tuple[Decimal, str]]:
+    """Extract only explicitly strict upper percentage bounds, not exact values."""
+    result = []
+    for match in _PERCENT.finditer(text):
+        prefix = text[max(0, match.start() - 32):match.start()]
+        bound = _STRICT_UPPER_BOUND.search(prefix)
+        if not bound or re.search(r"\b(?:not|never|no)\b|[不非未]", prefix[max(0, bound.start() - 20):bound.start()], re.IGNORECASE):
+            continue
+        values = _quoted_numbers(match.group(1).replace("−", "-"))
+        if len(values) == 1:
+            result.append((next(iter(values)), match.group(0)))
+    return result
+
+
+def _only_strict_upper_percentage(text: str, value: Decimal) -> bool:
+    """Avoid equating a sole decimal upper bound with an unrelated exact fact.
+
+    Any fractions, multiple occurrences, or ambiguous spellings keep the
+    existing conservative fact-candidate behavior.
+    """
+    if re.search(r"\d\s*/\s*\d", text):
+        return False
+    occurrences = []
+    for match in _DECIMAL_TOKEN.finditer(text):
+        try:
+            if Decimal(match.group(0).replace("−", "-")) == value:
+                occurrences.append(match)
+        except InvalidOperation:
+            continue
+    return (len(occurrences) == 1 and
+            any(v == value for v, _ in _strict_upper_percentages(text)))
 _ZH_USD_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:个\s*)?(万亿|千亿|百亿|十亿|千万|百万|十万|亿|万|千|百)?\s*(美元|美金)")
 _ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "千亿": Decimal("100000"), "百亿": Decimal("10000"),
                        "十亿": Decimal("1000"), "亿": Decimal("100"), "千万": Decimal("10"),
@@ -760,6 +795,7 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
         entry.pop("suggested_fact_evidence", None)
         entry.pop("uncited_percentages", None)
         entry.pop("reused_percentages", None)
+        entry.pop("uncited_percentage_bounds", None)
         text = entry.get("text")
         citations = entry.get("citations")
         if not isinstance(text, str) or not isinstance(citations, list):
@@ -782,6 +818,13 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
             quote = citation.get("quotation") if isinstance(citation, dict) else None
             if isinstance(quote, str):
                 existing.update(_quoted_numbers(quote))
+        cited_bounds = {value for citation in citations if isinstance(citation, dict)
+                        and isinstance(citation.get("quotation"), str)
+                        for value, _ in _strict_upper_percentages(citation["quotation"])}
+        missing_bounds = list(dict.fromkeys(raw for value, raw in _strict_upper_percentages(text)
+                                           if value not in cited_bounds))[:5]
+        if missing_bounds:
+            entry["uncited_percentage_bounds"] = missing_bounds
         suggested = []
         uncited = []
         seen: set[Decimal] = set()
@@ -958,7 +1001,8 @@ def suggest_uncited_numeric_facts(claims: list[dict], facts: list[dict], sources
                     source.text[a:b] == quote and not partial_ascii_token(source.text, a, b)):
                 existing[sid].append((a, b))
         numbers = _quoted_numbers(text)
-        candidates = [(sid, value, fact) for sid, value, fact in usable if sid in existing and value in numbers]
+        candidates = [(sid, value, fact) for sid, value, fact in usable if sid in existing and value in numbers
+                      and not _only_strict_upper_percentage(text, value)]
         counts = Counter((sid, value) for sid, value, _ in candidates)
         previous = entry.get("suggested_fact_evidence")
         suggestions = [s for s in previous if isinstance(s, dict)] if isinstance(previous, list) else []

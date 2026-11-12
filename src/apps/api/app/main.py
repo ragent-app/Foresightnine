@@ -2607,7 +2607,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
-                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_claim_amounts") or c.get("uncited_dollar_amounts") or c.get("uncited_quarters") or c.get("balance_direction_warnings") or c.get("uncited_percentages") or c.get("reused_percentages") or c.get("uncited_basis_points") or c.get("uncited_percentage_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
+                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_claim_amounts") or c.get("uncited_dollar_amounts") or c.get("uncited_quarters") or c.get("balance_direction_warnings") or c.get("uncited_percentages") or c.get("uncited_percentage_bounds") or c.get("reused_percentages") or c.get("uncited_basis_points") or c.get("uncited_percentage_points") or c.get("uncited_fact_values") or c.get("citation_context_warnings") for c in claims) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if not analysis.counterarguments:
@@ -2640,6 +2640,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("A claimed component direction may conflict with an accounting identity; check definitions, signs and periods.")
         if any(c.get("uncited_fact_values") for c in claims):
             limitations.append("A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.")
+        if any(c.get("uncited_percentage_bounds") for c in claims):
+            limitations.append("A strict percentage upper bound is not present in the attached quotations; do not treat its threshold as an exact value.")
         if any(c.get("reused_percentages") for c in claims):
             limitations.append("A percentage repeats within a claim; check that each measure has its own supporting evidence.")
         if any(c.get("uncited_percentages") for c in claims):

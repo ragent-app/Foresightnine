@@ -699,3 +699,29 @@ def test_repeated_percentage_requires_review_even_when_number_is_quoted():
     assert not suggest_percentage_evidence([revised], [])[0].get("reused_percentages")
     formula = {"text": "(120-100)/100 × 100% and (90-80)/80 × 100%", "citations": []}
     assert not suggest_percentage_evidence([formula], [])[0].get("reused_percentages")
+
+
+def test_percentage_upper_bound_is_not_the_same_as_an_exact_fact():
+    from app.research_evidence import suggest_uncited_numeric_facts
+    text = "PCE increased less than 0.1 percent. Services increased 0.1 percent."
+    src = ResearchSource(source_id="s", owner_id="owner", title="Release", text=text, kind="user_supplied",
+        obtained_at=datetime.now(timezone.utc), content_sha256="hash", permissions=SourcePermissions(store=True, display=True))
+    first = "PCE increased less than 0.1 percent."
+    second = "Services increased 0.1 percent."
+    start = text.index(second)
+    fact = {"fact_id":"services", "source_id":"s", "value":"0.1", "unit":"percent", "quotation":second,
+            "location":{"character_start":start,"character_end":start+len(second)},
+            "verification":"model_extraction_not_independently_verified"}
+    citation = {"source_id":"s", "quotation":first, "location":{"character_start":0,"character_end":len(first)}}
+    claim = {"text":"PCE increased less than 0.1 percent.","citations":[citation]}
+    assert not suggest_uncited_numeric_facts([claim],[fact],[src])[0].get("uncited_fact_values")
+    checked = suggest_percentage_evidence([claim],[])[0]
+    assert not checked.get("uncited_percentage_bounds")
+    wrong = {**claim,"citations":[{"quotation":second}]}
+    assert suggest_percentage_evidence([wrong],[])[0]["uncited_percentage_bounds"] == ["0.1 percent"]
+    mixed = {**claim,"text":"PCE increased less than 0.1 percent and services increased 0.1 percent."}
+    assert suggest_uncited_numeric_facts([mixed],[fact],[src])[0]["uncited_fact_values"] == ["0.1 percent"]
+    assert not suggest_percentage_evidence([{**claim,"text":"PCE rose below 0.1%."}],[])[0].get("uncited_percentage_bounds")
+    for negated in ("PCE increased not less than 0.1 percent.", "PCE increased no less than 0.1 percent.", "PCE 增长不少于 0.1%。"):
+        assert not suggest_percentage_evidence([{**claim,"text":negated,"citations":[{"quotation":second}]}],[])[0].get("uncited_percentage_bounds")
+        assert suggest_uncited_numeric_facts([{**claim,"text":negated}],[fact],[src])[0].get("uncited_fact_values")

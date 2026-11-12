@@ -17,6 +17,7 @@ export interface ResearchClaim {
   citation_context_warnings?: { source_id: string; citation_index: number; context_metric: string; context_character_start?: number; context_character_end?: number; status: string }[];
   uncited_percentages?: string[];
   reused_percentages?: string[];
+  uncited_percentage_bounds?: string[];
   uncited_basis_points?: string[];
   uncited_percentage_points?: string[];
   suggested_calculations?: { calculation_index: number; claimed_percentage: string; formula_id: string; input_fact_ids: string[]; status: string }[];

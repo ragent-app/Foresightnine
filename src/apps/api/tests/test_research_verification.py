@@ -420,3 +420,12 @@ def test_review_does_not_treat_reused_percentages_as_proof_of_each_metric():
     batch = prepare_support_review([item], [report], 3000)
     assert batch.indexes == []
     assert batch.omissions == [{"claim_index": 0, "reason": "not_reviewable"}]
+
+
+def test_percentage_bound_must_be_cited_as_a_bound_before_review():
+    quote = "The price index increased 0.1 percent."
+    report = source().model_copy(update={"text":quote})
+    item = {"text":"PCE increased less than 0.1 percent.","citations":[{"source_id":"s","quotation":quote,
+        "location":{"character_start":0,"character_end":len(quote)}}]}
+    batch = prepare_support_review([item],[report],3000)
+    assert batch.omissions == [{"claim_index":0,"reason":"not_reviewable"}]
