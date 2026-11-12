@@ -219,6 +219,28 @@ def test_separate_passages_cannot_be_stitched_into_a_fake_quotation():
         analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
 
 
+def test_long_document_uses_two_windows_under_a_thousand_character_allowance():
+    report = source("s", text="2023 Revenue 100. " + "background " * 400 +
+                    "2023 Profit 200. " + "irrelevant " * 400)
+    def model(prompt):
+        parts = json.loads(prompt)["sources"]
+        assert len(parts) == 2
+        assert sum(len(part["text"]) for part in parts) < 1000
+        assert any("2023 Revenue 100." in part["text"] for part in parts)
+        assert any("2023 Profit 200." in part["text"] for part in parts)
+        return {"claims": [], "counterarguments": [], "limitations": []}, 10
+    result = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=1750)
+    assert len(result.segments) == 2 and result.prompt_bytes <= 1750
+
+
+def test_short_document_remains_whole_when_it_fits():
+    report = source("s", text="Annual report. " * 150)
+    result = analyze("report", [report], None, lambda _: ({}, 10), max_prompt_chars=5000)
+    assert len(result.segments) == 1
+    assert result.segments[0]["character_start"] == 0
+    assert result.segments[0]["character_end"] == len(report.text)
+
+
 def test_casefold_expansion_preserves_original_character_offsets():
     prefix = "ß " * 1000
     quote = "2023 Revenue was 100 million."

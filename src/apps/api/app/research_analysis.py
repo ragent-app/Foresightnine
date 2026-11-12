@@ -32,7 +32,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v3"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v4"
 
 
 class Citation(BaseModel):
@@ -267,8 +267,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # not crowd every later comparison source out of the prompt.
         share = remaining // (len(eligible) - index)
         max_size = min(len(source.text), MAX_SOURCE_CHARS, share)
-        def portions(size: int) -> list[tuple[int, str]]:
-            if size >= 1000 and len(source.text) > size * 2:
+        def portions(size: int, split: bool) -> list[tuple[int, str]]:
+            if split and size >= 2:
                 return sorted(_select_windows(source.text, question, size // 2, 2, should_stop), key=lambda item: item[0])
             return [_select_window(source.text, question, size, should_stop)]
 
@@ -276,24 +276,38 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             return [{"source_id": source.source_id, "title": source.title,
                      "character_start": start, "text": passage} for start, passage in parts]
 
-        lo, hi = 0, max_size
-        # Measure the JSON-escaped prompt, not just raw document characters.
-        while lo < hi:
-            middle = (lo + hi + 1) // 2
-            candidate = portions(middle)
+        def fits(candidate: list[tuple[int, str]]) -> bool:
             data["sources"].extend(source_payload(candidate))
-            # Byte length is conservative for byte-based tokenizers and avoids
-            # counting Chinese text as if four characters were always one token.
-            fits = len(serialize().encode("utf-8")) <= max_prompt_chars
+            within_budget = len(serialize().encode("utf-8")) <= max_prompt_chars
             del data["sources"][-len(candidate):]
-            if fits:
-                lo = middle
-            else:
-                hi = middle - 1
-        if not lo:
+            return within_budget
+
+        # Prefer the entire document when it fits. Otherwise choose the
+        # number of windows before searching the byte budget, avoiding a
+        # discontinuity when the available size happens to be below 1000.
+        if max_size == len(source.text) and fits([(0, source.text)]):
+            selected = [(0, source.text)]
+        else:
+            split = len(source.text) > 2000
+            def budget_for(split_windows: bool) -> int:
+                lo, hi = 0, max_size
+                while lo < hi:
+                    middle = (lo + hi + 1) // 2
+                    if fits(portions(middle, split_windows)):
+                        lo = middle
+                    else:
+                        hi = middle - 1
+                return lo
+            lo = budget_for(split)
+            # Tiny fragments rarely provide enough context; retain one larger
+            # window when a pair cannot fit at least 200 characters apiece.
+            if split and lo < 400:
+                split = False
+                lo = budget_for(False)
+            selected = portions(lo, split) if lo else []
+        if not selected:
             limitations.append(f"Source {source.source_id}: exceeds the current input budget; not processed.")
             continue
-        selected = portions(lo)
         model_text[source.source_id] = selected
         remaining -= sum(len(passage) for _, passage in selected)
         processed.append(source)
