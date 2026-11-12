@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { researchClient, type DiscoveryCandidate, type ResearchClaim, type ResearchFact, type ResearchOperation, type ResearchTopic, type SourceMetadata, type RunBudget, type RunInputSnapshot, type IssuerCandidate } from "../general-research-client";
+import { researchClient, ResearchRequestError, researchPollingDelay, type DiscoveryCandidate, type ResearchClaim, type ResearchFact, type ResearchOperation, type ResearchTopic, type SourceMetadata, type RunBudget, type RunInputSnapshot, type IssuerCandidate } from "../general-research-client";
 import type { Language } from "../types";
 import { Button, Field, Input, Textarea } from "./Controls";
 import { Header } from "./AppShell";
@@ -104,6 +104,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [sourceMetadata, setSourceMetadata] = useState<SourceMetadata[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [pollNotice, setPollNotice] = useState("");
   const pendingRun = useRef<{ topicId: string; versionId: string; key: string; budget: RunBudget } | null>(null);
   const pendingSource = useRef<{ fingerprint: string; sourceId: string; file: File | null } | null>(null);
   const sourceDetails = useRef<HTMLDetailsElement>(null);
@@ -152,18 +153,33 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   }, [api, topic?.topic_id, operation?.operation_id]);
 
   useEffect(() => {
-    if (!api || !topic || !operation || !["pending", "running"].includes(operation.status)) return;
+    if (!api || !topic || !operation || !["pending", "running"].includes(operation.status)) { setPollNotice(""); return; }
     let active = true;
-    const timer = window.setInterval(() => {
-      void api.operation(topic.topic_id, operation.operation_id).then(async ({ operation: next }) => {
+    let timer: number | undefined;
+    let delay = 1500;
+    const poll = async () => {
+      try {
+        const { operation: next } = await api.operation(topic.topic_id, operation.operation_id);
         if (!active) return;
         if (!["pending", "running"].includes(next.status)) {
           const updated = await api.get(topic.topic_id);
-          if (active) { setTopic(updated); setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item)); setOperation(next); }
-        } else setOperation(next);
-      }).catch(() => { if (active) setNotice(en ? "Could not check progress. Your research is retained." : "无法获取运行状态，研究内容仍会保留。") });
-    }, 1500);
-    return () => { active = false; window.clearInterval(timer); };
+          if (active) { setTopic(updated); setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item)); setPollNotice(""); setOperation(next); }
+          return;
+        }
+        setPollNotice(""); setOperation(next); delay = 1500;
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof ResearchRequestError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+          setPollNotice(en ? "Cannot check this run. Reopen the research to refresh its status." : "无法查询此运行，请重新打开研究以刷新状态。不要重复启动。 ");
+          return;
+        }
+        delay = researchPollingDelay(error, delay);
+        setPollNotice(en ? "Could not check progress; the same run will be checked again." : "暂时无法获取运行状态，将继续查询同一次运行。不要重复启动。 ");
+      }
+      if (active) timer = window.setTimeout(() => void poll(), delay);
+    };
+    timer = window.setTimeout(() => void poll(), delay);
+    return () => { active = false; if (timer !== undefined) window.clearTimeout(timer); };
   }, [api, topic?.topic_id, operation?.operation_id, operation?.status, en]);
 
   if (!baseUrl) return <p role="status">{en ? "Connect the API to use the research workspace." : "连接 API 后即可使用研究工作区。"}</p>;
@@ -430,6 +446,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <Field label={en ? "Maximum cost in USD (optional)" : "费用上限（美元，可选）"} helper={en ? "If provider pricing is unknown, a cost cap prevents external calls." : "供应商价格未知时，设置费用上限会阻止外部调用。"}><Input type="number" min="0" step="0.01" value={maxCost} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxCost(event.target.value)} /></Field>
       </details>
       {operation ? <p role="status">{en ? "Run status: " : "运行状态："}{statusLabel(operation.status, en)}{running ? <> <Button disabled={busy} onClick={() => void cancel()}>{en ? "Cancel" : "取消"}</Button></> : null}</p> : null}
+      {pollNotice ? <p role="status">{pollNotice}</p> : null}
       {runInputs ? <details className="general-source"><summary>{en ? "Run input snapshot" : "运行时输入记录"}</summary>
         <p>{en ? "Captured" : "记录时间"}: {new Date(runInputs.captured_at).toLocaleString()} · {en ? "Source version" : "输入版本"}: {runInputs.parent_version_id}</p>
         <p>{en ? "Time limit" : "时间上限"}: {runInputs.budget.max_elapsed_seconds} s · {en ? "Token limit" : "Token 上限"}: {runInputs.budget.max_total_tokens} · {en ? "Cost limit (USD)" : "费用上限（美元）"}: {runInputs.budget.max_cost_usd ?? (en ? "not set" : "未设置")}</p>

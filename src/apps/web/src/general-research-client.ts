@@ -58,6 +58,26 @@ export interface RunInputSnapshot {
   provider: string | null;
 }
 
+export class ResearchRequestError extends Error {
+  constructor(readonly status: number, readonly retryAfterMs: number | null) {
+    super(`request_${status}`);
+  }
+}
+
+export function researchPollingDelay(error: unknown, previousMs: number): number {
+  const backoff = Math.min(Math.max(1500, previousMs) * 2, 30000);
+  if (error instanceof ResearchRequestError && (error.status === 429 || error.status === 503) && error.retryAfterMs !== null) {
+    return Math.max(backoff, error.retryAfterMs);
+  }
+  return backoff;
+}
+
+function retryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = /^\d+$/.test(header.trim()) ? Number(header) : (Date.parse(header) - Date.now()) / 1000;
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.min(2147483647, seconds * 1000) : null;
+}
+
 export function researchClient(baseUrl: string) {
   const fetcher = sameOriginOAuthFetcher(baseUrl);
   async function request<T>(path: string, body?: unknown, key?: string): Promise<T> {
@@ -67,7 +87,7 @@ export function researchClient(baseUrl: string) {
         ...(key ? { "Idempotency-Key": key } : {}),
       }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    if (!response.ok) throw new Error(`request_${response.status}`);
+    if (!response.ok) throw new ResearchRequestError(response.status, retryAfterMs(response.headers.get("Retry-After")));
     return await response.json() as T;
   }
   return {
