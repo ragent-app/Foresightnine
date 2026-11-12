@@ -279,3 +279,24 @@ def test_different_period_labels_do_not_become_claim_correction_or_suggestion():
     assert not claim_calculation_differences([claim], [calculation], [current, prior])
     claim['text'] = 'Growth was 25%.'
     assert not suggest_percentage_calculations([claim], [calculation], [current, prior])[0].get('suggested_calculations')
+
+
+def test_table_period_conflict_only_for_narrow_unambiguous_rectangles():
+    from decimal import Decimal
+    from app.research_calculations import table_period_conflict
+    text = '| Year Ended | 2024 | 2023 |\n| Revenue | USD 100 | USD 90 |\n'
+    quote = 'USD 100'
+    start = text.index(quote)
+    check = lambda txt, pos, q, value, period: table_period_conflict(txt, pos, q, Decimal(value), period)
+    assert check(text, start, quote, '100', 'FY2023') == {'declared_year': '2023', 'column_year': '2024'}
+    assert check(text, start, quote, '100', 'FY2024') is None
+    assert check(text, start, quote, '100', '2023 Q1') is None
+    assert check(text, start + 1, quote, '100', '2023') is None
+    duplicate = text.replace('USD 90', 'USD 100')
+    assert check(duplicate, duplicate.index(quote), quote, '100', '2023') is None
+    for changed in (text.replace('2023 |', '2024 |', 1),
+                    text.replace('Year Ended', 'Revenue'),
+                    text.replace('USD 100', '[colspan=2] USD 100'),
+                    text.replace('| Revenue |', 'Narrative\n| Revenue |'),
+                    text.replace('| Revenue | USD 100 | USD 90 |', '| Revenue | USD 100 | USD 90 | 80 |')):
+        assert check(changed, changed.index(quote), quote, '100', '2023') is None

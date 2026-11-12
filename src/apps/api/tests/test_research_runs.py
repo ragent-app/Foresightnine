@@ -1731,3 +1731,58 @@ def test_table_calculation_alignment_warning_keeps_run_partial(monkeypatch):
     exported = client.get(path + '/versions/' + current['version_id'] + '/export', headers=headers)
     assert exported.status_code == 200
     assert all(item['table_alignment_unverified'] for item in exported.json()['version']['content']['facts'])
+
+
+def test_table_period_conflict_excludes_calculation_and_rechecks_edits(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    class Provider:
+        name = 'table-period-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            def fact(fid, value, year):
+                return {'fact_id': fid, 'label': 'Revenue', 'value': value, 'unit': 'million', 'currency': 'USD',
+                        'period': year, 'citation': {'source_id': source_id, 'quotation': 'USD ' + value}}
+            return {'claims': [{'text': 'Revenue was reported.', 'citations': [{'source_id': source_id, 'quotation': 'Revenue | USD 100 | USD 90'}]}],
+                    'facts': [fact('a','100','2023'), fact('b','90','2024')],
+                    'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'a', 'second_fact_id': 'b'}]}, 10
+    monkeypatch.setattr(api, 'challenge_provider', Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'period-column-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title':'Report', 'text':'| Year Ended | 2024 | 2023 |\n| Revenue | USD 100 | USD 90 |',
+        'permissions': {'store': True, 'model_input': True, 'display': True, 'export': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question':'Revenue?', 'source_ids':[source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    receipt = client.post(path + '/runs', headers={**headers, 'Idempotency-Key':'period-column'}, json={'parent_version_id': topic['versions'][0]['version_id'], 'require_counterarguments':False}).json()
+    op = receipt['operation']['operation_id']
+    for _ in range(100):
+        status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+        if status in {'completed','failed'}: break
+        time.sleep(.02)
+    assert status == 'completed'
+    current = client.get(path, headers=headers).json()['versions'][-1]
+    content = current['content']
+    assert content['run']['status'] == 'partial' and not content['calculations']
+    assert [f['table_period_conflict']['column_year'] for f in content['facts']] == ['2024', '2023']
+    exported = client.get(path + '/versions/' + current['version_id'] + '/export', headers=headers)
+    assert exported.status_code == 200
+    assert exported.json()['version']['content']['facts'][0]['table_period_conflict']['column_year'] == '2024'
+    edited = deepcopy(content)
+    inputs = [{k:f[k] for k in ('fact_id','value','unit','currency','period')} for f in edited['facts']]
+    edited['calculations'] = [{'formula_id':'growth_percent','formula_version':'1','inputs':inputs, 'expression':'(first / second - 1) * 100','value':'11.11','unit':'percent'}]
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id':current['version_id'],'content':edited})
+    assert saved.status_code == 201, saved.text
+    latest = saved.json()['versions'][-1]
+    assert latest['content']['calculations'][0]['input_status'] == 'unverifiable'
+    assert client.post(path + '/calculations/recalculate', headers=headers, json={'parent_version_id':latest['version_id'],'calculation_index':0}).status_code == 422
+    fixed = deepcopy(latest['content'])
+    fixed['facts'][0]['period'],fixed['facts'][1]['period'] = '2024','2023'
+    for fact in fixed['facts']: fact['table_period_conflict'] = {'declared_year':'2023','column_year':'2024'}
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id':latest['version_id'],'content':fixed})
+    assert saved.status_code == 201, saved.text
+    latest = saved.json()['versions'][-1]
+    assert all(not fact.get('table_period_conflict') for fact in latest['content']['facts'])
+    recalc = client.post(path + '/calculations/recalculate', headers=headers, json={'parent_version_id':latest['version_id'],'calculation_index':0})
+    assert recalc.status_code == 201 and recalc.json()['versions'][-1]['content']['calculations'][0]['value'] == '11.11'
+    assert all(f.get('table_alignment_unverified') for f in latest['content']['facts'])

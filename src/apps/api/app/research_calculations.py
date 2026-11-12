@@ -76,6 +76,65 @@ def quotation_is_table_row(source_text: str, start: object, quotation: object) -
     return row.startswith("|") and row.endswith("|") and row.count("|") >= 3
 
 
+def table_period_conflict(source_text: str, start: object, quotation: object,
+                          value: Decimal, period: str) -> dict[str, str] | None:
+    """Detect a narrow year/value mismatch in a simple rectangular table.
+
+    This never confirms that a fact is correct: merged cells, repeated values,
+    unrecognized periods, complex amounts and broken table layout fail open to
+    ordinary review rather than being guessed. The caller must already have
+    established that the quotation is unique and is valid evidence.
+    """
+    if not quotation_is_table_row(source_text, start, quotation):
+        return None
+    year_match = re.fullmatch(r"(?:FY\s*)?((?:19|20)\d{2})", period.strip(), re.IGNORECASE)
+    if not year_match:
+        return None
+    line_start = source_text.rfind("\n", 0, start) + 1
+    line_end = source_text.find("\n", start)
+    if line_end < 0:
+        line_end = len(source_text)
+    def cells(line: str) -> list[str] | None:
+        line = line.strip()
+        if len(line) > 1000 or not line.startswith("|") or not line.endswith("|") or "[colspan=" in line.casefold() or "[rowspan=" in line.casefold():
+            return None
+        result = [part.strip() for part in line[1:-1].split("|")]
+        return result if 3 <= len(result) <= 12 else None
+    def amount(cell: str) -> Decimal | None:
+        match = re.fullmatch(r"(?:(?:USD|EUR|GBP)\s+)?([+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?:\s+(?:USD|EUR|GBP))?", cell, re.IGNORECASE)
+        if not match:
+            return None
+        try:
+            return Decimal(match.group(1).replace(",", ""))
+        except InvalidOperation:
+            return None
+    row = cells(source_text[line_start:line_end])
+    if row is None or not row[0]:
+        return None
+    positions = [i for i, cell in enumerate(row[1:], 1) if amount(cell) == value]
+    if len(positions) != 1:
+        return None
+    # A small, contiguous rectangle prevents a header from an unrelated
+    # narrative or a differently shaped table being applied to the row.
+    prior = source_text[max(0, line_start - 12000):line_start].splitlines()
+    for line in reversed(prior[-10:]):
+        current = cells(line)
+        if current is None or len(current) != len(row):
+            return None
+        if re.fullmatch(r"(?:fiscal\s+)?years?(?:\s+ended)?", current[0], re.IGNORECASE):
+            years = current[1:]
+            if (not all(re.fullmatch(r"(?:19|20)\d{2}", year) for year in years) or
+                    len(set(years)) != len(years)):
+                return None
+            column_year, declared_year = years[positions[0] - 1], year_match.group(1)
+            if column_year != declared_year:
+                return {"declared_year": declared_year, "column_year": column_year}
+            return None
+        if not current[0] or any(cell and amount(cell) is None for cell in current[1:]):
+            return None
+    return None
+
+
 def table_currency_quote_missing(currency: str | None, quotation: str | None) -> bool:
     """Flag a table-row quotation without an explicit currency identifier.
 
@@ -220,7 +279,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             candidates = by_id.get(snapshot.fact_id, [])
             if len(candidates) != 1:
                 return "missing_or_ambiguous"
-            if candidates[0].get("direction_context_unverified") or currency_value_conflict(
+            if candidates[0].get("table_period_conflict") or candidates[0].get("direction_context_unverified") or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation")):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})
