@@ -130,3 +130,27 @@ def test_retained_calculation_detects_changed_missing_and_ambiguous_facts():
     assert calculation_input_status(calculation, [current]) == "missing_or_ambiguous"
     assert calculation_input_status(calculation, [current, current, prior]) == "missing_or_ambiguous"
     assert calculation_input_status({"inputs": [current]}, [current, prior]) == "unverifiable"
+
+
+def test_suggested_calculation_requires_matching_result_and_both_source_passages():
+    from app.research_calculations import suggest_percentage_calculations
+    current = {**fact("current", "100", "2024"), "verification": "model_extraction_not_independently_verified",
+               "source_id": "s", "quotation": "Current 100", "location": {"character_start": 0, "character_end": 11}}
+    prior = {**fact("prior", "80", "2023"), "verification": "model_extraction_not_independently_verified",
+             "source_id": "s", "quotation": "Prior 80", "location": {"character_start": 20, "character_end": 28}}
+    calculation = calculate(CalculationRequest(formula="growth_percent", first=fact("current", "100", "2024"),
+                                                second=fact("prior", "80", "2023")))
+    claim = {"text": "Revenue growth was 25%", "uncited_percentages": ["25%"], "citations": [
+        {"source_id": "s", "location": {"character_start": 0, "character_end": 11}},
+        {"source_id": "s", "location": {"character_start": 20, "character_end": 28}}]}
+    result = suggest_percentage_calculations([claim], [calculation], [current, prior])[0]
+    assert result["uncited_percentages"] == ["25%"]
+    assert result["suggested_calculations"] == [{"calculation_index": 0, "claimed_percentage": "25%",
+        "formula_id": "growth_percent", "input_fact_ids": ["current", "prior"], "status": "requires_semantic_review"}]
+    assert "suggested_calculations" not in claim
+    assert not suggest_percentage_calculations([{**claim, "citations": claim["citations"][:1]}], [calculation], [current, prior])[0].get("suggested_calculations")
+    assert not suggest_percentage_calculations([claim], [{**calculation, "value": "26"}], [current, prior])[0].get("suggested_calculations")
+    assert not suggest_percentage_calculations([claim], [calculation], [current, {**prior, "value": "81"}])[0].get("suggested_calculations")
+    assert not suggest_percentage_calculations([claim], [calculation], [current, {**prior, "authorship": "user"}])[0].get("suggested_calculations")
+    assert not suggest_percentage_calculations([{**claim, "citations": [{**claim["citations"][0], "partial_token": True}, claim["citations"][1]]}], [calculation], [current, prior])[0].get("suggested_calculations")
+    assert not suggest_percentage_calculations([{**claim, "uncited_percentages": ["26%"], "suggested_calculations": [{"fabricated": True}]}], [calculation], [current, prior])[0].get("suggested_calculations")

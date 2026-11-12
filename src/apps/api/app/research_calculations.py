@@ -232,3 +232,96 @@ def claim_calculation_differences(claims: list[dict], calculations: list[dict], 
             if len(differences) == 50:
                 return differences
     return differences
+
+
+def suggest_percentage_calculations(claims: list[dict], calculations: list[dict], facts: list[dict]) -> list[dict]:
+    """Suggest source-covered calculations; matching is not semantic verification.
+
+    Only reproducible machine calculations with uniquely identified, unedited
+    facts whose original passages are covered by the claim's citations qualify.
+    Percentages remain uncited and still require review.
+    """
+    from copy import deepcopy
+
+    facts_by_id: dict[str, list[dict]] = {}
+    for fact in facts:
+        if isinstance(fact.get("fact_id"), str):
+            facts_by_id.setdefault(fact["fact_id"], []).append(fact)
+    valid: list[tuple[int, CalculationRequest, list[dict]]] = []
+    for index, item in enumerate(calculations):
+        if (item.get("authorship") == "user" or item.get("formula_version") != "1" or
+                item.get("formula_id") not in {"growth_percent", "margin_percent"} or
+                item.get("unit") != "percent" or calculation_input_status(item, facts) != "matched"):
+            continue
+        try:
+            inputs = item["inputs"]
+            request = CalculationRequest.model_validate({"formula": item["formula_id"], "first": inputs[0],
+                "second": inputs[1], "decimal_places": item.get("decimal_places", 2)})
+            if Decimal(str(item.get("value"))) != Decimal(calculate(request)["value"]):
+                continue
+            source_facts = [facts_by_id[fact.fact_id][0] for fact in (request.first, request.second)]
+        except (ValidationError, CalculationError, InvalidOperation, TypeError, ValueError, KeyError, IndexError):
+            continue
+        if any(fact.get("verification") != "model_extraction_not_independently_verified" or
+               fact.get("authorship") == "user" or not isinstance(fact.get("source_id"), str) or
+               not isinstance(fact.get("quotation"), str) or not fact.get("quotation") or
+               not isinstance(fact.get("location"), dict) or fact["location"].get("status") == "ambiguous" or
+               type(fact["location"].get("character_start")) is not int or
+               type(fact["location"].get("character_end")) is not int or
+               fact["location"]["character_end"] - fact["location"]["character_start"] != len(fact["quotation"])
+               for fact in source_facts):
+            continue
+        valid.append((index, request, source_facts))
+    # Index rounded values once so a large saved version does not repeatedly
+    # recompute every calculation for every claim.
+    by_result: dict[tuple[int, Decimal], list[tuple[int, CalculationRequest, list[dict]]]] = {}
+    for index, request, source_facts in valid:
+        for precision in range(9):
+            try:
+                value = Decimal(calculate(request.model_copy(update={"decimal_places": precision}))["value"])
+            except (CalculationError, InvalidOperation):
+                continue
+            by_result.setdefault((precision, value), []).append((index, request, source_facts))
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("suggested_calculations", None)
+        citations = entry.get("citations")
+        percentages = entry.get("uncited_percentages")
+        if not isinstance(citations, list) or not isinstance(percentages, list):
+            output.append(entry)
+            continue
+        candidates = []
+        for raw in percentages[:5]:
+            match = _TEXT_PERCENT.fullmatch(raw) if isinstance(raw, str) else None
+            if match is None:
+                continue
+            value = match.group(1).replace(",", "").replace("−", "-")
+            precision = len(value.rsplit(".", 1)[1]) if "." in value else 0
+            if len(value) > 40 or precision > 8:
+                continue
+            try:
+                matching = by_result.get((precision, Decimal(value)), [])
+            except InvalidOperation:
+                continue
+            for index, request, source_facts in matching:
+                if not all(any(isinstance(citation, dict) and not citation.get("partial_token") and
+                    citation.get("source_id") == fact["source_id"] and isinstance(citation.get("location"), dict) and
+                    citation["location"].get("status") != "ambiguous" and
+                    type(citation["location"].get("character_start")) is int and
+                    type(citation["location"].get("character_end")) is int and
+                    citation["location"]["character_start"] <= fact["location"]["character_start"] and
+                    citation["location"]["character_end"] >= fact["location"]["character_end"]
+                    for citation in citations) for fact in source_facts):
+                    continue
+                candidates.append({"calculation_index": index, "claimed_percentage": raw,
+                    "formula_id": request.formula, "input_fact_ids": [request.first.fact_id, request.second.fact_id],
+                    "status": "requires_semantic_review"})
+                if len(candidates) >= 5:
+                    break
+            if len(candidates) >= 5:
+                break
+        if candidates:
+            entry["suggested_calculations"] = candidates
+        output.append(entry)
+    return output
