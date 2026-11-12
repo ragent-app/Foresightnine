@@ -96,7 +96,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, table_period_conflict
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
@@ -1798,6 +1798,9 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                                 if isinstance(citation, dict):
                                     citation["support_status"] = "not_independently_verified"
                     if field == "facts":
+                        # Confirmations are issued only by the dedicated action;
+                        # any edit invalidates the prior attestation.
+                        entry.pop("direction_confirmation", None)
                         entry.pop("numeric_normalization", None)
                         entry.pop("range_parent_id", None)
         for entry in content.calculations:
@@ -1854,6 +1857,60 @@ def attach_research_sources(topic_id: str, request: AttachSourcesInput, authoriz
         raise ApiProblem(422, "invalid_request", str(error)) from error
 
 
+@app.post("/v2/research/topics/{topic_id}/facts/confirm-direction", response_model=ResearchTopic,
+          status_code=201, include_in_schema=False)
+def confirm_research_direction(topic_id: str, request: ConfirmDirectionRequest,
+                               authorization: str | None = Header(default=None)) -> ResearchTopic:
+    """Record an explicit user review of one source-backed signed change."""
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+        previous = topic.versions[-1]
+        if previous.version_id != request.parent_version_id:
+            raise TopicVersionConflict()
+        matches = [fact for fact in previous.content.facts if fact.get("fact_id") == request.fact_id]
+        if len(matches) != 1 or not matches[0].get("direction_context_unverified"):
+            raise ApiProblem(422, "invalid_request", "A unique directional fact requiring review is needed.")
+        fact = matches[0]
+        if direction_user_confirmed(fact):
+            return topic
+        source_id, quote, location = fact.get("source_id"), fact.get("quotation"), fact.get("location")
+        if (source_id not in set(previous.source_ids) or not isinstance(quote, str) or not quote or
+                not isinstance(location, dict) or location.get("status") == "ambiguous" or
+                fact.get("source_value_warnings") or fact.get("table_period_conflict") or
+                fact.get("currency_conflict_unverified") or fact.get("currency_context_unverified")):
+            raise ApiProblem(422, "invalid_request", "The directional fact or its source requires further review.")
+        source = research_sources.get(account.account_id, source_id)
+        if (source.is_simulated or not source.permissions.display or topic.request.as_of is not None and
+                (source.published_at is None or source.published_at > topic.request.as_of or
+                 source.revised_at is not None and source.revised_at > topic.request.as_of)):
+            raise ApiProblem(422, "invalid_request", "The source is unavailable for this research.")
+        checked = locate_user_quotation(source, quote)
+        located = checked.get("location", {})
+        if (located.get("status") == "ambiguous" or checked.get("partial_token") or
+                located.get("character_start") != location.get("character_start") or
+                located.get("character_end") != location.get("character_end")):
+            raise ApiProblem(422, "invalid_request", "The quotation must have a unique complete source location.")
+        numeric = NumericFact.model_validate({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})
+        if not (_directional_negative_percent(numeric.value, numeric.unit, quote) or
+                _directional_negative_amount(numeric.value, numeric.unit, quote, numeric.currency)):
+            raise ApiProblem(422, "invalid_request", "The quotation does not contain a matching directional cue.")
+        content = previous.content.model_copy(deep=True)
+        target = next(item for item in content.facts if item.get("fact_id") == request.fact_id)
+        target["direction_confirmation"] = {"confirmed_by": "user", "fact_sha256": direction_confirmation_fingerprint(target),
+                                             "confirmed_at": datetime.now(timezone.utc).isoformat()}
+        for calculation in content.calculations:
+            calculation["input_status"] = calculation_input_status(calculation, content.facts)
+        return research_topics.add_version(account.account_id, topic_id, VersionInput(
+            parent_version_id=previous.version_id, content=content, review="draft", note=previous.note))
+    except (TopicNotFound, SourceNotFound) as error:
+        raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
+    except TopicVersionConflict as error:
+        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before saving.") from error
+    except (ValueError, ValidationError) as error:
+        raise ApiProblem(422, "invalid_request", "The directional fact or its source requires further review.") from error
+
+
 @app.post("/v2/research/topics/{topic_id}/calculations/recalculate", response_model=ResearchTopic,
           status_code=201, include_in_schema=False)
 def recalculate_research(topic_id: str, request: RecalculateRequest,
@@ -1881,7 +1938,7 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
                 raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before recalculation.")
             if candidates[0].get("table_period_conflict"):
                 raise ApiProblem(422, "invalid_request", "Table period and column require review before recalculation.")
-            if candidates[0].get("direction_context_unverified"):
+            if candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0]):
                 raise ApiProblem(422, "invalid_request", "Value direction and subject require review before recalculation.")
             if currency_value_conflict(candidates[0].get("currency"), candidates[0].get("value"), candidates[0].get("quotation")):
                 raise ApiProblem(422, "invalid_request", "Currency and quoted value require review before recalculation.")

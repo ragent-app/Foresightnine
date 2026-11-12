@@ -30,7 +30,7 @@ export interface ResearchClaim {
   rate_unit_warnings?: { claimed_text: string; status: string }[];
   publication_date_warnings?: { claimed_text: string; source_id: string; declared_published_at: string; status: string }[];
 }
-export interface ResearchFact { numeric_normalization?: string; currency_context_unverified?: boolean; currency_quote_missing?: boolean; table_alignment_unverified?: boolean; table_period_conflict?: { declared_year: string; column_year: string }; currency_conflict_unverified?: boolean; direction_context_unverified?: boolean; source_value_warnings?: string[]; fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
+export interface ResearchFact { numeric_normalization?: string; currency_context_unverified?: boolean; currency_quote_missing?: boolean; table_alignment_unverified?: boolean; table_period_conflict?: { declared_year: string; column_year: string }; currency_conflict_unverified?: boolean; direction_context_unverified?: boolean; direction_confirmation?: { confirmed_by: "user"; fact_sha256: string; confirmed_at: string }; source_value_warnings?: string[]; fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
 export interface ResearchContent {
   summary: string;
   sources: { source_id: string; title?: string; url?: string | null; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null }[];
@@ -170,6 +170,8 @@ export function researchClient(baseUrl: string) {
       ...(asOf ? { as_of: new Date(asOf).toISOString() } : {}) }),
     attach: (topicId: string, parent: string, sourceIds: string[]) => request<ResearchTopic>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/sources`, { parent_version_id: parent, source_ids: sourceIds }),
+    confirmDirection: (topicId: string, parent: string, factId: string) => request<ResearchTopic>(
+      `/v2/research/topics/${encodeURIComponent(topicId)}/facts/confirm-direction`, { parent_version_id: parent, fact_id: factId }),
     recalculate: (topicId: string, parent: string, index: number) => request<ResearchTopic>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/calculations/recalculate`, { parent_version_id: parent, calculation_index: index }),
     run: (topicId: string, parent: string, key: string, budget: RunBudget) => request<{ operation: ResearchOperation }>(

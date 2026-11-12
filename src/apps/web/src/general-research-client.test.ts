@@ -4,6 +4,14 @@ import { researchClient, researchPollingDelay, ResearchRequestError } from "./ge
 afterEach(() => vi.unstubAllGlobals());
 
 describe("research operation polling", () => {
+  it("confirms a specific fact against the current version", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 201 }));
+    vi.stubGlobal("fetch", fetcher);
+    await researchClient("https://api.example.com").confirmDirection("topic/one", "version-1", "fact-2");
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("/topics/topic%2Fone/facts/confirm-direction");
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({parent_version_id:"version-1",fact_id:"fact-2"});
+  });
   it("sends an input limit only when explicitly selected", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 202 }));

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 from datetime import date, datetime
+from hashlib import sha256
+import json
 import re
 from typing import Literal
 
@@ -37,6 +39,30 @@ class RecalculateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     parent_version_id: str = Field(min_length=1, max_length=100)
     calculation_index: int = Field(ge=0, le=1999, strict=True)
+
+
+class ConfirmDirectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    parent_version_id: str = Field(min_length=1, max_length=100)
+    fact_id: str = Field(min_length=1, max_length=200)
+
+
+_DIRECTION_FINGERPRINT_FIELDS = ("fact_id", "label", "value", "unit", "currency", "period", "source_id", "quotation", "location")
+
+
+def direction_confirmation_fingerprint(fact: dict) -> str:
+    data = {key: fact.get(key) for key in _DIRECTION_FINGERPRINT_FIELDS}
+    return sha256(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def direction_user_confirmed(fact: dict) -> bool:
+    confirmation = fact.get("direction_confirmation")
+    if not isinstance(confirmation, dict) or confirmation.get("confirmed_by") != "user":
+        return False
+    try:
+        return confirmation.get("fact_sha256") == direction_confirmation_fingerprint(fact)
+    except (TypeError, ValueError):
+        return False
 
 
 class CalculationError(ValueError):
@@ -385,7 +411,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             candidates = by_id.get(snapshot.fact_id, [])
             if len(candidates) != 1:
                 return "missing_or_ambiguous"
-            if candidates[0].get("table_period_conflict") or candidates[0].get("direction_context_unverified") or currency_value_conflict(
+            if candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation")):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})

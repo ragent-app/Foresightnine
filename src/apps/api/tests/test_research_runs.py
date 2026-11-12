@@ -2408,3 +2408,36 @@ def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_afte
     assert next(item for item in latest["content"]["facts"] if item["fact_id"]=="goods")["direction_context_unverified"] is True
     recalculated=client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":latest["version_id"],"calculation_index":0})
     assert recalculated.status_code==422 and "direction and subject require review" in recalculated.json()["message"]
+    assert client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":latest["version_id"],"fact_id":"services"}).status_code==422
+    confirmed=client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":latest["version_id"],"fact_id":"goods"})
+    assert confirmed.status_code==201, confirmed.text
+    reviewed=confirmed.json()["versions"][-1]
+    reviewed_goods=next(item for item in reviewed["content"]["facts"] if item["fact_id"]=="goods")
+    assert reviewed_goods["direction_context_unverified"] is True
+    assert reviewed_goods["direction_confirmation"]["confirmed_by"]=="user"
+    other=client.post("/v1/auth/local/register",json={"email":f"other-direction-{uuid4().hex}@example.test",
+        "password":"correct horse battery staple!"}).json()
+    other_headers={"Authorization":"Bearer "+other["access_token"]}
+    assert client.post(path+"/facts/confirm-direction",headers=other_headers,json={"parent_version_id":reviewed["version_id"],"fact_id":"goods"}).status_code==404
+    assert not next(item for item in confirmed.json()["versions"][-2]["content"]["facts"] if item["fact_id"]=="goods").get("direction_confirmation")
+    assert client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":latest["version_id"],"fact_id":"goods"}).status_code==409
+    recalculated=client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":reviewed["version_id"],"calculation_index":0})
+    assert recalculated.status_code==201, recalculated.text
+    calculated=recalculated.json()["versions"][-1]
+    assert calculated["content"]["calculations"][0]["input_status"]=="matched"
+    changed=deepcopy(calculated["content"])
+    changed_goods=next(item for item in changed["facts"] if item["fact_id"]=="goods")
+    changed_goods["label"]="a different metric"
+    saved_again=client.post(path+"/versions",headers=headers,json={"parent_version_id":calculated["version_id"],"content":changed})
+    assert saved_again.status_code==201, saved_again.text
+    edited=saved_again.json()["versions"][-1]
+    assert not next(item for item in edited["content"]["facts"] if item["fact_id"]=="goods").get("direction_confirmation")
+    assert edited["content"]["calculations"][0]["input_status"]=="unverifiable"
+    assert client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":edited["version_id"],"calculation_index":0}).status_code==422
+    forged=deepcopy(edited["content"])
+    forged_goods=next(item for item in forged["facts"] if item["fact_id"]=="goods")
+    from app.research_calculations import direction_confirmation_fingerprint
+    forged_goods["direction_confirmation"]={"confirmed_by":"user","fact_sha256":direction_confirmation_fingerprint(forged_goods),"confirmed_at":"2026-01-01T00:00:00Z"}
+    attempted=client.post(path+"/versions",headers=headers,json={"parent_version_id":edited["version_id"],"content":forged})
+    assert attempted.status_code==201
+    assert not next(item for item in attempted.json()["versions"][-1]["content"]["facts"] if item["fact_id"]=="goods").get("direction_confirmation")

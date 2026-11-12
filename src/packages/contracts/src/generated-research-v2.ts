@@ -1,8 +1,9 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: 40dc89f7093b1847dfb0a9be351fbfae8b017959d3968aaa08f0dc11b979d842
+ * SHA-256: 86537a5d8def1d0f61b4f4f6845089b883c92f85b89442be652c08a4e3437219
  */
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
 export type CalculationRequest = { readonly "decimal_places"?: number; readonly "first": NumericFact; readonly "formula": "growth_percent" | "margin_percent" | "difference"; readonly "second": NumericFact; };
+export type ConfirmDirectionRequest = { readonly "fact_id": string; readonly "parent_version_id": string; };
 export type FetchSourceRequest = { readonly "event_at"?: string | null; readonly "is_simulated"?: boolean; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "revised_at"?: string | null; readonly "title": string; readonly "url": string; };
 export type FocusCitation = { readonly "citation_index": number; readonly "claim_index": number; };
 export type HTTPValidationError = { readonly "detail"?: readonly (ValidationError)[]; };
