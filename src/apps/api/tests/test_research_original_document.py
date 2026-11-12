@@ -131,3 +131,30 @@ def test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model(monkey
     assert context.json()["page_start"] == 2
     assert content["claims"][1]["citations"][0]["location"]["page"] == 1
     assert any("user-declared" in item for item in content["limitations"])
+
+
+@pytest.mark.parametrize("case,needles", [
+    ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+    ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+    ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+    ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+])
+@pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+    folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+    task = json.loads((folder / (case + "-input.json")).read_text())
+    text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+    assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+    report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+        kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+        published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+        content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+    captured = []
+    def model(prompt):
+        captured.extend(item["text"] for item in json.loads(prompt)["sources"])
+        return {}, 1
+    result = analyze(task["question"], [report], None, model,
+                     max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+    normalized = [" ".join(part.split()) for part in captured]
+    assert all(any(needle in part for part in normalized) for needle in needles)
+    assert all(text[segment["character_start"]:segment["character_end"]] for segment in result.segments)

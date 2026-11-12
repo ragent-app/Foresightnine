@@ -35,7 +35,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v12"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v13"
 
 
 class Citation(BaseModel):
@@ -200,6 +200,25 @@ def _select_window(text: str, question: str, length: int,
     return _select_windows(text, question, length, 1, should_stop)[0]
 
 
+def _trim_partial_ascii_words(text: str, start: int, passage: str) -> tuple[int, str]:
+    """Remove only short, visibly cut ASCII words at excerpt boundaries."""
+    end = start + len(passage)
+    def letter(char: str) -> bool:
+        return char.isascii() and char.isalpha()
+    left, right = start, end
+    if left and left < right and letter(text[left - 1]) and letter(text[left]):
+        while left < right and left - start < 32 and letter(text[left]):
+            left += 1
+        if left < right and letter(text[left]):
+            left = start  # An unusually long token: do not discard the passage.
+    if right < len(text) and right > left and letter(text[right - 1]) and letter(text[right]):
+        while right > left and end - right < 32 and letter(text[right - 1]):
+            right -= 1
+        if right > left and letter(text[right - 1]):
+            right = end
+    return (left, text[left:right]) if right - left >= 50 else (start, passage)
+
+
 def _compact_pdf_with_offsets(text: str, should_stop: Callable[[], bool] | None = None) -> tuple[str, Callable[[int], int]]:
     """Compact horizontal PDF gaps while preserving every original boundary.
 
@@ -314,6 +333,8 @@ def _select_windows(text: str, question: str, length: int, count: int,
         "较上月": ("preceding", "month"), "同比": ("year", "month"),
         "较上年同期": ("year", "month"),
         "联邦基金": ("federal", "funds"), "目标区间": ("target", "range"),
+        "决定": ("decided",),
+        "下调": ("lower", "decrease"), "上调": ("raise", "increase"),
         "变化幅度": ("lower", "increase", "decrease"), "当期美元": ("current", "dollars"),
         "前月": ("preceding", "month"), "修订": ("revised", "previous"),
     }.items():
@@ -333,7 +354,11 @@ def _select_windows(text: str, question: str, length: int, count: int,
                 "increase": ("growth", "increase", "grew"),
                 "revenue": ("revenue", "sales"), "sales": ("revenue", "sales"),
                 "annual": ("annual", "yearly"), "annualized": ("annual", "yearly"),
-                "quarterly": ("quarter",), "profit": ("profit", "income")}
+                "quarterly": ("quarter",), "profit": ("profit", "income"),
+                "dissenting": ("dissent", "against"), "dissent": ("dissent", "against"),
+                "voter": ("voter", "voting"), "voters": ("voter", "voting"),
+                "cut": ("cut", "lower", "decrease", "reduc"),
+                "half": ("half", "1/2", "0.5")}
     groups = list(dict.fromkeys(synonyms.get(term, (term,)) for term in words))
     wants_annual_levels = ("full-year" in lower or "full year" in lower or "全年" in lower or
                            bool(re.search(r"\bannual\s+(?:real\s+)?(?:gdp|growth|revenue|income)\b", lower)))
@@ -341,12 +366,41 @@ def _select_windows(text: str, question: str, length: int, count: int,
     wants_year_comparison = any(term in lower for term in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))
     wants_monetary_amount = any(term in lower for term in ("金额", "美元", "dollar amount", "monetary amount"))
     wants_previous_period = any(term in lower for term in ("前月", "上月", "preceding month", "previous month"))
+    wants_revision = any(term in lower for term in ("修订", "revision", "revised", "revise"))
+    wants_decision = (any(term in lower for term in ("决定", "decision", "decided")) or
+                      ("目标区间" in lower and any(term in lower for term in ("下调", "上调", "变化幅度"))))
+    metric_terms = set()
+    for term in ("gdp", "pce", "revenue", "sales", "income", "inflation", "price"):
+        if term in terms:
+            metric_terms.add(term)
     ranked: list[tuple[int, int]] = []
     seen: set[int] = set()
     # Cap scanning work for multi-megabyte material; unexamined ranges remain
     # explicitly disclosed and cannot become evidence.
     step = max(256, length // 4, (len(text) + 4095) // 4096)
     candidates = [(candidate, False) for candidate in range(0, len(text), step)]
+    # A coarse stride can place a high-scoring keyword at the very end of a
+    # window, cutting off its associated value. Center bounded windows near
+    # actual query terms as well; all ranges still come from the original
+    # input and share the same byte and time limits.
+    anchors_added = 0
+    for group in groups:
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        for option in group:
+            for option_index, match in enumerate(re.finditer(r"(?<![A-Za-z0-9])" + re.escape(option), text, re.IGNORECASE)):
+                if option_index >= 8:
+                    break
+                candidates.append((max(0, match.start() - length // 3), True))
+                anchors_added += 1
+                if anchors_added % 64 == 0 and should_stop is not None and should_stop():
+                    raise AnalysisInterrupted()
+                if anchors_added >= 512:
+                    break
+            if anchors_added >= 512:
+                break
+        if anchors_added >= 512:
+            break
     # A fixed stride can cut a short comparison sentence at both ends. Add
     # bounded anchors at explicit period phrases, retaining original offsets.
     for wanted, pattern in ((wants_month_comparison, r"\b(?:preceding|previous)\s+month\b"),
@@ -380,9 +434,16 @@ def _select_windows(text: str, question: str, length: int, count: int,
         year_counts = [passage.count(year) for year in years]
         score = (sum(100 + min(count, 4) * 3 for count in counts if count) +
                  sum(25 + min(count, 4) * 5 for count in year_counts if count))
+        if partial_ascii_token(text, start, min(len(text), start + length)):
+            score -= 4
         if (wants_monetary_amount and re.search(r"\b(?:millions?|billions?|trillions?)\s+of\s+dollars\b", passage) and
                 re.search(r"\b(?:dollars|income|revenue|sales)\b[^\n]{0,120}\d", passage)):
             score += 250
+        if wants_revision and any(re.search(r"\b" + re.escape(term) + r"\b[\s\S]{0,35}?\brevis(?:ed|ion)\b", passage)
+                                  for term in metric_terms):
+            score += 250
+        if wants_decision and re.search(r"\b(?:decided|voted)\s+to\s+(?:lower|raise|maintain|hold|increase|reduce)\s+(?:the\s+)?target\s+range\b", passage):
+            score += 350
         if wants_annual_levels and re.search(r"\b(?:annual (?:level|average)|calendar year|full[- ]year|year ended)\b", passage):
             score += 350
             if re.search(r"\breal\s+gdp\s+(?:increased|decreased|grew|declined)\s+[-\d,.]+\s+percent\b", passage):
@@ -392,20 +453,34 @@ def _select_windows(text: str, question: str, length: int, count: int,
         if month_anchor:
             score += 350
             if re.search(r"\d+(?:\.\d+)?\s*(?:percent|%)", passage[month_anchor.end():]):
-                score += 250
+                score += 650
         if year_anchor:
             score += 350
             if re.search(r"\d+(?:\.\d+)?\s*(?:percent|%)", passage[year_anchor.end():]):
-                score += 250
+                score += 650
         ranked.append((score, start))
     ranked.sort(key=lambda item: (-item[0], item[1]))
     selected: list[tuple[int, str]] = []
-    for score, start in ranked:
-        if selected and (score == 0 or any(start < other + len(passage) and other < start + length for other, passage in selected)):
-            continue
-        selected.append((start, text[start:start + length]))
-        if len(selected) >= count:
+    covered: set[int] = set()
+    while ranked and len(selected) < count:
+        best: tuple[int, int, int, set[int]] | None = None
+        for index, (score, start) in enumerate(ranked):
+            if index % 64 == 0 and should_stop is not None and should_stop():
+                raise AnalysisInterrupted()
+            if selected and (score <= 0 or any(start < other + len(passage) and other < start + length for other, passage in selected)):
+                continue
+            passage = text[start:start + length].casefold()
+            hit_groups = {i for i, group in enumerate(groups) if any(option in passage for option in group)}
+            value = score + (100 * len(hit_groups - covered) if selected else 0)
+            candidate = (value, score, -start, hit_groups)
+            if best is None or candidate[:3] > best[:3]:
+                best = candidate
+        if best is None:
             break
+        _, _, negative_start, hit_groups = best
+        start = -negative_start
+        selected.append((start, text[start:start + length]))
+        covered.update(hit_groups)
     return selected
 
 
@@ -459,6 +534,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     windows = sorted(_select_windows(selection_text, question, size // 2, 2, should_stop), key=lambda item: item[0])
             else:
                 windows = [_select_window(selection_text, question, size, should_stop)]
+            windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
             return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                     for start, part in windows]
 

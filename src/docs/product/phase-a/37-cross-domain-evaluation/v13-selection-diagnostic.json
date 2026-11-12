@@ -1,0 +1,138 @@
+{
+  "kind": "offline development input selection checks; no model call, rescore, semantic support or independence claim",
+  "method": "ranked_nonoverlapping_windows_v13",
+  "analysis_code_sha256": "1ba2a1497dc245c2693f6ae62ba9d4ad532e76dee6892610be75b74e5fe2bec2",
+  "provider_input_limit": 3000,
+  "source_id_note": "39-character placeholder matching stored source-ID length",
+  "current_cases": {
+    "GDP_AQ": {
+      "visible": {
+        "0.7 percent in the fourth quarter": true,
+        "Real GDP increased 2.1 percent in 2025": true
+      },
+      "segments": [
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 90,
+          "character_end": 380
+        },
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 3528,
+          "character_end": 3810
+        }
+      ]
+    },
+    "GDP_REV": {
+      "visible": {
+        "0.7 percent in the fourth quarter": true,
+        "Real GDP was revised down 0.7 percentage point": true
+      },
+      "segments": [
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 90,
+          "character_end": 380
+        },
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 876,
+          "character_end": 1172
+        }
+      ]
+    },
+    "FED_RATE": {
+      "visible": {
+        "lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent": true
+      },
+      "segments": [
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 754,
+          "character_end": 1070
+        },
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 3144,
+          "character_end": 3466
+        }
+      ]
+    },
+    "FED_DISS": {
+      "visible": {
+        "Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point": true
+      },
+      "segments": [
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 2307,
+          "character_end": 2601
+        },
+        {
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "character_start": 3100,
+          "character_end": 3410
+        }
+      ]
+    }
+  },
+  "prior_revision_cases": [
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 0,
+      "value_visible": true,
+      "published_at": "2024-11-27T15:00:00+00:00",
+      "segments": [
+        [
+          5491,
+          5986
+        ]
+      ]
+    },
+    {
+      "task": "28-revision-evaluation",
+      "source_index": 1,
+      "value_visible": true,
+      "published_at": "2024-12-20T13:30:00+00:00",
+      "segments": [
+        [
+          5805,
+          6293
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 0,
+      "value_visible": true,
+      "published_at": "2023-10-27T12:30:00+00:00",
+      "segments": [
+        [
+          5510,
+          6060
+        ]
+      ]
+    },
+    {
+      "task": "29-new-revision-evaluation",
+      "source_index": 1,
+      "value_visible": true,
+      "published_at": "2023-11-30T13:30:00+00:00",
+      "segments": [
+        [
+          5836,
+          6329
+        ]
+      ]
+    }
+  ],
+  "prior_pce_cases": {
+    "P24": {
+      "monthly_and_yearly_visible": true
+    },
+    "P25": {
+      "monthly_and_yearly_visible": true
+    }
+  },
+  "stress_probe": "2 MB repeated text, 1 second deadline, completed in approximately 0.203 seconds on this host; not a latency guarantee"
+}

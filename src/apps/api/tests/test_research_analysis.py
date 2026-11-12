@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _select_window, _select_windows, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, analyze, _compact_pdf_with_offsets, _comparison_windows, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions, locate_user_quotation
 
@@ -665,6 +665,22 @@ def test_time_budget_interrupts_source_selection_before_model_call():
     with pytest.raises(AnalysisInterrupted):
         analyze("2023 revenue", [report], None, must_not_call, max_prompt_chars=3000, should_stop=stop)
     assert checks == 4
+
+
+def test_excerpt_word_trimming_preserves_original_coordinates_and_non_ascii_text():
+    text = "Before the important revenue figure ends after the sentence."
+    start, end = text.index("portant"), text.index("sentenc") + len("sentenc")
+    offset, passage = _trim_partial_ascii_words(text, start, text[start:end])
+    # Tiny fragments are intentionally preserved to avoid discarding context.
+    assert offset == start and passage == text[start:end]
+    text = "prefix fragmented " + ("relevant content " * 6) + "unfinished suffix"
+    start, end = text.index("mented"), text.index("unfinish") + len("unfinish")
+    offset, passage = _trim_partial_ascii_words(text, start, text[start:end])
+    assert passage == text[offset:offset + len(passage)]
+    assert not passage.startswith("mented") and not passage.endswith("unfinish")
+    chinese = "前文数据" * 20
+    offset, passage = _trim_partial_ascii_words(chinese, 3, chinese[3:70])
+    assert offset == 3 and passage == chinese[3:70]
 
 
 @pytest.mark.parametrize("url", ["https://fred.stlouisfed.org./series/GDP",
