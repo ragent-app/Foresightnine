@@ -285,3 +285,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .source-context mark { color: #1d1b16; background: #f4e6ab; }
 .general-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 720px) { .general-grid { grid-template-columns: 1fr; }.general-library { border-left: 0; border-top: 1px solid var(--border); padding: 16px 0 0; }.general-result-header { align-items: flex-start; flex-direction: column; } }
+/* Long saved quotation options must not widen the research workspace. */
+.general-research .field { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.general-research .field select { min-width: 0; max-width: 100%; width: 100%; }
+.general-result li { overflow-wrap: anywhere; }
