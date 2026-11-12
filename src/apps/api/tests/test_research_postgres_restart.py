@@ -541,3 +541,71 @@ print(json.dumps({"source_id":r.json()["source_id"],"replayed":r.headers["Idempo
                 process.communicate()
     assert outputs[0]["source_id"]==outputs[1]["source_id"]
     assert sorted(item["replayed"] for item in outputs)==["false","true"]
+
+
+@pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
+def test_html_original_and_table_review_survive_process_restart(tmp_path):
+    """An uploaded original, user review and its calculation remain account scoped."""
+    env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
+               FORESIGHTNINE_POSTGRES_DSN=os.environ["FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"],
+               STAGEB_TEST_STATE=str(tmp_path / "html-review.json"))
+    root = Path(__file__).resolve().parents[3]
+    seed = r'''
+import base64,json,os,sys,time
+from uuid import uuid4
+from types import SimpleNamespace
+sys.path.insert(0,'apps/api')
+from fastapi.testclient import TestClient
+import app.main as api
+c=TestClient(api.app)
+def register():
+ r=c.post('/v1/auth/local/register',json={'email':uuid4().hex+'@example.test','password':'correct horse battery staple!'})
+ assert r.status_code==201,r.text
+ return {'Authorization':'Bearer '+r.json()['access_token']}
+h=register(); other=register()
+raw=b'<html><table><tr><td colspan="3">Revenue</td><td colspan="2">100</td><td></td><td colspan="2">80</td><td></td></tr></table></html>'
+r=c.post('/v2/research/sources/html',headers=h,json={'title':'Table','html_base64':base64.b64encode(raw).decode(),'permissions':{'store':True,'display':True,'model_input':True,'export':True}})
+assert r.status_code==201,r.text
+sid=r.json()['source_id']; t=c.post('/v2/research/topics',headers=h,json={'question':'Revenue?','source_ids':[sid]}).json();path='/v2/research/topics/'+t['topic_id']
+class Provider:
+ name='table-persist';policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+ def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+  def fact(key,value,period):return {'fact_id':key,'label':'Revenue','value':value,'unit':'USD million','currency':'USD','period':period,'citation':{'source_id':'ref-1','quotation':'Revenue | 100 | 80'}}
+  return {'facts':[fact('current','100','2024'),fact('prior','80','2023')]},10
+api.challenge_provider=Provider()
+r=c.post(path+'/runs',headers={**h,'Idempotency-Key':'table-persist-run'},json={'parent_version_id':t['versions'][0]['version_id'],'require_counterarguments':False});assert r.status_code==202,r.text
+op=r.json()['operation']['operation_id']
+for _ in range(200):
+ state=c.get(path+'/runs/'+op,headers=h).json()['operation']['status']
+ if state in {'completed','failed','cancelled'}:break
+ time.sleep(.05)
+assert state=='completed',state
+v=c.get(path,headers=h).json()['versions'][-1]
+assert len(v['content']['facts'])==2
+for fid in ('current','prior'):
+ r=c.post(path+'/facts/confirm-table',headers=h,json={'parent_version_id':v['version_id'],'fact_id':fid});assert r.status_code==201,r.text
+ v=r.json()['versions'][-1]
+r=c.post(path+'/calculations',headers=h,json={'parent_version_id':v['version_id'],'formula':'growth_percent','first_fact_id':'current','second_fact_id':'prior'});assert r.status_code==201,r.text
+v=r.json()['versions'][-1];assert v['content']['calculations'][-1]['value']=='25.00'
+with open(os.environ['STAGEB_TEST_STATE'],'w') as f:json.dump({'owner':h['Authorization'],'other':other['Authorization'],'source':sid,'topic':path,'version':v['version_id'],'raw':base64.b64encode(raw).decode()},f)
+'''
+    recover = r'''
+import base64,json,os,sys
+sys.path.insert(0,'apps/api')
+from fastapi.testclient import TestClient
+import app.main as api
+with open(os.environ['STAGEB_TEST_STATE']) as f:s=json.load(f)
+c=TestClient(api.app);h={'Authorization':s['owner']};other={'Authorization':s['other']}
+r=c.get('/v2/research/sources/'+s['source']+'/original',headers=h)
+assert r.status_code==200 and r.content==base64.b64decode(s['raw'])
+assert c.get('/v2/research/sources/'+s['source']+'/original',headers=other).status_code==404
+t=c.get(s['topic'],headers=h);assert t.status_code==200 and t.json()['versions'][-1]['version_id']==s['version']
+v=t.json()['versions'][-1];assert all(f['table_confirmation']['confirmed_by']=='user' for f in v['content']['facts'])
+assert v['content']['calculations'][-1]['value']=='25.00' and v['content']['calculations'][-1]['input_status']=='matched'
+assert c.get(s['topic'],headers=other).status_code==404
+assert c.delete('/v1/auth/local/account',headers=h).status_code==200
+assert c.delete('/v1/auth/local/account',headers=other).status_code==200
+'''
+    for script in (seed, recover):
+        result = subprocess.run([sys.executable, '-c', script], cwd=root, env=env, capture_output=True, text=True, timeout=90)
+        assert result.returncode == 0, result.stderr
