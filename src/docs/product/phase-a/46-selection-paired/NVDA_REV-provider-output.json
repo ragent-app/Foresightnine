@@ -1,0 +1,94 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "FY2023（截至2023年1月29日）Revenue 为 $26,974 百万，FY2022（截至2022年1月30日）为 $26,914 百万，两者基本持平（变更列显示 '—%'）。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "| [colspan=3] Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914  |  | [colspan=3]  | [colspan=2] —  | % |"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "反方/限制：摘要表显示毛利率同比显著下降 8.0 个百分点，收入持平的同时盈利能力恶化，因此“收入稳定”并不代表整体业绩稳定。",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "quotation": "| [colspan=3] Gross margin | [colspan=2] 56.9  | % | [colspan=3]  | [colspan=2] 64.9  | % | [colspan=3]  | [colspan=3] Down 8.0 pts |"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的文本仅为节选（partial coverage），未包含完整 10-K；缺少同比变化率的明确数值，仅显示 '—%'，精确增长率需基于所列事实发起计算验证。",
+      "表中部分单元格可能因 PDF 压缩而缺失，'Change' 列数值显示为 '—'，可能被截断。",
+      "来源为文本抽取，表格分隔符为生成，日期为申报所声明而非独立核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "revenue_fy2023",
+        "label": "Revenue",
+        "value": "26,974",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 29, 2023",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "| [colspan=3] Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914  |"
+        }
+      },
+      {
+        "fact_id": "revenue_fy2022",
+        "label": "Revenue",
+        "value": "26,914",
+        "unit": "millions",
+        "currency": "USD",
+        "period": "Year Ended January 30, 2022",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "$ | 26,914  |  | [colspan=3]  | [colspan=2] —  | % |"
+        }
+      },
+      {
+        "fact_id": "gross_margin_fy2023",
+        "label": "Gross margin",
+        "value": "56.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "Year Ended January 29, 2023",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "| [colspan=3] Gross margin | [colspan=2] 56.9  | %"
+        }
+      },
+      {
+        "fact_id": "gross_margin_fy2022",
+        "label": "Gross margin",
+        "value": "64.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "Year Ended January 30, 2022",
+        "citation": {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "quotation": "[colspan=2] 64.9  | % | [colspan=3]  | [colspan=3] Down 8.0 pts |"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "revenue_fy2023",
+        "second_fact_id": "revenue_fy2022"
+      },
+      {
+        "formula": "difference",
+        "first_fact_id": "gross_margin_fy2023",
+        "second_fact_id": "gross_margin_fy2022"
+      }
+    ]
+  },
+  "reported_tokens": 1689
+}

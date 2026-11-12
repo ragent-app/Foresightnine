@@ -1,0 +1,191 @@
+{
+  "id": "NVDA_REV",
+  "operation_status": "completed",
+  "manifest_sha256": "bf671cf0e63da6985d99c334dbc8c59344446ebe9daae9dac99641f33695e5df",
+  "input_sha256": "057344493f628b2c5a27d1ea034cabc267488577977034477b0d33fc3503c0dc",
+  "elapsed_seconds_observed": 18.23,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+        "title": "NVIDIA 2023 Form 10-K SEC HTML text extraction; table separators generated",
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581023000017/nvda-20230129.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T06:12:47.543802+00:00",
+        "revised_at": null,
+        "content_sha256": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "gross_margin_fy2023",
+        "value": "56.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "Year Ended January 29, 2023",
+        "label": "Gross margin",
+        "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+        "quotation": "| [colspan=3] Gross margin | [colspan=2] 56.9  | %",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 186549,
+          "character_end": 186599
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "gross_margin_fy2022",
+        "value": "64.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "Year Ended January 30, 2022",
+        "label": "Gross margin",
+        "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+        "quotation": "[colspan=2] 64.9  | % | [colspan=3]  | [colspan=3] Down 8.0 pts |",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 186617,
+          "character_end": 186682
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "difference",
+        "formula_version": "2",
+        "expression": "first - second",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "gross_margin_fy2023",
+            "value": "56.9",
+            "unit": "percent",
+            "currency": null,
+            "period": "Year Ended January 29, 2023"
+          },
+          {
+            "fact_id": "gross_margin_fy2022",
+            "value": "64.9",
+            "unit": "percent",
+            "currency": null,
+            "period": "Year Ended January 30, 2022"
+          }
+        ],
+        "value": "-8.00",
+        "unit": "percentage points",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "FY2023（截至2023年1月29日）Revenue 为 $26,974 百万，FY2022（截至2022年1月30日）为 $26,914 百万，两者基本持平（变更列显示 '—%'）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "location": {
+              "character_start": 186440,
+              "character_end": 186548
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Revenue | $ | 26,974  |  | [colspan=3]  | $ | 26,914  |  | [colspan=3]  | [colspan=2] —  | % |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "反方/限制：摘要表显示毛利率同比显著下降 8.0 个百分点，收入持平的同时盈利能力恶化，因此“收入稳定”并不代表整体业绩稳定。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+            "location": {
+              "character_start": 186549,
+              "character_end": 186682
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "| [colspan=3] Gross margin | [colspan=2] 56.9  | % | [colspan=3]  | [colspan=2] 64.9  | % | [colspan=3]  | [colspan=3] Down 8.0 pts |"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_25b4e5ca3b804a22b053b61c8b8b37af: only character ranges 185927–186734 were analyzed; remaining text was not examined.",
+      "2 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "A requested calculation was omitted because its input facts were unavailable.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "提供的文本仅为节选（partial coverage），未包含完整 10-K；缺少同比变化率的明确数值，仅显示 '—%'，精确增长率需基于所列事实发起计算验证。",
+      "表中部分单元格可能因 PDF 压缩而缺失，'Change' 列数值显示为 '—'，可能被截断。",
+      "来源为文本抽取，表格分隔符为生成，日期为申报所声明而非独立核实。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:96c0782b0828f214997bc088",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1689,
+      "cost_usd": null,
+      "generation_tokens": 1689,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 17.937,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "a2c9b1fc6a838f5dd189b1eef8074a49678f0f7a87eb39345233badc87ce1e96",
+      "prompt_characters": 1961,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v14",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_25b4e5ca3b804a22b053b61c8b8b37af",
+          "character_start": 185927,
+          "character_end": 186734
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_25b4e5ca3b804a22b053b61c8b8b37af": "e45d276acca1eefb89a46eb88b8413db1b2a30666046cc7f962a9faf02e1f41a"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

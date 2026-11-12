@@ -1,0 +1,68 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "有委员投反对票：无。会议纪要明确记载\"Voting against this action: None.\"，即针对该货币政策行动（加息）没有反对票。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "Voting against this action: None."
+          }
+        ]
+      },
+      {
+        "text": "理事会层面的行动也是一致通过：为配合联邦基金目标区间上调，理事会一致投票将准备金余额利率上调至 5.15%（2023年5月4日生效）。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "the Board of Governors of the Federal Reserve System voted unanimously to raise the interest rate paid on reserve balances to 5.15 percent, effective May 4, 2023"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无反对票这一点可视为对\"可能存在异议\"预期（例如过去会议中曾有委员主张不加息或更大幅度加息）的反证；来源文本明确写明无反对票。",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "quotation": "Voting against this action: None."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的文本为节选（source_coverage 为 partial），无法确认纪要全文中是否还有其他投票相关内容；但所引段落明确陈述无反对票。",
+      "\"None\"具体指 FOMC 委员会对该行动的投票，文本中该句上下文被截断，无法直接看到所针对的具体行动措辞，但紧随其后的理事会行动为一致通过。",
+      "来源仅节选加息幅度等部分信息；联邦基金目标区间具体数值未在所引文本中出现。"
+    ],
+    "facts": [
+      {
+        "fact_id": "iorb_rate",
+        "label": "interest rate on reserve balances",
+        "value": "5.15",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective 2023-05-04",
+        "citation": {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "quotation": "voted unanimously to raise the interest rate paid on reserve balances to 5.15 percent, effective May 4, 2023"
+        }
+      },
+      {
+        "fact_id": "dissent_votes",
+        "label": "votes against the action",
+        "value": "None",
+        "unit": "count",
+        "currency": null,
+        "period": "May 2023 FOMC meeting",
+        "citation": {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "quotation": "Voting against this action: None."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1177
+}

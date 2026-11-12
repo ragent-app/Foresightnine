@@ -1,0 +1,158 @@
+{
+  "id": "FED_VOTE",
+  "operation_status": "completed",
+  "manifest_sha256": "bf671cf0e63da6985d99c334dbc8c59344446ebe9daae9dac99641f33695e5df",
+  "input_sha256": "4fe00d6db7b6205a2e3f72faf7b374cd34ed3f647f78932b7a27da9356183083",
+  "elapsed_seconds_observed": 14.48,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+        "title": "Federal Reserve May 2023 meeting minutes",
+        "url": null,
+        "event_at": null,
+        "published_at": "2023-05-24T18:00:00+00:00",
+        "obtained_at": "2026-11-12T06:13:22.721364+00:00",
+        "revised_at": null,
+        "content_sha256": "438dd6be38ad3f5b43b7e212832d1365e10e8ec571c67be5b6dd02d158a2ab73",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "iorb_rate",
+        "value": "5.15",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "effective 2023-05-04",
+        "label": "interest rate on reserve balances",
+        "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+        "quotation": "voted unanimously\nto raise the interest rate paid on reserve balances to\n5.15 percent, effective May 4, 2023",
+        "quotation_match": "whitespace_normalized",
+        "currency_context_unverified": true,
+        "location": {
+          "character_start": 55162,
+          "character_end": 55270,
+          "page": 12
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "有委员投反对票：无。会议纪要明确记载\"Voting against this action: None.\"，即针对该货币政策行动（加息）没有反对票。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "location": {
+              "character_start": 54983,
+              "character_end": 55016,
+              "page": 12
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this action: None."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "无反对票这一点可视为对\"可能存在异议\"预期（例如过去会议中曾有委员主张不加息或更大幅度加息）的反证；来源文本明确写明无反对票。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+            "location": {
+              "character_start": 54983,
+              "character_end": 55016,
+              "page": 12
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this action: None."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_8e6805c729aa43d887a67011083c1f7a: only character ranges 31282–31592, 54983–55285 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "提供的文本为节选（source_coverage 为 partial），无法确认纪要全文中是否还有其他投票相关内容；但所引段落明确陈述无反对票。",
+      "\"None\"具体指 FOMC 委员会对该行动的投票，文本中该句上下文被截断，无法直接看到所针对的具体行动措辞，但紧随其后的理事会行动为一致通过。",
+      "来源仅节选加息幅度等部分信息；联邦基金目标区间具体数值未在所引文本中出现。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:7ae7242a8e3a79163cf2c878",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1177,
+      "cost_usd": null,
+      "generation_tokens": 1177,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 13.529,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "e934b1565f81d809a6a7cf51fe79ec6570a2f7155a5f47a2ed155113372f35bc",
+      "prompt_characters": 1954,
+      "prompt_bytes": 2048,
+      "selection_method": "ranked_nonoverlapping_windows_v14",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "character_start": 31282,
+          "character_end": 31592
+        },
+        {
+          "source_id": "source_8e6805c729aa43d887a67011083c1f7a",
+          "character_start": 54983,
+          "character_end": 55285
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_8e6805c729aa43d887a67011083c1f7a": "438dd6be38ad3f5b43b7e212832d1365e10e8ec571c67be5b6dd02d158a2ab73"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}
