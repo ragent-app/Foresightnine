@@ -1,0 +1,1589 @@
+EMBARGOED UNTIL RELEASE AT 8:30 a.m. EDT, Thursday, June 29, 2023 BEA 23–27
+Technical: Lisa Mataloni (GDP) (301) 278-9083 gdpniwd@bea.gov
+Kate Pinard (Corporate Profits) (301) 278-9417 cpniwd@bea.gov
+Media: Connie O'Connell (301) 278-9003 Connie.OConnell@bea.gov
+Gross Domestic Product (Third Estimate),
+Corporate Profits (Revised Estimate),
+and GDP by Industry, First Quarter 2023
+Real gross domestic product (GDP) increased at an annual rate of 2.0 percent in the first quarter of 2023
+(table 1), according to the "third" estimate released by the Bureau of Economic Analysis. In the fourth
+quarter, real GDP increased 2.6 percent.
+The GDP estimate released today is based on more complete source data than were available for the
+"second" estimate issued last month. In the second estimate, the increase in real GDP was 1.3 percent.
+The updated estimates primarily reflected upward revisions to exports and consumer spending that
+were partly offset by downward revisions to nonresidential fixed investment and federal government
+spending. Imports, which are a subtraction in the calculation of GDP, were revised down (refer to
+"Updates to GDP").
+The increase in real GDP in the first quarter reflected increases in consumer spending, exports, state and
+local government spending, federal government spending, and nonresidential fixed investment that
+were partly offset by decreases in private inventory investment and residential fixed investment.
+Imports increased (table 2).
+-40
+-30
+-20
+-10
+0
+10
+20
+30
+40
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1
+U.S. Bureau of Economic Analysis Seasonally adjusted annual rates
+2019 2020 2021 2022 2023
+Real GDP: Percent change from preceding quarterCompared to the fourth quarter, the deceleration in real GDP in the first quarter primarily reflected
+a downturn in private inventory investment and a slowdown in nonresidential fixed investment that
+were partly offset by an acceleration in consumer spending, an upturn in exports, and a smaller
+decrease in residential fixed investment. Imports turned up.
+Current-dollar GDP increased 6.1 percent at an annual rate, or $391.8 billion, in the first quarter to a
+level of $26.53 trillion, an upward revision of $43.5 billion from the previous estimate (tables 1 and 3).
+More information on the source data that underlie the estimates is available in the "Key Source Data
+and Assumptions" file on BEA’s website.
+The price index for gross domestic purchases increased 3.8 percent in the first quarter, the same as the
+previous estimate (table 4). The personal consumption expenditures (PCE) price index increased 4.1
+percent, revised down 0.1 percentage point. The PCE price index excluding food and energy prices
+increased 4.9 percent, a downward revision of 0.1 percentage point.
+Personal Income
+Current-dollar personal income increased $278.0 billion in the first quarter, an upward revision of $26.7
+billion from the previous estimate. The increase primarily reflected increases in compensation (led by
+private wages and salaries) and personal current transfer receipts (led by government social benefits)
+(table 8).
+Disposable personal income increased $587.9 billion, or 12.9 percent, in the first quarter, an upward
+revision of $26.4 billion from the previous estimate. Real disposable personal income increased 8.5
+percent, an upward revision of 0.7 percentage point.
+Personal saving was $840.9 billion in the first quarter, an upward revision of $11.6 billion from the
+previous estimate. The personal saving rate—personal saving as a percentage of disposable personal
+income—was 4.3 percent in the first quarter, an upward revision of 0.1 percentage point.
+Gross Domestic Income and Corporate Profits
+Real gross domestic income (GDI) decreased 1.8 percent in the first quarter, an upward revision of 0.5
+percentage point from the previous estimate. The average of real GDP and real GDI, a supplemental
+measure of U.S. economic activity that equally weights GDP and GDI, increased 0.1 percent in the first
+quarter, an upward revision of 0.6 percentage point from the previous estimate.
+Profits from current production (corporate profits with inventory valuation and capital consumption
+adjustments) decreased $121.5 billion in the first quarter, an upward revision of $29.7 billion from the
+previous estimate (table 10).
+Profits of domestic financial corporations decreased $9.4 billion in the first quarter, an upward revision
+of $16.0 billion from the previous estimate. Profits of domestic nonfinancial corporations decreased
+$102.9 billion, an upward revision of $6.5 billion. Rest-of-the-world profits (net) decreased $9.2 billion,
+- 2 -an upward revision of $7.2 billion. In the first quarter, receipts increased $9.4 billion, and payments
+increased $18.6 billion.
+Updates to GDP
+The increase in first-quarter real GDP was revised up 0.7 percentage point from the second estimate,
+reflecting upward revisions to exports, consumer spending, state and local government spending, and
+residential fixed investment that were partly offset by downward revisions to nonresidential fixed
+investment, federal government spending, and private inventory investment. Imports were revised
+down. For more information, refer to the Technical Note. For information on updates to GDP, refer to
+the "Additional Information" section that follows.
+Advance Estimate Second Estimate Third Estimate
+(Percent change from preceding quarter)
+Real GDP 1.1 1.3 2.0
+Current-dollar GDP 5.1 5.4 6.1
+Real GDI … -2.3 -1.8
+Average of Real GDP and Real GDI … -0.5 0.1
+Gross domestic purchases price index 3.8 3.8 3.8
+PCE price index 4.2 4.2 4.1
+PCE price index excluding food and energy 4.9 5.0 4.9
+- 3 -Real GDP by Industry
+Today’s release includes estimates of real GDP by industry, or value added—a measure of an industry’s
+contribution to GDP. In the first quarter, the value added of private services-producing industries
+increased 2.6 percent, government increased 2.7 percent, and private goods-producing industries
+decreased 0.7 percent (table 12). Overall, 15 of 22 industry groups contributed to the first-quarter
+increase in real GDP (table 13).
+• Within private services-producing
+industries, the increase was led by health
+care and social assistance; retail trade;
+real estate and rental and leasing; and
+accommodation and food services. Partly
+offsetting these increases was a decrease
+in finance and insurance.
+• The increase in government reflected
+increases in state and local as well as
+federal government.
+• Within private goods-producing
+industries, decreases in both durable
+goods and nondurable goods
+manufacturing were partly offset by an
+increase in agriculture, forestry, fishing,
+and hunting.
+-0.43
+-0.38
+-0.23
+-0.11
+-0.07
+-0.05
+-0.01
+0.00
+0.03
+0.05
+0.06
+0.10
+0.11
+0.15
+0.16
+0.21
+0.24
+0.26
+0.31
+0.40
+0.57
+0.61
+Finance and insurance
+Durable goods manufacturing
+Nondurable goods manufacturing
+Wholesale trade
+Utilities
+Management of companies and enterprises
+Other services, except government
+Educational services
+Mining
+Construction
+Administrative and waste management services
+Federal government
+Transportation and warehousing
+Professional, scientific, and technical services
+Arts, entertainment, and recreation
+State and local government
+Information
+Accommodation and food services
+Real estate and rental and leasing
+Agriculture, forestry, fishing, and hunting
+Retail trade
+Health care and social assistance
+Percentage points
+Contributions to Percent Change in Real GDP by Industry Group, 2023:Q1
+Real GDP increased 2.0 percent
+Private goods Private services Government
+U.S. Bureau of Economic Analysis Seasonally adjusted annual rates
+-11
+-9
+-7
+-5
+-3
+-1
+1
+3
+5
+2022:Q1 2022:Q2 2022:Q3 2022:Q4 2023:Q1
+Percent Change
+Real GDP by Industry
+GDP
+Private Goods
+Private Services
+Government
+U.S. Bureau of Economic Analysis Seasonally adjusted annual rates
+- 4 -Gross Output by Industry
+Real gross output—principally a measure of an industry’s sales or receipts, which includes sales to final
+users in the economy (GDP) and sales to other industries (intermediate inputs)—increased 2.7 percent
+in the first quarter, reflecting increases of 0.4 percent for private goods-producing industries, 3.4
+percent for private services-producing industries, and 3.7 percent for government (table 16). Overall, 16
+of 22 industry groups contributed to the first-quarter increase in real gross output.
+Comprehensive Update of the National Economic Accounts
+BEA will release initial results from the 2023 comprehensive update of the National
+Economic Accounts, which include the National Income and Product Accounts as well as the
+Industry Economic Accounts, on September 28, 2023. The update will present revised
+statistics for GDP, GDP by Industry, and gross domestic income. For details, refer to
+Information on Updates to the National Economic Accounts.
+Next release, July 27, 2023, at 8:30 a.m. EDT
+Gross Domestic Product, Second Quarter 2023 (Advance Estimate)
+* * *
+- 5 -Additional Information
+Resources
+Additional resources available at www.bea.gov:
+• Stay informed about BEA developments by
+reading the BEA blog, signing up for BEA’s email
+subscription service, or following BEA on Twitter
+@BEA_News.
+• Historical time series for these estimates can be
+accessed in BEA’s interactive data application.
+• Access BEA data by registering for BEA’s data
+Application Programming Interface (API).
+• For more on BEA’s statistics, refer to our online
+journal, the Survey of Current Business.
+• BEA's news release schedule
+• NIPA Handbook: Concepts and Methods of the
+U.S. National Income and Product Accounts
+Definitions
+Gross domestic product (GDP), or value added, is the value
+of the goods and services produced by the nation’s
+economy less the value of the goods and services used up
+in production. GDP is also equal to the sum of personal
+consumption expenditures, gross private domestic
+investment, net exports of goods and services, and
+government consumption expenditures and gross
+investment.
+Gross domestic income (GDI) is the sum of incomes earned
+and costs incurred in the production of GDP. In national
+economic accounting, GDP and GDI are conceptually equal.
+In practice, GDP and GDI differ because they are
+constructed using largely independent source data.
+Gross output is the value of the goods and services
+produced by the nation’s economy. It is principally
+measuredusingindustrysalesorreceipts, includingsalesto
+finalusers(GDP)andsalestootherindustries(intermediate
+inputs).
+Current-dollar estimates are valued in the prices of the
+period when the transactions occurred—that is, at "market
+value." Also referred to as "nominal estimates" or as
+"current-price estimates."
+Real values are inflation-adjusted estimates—that is,
+estimates that exclude the effects of price changes.
+The gross domestic purchases price index measures the
+prices of final goods and services purchased by U.S.
+residents.
+The personal consumption expenditure price index
+measures the prices paid for the goods and services
+purchased by, or on the behalf of, "persons."
+Personal income is the income received by, or on behalf of,
+all persons from all sources: from participation as laborers
+in production, from owning a home or business, from the
+ownership of financial assets, and from government and
+business in the form of transfers. It includes income from
+domestic sources as well as the rest of world. It does not
+include realized or unrealized capital gains or losses.
+Disposable personal income is the income available to
+persons for spending or saving. It is equal to personal
+income less personal current taxes.
+Personal outlays is the sum of personal consumption
+expenditures, personal interest payments, and personal
+current transfer payments.
+Personal saving is personal income less personal outlays
+and personal current taxes.
+Thepersonalsaving rate ispersonalsavingasa percentage
+of disposable personal income.
+Profits from current production, referred to as corporate
+profits with inventory valuation adjustment (IVA) and
+capital consumption (CCAdj) adjustment in the National
+Income and Product Accounts (NIPAs), is a measure of the
+net income of corporations before deducting income taxes
+that is consistent with the value of goods and services
+measured in GDP. The IVA and CCAdj are adjustments that
+convert inventory withdrawals and depreciation of fixed
+assets reported on a tax-return, historical-cost basis to the
+current-cost economic measures used in the national
+income and product accounts. Profits for domestic
+industries reflect profits for all corporations located within
+the geographic borders of the United States. The rest-of-
+the-world (ROW) component of profits is measured as the
+difference between profits received from ROW and profits
+paid to ROW.
+Formoredefinitions,refertotheGlossary:NationalIncome
+and Product Accounts.
+- 6 -Statistical conventions
+Annual-vs-quarterly rates. Quarterly seasonally adjusted
+values are expressed at annual rates, unless otherwise
+specified. This convention is used for BEA’s featured,
+seasonally adjusted measures to facilitate comparisons
+withrelatedandhistoricaldata.Fordetails,refertotheFAQ
+“Why does BEA publish estimates at annual rates?”
+Quarterlynotseasonallyadjustedvaluesareexpressedonly
+at quarterly rates.
+Percent changes. Percent changes in quarterly seasonally
+adjusted series are displayed at annual rates, unless
+otherwise specified. For details, refer to the FAQ “How is
+average annual growth calculated?” and “Why does BEA
+publish percent changes in quarterly series at annual
+rates?“ Percent changes in quarterly not seasonally
+adjusted values are calculated from the same quarter one
+yearago. Allpublishedpercentchangesarecalculatedfrom
+unrounded data.
+Calendar years and quarters. Unless noted otherwise,
+annual and quarterly data are presented on a calendar
+basis.
+Quantities and prices. Quantities, or "real" volume
+measures, and prices are expressed as index numbers with
+a specified reference year equal to 100 (currently 2012).
+Quantity and price indexes are calculated using a Fisher-
+chained weighted formula that incorporates weights from
+two adjacent periods (quarters for quarterly data and
+annuals for annual data). For details on the calculation of
+quantity and price indexes, refer to Chapter 4: Estimating
+Methods in the NIPA Handbook.
+Chained-dollar values are calculated by multiplying the
+quantity index by the current dollar value in the reference
+year (2012) and then dividing by 100. Percent changes
+calculated from real quantity indexes and chained-dollar
+levelsareconceptuallythesame;anydifferencesaredueto
+rounding. Chained-dollar values are not additive because
+the relative weights for a given period differ from those of
+the reference year. In tables that display chained-dollar
+values, a "residual" line shows the difference between the
+sum of detailed chained-dollar series and its corresponding
+aggregate.
+Updates to GDP
+BEA releases three vintages of the current quarterly
+estimate for GDP. "Advance" estimates are released near
+the end of the first month following the end of the quarter
+andarebasedonsourcedatathatareincompleteorsubject
+to further revision by the source agency. "Second" and
+"third" estimates are released near the end of the second
+and third months, respectively, and are based on more
+detailed and more comprehensive data as they become
+available.
+The table below shows the average revisions to the
+quarterly percent changes in real GDP between different
+estimate vintages, without regard to sign.
+Vintage
+Average Revision
+Without Regard to Sign
+(percentage points, annual rates)
+Advance to second 0.5
+Advance to third 0.6
+Second to third 0.3
+Note - Based on estimates from 1996 through 2021. For
+more information on GDP updates, refer to Revision
+Information on the BEA website.
+Annual and comprehensive updates are released in late
+September. Annual updates generally cover at least the 5
+most recent calendar years (and their associated quarters)
+and incorporate newly available major annual source data
+as well as some changes in methods and definitions to
+improve the accounts. Comprehensive (or benchmark)
+updates are carried out at about 5-year intervals and
+incorporate major periodic source data, as well as major
+conceptual improvements.
+UnlikeGDP,advancecurrentquarterlyestimatesofGDIand
+corporate profits are not released because data on
+domestic profits and on net interest of domestic industries
+are not available. For fourth quarter estimates, these data
+are not available until the third estimate.
+GDP by industry and gross output estimates are released
+with the third estimate of GDP.
+- 7 -GDP News Release Tables
+Table 1. Real Gross Domestic Product and Related Measures: Percent Change from Preceding Period
+Table 2. Contributions to Percent Change in Real Gross Domestic Product
+Table 3. Gross Domestic Product: Level and Change from Preceding Period
+Table 4. Price Indexes for Gross Domestic Product and Related Measures: Percent Change from Preceding Period
+Table 5. Real Gross Domestic Product: Annual Percent Change
+Table 6. Real Gross Domestic Product: Percent Change from Quarter One Year Ago
+Table 7. Relation of Gross Domestic Product, Gross National Product, and National Income
+Table 8. Personal Income and Its Disposition
+Table 9. Corporate Profits: Level and Percent Change
+Table 10. Corporate Profits by Industry: Level and Change from Preceding Period
+Table 11. Gross Value Added of Nonfinancial Domestic Corporate Business
+Table 12. Real Gross Domestic Product by Industry Group: Percent Change from Preceding Period
+Table 13. Contributions to Percent Change in Real Gross Domestic Product by Industry Group
+Table 14. Gross Domestic Product by Industry Group: Level and Change from Preceding Period
+Table 15. Price Indexes for Gross Domestic Product by Industry Group: Percent Change from Preceding Period
+Table 16. Real Gross Output by Industry Group: Percent Change from Preceding Period
+Table 17. Gross Output by Industry Group: Level and Change from Preceding Period
+Table 18. Price Indexes for Gross Output by Industry Group: Percent Change from Preceding Period
+Appendix Table A. Real Gross Domestic Product and Related Aggregates: Percent Change from Preceding Period and
+Contributions to Percent Change
+Appendix Table B. Not Seasonally Adjusted Real Gross Domestic Product: Level and Percent Change from Quarter One Year Ago
+- 8 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1r
+1 Gross domestic product (GDP) -2.8 5.9 2.1 2.7 3.6 1.8 -4.6 -29.9 35.3 3.9 6.3 7.0 2.7 7.0 -1.6 -0.6 3.2 2.6 2.0 1
+2 Personal consumption expenditures -3.0 8.3 2.7 2.6 3.4 2.4 -6.2 -32.1 43.0 3.9 10.8 12.1 3.0 3.1 1.3 2.0 2.3 1.0 4.2 2
+3 Goods 5.2 12.2 -0.5 5.5 5.8 2.8 0.0 -10.7 55.2 0.3 25.3 11.6 -7.9 2.3 -0.1 -2.6 -0.4 -0.1 6.0 3
+4 Durable goods 10.0 18.5 -0.4 8.9 10.3 7.7 -11.3 0.4 103.6 0.6 44.7 10.6 -22.0 5.1 7.6 -2.8 -0.8 -1.3 16.3 4
+5 Nondurable goods 2.7 8.8 -0.5 3.8 3.6 0.4 6.2 -15.9 33.7 0.1 14.9 12.2 1.7 0.7 -4.4 -2.5 -0.1 0.6 0.5 5
+6 Services -6.6 6.3 4.5 1.3 2.3 2.1 -8.9 -40.4 37.1 5.7 4.0 12.3 9.2 3.5 2.1 4.6 3.7 1.6 3.2 6
+7 Gross private domestic investment -5.3 9.0 4.0 2.4 2.6 -8.0 -5.1 -48.8 91.8 18.0 -5.4 0.9 10.4 32.0 5.4 -14.1 -9.6 4.5 -11.9 7
+8 Fixed investment -2.3 7.4 -0.2 6.2 4.1 -1.3 -3.0 -28.9 29.2 16.8 9.7 5.8 -1.1 0.6 4.8 -5.0 -3.5 -3.8 -0.4 8
+9 Nonresidential -4.9 6.4 3.9 6.2 4.1 -1.6 -8.2 -29.4 20.2 11.5 8.9 9.9 0.6 1.1 7.9 0.1 6.2 4.0 0.6 9
+10 Structures -10.1 -6.4 -6.6 15.4 17.9 -5.8 -3.4 -42.9 -10.4 0.9 1.9 -2.5 -6.7 -12.7 -4.3 -12.7 -3.6 15.8 15.8 10
+11 Equipment -10.5 10.3 4.3 0.8 -5.5 -8.3 -23.9 -38.0 57.1 21.1 6.1 14.0 -2.2 1.6 11.4 -2.0 10.6 -3.5 -8.9 11
+12 Intellectual property products 4.8 9.7 8.8 7.3 7.3 9.3 7.9 -9.3 9.5 8.3 15.6 12.6 7.4 8.1 10.8 8.9 6.8 6.2 3.1 12
+13 Residential 7.2 10.7 -10.6 6.5 4.2 0.0 17.4 -27.4 61.6 33.4 11.6 -4.9 -5.8 -1.1 -3.1 -17.8 -27.1 -25.1 -4.0 13
+14 Change in private inventories ......... ......... ......... ......... ......... ......... ......... ......... ......... ........... ......... ......... ......... ......... ......... ......... ......... ......... ......... 14
+15 Net exports of goods and services ......... ......... ......... ......... ......... ......... ......... ......... ......... ........... ......... ......... ......... ......... ......... ......... ......... ......... ......... 15
+16 Exports -13.2 6.1 7.1 -2.3 0.0 0.8 -15.3 -60.9 59.5 24.2 0.4 4.9 -1.1 23.5 -4.6 13.8 14.6 -3.7 7.8 16
+17 Goods -10.1 7.4 6.3 -7.2 1.9 -0.2 -3.6 -66.2 103.2 25.5 -0.7 3.4 -3.7 23.4 -7.2 15.5 17.8 -7.4 12.3 17
+18 Services -18.8 3.3 8.7 7.6 -3.4 2.5 -33.7 -49.1 1.4 21.2 2.5 7.7 4.7 23.6 1.6 9.9 7.5 5.0 -1.3 18
+19 Imports -9.0 14.1 8.1 0.7 -1.7 -8.0 -12.2 -53.7 88.2 32.9 7.6 7.9 6.6 18.6 18.4 2.2 -7.3 -5.5 2.0 19
+20 Goods -5.8 14.5 6.9 -0.4 -1.6 -9.4 -7.8 -49.3 103.7 29.3 10.9 4.0 0.2 19.6 20.4 -0.4 -8.6 -5.9 2.3 20
+21 Services -22.0 12.3 14.2 5.3 -2.3 -2.0 -28.9 -69.3 25.7 53.6 -8.8 31.9 45.3 14.0 9.1 16.6 -0.8 -3.7 0.4 21
+22 Government consumption
+expenditures and gross investment 2.6 0.6 -0.6 5.3 3.4 2.4 3.3 7.3 -5.9 -0.1 6.5 -3.0 -0.2 -1.0 -2.3 -1.6 3.7 3.8 5.0 22
+23 Federal 6.2 2.3 -2.5 6.3 4.9 1.8 3.7 31.5 -10.9 1.8 17.3 -6.9 -7.2 0.0 -5.3 -3.4 3.7 5.8 6.0 23
+24 National defense 2.9 -1.2 -2.8 0.0 6.8 1.8 2.1 1.8 1.3 11.8 -9.0 -2.6 -3.2 -5.3 -8.5 1.4 4.7 2.3 2.5 24
+25 Nondefense 11.2 7.3 -2.2 16.6 2.2 1.8 6.1 86.5 -24.7 -10.8 64.8 -11.9 -12.1 7.4 -1.1 -9.2 2.5 10.6 10.5 25
+26 State and local 0.4 -0.5 0.7 4.7 2.4 2.7 3.0 -5.5 -2.5 -1.3 0.1 -0.4 4.5 -1.6 -0.4 -0.6 3.7 2.6 4.4 26
+Addenda:
+27 Gross domestic income (GDI)1
+-2.3 5.5 2.1 1.2 1.6 3.6 -0.4 -30.6 23.8 17.2 2.0 3.1 4.6 6.7 0.8 -0.8 2.8 -3.3 -1.8 27
+28 Average of GDP and GDI -2.5 5.7 2.1 2.0 2.6 2.7 -2.5 -30.3 29.4 10.4 4.1 5.0 3.6 6.8 -0.4 -0.7 3.0 -0.4 0.1 28
+29 Final sales of domestic product -2.2 5.7 1.3 3.4 3.9 3.1 -4.3 -25.9 26.6 3.7 9.1 7.9 0.7 1.9 -1.8 1.3 4.5 1.1 4.2 29
+30 Gross domestic purchases -2.4 7.0 2.4 3.0 3.3 0.5 -4.4 -29.4 38.7 5.5 7.1 7.4 3.6 6.9 1.4 -1.6 0.3 2.1 1.4 30
+31 Final sales to domestic purchasers -1.9 6.7 1.7 3.7 3.5 1.7 -4.1 -25.5 30.1 5.3 9.9 8.2 1.7 2.0 1.3 0.2 1.5 0.7 3.5 31
+32 Final sales to private domestic
+purchasers -2.8 8.1 2.1 3.3 3.6 1.6 -5.5 -31.4 40.0 6.5 10.6 10.7 2.1 2.6 2.1 0.5 1.1 0.0 3.2 32
+33 Gross national product (GNP) -3.1 5.7 2.0 2.7 3.4 1.3 -4.6 -30.8 35.7 3.1 6.9 5.9 3.0 7.1 -1.6 -0.3 2.4 2.4 1.6 33
+34 Disposable personal income 6.2 1.8 -6.1 0.0 3.3 2.6 2.4 46.5 -15.3 -9.0 52.4 -28.8 -4.6 -4.9 -10.6 -2.3 3.2 2.5 8.5 34
+Current-dollar measures:
+35 GDP -1.5 10.7 9.2 5.0 5.0 3.3 -3.1 -30.9 40.1 6.6 11.7 13.8 9.0 14.3 6.6 8.5 7.7 6.6 6.1 35
+36 GDI -1.0 10.2 9.3 3.5 2.9 5.1 1.3 -31.7 28.2 20.2 7.1 9.6 11.1 14.0 9.2 8.2 7.2 0.5 2.2 36
+37 Average of GDP and GDI -1.2 10.4 9.3 4.3 3.9 4.2 -0.9 -31.3 34.0 13.2 9.4 11.7 10.0 14.1 7.9 8.4 7.5 3.5 4.1 37
+38 Final sales of domestic product -0.9 10.5 8.4 5.7 5.3 4.4 -2.6 -26.8 31.0 6.3 14.8 14.9 7.1 8.8 6.4 10.5 9.1 5.1 8.6 38
+39 Gross domestic purchases -1.2 11.5 9.4 5.2 4.2 1.9 -2.9 -30.2 43.2 7.8 12.1 13.8 9.7 14.2 9.7 6.8 5.1 5.8 5.1 39
+40 Final sales to domestic purchasers -0.7 11.3 8.6 5.9 4.6 2.9 -2.4 -26.2 34.1 7.5 15.1 14.8 7.8 8.9 9.5 8.7 6.3 4.4 7.5 40
+41 Final sales to private domestic
+purchasers -1.7 12.5 9.0 5.8 4.6 2.7 -4.1 -32.2 44.3 8.4 15.4 17.3 8.2 9.5 10.2 8.5 6.1 3.8 7.6 41
+42 GNP -1.9 10.5 9.2 5.0 4.7 2.8 -3.0 -31.8 40.5 5.8 12.3 12.7 9.4 14.4 6.7 8.7 6.9 6.4 5.7 42
+43 Disposable personal income 7.4 5.9 -0.3 2.4 4.4 4.1 3.9 43.8 -12.4 -7.5 59.2 -24.2 0.8 1.0 -3.9 4.8 7.7 6.4 12.9 43
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+June 29, 2023
+Table 1. Real Gross Domestic Product and Related Measures: Percent Change from Preceding Period
+Line
+r Revised
+1. Gross domestic income deflated by the implicit price deflator for gross domestic product.
+- 9 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1
+r
+Percent change at annual rate:
+1 Gross domestic product -2.8 5.9 2.1 2.7 3.6 1.8 -4.6 -29.9 35.3 3.9 6.3 7.0 2.7 7.0 -1.6 -0.6 3.2 2.6 2.0 1
+Percentage points at annual rates:
+2 Personal consumption expenditures -2.01 5.54 1.85 1.73 2.27 1.55 -4.25 -23.07 26.34 2.53 6.98 7.84 1.98 2.14 0.91 1.38 1.54 0.70 2.79 2
+3 Goods 1.07 2.72 -0.11 1.11 1.18 0.57 -0.02 -2.07 10.85 0.06 5.26 2.65 -1.96 0.55 -0.02 -0.61 -0.08 -0.01 1.34 3
+4 Durable goods 0.70 1.46 -0.04 0.60 0.70 0.53 -0.83 0.14 6.22 0.05 3.22 0.92 -2.22 0.44 0.64 -0.24 -0.07 -0.11 1.28 4
+5 Motor vehicles and parts 0.04 0.41 -0.19 0.13 0.10 0.21 -0.91 -0.08 2.07 0.05 1.34 0.38 -2.04 0.20 0.42 -0.32 -0.38 0.11 1.06 5
+6 Furnishings and durable household equipment 0.23 0.28 -0.06 0.14 0.18 0.15 0.05 0.09 1.36 -0.13 0.73 -0.02 -0.21 -0.13 -0.07 -0.01 0.05 -0.01 0.03 6
+7 Recreational goods and vehicles 0.46 0.47 0.16 0.33 0.32 0.19 0.21 0.89 1.36 0.03 0.75 0.29 -0.06 0.29 0.26 0.04 0.23 -0.08 0.14 7
+8 Other durable goods -0.02 0.30 0.05 0.01 0.10 -0.03 -0.18 -0.76 1.44 0.09 0.40 0.27 0.09 0.07 0.03 0.05 0.02 -0.13 0.04 8
+9 Nondurable goods 0.37 1.26 -0.08 0.51 0.48 0.04 0.81 -2.21 4.63 0.02 2.05 1.74 0.26 0.12 -0.66 -0.37 -0.01 0.09 0.07 9
+10 Food and beverages purchased
+for off-premises consumption 0.28 0.20 -0.21 0.23 0.24 -0.06 1.18 -0.33 0.16 -0.08 0.79 0.13 -0.06 0.03 -0.39 -0.52 -0.15 0.00 -0.08 10
+11 Clothing and footwear -0.09 0.44 0.02 0.06 0.04 0.11 -0.65 -1.02 2.12 0.08 0.61 0.52 0.00 -0.07 -0.09 0.08 0.11 0.01 -0.05 11
+12 Gasoline and other energy goods -0.19 0.16 0.00 -0.01 -0.04 -0.06 -0.32 -0.89 0.75 -0.12 0.14 0.48 0.16 0.07 -0.19 -0.05 -0.06 0.03 0.04 12
+13 Other nondurable goods 0.38 0.47 0.11 0.23 0.24 0.04 0.60 0.03 1.59 0.14 0.50 0.61 0.15 0.09 0.02 0.12 0.08 0.06 0.15 13
+14 Services -3.08 2.83 1.96 0.61 1.09 0.98 -4.23 -21.01 15.50 2.47 1.71 5.19 3.94 1.58 0.93 1.99 1.63 0.72 1.44 14
+15 Household consumption expenditures (for services) -3.35 3.18 1.92 0.60 1.17 1.04 -5.44 -22.00 17.00 2.64 2.09 5.73 3.96 1.49 0.73 1.82 1.63 1.01 1.61 15
+16 Housing and utilities 0.11 0.14 0.14 -0.05 0.27 0.12 -0.21 0.55 0.11 0.07 0.22 0.03 0.18 -0.06 0.36 0.10 -0.03 0.25 -0.09 16
+17 Health care -0.85 0.81 0.34 0.56 0.16 0.45 -1.74 -7.27 6.99 1.43 -0.37 1.19 0.57 0.42 -0.05 0.05 0.58 0.70 1.03 17
+18 Transportation services -0.57 0.28 0.19 0.21 0.19 0.01 -0.72 -2.83 1.07 0.11 0.11 0.84 0.83 0.13 -0.03 0.14 0.00 -0.06 -0.01 18
+19 Recreation services -0.71 0.34 0.25 -0.09 0.01 0.04 -0.88 -3.66 1.95 0.06 0.48 0.71 0.53 0.35 0.05 0.21 0.09 0.11 0.15 19
+20 Food services and accommodations -0.99 0.91 0.44 0.17 0.14 0.12 -1.69 -5.57 4.51 -0.12 1.05 2.11 0.85 0.17 0.01 0.72 0.25 0.11 0.22 20
+21 Financial services and insurance 0.08 0.22 0.11 -0.32 -0.04 0.08 0.14 0.02 0.56 0.40 0.16 0.06 0.20 0.33 -0.09 0.10 0.27 -0.11 0.10 21
+22 Other services -0.42 0.48 0.45 0.12 0.46 0.22 -0.34 -3.25 1.81 0.68 0.44 0.79 0.81 0.14 0.48 0.50 0.48 0.01 0.20 22
+23 Final consumption expenditures of nonprofit
+institutions serving households 0.27 -0.35 0.04 0.01 -0.09 -0.06 1.20 0.99 -1.50 -0.17 -0.37 -0.54 -0.02 0.09 0.20 0.18 -0.01 -0.30 -0.17 23
+24 Gross output of nonprofit institutions -0.13 0.07 0.13 0.04 0.03 0.08 0.00 -1.42 0.86 0.61 -0.53 0.29 0.10 0.34 -0.13 -0.01 0.50 0.19 0.04 24
+25 Less: Receipts from sales of goods and services
+by nonprofit institutions -0.40 0.42 0.09 0.02 0.12 0.15 -1.21 -2.41 2.36 0.78 -0.16 0.83 0.12 0.25 -0.33 -0.19 0.50 0.48 0.20 25
+26 Gross private domestic investment -0.95 1.55 0.72 0.44 0.48 -1.48 -0.88 -9.65 12.69 3.07 -0.82 0.30 1.78 5.14 0.98 -2.83 -1.80 0.79 -2.22 26
+27 Fixed investment -0.40 1.30 -0.03 1.07 0.71 -0.24 -0.54 -5.30 5.12 2.76 1.70 1.05 -0.18 0.12 0.83 -0.92 -0.62 -0.68 -0.08 27
+28 Nonresidential -0.67 0.83 0.50 0.83 0.55 -0.24 -1.16 -4.12 2.91 1.46 1.18 1.29 0.10 0.17 0.98 0.01 0.80 0.52 0.08 28
+29 Structures -0.32 -0.19 -0.17 0.45 0.53 -0.19 -0.11 -1.60 -0.32 0.02 0.04 -0.08 -0.18 -0.35 -0.11 -0.34 -0.09 0.38 0.40 29
+30 Equipment -0.59 0.52 0.22 0.04 -0.32 -0.49 -1.44 -2.05 2.69 1.02 0.36 0.73 -0.09 0.10 0.55 -0.11 0.53 -0.18 -0.48 30
+31 Information processing equipment 0.02 0.18 0.10 0.14 -0.11 -0.11 -0.39 0.40 0.63 0.14 0.18 0.01 -0.07 0.34 0.29 -0.12 0.16 -0.48 -0.10 31
+32 Industrial equipment -0.10 0.13 0.07 0.09 0.03 -0.20 -0.19 -0.29 0.26 0.19 0.04 0.30 0.12 0.13 0.15 -0.08 -0.15 0.07 0.05 32
+33 Transportation equipment -0.43 0.15 0.05 -0.26 -0.17 -0.05 -0.71 -1.70 1.22 0.56 0.10 0.42 -0.12 -0.34 -0.03 0.10 0.63 0.29 -0.31 33
+34 Other equipment -0.08 0.06 0.01 0.07 -0.08 -0.12 -0.14 -0.46 0.58 0.14 0.04 0.00 -0.02 -0.03 0.14 0.00 -0.11 -0.07 -0.11 34
+35 Intellectual property products 0.23 0.50 0.46 0.34 0.35 0.44 0.38 -0.46 0.53 0.42 0.78 0.64 0.38 0.42 0.54 0.46 0.36 0.33 0.16 35
+36 Software 0.17 0.27 0.25 0.13 0.16 0.24 0.28 -0.04 0.24 0.21 0.50 0.28 0.18 0.10 0.38 0.22 0.32 0.29 0.09 36
+37 Research and development 0.08 0.23 0.14 0.21 0.16 0.18 0.11 -0.33 0.35 0.21 0.31 0.33 0.14 0.23 0.14 0.15 -0.03 0.03 0.05 37
+38 Entertainment, literary, and artistic originals -0.02 0.00 0.06 0.00 0.02 0.02 -0.02 -0.09 -0.05 0.01 -0.03 0.02 0.06 0.08 0.02 0.09 0.08 0.01 0.02 38
+39 Residential 0.28 0.47 -0.53 0.24 0.16 0.00 0.63 -1.18 2.21 1.30 0.52 -0.24 -0.29 -0.05 -0.15 -0.93 -1.42 -1.20 -0.16 39
+40 Change in private inventories -0.55 0.24 0.74 -0.62 -0.24 -1.24 -0.35 -4.35 7.57 0.30 -2.52 -0.75 1.96 5.01 0.15 -1.91 -1.19 1.47 -2.14 40
+41 Farm 0.04 0.02 -0.04 0.05 0.03 0.08 0.06 0.09 0.03 -0.02 0.10 -0.05 0.01 -0.04 -0.05 -0.08 -0.04 0.07 0.10 41
+42 Nonfarm -0.60 0.22 0.78 -0.67 -0.26 -1.32 -0.41 -4.44 7.54 0.32 -2.62 -0.71 1.95 5.05 0.21 -1.83 -1.14 1.40 -2.24 42
+43 Net exports of goods and services -0.26 -1.25 -0.40 -0.37 0.28 1.30 -0.05 1.30 -2.74 -1.68 -1.02 -0.60 -1.08 -0.16 -3.13 1.16 2.86 0.42 0.58 43
+44 Exports -1.54 0.64 0.79 -0.27 0.02 0.13 -1.82 -8.66 4.98 2.20 0.03 0.51 -0.13 2.37 -0.53 1.51 1.65 -0.44 0.86 44
+45 Goods -0.76 0.52 0.49 -0.59 0.16 0.01 -0.23 -6.48 4.87 1.57 -0.05 0.26 -0.28 1.62 -0.58 1.18 1.38 -0.62 0.91 45
+46 Services -0.78 0.12 0.30 0.31 -0.14 0.12 -1.59 -2.18 0.12 0.64 0.08 0.25 0.15 0.74 0.06 0.33 0.26 0.18 -0.05 46
+47 Imports 1.28 -1.89 -1.19 -0.09 0.26 1.18 1.77 9.95 -7.72 -3.88 -1.06 -1.11 -0.95 -2.53 -2.60 -0.35 1.21 0.86 -0.28 47
+48 Goods 0.67 -1.61 -0.85 0.06 0.20 1.14 0.89 7.23 -7.27 -2.96 -1.27 -0.49 -0.05 -2.20 -2.38 0.05 1.19 0.76 -0.27 48
+49 Services 0.61 -0.28 -0.34 -0.15 0.06 0.04 0.88 2.73 -0.45 -0.92 0.22 -0.61 -0.90 -0.33 -0.22 -0.41 0.02 0.10 -0.01 49
+50 Government consumption
+expenditures and gross investment 0.45 0.11 -0.10 0.92 0.58 0.41 0.57 1.57 -0.97 -0.01 1.18 -0.54 -0.02 -0.16 -0.40 -0.29 0.65 0.65 0.85 50
+51 Federal 0.41 0.17 -0.17 0.41 0.32 0.12 0.25 2.07 -0.77 0.13 1.17 -0.50 -0.51 0.01 -0.36 -0.22 0.24 0.37 0.38 51
+52 National defense 0.12 -0.05 -0.11 0.00 0.26 0.07 0.08 0.11 0.09 0.47 -0.38 -0.10 -0.12 -0.20 -0.33 0.05 0.17 0.08 0.09 52
+53 Consumption expenditures 0.06 -0.08 -0.08 0.32 0.05 0.04 0.11 -0.04 0.01 0.27 -0.28 -0.09 -0.16 -0.19 -0.21 0.09 0.18 0.05 0.16 53
+54 Gross investment 0.05 0.03 -0.03 -0.32 0.21 0.03 -0.03 0.15 0.08 0.20 -0.11 -0.01 0.04 -0.01 -0.11 -0.04 -0.01 0.03 -0.07 54
+55 Nondefense 0.30 0.22 -0.07 0.41 0.06 0.05 0.16 1.96 -0.86 -0.34 1.55 -0.40 -0.39 0.21 -0.03 -0.28 0.07 0.29 0.29 55
+56 Consumption expenditures 0.22 0.23 -0.09 0.35 0.02 -0.02 0.04 1.86 -0.98 -0.19 1.58 -0.41 -0.41 0.21 -0.06 -0.28 0.04 0.22 0.23 56
+57 Gross investment 0.07 -0.01 0.02 0.06 0.04 0.07 0.12 0.10 0.12 -0.15 -0.03 0.01 0.02 0.00 0.03 0.01 0.03 0.06 0.06 57
+58 State and local 0.04 -0.06 0.07 0.51 0.26 0.29 0.32 -0.50 -0.20 -0.14 0.02 -0.04 0.49 -0.17 -0.04 -0.06 0.41 0.29 0.47 58
+59 Consumption expenditures 0.03 0.04 0.13 0.35 0.37 0.33 0.04 -0.34 -0.03 -0.30 0.15 0.22 0.54 -0.10 0.08 0.10 0.17 0.17 0.29 59
+60 Gross investment 0.01 -0.10 -0.06 0.16 -0.10 -0.04 0.28 -0.16 -0.17 0.16 -0.13 -0.26 -0.05 -0.07 -0.13 -0.16 0.23 0.11 0.18 60
+June 29, 2023
+Table 2. Contributions to Percent Change in Real Gross Domestic Product
+Line
+r Revised
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+- 10 -2023 2023 2022 2023
+Q1 Q2 Q3 Q4 Q1
+r
+Q1 Q2 Q3 Q4 Q1
+r
+Q4 Q1
+r
+1 Gross domestic product (GDP) 25,462.7 24,740.5 25,248.5 25,723.9 26,138.0 26,529.8 20,014.1 19,924.1 19,895.3 20,054.7 20,182.5 20,282.8 404.3 127.8 100.3 1
+2 Personal consumption expenditures 17,357.2 16,874.8 17,261.3 17,542.7 17,749.9 18,113.1 14,130.3 14,028.4 14,099.5 14,178.6 14,214.9 14,360.4 376.2 36.3 145.5 2
+3 Goods 5,941.3 5,843.2 5,953.6 5,988.6 5,980.0 6,079.0 5,535.9 5,565.7 5,529.6 5,524.5 5,523.6 5,605.0 -26.1 -0.9 81.4 3
+4 Durable goods 2,185.5 2,183.9 2,181.8 2,195.8 2,180.4 2,258.9 2,259.0 2,275.1 2,259.2 2,254.4 2,247.3 2,333.7 -9.8 -7.2 86.5 4
+5 Motor vehicles and parts 723.2 737.1 724.5 713.1 717.8 776.4 574.7 594.7 578.7 559.8 565.5 620.8 -39.3 5.8 55.3 5
+6 Furnishings and durable
+household equipment 525.7 516.8 525.1 532.8 528.0 533.2 519.4 518.4 517.6 521.0 520.5 522.6 -16.1 -0.4 2.0 6
+7 Recreational goods and vehicles 645.5 641.4 640.5 655.4 644.8 652.3 900.9 890.1 893.2 913.7 906.6 919.5 54.5 -7.2 13.0 7
+8 Other durable goods 291.1 288.6 291.7 294.5 289.7 297.0 341.1 340.2 343.8 345.2 335.1 338.3 14.5 -10.2 3.3 8
+9 Nondurable goods 3,755.9 3,659.3 3,771.9 3,792.7 3,799.6 3,820.1 3,319.6 3,334.1 3,313.5 3,312.7 3,317.9 3,321.7 -16.6 5.2 3.8 9
+10 Food and beverages purchased
+for off-premises consumption 1,277.6 1,248.5 1,260.4 1,289.9 1,311.5 1,318.2 1,038.3 1,062.7 1,035.3 1,027.6 1,027.6 1,023.7 -43.7 0.0 -4.0 10
+11 Clothing and footwear 491.4 480.5 488.6 498.9 497.8 501.2 492.4 485.1 489.9 496.9 497.7 494.6 6.0 0.8 -3.1 11
+12 Gasoline and other energy goods 492.8 474.5 541.0 492.3 463.6 443.1 435.4 438.4 436.0 432.9 434.3 437.1 2.4 1.5 2.8 12
+13 Other nondurable goods 1,494.1 1,455.8 1,481.9 1,511.7 1,526.8 1,557.6 1,324.0 1,315.7 1,322.7 1,327.3 1,330.4 1,338.8 24.7 3.1 8.4 13
+14 Services 11,415.8 11,031.6 11,307.7 11,554.1 11,769.9 12,034.1 8,733.5 8,613.0 8,709.6 8,788.4 8,823.2 8,893.5 372.4 34.8 70.3 14
+15 Household consumption
+expenditures (for services) 10,888.7 10,525.4 10,779.2 11,015.6 11,234.5 11,498.0 8,389.1 8,270.4 8,359.0 8,438.7 8,488.4 8,567.4 365.9 49.7 79.0 15
+16 Housing and utilities 2,996.6 2,896.1 2,958.4 3,027.3 3,104.5 3,160.1 2,171.7 2,165.9 2,170.5 2,169.3 2,180.9 2,176.9 24.9 11.5 -4.0 16
+17 Health care 2,725.9 2,673.4 2,684.8 2,742.8 2,802.6 2,879.6 2,300.3 2,273.5 2,276.0 2,307.0 2,344.8 2,401.1 68.8 37.8 56.3 17
+18 Transportation services 547.3 506.6 551.6 560.6 570.5 583.2 436.3 431.5 439.0 438.8 435.8 435.2 41.1 -2.9 -0.6 18
+19 Recreation services 615.4 590.9 610.3 622.0 638.3 661.1 482.7 471.4 481.8 486.0 491.5 498.9 47.7 5.5 7.4 19
+20 Food services and accommodations 1,253.6 1,178.0 1,247.0 1,277.4 1,312.1 1,352.3 911.8 879.7 913.1 924.5 929.7 940.0 81.5 5.2 10.3 20
+21 Financial services and insurance 1,316.9 1,309.8 1,309.1 1,320.9 1,327.7 1,352.6 892.4 884.8 888.9 900.4 895.6 900.2 18.3 -4.9 4.6 21
+22 Other services 1,433.0 1,370.7 1,418.0 1,464.5 1,478.7 1,509.0 1,216.3 1,183.2 1,209.9 1,235.8 1,236.3 1,247.3 94.1 0.5 11.0 22
+23 Final consumption expenditures of
+nonprofit institutions serving
+households 527.1 506.2 528.5 538.5 535.4 536.1 348.5 346.1 353.6 353.3 340.9 334.1 7.4 -12.4 -6.9 23
+24 Gross output of nonprofit institutions 1,870.3 1,821.2 1,839.1 1,893.4 1,927.4 1,950.9 1,421.2 1,407.4 1,406.9 1,430.8 1,439.9 1,441.8 25.0 9.1 1.9 24
+25 Less: Receipts from sales of
+goods and services by nonprofit
+institutions 1,343.2 1,315.1 1,310.6 1,355.0 1,392.0 1,414.8 1,075.9 1,064.0 1,054.6 1,080.1 1,105.0 1,115.6 17.3 24.9 10.6 25
+26 Gross private domestic investment 4,632.5 4,671.0 4,609.9 4,579.1 4,669.8 4,569.2 3,746.9 3,892.5 3,747.0 3,653.9 3,694.1 3,579.1 143.9 40.3 -115.1 26
+27 Fixed investment 4,473.6 4,413.6 4,464.6 4,508.2 4,508.0 4,557.2 3,569.2 3,628.6 3,581.9 3,550.5 3,516.0 3,512.0 -5.4 -34.5 -3.9 27
+28 Nonresidential 3,347.0 3,225.0 3,292.2 3,403.4 3,467.5 3,533.6 2,944.8 2,915.0 2,915.5 2,959.7 2,988.8 2,993.3 109.4 29.1 4.6 28
+29 Structures 651.3 627.3 631.2 654.8 691.9 732.7 446.2 455.6 440.4 436.4 452.6 469.5 -31.3 16.3 16.9 29
+30 Equipment 1,322.3 1,277.8 1,299.5 1,352.0 1,360.1 1,353.4 1,274.0 1,265.7 1,259.1 1,291.3 1,279.8 1,250.4 52.1 -11.4 -29.4 30
+31 Information processing
+equipment 457.7 464.2 458.5 469.1 439.1 434.8 568.7 579.0 569.6 582.3 543.8 535.3 28.3 -38.5 -8.5 31
+32 Industrial equipment 316.8 315.8 318.7 313.3 319.5 327.5 264.8 270.9 266.7 258.9 262.6 265.2 13.8 3.7 2.6 32
+33 Transportation equipment 250.8 208.5 224.0 269.4 301.1 294.9 233.5 206.3 212.1 249.1 266.3 248.6 10.7 17.2 -17.7 33
+34 Other equipment 297.1 289.3 298.3 300.2 300.5 296.2 238.1 241.8 241.8 236.2 232.7 227.0 1.9 -3.5 -5.6 34
+35 Intellectual property products 1,373.4 1,319.9 1,361.4 1,396.6 1,415.5 1,447.5 1,254.5 1,219.6 1,245.9 1,266.7 1,285.8 1,295.5 101.5 19.1 9.7 35
+36 Software 567.2 545.1 558.9 579.3 585.6 601.6 643.7 615.7 630.9 653.5 674.5 681.3 69.4 21.0 6.8 36
+37 Research and development 696.0 674.3 693.9 702.7 713.4 725.9 539.5 534.3 541.7 540.3 541.7 544.1 27.6 1.5 2.4 37
+38 Entertainment, literary,
+and artistic originals 110.1 100.6 108.7 114.6 116.4 120.0 91.8 86.1 90.9 94.8 95.4 96.7 11.7 0.6 1.3 38
+39 Residential 1,126.6 1,188.6 1,172.4 1,104.8 1,040.5 1,023.6 643.1 704.7 671.0 620.0 576.7 570.9 -76.3 -43.3 -5.8 39
+40 Change in private inventories 158.9 257.4 145.4 70.9 161.8 12.0 125.0 214.5 110.2 38.7 136.5 3.5 144.4 97.9 -133.0 40
+41 Farm -8.9 -6.6 -9.5 -12.1 -7.4 -0.5 -18.4 -15.5 -19.5 -22.4 -16.3 -7.9 -14.5 6.1 8.4 41
+42 Nonfarm 167.8 264.1 154.9 83.0 169.2 12.5 137.6 223.6 123.6 55.5 147.7 10.2 153.6 92.2 -137.5 42
+Note. Users are cautioned that particularly for components that exhibit rapid change in prices relative to other prices in the economy, the chained-dollar estimates should not be used to measure the component's relative importance or its contribution to the
+growth rate of more aggregate series. For accurate estimates of the contributions to percent changes in real gross domestic product, use table 2.
+Source: U.S. Bureau of Economic Analysis
+Billions of dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Billions of chained (2012) dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Change from preceding
+period
+2022
+Line
+June 29, 2023
+Table 3. Gross Domestic Product: Level and Change from Preceding Period--Continues
+Line
+r Revised
+1. Real gross domestic income is gross domestic income deflated by the implicit price deflator for gross domestic product.
+- 11 -2023 2023 2022 2023
+Q1 Q2 Q3 Q4 Q1
+r
+Q1 Q2 Q3 Q4 Q1
+r
+Q4 Q1
+r
+43 Net exports of goods and services -975.0 -1,116.7 -1,035.6 -890.8 -857.1 -802.3 -1,356.7 -1,488.7 -1,430.5 -1,268.8 -1,238.6 -1,208.4 -123.3 30.2 30.2 43
+44 Exports 2,975.8 2,811.2 3,038.8 3,065.0 2,988.3 3,046.2 2,534.4 2,436.9 2,516.9 2,604.1 2,579.6 2,628.4 167.6 -24.6 48.9 44
+45 Goods 2,064.2 1,940.9 2,134.7 2,141.2 2,040.0 2,083.8 1,837.7 1,760.2 1,824.9 1,901.0 1,864.8 1,919.8 108.8 -36.2 55.0 45
+46 Services 911.6 870.4 904.2 923.8 948.3 962.5 714.1 693.0 709.5 722.5 731.4 728.9 57.2 8.9 -2.5 46
+47 Imports 3,950.9 3,927.9 4,074.4 3,955.8 3,845.4 3,848.5 3,891.0 3,925.6 3,947.5 3,872.9 3,818.2 3,836.8 290.9 -54.7 18.7 47
+48 Goods 3,277.2 3,289.3 3,394.8 3,269.7 3,155.0 3,150.3 3,359.6 3,412.7 3,409.5 3,333.4 3,283.0 3,301.9 216.6 -50.4 18.9 48
+49 Services 673.7 638.6 679.6 686.1 690.4 698.3 553.0 539.0 560.1 559.0 553.7 554.3 68.8 -5.3 0.5 49
+50 Government consumption
+expenditures and gross
+investment 4,448.1 4,311.4 4,412.8 4,493.0 4,575.4 4,649.8 3,406.5 3,393.4 3,379.5 3,410.6 3,442.5 3,484.5 -19.8 31.8 42.0 50
+51 Federal 1,646.7 1,613.1 1,622.7 1,657.1 1,693.8 1,732.1 1,355.3 1,353.0 1,341.3 1,353.7 1,373.0 1,393.1 -35.3 19.3 20.1 51
+52 National defense 924.9 898.7 918.3 935.3 947.4 959.2 769.3 761.7 764.5 773.3 777.6 782.5 -22.1 4.3 4.9 52
+53 Consumption expenditures 732.4 708.4 726.5 743.1 751.4 765.8 601.4 592.8 597.3 606.5 609.1 617.4 -15.1 2.6 8.4 53
+54 Gross investment 192.6 190.4 191.8 192.2 196.0 193.4 168.6 169.9 167.9 167.4 169.2 165.5 -7.1 1.8 -3.8 54
+55 Nondefense 721.7 714.4 704.4 721.8 746.4 772.9 583.8 588.9 574.8 578.3 593.0 608.0 -13.3 14.7 15.0 55
+56 Consumption expenditures 536.6 535.2 521.8 535.1 554.5 574.8 426.3 433.2 418.9 421.0 432.2 443.9 -17.0 11.2 11.7 56
+57 Gross investment 185.1 179.3 182.6 186.7 191.9 198.1 157.6 155.7 156.2 157.6 161.1 164.3 4.3 3.5 3.2 57
+58 State and local 2,801.4 2,698.2 2,790.0 2,836.0 2,881.6 2,917.7 2,051.2 2,040.7 2,037.8 2,056.5 2,069.8 2,092.1 13.3 13.3 22.3 58
+59 Consumption expenditures 2,322.1 2,238.5 2,325.6 2,346.0 2,378.2 2,396.6 1,705.9 1,696.4 1,701.0 1,709.0 1,717.1 1,731.0 24.8 8.2 13.8 59
+60 Gross investment 479.4 459.7 464.5 490.0 503.4 521.1 345.3 344.3 336.8 347.5 352.5 360.8 -11.5 5.1 8.3 60
+61 Residual ............... ............... ............... ............... ............... ............... -201.3 -149.8 -166.2 -225.0 -264.1 -256.5 .............. .............. .............. 61
+Addenda:
+62 Gross domestic income (GDI)
+1
+25,625.4 25,017.5 25,517.8 25,967.6 25,998.5 26137.3 20,142.0 20,147.2 20,107.5 20,244.6 20,074.8 19982.7 423.7 -169.8 -92.1 62
+63 Average of GDP and GDI 25,544.0 24,879.0 25,383.1 25,845.8 26,068.3 26333.5 20,078.0 20,035.6 20,001.4 20,149.6 20,128.6 20132.7 414.0 -21.0 4.1 63
+64 Final sales of domestic product 25,303.8 24,483.1 25,103.1 25,653.0 25,976.2 26,517.7 19,842.1 19,669.8 19,735.9 19,954.2 20,008.4 20,216.4 260.8 54.2 207.9 64
+65 Gross domestic purchases 26,437.8 25,857.2 26,284.0 26,614.8 26,995.1 27,332.1 21,267.5 21,297.3 21,208.9 21,227.1 21,336.6 21,409.5 492.7 109.5 72.9 65
+66 Final sales to domestic purchasers 26,278.9 25,599.7 26,138.7 26,543.9 26,833.3 27,320.1 21,093.1 21,038.4 21,047.3 21,126.2 21,160.5 21,343.7 345.9 34.2 183.2 66
+67 Final sales to private domestic purchasers 21,830.8 21,288.4 21,725.9 22,050.8 22,257.9 22,670.3 17,698.2 17,656.9 17,680.5 17,727.2 17,728.1 17,868.8 369.7 0.9 140.7 67
+68 GDP 25,462.7 24,740.5 25,248.5 25,723.9 26,138.0 26,529.8 20,014.1 19,924.1 19,895.3 20,054.7 20,182.5 20,282.8 404.3 127.8 100.3 68
+69 Plus: Income receipts from the rest of
+the world 1,256.2 1,147.1 1,231.3 1,292.1 1,354.6 1402.8 1,006.7 942.3 990.6 1,027.1 1,066.7 1094.7 77.2 39.7 28.0 69
+70 Less: Income payments to the rest of
+the world 1,078.8 958.4 1,023.3 1,130.6 1,203.1 1278.5 864.3 787.4 823.4 898.8 947.5 997.9 82.8 48.7 50.4 70
+71 Equals: Gross national product 25,640.1 24,929.2 25,456.4 25,885.4 26,289.5 26654 20,158.2 20,080.4 20,063.7 20,184.9 20,303.9 20382.3 398.9 119.0 78.4 71
+72 Net domestic product 21,178.0 20,626.9 21,006.4 21,365.8 21,712.9 22,023.4 16,601.4 16,551.0 16,495.3 16,628.5 16,731.0 16,807.3 298.6 102.5 76.3 72
+Note. Users are cautioned that particularly for components that exhibit rapid change in prices relative to other prices in the economy, the chained-dollar estimates should not be used to measure the component's relative importance or its contribution to the
+growth rate of more aggregate series. For accurate estimates of the contributions to percent changes in real gross domestic product, use table 2.
+Source: U.S. Bureau of Economic Analysis
+Billions of dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Billions of chained (2012) dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Change from preceding
+period
+2022
+Line
+June 29, 2023
+Table 3. Gross Domestic Product: Level and Change from Preceding Period--Table Ends
+Line
+r Revised
+1. Real gross domestic income is gross domestic income deflated by the implicit price deflator for gross domestic product.
+- 12 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1r
+1 Gross domestic product (GDP) 1.3 4.5 7.0 2.3 1.3 1.3 1.8 -1.3 3.5 2.5 5.2 6.3 6.2 6.8 8.3 9.0 4.4 3.9 4.1 1
+2 Personal consumption expenditures 1.1 4.0 6.3 2.5 1.0 1.5 1.5 -1.8 3.4 1.6 4.5 6.4 5.6 6.2 7.5 7.3 4.3 3.7 4.1 2
+3 Goods -0.7 4.9 8.6 1.8 -1.4 0.2 -0.8 -5.4 4.0 0.5 5.8 9.0 7.6 9.3 12.6 10.6 2.7 -0.5 0.7 3
+4 Durable goods -0.9 5.6 6.5 -1.1 -1.9 -2.6 -1.2 -2.7 4.8 2.1 1.3 14.7 10.0 8.2 8.3 2.4 3.5 -1.5 -1.0 4
+5 Nondurable goods -0.7 4.5 9.9 3.3 -1.2 1.6 -0.6 -6.8 3.7 -0.4 8.6 5.6 6.1 9.9 15.2 15.7 2.3 0.1 1.7 5
+6 Services 2.0 3.6 5.0 2.8 2.2 2.1 2.5 0.0 3.1 2.3 3.9 5.1 4.6 4.6 4.9 5.6 5.2 6.0 5.9 6
+7 Gross private domestic investment 1.3 3.6 8.2 2.1 0.7 -0.2 1.8 1.0 2.4 2.7 3.3 2.8 6.8 8.8 9.9 9.9 7.6 3.3 4.5 7
+8 Fixed investment 1.4 4.0 8.4 2.0 0.8 0.0 1.6 1.7 2.1 2.6 3.5 4.2 7.3 8.8 10.0 10.3 7.7 4.0 4.9 8
+9 Nonresidential 0.8 1.7 6.5 2.0 0.1 -0.8 1.3 2.0 -0.1 1.4 0.7 0.4 4.6 7.7 6.9 8.5 7.6 3.6 7.2 9
+10 Structures 1.3 4.1 16.4 5.7 2.9 2.1 2.0 -1.0 0.0 -1.6 1.3 8.1 10.2 22.8 16.7 17.5 20.1 7.7 8.6 10
+11 Equipment -0.5 0.4 6.2 -0.3 -1.6 -0.9 0.9 0.2 -2.4 -1.5 3.6 -4.4 4.3 6.5 7.6 9.2 5.9 6.1 7.6 11
+12 Intellectual property products 1.8 1.6 2.4 2.6 0.4 -2.3 1.4 5.7 2.1 5.8 -2.7 1.3 2.3 2.1 1.9 3.9 3.7 -0.6 6.1 12
+13 Residential 3.3 11.1 13.9 2.0 3.2 2.5 2.5 1.0 9.3 6.6 12.4 15.5 15.0 12.0 18.9 15.2 8.1 5.1 -2.5 13
+14 Change in private inventories ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... 14
+15 Net exports of goods and services ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... 15
+16 Exports -2.4 11.5 9.4 3.5 -2.4 -1.3 -1.8 -17.6 13.2 6.2 20.5 18.6 9.3 6.2 17.3 20.0 -9.7 -6.1 0.2 16
+17 Goods -3.9 14.2 11.5 2.6 -4.0 -1.2 -4.2 -21.9 16.0 7.0 26.1 24.4 11.1 7.0 22.9 26.7 -14.0 -11.0 -3.1 17
+18 Services 0.4 6.0 5.1 5.3 0.7 -1.5 3.0 -8.9 8.3 4.7 9.7 7.2 5.7 4.6 5.8 6.0 1.3 5.7 7.6 18
+19 Imports -2.2 7.4 7.5 2.3 -4.1 -1.3 -1.2 -12.2 8.1 2.8 12.9 12.7 6.1 6.3 13.5 13.2 -4.1 -5.5 -1.6 19
+20 Goods -2.8 7.8 7.8 2.5 -4.8 -2.0 -1.8 -13.7 8.8 2.6 14.5 13.5 6.1 6.6 15.5 13.9 -5.8 -7.9 -2.9 20
+21 Services 0.7 5.1 6.1 1.0 -1.0 1.6 1.6 -4.4 5.0 4.3 5.0 8.8 6.5 4.8 4.1 10.0 4.7 6.6 4.2 21
+22 Government consumption
+expenditures and gross investment 1.9 5.3 7.5 0.8 1.0 1.5 3.2 0.0 3.2 3.7 6.9 6.8 6.0 7.2 8.7 11.6 3.6 3.6 1.6 22
+23 Federal 1.1 3.4 5.0 -2.6 1.0 1.6 1.4 0.3 2.6 2.4 4.1 4.1 4.4 4.3 5.7 6.0 4.8 3.2 3.2 23
+24 National defense 1.1 3.7 5.2 1.3 1.2 1.8 1.0 -1.1 3.0 2.5 5.2 4.3 4.4 4.5 6.6 7.5 2.7 3.0 2.5 24
+25 Nondefense 1.1 3.0 4.6 -8.3 0.7 1.4 2.0 2.3 2.1 2.4 2.6 3.8 4.4 4.2 4.5 4.1 7.6 3.4 4.1 25
+26 State and local 2.4 6.5 9.1 3.0 1.1 1.5 4.3 -0.2 3.6 4.6 8.8 8.5 7.0 9.0 10.6 15.0 2.9 3.9 0.7 26
+Addenda:
+27 Final sales of domestic product 1.4 4.6 7.0 2.3 1.4 1.3 1.8 -1.2 3.4 2.5 5.2 6.5 6.3 6.8 8.3 9.1 4.4 4.0 4.2 27
+28 Gross domestic purchases 1.3 4.2 6.8 2.1 1.0 1.2 1.8 -1.0 3.2 2.2 4.7 5.9 5.9 6.8 8.1 8.5 4.8 3.6 3.8 28
+29 Final sales to domestic purchasers 1.3 4.2 6.8 2.1 1.0 1.2 1.8 -0.9 3.1 2.2 4.8 6.1 5.9 6.8 8.1 8.5 4.8 3.8 3.8 29
+30
+Final sales to private domestic
+purchasers
+1.2 4.0 6.7 2.4 1.0 1.1 1.5 -1.1 3.1 1.9 4.3 6.0 5.9 6.7 8.0 7.9 5.0 3.8 4.3 30
+31 Gross national product (GNP) 1.3 4.5 7.0 2.3 1.3 1.3 1.8 -1.3 3.5 2.5 5.2 6.2 6.2 6.8 8.3 9.0 4.4 3.9 4.1 31
+32 GDP excluding food and energy1
+1.5 4.1 6.2 2.4 1.5 1.1 2.2 -0.6 3.1 2.3 4.3 5.9 5.6 6.2 6.6 7.3 5.2 4.2 4.8 32
+33 Gross domestic purchases excluding
+food and energy1 1.4 3.9 6.1 1.8 1.3 1.1 2.1 -0.3 3.0 2.2 4.0 5.7 5.4 6.0 7.0 6.9 5.0 4.1 4.2 33
+34 PCE excluding food and energy1
+1.3 3.5 5.0 2.1 1.6 1.2 1.9 -1.0 3.2 1.5 3.2 6.0 4.8 4.8 5.6 4.7 4.7 4.4 4.9 34
+35 Market-based PCE2
+1.1 3.6 6.5 2.1 0.8 1.5 1.3 -1.0 2.8 1.1 4.0 5.8 5.2 6.2 8.2 8.0 4.5 3.4 3.9 35
+36 Market-based PCE excluding food and
+energy1,2 1.3 2.9 5.1 1.7 1.4 1.3 1.8 0.1 2.4 0.9 2.5 5.2 4.3 4.6 6.1 5.0 5.0 4.1 4.7 36
+Implicit price deflators:
+37 GDP 1.3 4.5 7.0 2.2 1.3 1.5 1.6 -1.5 3.5 2.6 5.1 6.4 6.2 6.8 8.4 9.1 4.4 3.9 4.1 37
+38 Gross domestic purchases 1.2 4.2 6.8 2.1 1.0 1.4 1.6 -1.2 3.2 2.2 4.6 6.0 5.9 6.8 8.2 8.6 4.8 3.7 3.7 38
+39 GNP 1.3 4.5 7.0 2.2 1.3 1.5 1.6 -1.5 3.5 2.6 5.1 6.3 6.2 6.8 8.3 9.1 4.4 3.9 4.0 39
+2. This index is a supplemental measure that is based on household expenditures for which there are observable price measures. It excludes most implicit prices (for example, financial services furnished without
+payment) and the final consumption expenditures of nonprofit institutions serving households.
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+June 29, 2023
+Table 4. Price Indexes for Gross Domestic Product and Related Measures: Percent Change from Preceding Period
+Line
+r Revised
+1. Food excludes personal consumption expenditures for purchased meals and beverages, which are classified in food services.
+- 13 -2015 2016 2017 2018 2019 2020 2021 2022 2015 2016 2017 2018 2019 2020 2021 2022
+1 Gross domestic product (GDP) 2.7 1.7 2.2 2.9 2.3 -2.8 5.9 2.1 1.9 2.0 2.8 2.3 2.6 -1.5 5.7 0.9 1
+2 Personal consumption expenditures (PCE) 3.3 2.5 2.4 2.9 2.0 -3.0 8.3 2.7 2.6 2.3 2.8 2.5 2.2 -1.4 7.2 1.7 2
+3 Goods 4.8 3.4 3.9 3.9 3.1 5.2 12.2 -0.5 3.8 3.4 5.2 2.7 3.5 8.6 7.1 -0.8 3
+4 Durable goods 7.6 5.4 6.4 6.8 3.8 10.0 18.5 -0.4 6.0 6.3 8.2 3.7 5.7 16.2 7.0 0.6 4
+5 Nondurable goods 3.4 2.5 2.6 2.5 2.8 2.7 8.8 -0.5 2.8 2.0 3.7 2.2 2.4 4.6 7.2 -1.6 5
+6 Services 2.6 2.0 1.7 2.4 1.5 -6.6 6.3 4.5 2.1 1.8 1.7 2.4 1.6 -5.8 7.2 3.0 6
+7 Gross private domestic investment 5.5 -1.0 4.1 5.7 2.8 -5.3 9.0 4.0 2.3 1.8 4.6 4.8 0.1 2.4 8.6 -3.8 7
+8 Fixed investment 3.8 2.1 4.1 4.9 2.5 -2.3 7.4 -0.2 1.7 2.8 5.0 3.5 2.4 1.0 3.7 -2.0 8
+9 Nonresidential 2.3 0.9 4.1 6.5 3.6 -4.9 6.4 3.9 -0.1 2.5 5.2 5.7 2.6 -3.5 5.0 4.5 9
+10 Structures -0.9 -4.3 4.4 4.1 2.3 -10.1 -6.4 -6.6 -7.3 3.6 0.8 1.7 6.6 -16.0 -5.2 -1.7 10
+11 Equipment 3.0 -1.8 2.8 6.6 1.3 -10.5 10.3 4.3 1.5 -2.2 7.0 5.1 -3.1 -2.7 4.7 3.9 11
+12 Intellectual property products 3.8 8.8 5.6 8.1 7.3 4.8 9.7 8.8 3.3 8.4 5.8 9.3 6.9 3.8 10.8 8.2 12
+13 Residential 10.2 6.6 4.0 -0.6 -1.0 7.2 10.7 -10.6 9.2 4.0 4.6 -3.8 2.0 16.4 -0.3 -18.8 13
+14 Change in private inventories .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... 14
+15 Net exports of goods and services .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... .......... 15
+16 Exports 0.3 0.4 4.3 2.8 0.5 -13.2 6.1 7.1 -1.5 1.3 6.2 0.2 0.8 -10.0 6.5 4.6 16
+17 Goods -0.4 0.6 4.1 4.2 0.1 -10.1 7.4 6.3 -2.8 2.4 6.1 1.2 -0.1 -4.5 5.1 4.0 17
+18 Services 1.5 0.0 4.5 0.2 1.2 -18.8 3.3 8.7 1.2 -0.7 6.4 -1.8 2.4 -19.7 9.3 6.0 18
+19 Imports 5.2 1.5 4.5 4.2 1.1 -9.0 14.1 8.1 3.3 2.2 5.3 3.3 -2.0 0.4 10.1 1.5 19
+20 Goods 5.8 1.1 4.5 5.1 0.5 -5.8 14.5 6.9 3.3 2.6 5.5 3.5 -2.9 5.3 8.4 0.8 20
+21 Services 2.5 3.0 4.6 0.5 4.0 -22.0 12.3 14.2 3.1 0.3 4.7 2.4 1.6 -19.4 18.8 5.0 21
+22 Government consumption expenditures
+and gross investment 1.8 2.0 0.4 1.7 3.3 2.6 0.6 -0.6 2.2 1.6 0.7 1.6 4.0 1.0 0.5 0.9 22
+23 Federal 0.0 0.5 0.4 3.0 3.9 6.2 2.3 -2.5 1.2 0.1 1.3 3.2 4.0 5.4 0.4 0.1 23
+24 National defense -2.1 -0.6 0.9 3.3 5.3 2.9 -1.2 -2.8 -0.4 -0.6 2.0 4.5 4.1 4.2 -5.0 -0.2 24
+25 Nondefense 3.3 2.1 -0.3 2.5 1.9 11.2 7.3 -2.2 3.7 1.1 0.2 1.4 3.9 7.4 8.2 0.4 25
+26 State and local 3.0 2.8 0.4 0.9 3.0 0.4 -0.5 0.7 2.8 2.5 0.3 0.6 4.0 -1.6 0.6 1.3 26
+Addenda:
+27 Gross domestic income (GDI)1
+2.5 0.9 2.3 2.9 2.2 -2.3 5.5 2.1 1.2 1.2 2.9 2.9 2.1 0.1 4.1 -0.2 27
+28 Average of GDP and GDI 2.6 1.3 2.3 2.9 2.3 -2.5 5.7 2.1 1.5 1.6 2.8 2.6 2.3 -0.7 4.9 0.4 28
+29 Final sales of domestic product 2.4 2.2 2.2 2.8 2.3 -2.2 5.7 1.3 1.8 2.2 2.9 2.1 3.0 -1.8 4.8 1.3 29
+30 Gross domestic purchases 3.4 1.8 2.3 3.1 2.3 -2.4 7.0 2.4 2.5 2.1 2.8 2.7 2.1 -0.3 6.2 0.5 30
+31 Final sales to domestic purchasers 3.1 2.3 2.3 3.0 2.3 -1.9 6.7 1.7 2.4 2.3 2.8 2.5 2.5 -0.6 5.4 0.9 31
+32 Final sales to private domestic purchasers 3.4 2.4 2.7 3.3 2.1 -2.8 8.1 2.1 2.5 2.4 3.3 2.7 2.2 -0.9 6.4 0.9 32
+33 Gross national product 2.6 1.7 2.5 2.9 2.2 -3.1 5.7 2.0 1.9 2.2 3.0 2.0 2.4 -1.9 5.7 0.7 33
+34 Real disposable personal income 4.0 1.8 2.7 3.3 3.5 6.2 1.8 -6.1 2.8 1.6 3.0 4.1 2.8 3.7 -0.4 -1.9 34
+Price indexes:
+35 Gross domestic purchases 0.3 0.7 1.9 2.3 1.5 1.3 4.2 6.8 0.1 1.3 2.0 2.2 1.4 1.5 5.8 6.2 35
+36 Gross domestic purchases excluding
+food and energy2
+1.0 1.1 1.8 2.3 1.7 1.4 3.9 6.1 0.7 1.5 1.9 2.3 1.4 1.7 5.3 5.7 36
+37 GDP 1.0 1.0 1.9 2.4 1.8 1.3 4.5 7.0 0.8 1.5 2.0 2.3 1.6 1.6 6.1 6.4 37
+38 GDP excluding food and energy2
+1.2 1.3 1.9 2.5 1.9 1.5 4.1 6.2 1.0 1.7 2.0 2.5 1.7 1.7 5.5 5.8 38
+39 PCE 0.2 1.0 1.8 2.1 1.5 1.1 4.0 6.3 0.2 1.5 1.9 2.0 1.5 1.2 5.7 5.7 39
+40 PCE excluding food and energy2
+1.3 1.6 1.7 2.0 1.7 1.3 3.5 5.0 1.1 1.8 1.7 2.0 1.6 1.4 4.7 4.8 40
+41 Market-based PCE3
+-0.1 0.7 1.5 1.8 1.3 1.1 3.6 6.5 0.0 1.2 1.5 1.7 1.3 1.0 5.3 6.0 41
+42 Market-based PCE excluding food and
+energy2,3
+1.0 1.3 1.2 1.6 1.5 1.3 2.9 5.1 1.1 1.4 1.2 1.7 1.5 1.3 4.1 5.0 42
+2. Food excludes personal consumption expenditures for purchased meals and beverages, which are classified in food services.
+3. This index is a supplemental measure that is based on household expenditures for which there are observable price measures. It excludes most implicit prices (for example, financial services furnished without
+payment) and the final consumption expenditures of nonprofit institutions serving households.
+Note. Estimates under the Percent change from preceding year columns are calculated from annual data. Estimates under the Percent change from fourth quarter to fourth quarter columns are calculated from fourth
+quarter values relative to the same quarter one year prior.
+Source: U.S. Bureau of Economic Analysis
+Percent change from preceding year
+Percent change from fourth quarter to
+fourth quarter one year ago Line
+June 29, 2023
+Table 5. Real Gross Domestic Product: Annual Percent Change
+Line
+1. Gross domestic income deflated by the implicit price deflator for gross domestic product.
+- 14 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1r
+1 Gross domestic product (GDP) 2.1 2.3 2.6 0.8 -8.4 -2.0 -1.5 1.2 12.5 5.0 5.7 3.7 1.8 1.9 0.9 1.8 1
+2 Personal consumption expenditures (PCE) 1.8 2.0 2.2 0.5 -9.4 -1.7 -1.4 2.8 16.6 7.4 7.2 4.8 2.4 2.2 1.7 2.4 2
+3 Goods 3.0 3.6 3.5 3.5 -0.7 9.2 8.6 14.9 21.5 6.6 7.1 1.3 -2.1 -0.2 -0.8 0.7 3
+4 Durable goods 2.9 4.2 5.7 3.5 1.4 18.2 16.2 31.4 34.6 5.9 7.0 -0.6 -3.7 2.2 0.6 2.6 4
+5 Nondurable goods 3.1 3.3 2.4 3.5 -1.8 4.6 4.6 6.6 14.6 7.0 7.2 2.4 -1.1 -1.6 -1.6 -0.4 5
+6 Services 1.3 1.3 1.6 -0.9 -13.2 -6.6 -5.8 -2.6 14.1 7.8 7.2 6.7 4.8 3.5 3.0 3.3 6
+7 Gross private domestic investment 4.7 2.1 0.1 -2.1 -17.7 -3.8 2.4 2.3 21.2 5.6 8.6 11.6 7.2 1.9 -3.8 -8.1 7
+8 Fixed investment 2.4 3.0 2.4 1.4 -8.3 -3.2 1.0 4.1 15.0 7.6 3.7 2.5 -0.2 -0.9 -2.0 -3.2 8
+9 Nonresidential 3.8 3.9 2.6 -0.1 -9.7 -6.4 -3.5 0.8 12.5 7.6 5.0 4.8 2.4 3.8 4.5 2.7 9
+10 Structures -0.3 4.7 6.6 5.5 -11.6 -17.4 -16.0 -14.8 -2.6 -1.7 -5.2 -6.6 -9.2 -8.4 -1.7 3.0 10
+11 Equipment 3.6 0.8 -3.1 -9.7 -20.0 -9.2 -2.7 5.8 23.2 9.4 4.7 6.0 2.0 5.2 3.9 -1.2 11
+12 Intellectual property products 6.9 7.3 6.9 8.0 3.5 4.0 3.8 5.6 11.4 10.9 10.8 9.7 8.8 8.6 8.2 6.2 12
+13 Residential -2.6 -0.3 2.0 6.8 -2.9 8.3 16.4 15.0 23.0 7.5 -0.3 -3.7 -7.2 -13.0 -18.8 -19.0 13
+14 Change in private inventories ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... 14
+15 Net exports of goods and services ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... ......... 15
+16 Exports -0.4 0.9 0.8 -4.5 -24.0 -14.6 -10.0 -6.1 20.2 6.6 6.5 5.2 7.3 11.3 4.6 7.9 16
+17 Goods -2.0 0.6 -0.1 -2.4 -24.1 -9.8 -4.5 -3.8 27.2 5.6 5.1 3.4 6.3 11.7 4.0 9.1 17
+18 Services 2.7 1.4 2.4 -8.3 -24.0 -23.0 -19.7 -10.5 7.9 8.8 9.3 9.1 9.6 10.4 6.0 5.2 18
+19 Imports 2.8 1.0 -2.0 -5.5 -22.1 -8.4 0.4 5.7 30.5 13.3 10.1 12.7 11.2 7.4 1.5 -2.3 19
+20 Goods 2.3 0.2 -2.9 -4.9 -19.7 -3.6 5.3 10.3 32.0 10.6 8.4 10.7 9.5 7.0 0.8 -3.2 20
+21 Services 5.2 4.9 1.6 -8.0 -32.4 -28.0 -19.4 -14.2 23.4 28.0 18.8 24.2 20.5 9.5 5.0 2.8 21
+22 Government consumption expenditures
+and gross investment 3.2 3.4 4.0 3.6 4.1 1.6 1.0 1.8 -0.7 0.7 0.5 -1.6 -1.3 -0.3 0.9 2.7 22
+23 Federal 4.2 4.1 4.0 4.2 9.8 5.4 5.4 8.7 -0.2 0.8 0.4 -4.9 -4.0 -1.3 0.1 3.0 23
+24 National defense 5.3 5.3 4.1 2.6 3.1 1.7 4.2 1.2 0.1 -1.0 -5.0 -4.9 -3.9 -2.0 -0.2 2.7 24
+25 Nondefense 2.5 2.3 3.9 6.5 19.8 11.0 7.4 19.9 -0.6 3.3 8.2 -4.8 -4.1 -0.3 0.4 3.2 25
+26 State and local 2.7 3.0 4.0 3.2 0.6 -0.7 -1.6 -2.3 -1.0 0.7 0.6 0.5 0.5 0.3 1.3 2.5 26
+Addenda:
+27 Gross domestic income (GDI)1
+2.6 1.7 2.1 1.5 -7.7 -3.0 0.1 0.7 11.1 6.5 4.1 3.8 2.8 2.3 -0.2 -0.8 27
+28 Average of GDP and GDI 2.4 2.0 2.3 1.2 -8.0 -2.5 -0.7 0.9 11.8 5.7 4.9 3.7 2.3 2.1 0.4 0.5 28
+29 Final sales of domestic product 1.7 2.5 3.0 1.5 -6.7 -1.9 -1.8 1.5 11.5 5.3 4.8 2.1 0.5 1.5 1.3 2.8 29
+30 Gross domestic purchases 2.5 2.3 2.1 0.5 -8.5 -1.5 -0.3 2.6 13.9 5.9 6.2 4.8 2.5 1.7 0.5 0.5 30
+31 Final sales to domestic purchasers 2.2 2.4 2.5 1.2 -6.9 -1.4 -0.6 2.9 13.0 6.2 5.4 3.3 1.3 1.2 0.9 1.5 31
+32 Final sales to private domestic purchasers 1.9 2.2 2.2 0.7 -9.1 -2.0 -0.9 3.1 16.2 7.4 6.4 4.3 1.8 1.6 0.9 1.2 32
+33 Gross national product 2.0 2.3 2.4 0.7 -8.8 -2.4 -1.9 0.9 12.2 4.7 5.7 3.6 2.0 1.9 0.7 1.5 33
+34 Real disposable personal income 3.5 3.2 2.8 2.1 12.3 6.9 3.7 14.5 -4.4 -1.5 -0.4 -12.8 -5.6 -3.8 -1.9 2.9 34
+Price indexes:
+35 Gross domestic purchases 1.6 1.5 1.4 1.5 0.7 1.3 1.5 2.2 4.0 4.7 5.8 6.7 7.3 7.0 6.2 5.1 35
+36 Gross domestic purchases excluding
+food and energy2 1.7 1.6 1.4 1.6 1.0 1.4 1.7 2.2 3.7 4.3 5.3 6.0 6.3 6.2 5.7 5.1 36
+37 GDP 1.8 1.7 1.6 1.7 0.8 1.3 1.6 2.4 4.4 5.0 6.1 6.9 7.6 7.1 6.4 5.3 37
+38 GDP excluding food and energy2
+2.0 1.9 1.7 1.8 1.0 1.4 1.7 2.3 3.9 4.5 5.5 6.1 6.4 6.3 5.8 5.4 38
+39 PCE 1.6 1.5 1.5 1.6 0.5 1.1 1.2 1.9 4.0 4.5 5.7 6.4 6.6 6.3 5.7 4.9 39
+40 PCE excluding food and energy2
+1.7 1.8 1.6 1.7 0.9 1.3 1.4 1.7 3.5 3.9 4.7 5.3 5.0 4.9 4.8 4.6 40
+41 Market-based PCE3
+1.3 1.2 1.3 1.4 0.6 1.1 1.0 1.7 3.4 4.0 5.3 6.3 6.9 6.7 6.0 4.9 41
+42 Market-based PCE excluding food and energy2,3
+1.5 1.6 1.5 1.5 1.1 1.4 1.3 1.5 2.7 3.2 4.1 5.0 5.0 5.2 5.0 4.7 42
+2. Food excludes personal consumption expenditures for purchased meals and beverages, which are classified in food services.
+3. This index is a supplemental measure that is based on household expenditures for which there are observable price measures. It excludes most implicit prices (for example, financial services furnished
+without payment) and the final consumption expenditures of nonprofit institutions serving households.
+Source: U.S. Bureau of Economic Analysis
+2019 2020 2021 2022
+Line
+June 29, 2023
+Table 6. Real Gross Domestic Product: Percent Change from Quarter One Year Ago
+Line
+r Revised
+1. Gross domestic income deflated by the implicit price deflator for gross domestic product.
+- 15 -2023
+Q1 Q2 Q3 Q4 Q1r
+1 Gross domestic product (GDP) 21,060.5 23,315.1 25,462.7 24,740.5 25,248.5 25,723.9 26,138.0 26,529.8 1
+2 Plus: Income receipts from the rest of the world 971.3 1,087.0 1,256.2 1,147.1 1,231.3 1,292.1 1,354.6 1,402.8 2
+3 Less: Income payments to the rest of the world 774.3 913.9 1,078.8 958.4 1,023.3 1,130.6 1,203.1 1,278.5 3
+4 Equals: Gross national product 21,257.4 23,488.2 25,640.1 24,929.2 25,456.4 25,885.4 26,289.5 26,654.0 4
+5 Less: Consumption of fixed capital 3,577.8 3,831.6 4,284.7 4,113.6 4,242.1 4,358.1 4,425.1 4,506.4 5
+6 Less: Statistical discrepancy -214.9 -128.9 -162.6 -277.0 -269.3 -243.7 139.5 392.5 6
+7 Equals: National income 17,894.6 19,785.5 21,518.0 21,092.6 21,483.6 21,771.0 21,724.9 21,755.2 7
+8 Compensation of employees 11,592.7 12,538.5 13,564.5 13,259.7 13,415.2 13,755.0 13,828.1 13,985.5 8
+9 Wages and salaries 9,457.4 10,290.1 11,189.6 10,925.5 11,058.0 11,361.0 11,413.9 11,545.6 9
+10 Supplements to wages and salaries 2,135.4 2,248.4 2,374.9 2,334.2 2,357.1 2,394.0 2,414.2 2,440.0 10
+11 Proprietors' income with inventory valuation and capital
+consumption adjustments 1,643.1 1,753.6 1,848.3 1,811.4 1,835.4 1,863.5 1,882.9 1,909.5 11
+12 Rental income of persons with capital consumption adjustment 719.8 723.8 781.9 744.9 775.9 794.9 811.8 845.0 12
+13 Corporate profits with inventory valuation and capital
+consumption adjustments 2,260.1 2,771.1 2,952.6 2,869.6 3,001.3 3,000.0 2,939.5 2,818.1 13
+14 Net interest and miscellaneous payments 665.8 644.1 542.1 630.2 608.2 515.7 414.5 329.7 14
+15 Taxes on production and imports less subsidies 869.0 1,181.5 1,648.7 1,604.9 1,652.0 1,670.6 1,667.5 1,687.9 15
+16 Business current transfer payments (net) 144.1 171.0 183.3 170.1 198.7 177.7 186.7 183.9 16
+17 Current surplus of government enterprises -0.1 2.1 -3.4 1.8 -3.0 -6.4 -6.1 -4.4 17
+Addenda:
+18 Gross domestic income (GDI) 21,275.4 23,444.0 25,625.4 25,017.5 25,517.8 25,967.6 25,998.5 26,137.3 18
+19 Average of GDP and GDI 21,167.9 23,379.6 25,544.0 24,879.0 25,383.1 25,845.8 26,068.3 26,333.5 19
+20 Statistical discrepancy as a percentage of GDP -1.0 -0.6 -0.6 -1.1 -1.1 -0.9 0.5 1.5 20
+June 29, 2023
+Table 7. Relation of Gross Domestic Product, Gross National Product, and National Income
+r Revised
+Source: U.S. Bureau of Economic Analysis
+[Billions of dollars]
+Line 2020 2021 2022
+Seasonally adjusted at annual rates
+2022 Line
+- 16 -2023
+Q1 Q2 Q3 Q4 Q1r
+1 Personal income1
+19,832.3 21,294.8 21,777.2 21,319.8 21,578.3 21,969.5 22,241.3 22,519.2 1
+2 Compensation of employees 11,592.7 12,538.5 13,564.5 13,259.7 13,415.2 13,755.0 13,828.1 13,985.5 2
+3 Wages and salaries 9,457.4 10,290.1 11,189.6 10,925.5 11,058.0 11,361.0 11,413.9 11,545.6 3
+4 Supplements to wages and salaries 2,135.4 2,248.4 2,374.9 2,334.2 2,357.1 2,394.0 2,414.2 2,440.0 4
+5 Proprietors' income with inventory valuation and
+capital consumption adjustments 1,643.1 1,753.6 1,848.3 1,811.4 1,835.4 1,863.5 1,882.9 1,909.5 5
+6 Farm 45.2 51.3 91.7 74.4 95.7 95.9 100.9 96.7 6
+7 Nonfarm 1,597.9 1,702.2 1,756.6 1,737.0 1,739.7 1,767.6 1,782.0 1,812.8 7
+8 Rental income of persons with capital consumption adjustment 719.8 723.8 781.9 744.9 775.9 794.9 811.8 845.0 8
+9 Personal income receipts on assets 3,095.4 3,202.4 3,343.9 3,269.9 3,323.0 3,358.8 3,424.0 3,452.6 9
+10 Personal interest income 1,647.3 1,658.6 1,726.6 1,670.8 1,708.6 1,738.1 1,789.0 1,808.1 10
+11 Personal dividend income 1,448.1 1,543.9 1,617.3 1,599.1 1,614.4 1,620.7 1,635.0 1,644.5 11
+12 Personal current transfer receipts 4,231.2 4,617.3 3,910.7 3,868.7 3,883.2 3,892.8 3,998.2 4,057.5 12
+13 Less: Contributions for government social insurance,
+domestic 1,450.0 1,540.8 1,672.1 1,634.7 1,654.4 1,695.6 1,703.7 1,730.8 13
+14 Less: Personal current taxes 2,236.4 2,661.7 3,196.6 3,145.5 3,188.5 3,236.5 3,216.2 2,906.2 14
+15 Equals: Disposable personal income 17,595.9 18,633.1 18,580.6 18,174.4 18,389.8 18,733.0 19,025.1 19,613.1 15
+16 Less: Personal outlays 14,603.6 16,389.8 17,922.5 17,389.5 17,798.7 18,124.5 18,377.2 18,772.2 16
+17 Equals: Personal saving 2,992.3 2,243.4 658.1 784.9 591.1 608.5 647.9 840.9 17
+18 Personal saving as a percentage of disposable
+personal income 17.0 12.0 3.5 4.3 3.2 3.2 3.4 4.3 18
+Addenda:
+19 Personal income excluding current transfer receipts,
+billions of chained (2012) dollars2
+14,036.8 14,424.3 14,544.9 14,507.5 14,453.7 14,610.2 14,609.8 14,636.8 19
+20 Disposable personal income, billions of chained (2012)
+dollars2
+15,831.6 16,115.7 15,126.3 15,108.8 15,021.2 15,140.6 15,236.1 15,549.6 20
+2. The current-dollar measure is deflated by the implicit price deflator for personal consumption expenditures.
+Source: U.S. Bureau of Economic Analysis
+Line 2020 2021 2022
+Seasonally adjusted at annual rates
+2022 Line
+June 29, 2023
+Table 8. Personal Income and Its Disposition
+r Revised
+1. Personal income is also equal to national income less corporate profits with inventory valuation and capital consumption adjustments, taxes on production and imports less subsidies,
+contributions for government social insurance, net interest and miscellaneous payments, business current transfer payments (net), and current surplus of government enterprises, plus personal
+income receipts on assets, and personal current transfer receipts.
+[Billions of dollars]
+- 17 -Quarter
+one year
+ago
+2023 2023 2023
+Q1 Q2 Q3 Q4 Q1r
+Q2 Q3 Q4 Q1r
+Q1r
+1 Corporate profits with inventory
+valuation and capital consumption
+adjustments 2,260.1 2,771.1 2,952.6 2,869.6 3,001.3 3,000.0 2,939.5 2,818.1 22.6 6.6 4.6 0.0 -2.0 -4.1 -1.8 1
+2 Less: Taxes on corporate income 288.9 388.2 473.8 495.1 478.7 457.0 464.3 488.7 34.4 22.0 -3.3 -4.5 1.6 5.3 -1.3 2
+3 Equals: Profits after tax with
+inventory valuation and capital
+consumption adjustments 1,971.2 2,382.8 2,478.8 2,374.6 2,522.6 2,543.0 2,475.2 2,329.3 20.9 4.0 6.2 0.8 -2.7 -5.9 -1.9 3
+4 Net dividends 1,541.3 1,659.3 1,705.4 1,743.6 1,740.4 1,683.9 1,653.8 1,651.6 7.7 2.8 -0.2 -3.2 -1.8 -0.1 -5.3 4
+5 Undistributed profits with inventory
+valuation and capital consumption
+adjustments 429.9 723.6 773.4 631.0 782.2 859.0 821.4 677.7 68.3 6.9 24.0 9.8 -4.4 -17.5 7.4 5
+Addenda for corporate cash flow:
+6 Net cash flow with inventory
+valuation adjustment 2,374.7 2,778.9 3,018.3 2,837.6 2,954.0 3,135.6 3,146.0 3,126.8 17.0 8.6 4.1 6.1 0.3 -0.6 10.2 6
+7 Undistributed profits with inventory
+valuation and capital consumption
+adjustments 429.9 723.6 773.4 631.0 782.2 859.0 821.4 677.7 68.3 6.9 24.0 9.8 -4.4 -17.5 7.4 7
+8 Consumption of fixed capital 1,958.5 2,068.2 2,302.7 2,206.2 2,275.6 2,343.3 2,385.6 2,448.7 5.6 11.3 3.1 3.0 1.8 2.6 11.0 8
+9 Less: Capital transfers paid (net) 13.6 12.8 57.8 -0.4 103.7 66.8 61.1 -0.3 .......... .......... .......... .......... .......... .......... ............... 9
+Addenda:
+10 Profits before tax (without inventory
+valuation and capital consumption
+adjustments) 2,399.8 3,138.1 3,345.9 3,328.5 3,521.8 3,347.8 3,185.6 3,176.8 30.8 6.6 5.8 -4.9 -4.8 -0.3 -4.6 10
+11 Profits after tax (without inventory
+valuation and capital consumption
+adjustments) 2,110.9 2,749.8 2,872.2 2,833.4 3,043.1 2,890.8 2,721.3 2,688.0 30.3 4.4 7.4 -5.0 -5.9 -1.2 -5.1 11
+12 Inventory valuation adjustment -26.4 -256.9 -130.8 -246.9 -269.1 -59.8 52.5 31.7 .......... .......... .......... .......... .......... .......... ............... 12
+13 Capital consumption adjustment -113.4 -110.1 -262.5 -212.0 -251.4 -288.0 -298.6 -390.4 .......... .......... .......... .......... .......... .......... ............... 13
+2022
+Line
+June 29, 2023
+Table 9. Corporate Profits: Level and Percent Change
+r Revised
+Source: U.S. Bureau of Economic Analysis
+Line
+Billions of dollars
+2020 2021 2022
+Seasonally adjusted at annual rates
+2022
+Percent change from preceding period
+2021 2022
+Quarterly rates
+- 18 -2023 2023
+Q1 Q2 Q3 Q4 Q1r
+Q2 Q3 Q4 Q1r
+1 Corporate profits with inventory
+valuation and capital
+consumption adjustments 2,260.1 2,771.1 2,952.6 2,869.6 3,001.3 3,000.0 2,939.5 2,818.1 511.0 181.5 131.6 -1.3 -60.5 -121.5 1
+2 Domestic industries 1,830.5 2,358.7 2,499.1 2,432.7 2,538.9 2,553.2 2,471.3 2,359.1 528.2 140.3 106.2 14.3 -81.9 -112.3 2
+3 Financial 443.2 512.2 460.2 510.3 464.3 462.5 403.6 394.2 69.0 -52.0 -46.0 -1.8 -59.0 -9.4 3
+4 Nonfinancial 1,387.3 1,846.5 2,038.9 1,922.4 2,074.6 2,090.7 2,067.8 1,964.9 459.2 192.3 152.2 16.1 -22.9 -102.9 4
+5 Rest of the world 429.6 412.4 453.6 436.9 462.3 446.8 468.2 459.0 -17.3 41.2 25.5 -15.5 21.4 -9.2 5
+6 Receipts from the rest of the world 744.6 869.4 956.4 912.1 968.2 969.1 976.3 985.8 124.8 87.0 56.1 1.0 7.2 9.4 6
+7 Less: Payments to the rest of the
+world 315.0 457.0 502.9 475.2 505.8 522.3 508.1 526.8 142.1 45.8 30.6 16.5 -14.2 18.6 7
+8 Corporate profits with inventory
+valuation adjustment 2,373.5 2,881.2 3,215.1 3,081.6 3,252.7 3,288.0 3,238.2 3,208.5 507.7 333.9 171.1 35.3 -49.8 -29.7 8
+9 Domestic industries 1,943.8 2,468.8 2,761.6 2,644.7 2,790.4 2,841.2 2,770.0 2,749.5 525.0 292.7 145.6 50.8 -71.2 -20.5 9
+10 Financial 514.6 585.0 549.8 593.4 552.4 555.8 497.6 499.4 70.4 -35.1 -41.0 3.4 -58.3 1.8 10
+11 Federal Reserve banks 89.7 113.1 63.9 142.7 130.7 42.5 -60.2 -130.2 23.4 -49.2 -12.0 -88.1 -102.7 -70.0 11
+12 Other financial 424.9 471.8 485.9 450.7 421.8 513.3 557.7 629.6 47.0 14.1 -29.0 91.5 44.4 71.9 12
+13 Nonfinancial 1,429.2 1,883.9 2,211.7 2,051.3 2,237.9 2,285.3 2,272.4 2,250.0 454.6 327.9 186.6 47.4 -12.9 -22.4 13
+14 Utilities 25.6 23.6 29.5 26.2 27.9 36.0 27.8 32.2 -2.0 5.9 1.7 8.1 -8.2 4.4 14
+15 Manufacturing 329.5 447.0 616.3 548.1 616.9 635.7 664.4 657.4 117.5 169.3 68.7 18.9 28.6 -7.0 15
+16 Durable goods 207.6 275.2 358.2 332.7 359.9 358.3 381.9 373.5 67.6 83.0 27.1 -1.5 23.6 -8.4 16
+17 Fabricated metal products 26.9 27.6 47.6 42.0 44.0 48.1 56.3 55.7 0.7 20.0 2.0 4.1 8.2 -0.7 17
+18 Machinery 30.5 30.5 50.7 38.7 46.1 53.3 64.8 61.8 0.0 20.2 7.3 7.2 11.6 -3.0 18
+19 Computer and electronic
+products 78.6 104.0 102.3 112.0 108.8 97.1 91.3 93.6 25.4 -1.7 -3.2 -11.7 -5.8 2.3 19
+20 Electrical equipment,
+appliances, and components 8.2 6.7 9.5 7.7 8.7 10.1 11.7 11.0 -1.5 2.8 1.0 1.4 1.6 -0.7 20
+21 Motor vehicles, bodies and
+trailers, and parts 0.5 4.4 29.4 19.1 26.7 32.3 39.5 38.6 3.9 25.0 7.6 5.6 7.2 -0.9 21
+22 Other durable goods 63.0 102.0 118.6 113.2 125.5 117.4 118.2 112.8 39.0 16.6 12.4 -8.1 0.8 -5.4 22
+23 Nondurable goods 121.9 171.8 258.1 215.4 257.0 277.4 282.5 283.9 49.9 86.3 41.6 20.4 5.1 1.4 23
+24 Food and beverage and
+tobacco products 69.0 68.2 62.9 55.2 58.6 65.8 72.0 75.4 -0.8 -5.3 3.4 7.2 6.3 3.4 24
+25 Petroleum and coal products -48.6 -6.7 46.8 11.3 49.7 67.1 59.0 56.5 41.9 53.5 38.4 17.4 -8.1 -2.6 25
+26 Chemical products 66.7 76.8 101.6 102.3 99.4 98.2 106.6 105.2 10.1 24.8 -3.0 -1.2 8.5 -1.4 26
+27 Other nondurable goods 34.7 33.5 46.7 46.5 49.3 46.3 44.8 46.8 -1.2 13.3 2.8 -3.0 -1.5 2.0 27
+28 Wholesale trade 142.2 159.3 209.8 190.3 184.9 229.8 234.1 215.4 17.1 50.5 -5.4 44.9 4.3 -18.6 28
+29 Retail trade 230.2 311.3 309.6 297.3 307.4 312.0 321.8 340.1 81.2 -1.7 10.2 4.6 9.8 18.3 29
+30 Transportation and warehousing 38.0 93.8 112.5 89.4 124.4 121.6 114.5 113.5 55.8 18.7 35.0 -2.7 -7.2 -1.0 30
+31 Information 138.7 159.2 156.8 161.7 151.8 152.4 161.5 170.4 20.4 -2.3 -9.9 0.6 9.1 8.9 31
+32 Other nonfinancial 525.1 689.7 777.3 738.3 824.6 797.8 748.4 721.1 164.6 87.6 86.3 -26.8 -49.4 -27.3 32
+33 Rest of the world 429.6 412.4 453.6 436.9 462.3 446.8 468.2 459.0 -17.3 41.2 25.5 -15.5 21.4 -9.2 33
+Note. Estimates in this table are based on the 2012 North American Industry Classification System (NAICS).
+Source: U.S. Bureau of Economic Analysis
+Level
+2020 2021 2022
+Seasonally adjusted at annual rates
+2022
+Change from preceding period
+2021 2022
+2022
+Line
+June 29, 2023
+Table 10. Corporate Profits by Industry: Level and Change from Preceding Period
+[Billions of dollars]
+Line
+r Revised
+- 19 -2023
+Q1 Q2 Q3 Q4 Q1
+r
+1 Gross value added of nonfinancial corporate business 10,351.0 11,774.6 13,102.2 12,684.9 13,046.1 13,322.9 13,355.0 13,385.4 1
+2 Consumption of fixed capital 1,709.3 1,801.3 2,005.6 1,921.6 1,982.0 2,040.5 2,078.2 2,131.9 2
+3 Net value added 8,641.7 9,973.3 11,096.6 10,763.3 11,064.0 11,282.4 11,276.8 11,253.5 3
+4 Compensation of employees 6,327.8 6,955.6 7,636.7 7,432.5 7,550.8 7,761.5 7,802.2 7,894.0 4
+5 Wages and salaries 5,329.1 5,888.2 6,497.3 6,314.4 6,420.1 6,611.3 6,643.5 6,722.9 5
+6 Supplements to wages and salaries 998.7 1,067.4 1,139.4 1,118.1 1,130.7 1,150.2 1,158.6 1,171.0 6
+7 Taxes on production and imports less subsidies 550.3 789.2 1,056.0 1,024.1 1,060.0 1,071.4 1,068.3 1,078.4 7
+8 Net operating surplus 1,763.5 2,228.6 2,403.9 2,306.7 2,453.2 2,449.5 2,406.4 2,281.1 8
+9 Net interest and miscellaneous payments 287.9 285.4 273.5 292.4 287.7 268.3 245.5 222.6 9
+10 Business current transfer payments (net) 88.3 96.6 91.6 92.0 90.9 90.5 93.0 93.6 10
+11 Corporate profits with inventory valuation and capital consumption adjustments 1,387.3 1,846.5 2,038.9 1,922.4 2,074.6 2,090.7 2,067.8 1,964.9 11
+12 Taxes on corporate income 204.0 280.9 377.6 395.9 399.7 358.9 355.8 372.2 12
+13 Profits after tax with inventory valuation and capital consumption adjustments 1,183.3 1,565.6 1,661.3 1,526.5 1,674.9 1,731.8 1,712.0 1,592.7 13
+14 Net dividends 850.2 1,042.2 902.5 960.4 939.8 831.1 878.9 747.4 14
+15 Undistributed profits with inventory valuation and capital consumption adjustments 333.1 523.5 758.8 566.1 735.1 900.7 833.1 845.3 15
+Addenda:
+16 Profits before tax (without inventory valuation and capital consumption adjustments) 1,455.6 2,140.7 2,342.6 2,298.2 2,507.0 2,345.2 2,219.9 2,218.3 16
+17 Profits after tax (without inventory valuation and capital consumption adjustments) 1,251.6 1,859.8 1,965.0 1,902.3 2,107.3 1,986.3 1,864.1 1,846.2 17
+18 Inventory valuation adjustment -26.4 -256.9 -130.8 -246.9 -269.1 -59.8 52.5 31.7 18
+19 Capital consumption adjustment -41.9 -37.3 -172.9 -128.9 -163.3 -194.7 -204.6 -285.1 19
+20 Gross value added of nonfinancial corporate business
+1
+9,210.3 9,976.6 10,171.6 10,134.7 10,119.7 10,226.4 10,203.3 10,156.7 20
+21 Consumption of fixed capital
+2
+1,622.4 1,668.5 1,762.4 1,719.4 1,748.3 1,777.0 1,804.9 1,831.0 21
+22 Net value added
+3
+7,587.8 8,308.2 8,409.2 8,415.3 8,371.4 8,449.4 8,398.4 8,325.6 22
+Price, costs, and profits per unit of real gross value added
+of nonfinancial corporate business:
+23 Price per unit of real gross value added of nonfinancial
+corporate business
+4
+1.124 1.180 1.288 1.252 1.289 1.303 1.309 1.318 23
+24 Compensation of employees (unit labor cost) 0.687 0.697 0.751 0.733 0.746 0.759 0.765 0.777 24
+25 Unit nonlabor cost 0.286 0.298 0.337 0.329 0.338 0.339 0.342 0.347 25
+26 Consumption of fixed capital 0.186 0.181 0.197 0.190 0.196 0.200 0.204 0.210 26
+27 Taxes on production and imports less subsidies
+plus business current transfer payments (net) 0.069 0.089 0.113 0.110 0.114 0.114 0.114 0.115 27
+28 Net interest and miscellaneous payments 0.031 0.029 0.027 0.029 0.028 0.026 0.024 0.022 28
+29 Corporate profits with inventory valuation and capital
+consumption adjustments (unit profits from current production) 0.151 0.185 0.200 0.190 0.205 0.204 0.203 0.193 29
+30 Taxes on corporate income 0.022 0.028 0.037 0.039 0.039 0.035 0.035 0.037 30
+31 Profits after tax with inventory valuation and capital consumption adjustments 0.128 0.157 0.163 0.151 0.166 0.169 0.168 0.157 31
+2. Chained-dollar consumption of fixed capital of nonfinancial corporate business is calculated as the product of the chain-type quantity index and the 2012 current-dollar value of the corresponding series, divided by 100.
+3. Chained-dollar net value added of nonfinancial corporate business is the difference between the gross value added and the consumption of fixed capital.
+4. The deflator for gross value added of nonfinancial corporate business divided by 100.
+Note. Estimates in this table are based on the 2012 North American Industry Classification System (NAICS).
+Source: U.S. Bureau of Economic Analysis
+June 29, 2023
+Table 11. Gross Value Added of Nonfinancial Domestic Corporate Business
+Line
+r Revised
+1. The current-dollar gross value added is deflated using the gross value added chain-type price index for nonfinancial industries from the GDP-by-industry accounts. For periods when this price index is not available, the
+chain-type price index for GDP goods and structures is used.
+Billions of chained (2012) dollars
+Dollars; quarters seasonally adjusted
+Billions of dollars
+2020 2021 2022
+Seasonally adjusted at annual rates
+2022 Line
+- 20 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1
+1 Gross domestic product -2.8 5.9 2.1 2.7 3.6 1.8 -4.6 -29.9 35.3 3.9 6.3 7.0 2.7 7.0 -1.6 -0.6 3.2 2.6 2.0 1
+2 Private industries -3.1 6.7 2.2 2.6 3.8 1.4 -5.4 -32.1 40.2 4.4 7.4 7.5 2.4 7.9 -2.0 -0.6 3.6 2.6 1.9 2
+3 Agriculture, forestry, fishing,
+and hunting 2.8 -8.5 -3.2 2.2 -5.1 -4.2 44.3 -40.3 42.5 1.3 -25.9 -12.0 -4.7 4.4 0.1 -12.8 -1.7 1.7 41.9 3
+4 Mining -1.1 -16.3 -6.5 9.3 15.4 -2.5 26.9 -34.6 -3.8 -9.5 -9.4 -33.4 -13.7 -13.4 -13.7 -0.2 27.0 21.0 1.9 4
+5 Utilities 3.6 -4.1 -2.2 21.1 -10.6 22.5 0.7 0.8 3.3 -10.9 -8.3 8.6 -9.9 -7.9 8.2 1.0 -16.0 1.8 -3.9 5
+6 Construction -3.8 2.5 -10.4 0.2 1.4 -2.2 -4.0 -28.9 27.6 10.2 5.9 4.1 -11.9 -13.2 -1.6 -19.2 -17.8 -3.6 1.3 6
+7 Manufacturing -4.5 6.7 0.2 4.6 5.5 -1.6 -8.8 -38.5 60.9 0.6 9.0 6.3 -4.4 14.2 -3.1 -8.5 0.5 4.5 -5.3 7
+8 Durable goods -4.5 9.7 2.2 0.3 -0.3 -2.1 -6.6 -42.4 79.5 4.9 13.9 8.5 -7.7 15.8 1.2 -4.1 -0.5 7.5 -6.0 8
+9 Nondurable goods -4.5 3.0 -2.1 10.2 13.5 -1.0 -11.4 -33.0 39.5 -4.7 3.3 3.8 0.0 12.3 -8.0 -13.4 1.6 0.8 -4.5 9
+10 Wholesale trade 0.0 5.5 0.3 -7.7 3.2 1.6 6.3 -30.3 47.7 1.6 8.5 5.5 -6.7 6.6 0.2 -6.8 6.1 3.2 -1.7 10
+11 Retail trade -2.9 2.6 -3.8 1.1 5.8 -0.3 -6.9 -31.3 51.0 -0.8 16.8 -12.3 -13.8 7.0 -14.8 1.4 6.8 8.1 10.2 11
+12 Transportation and warehousing -12.0 7.5 2.3 1.1 4.0 -5.1 -8.9 -61.3 73.5 8.5 16.2 -6.4 18.0 8.0 -10.7 2.4 10.9 5.1 3.3 12
+13 Information 3.9 13.9 7.6 9.1 6.4 4.6 -1.2 -5.3 25.9 2.0 16.9 24.4 9.5 16.3 -2.3 1.5 17.3 6.4 4.5 13
+14 Finance, insurance, real estate,
+rental, and leasing -0.1 4.8 2.2 2.7 2.5 4.5 -7.8 -4.7 10.6 4.9 4.2 4.5 3.8 8.1 -1.1 1.9 1.1 -3.7 -0.6 14
+15 Finance and insurance 2.7 7.2 0.5 3.8 1.0 14.0 -16.7 12.1 11.2 16.0 1.0 6.2 2.0 9.2 -5.7 2.1 -2.7 -5.8 -5.5 15
+16 Real estate and rental and leasing -1.8 3.2 3.3 2.0 3.4 -0.9 -1.8 -14.0 10.2 -1.8 6.3 3.3 5.0 7.5 2.0 1.8 3.5 -2.4 2.5 16
+17 Professional and business services -1.2 11.7 7.5 3.0 4.5 1.5 -0.5 -27.4 28.7 11.9 12.6 14.8 12.1 13.6 3.3 4.2 5.7 6.3 1.2 17
+18 Professional, scientific,
+and technical services -0.1 11.1 6.9 3.6 6.4 1.8 0.8 -23.4 26.9 5.8 11.8 17.5 14.7 10.3 0.4 3.3 7.8 8.2 1.8 18
+19 Management of companies
+and enterprises 1.7 10.9 7.2 3.3 0.4 3.0 -1.8 -7.5 7.6 33.2 3.8 16.3 -3.2 20.7 0.9 8.1 4.6 11.3 -2.7 19
+20 Administrative and waste
+management services -5.6 13.6 9.4 1.3 2.3 -0.1 -3.0 -46.1 50.5 15.9 20.6 7.4 15.6 17.5 12.0 4.1 1.4 -0.6 1.9 20
+21 Educational services, health care,
+and social assistance -2.9 4.6 3.9 3.0 2.7 1.7 -2.0 -42.7 71.1 4.8 -3.1 3.2 3.0 5.5 3.1 2.7 5.5 4.8 7.4 21
+22 Educational services -9.9 3.3 4.5 3.4 0.2 -4.8 -8.2 -38.6 19.9 -11.8 12.1 11.0 11.4 5.3 5.1 -4.1 5.6 4.9 0.1 22
+23 Health care and social assistance -1.7 4.8 3.8 3.0 3.2 2.8 -0.9 -43.4 81.2 7.5 -5.1 2.1 1.8 5.6 2.8 3.8 5.4 4.8 8.6 23
+24 Arts, entertainment, recreation,
+accommodation, and food services -27.6 28.3 8.8 2.0 6.8 -4.3 -33.6 -90.2 346.4 8.3 29.8 76.8 28.5 9.5 -8.8 10.6 7.3 -0.4 10.2 24
+25 Arts, entertainment, and recreation -36.0 35.2 20.9 0.1 9.6 1.6 -40.6 -95.3 295.7 70.1 65.5 29.2 61.6 33.7 -0.8 19.2 26.1 5.4 14.9 25
+26 Accommodation and food services -24.6 26.2 5.1 2.6 5.8 -6.4 -30.9 -87.6 361.9 -5.1 20.2 95.0 19.7 2.6 -11.4 7.9 1.4 -2.4 8.5 26
+27 Other services, except government -9.9 5.4 4.0 -0.3 5.5 1.0 -11.7 -56.6 74.2 4.6 -6.1 17.8 10.9 3.2 2.0 1.2 2.5 0.1 -0.2 27
+28 Government -0.4 0.5 1.3 3.5 1.7 5.2 1.7 -14.4 6.1 0.3 -1.1 2.4 4.4 -0.2 1.8 -0.2 0.6 2.1 2.7 28
+29 Federal 3.1 1.0 -0.2 7.6 2.3 2.2 2.7 3.8 5.3 -1.4 1.2 0.8 0.0 -1.2 0.4 -0.5 -1.5 3.2 2.8 29
+30 State and local -1.9 0.3 1.9 1.6 1.4 6.6 1.2 -21.5 6.5 1.1 -2.1 3.2 6.4 0.3 2.5 -0.1 1.6 1.5 2.6 30
+Addenda:
+31 Private goods-producing industries1
+-3.8 3.1 -2.8 3.7 4.7 -2.1 -3.4 -36.1 46.3 1.9 4.8 1.4 -6.6 4.4 -3.7 -10.4 -1.3 4.0 -0.7 31
+32 Private services-producing industries2
+-3.0 7.6 3.4 2.4 3.6 2.3 -5.9 -31.1 38.8 5.1 8.0 9.0 4.7 8.7 -1.6 2.0 4.9 2.3 2.6 32
+2. Consists of utilities; wholesale trade; retail trade; transportation and warehousing; information; finance, insurance, real estate, rental, and leasing; professional and business services; educational services, health care,
+and social assistance; arts, entertainment, recreation, accommodation, and food services; and other services, except government.
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+June 29, 2023
+Table 12. Real Gross Domestic Product by Industry Group: Percent Change from Preceding Period
+Line
+1. Consists of agriculture, forestry, fishing, and hunting; mining; construction; and manufacturing.
+- 21 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1
+Percent change at annual rate:
+1 Gross domestic product -2.8 5.9 2.1 2.7 3.6 1.8 -4.6 -29.9 35.3 3.9 6.3 7.0 2.7 7.0 -1.6 -0.6 3.2 2.6 2.0 1
+Percentage points at annual rates:
+2 Private industries -2.76 5.83 1.89 2.27 3.29 1.13 -4.80 -28.34 34.25 3.88 6.47 6.59 2.14 6.90 -1.80 -0.57 3.17 2.34 1.69 2
+3 Agriculture, forestry, fishing,
+and hunting 0.02 -0.08 -0.03 0.03 -0.02 0.00 0.37 -0.31 0.30 -0.01 -0.29 -0.14 -0.07 0.03 0.00 -0.15 -0.02 0.02 0.40 3
+4 Mining -0.02 -0.21 -0.18 0.16 0.19 -0.12 0.17 -0.33 0.09 0.14 0.34 -0.11 0.12 -0.03 -0.25 0.00 0.50 0.36 0.03 4
+5 Utilities 0.06 -0.07 -0.04 0.32 -0.15 0.37 0.03 0.04 0.10 -0.15 -0.10 0.17 -0.15 -0.12 0.13 0.02 -0.31 0.03 -0.07 5
+6 Construction -0.16 0.10 -0.43 -0.01 0.05 -0.09 -0.16 -1.24 1.20 0.40 0.22 0.15 -0.53 -0.57 -0.06 -0.84 -0.77 -0.14 0.05 6
+7 Manufacturing -0.50 0.71 0.04 0.33 0.46 -0.34 -1.14 -4.47 5.77 0.04 0.96 0.69 -0.47 1.47 -0.34 -0.97 0.06 0.49 -0.60 7
+8 Durable goods -0.28 0.57 0.15 0.00 -0.01 -0.09 -0.38 -2.80 4.04 0.20 0.67 0.40 -0.54 0.86 0.07 -0.25 -0.03 0.44 -0.38 8
+9 Nondurable goods -0.22 0.14 -0.11 0.32 0.47 -0.25 -0.76 -1.68 1.74 -0.16 0.29 0.29 0.07 0.61 -0.41 -0.72 0.08 0.04 -0.23 9
+10 Wholesale trade 0.00 0.34 0.02 -0.40 0.16 -0.03 0.17 -1.93 2.61 0.04 0.48 0.32 -0.45 0.40 0.01 -0.45 0.38 0.20 -0.11 10
+11 Retail trade -0.16 0.15 -0.22 0.04 0.30 -0.06 -0.40 -1.77 2.81 0.00 1.00 -0.74 -0.86 0.43 -0.93 0.08 0.39 0.46 0.57 11
+12 Transportation and warehousing -0.38 0.21 0.07 0.06 0.14 -0.16 -0.27 -2.29 1.68 0.18 0.36 -0.23 0.45 0.23 -0.35 0.07 0.33 0.16 0.11 12
+13 Information 0.21 0.75 0.43 0.48 0.34 0.24 -0.04 -0.24 1.50 0.10 0.87 1.23 0.50 0.86 -0.13 0.08 0.88 0.34 0.24 13
+14 Finance, insurance, real estate,
+rental, and leasing -0.01 1.02 0.48 0.60 0.62 1.15 -1.46 -0.61 2.64 0.95 0.70 0.81 0.69 1.62 -0.23 0.39 0.22 -0.75 -0.12 14
+15 Finance and insurance 0.22 0.61 0.06 0.36 0.15 1.25 -1.27 1.12 1.16 1.25 0.01 0.46 0.13 0.73 -0.48 0.17 -0.21 -0.46 -0.43 15
+16 Real estate and rental and leasing -0.23 0.42 0.42 0.24 0.47 -0.10 -0.20 -1.73 1.48 -0.30 0.69 0.35 0.56 0.89 0.25 0.22 0.43 -0.29 0.31 16
+17 Professional and business services -0.15 1.47 0.99 0.36 0.58 0.19 -0.06 -3.51 3.78 1.43 1.49 1.77 1.45 1.68 0.43 0.54 0.72 0.80 0.16 17
+18 Professional, scientific,
+and technical services -0.01 0.85 0.55 0.27 0.51 0.15 0.08 -1.79 2.17 0.40 0.81 1.22 1.04 0.78 0.03 0.26 0.59 0.62 0.15 18
+19 Management of companies
+and enterprises 0.03 0.21 0.14 0.06 0.00 0.06 -0.04 -0.13 0.16 0.56 0.07 0.29 -0.07 0.36 0.02 0.15 0.08 0.20 -0.05 19
+20 Administrative and waste
+management services -0.18 0.41 0.30 0.03 0.06 -0.02 -0.10 -1.58 1.45 0.48 0.62 0.25 0.47 0.54 0.38 0.14 0.05 -0.02 0.06 20
+21 Educational services, health care,
+and social assistance -0.25 0.40 0.34 0.27 0.23 0.14 -0.19 -4.10 5.54 0.43 -0.28 0.29 0.26 0.47 0.26 0.23 0.45 0.40 0.61 21
+22 Educational services -0.13 0.04 0.05 0.04 0.00 -0.06 -0.10 -0.51 0.25 -0.15 0.13 0.12 0.12 0.06 0.06 -0.05 0.06 0.06 0.00 22
+23 Health care and social assistance -0.13 0.36 0.29 0.22 0.23 0.20 -0.09 -3.59 5.28 0.58 -0.40 0.17 0.14 0.41 0.20 0.27 0.39 0.34 0.61 23
+24 Arts, entertainment, recreation,
+accommodation, and food services -1.19 0.91 0.35 0.07 0.28 -0.19 -1.56 -6.15 4.96 0.25 0.86 2.06 0.98 0.38 -0.38 0.41 0.29 -0.02 0.42 24
+25 Arts, entertainment, and recreation -0.41 0.26 0.20 0.00 0.12 0.03 -0.50 -1.96 1.01 0.40 0.41 0.23 0.45 0.30 -0.01 0.18 0.25 0.06 0.16 25
+26 Accommodation and food services -0.78 0.65 0.16 0.07 0.16 -0.23 -1.06 -4.19 3.95 -0.15 0.45 1.83 0.53 0.08 -0.37 0.23 0.04 -0.08 0.26 26
+27 Other services, except government -0.21 0.11 0.08 -0.02 0.11 0.01 -0.25 -1.43 1.28 0.08 -0.14 0.32 0.20 0.06 0.04 0.03 0.05 0.00 -0.01 27
+28 Government -0.04 0.07 0.16 0.45 0.25 0.71 0.24 -1.66 0.92 0.05 -0.13 0.30 0.51 -0.02 0.21 -0.03 0.08 0.24 0.31 28
+29 Federal 0.12 0.04 0.00 0.31 0.10 0.09 0.11 0.17 0.26 -0.05 0.05 0.03 0.00 -0.04 0.01 -0.02 -0.05 0.11 0.10 29
+30 State and local -0.16 0.03 0.16 0.15 0.15 0.62 0.12 -1.82 0.67 0.10 -0.18 0.27 0.51 0.02 0.20 -0.01 0.13 0.12 0.21 30
+Addenda:
+31 Private goods-producing industries1
+-0.66 0.53 -0.61 0.51 0.69 -0.55 -0.76 -6.35 7.36 0.57 1.23 0.59 -0.95 0.90 -0.65 -1.96 -0.23 0.72 -0.12 31
+32 Private services-producing industries2
+-2.10 5.30 2.50 1.77 2.60 1.67 -4.04 -21.99 26.89 3.31 5.24 6.00 3.08 6.01 -1.15 1.40 3.40 1.62 1.81 32
+2. Consists of utilities; wholesale trade; retail trade; transportation and warehousing; information; finance, insurance, real estate, rental, and leasing; professional and business services; educational services, health care, and social assistance; arts,
+entertainment, recreation, accommodation, and food services; and other services, except government.
+Note. Percentage-point contributions do not sum to the percent change in real gross domestic product because the industry details are calculated using source data and methodologies that differ from those used to calculate growth in the top-line,
+expenditure-based measure of real GDP.
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+June 29, 2023
+Table 13. Contributions to Percent Change in Real Gross Domestic Product by Industry Group
+Line
+1. Consists of agriculture, forestry, fishing, and hunting; mining; construction; and manufacturing.
+- 22 -2023 2023 2022 2023
+Q1 Q2 Q3 Q4 Q1 Q1 Q2 Q3 Q4 Q1 Q4 Q1
+1 Gross domestic product 25,462.7 24,740.5 25,248.5 25,723.9 26,138.0 26,529.8 20,014.1 19,924.1 19,895.3 20,054.7 20,182.5 20,282.8 404.3 127.8 100.3 1
+2 Private industries 22,502.4 21,837.5 22,313.7 22,743.7 23,114.5 23,457.8 17,688.9 17,603.3 17,575.0 17,730.6 17,846.7 17,931.4 372.9 116.1 84.7 2
+3 Agriculture, forestry, fishing,
+and hunting 288.9 264.9 291.9 296.3 302.6 301.2 202.5 208.0 201.0 200.1 201.0 219.4 -6.7 0.8 18.4 3
+4 Mining 483.5 432.6 538.7 520.1 442.7 390.0 382.3 366.4 366.2 388.8 407.8 409.7 -26.6 19.0 1.9 4
+5 Utilities 440.2 390.4 450.0 469.4 451.0 446.1 275.9 281.1 281.8 269.8 271.0 268.3 -6.3 1.2 -2.7 5
+6 Construction 1,007.0 986.3 987.9 1,008.9 1,045.0 1,062.0 594.9 635.5 602.4 573.5 568.4 570.1 -69.3 -5.2 1.8 6
+7 Manufacturing 2,793.7 2,703.2 2,768.0 2,808.9 2,894.5 2,904.5 2,276.1 2,306.4 2,256.0 2,258.6 2,283.4 2,252.3 4.4 24.8 -31.1 7
+8 Durable goods 1,532.0 1,486.5 1,503.0 1,543.6 1,595.0 1,592.9 1,323.1 1,328.4 1,314.4 1,312.8 1,336.8 1,316.3 28.1 24.1 -20.6 8
+9 Nondurable goods 1,261.6 1,216.8 1,265.0 1,265.3 1,299.4 1,311.7 956.0 979.5 944.9 948.7 950.7 939.7 -20.6 1.9 -10.9 9
+10 Wholesale trade 1,613.3 1,575.0 1,602.4 1,626.9 1,649.0 1,668.1 1,167.3 1,171.7 1,151.3 1,168.4 1,177.7 1,172.6 4.0 9.3 -5.0 10
+11 Retail trade 1,471.5 1,438.6 1,452.8 1,478.2 1,516.5 1,542.2 1,071.2 1,054.3 1,057.9 1,075.5 1,096.8 1,123.8 -42.0 21.2 27.1 11
+12 Transportation and
+warehousing 815.0 779.1 811.2 829.9 839.6 854.1 544.3 533.2 536.4 550.4 557.3 561.9 12.3 6.9 4.6 12
+13 Information 1,394.6 1,357.0 1,365.5 1,416.5 1,439.4 1,468.4 1,582.8 1,540.7 1,546.5 1,609.5 1,634.5 1,652.5 112.1 25.0 18.1 13
+14 Finance, insurance, real
+estate, rental, and leasing 5,141.0 5,059.8 5,101.7 5,169.0 5,233.6 5,322.6 3,826.2 3,816.5 3,834.7 3,844.7 3,808.7 3,802.7 82.2 -36.1 -6.0 14
+15 Finance and insurance 1,999.6 1,998.1 1,999.6 1,999.1 2,001.3 2,015.3 1,374.5 1,378.9 1,386.2 1,376.7 1,356.2 1,337.2 6.5 -20.4 -19.0 15
+16 Real estate and rental and
+leasing 3,141.5 3,061.7 3,102.1 3,169.9 3,232.2 3,307.4 2,445.2 2,430.1 2,440.9 2,462.2 2,447.5 2,462.6 78.9 -14.7 15.1 16
+17 Professional and business
+services 3,330.4 3,253.0 3,292.7 3,357.5 3,418.3 3,494.7 3,007.8 2,952.7 2,983.2 3,024.5 3,070.9 3,080.1 211.0 46.4 9.3 17
+18 Professional, scientific,
+and technical services 2,007.0 1,956.3 1,978.6 2,023.9 2,069.1 2,127.5 1,812.2 1,775.4 1,789.9 1,823.8 1,859.9 1,868.3 116.8 36.1 8.5 18
+19 Management of companies
+and enterprises 472.1 466.8 466.5 473.7 481.3 481.7 523.4 509.4 519.4 525.3 539.5 535.8 35.3 14.2 -3.6 19
+20 Administrative and waste
+management services 851.3 830.0 847.6 859.9 867.9 885.5 677.6 671.6 678.4 680.7 679.7 683.0 58.0 -1.0 3.2 20
+21 Educational services, health
+care, and social assistance 2,139.2 2,084.7 2,104.7 2,155.2 2,212.0 2,265.6 1,758.6 1,732.9 1,744.7 1,768.0 1,788.8 1,821.1 65.9 20.7 32.4 21
+22 Educational services 290.5 285.5 284.4 292.4 299.5 303.6 222.2 221.7 219.4 222.4 225.1 225.2 9.6 2.7 0.1 22
+23 Health care and social
+assistance 1,848.7 1,799.3 1,820.3 1,862.8 1,912.5 1,962.0 1,539.0 1,513.6 1,527.9 1,548.3 1,566.3 1,599.1 56.3 18.1 32.7 23
+24 Arts, entertainment, recreation,
+accommodation, and food
+services 1,062.4 1,009.2 1,036.3 1,080.5 1,123.6 1,178.4 741.0 720.9 739.3 752.4 751.6 770.0 60.1 -0.8 18.4 24
+25 Arts, entertainment, and
+recreation 271.8 254.2 260.2 281.8 290.8 312.7 211.0 197.5 206.3 218.6 221.5 229.4 36.5 2.9 7.8 25
+26 Accommodation and food
+services 790.6 755.0 776.1 798.7 832.8 865.8 531.7 524.1 534.1 536.0 532.7 543.8 25.7 -3.2 11.0 26
+27 Other services, except
+government 521.7 503.6 509.9 526.5 546.7 559.9 363.2 361.2 362.3 364.5 364.6 364.4 13.9 0.1 -0.2 27
+28 Government 2,960.4 2,903.0 2,934.8 2,980.2 3,023.5 3,072.0 2,247.9 2,244.2 2,242.9 2,246.5 2,258.0 2,273.0 28.1 11.5 15.0 28
+29 Federal 920.2 908.0 913.7 923.7 935.5 947.8 742.5 743.1 742.2 739.5 745.3 750.5 -1.1 5.9 5.1 29
+30 State and local 2,040.1 1,995.0 2,021.0 2,056.5 2,088.0 2,124.2 1,506.1 1,502.0 1,501.5 1,507.5 1,513.3 1,523.2 28.4 5.8 9.9 30
+Addenda:
+31 Private goods-producing
+industries
+1
+4,573.1 4,387.0 4,586.4 4,634.2 4,684.7 4,657.7 3,495.2 3,564.5 3,468.3 3,456.8 3,491.1 3,485.1 -101.1 34.3 -6.0 31
+32 Private services-producing
+industries
+2
+17,929.3 17,450.5 17,727.3 18,109.5 18,429.8 18,800.1 14,168.6 14,011.5 14,081.2 14,250.3 14,331.4 14,422.8 469.0 81.1 91.4 32
+2. Consists of utilities; wholesale trade; retail trade; transportation and warehousing; information; finance, insurance, real estate, rental, and leasing; professional and business services; educational services, health care, and social assistance;
+arts, entertainment, recreation, accommodation, and food services; and other services, except government.
+Source: U.S. Bureau of Economic Analysis
+Billions of dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Billions of chained (2012) dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Change from preceding
+period
+2022
+Line
+June 29, 2023
+Table 14. Gross Domestic Product by Industry Group: Level and Change from Preceding Period
+Line
+1. Consists of agriculture, forestry, fishing, and hunting; mining; construction; and manufacturing.
+- 23 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1
+1 Gross domestic product 1.3 4.5 7.0 2.3 1.3 1.3 1.8 -1.3 3.5 2.5 5.2 6.3 6.2 6.8 8.3 9.0 4.4 3.9 4.1 1
+2 Private industries 1.0 4.7 7.5 2.7 1.1 1.6 1.0 -2.5 4.1 2.5 5.1 7.0 6.6 7.3 9.0 9.7 4.2 3.9 4.1 2
+3 Agriculture, forestry, fishing,
+and hunting -1.1 39.1 44.1 -2.9 19.3 16.2 -6.2 -48.2 46.2 61.3 15.6 152.6 24.2 -8.9 113.3 69.0 8.1 7.0 -30.9 3
+4 Mining -31.9 98.3 51.7 -5.2 -31.7 -1.5 -59.0 -83.9 293.8 105.6 174.4 107.8 62.0 108.5 59.6 140.9 -31.5 -56.7 -40.9 4
+5 Utilities -1.4 16.7 19.0 -12.8 23.5 -15.5 -15.4 10.2 17.1 4.9 49.3 -15.7 29.5 34.4 -15.4 74.8 40.8 -16.3 -0.4 5
+6 Construction 2.9 3.2 19.1 5.8 4.4 4.1 4.8 3.2 -3.3 -2.0 2.5 -1.9 15.1 29.5 8.9 24.6 32.4 19.4 5.4 6
+7 Manufacturing -0.9 4.4 11.7 -0.3 -3.4 2.4 -1.4 -0.7 -2.8 -0.1 5.9 7.8 10.4 10.2 12.6 20.1 5.6 7.9 7.1 7
+8 Durable goods 0.5 -0.2 7.5 0.4 -0.7 2.1 -0.1 2.7 -0.7 -3.9 -3.1 2.0 4.3 6.3 8.5 9.0 11.8 6.0 5.8 8
+9 Nondurable goods -2.6 10.6 17.1 -1.1 -6.8 2.7 -3.2 -4.9 -5.7 5.2 19.0 15.5 18.4 15.3 17.8 34.9 -1.5 10.3 8.7 9
+10 Wholesale trade -1.0 8.2 11.3 8.7 3.4 -1.2 -5.4 -9.0 11.7 1.3 8.6 13.7 16.0 7.5 17.2 14.9 0.2 2.3 6.5 10
+11 Retail trade 6.4 12.5 9.8 5.0 2.2 0.2 8.8 9.6 14.9 -0.8 7.5 38.0 10.0 8.0 17.9 2.6 0.3 2.4 -3.0 11
+12 Transportation and warehousing -2.1 8.8 15.8 2.5 0.3 2.6 -2.9 -7.6 -8.1 8.4 3.2 29.9 14.6 17.1 27.6 14.8 -1.2 -0.3 3.6 12
+13 Information 0.1 -1.6 -1.4 1.5 -1.2 -1.3 3.2 -4.9 2.4 3.8 -2.9 -4.8 -4.1 -2.1 -0.7 1.0 -1.3 0.2 3.6 13
+14 Finance, insurance, real estate,
+rental, and leasing 2.5 1.5 3.0 4.7 2.5 1.6 6.3 -1.1 1.8 1.3 0.6 3.6 1.7 1.5 3.6 1.4 4.3 9.1 7.7 14
+15 Finance and insurance 1.9 1.8 1.6 5.5 2.2 -0.9 10.1 -5.1 0.1 1.0 3.0 4.8 1.6 1.7 1.6 -1.8 2.7 6.6 8.8 15
+16 Real estate and rental and leasing 2.9 1.4 3.9 4.2 2.7 3.1 3.9 1.4 2.9 1.5 -0.9 2.8 1.8 1.3 5.0 3.5 5.3 10.7 7.0 16
+17 Professional and business services 1.0 0.1 1.9 1.0 0.6 0.8 1.1 1.4 0.8 0.5 1.1 -2.4 -0.7 1.4 5.8 0.7 2.3 1.1 7.9 17
+18 Professional, scientific,
+and technical services 1.1 -0.1 1.8 0.5 0.5 1.0 1.9 0.8 0.7 2.4 0.6 -4.1 -1.3 2.1 5.6 1.3 1.6 1.0 9.8 18
+19 Management of companies
+and enterprises -1.7 -1.8 -1.8 -0.2 -2.3 -1.4 -0.7 -2.9 -1.4 -4.2 0.6 -1.5 -2.1 -4.3 3.8 -7.8 1.7 -4.2 3.0 19
+20 Administrative and waste
+management services 2.3 1.9 4.4 2.9 2.7 1.8 0.2 6.0 2.8 -1.2 2.8 1.7 1.6 3.1 7.4 4.4 4.5 4.3 6.4 20
+21 Educational services, health care,
+and social assistance 2.7 2.6 2.7 2.0 2.7 3.1 2.9 2.5 3.5 0.6 4.9 0.3 3.0 3.5 2.0 1.1 4.2 5.9 2.4 21
+22 Educational services 2.7 2.8 3.1 1.9 2.1 3.5 3.2 2.1 2.9 2.4 2.5 3.3 3.3 3.1 1.4 2.7 5.7 5.0 5.4 22
+23 Health care and social assistance 2.7 2.5 2.6 2.0 2.8 3.0 2.8 2.5 3.6 0.4 5.3 -0.2 3.0 3.6 2.1 0.9 4.0 6.1 2.0 23
+24 Arts, entertainment, recreation,
+accommodation, and food services 3.6 3.1 8.0 3.9 1.8 7.0 4.1 3.9 -1.4 4.2 -1.4 2.0 12.4 12.3 6.8 0.5 10.2 17.4 9.8 24
+25 Arts, entertainment, and recreation 5.9 0.0 2.9 4.1 2.0 10.0 8.8 7.7 0.4 -1.5 -13.9 15.0 2.8 8.2 0.7 -7.9 9.1 7.6 16.3 25
+26 Accommodation and food services 2.8 4.1 9.8 3.9 1.7 6.0 2.5 2.7 -1.9 5.9 3.0 -1.7 15.6 13.7 8.9 3.5 10.6 21.1 7.6 26
+27 Other services, except government 4.9 4.0 6.8 4.1 1.8 7.0 7.6 2.5 4.5 2.9 7.0 0.3 4.0 7.0 7.6 3.9 10.8 16.2 10.2 27
+28 Government 3.5 3.6 3.9 -0.9 3.5 0.4 5.8 7.1 0.9 2.9 5.1 3.0 3.6 3.8 3.0 4.7 5.7 3.8 3.8 28
+29 Federal 1.7 3.5 3.8 -5.3 1.1 1.2 2.9 2.5 2.4 3.2 3.8 3.6 3.9 4.4 3.5 3.0 6.0 1.9 2.5 29
+30 State and local 4.3 3.7 4.0 1.1 4.6 0.0 7.1 9.2 0.2 2.8 5.6 2.7 3.5 3.5 2.8 5.5 5.5 4.7 4.4 30
+Addenda:
+31 Private goods-producing industries1
+-2.5 10.4 18.2 0.7 -3.2 3.3 -6.0 -11.8 6.2 6.4 12.7 15.5 15.7 19.8 19.8 33.3 5.6 0.4 -1.6 31
+32 Private services-producing industries2
+1.9 3.4 5.0 3.2 2.2 1.2 2.8 -0.2 3.6 1.6 3.3 5.0 4.5 4.5 6.5 4.4 3.8 4.9 5.6 32
+2. Consists of utilities; wholesale trade; retail trade; transportation and warehousing; information; finance, insurance, real estate, rental, and leasing; professional and business services; educational services, health care, and
+social assistance; arts, entertainment, recreation, accommodation, and food services; and other services, except government.
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+June 29, 2023
+Table 15. Price Indexes for Gross Domestic Product by Industry Group: Percent Change from Preceding Period
+Line
+1. Consists of agriculture, forestry, fishing, and hunting; mining; construction; and manufacturing.
+- 24 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1
+1 All Industries -3.6 6.2 2.8 3.3 2.3 -0.3 -4.3 -29.8 28.8 7.3 8.8 5.7 3.8 3.9 2.4 1.7 2.5 1.0 2.7 1
+2 Private industries -4.0 6.8 3.1 3.0 2.4 -0.7 -4.6 -32.6 33.2 8.3 9.0 6.2 4.3 4.3 2.5 1.8 2.6 0.7 2.6 2
+3 Agriculture, forestry, fishing,
+and hunting 4.5 -2.7 -2.0 1.3 1.0 3.5 19.4 -13.6 14.7 2.5 -10.6 -3.9 -2.9 -1.9 -1.6 -3.7 1.1 -2.0 15.1 3
+4 Mining -14.5 -2.3 5.7 13.0 13.1 -3.9 8.2 -65.3 -2.0 3.6 2.7 23.7 -4.2 6.9 6.3 6.2 9.4 -4.0 12.2 4
+5 Utilities -2.7 2.2 1.6 0.2 -2.9 -4.4 -8.3 -0.3 4.6 2.3 6.9 4.1 -7.5 -2.9 10.9 7.1 -5.3 -4.5 -5.8 5
+6 Construction 1.8 1.0 -8.2 6.2 6.4 1.8 8.2 -14.3 3.7 13.1 6.3 -5.6 -6.3 -7.7 -6.3 -13.6 -10.8 -1.7 0.6 6
+7 Manufacturing -7.1 2.0 1.2 -0.4 -2.0 -9.2 -5.4 -37.4 44.7 2.5 3.4 -5.5 -1.1 5.3 0.5 -0.8 3.9 4.9 -2.0 7
+8 Durable goods -8.6 6.1 4.5 0.4 -6.8 -10.5 -5.7 -48.4 77.8 7.6 7.8 -4.0 1.1 7.3 2.9 5.9 7.2 8.0 -6.2 8
+9 Nondurable goods -5.6 -2.0 -1.9 -1.2 3.1 -8.0 -5.1 -23.6 16.9 -2.5 -0.9 -6.9 -3.3 3.3 -2.0 -7.1 0.6 1.7 2.7 9
+10 Wholesale trade -4.1 11.2 4.1 -3.5 -0.6 -2.6 -1.5 -40.4 59.3 12.1 15.6 12.0 0.1 5.4 13.8 -2.2 -1.5 -5.2 -5.2 10
+11 Retail trade 1.1 6.5 -0.5 1.6 4.0 4.1 -6.3 -17.8 49.3 -0.8 21.9 -5.7 -9.7 1.9 0.8 2.8 1.9 -1.7 5.2 11
+12 Transportation and warehousing -13.1 14.4 7.6 1.3 -2.7 -8.0 -11.8 -60.5 70.1 24.0 18.7 10.2 16.6 14.5 0.2 10.1 5.4 -3.3 -4.3 12
+13 Information 1.6 13.4 7.8 7.1 4.1 2.5 -2.6 -10.3 18.2 13.6 18.3 17.0 9.6 8.1 10.8 5.8 2.8 -0.2 5.0 13
+14 Finance, insurance, real estate,
+rental, and leasing 0.0 4.3 1.9 2.7 2.7 2.0 -2.6 -8.6 9.7 4.7 6.8 0.8 6.5 2.8 0.6 0.1 3.7 -0.5 6.3 14
+15 Finance and insurance 2.7 4.7 0.7 0.4 4.1 3.9 -2.6 5.5 5.6 5.6 12.7 -5.4 5.8 -1.5 -4.1 3.1 8.8 0.8 11.1 15
+16 Real estate and rental and leasing -2.1 4.0 2.9 4.4 1.6 0.5 -2.6 -18.3 13.1 4.0 2.4 6.0 7.1 6.3 4.2 -2.0 0.0 -1.5 2.8 16
+17 Professional and business services -0.3 11.3 7.1 10.1 7.5 3.5 0.2 -29.1 24.2 20.7 9.4 14.7 10.7 9.6 5.5 6.2 3.4 3.3 1.3 17
+18 Professional, scientific,
+and technical services 1.6 10.1 7.4 14.2 9.7 3.1 6.2 -29.3 27.6 17.2 7.2 13.0 11.2 7.4 5.7 5.4 7.7 7.2 0.0 18
+19 Management of companies
+and enterprises 1.9 7.9 4.4 3.3 -1.6 5.2 -1.3 -6.0 6.0 29.9 0.7 14.6 -10.1 17.8 1.2 3.5 2.5 8.3 -3.8 19
+20 Administrative and waste
+management services -5.6 16.0 8.0 6.0 8.2 3.3 -10.8 -39.5 28.8 23.5 20.1 18.3 22.3 9.9 7.3 9.1 -4.3 -6.6 6.7 20
+21 Educational services, health care,
+and social assistance -4.8 4.7 2.8 3.7 1.0 1.6 -5.6 -37.4 38.3 9.7 -1.5 8.3 4.3 3.1 1.4 1.5 3.4 1.5 9.7 21
+22 Educational services -7.6 4.1 5.2 -1.2 1.3 1.2 -4.4 -40.5 25.8 -5.7 11.1 11.1 6.3 4.7 6.7 2.5 6.4 -1.6 5.0 22
+23 Health care and social assistance -4.3 4.8 2.4 4.5 0.9 1.6 -5.8 -37.0 40.2 12.0 -3.1 7.9 4.0 2.8 0.7 1.4 3.0 2.0 10.4 23
+24 Arts, entertainment, recreation,
+accommodation, and food services -27.3 31.9 12.3 0.9 3.3 1.9 -34.1 -89.5 310.7 5.3 50.2 77.0 34.1 3.0 -1.2 19.1 6.5 6.1 8.0 24
+25 Arts, entertainment, and recreation -38.1 35.5 22.8 -7.4 1.6 -3.8 -41.7 -94.9 284.6 40.7 84.1 27.7 88.0 16.4 5.3 22.7 26.3 10.5 2.5 25
+26 Accommodation and food services -23.9 31.0 9.6 3.7 3.8 3.7 -31.7 -87.2 317.1 -1.9 42.5 91.9 23.2 -0.3 -2.9 18.2 1.6 4.8 9.6 26
+27 Other services, except government -8.8 1.6 2.3 0.5 8.5 5.6 -11.4 -54.6 65.2 0.2 -8.2 13.0 2.7 0.1 2.1 -3.1 8.7 4.0 -2.7 27
+28 Government -0.3 1.6 1.0 5.9 1.7 2.2 -1.7 -4.4 0.1 -0.1 7.0 0.9 -0.1 0.3 1.1 0.8 2.3 3.4 3.7 28
+29 Federal 5.1 2.8 -1.3 13.1 1.4 1.1 1.7 31.4 -13.4 1.7 23.0 -7.0 -10.2 1.4 -3.1 2.4 3.6 1.8 3.7 29
+30 State and local -2.6 1.0 2.1 3.0 1.8 2.7 -3.2 -17.5 7.3 -0.9 0.1 4.9 4.9 -0.2 2.9 0.2 1.8 4.1 3.7 30
+Addenda:
+31 Private goods-producing industries1
+-5.2 1.3 -0.6 1.7 0.6 -6.3 -0.9 -33.8 30.0 4.6 2.9 -3.9 -2.5 2.3 -0.6 -3.0 1.2 2.4 0.4 31
+32 Private services-producing industries2
+-3.6 8.8 4.3 3.5 3.0 1.4 -5.9 -32.2 34.3 9.6 11.2 10.0 6.7 5.0 3.7 3.6 3.0 0.1 3.4 32
+2. Consists of utilities; wholesale trade; retail trade; transportation and warehousing; information; finance, insurance, real estate, rental, and leasing; professional and business services; educational services, health care,
+and social assistance; arts, entertainment, recreation, accommodation, and food services; and other services, except government.
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+June 29, 2023
+Table 16. Real Gross Output by Industry Group: Percent Change from Preceding Period
+Line
+1. Consists of agriculture, forestry, fishing, and hunting; mining; construction; and manufacturing.
+- 25 -2023 2023 2022 2023
+Q1 Q2 Q3 Q4 Q1 Q1 Q2 Q3 Q4 Q1 Q4 Q1
+1 All Industries 45,962.8 44,579.4 45,972.9 46,562.9 46,736.2 47,230.0 36,111.8 35,862.8 36,013.3 36,239.8 36,331.3 36,577.3 994.7 91.5 246.0 1
+2 Private industries 41,130.9 39,908.4 41,156.8 41,675.7 41,782.7 42,221.2 32,432.3 32,207.5 32,350.4 32,555.8 32,615.7 32,827.5 960.0 59.9 211.8 2
+3 Agriculture, forestry, fishing,
+and hunting 637.1 598.1 640.4 653.4 656.4 648.8 517.6 521.1 516.3 517.8 515.1 533.5 -10.8 -2.7 18.4 3
+4 Mining 891.3 823.0 976.8 951.7 813.5 770.0 668.1 654.8 664.8 679.9 673.0 692.6 36.1 -6.8 19.6 4
+5 Utilities 773.4 694.3 796.6 829.1 773.7 744.6 506.4 504.8 513.5 506.5 500.7 493.3 8.1 -5.8 -7.4 5
+6 Construction 2,082.2 2,067.3 2,078.2 2,078.5 2,104.9 2,119.5 1,322.2 1,379.5 1,330.1 1,292.5 1,286.9 1,288.8 -118.2 -5.7 1.9 6
+7 Manufacturing 7,245.3 6,971.6 7,312.5 7,338.5 7,358.6 7,305.8 5,842.8 5,807.0 5,794.6 5,849.9 5,919.6 5,890.1 69.6 69.7 -29.5 7
+8 Durable goods 3,651.7 3,498.0 3,629.6 3,706.5 3,772.5 3,748.9 2,936.5 2,865.8 2,907.1 2,957.9 3,015.4 2,967.3 125.2 57.5 -48.2 8
+9 Nondurable goods 3,593.6 3,473.5 3,682.9 3,632.0 3,586.1 3,557.0 2,899.1 2,934.1 2,880.3 2,884.9 2,897.1 2,916.5 -57.2 12.1 19.4 9
+10 Wholesale trade 2,756.3 2,719.0 2,778.7 2,779.0 2,748.4 2,740.6 2,069.5 2,088.9 2,077.2 2,069.6 2,042.2 2,015.0 81.0 -27.4 -27.2 10
+11 Retail trade 2,555.8 2,507.7 2,557.1 2,580.7 2,577.9 2,600.9 1,918.8 1,906.4 1,919.5 1,928.6 1,920.6 1,944.9 -8.9 -8.0 24.3 11
+12
+Transportation and
+warehousing
+1,779.8 1,696.1 1,803.7 1,823.8 1,795.6 1,775.6 1,305.8 1,276.7 1,307.8 1,325.0 1,313.8 1,299.4 92.0 -11.2 -14.4 12
+13 Information 2,457.4 2,411.5 2,458.8 2,478.2 2,481.0 2,519.8 2,457.9 2,424.1 2,458.4 2,475.3 2,473.9 2,504.3 177.0 -1.4 30.3 13
+14 Finance, insurance, real
+estate, rental, and leasing 8,288.0 8,124.9 8,201.8 8,360.3 8,465.0 8,707.0 6,196.1 6,168.9 6,170.7 6,226.6 6,218.3 6,313.6 118.2 -8.3 95.4 14
+15 Finance and insurance 3,546.9 3,472.7 3,496.2 3,586.5 3,632.0 3,783.0 2,614.0 2,570.6 2,589.9 2,645.1 2,650.6 2,721.0 18.6 5.4 70.5 15
+16 Real estate and rental and
+leasing 4,741.1 4,652.1 4,705.6 4,773.8 4,833.0 4,924.0 3,584.4 3,601.7 3,583.3 3,583.3 3,569.4 3,593.9 102.3 -13.9 24.5 16
+17 Professional and business
+services 5,491.8 5,345.4 5,463.7 5,549.9 5,608.2 5,704.9 4,766.5 4,684.2 4,754.6 4,794.3 4,833.0 4,848.5 316.3 38.7 15.5 17
+18 Professional, scientific,
+and technical services 3,160.1 3,059.4 3,120.9 3,198.0 3,262.2 3,318.4 2,745.5 2,681.5 2,716.8 2,767.5 2,816.0 2,816.0 189.0 48.5 0.0 18
+19 Management of companies
+and enterprises 771.4 761.4 764.0 774.7 785.4 783.5 767.7 756.6 763.1 767.9 783.2 775.7 32.6 15.4 -7.6 19
+20 Administrative and waste
+management services 1,560.3 1,524.5 1,578.7 1,577.2 1,560.6 1,603.0 1,250.1 1,241.9 1,269.2 1,255.3 1,234.0 1,254.3 92.3 -21.2 20.2 20
+21 Educational services, health
+care, and social assistance 3,386.3 3,315.8 3,351.8 3,415.9 3,461.6 3,566.5 2,752.9 2,731.0 2,741.4 2,764.6 2,774.8 2,839.6 74.1 10.3 64.8 21
+22 Educational services 428.5 416.5 423.6 436.0 438.0 447.9 334.1 330.3 332.4 337.6 336.2 340.4 16.4 -1.4 4.2 22
+23 Health care and social
+assistance 2,957.8 2,899.3 2,928.2 2,979.8 3,023.6 3,118.6 2,420.2 2,402.1 2,410.5 2,428.3 2,440.1 2,500.9 57.4 11.8 60.8 23
+24 Arts, entertainment, recreation,
+accommodation, and food
+services 1,961.0 1,834.3 1,934.3 2,001.7 2,073.6 2,144.3 1,445.2 1,381.9 1,443.8 1,466.6 1,488.3 1,517.3 158.0 21.7 28.9 24
+25 Arts, entertainment, and
+recreation 424.7 392.7 407.9 440.5 457.8 474.6 334.1 309.9 326.2 345.8 354.5 356.7 62.0 8.7 2.2 25
+26 Accommodation and food
+services 1,536.3 1,441.6 1,526.4 1,561.2 1,615.9 1,669.7 1,112.2 1,072.3 1,118.0 1,122.5 1,135.8 1,162.2 97.5 13.4 26.4 26
+27 Other services, except
+government 825.3 799.5 802.6 835.0 864.2 872.9 607.2 603.0 598.2 610.7 616.8 612.6 13.9 6.1 -4.2 27
+28 Government 4,832.0 4,671.0 4,816.0 4,887.2 4,953.6 5,008.8 3,689.4 3,665.3 3,673.0 3,694.3 3,725.2 3,759.2 37.1 30.8 34.0 28
+29 Federal 1,462.7 1,420.4 1,451.7 1,482.4 1,496.3 1,520.7 1,188.0 1,176.1 1,183.2 1,193.6 1,199.0 1,209.9 -15.9 5.3 10.9 29
+30 State and local 3,369.3 3,250.6 3,364.4 3,404.8 3,457.2 3,488.1 2,500.9 2,488.2 2,489.3 2,500.5 2,525.6 2,548.7 51.4 25.1 23.1 30
+Addenda:
+31 Private goods-producing
+industries
+1
+10,855.8 10,459.9 11,007.9 11,022.0 10,933.4 10,844.1 8,400.9 8,424.3 8,359.5 8,384.9 8,435.1 8,444.5 -48.6 50.2 9.4 31
+32 Private services-producing
+industries
+2
+30,275.1 29,448.5 30,149.0 30,653.6 30,849.3 31,377.1 23,887.8 23,638.7 23,848.0 24,027.7 24,036.5 24,238.0 994.1 8.8 201.4 32
+2. Consists of utilities; wholesale trade; retail trade; transportation and warehousing; information; finance, insurance, real estate, rental, and leasing; professional and business services; educational services, health care, and social assistance;
+arts, entertainment, recreation, accommodation, and food services; and other services, except government.
+Source: U.S. Bureau of Economic Analysis
+Billions of dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Billions of chained (2012) dollars
+2022
+Seasonally adjusted at annual rates
+2022
+Change from preceding
+period
+2022
+Line
+June 29, 2023
+Table 17. Gross Output by Industry Group: Level and Change from Preceding Period
+Line
+1. Consists of agriculture, forestry, fishing, and hunting; mining; construction; and manufacturing.
+- 26 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1
+1 All Industries 0.6 6.6 8.0 2.0 0.7 0.6 0.2 -3.9 5.4 4.8 7.6 10.0 8.2 7.9 9.8 11.2 2.6 0.5 1.5 1
+2 Private industries 0.4 6.7 8.1 2.2 0.6 0.5 -0.1 -4.4 5.6 4.9 7.5 10.5 8.5 8.0 10.1 11.1 2.5 0.3 1.6 2
+3 Agriculture, forestry, fishing,
+and hunting -2.4 20.8 23.5 -0.5 3.9 4.1 -7.0 -26.0 19.1 28.4 14.2 57.3 17.0 0.2 46.2 36.4 7.2 4.0 -17.1 3
+4 Mining -18.1 54.5 34.1 -4.8 -18.5 0.2 -37.6 -61.3 107.4 56.3 91.7 50.7 45.9 65.9 34.2 86.8 -17.6 -44.4 -28.5 4
+5 Utilities -2.5 18.7 18.1 -10.0 11.4 -9.7 -14.1 -0.5 16.4 11.8 46.2 -7.0 29.6 31.8 -6.4 61.8 24.0 -20.6 -9.0 5
+6 Construction 2.4 8.4 15.5 4.0 2.7 2.0 2.5 -0.1 5.4 2.4 8.4 13.3 12.6 17.6 17.8 18.2 12.2 7.0 2.2 6
+7 Manufacturing -2.2 12.6 13.3 1.3 -3.8 1.0 -3.5 -12.7 8.3 7.7 17.7 20.4 16.6 12.8 17.2 22.1 -2.4 -3.6 -0.9 7
+8 Durable goods 0.3 7.7 8.6 -0.4 -1.0 -0.4 -0.2 0.1 2.5 3.3 8.3 13.9 12.2 9.1 11.0 9.5 1.5 -0.6 4.0 8
+9 Nondurable goods -4.6 17.9 18.1 3.2 -6.7 2.3 -6.9 -24.2 14.5 12.5 28.4 27.6 21.3 16.7 23.9 36.1 -6.0 -6.5 -5.8 9
+10 Wholesale trade -0.2 7.2 9.2 5.7 2.8 -0.8 -3.4 -5.6 8.3 3.0 6.6 12.6 12.2 6.9 13.3 11.5 1.5 0.9 4.3 10
+11 Retail trade 4.2 9.6 8.4 3.4 2.4 -0.2 5.1 5.8 10.3 2.0 6.0 25.2 8.5 7.1 13.6 5.2 1.8 1.2 -1.5 11
+12 Transportation and warehousing -1.9 9.7 13.8 3.5 0.5 0.3 -2.4 -9.3 -2.5 8.2 7.8 24.6 15.2 14.7 21.3 16.2 -0.8 -2.8 -0.1 12
+13 Information 0.4 0.5 1.2 1.0 -0.2 -0.6 2.8 -5.2 3.2 5.6 -2.5 0.6 -0.7 0.2 2.9 2.2 0.4 0.7 1.3 13
+14 Finance, insurance, real estate,
+rental, and leasing 1.7 3.0 3.9 3.7 2.5 -0.4 3.9 -1.3 2.8 2.9 2.6 5.1 3.4 3.2 4.0 3.7 4.1 5.7 5.3 14
+15 Finance and insurance 1.1 3.0 1.9 4.7 2.1 -3.3 6.2 -4.3 2.3 2.7 4.0 5.8 2.6 2.0 1.6 -0.3 1.8 4.3 6.0 15
+16 Real estate and rental and leasing 2.2 3.0 5.5 3.0 2.8 1.8 2.2 1.1 3.1 3.1 1.6 4.5 4.1 4.1 5.8 6.8 5.9 6.7 4.8 16
+17 Professional and business services 0.9 1.7 3.3 1.1 0.9 0.5 0.7 0.6 1.5 2.0 1.7 1.7 1.7 2.7 6.1 2.8 3.0 1.0 5.7 17
+18 Professional, scientific,
+and technical services
+1.0 1.4 3.0 0.8 0.8 0.6 1.2 0.6 1.2 3.2 1.2 0.2 1.0 3.0 5.7 2.8 2.4 1.0 7.1 18
+19 Management of companies
+and enterprises -0.8 0.2 0.8 0.1 -0.7 -1.6 0.2 -2.7 0.4 -0.9 1.1 1.2 0.3 -1.3 4.3 -2.1 3.1 -2.4 3.0 19
+20 Administrative and waste
+management services 1.6 3.2 5.2 2.4 2.1 1.3 0.0 2.8 2.8 1.0 3.0 5.2 3.8 4.3 7.8 5.4 4.1 2.6 4.3 20
+21 Educational services, health care,
+and social assistance 2.3 3.4 3.7 1.9 2.3 2.0 1.8 2.5 3.2 2.2 4.3 3.3 3.9 4.3 3.5 2.8 4.3 3.9 2.7 21
+22 Educational services 2.3 3.4 4.1 1.5 2.0 2.2 2.2 2.0 2.8 3.4 2.3 5.0 4.4 4.3 2.7 4.4 5.5 3.4 4.1 22
+23 Health care and social assistance 2.3 3.4 3.6 1.9 2.4 2.0 1.7 2.6 3.2 2.1 4.6 3.1 3.9 4.3 3.6 2.6 4.1 4.0 2.6 23
+24 Arts, entertainment, recreation,
+accommodation, and food services 2.7 4.0 7.3 2.7 1.9 3.8 2.7 2.8 0.7 4.4 0.7 5.4 9.5 9.2 7.2 3.8 7.7 8.6 5.9 24
+25 Arts, entertainment, and recreation 4.4 1.3 3.5 3.4 1.5 6.9 5.9 5.6 1.3 0.2 -11.0 15.3 3.8 7.9 1.8 -5.1 7.7 5.5 12.7 25
+26 Accommodation and food services 2.2 4.8 8.3 2.4 2.0 3.0 1.8 2.0 0.6 5.5 4.0 3.1 11.0 9.6 8.8 6.3 7.7 9.5 4.0 26
+27 Other services, except government 3.2 4.7 6.7 3.3 1.9 2.7 4.6 1.8 4.3 3.5 5.9 4.2 5.2 6.8 7.8 4.9 7.8 10.3 7.0 27
+28 Government 1.8 5.5 7.1 0.3 1.7 1.1 2.5 0.3 3.7 3.7 8.5 5.4 6.2 6.8 7.5 12.1 3.6 2.1 0.8 28
+29 Federal 1.1 3.7 5.2 -2.8 1.0 1.4 1.9 -0.2 2.9 2.3 4.8 4.2 4.9 4.8 5.7 6.5 5.0 2.0 2.9 29
+30 State and local 2.1 6.4 7.9 1.7 2.0 1.0 2.8 0.5 4.1 4.3 10.3 6.0 6.8 7.6 8.3 14.6 3.0 2.1 -0.1 30
+Addenda:
+31 Private goods-producing industries1
+-2.3 14.2 15.7 1.3 -3.2 1.4 -5.0 -14.5 11.6 9.8 18.7 22.4 17.5 16.1 20.1 26.5 -0.7 -5.5 -3.7 31
+32 Private services-producing industries2
+1.4 4.3 5.5 2.5 2.0 0.2 1.6 -0.8 3.7 3.3 3.9 6.7 5.5 5.3 6.8 6.1 3.7 2.4 3.5 32
+2. Consists of utilities; wholesale trade; retail trade; transportation and warehousing; information; finance, insurance, real estate, rental, and leasing; professional and business services; educational services, health care,
+and social assistance; arts, entertainment, recreation, accommodation, and food services; and other services, except government.
+Source: U.S. Bureau of Economic Analysis
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022 Line
+June 29, 2023
+Table 18. Price Indexes for Gross Output by Industry Group: Percent Change from Preceding Period
+Line
+1. Consists of agriculture, forestry, fishing, and hunting; mining; construction; and manufacturing.
+- 27 -2023
+Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1r
+Gross domestic product
+(GDP) and related
+aggregates:
+1 GDP -2.8 5.9 2.1 2.7 3.6 1.8 -4.6 -29.9 35.3 3.9 6.3 7.0 2.7 7.0 -1.6 -0.6 3.2 2.6 2.0 1
+2 Goods 0.7 9.8 3.0 0.3 5.4 1.7 -2.5 -30.1 72.5 1.4 7.8 9.5 -0.3 18.6 -5.4 -3.0 7.3 5.9 -1.4 2
+3 Services -4.7 4.7 3.2 2.9 2.3 2.4 -7.5 -29.8 22.6 3.3 5.9 7.7 5.4 3.2 1.0 3.1 3.9 2.4 3.5 3
+4 Structures -0.4 1.6 -8.5 10.1 6.7 -2.6 9.9 -29.7 16.5 17.5 4.2 -5.8 -5.2 -5.2 -4.9 -15.3 -14.6 -8.1 4.7 4
+5 Motor vehicle output -14.1 8.3 -1.1 5.3 6.0 -14.5 -32.2 -87.0 1,300.5 -20.5 4.7 -7.8 -43.5 48.2 -3.6 -3.8 2.6 10.4 7.1 5
+6 GDP excluding motor
+vehicle output -2.4 5.9 2.1 2.6 3.5 2.3 -3.8 -27.4 28.5 4.7 6.3 7.4 4.2 6.1 -1.6 -0.5 3.3 2.4 1.9 6
+7 Nonfarm business gross
+value added1
+-3.5 7.8 2.3 2.9 4.3 1.8 -6.7 -35.0 47.2 5.3 8.5 8.9 2.7 9.1 -2.5 -1.2 3.6 2.9 1.4 7
+Percent change at annual
+rate:
+8 Gross domestic
+product -2.8 5.9 2.1 2.7 3.6 1.8 -4.6 -29.9 35.3 3.9 6.3 7.0 2.7 7.0 -1.6 -0.6 3.2 2.6 2.0 8
+Percentage points at
+annual rates:
+9 Goods 0.20 2.94 0.95 0.10 1.59 0.52 -0.70 -7.99 19.61 0.52 2.50 3.01 -0.02 5.52 -1.76 -0.96 2.28 1.83 -0.44 9
+10 Services -2.94 2.87 1.89 1.79 1.45 1.49 -4.75 -18.98 14.16 1.97 3.46 4.54 3.16 1.91 0.57 1.83 2.30 1.44 2.06 10
+11 Structures -0.03 0.14 -0.79 0.83 0.57 -0.22 0.83 -2.88 1.55 1.42 0.35 -0.55 -0.49 -0.47 -0.44 -1.44 -1.34 -0.70 0.38 11
+12 Motor vehicle output -0.39 0.20 -0.02 0.14 0.16 -0.43 -0.98 -3.86 5.92 -0.64 0.12 -0.22 -1.42 0.98 -0.10 -0.10 0.07 0.26 0.18 12
+Line
+June 29, 2023
+Appendix Table A. Real Gross Domestic Product and Related Aggregates:
+Percent Change from Preceding Period and Contributions to Percent Change
+r Revised
+1. Consists of GDP less gross value added of farm, of households and institutions, and of general government.
+Source: U.S. Bureau of Economic Analysis
+Line
+Contributions to percent change in real gross domestic product
+Percent change from preceding period
+2020 2021 2022
+Seasonally adjusted at annual rates
+2019 2020 2021 2022
+- 28 -2020 2023 2023
+Q4 Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1r
+Q1 Q2 Q3 Q4 Q1 Q2 Q3 Q4 Q1r
+1 Gross domestic product
+(GDP) 4,843.7 4,691.6 4,890.8 4,916.4 5,111.0 4,855.9 4,985.8 5,018.1 5,157.2 4,950.8 1.4 12.8 4.6 5.5 3.5 1.9 2.1 0.9 2.0 1
+2 Personal consumption
+expenditures 3,369.1 3,252.5 3,447.7 3,452.0 3,601.9 3,396.8 3,535.5 3,539.0 3,662.2 3,495.8 2.7 16.8 7.5 6.9 4.4 2.5 2.5 1.7 2.9 2
+3 Gross private domestic
+investment 874.7 845.1 862.1 934.0 961.9 935.5 930.6 950.8 915.6 872.2 1.5 21.2 5.1 10.0 10.7 7.9 1.8 -4.8 -6.8 3
+4 Net exports of goods and
+services -277.8 -260.9 -301.0 -343.8 -327.7 -337.4 -361.7 -348.2 -304.0 -278.4 ......... ......... ......... ......... ......... ......... ......... ......... ......... 4
+5 Exports 597.4 567.3 587.8 578.2 633.5 594.7 628.4 644.8 660.7 636.4 -6.0 20.4 6.6 6.0 4.8 6.9 11.5 4.3 7.0 5
+6 Imports 875.3 828.2 888.8 922.0 961.2 932.0 990.1 993.0 964.8 914.8 4.6 31.1 13.9 9.8 12.5 11.4 7.7 0.4 -1.9 6
+7 Government consumption
+expenditures and gross
+investment 865.3 845.2 867.3 855.4 858.3 840.5 855.9 852.3 869.7 849.6 3.1 0.5 -0.4 -0.8 -0.6 -1.3 -0.4 1.3 1.1 7
+Addenda:
+Current dollar measures:
+(Billions of dollars)
+8 GDP 5,539.4 5,444.4 5,784.8 5,883.2 6,203.4 6,010.7 6,353.0 6,439.2 6,655.0 6,481.5 3.6 17.3 10.0 12.0 10.4 9.8 9.5 7.3 7.8 8
+9 Gross domestic income 5,689.9 5,598.9 5,690.5 5,860.8 6,293.8 6,234.8 6,266.1 6,396.8 6,629.3 6,581.9 1.3 16.8 13.0 10.6 11.4 10.1 9.1 5.3 5.6 9
+June 29, 2023
+r Revised
+Source: U.S. Bureau of Economic Analysis
+Appendix Table B. Not Seasonally Adjusted Real Gross Domestic Product: Level and Percent Change from Quarter One Year Ago
+Line
+Billions of chained (2012) dollars at quarterly rates
+2021 2022
+Percent change from quarter one year ago
+2021 2022 Line
+- 29 -

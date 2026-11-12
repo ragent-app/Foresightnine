@@ -1,0 +1,11 @@
+{
+  "id": "BEA_Q1",
+  "question": "根据所附 BEA 第三次估计，2023 年第一季度实际 GDP 折年增长率是多少？第二次估计是多少？说明修订和可验证的局限。",
+  "source_kind": "original_pdf",
+  "source_file": "bea-gdp-q1-2023.pdf",
+  "source_title": "BEA GDP third estimate first quarter 2023",
+  "published_at": "2023-06-29T12:30:00Z",
+  "text_order": "reading",
+  "source_sha256": "309ab888a4fc68f1e4ad9aad1794e92143a40572907605044b1f667706e2ed1d",
+  "source_text_sha256": "a3f661c159e37d1024c56ba90b9febc41eee656d4adfa9f5333895501ee40226"
+}
