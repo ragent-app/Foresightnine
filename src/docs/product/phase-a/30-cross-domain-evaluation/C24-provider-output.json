@@ -1,0 +1,76 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Caterpillar 2023 财年销售及总收入为 67,060 百万美元（截至 2023-12-31 的财年）。",
+        "citations": [
+          {
+            "source_id": "source_f905cbb0870b436495cd391ebdc2d02a",
+            "quotation": "\"total_sales_and_revenues\":{\"2023\":67060,\"2024\":64809} and \"unit\":\"USD millions\""
+          }
+        ]
+      },
+      {
+        "text": "Caterpillar 2024 财年销售及总收入为 64,809 百万美元（截至 2024-12-31 的财年），据此可计算同比增长率（见 calculations；本助手不自行计算数值，结果需由用户提供支持的公式执行）。",
+        "citations": [
+          {
+            "source_id": "source_f905cbb0870b436495cd391ebdc2d02a",
+            "quotation": "\"total_sales_and_revenues\":{\"2023\":67060,\"2024\":64809} and \"fiscal_year_end_dates\":{\"2023\":\"2023-12-31\",\"2024\":\"2024-12-31\"}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该数值为标注为“derived”的事实，即由源文件推导而来而非直接引用原文表格；若推导有误，增长率结果将随之出错。文本是 JSON 摘录而非原始 10-K 表格，无法独立核验。",
+        "citations": [
+          {
+            "source_id": "source_f905cbb0870b436495cd391ebdc2d02a",
+            "quotation": "\"title\":\"Caterpillar 2024 SEC 10-K: derived sales and revenue facts\""
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源仅为标注为 derived 的 JSON 事实摘要，非 10-K 原文表格引用，无法通过原文 quotation 核验数值。",
+      "来源未说明是否为合并口径及具体会计政策；亦未区分 Financial Products 收入。",
+      "来源声明日期未经验证；发布日期与会计期间归属未在文本中区分。",
+      "未提供 2022 年或更早期间数据，故无法计算多年趋势或对 2023 年增长率进行交叉核验。",
+      "本助手不自行执行数值计算；增长率需通过请求的 calculation 由具备支持的系统完成。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_cat_2023_total_sales",
+        "label": "Total sales and revenues, FY2023",
+        "value": "67060",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "Fiscal year ended 2023-12-31",
+        "citation": {
+          "source_id": "source_f905cbb0870b436495cd391ebdc2d02a",
+          "quotation": "\"total_sales_and_revenues\":{\"2023\":67060 ...}, \"unit\":\"USD millions\", \"fiscal_year_end_dates\":{\"2023\":\"2023-12-31\"}"
+        }
+      },
+      {
+        "fact_id": "fact_cat_2024_total_sales",
+        "label": "Total sales and revenues, FY2024",
+        "value": "64809",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "Fiscal year ended 2024-12-31",
+        "citation": {
+          "source_id": "source_f905cbb0870b436495cd391ebdc2d02a",
+          "quotation": "\"total_sales_and_revenues\":{... \"2024\":64809}, \"unit\":\"USD millions\", \"fiscal_year_end_dates\":{... \"2024\":\"2024-12-31\"}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_cat_2024_total_sales",
+        "second_fact_id": "fact_cat_2023_total_sales"
+      }
+    ]
+  },
+  "reported_tokens": 1367
+}

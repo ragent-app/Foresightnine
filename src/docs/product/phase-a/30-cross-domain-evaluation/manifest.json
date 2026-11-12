@@ -1,0 +1,45 @@
+{
+  "assessment": "Three newly selected inputs not previously used as tasks, nonblind developer, two original PDF sources and a derived company input; not independent human validation or broad quality acceptance.",
+  "cost_usd": "unknown; no monetary cap asserted",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "a6875848eef0049d2ad09d17c5db9995f56c5ae5",
+  "inputs": [
+    {
+      "id": "C24",
+      "sha256": "4d955212f5518fe4a30fba387a3689c4c0c54303025cf99074fac6c23e61361b"
+    },
+    {
+      "id": "P25J",
+      "sha256": "b9bec08215f5980242d09c49858761522961d640fbb38a17d02be98b31d17f5d"
+    },
+    {
+      "id": "F24N",
+      "sha256": "f0140ae29d00917da98c4c43b98da472698ce128fbede87bc57dd959a2bf14d2"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 3,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "Every required fact matches value, period, unit, source position and contextual qualifier; each has a corresponding located support citation; every supporting claim is cited; company calculations match inputs/formula/value; no unrecognized percentage, omitted citation or program-reported numeric, amount or publication-date warning; budget respected. Three of three mechanical passes are required for this small set. This does not prove natural-language entailment, historical byte identity, full-document coverage or overall product quality.",
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "36894c6dd330825428a337677ce0bc09814619f9b76f45504d548ca5ff06efb3",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "ffe076bcdb9331d0f772dfe036a15c3fef54f80a6a05ff614d5f25c5ee58ed7c",
+  "scorer_sha256": "e01d44c35f69837046f560478e550c9367b90972aaf66136ca28ef8b00ade872",
+  "search_calls": 0
+}

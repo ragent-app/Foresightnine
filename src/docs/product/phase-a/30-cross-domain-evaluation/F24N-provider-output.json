@@ -1,0 +1,68 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据美联储2024年11月7日FOMC声明，联邦基金利率目标区间下调至4-1/2至4-3/4（4.5%–4.75%）。",
+        "citations": [
+          {
+            "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+            "quotation": "the Committee decided to lower the target range for the federal funds rate by 1/4 percentage point to 4-1/2 to 4-3/4 percent."
+          }
+        ]
+      },
+      {
+        "text": "本次下调幅度为0.25个百分点（1/4个百分点），该目标区间自2024年11月8日起生效。",
+        "citations": [
+          {
+            "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+            "quotation": "Effective November 8, 2024, the Federal Open Market Committee directs the Desk to: o Undertake open market operations as necessary to maintain the federal funds rate in a target range of 4-1/2 to 4-3/4 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "声明强调经济前景不确定，委员会对双重使命双方风险保持关注，表明未来政策路径并非确定继续降息。",
+        "citations": [
+          {
+            "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+            "quotation": "The economic outlook is uncertain, and the Committee is attentive to the risks to both sides of its dual mandate."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的来源为部分摘录，未包含完整声明文本。",
+      "来源日期为声明标注的发布日期，未独立核实。",
+      "下调前的原目标区间（4.75%–5%）系根据降幅推算，原文摘录未直接给出，属推断而非证据。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fed_funds_range_nov2024",
+        "label": "联邦基金利率目标区间",
+        "value": "4-1/2 to 4-3/4",
+        "unit": "percent",
+        "currency": null,
+        "period": "自2024年11月8日起",
+        "citation": {
+          "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+          "quotation": "lower the target range for the federal funds rate by 1/4 percentage point to 4-1/2 to 4-3/4 percent."
+        }
+      },
+      {
+        "fact_id": "fed_cut_nov2024",
+        "label": "本次降息幅度",
+        "value": "1/4",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2024年11月7日决议",
+        "citation": {
+          "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+          "quotation": "the Committee decided to lower the target range for the federal funds rate by 1/4 percentage point"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1385
+}

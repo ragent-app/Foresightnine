@@ -1,0 +1,99 @@
+{
+  "id": "C24",
+  "operation_status": "completed",
+  "manifest_sha256": "7f75225cea28ea6b9b6966a5a125123321a239ada16ffe36f9dd4699149088aa",
+  "input_sha256": "4d955212f5518fe4a30fba387a3689c4c0c54303025cf99074fac6c23e61361b",
+  "elapsed_seconds_observed": 16.112,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_f905cbb0870b436495cd391ebdc2d02a",
+        "title": "Caterpillar 2024 SEC 10-K: derived sales and revenue facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/18230/000001823025000008/cat-20241231.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T04:22:14.349136+00:00",
+        "revised_at": null,
+        "content_sha256": "ab10a7c65dd463bc30b42087041dd3f03e9cce9605a574ab771b87897cf420ed",
+        "is_simulated": false,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [],
+    "limitations": [
+      "A model-generated fact had an unlocatable quotation and was omitted.",
+      "A model-generated fact had an unlocatable quotation and was omitted.",
+      "A requested calculation was omitted because its input facts were unavailable.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源仅为标注为 derived 的 JSON 事实摘要，非 10-K 原文表格引用，无法通过原文 quotation 核验数值。",
+      "来源未说明是否为合并口径及具体会计政策；亦未区分 Financial Products 收入。",
+      "来源声明日期未经验证；发布日期与会计期间归属未在文本中区分。",
+      "未提供 2022 年或更早期间数据，故无法计算多年趋势或对 2023 年增长率进行交叉核验。",
+      "本助手不自行执行数值计算；增长率需通过请求的 calculation 由具备支持的系统完成。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:28ba05c776f9bbcedc6a0002",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1367,
+      "cost_usd": null,
+      "generation_tokens": 1367,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 15.005,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "c04b4dbd31bf8e8625d7acfc13b114927ab9abaaebc8c64663a1900430d49f67",
+      "prompt_characters": 1281,
+      "prompt_bytes": 1365,
+      "selection_method": "ranked_nonoverlapping_windows_v12",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_f905cbb0870b436495cd391ebdc2d02a",
+          "character_start": 0,
+          "character_end": 172
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_f905cbb0870b436495cd391ebdc2d02a": "ab10a7c65dd463bc30b42087041dd3f03e9cce9605a574ab771b87897cf420ed"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

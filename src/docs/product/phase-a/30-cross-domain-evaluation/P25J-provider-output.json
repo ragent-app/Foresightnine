@@ -1,0 +1,67 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据BEA公告，2025年7月总体PCE价格指数环比（较上月）上升0.2%；同比（较上年同月）上升2.6%。两种口径不同：环比衡量月度变化，同比衡量年度变化。",
+        "citations": [
+          {
+            "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+            "quotation": "From the preceding month, the PCE price index for July increased 0.2 percent."
+          },
+          {
+            "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+            "quotation": "From the same month one year ago, the PCE price index for July increased 2.6 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无相反证据；但摘要提及剔除食品和能源的核心PCE（环比0.3%、同比2.9%）易与总体口径混淆，需区分。",
+        "citations": [
+          {
+            "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+            "quotation": "Excluding food and energy, the PCE price index increased 0.3 percent."
+          },
+          {
+            "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+            "quotation": "Excluding food and energy, the PCE price index increased 2.9 percent from one year ago."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源为节选（partial coverage），非公告全文",
+      "发布日期为声明值（2025-08-29），未经核实",
+      "本回答仅涉及总体PCE，核心PCE数据一并引用仅作区分说明"
+    ],
+    "facts": [
+      {
+        "fact_id": "pce_jul2025_mom",
+        "label": "总体PCE价格指数环比变化",
+        "value": "0.2",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025年7月，较上月",
+        "citation": {
+          "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+          "quotation": "the PCE price index for July increased 0.2 percent"
+        }
+      },
+      {
+        "fact_id": "pce_jul2025_yoy",
+        "label": "总体PCE价格指数同比变化",
+        "value": "2.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025年7月，较上年同月",
+        "citation": {
+          "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+          "quotation": "the PCE price index for July increased 2.6 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1219
+}

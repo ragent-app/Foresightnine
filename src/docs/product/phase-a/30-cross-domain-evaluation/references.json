@@ -1,0 +1,89 @@
+{
+  "C24": {
+    "allowed_percentages": [
+      "-3.36",
+      "3.36"
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "64809",
+        "67060"
+      ],
+      "value": "-3.36"
+    },
+    "facts": [
+      {
+        "literal": "67060",
+        "period": "2023",
+        "value": "67060"
+      },
+      {
+        "literal": "64809",
+        "period": "2024",
+        "value": "64809"
+      }
+    ],
+    "kind": "company",
+    "unit": "USD millions"
+  },
+  "P25J": {
+    "allowed_percentages": [
+      "0.2",
+      "2.6",
+      "0.3",
+      "2.9"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "literal": "0.2",
+        "period": "2025",
+        "value": "0.2",
+        "basis": [
+          "preceding month"
+        ]
+      },
+      {
+        "literal": "2.6",
+        "period": "2025",
+        "value": "2.6",
+        "basis": [
+          "same month one year",
+          "one year ago"
+        ]
+      }
+    ],
+    "kind": "macro",
+    "unit": "percent"
+  },
+  "F24N": {
+    "allowed_percentages": [
+      "4.5",
+      "4.75",
+      "0.25",
+      "2"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "literal": "4-1/2",
+        "period": "2024",
+        "value": "4.5"
+      },
+      {
+        "literal": "4-3/4",
+        "period": "2024",
+        "value": "4.75"
+      },
+      {
+        "literal": "1/4",
+        "period": "2024",
+        "value": "0.25",
+        "unit_override": "percentage point"
+      }
+    ],
+    "kind": "macro",
+    "unit": "percent"
+  }
+}

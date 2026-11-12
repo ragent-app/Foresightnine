@@ -1,0 +1,117 @@
+{
+  "id": "P25J",
+  "operation_status": "completed",
+  "manifest_sha256": "7f75225cea28ea6b9b6966a5a125123321a239ada16ffe36f9dd4699149088aa",
+  "input_sha256": "b9bec08215f5980242d09c49858761522961d640fbb38a17d02be98b31d17f5d",
+  "elapsed_seconds_observed": 10.239,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+        "title": "BEA Personal Income and Outlays July 2025",
+        "url": null,
+        "event_at": null,
+        "published_at": "2025-08-29T12:30:00+00:00",
+        "obtained_at": "2026-11-12T04:22:30.586793+00:00",
+        "revised_at": null,
+        "content_sha256": "62e0e522c33b04d63d9e0540f34d024bb35f3356920cba829ab0a368dcb83528",
+        "is_simulated": false,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "pce_jul2025_yoy",
+        "value": "2.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025年7月，较上年同月",
+        "label": "总体PCE价格指数同比变化",
+        "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+        "quotation": "the PCE price index for July\nincreased 2.6 percent",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 5639,
+          "character_end": 5689,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [],
+    "limitations": [
+      "Source source_d9c95457f10f441092ee07c5043ee90b: only character ranges 4980–5517, 5517–6162 were analyzed; remaining text was not examined.",
+      "A model-generated fact had an unlocatable quotation and was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源为节选（partial coverage），非公告全文",
+      "发布日期为声明值（2025-08-29），未经核实",
+      "本回答仅涉及总体PCE，核心PCE数据一并引用仅作区分说明",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:97665eb730f7967ca60988e4",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1219,
+      "cost_usd": null,
+      "generation_tokens": 1219,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 8.508,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "c2fb0ba5b018266749bd1c16f44c9bc0f8ef54d1ba17a2972f4fe51605e35876",
+      "prompt_characters": 1959,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v12",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+          "character_start": 4980,
+          "character_end": 5517
+        },
+        {
+          "source_id": "source_d9c95457f10f441092ee07c5043ee90b",
+          "character_start": 5517,
+          "character_end": 6162
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_d9c95457f10f441092ee07c5043ee90b": "62e0e522c33b04d63d9e0540f34d024bb35f3356920cba829ab0a368dcb83528"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

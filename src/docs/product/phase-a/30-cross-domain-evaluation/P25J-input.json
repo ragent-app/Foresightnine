@@ -1,0 +1,10 @@
+{
+  "id": "P25J",
+  "question": "根据提供的美国经济分析局公告，2025 年 7 月总体 PCE 价格指数较上月和较上年同期分别变化多少？区分两种比较口径。",
+  "source_kind": "original_pdf",
+  "source_file": "bea-july-2025.pdf",
+  "source_title": "BEA Personal Income and Outlays July 2025",
+  "published_at": "2025-08-29T12:30:00Z",
+  "source_sha256": "3066af531a68d9aefbac3d9b73e16715680e0b485d818420f33ce177293068e1",
+  "source_text_sha256": "62e0e522c33b04d63d9e0540f34d024bb35f3356920cba829ab0a368dcb83528"
+}

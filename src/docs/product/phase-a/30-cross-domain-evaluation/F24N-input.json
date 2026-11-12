@@ -1,0 +1,10 @@
+{
+  "id": "F24N",
+  "question": "根据提供的美联储 2024 年 11 月 7 日声明，联邦基金利率目标区间是多少，本次下调多少个百分点？",
+  "source_kind": "original_pdf",
+  "source_file": "fed-nov-2024.pdf",
+  "source_title": "Federal Reserve FOMC statement November 7, 2024",
+  "published_at": "2024-11-07T19:00:00Z",
+  "source_sha256": "33b2da84c96683b7fff9f334b487baec3ebb150ffc5a0475b687544f9077640c",
+  "source_text_sha256": "bb3eaea333d9dafc8a9f5f845980b832783dfbed6f685387ea6ce3f93b2cb0f2"
+}

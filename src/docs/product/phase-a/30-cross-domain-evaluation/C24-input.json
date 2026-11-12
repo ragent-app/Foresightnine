@@ -1,0 +1,8 @@
+{
+  "id": "C24",
+  "question": "使用提供的 Caterpillar 2023 和 2024 财年销售及总收入，列示金额、期间和单位，计算同比增长率，并说明资料限制。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"Caterpillar Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2023\":\"2023-12-31\",\"2024\":\"2024-12-31\"},\"total_sales_and_revenues\":{\"2023\":67060,\"2024\":64809}}",
+  "source_title": "Caterpillar 2024 SEC 10-K: derived sales and revenue facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/18230/000001823025000008/cat-20241231.htm"
+}

@@ -1,0 +1,209 @@
+{
+  "id": "F24N",
+  "operation_status": "completed",
+  "manifest_sha256": "7f75225cea28ea6b9b6966a5a125123321a239ada16ffe36f9dd4699149088aa",
+  "input_sha256": "f0140ae29d00917da98c4c43b98da472698ce128fbede87bc57dd959a2bf14d2",
+  "elapsed_seconds_observed": 12.142,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+        "title": "Federal Reserve FOMC statement November 7, 2024",
+        "url": null,
+        "event_at": null,
+        "published_at": "2024-11-07T19:00:00+00:00",
+        "obtained_at": "2026-11-12T04:22:40.743853+00:00",
+        "revised_at": null,
+        "content_sha256": "bb3eaea333d9dafc8a9f5f845980b832783dfbed6f685387ea6ce3f93b2cb0f2",
+        "is_simulated": false,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fed_funds_range_nov2024:lower",
+        "value": "4.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "自2024年11月8日起",
+        "label": "联邦基金利率目标区间 (lower bound)",
+        "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+        "quotation": "lower the target range for the federal\n\nfunds rate by 1/4 percentage point to 4-1/2 to 4-3/4 percent.",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "fed_funds_range_nov2024",
+        "location": {
+          "character_start": 831,
+          "character_end": 932,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fed_funds_range_nov2024:upper",
+        "value": "4.75",
+        "unit": "percent",
+        "currency": null,
+        "period": "自2024年11月8日起",
+        "label": "联邦基金利率目标区间 (upper bound)",
+        "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+        "quotation": "lower the target range for the federal\n\nfunds rate by 1/4 percentage point to 4-1/2 to 4-3/4 percent.",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_range_bound",
+        "range_parent_id": "fed_funds_range_nov2024",
+        "location": {
+          "character_start": 831,
+          "character_end": 932,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fed_cut_nov2024",
+        "value": "0.25",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2024年11月7日决议",
+        "label": "本次降息幅度",
+        "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+        "quotation": "the Committee decided to lower the target range for the federal\n\nfunds rate by 1/4 percentage point",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_fraction",
+        "location": {
+          "character_start": 806,
+          "character_end": 905,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "根据美联储2024年11月7日FOMC声明，联邦基金利率目标区间下调至4-1/2至4-3/4（4.5%–4.75%）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+            "location": {
+              "character_start": 806,
+              "character_end": 932,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to lower the target range for the federal\n\nfunds rate by 1/4 percentage point to 4-1/2 to 4-3/4 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "本次下调幅度为0.25个百分点（1/4个百分点），该目标区间自2024年11月8日起生效。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+            "location": {
+              "character_start": 3348,
+              "character_end": 3591,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Effective November 8, 2024, the Federal Open Market Committee directs the Desk to:\n               o Undertake open market operations as necessary to maintain the federal funds rate\n                  in a target range of 4-1/2 to 4-3/4 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "声明强调经济前景不确定，委员会对双重使命双方风险保持关注，表明未来政策路径并非确定继续降息。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+            "location": {
+              "character_start": 658,
+              "character_end": 772,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The economic outlook is uncertain, and the\n\nCommittee is attentive to the risks to both sides of its dual mandate."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_270d98cfbabd4903b5d93b4a2c6917dd: only character ranges 614–932, 3230–3591 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "提供的来源为部分摘录，未包含完整声明文本。",
+      "来源日期为声明标注的发布日期，未独立核实。",
+      "下调前的原目标区间（4.75%–5%）系根据降幅推算，原文摘录未直接给出，属推断而非证据。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:aa3bff060ee94d11cc694026",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1385,
+      "cost_usd": null,
+      "generation_tokens": 1385,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 11.116,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "d1bd2c87e6382527d3aaa656e909254d419e8952d80882c7cd75f5e7ed3efb35",
+      "prompt_characters": 1977,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v12",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+          "character_start": 614,
+          "character_end": 932
+        },
+        {
+          "source_id": "source_270d98cfbabd4903b5d93b4a2c6917dd",
+          "character_start": 3230,
+          "character_end": 3591
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_270d98cfbabd4903b5d93b4a2c6917dd": "bb3eaea333d9dafc8a9f5f845980b832783dfbed6f685387ea6ce3f93b2cb0f2"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}
