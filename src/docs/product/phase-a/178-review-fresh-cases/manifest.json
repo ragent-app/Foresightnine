@@ -1,0 +1,97 @@
+{
+  "implementation_commit": "5c4ade8c39e5e82676dfb19fb32786e7ba18418b",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "review_method": "bounded_quotation_context_model_review_v23",
+  "system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "source_pdf_sha256": "a883f6d7a6761822c48e9416fb6ee65815405e4ca6002e2a192edcb31691da65",
+  "source_text_sha256": "8a8138ddbcfe5048f9e6c21c760839a2d8968ba496b09660c3f63671f53d6259",
+  "files": {
+    "prepare.py": "d84f95073b7860eb2b8665cbbf640b8833a21eb641c2bb05e02a1d74045426cd",
+    "run.py": "7762d61f1267f89943b10900a5bcae992a2cdb5771ada9e036cabaa7883771c5",
+    "score.py": "f0e38d9172256cbd0078da0f6b15edb2ef91fe760a0adb87b25b5e6451c19a43",
+    "batch-prompt.json": "19a1788a265c8675a6cd6efc892daf77bd70809d02558a6856d4aad9e747e907",
+    "isolated-0-prompt.json": "17786ad775b2acecd79b359309522e71e35d6515d277787ed7f18dcad881a487",
+    "isolated-1-prompt.json": "44dc2de0f9ef1fcde03861492af9a9cec23b04b7cf2272975c334155f95f7fff",
+    "isolated-2-prompt.json": "64f0e6e2c946352203ebbf1c058fcb5941d216719c226aefafc0901385192ac8",
+    "isolated-3-prompt.json": "e40826acf364110173b4f6f13f6e25cde3fdfe8456b3c561fafa1b0d78b9e006"
+  },
+  "cases": [
+    {
+      "index": 0,
+      "expected": "supports"
+    },
+    {
+      "index": 1,
+      "expected": "not_supports"
+    },
+    {
+      "index": 2,
+      "expected": "supports"
+    },
+    {
+      "index": 3,
+      "expected": "not_supports"
+    }
+  ],
+  "conditions": [
+    {
+      "name": "batch",
+      "indexes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "prompt_sha256": "19a1788a265c8675a6cd6efc892daf77bd70809d02558a6856d4aad9e747e907"
+    },
+    {
+      "name": "isolated-0",
+      "indexes": [
+        0
+      ],
+      "prompt_sha256": "17786ad775b2acecd79b359309522e71e35d6515d277787ed7f18dcad881a487"
+    },
+    {
+      "name": "isolated-1",
+      "indexes": [
+        1
+      ],
+      "prompt_sha256": "44dc2de0f9ef1fcde03861492af9a9cec23b04b7cf2272975c334155f95f7fff"
+    },
+    {
+      "name": "isolated-2",
+      "indexes": [
+        2
+      ],
+      "prompt_sha256": "64f0e6e2c946352203ebbf1c058fcb5941d216719c226aefafc0901385192ac8"
+    },
+    {
+      "name": "isolated-3",
+      "indexes": [
+        3
+      ],
+      "prompt_sha256": "e40826acf364110173b4f6f13f6e25cde3fdfe8456b3c561fafa1b0d78b9e006"
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 5,
+  "per_call_max_tokens": 10000,
+  "max_total_tokens": 50000,
+  "timeout_seconds": 60,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 197246
+}
