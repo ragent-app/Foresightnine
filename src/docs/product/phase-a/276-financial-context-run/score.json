@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "task": "COMPANY_CISCO_2024",
+      "set": "development_recheck",
+      "status": "completed",
+      "checks": {
+        "all_claims_located": false,
+        "no_claim_warnings": false,
+        "counterargument_cited": false,
+        "research_completed": false,
+        "budget": true,
+        "revenue_current": true,
+        "revenue_previous": true,
+        "calculation": true
+      },
+      "mechanical_pass": false,
+      "reported_tokens": 3797,
+      "semantic_support": "requires separate source-level assessment"
+    }
+  ],
+  "mechanical_pass": false,
+  "known_tokens": 3797,
+  "unknown_usage": false,
+  "semantic_support": "not established by numeric or lexical matches"
+}

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from hashlib import sha256
 import json
+import re
 from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -25,7 +26,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v29"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v30"
 ISOLATED_REVIEW_METHOD = REVIEW_METHOD + "_isolated"
 _DIAGNOSTIC_GUIDANCE = {
     "uncited_quarters": "A quarter stated in the claim was not matched in the cited passages. Check whether the cited text explicitly supports the period.",
@@ -251,9 +252,26 @@ def review_record(batch: ReviewBatch, index: int, verdict: str, method: str = RE
     return {"verdict": verdict, "method": method, "independently_verified": False}
 
 
-def _apply_verdicts(claims: list[dict], batch: ReviewBatch, verdicts: dict[int, str]) -> list[dict]:
+def _normalize_split_review_arrays(raw: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Recover a bounded provider format without inventing or changing verdicts."""
+    if not isinstance(raw, dict) or not isinstance(raw.get('reviews'), list) or len(raw) <= 1:
+        return raw, False
+    extras = set(raw) - {'reviews'}
+    if not extras or len(extras) > 9 or any(not isinstance(key, str) or not re.fullmatch(r'reviews_[1-9]', key) for key in extras):
+        return raw, False
+    indexes = sorted(int(key.split('_')[1]) for key in extras)
+    if indexes != list(range(1, len(indexes) + 1)):
+        return raw, False
+    values = [raw['reviews'], *(raw[f'reviews_{index}'] for index in indexes)]
+    if any(not isinstance(value, list) for value in values) or sum(map(len, values)) > 50:
+        return raw, False
+    return {'reviews': [entry for group in values for entry in group]}, True
+
+
+def _apply_verdicts(claims: list[dict], batch: ReviewBatch, verdicts: dict[int, str], *, split_arrays: bool = False) -> list[dict]:
     return [{**{key: value for key, value in claim.items() if key != "support_review"},
-             **({"support_review": review_record(batch, index, verdicts[index])}
+             **({"support_review": {**review_record(batch, index, verdicts[index]),
+                                     **({'response_format': 'split_review_arrays'} if split_arrays else {})}}
                          if index in verdicts else {})} for index, claim in enumerate(claims)]
 
 
@@ -266,14 +284,16 @@ def parse_isolated_support_review(batch: ReviewBatch, raw: dict[str, Any]) -> tu
 
 
 def apply_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> list[dict]:
+    raw, split_arrays = _normalize_split_review_arrays(raw)
     verdicts = _validated_review_verdicts(batch, raw)
     if set(verdicts) != set(batch.indexes):
         raise InvalidReview("Review must cover exactly the submitted claims once.")
-    return _apply_verdicts(claims, batch, verdicts)
+    return _apply_verdicts(claims, batch, verdicts, split_arrays=split_arrays)
 
 
 def apply_partial_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> tuple[list[dict], list[int]]:
     """Retain well-formed returned assessments while explicitly reporting omissions."""
+    raw, split_arrays = _normalize_split_review_arrays(raw)
     verdicts = _validated_review_verdicts(batch, raw)
     missing = [index for index in batch.indexes if index not in verdicts]
-    return _apply_verdicts(claims, batch, verdicts), missing
+    return _apply_verdicts(claims, batch, verdicts, split_arrays=split_arrays), missing

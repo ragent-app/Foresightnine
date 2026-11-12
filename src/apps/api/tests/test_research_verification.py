@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v29"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v30"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -80,6 +80,28 @@ def test_review_enforces_budget_and_exact_result_coverage():
     limited = prepare_support_review([claim()], [source()], 100)
     assert not limited.indexes and limited.omitted == [0]
     assert limited.omissions == [{"claim_index": 0, "reason": "input_budget", "required_subject_context": False}]
+
+
+def test_split_review_arrays_are_normalized_only_when_unambiguous():
+    from app.research_verification import apply_partial_support_review
+    items = [claim(), claim()]
+    batch = prepare_support_review(items, [source()], 3000)
+    raw = {'reviews':[{'claim_index':0,'verdict':'supports'}],
+           'reviews_1':[{'claim_index':1,'verdict':'uncertain'}]}
+    checked, missing = apply_partial_support_review(items, batch, raw)
+    assert not missing and checked[0]['support_review']['verdict'] == 'supports'
+    assert checked[1]['support_review']['verdict'] == 'uncertain'
+    assert all(x['support_review']['response_format'] == 'split_review_arrays' for x in checked)
+    assert len(raw) == 2 and len(raw['reviews']) == 1
+    for bad in (
+        {'reviews':raw['reviews'], 'reviews_2':raw['reviews_1']},
+        {'reviews':raw['reviews'], 'reviews_1':raw['reviews']},
+        {'reviews':raw['reviews'], 'reviews_1':[{'claim_index':5,'verdict':'supports'}]},
+        {'reviews':raw['reviews'], 'reviews_1':raw['reviews_1'], 'comment':'extra'},
+        {'reviews':raw['reviews'], 'reviews_1':[{'claim_index':1,'verdict':'supports','reason':'extra'}]},
+    ):
+        with pytest.raises(InvalidReview):
+            apply_partial_support_review(items, batch, bad)
 
 
 def test_review_reduces_context_to_fit_without_truncating_the_quote():

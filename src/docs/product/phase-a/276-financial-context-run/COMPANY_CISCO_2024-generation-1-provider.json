@@ -1,0 +1,98 @@
+{
+  "manifest_sha256": "17be6c85f37831ba931b6ad7058407b0011986bebf49ae9b0cc61402316fb547",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "Cisco 2024财年（截至2024年7月27日）总收入为53,803百万美元。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |"
+          }
+        ]
+      },
+      {
+        "text": "Cisco 2023财年（截至2023年7月29日）总收入为56,998百万美元。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |"
+          }
+        ]
+      },
+      {
+        "text": "收入单位为百万美元，期间为截至2024年7月27日和2023年7月29日的财政年度。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "Consolidated Statements of Operations (in millions, except per-share amounts)"
+          },
+          {
+            "source_id": "ref-1",
+            "quotation": "| [colspan=3] Years Ended | [colspan=3] July 27, 2024 | [colspan=3]  | [colspan=3] July 29, 2023 |"
+          }
+        ]
+      },
+      {
+        "text": "年报原文说明总收入同比下降约6%。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "In fiscal 2024, total revenue decreased by 6% compared with fiscal 2023."
+          }
+        ]
+      },
+      {
+        "text": "收入可比性受Splunk收购影响，其2024财年贡献约14亿美元收入，构成对收入变化解读的限制。",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "In March 2024, we completed the acquisition of Splunk Inc. (“Splunk”), which contributed approximately $1.4 billion in total revenue for fiscal 2024."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "源文本覆盖为部分（source_coverage: partial），表格为压缩PDF摘录，收入列数值可能存在截取风险，建议核对原始年报确认。",
+      "未提供分季度数据，无法分析期内收入趋势。"
+    ],
+    "facts": [
+      {
+        "fact_id": "rev-fy2024",
+        "label": "total_revenue_fy2024",
+        "value": "53803",
+        "unit": "million",
+        "currency": "USD",
+        "period": "fiscal year ended July 27, 2024",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |"
+        }
+      },
+      {
+        "fact_id": "rev-fy2023",
+        "label": "total_revenue_fy2023",
+        "value": "56998",
+        "unit": "million",
+        "currency": "USD",
+        "period": "fiscal year ended July 29, 2023",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "| [colspan=3] Total revenue | [colspan=2] 53,803  |  | [colspan=3]  | [colspan=2] 56,998  |"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "rev-fy2024",
+        "second_fact_id": "rev-fy2023"
+      }
+    ]
+  },
+  "reported_tokens": 2915,
+  "prompt_sha256": "a7fe2a6526bbd4fecfd38f687b34b6cca542dfc5cad2b12fc6e98a17f0f11514",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

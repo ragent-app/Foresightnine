@@ -1,0 +1,30 @@
+{
+  "model_calls": 0,
+  "result_sha256": "9361af10bbfa6d12dcdcb5e20320ce96ee41ed90994ef9e1c4ce180294c490fe",
+  "provider_output_sha256": "16c32ffaddefd6247b91aaa40ea9aeebceff8debf2445eb67a058dd35bb580ad",
+  "prompt_sha256": "ffff971f3d882679bcb1cf6aeb3b9a38ffb4ef07bfe6e9c9a51ab1fda56631a8",
+  "submitted_indexes": [
+    2,
+    3
+  ],
+  "omitted_indexes": [
+    0,
+    1,
+    4
+  ],
+  "missing": [],
+  "review_records": {
+    "2": {
+      "verdict": "supports",
+      "method": "bounded_quotation_context_model_review_v30",
+      "independently_verified": false,
+      "response_format": "split_review_arrays"
+    },
+    "3": {
+      "verdict": "supports",
+      "method": "bounded_quotation_context_model_review_v30",
+      "independently_verified": false,
+      "response_format": "split_review_arrays"
+    }
+  }
+}
