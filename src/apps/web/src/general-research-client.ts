@@ -65,7 +65,7 @@ export interface ResearchOperation {
   status: string;
   cancel_token: string;
 }
-export interface SourceMetadata { original_pdf_available?: boolean; derived_from_source_id?: string | null; pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
+export interface SourceMetadata { original_pdf_available?: boolean; original_html_available?: boolean; derived_from_source_id?: string | null; pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string; published_at?: string | null }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
 export interface RunBudget { selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean }
@@ -165,6 +165,10 @@ export function researchClient(baseUrl: string) {
       request<{ source_id: string }>("/v2/research/sources/pdf", { title, pdf_base64: pdfBase64,
         ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated, text_order: textOrder,
         permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
+    uploadHtml: (title: string, htmlBase64: string, modelInput: boolean, allowExport: boolean, publishedAt: string, eventAt = "", revisedAt = "", isSimulated = false) =>
+      request<{ source_id: string }>("/v2/research/sources/html", { title, html_base64: htmlBase64,
+        ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated,
+        permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
     reextractPdf: (sourceId: string, textOrder: "layout" | "reading", key: string) => request<{ source_id: string }>(
       `/v2/research/sources/${encodeURIComponent(sourceId)}/reextract`, { text_order: textOrder }, key),
     search: (query: string) => request<{ project_search_available: boolean; candidates: DiscoveryCandidate[] }>(
@@ -211,6 +215,13 @@ export function researchClient(baseUrl: string) {
     originalPdf: async (sourceId: string) => {
       const response = await fetcher(new URL(`/v2/research/sources/${encodeURIComponent(sourceId)}/original`, `${baseUrl.replace(/\/+$/, "")}/`), { method: "GET", headers: { Accept: "application/pdf" } });
       if (!response.ok || !response.headers.get("content-type")?.toLowerCase().startsWith("application/pdf")) throw new Error("original_unavailable");
+      const blob = await response.blob();
+      if (blob.size > MAX_RESEARCH_PDF_BYTES) throw new Error("original_too_large");
+      return blob;
+    },
+    originalHtml: async (sourceId: string) => {
+      const response = await fetcher(new URL(`/v2/research/sources/${encodeURIComponent(sourceId)}/original`, `${baseUrl.replace(/\/+$/, "")}/`), { method: "GET", headers: { Accept: "application/octet-stream" } });
+      if (!response.ok || !response.headers.get("content-type")?.toLowerCase().startsWith("application/octet-stream")) throw new Error("original_unavailable");
       const blob = await response.blob();
       if (blob.size > MAX_RESEARCH_PDF_BYTES) throw new Error("original_too_large");
       return blob;

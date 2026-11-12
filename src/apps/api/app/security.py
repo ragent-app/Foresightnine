@@ -282,7 +282,7 @@ class SecurityBoundaryMiddleware(BaseHTTPMiddleware):
         if request.method in {"POST", "PUT", "PATCH"}:
             if request.method == "POST" and request.url.path == "/v2/research/sources":
                 body_limit = self.config.max_research_source_body_bytes
-            elif request.url.path == "/v2/research/sources/pdf":
+            elif request.url.path in {"/v2/research/sources/pdf", "/v2/research/sources/html"}:
                 body_limit = self.config.max_pdf_body_bytes
             else:
                 body_limit = self.config.max_body_bytes

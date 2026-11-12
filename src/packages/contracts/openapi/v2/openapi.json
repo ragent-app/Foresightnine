@@ -234,6 +234,74 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HtmlUploadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event At"
+          },
+          "html_base64": {
+            "maxLength": 6666668,
+            "minLength": 1,
+            "title": "Html Base64",
+            "type": "string"
+          },
+          "is_simulated": {
+            "default": false,
+            "title": "Is Simulated",
+            "type": "boolean"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SourcePermissions"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "revised_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revised At"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "html_base64",
+          "permissions"
+        ],
+        "title": "HtmlUploadRequest",
+        "type": "object"
+      },
       "NumericFact": {
         "additionalProperties": false,
         "properties": {
@@ -1619,6 +1687,64 @@
           }
         },
         "summary": "Fetch Research Source"
+      }
+    },
+    "/v2/research/sources/html": {
+      "post": {
+        "operationId": "upload_research_html_v2_research_sources_html_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HtmlUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Research Html V2 Research Sources Html Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Research Html"
       }
     },
     "/v2/research/sources/pdf": {

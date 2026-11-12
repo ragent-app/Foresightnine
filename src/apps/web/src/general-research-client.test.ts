@@ -4,6 +4,17 @@ import { researchClient, researchPollingDelay, ResearchRequestError } from "./ge
 afterEach(() => vi.unstubAllGlobals());
 
 describe("research operation polling", () => {
+  it("sends HTML material with explicit permissions and without changing the source type", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => null });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{"source_id":"s"}', { status: 201 }));
+    vi.stubGlobal("fetch", fetcher);
+    await researchClient("https://api.example.com").uploadHtml("Annual filing", "PGh0bWw+", true, false, "");
+    expect(String(fetcher.mock.calls[0]?.[0])).toContain("/v2/research/sources/html");
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({
+      title: "Annual filing", html_base64: "PGh0bWw+",
+      permissions: { store: true, display: true, model_input: true, export: false }
+    });
+  });
   it("requests an alternative PDF extraction without sending or changing source permissions", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response('{}', { status: 201 }));

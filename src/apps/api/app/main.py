@@ -107,7 +107,7 @@ from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_quer
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, search_sec_identities, reserve_sec_request, validate_user_agent
-from .research_uploads import PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf
+from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
 
 
 oauth_trace_logger = logging.getLogger("foresightnine.oauth")
@@ -1503,9 +1503,11 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
         except SourceNotFound:
             result.append({"source_id": source_id, "status": "unavailable"})
             continue
-        metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64"})
+        metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
         if source.retrieval_method == "user_pdf":
             metadata["original_pdf_available"] = bool(source.original_pdf_base64)
+        if source.retrieval_method == "user_html":
+            metadata["original_html_available"] = bool(source.original_html_base64)
         if pdf_text_spacing_suspect(source):
             metadata["pdf_text_spacing_warning"] = True
         if source.url:
@@ -1513,7 +1515,7 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
             metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
         metadata["status"] = "available"
         metadata["verification"] = "user_declared_not_verified"
-        if source.retrieval_method == "official_html":
+        if source.retrieval_method in {"official_html", "user_html"}:
             metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
         result.append(metadata)
     return result
@@ -1575,14 +1577,14 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
             source = research_sources.get(account.account_id, source_id)
             if not source.permissions.export:
                 raise ApiProblem(403, "invalid_request", "A research source is not permitted for export.")
-            metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64"})
+            metadata = source.model_dump(mode="json", exclude={"text", "owner_id", "url", "original_pdf_base64", "original_html_base64"})
             if pdf_text_spacing_suspect(source):
                 metadata["pdf_text_spacing_warning"] = True
             if source.url:
                 parts = urlsplit(str(source.url))
                 metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
             metadata["verification"] = "user_declared_not_verified"
-            if source.retrieval_method == "official_html":
+            if source.retrieval_method in {"official_html", "user_html"}:
                 metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
             sources.append(metadata)
     except SourceNotFound as error:
@@ -2037,16 +2039,18 @@ def calculate_research(request: CalculationRequest, authorization: str | None = 
 
 
 def _visible_research_source(source: ResearchSource) -> dict:
-    result = source.model_dump(mode="json", exclude={"original_pdf_base64"})
+    result = source.model_dump(mode="json", exclude={"original_pdf_base64", "original_html_base64"})
     if source.retrieval_method == "user_pdf":
         result["original_pdf_available"] = bool(source.original_pdf_base64)
+    if source.retrieval_method == "user_html":
+        result["original_html_available"] = bool(source.original_html_base64)
     if pdf_text_spacing_suspect(source):
         result["pdf_text_spacing_warning"] = True
     if not source.permissions.display:
         result.pop("text", None)
     # User-supplied provenance and permissions are declarations, not proof.
     result["verification"] = "user_declared_not_verified"
-    if source.retrieval_method == "official_html":
+    if source.retrieval_method in {"official_html", "user_html"}:
         result["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
     return result
 
@@ -2078,6 +2082,26 @@ def upload_research_pdf(request: PdfUploadRequest, authorization: str | None = H
         if error.code in {"pdf_extractor_unavailable", "pdf_timeout", "pdf_busy"}:
             raise ApiProblem(503, "internal_error", "PDF extraction is unavailable or timed out.", retryable=True) from error
         raise ApiProblem(422, "invalid_request", "PDF is invalid, too large, encrypted, or has no extractable text.") from error
+
+
+@app.post("/v2/research/sources/html", status_code=201, include_in_schema=False)
+def upload_research_html(request: HtmlUploadRequest, authorization: str | None = Header(default=None)) -> dict:
+    account = _authenticated_account(authorization)
+    try:
+        text, raw_hash = extract_uploaded_html(request)
+        source = research_sources.create(account.account_id, SourceInput(title=request.title, text=text,
+            published_at=request.published_at, event_at=request.event_at, revised_at=request.revised_at,
+            is_simulated=request.is_simulated, permissions=request.permissions), retrieval_method="user_html",
+            response_sha256=raw_hash, response_content_type="text/html", original_html_base64=request.html_base64)
+        metadata = _visible_research_source(source)
+        metadata.pop("text", None)
+        return metadata
+    except PdfFailure as error:
+        if error.code == "html_busy":
+            raise ApiProblem(503, "internal_error", "HTML extraction is busy.", retryable=True) from error
+        raise ApiProblem(422, "invalid_request", "HTML is invalid, too large, not UTF-8, or has no extractable text.") from error
+    except SourcePermissionError as error:
+        raise ApiProblem(422, "invalid_request", "HTML is invalid, too large, not UTF-8, or has no extractable text.") from error
 
 
 @app.post("/v2/research/sources/{source_id}/reextract", status_code=201, include_in_schema=False)
@@ -2145,11 +2169,14 @@ def get_research_source_original(source_id: str, authorization: str | None = Hea
         source = research_sources.get(account.account_id, source_id)
     except SourceNotFound as error:
         raise ApiProblem(404, "not_found", "Research source not found.") from error
-    if not source.original_pdf_base64 or not source.permissions.display or not source.permissions.export:
+    raw = source.original_pdf_base64 or source.original_html_base64
+    if not raw or not source.permissions.display or not source.permissions.export:
         raise ApiProblem(403, "invalid_request", "The original document is not available for download.")
     import base64
-    return Response(content=base64.b64decode(source.original_pdf_base64), media_type="application/pdf",
-                    headers={"Content-Disposition": 'attachment; filename="source.pdf"', "Cache-Control": "no-store"})
+    is_html = source.retrieval_method == "user_html"
+    return Response(content=base64.b64decode(raw), media_type="application/octet-stream" if is_html else "application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="source.html"' if is_html else 'attachment; filename="source.pdf"',
+                             "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/v2/research/sources/{source_id}/context", include_in_schema=False)

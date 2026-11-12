@@ -1,5 +1,5 @@
 /** GENERATED FILE — DO NOT EDIT. Source: openapi/v2/openapi.json
- * SHA-256: e0b61141cacab80348f00614f2975c509177942284d1a705a20fecb8bbcaec89
+ * SHA-256: d1c9d2963152431c26146e8a47dc9cc56fd7d8406224982734bd19abe7bf6c77
  */
 export type AttachSourcesInput = { readonly "parent_version_id": string; readonly "source_ids": readonly (string)[]; };
 export type CalculationRequest = { readonly "decimal_places"?: number; readonly "first": NumericFact; readonly "formula": "growth_percent" | "margin_percent" | "difference"; readonly "second": NumericFact; };
@@ -8,6 +8,7 @@ export type CreateResearchCalculationRequest = { readonly "decimal_places"?: num
 export type FetchSourceRequest = { readonly "event_at"?: string | null; readonly "is_simulated"?: boolean; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "revised_at"?: string | null; readonly "title": string; readonly "url": string; };
 export type FocusCitation = { readonly "citation_index": number; readonly "claim_index": number; };
 export type HTTPValidationError = { readonly "detail"?: readonly (ValidationError)[]; };
+export type HtmlUploadRequest = { readonly "event_at"?: string | null; readonly "html_base64": string; readonly "is_simulated"?: boolean; readonly "permissions": SourcePermissions; readonly "published_at"?: string | null; readonly "revised_at"?: string | null; readonly "title": string; };
 export type NumericFact = { readonly "currency"?: string | null; readonly "fact_id": string; readonly "period": string; readonly "unit": string; readonly "value": number | string; };
 export type Operation = { readonly "cancel_token": string; readonly "content_hash": string; readonly "created_at": string; readonly "endpoint": string; readonly "idempotency_key_hash": string; readonly "last_event_id": string; readonly "operation_id": string; readonly "resume_token": string; readonly "schema_version": "v1"; readonly "source_refs": readonly (SourceRef)[]; readonly "status": "pending" | "running" | "completed" | "failed" | "cancelled"; readonly "updated_at": string; };
 export type OperationResponse = { readonly "operation": Operation; };
