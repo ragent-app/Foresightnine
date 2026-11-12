@@ -1,0 +1,48 @@
+{
+  "assessment": "Three newly reserved official-source tasks, developer knows sources and references; no independent human review; no comparison or assertion of overall acceptance. NVIDIA original HTML extracted locally, tables use generated separators. PDF source byte identity at prior dates not established.",
+  "cost_usd": "unknown; no monetary cap asserted",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "08759814fc66f4eb4fabed706faa01bd0ffc8ea2",
+  "inputs": [
+    {
+      "id": "NVDA_REV",
+      "sha256": "057344493f628b2c5a27d1ea034cabc267488577977034477b0d33fc3503c0dc"
+    },
+    {
+      "id": "BEA_Q3",
+      "sha256": "e8796d4013dbadc3d9f6ce899854251159616b7dd4aade7264af465c6459aef5"
+    },
+    {
+      "id": "FED_VOTE",
+      "sha256": "4fe00d6db7b6205a2e3f72faf7b374cd34ed3f647f78932b7a27da9356183083"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 3,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "All 3 must satisfy the preregistered mechanical scorer and token budgets; not proof of semantic correctness or full B acceptance.",
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "e1c527cace7e8cced001d189366c34a8f3359d5d663859d0cdb2b453c0669a39",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "34e76ae6b4b527dddb81cc812026aa62a67611c70c9a593159930250e7eeea99",
+  "scorer_sha256": "5da67911b375244649b6ed776e419cdea009eb1120a6881b6261af20c9b940bf",
+  "search_calls": 0,
+  "max_tokens_total": 30000,
+  "source_html_sha256": "bf8e287df4a1a2d6b37a73c5bcbde2a134e081eb2af3e75009cb98a479d1d85b",
+  "source_html_gzip_sha256": "4cc244d9b2f9c1b38ec59e3f68ee5c675f1f85e225464d176154be4a23204d13"
+}
