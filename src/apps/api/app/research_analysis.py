@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v41"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v42"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1669,6 +1669,26 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in parts)
                     return normalized <= max_size and fits(parts, compact_metadata=True, short_refs=short_refs)
 
+                # A window that starts "of America" can omit "Bank" even
+                # though its boundary is not inside a word. Preserve the
+                # adjacent name component only when spare budget permits.
+                for part_index, (start, passage) in enumerate(selected):
+                    if not start or not re.match(r"\s*(?:of|and)\s+[A-Z][A-Za-z0-9&.'-]{2,}\b", passage):
+                        continue
+                    if not (passage[0].isspace() or source.text[start - 1].isspace()):
+                        continue
+                    left = max(0, start - 120)
+                    prefix = source.text[left:start]
+                    name = re.search(r"\b[A-Z][A-Za-z0-9&.'-]{2,}\s*$", prefix)
+                    if name is None or "\f" in prefix[name.start():]:
+                        continue
+                    new_start = left + name.start()
+                    if part_index and new_start < selected[part_index - 1][0] + len(selected[part_index - 1][1]):
+                        continue
+                    trial = list(selected)
+                    trial[part_index] = (new_start, source.text[new_start:start + len(passage)])
+                    if can_expand(trial):
+                        selected = trial
                 for part_index, (start, passage) in enumerate(selected):
                     if start == 0 or not re.match(r"^\s*(?:in|on|at|for|from|to|during|as|by)\s+", passage, re.IGNORECASE):
                         continue
