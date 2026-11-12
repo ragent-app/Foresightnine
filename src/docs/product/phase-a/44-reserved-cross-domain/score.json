@@ -1,0 +1,49 @@
+{
+  "manifest_sha256": "11c815d9250f366c33da4a2b4fb42a1afb7f6a17d619dee77e174ebde41d893b",
+  "independence": "reserved sources and tasks, nonblind to evaluator; no independent human review",
+  "semantic_support": "not established by mechanical checks",
+  "historical_availability": "not established",
+  "tasks": {
+    "NVDA_REV": {
+      "operation_status": "local_failure",
+      "research_status": null,
+      "facts": [
+        {
+          "value": "26974",
+          "unit": "million",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": false
+        },
+        {
+          "value": "26914",
+          "unit": "million",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": false
+        }
+      ],
+      "calculation_ok": false,
+      "name_checks_ok": true,
+      "counterargument_citations_located": false,
+      "support_citations_located_and_complete": false,
+      "omitted_or_truncated_quotation": false,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": false,
+      "declared_publication_matches": true,
+      "budget_ok": false,
+      "reported_tokens": null,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    },
+    "BEA_Q3": {
+      "mechanical_pass": false,
+      "status": "not_run"
+    },
+    "FED_VOTE": {
+      "mechanical_pass": false,
+      "status": "not_run"
+    }
+  },
+  "passed": 0,
+  "total": 3
+}
