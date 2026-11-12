@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v29"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v30"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -555,8 +555,8 @@ def _revision_summary_windows(text: str, question: str, size: int,
     sentence. The bounded pattern may miss alternative wording or caveats.
     """
     intent = _query_intent(question)
-    if not (any(x in intent for x in ("修订", "revision", "revised")) and
-            any(x in intent for x in ("原因", "因素", "抵消", "drivers", "factors", "offset"))):
+    if not (any(x in intent for x in ("修订", "修訂", "上修", "下修", "revision", "revised")) and
+            any(x in intent for x in ("原因", "因素", "抵消", "来源", "來源", "drivers", "factors", "offset"))):
         return None
     metrics = []
     if any(x in intent for x in ("gdp", "国内生产")):
@@ -581,14 +581,68 @@ def _revision_summary_windows(text: str, question: str, size: int,
     if (not level or not driver or level.end() > driver.start() or
             driver.group('first').casefold() == driver.group('second').casefold()):
         return None
+    # Do not promote an otherwise relevant revision from the wrong period.
+    requested_years = set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", intent))
+    level_years = set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", level.group()))
+    if requested_years and (len(requested_years) != 1 or not requested_years <= level_years):
+        return None
+    requested_quarters = set(re.findall(r"\bq([1-4])\b", intent, re.IGNORECASE))
+    for number, chinese in enumerate(("一", "二", "三", "四"), 1):
+        if f"第{chinese}季度" in intent or f"第{number}季度" in intent:
+            requested_quarters.add(str(number))
+    if requested_quarters:
+        names = {"1": "first", "2": "second", "3": "third", "4": "fourth"}
+        if (len(requested_quarters) != 1 or
+                not re.search(r"\b" + names[next(iter(requested_quarters))] + r"\s+quarter\b", level.group(), re.IGNORECASE)):
+            return None
     level_end = level.end()
     estimate_label = re.search(r"(?i)\baccording\s+to\s+the\s+[\"']?(?:advance|first|second|third)[\"']?\s+estimate\b", level.group())
     if estimate_label:
         level_end = level.start() + estimate_label.end()
     spans = [(level.start(), level_end), (driver.start(), driver.end())]
+    # A single release can report the previous estimate in the sentence
+    # between the leading level and the revision drivers. Preserve it when
+    # the question explicitly compares the second and third estimates.
+    wants_both = (("第二次" in intent and "第三次" in intent) or
+                  ("second estimate" in intent and "third estimate" in intent))
+    if wants_both:
+        between = sample[level_end:driver.start()]
+        previous = re.search(r"(?i)\bin\s+the\s+second\s+estimate\b" + inside +
+                             r"{0,160}?\b(?:percent\b|%)" + inside +
+                             r"{0,60}?(?<!U\.S)[.!?](?=\s|$)", between)
+        if previous:
+            spans.insert(1, (level_end + previous.start(), level_end + previous.end()))
     if sum(end - start for start, end in spans) > size:
         return None
     return [(start, text[start:end]) for start, end in spans]
+
+
+def _policy_rate_purchase_risk_windows(text: str, question: str, size: int,
+                                       should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]] | None:
+    """Keep three explicitly requested policy passages, without inferring their meaning."""
+    intent = _query_intent(question)
+    if not (any(term in intent for term in ("利率", "interest rate", "funds rate")) and
+            any(term in intent for term in ("购买", "purchase", "buying")) and
+            any(term in intent for term in ("国债", "treasury")) and
+            any(term in intent for term in ("抵押贷款", "mortgage")) and
+            any(term in intent for term in ("风险", "未恢复", "risk", "not recovered"))):
+        return None
+    if should_stop is not None and should_stop():
+        raise AnalysisInterrupted()
+    sample = text[:100_000]
+    rate = re.search(r"(?i)\bthe\s+committee\s+decided\s+to\s+(?:keep|maintain)\s+the\s+target\s+range\s+for\s+the\s+federal\s+funds\s+rate\s+at\s+[^;\n]{1,60}?\bpercent\b", sample)
+    amount = r"\$\s*\d+(?:\.\d+)?\s+(?:million|billion|trillion)\s+per\s+month"
+    purchase = re.search(r"(?i)\bthe\s+committee\s+indicated\s+that\s+it\s+would\s+continue\s+to\s+increase\s+its\s+holdings\s+of\s+treasury\s+securities\s+by\s+at\s+least\s+" + amount +
+                         r"\s+and\s+of\s+agency\s+mortgage[-–‑\s]+backed\s+securities\s+by\s+at\s+least\s+" + amount +
+                         r"\s+until\s+[^.!?\n]{1,180}[.!?]", sample)
+    risk = (re.search(r"(?i)\bthe\s+path\s+of\s+the\s+economy\s+continues\s+to\s+depend\s+on\s+the\s+course\s+of\s+the\s+virus\s*[.!?]", sample) or
+            re.search(r"(?i)\brisks?\s+to\s+the\s+economic\s+outlook\s+remain(?:s)?\s*[.!?]", sample))
+    if not rate or not purchase or not risk:
+        return None
+    spans = sorted([(rate.start(), rate.end()), (purchase.start(), purchase.end()), (risk.start(), risk.end())])
+    if any(spans[i][1] > spans[i + 1][0] for i in range(2)) or sum(b-a for a,b in spans) > size:
+        return None
+    return [(a,text[a:b]) for a,b in spans]
 
 
 def _asset_purchase_window(text: str, question: str, size: int,
@@ -1140,12 +1194,17 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         revision_parts = _revision_summary_windows(selection_text, question, max_size, should_stop)
         revision_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                               for start, part in revision_parts] if revision_parts else None)
+        policy_parts = _policy_rate_purchase_risk_windows(selection_text, question, max_size, should_stop)
+        policy_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
+                            for start, part in policy_parts] if policy_parts else None)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             windows = (structured_parts if structured_parts and
                        sum(len(part) for _, part in structured_parts) <= size else None)
             if windows is None:
                 if split and size >= 2:
                     windows = _policy_vote_windows(selection_text, question, size, should_stop)
+                    if windows is None:
+                        windows = _policy_rate_purchase_risk_windows(selection_text, question, size, should_stop)
                     if windows is None:
                         windows = _asset_purchase_window(selection_text, question, size, should_stop)
                     if windows is None:
@@ -1163,7 +1222,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         def source_payload(parts: list[tuple[int, str]]) -> list[dict[str, Any]]:
             coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
             structured = (structured_parts is not None and parts == structured_parts or
-                          revision_original is not None and parts == revision_original)
+                          revision_original is not None and parts == revision_original or
+                          policy_original is not None and parts == policy_original)
             return [{"source_id": source.source_id,
                      **({"title": source.title} if not structured or position == 0 else {}),
                      "source_coverage": coverage,
@@ -1210,6 +1270,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             selected = [(0, source.text)]
         elif revision_original and fits(revision_original):
             selected = revision_original
+        elif policy_original and fits(policy_original):
+            selected = policy_original
         else:
             split = len(selection_text) > 2000
             def budget_for(split_windows: bool) -> int:

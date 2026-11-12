@@ -1410,3 +1410,46 @@ def test_date_and_unit_observations_are_source_located_claims_not_calculation_in
     assert any('retained as unverified claims' in note for note in result.limitations)
     assert any('fact(s) were omitted' in note for note in result.limitations)
     assert any('unlocatable' in note or 'did not match' in note for note in result.limitations)
+
+
+def test_single_release_revision_comparison_keeps_both_estimates_and_drivers():
+    from app.research_analysis import _revision_summary_windows
+    text = ('Intro. Real gross domestic product (GDP) increased at an annual rate of 3.4 percent in the fourth quarter of 2023, according to the "third" estimate. '
+            'The previous data are older. In the second estimate, the increase in real GDP was 3.2 percent. '
+            'The update primarily reflected upward revisions to consumer spending and nonresidential fixed investment that were partly offset by a downward revision to private inventory investment. Tail.')
+    question = '比较第三次和第二次估计的GDP年化增长率，说明上修来源及抵消因素。'
+    parts = _revision_summary_windows(text, question, 1000)
+    assert parts and len(parts) == 3
+    selected = ' '.join(segment for _, segment in parts)
+    assert all(term in selected for term in ('3.4 percent','3.2 percent','consumer spending','nonresidential fixed investment','private inventory investment'))
+    assert all(text[start:start + len(segment)] == segment for start,segment in parts)
+    assert _revision_summary_windows(text, '比较2022年第三次和第二次估计的GDP年化增长率，说明上修来源及抵消因素。', 1000) is None
+    assert _revision_summary_windows(text, '比较2023年第三季度第三次和第二次估计的GDP，说明上修及抵消因素。', 1000) is None
+    assert _revision_summary_windows(text, question, sum(len(part) for _,part in parts)-1) is None
+    same_direction = text.replace('downward revision', 'upward revision')
+    assert _revision_summary_windows(same_direction, question, 1000) is None
+    no_compare = _revision_summary_windows(text, '说明GDP修订原因和抵消因素。', 1000)
+    assert no_compare and len(no_compare) == 2
+
+
+def test_policy_rate_purchase_risk_windows_preserve_condition_and_bounded_offsets():
+    from app.research_analysis import _policy_rate_purchase_risk_windows
+    text = ('Unrelated. ' * 100 + 'Risks to the economic outlook remain. ' + 'Unrelated. ' * 40 +
+            'The Committee decided to keep the target range for the federal funds rate at 0 to 1/4 percent and expects more. ' +
+            'Unrelated. ' * 20 +
+            'The Committee indicated that it would continue to increase its holdings of Treasury securities by at least $80 billion per month and of agency mortgage-backed securities by at least $40 billion per month until substantial further progress has been made toward its maximum employment and price stability goals. ' + 'End. ' * 100)
+    question = '利率目标区间、国债与抵押贷款证券购买金额，以及经济风险是什么？'
+    parts = _policy_rate_purchase_risk_windows(text, question, 1000)
+    assert parts and len(parts) == 3
+    combined = ' '.join(part for _,part in parts)
+    assert '0 to 1/4 percent' in combined and '$80 billion' in combined and '$40 billion' in combined
+    assert 'Risks to the economic outlook remain' in combined and 'until substantial further progress' in combined
+    assert all(text[start:start + len(part)] == part for start,part in parts)
+    assert _policy_rate_purchase_risk_windows(text, question, sum(len(part) for _,part in parts)-1) is None
+    specific = text.replace('Risks to the economic outlook remain.', 'The path of the economy continues to depend on the course of the virus. Risks to the economic outlook remain.')
+    specific_parts = _policy_rate_purchase_risk_windows(specific, question, 1000)
+    assert specific_parts and any('course of the virus' in part for _,part in specific_parts)
+    assert _policy_rate_purchase_risk_windows(text.replace('by at least $40','by $40'), question, 1000) is None
+    assert _policy_rate_purchase_risk_windows(text, '利率目标区间是什么？', 1000) is None
+    with pytest.raises(AnalysisInterrupted):
+        _policy_rate_purchase_risk_windows(text, question, 1000, lambda: True)
