@@ -342,6 +342,25 @@ def test_multilingual_source_respects_byte_budget():
     assert result.prompt_bytes <= 2000
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_multilingual_comparison_reserves_budget_for_each_source(reverse):
+    positive = source("positive", text="营业收入增长证据。" * 1000)
+    negative = source("negative", text="相反证据收入下降。" * 1000)
+    reports = [negative, positive] if reverse else [positive, negative]
+
+    def model(prompt):
+        assert len(prompt.encode("utf-8")) <= 3000
+        parts = json.loads(prompt)["sources"]
+        assert {part["source_id"] for part in parts} == {"positive", "negative"}
+        assert all(part["source_coverage"] == "partial" and part["text"] for part in parts)
+        return {}, 10
+
+    result = analyze("收入变化", reports, None, model, max_prompt_chars=3000)
+    assert set(result.source_ids) == {"positive", "negative"}
+    assert all(any(source_id in gap and "remaining text" in gap for gap in result.limitations)
+               for source_id in ("positive", "negative"))
+
+
 def test_chinese_year_and_relevance_outrank_unrelated_numeric_density():
     target = "Revenue increased in 2023 to 200 million."
     text = ("Generic discussion. " * 500 + target + " Context. " * 200 +

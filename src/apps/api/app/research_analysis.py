@@ -334,6 +334,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # not crowd every later comparison source out of the prompt.
         share = remaining // (len(eligible) - index)
         max_size = min(len(source.text), MAX_SOURCE_CHARS, share)
+        # Character quotas alone do not partition the provider's byte budget:
+        # Chinese text and JSON escaping can consume several bytes per character.
+        # Reserve an equal share of the remaining serialized bytes for each
+        # remaining source; unused shares roll forward to later sources.
+        current_bytes = len(serialize().encode("utf-8"))
+        source_budget_limit = current_bytes + max(0, max_prompt_chars - current_bytes) // (len(eligible) - index)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             if split and size >= 2:
                 return sorted(_select_windows(source.text, question, size // 2, 2, should_stop), key=lambda item: item[0])
@@ -347,7 +353,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
 
         def fits(candidate: list[tuple[int, str]]) -> bool:
             data["sources"].extend(source_payload(candidate))
-            within_budget = len(serialize().encode("utf-8")) <= max_prompt_chars
+            within_budget = len(serialize().encode("utf-8")) <= source_budget_limit
             del data["sources"][-len(candidate):]
             return within_budget
 
