@@ -1476,3 +1476,45 @@ def test_historical_run_sends_cutoff_and_excludes_later_source(monkeypatch):
     assert [s['source_id'] for s in prompts[0]['sources']] == ids[:1]
     snapshot = client.get(path + '/runs/' + op + '/inputs', headers=headers).json()
     assert snapshot['as_of'] == prompts[0]['research_cutoff']
+
+
+def test_source_discovery_only_sends_scope_when_explicitly_selected(monkeypatch):
+    from uuid import uuid4
+    from app.research_runs import discovery_query
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *a, **k: None)
+    queries = []
+    class Search:
+        supports_project_search = True
+        def search(self, query, *, limit, deadline, cancel_event):
+            queries.append(query)
+            return ()
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'discovery-scope-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    scope = 'Oceania FY2024'
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Compare revenue', 'scope': scope}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+    def run(parent, key, extra):
+        response = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': key}, json={'parent_version_id': parent, **extra})
+        assert response.status_code == 202, response.text
+        op = response.json()['operation']['operation_id']
+        for _ in range(100):
+            status = client.get(path + '/runs/' + op, headers=headers).json()['operation']['status']
+            if status in {'completed', 'failed'}: break
+            time.sleep(0.02)
+        assert status == 'completed'
+        return op, client.get(path, headers=headers).json()['versions'][-1]['version_id']
+    first_parent = topic['versions'][0]['version_id']
+    first, parent = run(first_parent, 'scope-search-default', {})
+    assert queries == ['Compare revenue']
+    # An explicit false remains idempotent with requests predating the field.
+    replay = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'scope-search-default'}, json={'parent_version_id': first_parent, 'include_scope_in_search': False})
+    assert replay.status_code == 202 and replay.headers['Idempotency-Replayed'] == 'true'
+    second, _ = run(parent, 'scope-search-opt-in', {'include_scope_in_search': True})
+    assert queries == ['Compare revenue', 'Compare revenue Oceania FY2024']
+    assert client.get(path + '/runs/' + second + '/inputs', headers=headers).json()['budget']['include_scope_in_search'] is True
+    assert 'include_scope_in_search' not in client.get(path + '/runs/' + first + '/inputs', headers=headers).json()['budget']
+    bounded = discovery_query('问' * 80, '🌏' * 80, True)
+    assert len(bounded) == 70 and bounded == '问' * 45 + ' ' + '🌏' * 24

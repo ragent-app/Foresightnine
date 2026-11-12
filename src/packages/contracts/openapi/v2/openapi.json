@@ -757,6 +757,11 @@
               }
             ]
           },
+          "include_scope_in_search": {
+            "default": false,
+            "title": "Include Scope In Search",
+            "type": "boolean"
+          },
           "max_cost_usd": {
             "anyOf": [
               {

@@ -102,7 +102,7 @@ from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTIO
 from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_citation_subject_context, suggest_percentage_evidence, suggest_usd_amount_evidence, suggest_uncited_numeric_facts
 from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_support_review, prepare_support_review)
-from .research_runs import ResearchRunRequest, ResearchRunResult
+from .research_runs import ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, search_sec_identities, reserve_sec_request, validate_user_agent
@@ -2021,6 +2021,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     run_request_payload = _request_payload(request)
     if request.require_counterarguments:
         run_request_payload.pop("require_counterarguments", None)
+    if not request.include_scope_in_search:
+        run_request_payload.pop("include_scope_in_search", None)
     focus = None
     if request.focus_citation is None:
         run_request_payload.pop("focus_citation", None)
@@ -2089,7 +2091,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         raise ProviderFailure("search_timeout", "Search time budget is exhausted.", retryable=False)
                     _reserve_search_call(http_request)
                     search_calls = 1
-                    raw_candidates = search(topic.request.question.strip()[:70], limit=5,
+                    raw_candidates = search(discovery_query(topic.request.question, topic.request.scope, request.include_scope_in_search), limit=5,
                                             deadline=deadline, cancel_event=operations.cancel_event(operation_id))
                     if not isinstance(raw_candidates, (list, tuple)):
                         raise ProviderFailure("search_response_invalid", "Search provider returned invalid results.", retryable=False)

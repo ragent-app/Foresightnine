@@ -70,3 +70,12 @@ describe("research scope", () => {
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).not.toHaveProperty("scope");
   });
 });
+
+describe("scope in source discovery", () => {
+  it("includes scope only when selected and does not split Unicode", async () => {
+    const { sourceDiscoveryQuery } = await import("./general-research-client");
+    expect(sourceDiscoveryQuery("Revenue?", "Asia FY2024", false)).toBe("Revenue?");
+    expect(sourceDiscoveryQuery("Revenue?", "Asia FY2024", true)).toBe("Revenue? Asia FY2024");
+    expect(sourceDiscoveryQuery("问".repeat(80), "🌏".repeat(80), true)).toBe("问".repeat(45) + " " + "🌏".repeat(24));
+  });
+});

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { researchClient, ResearchRequestError, researchPollingDelay, type DiscoveryCandidate, type ResearchClaim, type ResearchFact, type ResearchOperation, type ResearchTopic, type SourceMetadata, type RunBudget, type RunInputSnapshot, type IssuerCandidate } from "../general-research-client";
+import { researchClient, sourceDiscoveryQuery, ResearchRequestError, researchPollingDelay, type DiscoveryCandidate, type ResearchClaim, type ResearchFact, type ResearchOperation, type ResearchTopic, type SourceMetadata, type RunBudget, type RunInputSnapshot, type IssuerCandidate } from "../general-research-client";
 import type { Language } from "../types";
 import { Button, Field, Input, Textarea } from "./Controls";
 import { Header } from "./AppShell";
@@ -122,6 +122,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [selectedVersionId, setSelectedVersionId] = useState("");
   const [question, setQuestion] = useState("");
   const [scope, setScope] = useState("");
+  const [discoverScope, setDiscoverScope] = useState(false);
+  const [runSearchScope, setRunSearchScope] = useState(false);
   const [asOf, setAsOf] = useState("");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
@@ -172,6 +174,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const current = topic?.versions.find((item) => item.version_id === selectedVersionId) ?? latest;
   const isLatest = current?.version_id === latest?.version_id;
   useEffect(() => { setFocusChoice(""); }, [current?.version_id]);
+  useEffect(() => { setRunSearchScope(false); }, [accountId, topic?.topic_id]);
   const focusOptions = (current?.content.claims ?? []).flatMap((claim, claimIndex) => (claim.citations ?? []).flatMap((citation, citationIndex) => {
     const source = sourceMetadata.find((item) => item.source_id === citation.source_id);
     if (!source || !source.permissions?.model_input || !canUseCitationSource(source, topic?.request.as_of) || !citation.quotation || citation.partial_token || citation.location?.status === "ambiguous" || citation.location?.character_start === undefined) return [];
@@ -329,7 +332,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       }
       const created = await api.create(question.trim(), sourceIds, asOf, scope.trim());
       setTopic(created); setSelectedVersionId(""); setTopics((items) => [created, ...items]); setOperation(null);
-      setQuestion(""); setScope(""); setAsOf(""); clearMaterial();
+      setQuestion(""); setScope(""); setDiscoverScope(false); setRunSearchScope(false); setAsOf(""); clearMaterial();
     } catch (error) {
       if (error instanceof Error && error.message === "file_too_large") {
         setNotice(en ? "PDF files must be no larger than 1.5 MB." : "PDF 文件不能超过 1.5 MB。");
@@ -364,7 +367,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     try {
       const [updated, runs] = await Promise.all([api.get(topicId), api.runs(topicId)]);
-      setTopic(updated); setSelectedVersionId(""); setOperation(runs[0]?.operation ?? null);
+      setTopic(updated); setSelectedVersionId(""); setRunSearchScope(false); setOperation(runs[0]?.operation ?? null);
       setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
     } catch { setNotice(en ? "Could not open research." : "无法打开研究。"); }
     finally { setBusy(false); }
@@ -373,7 +376,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     if (!api || !question.trim()) return;
     setBusy(true); setNotice(""); setCandidates([]);
     try {
-      const found = await api.search(question.trim());
+      const found = await api.search(sourceDiscoveryQuery(question, scope, discoverScope));
       if (!found.project_search_available) setNotice(en ? "Search is unavailable. Add a source directly." : "搜索暂不可用，可以直接添加来源资料。");
       else if (!found.candidates.length) setNotice(en ? "No source candidates found." : "未找到候选来源。");
       else setCandidates(found.candidates);
@@ -393,7 +396,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     if (!pendingRun.current || pendingRun.current.topicId !== topic.topic_id || pendingRun.current.versionId !== current.version_id) {
       pendingRun.current = { topicId: topic.topic_id, versionId: current.version_id, key: crypto.randomUUID(),
-        budget: { search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
+        budget: { search: allowSearch, supportReview, requireCounterarguments, maxElapsedSeconds: Number(maxElapsed), maxTotalTokens: Number(maxTokens), ...(allowSearch && runSearchScope && topic.request.scope ? { includeScopeInSearch: true } : {}), ...(focus ? { focusCitation: { claim_index: focus.claim_index, citation_index: focus.citation_index } } : {}), ...(maxCost ? { maxCostUsd: maxCost } : {}) } };
     }
     try { const receipt = await api.run(topic.topic_id, current.version_id, pendingRun.current.key, pendingRun.current.budget);
       pendingRun.current = null;
@@ -487,6 +490,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <Field label={en ? "Scope and desired output (optional)" : "研究范围与期望成果（可选）"} helper={en ? "For example, companies, periods or the comparison you need. The scope is sent to the model during research." : "例如需要研究的公司、期间或比较方式。运行研究时会将范围发送给模型。"}><Textarea value={scope} maxLength={10000} onChange={(event) => setScope(event.target.value)} /></Field>
         <Field label={en ? "Research cutoff (optional)" : "研究截止时间（可选）"} helper={en ? "Uses your device's local time." : "使用设备所在时区。"}><Input type="datetime-local" value={asOf} onChange={(event) => setAsOf(event.target.value)} /></Field>
         <Button disabled={busy || !question.trim()} onClick={() => void discover()}>{en ? "Find sources" : "查找资料"}</Button>
+        {scope.trim() ? <label><input type="checkbox" checked={discoverScope} disabled={busy} onChange={(event) => setDiscoverScope(event.target.checked)} /> {en ? "Include part of the scope in source search (sent to the search provider)." : "查找资料时包含部分研究范围（将发送给搜索服务）。"}</label> : null}
+        {question.trim() ? <p><small>{en ? "Search query: " : "搜索内容："}{sourceDiscoveryQuery(question, scope, discoverScope)}</small></p> : null}
         {candidates.length ? <section className="general-candidates"><p>{en ? "Search results are unverified leads." : "搜索结果是待核验线索。"}</p>{candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><p>{candidate.excerpt}</p><Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Use link" : "使用链接"}</Button></article>)}</section> : null}
         <details className="general-source" ref={sourceDetails}><summary>{en ? "Add material (optional)" : "添加资料（可选）"}</summary>
           <Field label={en ? "Source type" : "资料类型"}><select className="text-input select-input" value={sourceMode} onChange={(event) => { const mode = event.target.value as "text" | "sec" | "file"; setSourceMode(mode); if (mode === "sec") setIsSimulated(false); }}><option value="text">{en ? "Text or official page" : "正文或官方网页"}</option><option value="file">{en ? "PDF document" : "PDF 文档"}</option><option value="sec">{en ? "SEC company concept" : "SEC 公司财务指标"}</option></select></Field>
@@ -548,6 +553,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       </details> : null}
       <p>{en ? "Only provided material with model permission can be analyzed. A question alone may return a clear information gap." : "目前仅分析你提供且允许模型处理的资料。只输入问题时，系统可能先返回资料缺口。"}</p>
       <label><input type="checkbox" checked={allowSearch} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setAllowSearch(event.target.checked)} /> {en ? "When no material is attached, send the question to the configured search provider to find leads." : "未关联资料时，将问题发送给已配置的搜索服务以查找线索。"}</label>
+      {allowSearch && topic.request.scope ? <label><input type="checkbox" checked={runSearchScope} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRunSearchScope(event.target.checked)} /> {en ? "Include part of the saved scope in source search (sent to the search provider)." : "搜索来源时包含部分已保存的研究范围（将发送给搜索服务）。"}</label> : null}
+      {allowSearch && topic.request.question ? <p><small>{en ? "If source search runs, its query is: " : "如需搜索来源，发送的内容："}{sourceDiscoveryQuery(topic.request.question, topic.request.scope ?? "", runSearchScope)}</small></p> : null}
       <label><input type="checkbox" checked={supportReview} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setSupportReview(event.target.checked)} /> {en ? "Ask the model to review citation support (up to one additional paid call; not independent verification)." : "请求模型复查引用是否支持结论（最多增加一次付费调用；不等于独立核验）。"}</label>
       {supportReview ? <p><small>{en ? "The review remains subject to token and time budgets; unknown initial usage requires reserving both call limits." : "复查仍受 Token 和时间预算限制；首次用量未知时需预留两次调用上限。"}</small></p> : null}
       <label><input type="checkbox" checked={requireCounterarguments} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setRequireCounterarguments(event.target.checked)} /> {en ? "Require a cited counterargument for a complete result (turn off for straightforward fact checks)." : "完成研究需要有引文的反方意见（简单事实核验可关闭）。"}</label>

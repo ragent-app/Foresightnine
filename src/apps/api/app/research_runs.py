@@ -22,11 +22,22 @@ class ResearchRunRequest(BaseModel):
     max_model_calls: int = Field(default=1, ge=0, le=2)
     support_review: bool = False
     require_counterarguments: bool = True
+    include_scope_in_search: bool = False
     focus_citation: FocusCitation | None = None
     max_search_calls: int = Field(default=1, ge=0, le=1)
     max_elapsed_seconds: int = Field(default=60, ge=1, le=180)
     max_total_tokens: int = Field(default=10000, ge=0, le=20000)
     max_cost_usd: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+
+def discovery_query(question: str, scope: str, include_scope: bool) -> str:
+    """Bound the user-authorized text sent to source discovery."""
+    question = question.strip()
+    scope = scope.strip()
+    if not include_scope or not scope:
+        return question[:70]
+    question = question[:45]
+    return question + " " + scope[:69 - len(question)]
 
 
 class ResearchRunResult(BaseModel):

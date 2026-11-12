@@ -57,7 +57,14 @@ export interface ResearchOperation {
 export interface SourceMetadata { source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
-export interface RunBudget { search: boolean; supportReview: boolean; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number } }
+export interface RunBudget { search: boolean; supportReview: boolean; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean }
+
+export function sourceDiscoveryQuery(question: string, scope: string, includeScope: boolean): string {
+  const q = Array.from(question.trim()), s = Array.from(scope.trim());
+  if (!includeScope || !s.length) return q.slice(0, 70).join("");
+  const prefix = q.slice(0, 45);
+  return `${prefix.join("")} ${s.slice(0, 69 - prefix.length).join("")}`;
+}
 export interface RunInputSnapshot {
   captured_at: string;
   parent_version_id: string;
@@ -136,7 +143,7 @@ export function researchClient(baseUrl: string) {
         ...sourceTimes(publishedAt, eventAt, revisedAt), is_simulated: isSimulated, text_order: textOrder,
         permissions: { store: true, display: true, model_input: modelInput, export: allowExport } }),
     search: (query: string) => request<{ project_search_available: boolean; candidates: DiscoveryCandidate[] }>(
-      `/v1/search/candidates?query=${encodeURIComponent(query.slice(0, 70))}&limit=5`),
+      `/v1/search/candidates?query=${encodeURIComponent(Array.from(query).slice(0, 70).join(""))}&limit=5`),
     create: (question: string, sourceIds: string[], asOf: string, scope = "") => request<ResearchTopic>("/v2/research/topics", { question, source_ids: sourceIds,
       ...(scope ? { scope } : {}),
       ...(asOf ? { as_of: new Date(asOf).toISOString() } : {}) }),
@@ -149,6 +156,7 @@ export function researchClient(baseUrl: string) {
         max_search_calls: budget.search ? 1 : 0, max_elapsed_seconds: budget.maxElapsedSeconds,
         max_total_tokens: budget.maxTotalTokens, max_model_calls: budget.supportReview ? 2 : 1, support_review: budget.supportReview,
         require_counterarguments: budget.requireCounterarguments,
+        ...(budget.includeScopeInSearch ? { include_scope_in_search: true } : {}),
         ...(budget.focusCitation ? { focus_citation: budget.focusCitation } : {}),
         ...(budget.maxCostUsd ? { max_cost_usd: budget.maxCostUsd } : {}) } satisfies ResearchV2.ResearchRunRequest, key),
     operation: (topicId: string, operationId: string) => request<{ operation: ResearchOperation }>(
