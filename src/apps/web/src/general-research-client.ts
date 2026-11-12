@@ -55,7 +55,7 @@ export interface ResearchOperation {
   cancel_token: string;
 }
 export interface SourceMetadata { source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
-export interface DiscoveryCandidate { title: string; url: string; excerpt: string }
+export interface DiscoveryCandidate { title: string; url: string; excerpt: string; published_at?: string | null }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
 export interface RunBudget { search: boolean; supportReview: boolean; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean }
 
@@ -64,6 +64,17 @@ export function sourceDiscoveryQuery(question: string, scope: string, includeSco
   if (!includeScope || !s.length) return q.slice(0, 70).join("");
   const prefix = q.slice(0, 45);
   return `${prefix.join("")} ${s.slice(0, 69 - prefix.length).join("")}`;
+}
+
+/** Search providers return a date, not an independently verified timestamp. */
+export function searchCandidateDate(publishedAt?: string | null, cutoff?: string | null): { date: string | null; relation: "unknown" | "unrestricted" | "before" | "same_or_after" } {
+  const date = publishedAt?.match(/^\d{4}-\d{2}-\d{2}(?=T|$)/)?.[0] ?? null;
+  const dateMs = date ? Date.parse(`${date}T00:00:00Z`) : NaN;
+  if (!date || !Number.isFinite(dateMs) || new Date(dateMs).toISOString().slice(0, 10) !== date) return { date: null, relation: "unknown" };
+  if (!cutoff) return { date, relation: "unrestricted" };
+  const cutoffMs = Date.parse(cutoff);
+  if (!Number.isFinite(cutoffMs)) return { date, relation: "unknown" };
+  return { date, relation: date < new Date(cutoffMs).toISOString().slice(0, 10) ? "before" : "same_or_after" };
 }
 export interface RunInputSnapshot {
   captured_at: string;

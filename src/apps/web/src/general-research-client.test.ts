@@ -79,3 +79,17 @@ describe("scope in source discovery", () => {
     expect(sourceDiscoveryQuery("问".repeat(80), "🌏".repeat(80), true)).toBe("问".repeat(45) + " " + "🌏".repeat(24));
   });
 });
+
+describe("search date precision", () => {
+  it("uses the provider's date without asserting a publication time or source validity", async () => {
+    const { searchCandidateDate } = await import("./general-research-client");
+    const cutoff = "2023-02-01T03:00:00+08:00"; // UTC cutoff day is January 31.
+    expect(searchCandidateDate("2023-01-30T00:00:00Z", cutoff)).toEqual({date: "2023-01-30", relation: "before"});
+    expect(searchCandidateDate("2023-01-31T00:00:00Z", cutoff)).toEqual({date: "2023-01-31", relation: "same_or_after"});
+    expect(searchCandidateDate("2023-02-01T00:00:00Z", cutoff)).toEqual({date: "2023-02-01", relation: "same_or_after"});
+    expect(searchCandidateDate(null, cutoff)).toEqual({date: null, relation: "unknown"});
+    expect(searchCandidateDate("2023-02-31T00:00:00Z", cutoff)).toEqual({date: null, relation: "unknown"});
+    expect(searchCandidateDate("2023-01-30", "invalid")).toEqual({date: "2023-01-30", relation: "unknown"});
+    expect(searchCandidateDate("2023-01-30", null)).toEqual({date: "2023-01-30", relation: "unrestricted"});
+  });
+});
