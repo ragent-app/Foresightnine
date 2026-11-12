@@ -596,6 +596,9 @@ def test_candidate_numeric_evidence_is_separate_and_recomputed_after_edit(monkey
     assert state == "completed"
     current = client.get(path, headers=headers).json()["versions"][-1]
     claim = current["content"]["claims"][0]
+    assert current["content"]["run"]["status"] == "partial"
+    assert claim["uncited_percentages"] == ["2.5 percent"]
+    assert any("claim percentage is absent" in note for note in current["content"]["limitations"])
     assert len(claim["citations"]) == 1 and claim["suggested_fact_evidence"][0]["fact_id"] == "annual"
     assert claim["suggested_fact_evidence"][0]["status"] == "requires_semantic_review"
     edited = deepcopy(current["content"])

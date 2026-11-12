@@ -2243,7 +2243,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             c.get("support_review", {}).get("verdict") == "supports" for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not differences and not calculation_differences and not amount_differences and
-                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") for c in claims) and
+                        not any(c.get("publication_date_warnings") or c.get("rate_unit_warnings") or c.get("uncited_amounts") or c.get("uncited_percentages") for c in claims) and
                         (not request.support_review or review_supports_all))
         limitations = [*discovery_notes, *analysis.limitations]
         if not analysis.counterarguments:
@@ -2266,6 +2266,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("An interest rate level may be expressed as percentage points; review the unit and context.")
         if any(c.get("uncited_amounts") for c in claims):
             limitations.append("A matched amount fact passage is not fully covered by attached quotations; check evidence and context.")
+        if any(c.get("uncited_percentages") for c in claims):
+            limitations.append("A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.")
         if len(differences) == 50:
             limitations.append("At most 50 candidate differences are shown.")
         if monotonic() > deadline:
