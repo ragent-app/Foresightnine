@@ -1,0 +1,74 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据 BEA 第二次估计，2025 年第四季度实际 GDP 环比折年增长 0.7%。",
+        "citations": [
+          {
+            "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 0.7 percent in the fourth quarter of 2025"
+          }
+        ]
+      },
+      {
+        "text": "该季度增速相对初次估计（advance estimate）向下修订了 0.7 个百分点。",
+        "citations": [
+          {
+            "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+            "quotation": "Real GDP was revised down 0.7 percentage point from the advance estimate, reflecting downward revisions to exports, consumer spending, government spending, and investment."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "修订主要反映出口、消费支出、政府支出和投资的下调，但进口降幅小于此前估计，部分抵消了下行修订。",
+        "citations": [
+          {
+            "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+            "quotation": "Imports decreased less than previously"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "文本为部分摘录（source_coverage: partial），初次估计的具体数值未在提供文本中给出，无法从所给来源直接得出修订后的原值。",
+      "发布日期为声明值（declared_published_at），未经独立核实。",
+      "文本未包含全年 2025 数据的完整细节。"
+    ],
+    "facts": [
+      {
+        "fact_id": "q4_2025_real_gdp_growth",
+        "label": "real GDP annualized growth rate (second estimate)",
+        "value": "0.7",
+        "unit": "percent",
+        "currency": null,
+        "period": "Q4 2025",
+        "citation": {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 0.7 percent in the fourth quarter of 2025"
+        }
+      },
+      {
+        "fact_id": "q4_2025_revision",
+        "label": "revision from advance estimate",
+        "value": "0.7",
+        "unit": "percentage points (downward)",
+        "currency": null,
+        "period": "Q4 2025",
+        "citation": {
+          "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+          "quotation": "Real GDP was revised down 0.7 percentage point from the advance estimate"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "q4_2025_real_gdp_growth",
+        "second_fact_id": "q4_2025_revision"
+      }
+    ]
+  },
+  "reported_tokens": 1159
+}

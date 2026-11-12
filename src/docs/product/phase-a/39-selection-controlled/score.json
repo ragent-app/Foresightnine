@@ -1,0 +1,130 @@
+{
+  "manifest_sha256": "354db2ea79cde30ec44c239ef3ad26bfc3105368e1dbb2116e0f52fd724fbe16",
+  "independence": "nonblind development evaluation; no independent review",
+  "semantic_support": "not established by mechanical checks",
+  "historical_availability": "not established",
+  "tasks": {
+    "GDP_AQ": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "2.1",
+          "unit": "percent",
+          "fact_matches": true,
+          "same_claim_mentions_value_and_cites_source": true
+        },
+        {
+          "value": "0.7",
+          "unit": "percent",
+          "fact_matches": true,
+          "same_claim_mentions_value_and_cites_source": true
+        }
+      ],
+      "calculation_ok": true,
+      "name_checks_ok": true,
+      "support_citations_located_and_complete": true,
+      "omitted_or_truncated_quotation": true,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": true,
+      "declared_publication_matches": true,
+      "budget_ok": true,
+      "reported_tokens": 1456,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    },
+    "GDP_REV": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "0.7",
+          "unit": "percent",
+          "fact_matches": true,
+          "same_claim_mentions_value_and_cites_source": true
+        },
+        {
+          "value": "0.7",
+          "unit": "point",
+          "fact_matches": true,
+          "same_claim_mentions_value_and_cites_source": true
+        }
+      ],
+      "calculation_ok": true,
+      "name_checks_ok": true,
+      "support_citations_located_and_complete": true,
+      "omitted_or_truncated_quotation": false,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": true,
+      "declared_publication_matches": true,
+      "budget_ok": true,
+      "reported_tokens": 1159,
+      "mechanical_pass": true,
+      "semantic_support": "not established"
+    },
+    "FED_RATE": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "3.5",
+          "unit": "percent",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": true
+        },
+        {
+          "value": "3.75",
+          "unit": "percent",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": true
+        },
+        {
+          "value": "0.25",
+          "unit": "point",
+          "fact_matches": false,
+          "same_claim_mentions_value_and_cites_source": true
+        }
+      ],
+      "calculation_ok": true,
+      "name_checks_ok": true,
+      "support_citations_located_and_complete": true,
+      "omitted_or_truncated_quotation": false,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": true,
+      "declared_publication_matches": true,
+      "budget_ok": true,
+      "reported_tokens": 1106,
+      "mechanical_pass": false,
+      "semantic_support": "not established"
+    },
+    "FED_DISS": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "0.5",
+          "unit": "point",
+          "fact_matches": true,
+          "same_claim_mentions_value_and_cites_source": true
+        }
+      ],
+      "calculation_ok": true,
+      "name_checks_ok": true,
+      "support_citations_located_and_complete": true,
+      "omitted_or_truncated_quotation": false,
+      "review_warnings": false,
+      "unknown_percentages": [],
+      "source_provenance_ok": true,
+      "declared_publication_matches": true,
+      "budget_ok": true,
+      "reported_tokens": 893,
+      "mechanical_pass": true,
+      "semantic_support": "not established"
+    }
+  },
+  "passed": 2,
+  "total": 4
+}

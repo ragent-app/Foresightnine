@@ -1,0 +1,37 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Stephen I. Miran dissented, preferring to lower the federal funds rate target range by 1/2 percentage point (half a percentage point).",
+        "citations": [
+          {
+            "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+            "quotation": "Voting against this action were Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point at this meeting"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "The excerpt is partial; another dissenter (Austan D.) is named but the text is truncated, so that dissenter's preferred action is not captured.",
+      "The publication date (2025-12-10) is declared, not independently verified.",
+      "The excerpts do not confirm the size of the rate action that was actually adopted by the Committee."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_miran_cut",
+        "label": "preferred rate cut size (Miran dissent)",
+        "value": "1/2",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "December 2025 FOMC meeting",
+        "citation": {
+          "source_id": "source_72327ed52a22419183fecbbe61ab6b8b",
+          "quotation": "Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point at this meeting"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 893
+}

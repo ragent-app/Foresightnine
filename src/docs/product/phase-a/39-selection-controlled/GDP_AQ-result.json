@@ -1,0 +1,173 @@
+{
+  "id": "GDP_AQ",
+  "operation_status": "completed",
+  "manifest_sha256": "354db2ea79cde30ec44c239ef3ad26bfc3105368e1dbb2116e0f52fd724fbe16",
+  "input_sha256": "3632fb5e81095886493d4660bb588d10f152ef55d2b551f3fff1be1c935ff41c",
+  "elapsed_seconds_observed": 14.65,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_851b830823de44a293832f28526cf99f",
+        "title": "BEA GDP second estimate fourth quarter and year 2025",
+        "url": null,
+        "event_at": null,
+        "published_at": "2026-03-13T12:30:00+00:00",
+        "obtained_at": "2026-11-12T05:43:27.516318+00:00",
+        "revised_at": null,
+        "content_sha256": "2e623f2113575dd98376699548184eec919ce0b8313713112440fb8a63ee0f08",
+        "is_simulated": false,
+        "pdf_text_order": "reading",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_annual_gdp_2025",
+        "value": "2.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025 annual (from 2024 annual level)",
+        "label": "annual real GDP growth 2025",
+        "source_id": "source_851b830823de44a293832f28526cf99f",
+        "quotation": "Real GDP increased 2.1 percent in 2025 (from the 2024 annual level to the 2025 annual level)",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 3566,
+          "character_end": 3658,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_q4_gdp_annual_rate",
+        "value": "0.7",
+        "unit": "percent annual rate",
+        "currency": null,
+        "period": "Q4 2025 (Oct-Dec)",
+        "label": "Q4 2025 real GDP quarterly annualized growth",
+        "source_id": "source_851b830823de44a293832f28526cf99f",
+        "quotation": "increased at an annual rate of 0.7 percent in the fourth quarter of\n2025 (October, November, and December)",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 272,
+          "character_end": 378,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "2025 年全年实际 GDP 增长 2.1%（从 2024 年年度水平到 2025 年年度水平），较此前估计下调 0.1 个百分点。这是年度同比（年对年水平比较）口径。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_851b830823de44a293832f28526cf99f",
+            "location": {
+              "character_start": 3566,
+              "character_end": 3721,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real GDP increased 2.1 percent in 2025 (from the 2024 annual level to the 2025 annual level), revised\ndown 0.1 percentage point from the previous estimate."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "2025 年第四季度实际 GDP 按季度环比折年率增长 0.7%。这是季度环比折年（Q/Q annual rate）口径，与全年年度口径不同。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_851b830823de44a293832f28526cf99f",
+            "location": {
+              "character_start": 238,
+              "character_end": 378,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 0.7 percent in the fourth quarter of\n2025 (October, November, and December)"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      }
+    ],
+    "limitations": [
+      "Source source_851b830823de44a293832f28526cf99f: only character ranges 90–380, 3528–3810 were analyzed; remaining text was not examined.",
+      "A model-generated fact value was absent from its quotation and was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源为摘录（partial coverage），2025 全年增长的完整驱动因素描述（如消费支出等）被截断。",
+      "第四季度 0.7% 增长的构成细节（各分项贡献）未包含在摘录中。",
+      "发布日期为声明值（2026-03-13），未经独立核实。",
+      "来源未明确说明 0.7% 是否相对第三季度，仅说明是第四季度年率。",
+      "No counterarguments were provided; this does not establish that none exist.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:f54b8181e606dd6a9986f36a",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1456,
+      "cost_usd": null,
+      "generation_tokens": 1456,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 14.129,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "bef2cfaba0009de72af443b63a75120b45ef1038d09ec6206b764d26b2e95d9a",
+      "prompt_characters": 1951,
+      "prompt_bytes": 2047,
+      "selection_method": "ranked_nonoverlapping_windows_v13",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "character_start": 90,
+          "character_end": 380
+        },
+        {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "character_start": 3528,
+          "character_end": 3810
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_851b830823de44a293832f28526cf99f": "2e623f2113575dd98376699548184eec919ce0b8313713112440fb8a63ee0f08"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

@@ -1,0 +1,71 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "2025 年全年实际 GDP 增长 2.1%（从 2024 年年度水平到 2025 年年度水平），较此前估计下调 0.1 个百分点。这是年度同比（年对年水平比较）口径。",
+        "citations": [
+          {
+            "source_id": "source_851b830823de44a293832f28526cf99f",
+            "quotation": "Real GDP increased 2.1 percent in 2025 (from the 2024 annual level to the 2025 annual level), revised down 0.1 percentage point from the previous estimate."
+          }
+        ]
+      },
+      {
+        "text": "2025 年第四季度实际 GDP 按季度环比折年率增长 0.7%。这是季度环比折年（Q/Q annual rate）口径，与全年年度口径不同。",
+        "citations": [
+          {
+            "source_id": "source_851b830823de44a293832f28526cf99f",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 0.7 percent in the fourth quarter of 2025 (October, November, and December)"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "来源为摘录（partial coverage），2025 全年增长的完整驱动因素描述（如消费支出等）被截断。",
+      "第四季度 0.7% 增长的构成细节（各分项贡献）未包含在摘录中。",
+      "发布日期为声明值（2026-03-13），未经独立核实。",
+      "来源未明确说明 0.7% 是否相对第三季度，仅说明是第四季度年率。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_annual_gdp_2025",
+        "label": "annual real GDP growth 2025",
+        "value": "2.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025 annual (from 2024 annual level)",
+        "citation": {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "quotation": "Real GDP increased 2.1 percent in 2025 (from the 2024 annual level to the 2025 annual level)"
+        }
+      },
+      {
+        "fact_id": "fact_q4_gdp_annual_rate",
+        "label": "Q4 2025 real GDP quarterly annualized growth",
+        "value": "0.7",
+        "unit": "percent annual rate",
+        "currency": null,
+        "period": "Q4 2025 (Oct-Dec)",
+        "citation": {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "quotation": "increased at an annual rate of 0.7 percent in the fourth quarter of 2025 (October, November, and December)"
+        }
+      },
+      {
+        "fact_id": "fact_annual_revision",
+        "label": "annual GDP growth revision",
+        "value": "-0.1",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2025 annual vs previous estimate",
+        "citation": {
+          "source_id": "source_851b830823de44a293832f28526cf99f",
+          "quotation": "revised down 0.1 percentage point from the previous estimate"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1456
+}

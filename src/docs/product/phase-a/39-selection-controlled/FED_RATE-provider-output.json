@@ -1,0 +1,60 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "美联储在2025年12月10日的FOMC声明中将联邦基金利率目标区间下调1/4个百分点，至3.5%至3.75%。",
+        "citations": [
+          {
+            "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+            "quotation": "the Committee decided to lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "来源声明为部分节选（source_coverage: partial），未包含完整FOMC声明；下调前的前一目标区间未在提供的文本中明确给出，系根据下调幅度推断。",
+      "发布日期为声明标注日期（2025-12-10），未独立核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fed_funds_target_range",
+        "label": "联邦基金利率目标区间",
+        "value": "3.5% 至 3.75%（3-1/2 to 3-3/4 percent）",
+        "unit": "percent",
+        "currency": null,
+        "period": "2025-12-10 FOMC决定",
+        "citation": {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "quotation": "lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent"
+        }
+      },
+      {
+        "fact_id": "rate_cut_size",
+        "label": "本次降息幅度",
+        "value": "0.25（1/4）",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2025-12-10 FOMC决定",
+        "citation": {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "quotation": "by 1/4 percentage point"
+        }
+      },
+      {
+        "fact_id": "iorb_rate",
+        "label": "准备金余额利率",
+        "value": "3.65",
+        "unit": "percent",
+        "currency": null,
+        "period": "自2025-12-11起生效",
+        "citation": {
+          "source_id": "source_63468b4d163849f582f3ba0ae01d579d",
+          "quotation": "lower the interest rate paid on reserve balances to 3.65 percent, effective December 11, 2025"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1106
+}
