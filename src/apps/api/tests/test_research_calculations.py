@@ -207,3 +207,16 @@ def test_table_currency_cue_does_not_treat_bare_dollar_sign_as_usd():
     assert not table_currency_quote_missing("EUR", "| Revenue | €100 | €90 |")
     assert not table_currency_quote_missing(None, "| Revenue | 100 | 90 |")
     assert not table_currency_quote_missing("USD", "Revenue was 100 million.")
+
+
+def test_ratio_difference_is_not_inferred_from_an_unrelated_yoy_percentage():
+    total = fact('total', '317', '2024年11月')
+    online = fact('online', '29', '2024年11月')
+    ratio = calculate(CalculationRequest(formula='margin_percent', first=online, second=total))
+    unrelated = {'text': '總銷貨價值為317億元，較上年同月下跌7.3%。'}
+    assert claim_calculation_differences([unrelated], [ratio], [online, total]) == []
+    intended = {'text': '網上銷售佔總銷貨317億元的9.3%。'}
+    differences = claim_calculation_differences([intended], [ratio], [online, total])
+    assert len(differences) == 1 and differences[0]['status'] == 'requires_review'
+    both_inputs = {'text': '網上銷售29億元、總銷貨317億元，結果為9.3%。'}
+    assert len(claim_calculation_differences([both_inputs], [ratio], [online, total])) == 1

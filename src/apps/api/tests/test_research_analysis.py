@@ -1060,3 +1060,18 @@ def test_chinese_multitopic_question_balances_phrases_and_utf8_windows():
     assert result.prompt_bytes <= 2055
     assert all(text[s['character_start']:s['character_end']] == passage
                for s, passage in zip(result.segments, passages))
+
+
+def test_chinese_explicit_decline_is_retained_as_unverified_direction():
+    from app.research_analysis import _directional_negative_percent
+    for text in ('較上年同期下跌7.3%', '收入下降7.3％', '銷售減少了7.3%'):
+        assert _directional_negative_percent(Decimal('-7.3'), '%', text)
+    for text in ('收入未下跌7.3%', '收入沒有下降7.3%', '收入不一定下跌7.3%', '收入上升7.3%', '下跌7.30個百分點'):
+        assert not _directional_negative_percent(Decimal('-7.3'), '%', text)
+    text = '零售額較上年同月下跌7.3%。'
+    quote = '較上年同月下跌7.3%'
+    raw = {'facts': [{'fact_id': 'rate', 'label': 'retail change', 'value': '-7.3', 'unit': '%', 'period': '2024年11月', 'citation': {'source_id': 's', 'quotation': quote}}]}
+    result = analyze('變化多少？', [source('s', text=text)], None, lambda _: (raw, 1))
+    assert result.facts[0]['value'] == '-7.3' and result.facts[0]['direction_context_unverified'] is True
+    assert result.facts[0]['quotation'] == quote
+    assert any('excluded from automatic calculations' in note for note in result.limitations)

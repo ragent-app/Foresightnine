@@ -175,6 +175,7 @@ def _equivalent_scalar(value: str, unit: str) -> Decimal | None:
 
 
 _DECREASE_PERCENT = re.compile(r"\b(?:decreased|declined|fell|dropped|contracted)\s+(?:by\s+)?(\d+(?:\.\d+)?)\s*(?:percent\b|%)", re.IGNORECASE)
+_ZH_DECREASE_PERCENT = re.compile(r"(?:下跌|下降|减少|減少|下滑|降低|回落|萎縮|萎缩)\s*(?:了|約|约)?\s*(\d+(?:\.\d+)?)\s*(?:%|％)")
 
 
 def _directional_negative_percent(value: Decimal, unit: str, quotation: str) -> bool:
@@ -189,6 +190,17 @@ def _directional_negative_percent(value: Decimal, unit: str, quotation: str) -> 
     for match in _DECREASE_PERCENT.finditer(quotation):
         prefix = quotation[max(0, match.start() - 40):match.start()]
         if re.search(r"\b(?:not|never|neither|no)\b|didn['’]t", prefix, re.IGNORECASE):
+            continue
+        try:
+            if -Decimal(match.group(1)) == value:
+                return True
+        except InvalidOperation:
+            continue
+    for match in _ZH_DECREASE_PERCENT.finditer(quotation):
+        # A nearby negation means that a decline is not established. This is
+        # still only a directional cue, not proof of the metric or period.
+        prefix = quotation[max(0, match.start() - 4):match.start()]
+        if re.search(r"(?:不(?:一定|再|會|会)?|未(?:必|曾)?|無|无|沒有|没有)\s*$", prefix):
             continue
         try:
             if -Decimal(match.group(1)) == value:

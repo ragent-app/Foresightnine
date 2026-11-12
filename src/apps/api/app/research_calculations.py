@@ -212,7 +212,9 @@ def claim_calculation_differences(claims: list[dict], calculations: list[dict], 
     """Flag narrow numerical mismatches for review, without asserting entailment.
 
     Compare claims whose percentages denote the same number and have a uniquely
-    matching denominator; inspect each stated precision separately.
+    matching denominator; inspect each stated precision separately. Ratio
+    calculations additionally require a ratio cue or both input values, so an
+    unrelated year-on-year percentage is not matched on the denominator alone.
     Recompute the saved calculation from current facts at both its own and the
     claim's stated precision; ignore user-edited, stale or ambiguous calculations.
     """
@@ -250,7 +252,9 @@ def claim_calculation_differences(claims: list[dict], calculations: list[dict], 
             continue
         if len(stated_values) != 1:
             continue
-        candidates = [entry for value in mentioned for entry in by_denominator.get(value, [])]
+        ratio_cue = re.search(r"\b(?:margin|ratio|share|proportion|percentage\s+of)\b|利潤率|利润率|毛利率|占比|佔比|比例|比率|占|佔", text, re.IGNORECASE)
+        candidates = [entry for value in mentioned for entry in by_denominator.get(value, [])
+                      if entry[1].formula != "margin_percent" or ratio_cue or entry[1].first.value in mentioned]
         if len(candidates) != 1:
             continue
         calculation_index, request = candidates[0]
