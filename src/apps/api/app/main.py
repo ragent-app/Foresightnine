@@ -98,7 +98,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
+from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_unspecified, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
@@ -1464,12 +1464,22 @@ def create_research_topic(request: ResearchInput, authorization: str | None = He
 
 def _legacy_calculation_diagnostics(version):
     """Annotate a copy on read; never rewrite an immutable saved version."""
-    if not any(legacy_percentage_difference_unit(item) for item in version.content.calculations):
+    if not (any(legacy_percentage_difference_unit(item) for item in version.content.calculations) or
+            any(monetary_currency_unspecified(item) for item in version.content.facts)):
         return version
     version = version.model_copy(deep=True)
+    missing_currency_ids = set()
+    for fact in version.content.facts:
+        if monetary_currency_unspecified(fact):
+            fact['currency_unspecified'] = True
+            if isinstance(fact.get('fact_id'), str):
+                missing_currency_ids.add(fact['fact_id'])
     for item in version.content.calculations:
         if legacy_percentage_difference_unit(item):
             item["legacy_unit_warning"] = "percentage_difference_requires_recalculation"
+        inputs = item.get('inputs')
+        if isinstance(inputs, list) and any(isinstance(input_fact, dict) and isinstance(input_fact.get('fact_id'), str) and input_fact['fact_id'] in missing_currency_ids for input_fact in inputs):
+            item['input_status'] = 'unverifiable'
     return version
 
 
@@ -1762,6 +1772,9 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
             fact.pop("currency_context_unverified", None)
             if is_percent_unit(numeric.unit) and numeric.currency is not None:
                 fact["currency_context_unverified"] = True
+            fact.pop('currency_unspecified', None)
+            if monetary_currency_unspecified(fact):
+                fact['currency_unspecified'] = True
             fact.pop("currency_conflict_unverified", None)
             if currency_value_conflict(numeric.currency, numeric.value, quote):
                 fact["currency_conflict_unverified"] = True
@@ -2062,6 +2075,8 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
             raise ApiProblem(422, "invalid_request", "Value direction and subject require review before calculation.")
         if currency_value_conflict(fact.get("currency"), fact.get("value"), fact.get("quotation")):
             raise ApiProblem(422, "invalid_request", "Currency and quoted value require review before calculation.")
+        if monetary_currency_unspecified(fact):
+            raise ApiProblem(422, "invalid_request", "The monetary fact's currency is unspecified; review it before calculation.")
         if is_percent_unit(str(fact.get("unit", ""))) and fact.get("currency") is not None:
             raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before calculation.")
         facts.append({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})

@@ -158,6 +158,40 @@ def test_legacy_annual_rate_difference_is_warned_without_rewriting_history(monke
     assert 'legacy_unit_warning' not in current
 
 
+def test_legacy_monetary_calculation_requires_currency_without_rewriting_history(monkeypatch):
+    from uuid import uuid4
+    from app.research_calculations import CalculationRequest, calculate
+    from app.research_topics import VersionInput
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client=TestClient(api.app)
+    auth=client.post('/v1/auth/local/register',json={'email':f'money-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+auth['access_token']}
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?'}).json()
+    facts=[{'fact_id':'a','label':'Revenue','value':'100','unit':'million','currency':None,'period':'2024'},
+           {'fact_id':'b','label':'Revenue','value':'90','unit':'million','currency':None,'period':'2023'}]
+    inputs=[{key:fact[key] for key in ('fact_id','value','unit','currency','period')} for fact in facts]
+    calculation=calculate(CalculationRequest(formula='growth_percent',first=inputs[0],second=inputs[1]))
+    calculation['input_status']='matched'
+    stored=api.research_topics.add_version(topic['owner_id'],topic['topic_id'],VersionInput(
+        parent_version_id=topic['versions'][0]['version_id'],content=ResearchContent(facts=facts,calculations=[calculation])))
+    version=stored.versions[-1];path='/v2/research/topics/'+topic['topic_id']
+    read=client.get(path,headers=headers).json()['versions'][-1]
+    assert all(f['currency_unspecified'] for f in read['content']['facts'])
+    assert read['content']['calculations'][0]['input_status']=='unverifiable'
+    original=api.research_topics.get(topic['owner_id'],topic['topic_id']).versions[-1].content
+    assert not original.facts[0].get('currency_unspecified') and original.calculations[0]['input_status']=='matched'
+    assert client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':version.version_id,'calculation_index':0}).status_code==422
+    updated=deepcopy(read['content'])
+    for fact in updated['facts']: fact['currency']='USD'
+    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version.version_id,'content':updated})
+    assert saved.status_code==201, saved.text
+    current=saved.json()['versions'][-1]
+    assert all(not f.get('currency_unspecified') and f.get('authorship')=='user' for f in current['content']['facts'])
+    recalculated=client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':current['version_id'],'calculation_index':0})
+    assert recalculated.status_code==201, recalculated.text
+
+
 def test_provisional_html_calculation_remains_partial_through_export_and_edit(monkeypatch):
     import base64
     from uuid import uuid4

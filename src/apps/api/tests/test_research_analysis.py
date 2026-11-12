@@ -34,6 +34,20 @@ def test_selected_source_offsets_survive_generation_failure():
     assert report.text[segment["character_start"]:segment["character_end"]] == report.text
 
 
+def test_monetary_facts_without_currency_are_retained_but_not_used_for_calculation():
+    report = source('s', text='Revenue was 100 million in 2024. Revenue was 90 million in 2023.')
+    raw = {'facts':[
+        {'fact_id':'current','label':'Revenue','value':'100','unit':'million','currency':None,'period':'2024',
+         'citation':{'source_id':'s','quotation':'Revenue was 100 million in 2024.'}},
+        {'fact_id':'previous','label':'Revenue','value':'90','unit':'million','currency':None,'period':'2023',
+         'citation':{'source_id':'s','quotation':'Revenue was 90 million in 2023.'}}],
+        'calculations':[{'formula':'growth_percent','first_fact_id':'current','second_fact_id':'previous'}]}
+    result=analyze('Compare revenue.', [report], None, lambda _: (raw, 10))
+    assert len(result.facts)==2 and all(f['currency_unspecified'] for f in result.facts)
+    assert result.calculations==[]
+    assert any('no specified currency' in note for note in result.limitations)
+
+
 def test_selected_sentence_opening_is_restored_only_within_budget():
     text = ("Header.\nRevenue increased at an annual rate of 3 percent. " + "filler " * 800 +
             "Profit was 10 percent. " + "filler " * 800)

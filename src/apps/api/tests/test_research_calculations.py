@@ -439,3 +439,16 @@ def test_pdf_layout_table_detection_is_a_bounded_formatting_cue():
     assert not quotation_is_pdf_layout_row(sentence, sentence.index("1,200"), "1,200")
     assert not quotation_is_pdf_layout_row("2024    2023", 0, "2024")
     assert not quotation_is_pdf_layout_row("Revenue  1,200\f  1,000", 9, "1,200")
+
+
+def test_unspecified_currency_for_monetary_labels_is_not_a_verified_input():
+    from app.research_calculations import monetary_currency_unspecified, calculation_input_status
+    a = {**fact('a','100','2024',unit='million',currency=None), 'label':'Revenue'}
+    b = {**fact('b','90','2023',unit='million',currency=None), 'label':'Revenue'}
+    assert monetary_currency_unspecified(a) and monetary_currency_unspecified(b)
+    assert not monetary_currency_unspecified({**a,'currency':'USD'})
+    assert not monetary_currency_unspecified({**a,'unit':'percent'})
+    assert not monetary_currency_unspecified({**a,'label':'Unit volume'})
+    calc=calculate(CalculationRequest(formula='growth_percent',first={k:a[k] for k in ('fact_id','value','unit','currency','period')},
+        second={k:b[k] for k in ('fact_id','value','unit','currency','period')}))
+    assert calculation_input_status(calc,[a,b])=='unverifiable'

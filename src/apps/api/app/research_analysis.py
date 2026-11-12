@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_unspecified, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_xbrl import match_inline_fact
 
@@ -2441,6 +2441,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     table_alignment_noted = False
     table_period_conflict_noted = False
     currency_conflict_noted = False
+    currency_unspecified_noted = False
     directional_context_noted = False
     ambiguous_fact_noted = False
     table_traces: dict[tuple[str, int], dict] = {}
@@ -2543,6 +2544,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if note not in limitations:
                 limitations.append(note)
         currency_conflict = currency_value_conflict(item.currency, item.value, quotation)
+        currency_unspecified = monetary_currency_unspecified({'label':item.label, 'unit':item.unit, 'currency':item.currency})
         ambiguous_fact = location.get("status") == "ambiguous"
         if currency_context:
             if not currency_context_noted:
@@ -2560,13 +2562,16 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if currency_conflict and not currency_conflict_noted:
             limitations.append("A fact's currency conflicts with an explicit currency cue on the same quoted value; it was excluded from automatic calculations pending review.")
             currency_conflict_noted = True
+        if currency_unspecified and not currency_unspecified_noted:
+            limitations.append('A monetary fact has no specified currency; it was excluded from automatic calculations pending review.')
+            currency_unspecified_noted = True
         if direction_context and not directional_context_noted:
             limitations.append("A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
             directional_context_noted = True
         if ambiguous_fact and not ambiguous_fact_noted:
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
             ambiguous_fact_noted = True
-        if (not currency_context and not currency_conflict and not ambiguous_fact and not direction_context and
+        if (not currency_context and not currency_conflict and not currency_unspecified and not ambiguous_fact and not direction_context and
                 not period_conflict and (matching not in {"pdf_line_hyphen_restored", "table_markup_expanded"} or structure_matched)):
             numeric_facts[item.fact_id] = numeric
         checked_fact = {**numeric.model_dump(mode="json"), "label": item.label,
@@ -2577,6 +2582,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             **({"table_period_conflict": period_conflict} if period_conflict else {}),
             **({"table_structure_alignment": structure_alignment} if structure_alignment else {}),
             **({"currency_conflict_unverified": True} if currency_conflict else {}),
+            **({"currency_unspecified": True} if currency_unspecified else {}),
             **({"direction_context_unverified": True} if direction_context else {}),
             **({"numeric_normalization": "thousands_separator"} if item.fact_id in normalized_grouped_ids else {}),
             **({"numeric_normalization": "exact_fraction"} if item.fact_id in normalized_fraction_ids else {}),

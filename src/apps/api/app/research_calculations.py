@@ -114,6 +114,28 @@ def is_percent_unit(unit: str) -> bool:
     return bool(re.fullmatch(r"(?:(?:annual|annualized|annualised)\s+)?(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|(?:,\s*|\s+)(?:at\s+an?\s+)?(?:seasonally\s+adjusted\s+)?(?:annualized(?:\s+rate)?|annualised(?:\s+rate)?|annual rate))?", normalized))
 
 
+_MONETARY_FACT_LABEL = re.compile(
+    r"\b(?:revenues?|net\s+sales|net\s+income|operating\s+(?:income|profit|loss)|"
+    r"gross\s+profit|net\s+profit|cash\s+flow|total\s+assets|total\s+liabilities)\b|"
+    r"(?:营业收入|營業收入|营收|營收|净收入|淨收入|净利润|淨利潤|营业利润|營業利潤|现金流|現金流|总资产|總資產)",
+    re.IGNORECASE)
+
+
+def monetary_currency_unspecified(fact: dict) -> bool:
+    """Identify clearly monetary labels with no explicit currency field.
+
+    This is a limited cue, not classification of all financial metrics. A
+    declared currency itself is not independent verification of the source.
+    """
+    label, unit, currency = fact.get('label'), fact.get('unit'), fact.get('currency')
+    if currency is not None or not isinstance(label, str) or not isinstance(unit, str):
+        return False
+    if (re.search(r'%|％|percent|percentage|百分点|百分點|百分比|basis\s+points?|\bbps\b|基点|基點', unit, re.IGNORECASE) or
+            unit.strip().casefold() in {'ratio', 'multiple', 'times', 'x'}):
+        return False
+    return bool(_MONETARY_FACT_LABEL.search(label[:300]))
+
+
 def quotation_is_inside_table_row(source_text: str, start: object, quotation: object) -> bool:
     """Identify a located single-line quotation inside a pipe-delimited row.
 
@@ -522,7 +544,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             if (candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or
                 candidates[0].get("quotation_match") == "table_markup_expanded" and not (table_user_confirmed(candidates[0]) or xbrl_source_consistent(candidates[0])) or
                 isinstance(candidates[0].get("table_structure_alignment"), dict) and candidates[0]["table_structure_alignment"].get("status") == "conflict" or
-                candidates[0].get("table_period_conflict") or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
+                candidates[0].get("table_period_conflict") or monetary_currency_unspecified(candidates[0]) or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation"))):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})
