@@ -1824,3 +1824,20 @@ def test_negative_dollar_change_is_retained_only_as_unverified_direction():
     assert goods["value"]=="-36.7" and goods["direction_context_unverified"] is True
     assert goods["quotation"]==quote and not result.calculations
     assert any("excluded from automatic calculations" in note for note in result.limitations)
+
+
+def test_pdf_line_hyphen_fact_is_retained_but_not_used_for_automatic_calculation():
+    text="Revenue esti-\nmates were 100. Prior revenue was 80."
+    report=source("s",text=text).model_copy(update={"retrieval_method":"user_pdf"})
+    raw={"facts":[
+      {"fact_id":"current","label":"Revenue","value":"100","unit":"USD million","currency":"USD","period":"2024",
+       "citation":{"source_id":"s","quotation":"Revenue estimates were 100"}},
+      {"fact_id":"prior","label":"Revenue","value":"80","unit":"USD million","currency":"USD","period":"2023",
+       "citation":{"source_id":"s","quotation":"Prior revenue was 80"}}],
+      "calculations":[{"formula":"growth_percent","first_fact_id":"current","second_fact_id":"prior"}]}
+    result=analyze("Compare revenue.",[report],None,lambda _:(raw,10))
+    fact=next(x for x in result.facts if x["fact_id"]=="current")
+    assert fact["quotation"]=="Revenue esti-\nmates were 100"
+    assert fact["quotation_match"]=="pdf_line_hyphen_restored"
+    assert not result.calculations
+    assert any("excluded from automatic calculations pending review" in note for note in result.limitations)

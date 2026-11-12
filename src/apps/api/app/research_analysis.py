@@ -2004,6 +2004,10 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if matching == "table_markup_expanded":
             limitations.append("A table-normalized fact was omitted until column alignment is verified.")
             continue
+        if matching == "pdf_line_hyphen_restored":
+            note = "A fact with a restored PDF line-break hyphen was excluded from automatic calculations pending review."
+            if note not in limitations:
+                limitations.append(note)
         if partial_boundary(source, location):
             limitations.append("A model-generated fact quotation cuts through a word or number and was omitted.")
             continue
@@ -2057,7 +2061,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if ambiguous_fact and not ambiguous_fact_noted:
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
             ambiguous_fact_noted = True
-        if not currency_context and not currency_conflict and not ambiguous_fact and not direction_context and not period_conflict:
+        if (not currency_context and not currency_conflict and not ambiguous_fact and not direction_context and
+                not period_conflict and matching != "pdf_line_hyphen_restored"):
             numeric_facts[item.fact_id] = numeric
         checked_facts.append({**numeric.model_dump(mode="json"), "label": item.label,
             "source_id": source.source_id, "quotation": quotation, "quotation_match": matching,

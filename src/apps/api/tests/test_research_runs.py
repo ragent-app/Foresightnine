@@ -2496,3 +2496,57 @@ def test_negative_change_candidate_can_be_attached_to_counterargument(monkeypatc
     assert not after.get("uncited_dollar_amounts") and not after.get("uncited_fact_values")
     assert after["authorship"]=="user" and after["support_status"]=="not_independently_verified"
     assert counter.get("uncited_dollar_amounts")
+
+
+def test_pdf_line_hyphen_fact_requires_exact_source_selection_before_calculation(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")
+    source_id=""
+    class Provider:
+        name="pdf-fact-caution"
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {"facts":[
+              {"fact_id":"current","label":"Revenue","value":"100","unit":"USD million","currency":"USD","period":"2024",
+               "citation":{"source_id":source_id,"quotation":"Revenue estimates were 100"}},
+              {"fact_id":"prior","label":"Revenue","value":"80","unit":"USD million","currency":"USD","period":"2023",
+               "citation":{"source_id":source_id,"quotation":"Prior revenue was 80"}},
+              {"fact_id":"decline","label":"Change","value":"-5","unit":"percent","period":"2024",
+               "citation":{"source_id":source_id,"quotation":"Loss estimates decreased 5 percent"}}],
+              "calculations":[{"formula":"growth_percent","first_fact_id":"current","second_fact_id":"prior"}]},10
+    monkeypatch.setattr(api,"challenge_provider",Provider())
+    client=TestClient(api.app)
+    account=client.post("/v1/auth/local/register",json={"email":f"pdf-fact-{uuid4().hex}@example.test","password":"correct horse battery staple!"}).json()
+    headers={"Authorization":"Bearer "+account["access_token"]}
+    source_id=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue esti-\nmates were 100. Prior revenue was 80. Loss esti-\nmates decreased 5 percent.",
+      "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    document=api.RESEARCH_SOURCES.get(source_id)
+    api.RESEARCH_SOURCES.put(source_id,document.model_copy(update={"retrieval_method":"user_pdf"}))
+    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Compare revenue.","source_ids":[source_id]}).json()
+    path="/v2/research/topics/"+topic["topic_id"]
+    receipt=client.post(path+"/runs",headers={**headers,"Idempotency-Key":"pdf-fact"},json={"parent_version_id":topic["versions"][0]["version_id"]}).json()["operation"]
+    for _ in range(100):
+        status=client.get(path+"/runs/"+receipt["operation_id"],headers=headers).json()["operation"]["status"]
+        if status in {"completed","failed"}:break
+        time.sleep(.02)
+    assert status=="completed"
+    before=client.get(path,headers=headers).json()["versions"][-1]
+    fact=next(f for f in before["content"]["facts"] if f["fact_id"]=="current")
+    assert fact["quotation_match"]=="pdf_line_hyphen_restored" and not before["content"]["calculations"]
+    decline=next(f for f in before["content"]["facts"] if f["fact_id"]=="decline")
+    assert decline["direction_context_unverified"] and decline["quotation_match"]=="pdf_line_hyphen_restored"
+    assert client.post(path+"/facts/confirm-direction",headers=headers,json={"parent_version_id":before["version_id"],"fact_id":"decline"}).status_code==422
+    spec={"parent_version_id":before["version_id"],"formula":"growth_percent","first_fact_id":"current","second_fact_id":"prior"}
+    assert client.post(path+"/calculations",headers=headers,json=spec).status_code==422
+    edited=deepcopy(before["content"])
+    selected=next(f for f in edited["facts"] if f["fact_id"]=="current")
+    selected.pop("location");selected.pop("quotation_match")
+    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":before["version_id"],"content":edited})
+    assert saved.status_code==201,saved.text
+    after=saved.json()["versions"][-1];selected=next(f for f in after["content"]["facts"] if f["fact_id"]=="current")
+    assert selected["quotation_match"]=="exact" and selected["authorship"]=="user"
+    spec["parent_version_id"]=after["version_id"]
+    result=client.post(path+"/calculations",headers=headers,json=spec)
+    assert result.status_code==201,result.text
+    assert result.json()["versions"][-1]["content"]["calculations"][0]["value"]=="25.00"
+    assert saved.json()["versions"][-2]["content"]["facts"][0]["quotation_match"]=="pdf_line_hyphen_restored"

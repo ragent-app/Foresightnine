@@ -1892,7 +1892,7 @@ def confirm_research_direction(topic_id: str, request: ConfirmDirectionRequest,
         source_id, quote, location = fact.get("source_id"), fact.get("quotation"), fact.get("location")
         if (source_id not in set(previous.source_ids) or not isinstance(quote, str) or not quote or
                 not isinstance(location, dict) or location.get("status") == "ambiguous" or
-                fact.get("source_value_warnings") or fact.get("table_period_conflict") or
+                fact.get("source_value_warnings") or fact.get("quotation_match") == "pdf_line_hyphen_restored" or fact.get("table_period_conflict") or
                 fact.get("currency_conflict_unverified") or fact.get("currency_context_unverified")):
             raise ApiProblem(422, "invalid_request", "The directional fact or its source requires further review.")
         source = research_sources.get(account.account_id, source_id)
@@ -1936,6 +1936,8 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
         fact = candidates[0]
         if fact.get("source_value_warnings"):
             raise ApiProblem(422, "invalid_request", "The fact's source quotation requires review before calculation.")
+        if fact.get("quotation_match") == "pdf_line_hyphen_restored":
+            raise ApiProblem(422, "invalid_request", "The restored PDF quotation requires review before calculation.")
         location = fact.get("location")
         if isinstance(location, dict) and location.get("status") == "ambiguous":
             raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before calculation.")
