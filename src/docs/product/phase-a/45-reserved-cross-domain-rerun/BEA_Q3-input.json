@@ -1,0 +1,11 @@
+{
+  "id": "BEA_Q3",
+  "question": "根据所附 BEA 第三次估计，2022 年第三季度实际 GDP 折年增长率是多少？第二次估计是多少？解释数据与修订的限制。",
+  "source_kind": "original_pdf",
+  "source_file": "bea-gdp-q3-2022.pdf",
+  "source_title": "BEA GDP third estimate third quarter 2022",
+  "published_at": "2022-12-22T13:30:00Z",
+  "text_order": "reading",
+  "source_sha256": "a6ef7abda546d11a1a0dbc9556a0fc314c33b332570497107e1ded1c089547c0",
+  "source_text_sha256": "67bd545226cfd451f8210d4026bb8769ae29137462b255f4ddbc720ba7d59693"
+}
