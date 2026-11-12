@@ -1312,3 +1312,40 @@ def test_financial_metric_table_selects_matching_single_metric_and_nearby_units(
     assert _financial_table_windows(separated, 'Compare 2024 and 2023 net income', 500) is None
     distant_unit = '| (in millions) |\n' + '| unrelated row | 1 | 2 |\n' * 20 + '| Year Ended | 2024 | 2023 |\n| Net income | 30 | 25 |\n'
     assert _financial_table_windows(distant_unit, 'Compare 2024 and 2023 net income', 1000) is None
+
+
+def test_generated_table_markup_expands_only_to_a_complete_original_row():
+    from app.research_analysis import _table_markup_rows
+    row = '| [colspan=3] Net cash provided by operating activities | $ | 5,641 | | [colspan=3] | $ | 9,108 |'
+    text = 'Lead text.\n' + row + '\nEnd.'
+    quotation = 'Net cash provided by operating activities | $ | 5,641 | | $ | 9,108'
+    start = text.index(row)
+    assert _table_markup_rows(text, [(0, text)], quotation) == [(start, start + len(row))]
+    assert _table_markup_rows(text, [(0, text)], quotation.replace('5,641', '5,642')) == []
+    assert _table_markup_rows(text, [(0, text)], quotation.replace(' | $ | 5,641', '')) == []
+    assert _table_markup_rows(text, [(start + 1, text[start+1:])], quotation) == []
+    assert _table_markup_rows(text, [(0, text[:start + len(row) - 2])], quotation) == []
+    assert _table_markup_rows(text.replace('[colspan=3]', ''), [(0, text.replace('[colspan=3]', ''))], quotation) == []
+    with pytest.raises(AnalysisInterrupted):
+        _table_markup_rows(text, [(0, text)], quotation, lambda: True)
+    result = analyze('Review cash flow.', [source('s', text=text)], None, lambda _: ({
+        'claims':[{'text':'Cash flow figures were reported.', 'citations':[{'source_id':'s','quotation':quotation}]}],
+        'facts':[{'fact_id':'cash','label':'cash','value':'5641','unit':'USD million','currency':'USD','period':'2023',
+                  'citation':{'source_id':'s','quotation':quotation}}]}, 1))
+    assert len(result.claims) == 1 and result.claims[0]['support_status'] == 'incomplete'
+    citation = result.claims[0]['citations'][0]
+    assert citation['quotation_match'] == 'table_markup_expanded' and citation['quotation'] == row
+    assert text[citation['location']['character_start']:citation['location']['character_end']] == row
+    assert not result.facts
+    assert any('column alignment' in note for note in result.limitations)
+
+
+def test_recovered_table_rows_with_multiple_matches_remain_ambiguous():
+    row = '| [colspan=3] Revenue | $ | 100 | | [colspan=3] | $ | 90 |'
+    text = row + '\n' + row + '\n'
+    quote = 'Revenue | $ | 100 | | $ | 90'
+    result = analyze('Review revenue.', [source('s', text=text)], None,
+        lambda _: ({'claims':[{'text':'Revenue was reported.', 'citations':[{'source_id':'s','quotation':quote}]}]}, 1))
+    assert result.claims[0]['support_status'] == 'incomplete'
+    loc = result.claims[0]['citations'][0]['location']
+    assert loc['status'] == 'ambiguous' and len(loc['matches']) == 2

@@ -228,6 +228,48 @@ def _directional_negative_percent(value: Decimal, unit: str, quotation: str) -> 
 
 
 
+
+_TABLE_SPAN_MARKER = re.compile(r"\[(?:colspan|rowspan)=(?:[2-9]|[1-9]\d)\]")
+
+
+def _table_markup_rows(source_text: str, passages: list[tuple[int, str]], quotation: str,
+                       should_stop: Callable[[], bool] | None = None) -> list[tuple[int, int]]:
+    """Find whole analyzed rows after ignoring only span markers and empty cells.
+
+    The original full row is returned, not a reconstructed quotation. Matching
+    cell strings cannot establish column alignment or support for a claim.
+    """
+    if len(quotation) > 1000 or "\n" in quotation or "|" not in quotation or not re.search(r"\d", quotation):
+        return []
+    def cells(value: str) -> list[str]:
+        parts = []
+        for cell in value.split("|"):
+            clean = re.sub(r"[ \t]+", " ", _TABLE_SPAN_MARKER.sub("", cell)).strip()
+            if clean:
+                parts.append(clean)
+        return parts
+    wanted = cells(quotation)
+    if not 2 <= len(wanted) <= 30:
+        return []
+    found: list[tuple[int, int]] = []
+    for offset, passage in passages:
+        for index, match in enumerate(re.finditer(r"(?m)^[ \t]*\|[^\n]{1,1000}(?=\n|$)", passage)):
+            if index % 64 == 0 and should_stop is not None and should_stop():
+                raise AnalysisInterrupted()
+            line = match.group(); start, end = offset + match.start(), offset + match.end()
+            if ((start and source_text[start - 1] != "\n") or
+                    (end < len(source_text) and source_text[end] != "\n") or
+                    not line.rstrip().endswith("|") or not _TABLE_SPAN_MARKER.search(line)):
+                continue
+            row = cells(line)
+            if len(row) > 100:
+                continue
+            if any(row[i:i + len(wanted)] == wanted for i in range(len(row) - len(wanted) + 1)):
+                found.append((start, end))
+                if len(found) >= 6:
+                    return found
+    return found
+
 def _counterargument_absence_only(text: str) -> bool:
     """Recognize a narrow absence statement, not a supported counterargument.
 
@@ -1293,7 +1335,16 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             if len(positions) == 6:
                 break
         expanded = False
+        table_markup_expanded = False
         trimmed_json_closure = False
+        if not positions:
+            for start, end in _table_markup_rows(source.text, model_text[source.source_id], quotation, should_stop):
+                record(0, source.text, start, end)
+            table_markup_expanded = bool(positions)
+            if table_markup_expanded:
+                note = "A model quotation omitted table markup or empty cells; the full original row was restored and requires column review."
+                if note not in limitations:
+                    limitations.append(note)
         if (not positions and source.retrieval_method == "user_supplied" and len(source.text) <= 100_000
                 and quotation.startswith('"') and re.search(r"\d\}$", quotation)):
             # A model may close a JSON object immediately after a numeric field
@@ -1352,7 +1403,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if not positions:
             raise InvalidAnalysis("Model cited a missing source or quotation.")
         original = originals[0]
-        matching = ("trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
+        matching = ("table_markup_expanded" if table_markup_expanded else "trimmed_json_closure" if trimmed_json_closure else "expanded_ellipsis" if expanded else
                     "exact" if original == quotation else "whitespace_normalized")
         if len(positions) == 1 and not scan_truncated:
             return positions[0], original, matching
@@ -1384,6 +1435,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             location, quotation, matching = quotation_location(source, item.citation.quotation)
         except InvalidAnalysis:
             limitations.append("A model-generated fact had an unlocatable quotation and was omitted.")
+            continue
+        if matching == "table_markup_expanded":
+            limitations.append("A table-normalized fact was omitted until column alignment is verified.")
             continue
         if partial_boundary(source, location):
             limitations.append("A model-generated fact quotation cuts through a word or number and was omitted.")
@@ -1502,6 +1556,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             limitations.append("A model-generated quotation cuts through a word or number; review the surrounding source.")
                     omitted = True
                     continue
+                if matching == "table_markup_expanded":
+                    incomplete_boundary = True
                 entry = {"source_id": citation.source_id,
                          "location": location, "quotation_match": matching,
                          "support_status": "not_independently_verified"}
