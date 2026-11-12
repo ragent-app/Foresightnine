@@ -104,7 +104,7 @@ from .research_verification import (REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, Invalid
                                     apply_support_review, prepare_support_review)
 from .research_runs import ResearchRunRequest, ResearchRunResult
 from .research_topics import ResearchContent
-from .research_fetch import FetchFailure, FetchSourceRequest, fetch_official_text
+from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, search_sec_identities, reserve_sec_request, validate_user_agent
 from .research_uploads import PdfFailure, PdfUploadRequest, extract_pdf
 
@@ -1508,6 +1508,8 @@ def list_research_version_sources(topic_id: str, version_id: str, authorization:
             metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
         metadata["status"] = "available"
         metadata["verification"] = "user_declared_not_verified"
+        if source.retrieval_method == "official_html":
+            metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
         result.append(metadata)
     return result
 
@@ -1547,6 +1549,8 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
                 parts = urlsplit(str(source.url))
                 metadata["url"] = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
             metadata["verification"] = "user_declared_not_verified"
+            if source.retrieval_method == "official_html":
+                metadata["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
             sources.append(metadata)
     except SourceNotFound as error:
         raise ApiProblem(403, "invalid_request", "A research source is unavailable for export.") from error
@@ -1774,6 +1778,8 @@ def _visible_research_source(source: ResearchSource) -> dict:
         result.pop("text", None)
     # User-supplied provenance and permissions are declarations, not proof.
     result["verification"] = "user_declared_not_verified"
+    if source.retrieval_method == "official_html":
+        result["extraction_disclosure"] = HTML_EXTRACTION_DISCLOSURE
     return result
 
 

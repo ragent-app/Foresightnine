@@ -5,6 +5,7 @@ from html.parser import HTMLParser
 from dataclasses import dataclass
 from hashlib import sha256
 from datetime import datetime
+import re
 from typing import Callable
 from urllib.parse import urlsplit
 
@@ -15,6 +16,8 @@ from .research_sources import SourcePermissions
 
 
 ALLOWED_HOSTS = frozenset({"www.bea.gov", "www.federalreserve.gov"})
+HTML_EXTRACTION_DISCLOSURE = ("Webpage text is extracted; table separators and span markers, when present, "
+                              "are generated. Check the original webpage for layout.")
 
 
 class FetchSourceRequest(BaseModel):
@@ -56,22 +59,49 @@ class _TextParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.hidden = 0
         self.parts: list[str] = []
+        self.cell_depth = 0
+        self.row_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in {"script", "style", "noscript", "svg", "nav", "footer"}:
             self.hidden += 1
-        if not self.hidden and tag in {"p", "div", "br", "tr", "h1", "h2", "h3", "li"}:
+        if self.hidden:
+            return
+        if tag in {"td", "th"}:
+            self.cell_depth += 1
+            self.parts.append(" | ")
+            # These are extraction annotations, not source quotations. Keep
+            # only bounded numeric spans; do not copy arbitrary attributes.
+            for name, value in attrs:
+                if (name in {"colspan", "rowspan"} and value and len(value) <= 2 and value.isascii() and
+                        value.isdigit() and 1 < int(value) <= 99):
+                    self.parts.append(f"[{name}={int(value)}] ")
+        elif tag == "tr":
+            self.row_depth += 1
             self.parts.append("\n")
+        elif tag in {"p", "div", "br", "h1", "h2", "h3", "li"}:
+            self.parts.append(" " if self.cell_depth else "\n")
 
     def handle_endtag(self, tag: str) -> None:
         if tag in {"script", "style", "noscript", "svg", "nav", "footer"} and self.hidden:
             self.hidden -= 1
-        if not self.hidden and tag in {"p", "div", "tr", "h1", "h2", "h3", "li"}:
-            self.parts.append("\n")
+            return
+        if self.hidden:
+            return
+        if tag in {"td", "th"} and self.cell_depth:
+            self.cell_depth -= 1
+        elif tag == "tr":
+            self.parts.append(" |\n")
+            self.row_depth = max(0, self.row_depth - 1)
+        elif tag in {"p", "div", "h1", "h2", "h3", "li"}:
+            self.parts.append(" " if self.cell_depth else "\n")
 
     def handle_data(self, data: str) -> None:
-        if not self.hidden:
-            self.parts.append(data)
+        if self.hidden:
+            return
+        if self.row_depth and not self.cell_depth and not data.strip():
+            return
+        self.parts.append(re.sub(r"\s+", " ", data) if self.cell_depth else data)
 
 
 @dataclass(frozen=True)

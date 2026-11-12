@@ -56,6 +56,7 @@ def test_official_fetch_keeps_provenance_and_declared_permissions(monkeypatch):
     assert fetched.status_code == 201, fetched.text
     data = fetched.json()
     assert data["retrieval_method"] == "official_html"
+    assert "span markers" in data["extraction_disclosure"]
     assert data["is_simulated"] is True
     assert data["response_sha256"] == "a" * 64
     assert data["verification"] == "user_declared_not_verified"
@@ -130,6 +131,24 @@ def test_authorized_full_export_contains_provenance_without_original_or_url_quer
     assert provenance["url"] == "https://example.org/report"
     assert "SECRET_QUERY" not in response.text and "SECRET_REST" not in response.text
     assert token not in response.text and "owner_id" not in response.text and "original_pdf_base64" not in response.text
+
+
+def test_official_html_extraction_disclosure_is_retained_in_version_and_export(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    monkeypatch.setattr(api, "_reserve_search_call", lambda request: None)
+    monkeypatch.setattr(api, "fetch_official_text", lambda request: FetchedText("| Year | 2024 |", "a" * 64, "text/html"))
+    client = TestClient(app)
+    registration = client.post("/v1/auth/local/register", json={"email": "html-disclosure@example.test",
+        "password": "correct horse battery staple!"})
+    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+    source = client.post("/v2/research/sources/fetch", headers=headers, json={"title": "BEA table",
+        "url": "https://www.bea.gov/news/example", "permissions": {"store": True, "display": True, "export": True}}).json()
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Year?", "source_ids": [source["source_id"]]}).json()
+    path = f"/v2/research/topics/{topic['topic_id']}/versions/{topic['versions'][0]['version_id']}"
+    metadata = client.get(path + "/sources", headers=headers).json()[0]
+    exported = client.get(path + "/export", headers=headers).json()["source_provenance"][0]
+    assert "span markers" in metadata["extraction_disclosure"]
+    assert exported["extraction_disclosure"] == metadata["extraction_disclosure"]
 
 
 def test_source_context_uses_unicode_offsets_and_enforces_display_ownership(monkeypatch):
