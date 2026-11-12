@@ -8,8 +8,8 @@ import pytest
 
 
 @pytest.mark.skipif(not os.getenv("FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"), reason="disposable PostgreSQL not configured")
-@pytest.mark.parametrize("review_phase", [False, True])
-def test_interrupted_research_retains_inputs_and_cannot_replay_external_call(tmp_path, review_phase):
+@pytest.mark.parametrize("phase", ["generation", "review", "result_commit"])
+def test_interrupted_research_retains_inputs_and_cannot_replay_external_call(tmp_path, phase):
     state_file = tmp_path / "state.json"
     env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE="postgres", FORESIGHTNINE_LOCAL_AUTH_MODE="mock",
                FORESIGHTNINE_POSTGRES_DSN=os.environ["FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN"],
@@ -63,6 +63,8 @@ path = state["path"]; op = state["operation"]
 assert client.get(path + "/" + op, headers=headers).json()["operation"]["status"] == "running"
 assert api.operations.recover_expired_leases(now=api.lifecycle_clock.now() + timedelta(seconds=301)) >= 1
 assert client.get(path + "/" + op, headers=headers).json()["operation"]["status"] == "failed"
+topic = client.get(path.rsplit("/runs", 1)[0], headers=headers)
+assert topic.status_code == 200 and len(topic.json()["versions"]) == 1
 snapshot = client.get(path + "/" + op + "/inputs", headers=headers)
 assert snapshot.status_code == 200 and snapshot.json()["parent_version_id"] == state["payload"]["parent_version_id"]
 reservation = api.billing_ledger.usage.get("model:" + op)
@@ -73,7 +75,7 @@ assert retry.json()["operation"]["status"] == "failed"
 assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
 assert api.RESEARCH_RUN_INPUTS.get(op) is None
 '''
-    if review_phase:
+    if phase == "review":
         start = start.replace('        entered.set()\n', '''        if "reviewing whether supplied evidence" not in system:
             citation = {"source_id": source_id, "quotation": "Revenue was 100"}
             return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
@@ -87,6 +89,27 @@ assert api.RESEARCH_RUN_INPUTS.get(op) is None
         recover = recover.replace('assert reservation is not None and reservation.status == "reserved"', '''assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55
 review_reservation = api.billing_ledger.usage.get("model:" + op + ":support-review")
 assert review_reservation is not None and review_reservation.status == "reserved"''')
+    elif phase == "result_commit":
+        # Exit while the result document has been written in the same
+        # uncommitted PostgreSQL transaction as the operation's terminal state.
+        start = start.replace('        entered.set()\n', '''        citation = {"source_id": source_id, "quotation": "Revenue was 100"}
+        return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
+                "counterarguments": [{"text": "Revenue alone does not establish profit", "citations": [citation]}],
+                "facts": [], "calculations": [], "limitations": []}, 55
+        entered.set()
+''')
+        start = start.replace('api.challenge_provider = Provider()\n', '''api.challenge_provider = Provider()
+original_add_version = api.research_topics.add_version
+def hold_after_result_write(*args, **kwargs):
+    result = original_add_version(*args, **kwargs)
+    entered.set()
+    Event().wait(30)
+    raise AssertionError("process should be terminated")
+api.research_topics.add_version = hold_after_result_write
+''')
+        start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
+        recover = recover.replace('assert reservation is not None and reservation.status == "reserved"',
+                                  'assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55')
     for script in (start, recover):
         result = subprocess.run([sys.executable, "-c", script], cwd=root, env=env, capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stderr
