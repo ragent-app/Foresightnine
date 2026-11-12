@@ -4,7 +4,7 @@ import json
 import pytest
 
 from app.research_sources import ResearchSource, SourcePermissions
-from app.research_verification import InvalidReview, apply_support_review, prepare_support_review
+from app.research_verification import InvalidReview, REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, apply_support_review, prepare_support_review
 
 
 def source(source_id="s", *, model=True, display=True):
@@ -22,10 +22,15 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     batch = prepare_support_review([claim()], [source()], 3000)
     assert batch.indexes == [0] and not batch.omitted
     payload = json.loads(batch.prompt)
-    assert payload["claims"][0]["excerpts"][0]["text"] == "Before. Revenue 100. After."
+    excerpt = payload["claims"][0]["excerpts"][0]
+    assert excerpt["text"] == "Before. Revenue 100. After."
+    assert excerpt["quotation"] == "Revenue 100"
+    assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == excerpt["quotation"]
+    assert "not as a substitute for an unquoted fact" in REVIEW_SYSTEM_PROMPT
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v2"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -60,5 +65,5 @@ def test_review_reduces_context_to_fit_without_truncating_the_quote():
     batch = prepare_support_review([item], [report], 350)
     assert batch.indexes == [0] and len(batch.prompt.encode()) <= 350
     assert batch.segments[0]["context_radius"] < 180
-    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]["text"]
-    assert "Revenue 100" in excerpt
+    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
+    assert excerpt["text"][excerpt["quotation_start"]:excerpt["quotation_end"]] == "Revenue 100"
