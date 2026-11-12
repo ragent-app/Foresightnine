@@ -46,6 +46,45 @@ def test_research_does_not_complete_when_percentage_only_matches_a_currency_amou
     assert content['claims'][0]['percentage_unit_unverified'] == ['5 percent']
 
 
+def test_same_number_in_another_metric_does_not_silently_complete_research(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
+    source_id=''
+    quote=('0.9 percent in the first quarter of 2026, compared with an increase of '
+           '1.6 percent in the fourth quarter of 2025.')
+    extra='GDP increased 1.6 percent in the first quarter of 2026.'
+    class Provider:
+        name='metric-attribution'
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {'claims':[{'text':"Real GDI grew 0.9 percent in Q1 2026, below GDP's 1.6 percent.",
+                'citations':[{'source_id':source_id,'quotation':quote}]}]},20
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    auth=client.post('/v1/auth/local/register',json={'email':f'metric-{uuid4().hex}@example.test',
+        'password':'correct horse battery staple!'}).json();headers={'Authorization':'Bearer '+auth['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report',
+        'text':'Real gross domestic income (GDI) increased '+quote+' '+extra,
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Compare GDP and GDI.','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'metric-attribution'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'require_counterarguments':False}).json()['operation']
+    for _ in range(100):
+        state=client.get(path+'/runs/'+receipt['operation_id'],headers=headers).json()['operation']['status']
+        if state in ('completed','failed','cancelled'):break
+        time.sleep(.02)
+    assert state=='completed'
+    version=client.get(path,headers=headers).json()['versions'][-1]; content=version['content']
+    assert content['run']['status']=='partial'
+    assert any(w['basis']=='metric_value_attribution' for w in content['claims'][0]['balance_direction_warnings'])
+    edited=deepcopy(content);edited['claims'][0]['citations'].append({'source_id':source_id,'quotation':extra})
+    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version['version_id'],'content':edited})
+    assert saved.status_code==201, saved.text
+    claim=saved.json()['versions'][-1]['content']['claims'][0]
+    assert not claim.get('balance_direction_warnings') and claim['support_status']=='not_independently_verified'
+
+
 def test_date_lead_is_a_reviewable_source_location_and_survives_version_save(monkeypatch):
     from uuid import uuid4
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')

@@ -736,6 +736,9 @@ _RATE_QUARTER_PAIR = re.compile(
 _PERIOD_RELATIVE_RATE = re.compile(
     r"\b(?P<quarter>Q[1-4]\s*[- /]?\s*20\d{2})\s+(?P<metric>GDP|GDI)\s+"
     r"(?:was|grew)\s+(?P<direction>slower|faster)\b", re.IGNORECASE)
+_METRIC_PERCENT_CLAIM = re.compile(
+    r"\b(?P<metric>GDP|GDI)(?:['’]s)?\s+(?:(?:grew|rose|increased|was|is|of)\s+)?"
+    r"(?:only\s+)?(?P<value>\d+(?:\.\d+)?)\s*(?:percent\b|%)", re.IGNORECASE)
 
 
 def _explicit_quarters(text: str) -> list[tuple[str, tuple[int, int]]]:
@@ -796,6 +799,47 @@ def flag_component_direction(claims: list[dict], sources: list[ResearchSource]) 
         text,citations=entry.get("text"),entry.get("citations")
         if not isinstance(text,str) or len(text)>3000 or not isinstance(citations,list):
             output.append(entry);continue
+        # A copied number in a two-period quotation can belong to a different
+        # explicitly identified metric. This narrow cue does not infer that
+        # the model's metric is wrong or that another source cannot support it.
+        metric_claims = list(_METRIC_PERCENT_CLAIM.finditer(text))[:10]
+        located_citations = []
+        for index, citation in enumerate(citations[:10]):
+            if not isinstance(citation, dict) or citation.get('partial_token'):
+                continue
+            sid = citation.get('source_id')
+            source = source_map.get(sid) if isinstance(sid, str) else None
+            quote, loc = citation.get('quotation'), citation.get('location')
+            if source is None or not isinstance(quote, str) or not isinstance(loc, dict) or loc.get('status') == 'ambiguous':
+                continue
+            a, b = loc.get('character_start'), loc.get('character_end')
+            if (type(a) is not int or type(b) is not int or not 0 <= a < b <= len(source.text) or
+                    source.text[a:b] != quote or partial_ascii_token(source.text, a, b)):
+                continue
+            context = source.text[max(0, a-180):a]
+            boundaries = list(_SENTENCE_END.finditer(context))
+            if boundaries:
+                context = context[boundaries[-1].end():]
+            located_citations.append((index, source, quote, context))
+        directly_quoted = set()
+        for _, _, quote, context in located_citations:
+            for match in _METRIC_PERCENT_CLAIM.finditer(context + quote):
+                directly_quoted.add((match.group('metric').upper(), Decimal(match.group('value'))))
+        for assertion in metric_claims:
+            metric, value = assertion.group('metric').upper(), Decimal(assertion.group('value'))
+            if (metric, value) in directly_quoted:
+                continue
+            for index, source, quote, context in located_citations:
+                if not re.search(r'\bincreased\s*$', context, re.IGNORECASE):
+                    continue
+                context_metrics = {name for name in ('GDP', 'GDI') if _METRIC_SUBJECTS[name].search(context)}
+                pair = _RATE_QUARTER_PAIR.search(quote)
+                if (len(context_metrics) == 1 and metric not in context_metrics and pair and
+                        value in {Decimal(pair.group('first')), Decimal(pair.group('second'))}):
+                    entry.setdefault('balance_direction_warnings', []).append({
+                        'source_id':source.source_id, 'citation_index':index,
+                        'basis':'metric_value_attribution', 'claimed_text':assertion.group(0), 'status':'requires_review'})
+                    break
         # Compare only a fully specified, adjacent two-quarter passage and an
         # explicit period/metric relative claim. This is a cue for checking
         # metric, annualization and wording, not a semantic verdict.

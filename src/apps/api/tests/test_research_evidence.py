@@ -1121,3 +1121,24 @@ def test_related_claim_suggests_same_source_quarter_as_a_review_lead():
     assert not suggest_related_claim_quotations(claims,[hidden])[1].get('suggested_related_quotations')
     repeated=source.model_copy(update={'text':text+' GDP increased in the first quarter of 2026.'})
     assert not suggest_related_claim_quotations(claims,[repeated])[1].get('suggested_related_quotations')
+
+
+def test_same_number_from_different_metric_is_a_review_cue_not_support():
+    from app.research_evidence import flag_component_direction
+    quote=('0.9 percent in the first quarter of 2026, compared with an increase of '
+           '1.6 percent in the fourth quarter of 2025.')
+    separate='GDP increased 1.6 percent in the first quarter of 2026.'
+    text='Real gross domestic income (GDI) increased '+quote+' '+separate
+    source=ResearchSource(source_id='s',owner_id='owner',title='Report',text=text,kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc),content_sha256='hash',permissions=SourcePermissions(store=True,display=True,model_input=True))
+    def cite(value):
+        start=text.index(value)
+        return {'source_id':'s','quotation':value,'location':{'character_start':start,'character_end':start+len(value)}}
+    item={'text':"Real GDI grew 0.9 percent in Q1 2026, below GDP's 1.6 percent.",'citations':[cite(quote)]}
+    result=flag_component_direction([item],[source])[0]
+    assert result['balance_direction_warnings'][0]['basis']=='metric_value_attribution'
+    assert not flag_component_direction([{**item,'citations':[cite(quote),cite(separate)]}],[source])[0].get('balance_direction_warnings')
+    same={**item,'text':'GDI grew 0.9 percent and GDI was 1.6 percent in Q4 2025.'}
+    assert not flag_component_direction([same],[source])[0].get('balance_direction_warnings')
+    ambiguous={**item,'citations':[{**cite(quote),'location':{'status':'ambiguous'}}]}
+    assert not flag_component_direction([ambiguous],[source])[0].get('balance_direction_warnings')

@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "original_counterpoint_retained": true,
+    "wrong_metric_number_flagged": true,
+    "original_result_not_changed": true
+  },
+  "all_checks_pass": true,
+  "model_calls": 0,
+  "warnings": [
+    {
+      "source_id": "source_29200000000000000000000000000001",
+      "citation_index": 0,
+      "basis": "metric_value_attribution",
+      "claimed_text": "GDP's 1.6 percent",
+      "status": "requires_review"
+    }
+  ],
+  "note": "A lexical cue is not a semantic verdict and cannot establish metric, period, or source truth."
+}
