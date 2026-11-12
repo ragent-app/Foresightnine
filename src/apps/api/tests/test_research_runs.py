@@ -2517,6 +2517,43 @@ def test_restored_table_fact_cannot_be_calculated_or_clear_warning_by_edit(monke
     assert confirm(latest["version_id"], "current").status_code == 409
 
 
+def test_uncited_causal_claim_remains_partial_and_is_rechecked_on_edit(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    source_id = ''
+    class Provider:
+        name='causal-cue-test';policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+            return {'claims':[{'text':'Revenue fell due to a supply shock.',
+                'citations':[{'source_id':source_id,'quotation':'Revenue fell.'}]}]},10
+    monkeypatch.setattr(api,'challenge_provider',Provider())
+    client=TestClient(api.app)
+    reg=client.post('/v1/auth/local/register',json={'email':f'cause-{uuid4().hex}@example.test','password':'correct horse battery staple!'}).json()
+    headers={'Authorization':'Bearer '+reg['access_token']}
+    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue fell.',
+        'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+    topic=client.post('/v2/research/topics',headers=headers,json={'question':'What changed?','source_ids':[source_id]}).json()
+    path='/v2/research/topics/'+topic['topic_id']
+    started=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'causal-cue-test'},json={
+        'parent_version_id':topic['versions'][0]['version_id'],'require_counterarguments':False})
+    assert started.status_code==202
+    op=started.json()['operation']['operation_id']
+    for _ in range(100):
+        status=client.get(path+'/runs/'+op,headers=headers).json()['operation']['status']
+        if status in {'completed','failed'}:break
+        time.sleep(.02)
+    assert status=='completed'
+    version=client.get(path,headers=headers).json()['versions'][-1]
+    assert version['content']['run']['status']=='partial'
+    assert version['content']['claims'][0]['causal_attribution_unverified'] is True
+    content=deepcopy(version['content']);content['claims'][0]['text']='Revenue fell.'
+    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version['version_id'],'content':content})
+    assert saved.status_code==201,saved.text
+    versions=saved.json()['versions']
+    assert not versions[-1]['content']['claims'][0].get('causal_attribution_unverified')
+    assert versions[-2]['content']['claims'][0]['causal_attribution_unverified'] is True
+
+
 def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_after_edit(monkeypatch):
     from uuid import uuid4
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")

@@ -9,7 +9,7 @@ from typing import Any, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource
-from .research_evidence import flag_citation_subject_context, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, suggest_percentage_evidence
+from .research_evidence import flag_citation_subject_context, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_uncited_causal_attribution, suggest_percentage_evidence
 
 
 REVIEW_SYSTEM_PROMPT = (
@@ -83,6 +83,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     # an explicit value absent from all attached quotations.
     review_claims = flag_uncited_dollar_amounts(flag_uncited_percentage_points(suggest_percentage_evidence(review_claims, [])), list(source_map.values()))
     review_claims = flag_component_direction(flag_uncited_quarters(review_claims, list(source_map.values())), list(source_map.values()))
+    review_claims = flag_uncited_causal_attribution(review_claims, list(source_map.values()))
     payload: dict[str, Any] = {"claims": [], "output_schema": {"reviews": [
         {"claim_index": 0, "verdict": "supports|does_not_support|contradicts|uncertain"}]}}
     indexes: list[int] = []
@@ -98,7 +99,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         citations = claim.get("citations")
         text = claim.get("text")
         if (any(warning.get("context_metric") == "related unquoted sentence" for warning in claim.get("citation_context_warnings", [])) or
-                claim.get("support_status") == "incomplete" or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_dollar_amounts") or claim.get("uncited_quarters") or claim.get("balance_direction_warnings") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or claim.get("reused_percentages") or claim.get("uncited_percentage_bounds") or
+                claim.get("support_status") == "incomplete" or claim.get("causal_attribution_unverified") or claim.get("uncited_amounts") or claim.get("uncited_claim_amounts") or claim.get("uncited_dollar_amounts") or claim.get("uncited_quarters") or claim.get("balance_direction_warnings") or claim.get("uncited_fact_values") or claim.get("uncited_basis_points") or claim.get("uncited_percentage_points") or claim.get("uncited_percentages") or claim.get("reused_percentages") or claim.get("uncited_percentage_bounds") or
                 claim.get("numeric_discrepancy_for_review") or not isinstance(text, str) or not text.strip() or not isinstance(citations, list) or
                 not 1 <= len(citations) <= 3):
             omitted.append(index)

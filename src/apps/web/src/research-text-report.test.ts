@@ -32,7 +32,7 @@ describe("authorized readable research export", () => {
   });
   it("preserves percentage cautions and user direction confirmation", () => {
     const version = {...sample.version, content: {...sample.version.content,
-      claims: [{text:"A\nB", uncited_percentage_bounds:["0.1 percent"], reused_percentages:["0.1%"],
+      claims: [{text:"A\nB", causal_attribution_unverified:true, uncited_percentage_bounds:["0.1 percent"], reused_percentages:["0.1%"],
         balance_direction_warnings:[{basis:"revision_vs_change",status:"requires_review"}],
         suggested_related_quotations:[{source_id:"s",quotation:"Goods $9.6 billion",status:"requires_semantic_review"}]}],
       facts: [{fact_id:"f1", direction_context_unverified:true, quotation_match:"pdf_line_hyphen_restored",
@@ -40,6 +40,7 @@ describe("authorized readable research export", () => {
         table_confirmation:{confirmed_by:"user",fact_sha256:"tablehash",confirmed_at:"2026-01-01T00:00:00Z"}}]}};
     const report = formatResearchTextReport({...sample, version}, false);
     expect(report).toContain('uncited_percentage_bounds: ["0.1 percent"]');
+    expect(report).toContain('causal_attribution_unverified: true');
     expect(report).toContain('reused_percentages: ["0.1%"]');
     expect(report).toContain('balance_direction_warnings: [{"basis":"revision_vs_change","status":"requires_review"}]');
     expect(report).toContain('suggested_related_quotations: [{"source_id":"s","quotation":"Goods $9.6 billion","status":"requires_semantic_review"}]');

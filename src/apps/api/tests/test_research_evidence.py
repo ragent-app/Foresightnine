@@ -8,6 +8,25 @@ def fact(fact_id, source_id, value, *, label="Revenue", period="FY2023", unit="U
             "label": label, "period": period, "unit": unit, "currency": currency}
 
 
+def test_causal_wording_requires_located_permitted_quotation_cue():
+    from app.research_evidence import flag_uncited_causal_attribution
+    text = 'Consumption fell. Costs fell because demand weakened.'
+    src = ResearchSource(source_id='s', owner_id='owner', title='Report', text=text, kind='user_supplied',
+        obtained_at=datetime.now(timezone.utc), content_sha256='hash', permissions=SourcePermissions(store=True, display=True))
+    def citation(quote):
+        start = text.index(quote)
+        return {'source_id':'s', 'quotation':quote, 'location':{'character_start':start,'character_end':start+len(quote)}}
+    finding = {'text':'Consumption fell, reflecting pandemic effects.', 'citations':[citation('Consumption fell.')]}
+    assert flag_uncited_causal_attribution([finding], [src])[0]['causal_attribution_unverified']
+    assert 'causal_attribution_unverified' not in finding
+    assert flag_uncited_causal_attribution([{**finding, 'text':'消费下降是由于疫情造成的。'}], [src])[0]['causal_attribution_unverified']
+    causal = {'text':'Costs fell because demand weakened.', 'citations':[citation('Costs fell because demand weakened.')]}
+    assert not flag_uncited_causal_attribution([causal], [src])[0].get('causal_attribution_unverified')
+    assert flag_uncited_causal_attribution([causal], [src.model_copy(update={'permissions': SourcePermissions(store=True)})])[0]['causal_attribution_unverified']
+    assert flag_uncited_causal_attribution([{**causal, 'citations':[{**causal['citations'][0], 'location':{'status':'ambiguous'}}]}], [src])[0]['causal_attribution_unverified']
+    assert not flag_uncited_causal_attribution([{'text':'Consumption fell.', 'causal_attribution_unverified':True}], [src])[0].get('causal_attribution_unverified')
+
+
 def test_rate_level_percentage_points_are_review_candidates_not_verdicts():
     for text in ("联邦基金利率目标区间维持在4-1/4至4-1/2个百分点。",
                  "利率区间为4.25至4.50个百分点。",

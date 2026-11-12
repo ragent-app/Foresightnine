@@ -34,6 +34,12 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     assert len(batch.prompt_sha256) == 64
 
 
+def test_review_cannot_clear_an_uncited_causal_assertion():
+    item = {**claim(), 'text':'Revenue was 100 due to a pandemic.'}
+    batch = prepare_support_review([item], [source()], 3000)
+    assert batch.indexes == [] and batch.omissions == [{'claim_index':0, 'reason':'not_reviewable'}]
+
+
 @pytest.mark.parametrize("item,src", [
     (claim(), source(model=False)), (claim(), source(display=False)),
     (claim(quotation="invented"), source()),

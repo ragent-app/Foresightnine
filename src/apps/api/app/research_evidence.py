@@ -18,6 +18,45 @@ _PERCENT = re.compile(r"(?<![A-Za-z0-9_./-])([-−]?(?:(?:\d+-)?\d+/\d+|\d+(?:\.
 _STRICT_UPPER_BOUND = re.compile(r"(?:\bless\s+than|\bbelow|\bunder|<|小于|小於|低于|低於|少于|少於)\s*$", re.IGNORECASE)
 _DECIMAL_TOKEN = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?![\w.])")
 _RELATED_DECIMAL = re.compile(r"(?<![\w.])[-−]?\d+(?:\.\d+)?(?!\w|\.\d)")
+_CAUSAL_CUE = re.compile(
+    r"\b(?:because|due\s+to|attributable\s+to|driven\s+by|result(?:ed|s|ing)?\s+from|"
+    r"result(?:ed|s|ing)?\s+in|caus(?:e|es|ed|ing)|led\s+to|leads?\s+to)\b|"
+    r"\breflect(?:s|ed|ing)\s+(?:the\s+)?[^.;\n]{1,70}?\b(?:effects?|impact)\b|"
+    r"(?:由于|由於|因为|因為|导致|導致|造成|归因于|歸因於|受[^。；\n]{1,25}影响)", re.IGNORECASE)
+
+
+def flag_uncited_causal_attribution(claims: list[dict], sources: list[ResearchSource]) -> list[dict]:
+    """Flag causal wording absent from all uniquely located source quotations.
+
+    Lexical cues are incomplete and can overflag; a matching cue does not prove
+    the same cause, direction, subject or relationship. Only permitted source
+    excerpts can clear this narrow warning, never surrounding uncited text.
+    """
+    source_map = {s.source_id: s for s in sources if s.permissions.display and not s.is_simulated}
+    output = []
+    for claim in claims:
+        entry = deepcopy(claim)
+        entry.pop("causal_attribution_unverified", None)
+        text, citations = entry.get("text"), entry.get("citations")
+        if isinstance(text, str) and len(text) <= 3000 and _CAUSAL_CUE.search(text):
+            found = False
+            if isinstance(citations, list):
+                for citation in citations[:10]:
+                    if not isinstance(citation, dict) or citation.get("partial_token"):
+                        continue
+                    source = source_map.get(citation.get("source_id")) if isinstance(citation.get("source_id"), str) else None
+                    quote, location = citation.get("quotation"), citation.get("location")
+                    if source is None or not isinstance(quote, str) or not isinstance(location, dict) or location.get("status") == "ambiguous":
+                        continue
+                    start, end = location.get("character_start"), location.get("character_end")
+                    if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text) and
+                            source.text[start:end] == quote and not partial_ascii_token(source.text, start, end) and _CAUSAL_CUE.search(quote)):
+                        found = True
+                        break
+            if not found:
+                entry["causal_attribution_unverified"] = True
+        output.append(entry)
+    return output
 
 
 def _strict_upper_percentages(text: str) -> list[tuple[Decimal, str]]:
