@@ -1,0 +1,90 @@
+{
+  "implementation_commit": "843253042cf0d80fd846c94f6ae81b630bc47f13",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "tasks": [
+    {
+      "id": "GDP_THIRD",
+      "input_sha256": "c724f65fb4c3e43703563575137ccafc17ab769dd7ae36168d45d73d387430fd"
+    },
+    {
+      "id": "FED_PURCHASES",
+      "input_sha256": "17973f96a4af1e2135b9fc4034e7c5f8f91ba389b1fc9bbc6e3817ee92cd5f07"
+    }
+  ],
+  "source_attributions": {
+    "GDP_THIRD": "U.S. Bureau of Economic Analysis, 2023 Q4 third estimate, original PDF.",
+    "FED_PURCHASES": "Board of Governors of the Federal Reserve System, 2021-07-28 statement, extracted HTML text."
+  },
+  "script_sha256": {
+    "prepare.py": "77009610f01e920a27dd5e9a17113f00975e6b7360115401d2e29cba2c3bddc2",
+    "run.py": "f40e166548517d0bdcb828e93f96b16206cc33c5e8ce03c0f1834055a90ab891",
+    "score.py": "33c42933dc0edebeb0e35ee8eee002f969ae3c4654ce4e4480738b938c1f97f4",
+    "validate_scorer.py": "b16003daee7b889b5e56fbc5dac880ff5e9d29e8fcc6e4620bd76d7559c3073b"
+  },
+  "references_sha256": "8f52438be726c8e2086952ddd43b2628c3d8b0ca50fc4aaf06fb2ee054650db2",
+  "research_system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_system_prompt_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "review_method": "bounded_quotation_context_model_review_v11",
+  "prompt_sha256_by_task": {
+    "GDP_THIRD": "c7860e637f2804e6bf0cf674978c3c839f2487d221d0eaf0ee54eccbec9d82d7",
+    "FED_PURCHASES": "965c28bc174ea1412206a0061cb15bc740b9cf3eefa8c6abb413e6d82f708904"
+  },
+  "preselected_segments": {
+    "GDP_THIRD": [
+      {
+        "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+        "character_start": 374,
+        "character_end": 525
+      },
+      {
+        "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+        "character_start": 760,
+        "character_end": 825
+      },
+      {
+        "source_id": "source_d1f8e4dfb30c43e09540625d06aeeb41",
+        "character_start": 826,
+        "character_end": 1038
+      }
+    ],
+    "FED_PURCHASES": [
+      {
+        "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+        "character_start": 6058,
+        "character_end": 6129
+      },
+      {
+        "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+        "character_start": 6782,
+        "character_end": 6875
+      },
+      {
+        "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+        "character_start": 7171,
+        "character_end": 7480
+      }
+    ]
+  },
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_tokens_per_task": 10000,
+  "max_tokens_total": 20000,
+  "max_elapsed_seconds_per_task": 120,
+  "search_calls": 0,
+  "retry_external_calls": 0,
+  "cost_usd": "unknown"
+}

@@ -1,0 +1,18 @@
+{
+  "GDP_THIRD": {
+    "annualized_third": "3.4",
+    "second": "3.2",
+    "upward": [
+      "consumer spending",
+      "nonresidential fixed investment"
+    ],
+    "offset": "private inventory investment"
+  },
+  "FED_PURCHASES": {
+    "lower": "0",
+    "upper": "0.25",
+    "treasury_billions_per_month": "80",
+    "mbs_billions_per_month": "40",
+    "risk": "public health or incomplete recovery"
+  }
+}
