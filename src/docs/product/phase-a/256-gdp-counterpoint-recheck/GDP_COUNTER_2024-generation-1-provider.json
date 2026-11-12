@@ -1,0 +1,82 @@
+{
+  "manifest_sha256": "5a2dd54f7ae729679637f7933953ed419f02625a283fea8446c61a6888ce58bb",
+  "kind": "generation",
+  "payload": {
+    "claims": [
+      {
+        "text": "The claim that both goods and services consumer spending rose in Q1 2024 is contradicted by the BEA second estimate: services increased while goods decreased.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The increase in consumer spending reflected an increase in services that was partly offset by a\ndecrease in goods. Within services, the leading contributors to the increase were health care as well\nas financial services and insurance. Within goods, the leading contributors to the decrease were\nmotor vehicles and parts as well as gasoline and other energy goods."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Overall consumer spending did increase in Q1 2024 and was a primary driver of GDP growth, but this was driven by services only, not goods.",
+        "citations": [
+          {
+            "source_id": "ref-1",
+            "quotation": "The increase in the first quarter primarily reflected increases in consumer spending and housing\ninvestment that were partly offset by a decrease in inventory investment."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "No passage in the sources states that goods spending rose in Q1 2024; no contrary evidence supporting the claim was found, so the gap remains a gap and is not itself proof.",
+      "The GDP figure alone establishes only the aggregate growth rate; it cannot establish the composition of spending by goods versus services, the causes of the changes, income distribution effects, or real-time levels of wellbeing.",
+      "Excerpts are partial; some table values (e.g., specific contribution magnitudes) are not fully legible in the supplied text.",
+      "Publication date (2024-05-30) is declared, not independently verified."
+    ],
+    "facts": [
+      {
+        "fact_id": "gdp_growth_q1_2024",
+        "label": "Real GDP growth rate, Q1 2024",
+        "value": 1.3,
+        "unit": "annual percent",
+        "currency": null,
+        "period": "2024 Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 1.3 percent in the first quarter of\n2024, according to the “second” estimate."
+        }
+      },
+      {
+        "fact_id": "gdp_growth_q4_2023",
+        "label": "Real GDP growth rate, Q4 2023",
+        "value": 3.4,
+        "unit": "annual percent",
+        "currency": null,
+        "period": "2023 Q4",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "In the fourth quarter of 2023, real GDP increased 3.4 percent."
+        }
+      },
+      {
+        "fact_id": "revision",
+        "label": "Revision from advance estimate",
+        "value": -0.3,
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2024 Q1",
+        "citation": {
+          "source_id": "ref-1",
+          "quotation": "The GDP estimate for the first quarter was revised down 0.3 percentage point from the “advance”\nestimate, primarily reflecting a downward revision to consumer spending."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "gdp_growth_q1_2024",
+        "second_fact_id": "gdp_growth_q4_2023"
+      }
+    ]
+  },
+  "reported_tokens": 1975,
+  "prompt_sha256": "69951788ccc0de7951ebf986ac00180e908c47ec82638d4eec785167ec8c0098",
+  "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7"
+}

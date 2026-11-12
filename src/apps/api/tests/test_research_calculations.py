@@ -182,7 +182,7 @@ def test_direction_context_blocks_treating_a_saved_calculation_as_verified():
     assert calculation_input_status(calculation, [current, {**prior, "quotation_match": "table_markup_expanded"}]) == "unverifiable"
 
 
-@pytest.mark.parametrize("unit", ["percent (annual rate)", "percent, annualized", "percentage (quarterly rate)", "百分比"])
+@pytest.mark.parametrize("unit", ["percent (annual rate)", "percent, annualized", "percentage (quarterly rate)", "百分比", "annual percent", "annualized percentage", "annualised percent"])
 def test_qualified_percentage_difference_is_percentage_points(unit):
     current = fact("current", "3.2", "2023", unit=unit, currency=None)
     prior = fact("prior", "2.9", "2023", unit=unit, currency=None)
@@ -190,6 +190,18 @@ def test_qualified_percentage_difference_is_percentage_points(unit):
     assert result["value"] == "0.30" and result["unit"] == "percentage points" and result["formula_version"] == "2"
     with pytest.raises(CalculationError, match="cannot have a currency"):
         calculate(CalculationRequest(formula="difference", first={**current, "currency": "USD"}, second={**prior, "currency": "USD"}))
+
+
+def test_legacy_annual_percent_difference_requires_recalculation():
+    from app.research_calculations import calculation_input_status, legacy_percentage_difference_unit
+    current = fact('current', '1.3', '2024 Q1', unit='annual percent', currency=None)
+    prior = fact('prior', '3.4', '2023 Q4', unit='annual percent', currency=None)
+    corrected = calculate(CalculationRequest(formula='difference', first=current, second=prior))
+    assert corrected['value'] == '-2.10' and corrected['unit'] == 'percentage points'
+    legacy = {**corrected, 'formula_version': '1', 'unit': 'annual percent', 'input_status': 'matched'}
+    assert legacy_percentage_difference_unit(legacy)
+    assert calculation_input_status(legacy, [current, prior]) == 'unverifiable'
+    assert not legacy_percentage_difference_unit(corrected)
 
 
 def test_percentage_point_inputs_remain_points_without_becoming_percentage_levels():

@@ -15,6 +15,37 @@ from app.research_analysis import AnalysisInterrupted
 from app.research_verification import REVIEW_SYSTEM_PROMPT
 
 
+def test_legacy_annual_rate_difference_is_warned_without_rewriting_history(monkeypatch):
+    from uuid import uuid4
+    from app.research_topics import VersionInput
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(api.app)
+    reg = client.post('/v1/auth/local/register', json={'email': f'legacy-rate-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + reg['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Rates?'}).json()
+    facts = [{'fact_id': 'a', 'value': '1.3', 'unit': 'annual percent', 'currency': None, 'period': '2024 Q1'},
+             {'fact_id': 'b', 'value': '3.4', 'unit': 'annual percent', 'currency': None, 'period': '2023 Q4'}]
+    calculation = {'formula_id': 'difference', 'formula_version': '1', 'inputs': facts, 'value': '-2.10',
+                   'unit': 'annual percent', 'decimal_places': 2, 'input_status': 'matched'}
+    stored = api.research_topics.add_version(topic['owner_id'], topic['topic_id'], VersionInput(
+        parent_version_id=topic['versions'][0]['version_id'], content=ResearchContent(facts=facts, calculations=[calculation])))
+    version = stored.versions[-1]
+    path = '/v2/research/topics/' + topic['topic_id']
+    for response in (client.get(path, headers=headers).json()['versions'][-1],
+                     client.get(path + '/versions/' + version.version_id, headers=headers).json(),
+                     client.get(path + '/versions/' + version.version_id + '/export', headers=headers).json()['version']):
+        assert response['content']['calculations'][0]['legacy_unit_warning'] == 'percentage_difference_requires_recalculation'
+        assert response['content']['calculations'][0]['unit'] == 'annual percent'
+    assert 'legacy_unit_warning' not in api.research_topics.get(topic['owner_id'], topic['topic_id']).versions[-1].content.calculations[0]
+    recalc = client.post(path + '/calculations/recalculate', headers=headers,
+        json={'parent_version_id': version.version_id, 'calculation_index': 0})
+    assert recalc.status_code == 201, recalc.text
+    current = recalc.json()['versions'][-1]['content']['calculations'][0]
+    assert current['value'] == '-2.10' and current['unit'] == 'percentage points' and current['formula_version'] == '2'
+    assert 'legacy_unit_warning' not in current
+
+
 def test_provisional_html_calculation_remains_partial_through_export_and_edit(monkeypatch):
     import base64
     from uuid import uuid4

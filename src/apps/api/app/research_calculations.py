@@ -91,7 +91,7 @@ def is_percent_unit(unit: str) -> bool:
     normalized = " ".join(unit.strip().casefold().split())
     if re.search(r"\bpoints?\b|百分点", normalized):
         return False
-    return bool(re.fullmatch(r"(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|,\s*(?:annualized|annual rate))?", normalized))
+    return bool(re.fullmatch(r"(?:(?:annual|annualized|annualised)\s+)?(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|,\s*(?:annualized|annualised|annual rate))?", normalized))
 
 
 def quotation_is_inside_table_row(source_text: str, start: object, quotation: object) -> bool:
@@ -457,12 +457,22 @@ def _is_ratio_scale_factor(text: str, match: re.Match[str]) -> bool:
         return False
 
 
+def legacy_percentage_difference_unit(calculation: dict) -> bool:
+    """Identify old results whose now-recognized rate unit needs recalculation."""
+    inputs = calculation.get("inputs")
+    return bool(calculation.get("formula_id") == "difference" and isinstance(inputs, list) and len(inputs) == 2 and
+                all(isinstance(item, dict) and isinstance(item.get("unit"), str) and is_percent_unit(item["unit"]) for item in inputs) and
+                calculation.get("unit") != "percentage points")
+
+
 def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
     """Check a retained calculation against this version's fact values.
 
     This verifies consistency, not whether the facts or the result are true.
     Old or user-supplied records with missing structure fail closed.
     """
+    if legacy_percentage_difference_unit(calculation):
+        return "unverifiable"
     inputs = calculation.get("inputs")
     if not isinstance(inputs, list) or len(inputs) != 2 or any(not isinstance(item, dict) for item in inputs):
         return "unverifiable"

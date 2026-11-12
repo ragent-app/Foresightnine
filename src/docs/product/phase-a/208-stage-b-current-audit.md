@@ -44,3 +44,5 @@
 [254 号记录](254-provisional-html-table-calculation.md)使用原件结构生成带未核验输入标记的暂定计算；旧 Cisco 模型输出离线重放得到 −5.61%，不代表独立测试或语义验收通过。
 
 [255 号记录](255-provisional-calculation-lifecycle.md)补充暂定计算的部分完成、导出与编辑边界，以及表格确认时的原件日期冲突检查。
+
+[256 号反方真实样本复查](256-gdp-counterpoint-recheck/README.md)仍未通过预设机械标准；模型正确识别服务上升与商品下降，但 GDP 主张、反方引用与模型复查仍不完整，并暴露年化百分比差值的单位错误。[257 号记录](257-annual-percent-difference.md)修复该单位并保留历史结果提示；本次不改变 B02、B04、B09 的验收状态。

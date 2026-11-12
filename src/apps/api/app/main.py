@@ -97,7 +97,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, suggest_percentage_calculations, is_percent_unit, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
@@ -1460,17 +1460,33 @@ def create_research_topic(request: ResearchInput, authorization: str | None = He
     return research_topics.create(account.account_id, request)
 
 
+def _legacy_calculation_diagnostics(version):
+    """Annotate a copy on read; never rewrite an immutable saved version."""
+    if not any(legacy_percentage_difference_unit(item) for item in version.content.calculations):
+        return version
+    version = version.model_copy(deep=True)
+    for item in version.content.calculations:
+        if legacy_percentage_difference_unit(item):
+            item["legacy_unit_warning"] = "percentage_difference_requires_recalculation"
+    return version
+
+
+def _topic_with_calculation_diagnostics(topic: ResearchTopic) -> ResearchTopic:
+    versions = [_legacy_calculation_diagnostics(version) for version in topic.versions]
+    return topic.model_copy(update={"versions": versions})
+
+
 @app.get("/v2/research/topics", response_model=list[ResearchTopic], include_in_schema=False)
 def list_research_topics(authorization: str | None = Header(default=None)) -> list[ResearchTopic]:
     account = _authenticated_account(authorization)
-    return research_topics.list(account.account_id)
+    return [_topic_with_calculation_diagnostics(topic) for topic in research_topics.list(account.account_id)]
 
 
 @app.get("/v2/research/topics/{topic_id}", response_model=ResearchTopic, include_in_schema=False)
 def get_research_topic(topic_id: str, authorization: str | None = Header(default=None)) -> ResearchTopic:
     account = _authenticated_account(authorization)
     try:
-        return research_topics.get(account.account_id, topic_id)
+        return _topic_with_calculation_diagnostics(research_topics.get(account.account_id, topic_id))
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
 
@@ -1485,7 +1501,7 @@ def get_research_version(topic_id: str, version_id: str, authorization: str | No
     version = next((v for v in topic.versions if v.version_id == version_id), None)
     if version is None:
         raise ApiProblem(404, "not_found", "Research version not found.")
-    return version.model_dump(mode="json")
+    return _legacy_calculation_diagnostics(version).model_dump(mode="json")
 
 
 @app.get("/v2/research/topics/{topic_id}/versions/{version_id}/sources", include_in_schema=False)
@@ -1592,7 +1608,7 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
     except SourceNotFound as error:
         raise ApiProblem(403, "invalid_request", "A research source is unavailable for export.") from error
     return ResearchFullExport(topic_id=topic_id, generated_at=lifecycle_clock.now(), request=topic.request,
-                              version=version, source_provenance=sources)
+                              version=_legacy_calculation_diagnostics(version), source_provenance=sources)
 
 
 @app.get("/v2/research/topics/{topic_id}/versions/{version_id}/export/metadata",
@@ -1627,6 +1643,8 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         # item must not masquerade as an untouched model extraction. The run
         # receipt and source inventory are server-produced historical records.
         content = request.content.model_copy(deep=True)
+        for calculation in content.calculations:
+            calculation.pop("legacy_unit_warning", None)
         existing_citations = {json.dumps(citation, sort_keys=True, ensure_ascii=False) for claim in previous.content.claims
                               for citation in (claim.get("citations") if isinstance(claim.get("citations"), list) else [])
                               if isinstance(citation, dict)}
