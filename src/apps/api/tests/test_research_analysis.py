@@ -1541,3 +1541,21 @@ def test_numeric_unit_extension_fails_closed_if_donor_contains_numbers_or_unique
     text = first + "\f billion. " + " omitted " * 30 + donor
     original = [(0,first),(text.index(donor),donor)]
     assert _preserve_numeric_units(text,original,"Explain value") == original
+
+
+def test_multiple_windows_share_metadata_and_stay_within_serialized_budget():
+    from datetime import datetime, timezone
+    text = ("Revenue analysis showed 100 million in the previous year. " + " unrelated filler " * 140 +
+            "Profit analysis showed 50 million for the current year. " + " other filler " * 140)
+    report = source("s", text=text).model_copy(update={"title":"Financial annual report",
+        "published_at":datetime(2024,1,1,tzinfo=timezone.utc)})
+    prompts=[]
+    result=analyze("Compare revenue and profit amounts.",[report],None,lambda p:(prompts.append(p) or {},0),max_prompt_chars=2200)
+    assert len(prompts[0].encode()) <= 2200
+    items=json.loads(prompts[0])["sources"]
+    assert len(items)==2 and all(item["source_id"]=="s" for item in items)
+    assert items[0]["title"]=="Financial annual report" and "declared_published_at" in items[0]
+    assert "title" not in items[1] and items[1]["declared_published_at"] == items[0]["declared_published_at"]
+    for segment in result.segments:
+        a,b=segment["character_start"],segment["character_end"]
+        assert 0<=a<b<=len(text) and text[a:b]
