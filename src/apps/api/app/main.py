@@ -102,7 +102,7 @@ from .research_calculations import CalculationError, CalculationRequest, Confirm
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
-from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, suggest_percentage_evidence, suggest_related_claim_quotations, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
+from .research_evidence import claim_amount_differences, evidence_differences, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, previous_supplemental_leads, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
@@ -1879,7 +1879,8 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         content.claims = suggest_uncited_numeric_facts(content.claims, content.facts, list(citation_sources.values()))
         eligible_comparison_sources, _ = prepare_sources(list(citation_sources.values()), topic.request.as_of)
         content.claims = suggest_cross_source_comparison_evidence(content.claims, content.facts, eligible_comparison_sources)
-        content.claims = suggest_related_claim_quotations(content.claims, list(citation_sources.values()))
+        content.claims = suggest_related_with_supplemental_leads(content.claims, list(citation_sources.values()),
+                                                               previous_supplemental_leads(previous.content.claims))
         content.claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(content.claims, list(citation_sources.values())))
         content.claims = flag_component_direction(flag_citation_subject_context(content.claims, list(citation_sources.values())), list(citation_sources.values()))
         content.claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(content.claims, list(citation_sources.values())), list(citation_sources.values()))
@@ -2762,12 +2763,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             eligible_comparison_sources, _ = prepare_sources(sources, topic.request.as_of)
             claims = suggest_cross_source_comparison_evidence(claims, analysis.facts,
                         [source for source in eligible_comparison_sources if source.source_id in analysis.source_ids])
-            claim_count = len(claims)
-            claims = suggest_related_claim_quotations([*claims, *supplemental_citation_leads], sources)[:claim_count]
-            for claim in claims:
-                for candidate in claim.get('suggested_related_quotations', []):
-                    if candidate['from_claim_index'] >= claim_count:
-                        candidate['from_claim_index'] = -1
+            claims = suggest_related_with_supplemental_leads(claims, sources, supplemental_citation_leads)
             claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
             claims = flag_component_direction(flag_citation_subject_context(claims, sources), sources)
             claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(claims, sources), sources)

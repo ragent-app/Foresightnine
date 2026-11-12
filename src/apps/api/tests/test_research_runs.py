@@ -3547,6 +3547,22 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
         assert any('malformed counterpoints were omitted' in item for item in content['limitations'])
     replay = client.post(path+'/runs',headers={**headers,'Idempotency-Key':'counterpoint-run'},json=body)
     assert replay.status_code==202 and replay.json()['operation']['operation_id']==op
+    if mode == 'extra_citation_leads':
+        saved = client.post(path+'/versions', headers=headers, json={
+            'parent_version_id': versions[-1]['version_id'], 'content': content, 'note':'Keep for review'})
+        assert saved.status_code == 201
+        saved_claim = saved.json()['versions'][-1]['content']['claims'][0]
+        assert saved_claim['uncited_percentages'] == ['2 percent']
+        assert saved_claim['suggested_related_quotations'][0]['from_claim_index'] == -1
+        assert saved_claim['suggested_related_quotations'][0]['quotation'] == 'Inflation was below 2 percent.'
+        assert len(saved_claim['citations']) == 1
+        saved_version = saved.json()['versions'][-1]
+        edited = deepcopy(saved_version['content'])
+        edited['claims'][0]['text'] = 'Revenue increased.'
+        changed = client.post(path+'/versions', headers=headers, json={
+            'parent_version_id': saved_version['version_id'], 'content': edited})
+        assert changed.status_code == 201
+        assert not changed.json()['versions'][-1]['content']['claims'][0].get('suggested_related_quotations')
 
 
 def test_counterpoint_cancellation_preserves_generation_checkpoint(monkeypatch):

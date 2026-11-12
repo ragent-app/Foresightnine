@@ -1386,6 +1386,44 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
     return output
 
 
+def suggest_related_with_supplemental_leads(claims: list[dict], sources: list[ResearchSource],
+                                            leads: list[dict]) -> list[dict]:
+    """Recheck saved citation leads without promoting their model text to claims."""
+    claim_count = len(claims)
+    result = suggest_related_claim_quotations([*claims, *leads[:50]], sources)[:claim_count]
+    for claim in result:
+        for candidate in claim.get('suggested_related_quotations', []):
+            if candidate['from_claim_index'] >= claim_count:
+                candidate['from_claim_index'] = -1
+    return result
+
+
+def previous_supplemental_leads(claims: list[dict]) -> list[dict]:
+    """Recover only saved supplemental citation locations, not model assertions."""
+    leads = []
+    seen = set()
+    for claim in claims:
+        candidates = claim.get('suggested_related_quotations')
+        if not isinstance(candidates, list):
+            continue
+        for candidate in candidates[:5]:
+            if not isinstance(candidate, dict) or candidate.get('from_claim_index') != -1:
+                continue
+            sid, quote, loc = candidate.get('source_id'), candidate.get('quotation'), candidate.get('location')
+            if (not isinstance(sid, str) or not isinstance(quote, str) or not 1 <= len(quote) <= 1000 or
+                    not isinstance(loc, dict) or type(loc.get('character_start')) is not int or
+                    type(loc.get('character_end')) is not int):
+                continue
+            key = (sid, quote, loc.get('character_start'), loc.get('character_end'))
+            if key in seen:
+                continue
+            seen.add(key)
+            leads.append({'citations': [{'source_id': sid, 'quotation': quote, 'location': deepcopy(loc)}]})
+            if len(leads) == 50:
+                return leads
+    return leads
+
+
 def _difference_label(label: str) -> str:
     # Ignore only an explicit, trailing release qualifier; accounting basis,
     # geography and other parenthetical details remain part of the label.
