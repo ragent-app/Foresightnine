@@ -55,6 +55,22 @@ class ReviewBatch:
         return sha256(self.prompt.encode("utf-8")).hexdigest()
 
 
+@dataclass(frozen=True)
+class IsolatedReviewPlan:
+    batches: list[ReviewBatch]
+    omissions: list[dict[str, int | str | bool]]
+
+
+def _review_order(claims: list[dict]) -> list[int]:
+    """Alternate supporting and opposing claims without changing either order."""
+    support = [i for i, claim in enumerate(claims) if claim.get("role") != "counterargument"]
+    counter = [i for i, claim in enumerate(claims) if claim.get("role") == "counterargument"]
+    order = [index for pair in zip(support, counter) for index in pair]
+    order.extend(support[len(counter):])
+    order.extend(counter[len(support):])
+    return order
+
+
 def prepare_support_review(claims: list[dict], sources: list[ResearchSource], max_bytes: int) -> ReviewBatch:
     """Assemble only authorized, uniquely located original excerpts within budget."""
     source_map = {item.source_id: item for item in sources if item.permissions.model_input and item.permissions.display and not item.is_simulated}
@@ -76,12 +92,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Alternate the two roles before allocating scarce review input, so a
     # run of supporting claims cannot always crowd out counterarguments.
-    support = [i for i, claim in enumerate(review_claims) if claim.get("role") != "counterargument"]
-    counter = [i for i, claim in enumerate(review_claims) if claim.get("role") == "counterargument"]
-    order = [index for pair in zip(support, counter) for index in pair]
-    order.extend(support[len(counter):])
-    order.extend(counter[len(support):])
-    for index in order:
+    for index in _review_order(review_claims):
         claim = review_claims[index]
         citations = claim.get("citations")
         text = claim.get("text")
@@ -156,6 +167,24 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions)
 
 
+def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchSource], max_bytes: int) -> IsolatedReviewPlan:
+    """Prepare separate bounded prompts, retaining original claim indexes.
+
+    This only prepares prompts; the caller must separately enforce call,
+    token, time and cost limits and persist partial progress.
+    """
+    batches: list[ReviewBatch] = []
+    omissions: list[dict[str, int | str | bool]] = []
+    for original_index in _review_order(claims):
+        single = prepare_support_review([claims[original_index]], sources, max_bytes)
+        if not single.indexes:
+            omissions.extend({**item, "claim_index": original_index} for item in single.omissions)
+            continue
+        batches.append(ReviewBatch(prompt=single.prompt, indexes=[original_index], omitted=[],
+            segments=[{**segment, "claim_index": original_index} for segment in single.segments], omissions=[]))
+    return IsolatedReviewPlan(batches=batches, omissions=sorted(omissions, key=lambda item: int(item["claim_index"])))
+
+
 def _review_item(index: int, text: str, located: list[tuple[ResearchSource, int, int, int, int]], radius: int) -> tuple[dict[str, Any], list[dict[str, int | str]]]:
     excerpts = []
     segments: list[dict[str, int | str]] = []
@@ -187,6 +216,14 @@ def _apply_verdicts(claims: list[dict], verdicts: dict[int, str]) -> list[dict]:
              **({"support_review": {"verdict": verdicts[index], "method": REVIEW_METHOD,
                                                "independently_verified": False}}
                          if index in verdicts else {})} for index, claim in enumerate(claims)]
+
+
+def parse_isolated_support_review(batch: ReviewBatch, raw: dict[str, Any]) -> tuple[int, str]:
+    """Validate one isolated response and return its original claim index."""
+    if len(batch.indexes) != 1:
+        raise InvalidReview("An isolated review must contain exactly one claim.")
+    verdicts = _validated_review_verdicts(batch, raw)
+    return batch.indexes[0], verdicts[batch.indexes[0]]
 
 
 def apply_support_review(claims: list[dict], batch: ReviewBatch, raw: dict[str, Any]) -> list[dict]:

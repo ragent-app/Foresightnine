@@ -369,3 +369,43 @@ def test_review_includes_possessive_entity_context_without_treating_it_as_quote(
     excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
     assert excerpt["quotation"] == quotation and excerpt["preceding_context"].endswith("River's ")
     assert batch.segments[0]["required_context_start"] == text.index("River's")
+
+
+def test_isolated_plan_preserves_role_priority_and_original_indexes():
+    from app.research_verification import prepare_isolated_support_reviews, parse_isolated_support_review
+    items = [{**claim(), "text":"Revenue was 100; first", "role":"support"},
+             {**claim(), "text":"Revenue was 100; second", "role":"support"},
+             {**claim(), "text":"Revenue was 100; counter", "role":"counterargument"},
+             {**claim(), "text":"Unavailable", "citations":[]}]
+    plan = prepare_isolated_support_reviews(items, [source()], 3000)
+    assert [batch.indexes for batch in plan.batches] == [[0], [2], [1]]
+    assert plan.omissions == [{"claim_index":3, "reason":"not_reviewable"}]
+    for batch in plan.batches:
+        payload = json.loads(batch.prompt)
+        assert len(payload["claims"]) == 1 and payload["claims"][0]["claim_index"] == 0
+        assert payload["claims"][0]["text"] == items[batch.indexes[0]]["text"]
+        assert batch.segments[0]["claim_index"] == batch.indexes[0]
+        assert len(batch.prompt.encode()) <= 3000
+        assert parse_isolated_support_review(batch, {"reviews":[{"claim_index":0,"verdict":"supports"}]}) == (batch.indexes[0], "supports")
+        for raw in ({"reviews":[]}, {"reviews":[{"claim_index":1,"verdict":"supports"}]},
+                    {"reviews":[{"claim_index":0,"verdict":"supports"},{"claim_index":0,"verdict":"uncertain"}]}):
+            with pytest.raises(InvalidReview):
+                parse_isolated_support_review(batch, raw)
+    unauthorized = prepare_isolated_support_reviews(items, [source(model=False)], 3000)
+    assert not unauthorized.batches and len(unauthorized.omissions) == len(items)
+
+
+def test_isolated_plan_keeps_required_source_context_and_budget_guard():
+    from app.research_verification import prepare_isolated_support_reviews
+    text = "River is a subsidiary. River's revenue increased 5 percent."
+    quotation = "revenue increased 5 percent"; start = text.index(quotation)
+    item = {"text":"Harbor revenue increased 5 percent.", "citations":[{"source_id":"s","quotation":quotation,
+        "location":{"character_start":start,"character_end":start+len(quotation)}}]}
+    report = source().model_copy(update={"text":text})
+    plan = prepare_isolated_support_reviews([item], [report], 3000)
+    batch = plan.batches[0]
+    excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
+    assert excerpt["quotation"] == quotation and excerpt["preceding_context"].endswith("River's ")
+    assert batch.segments[0]["required_context_start"] == text.index("River's")
+    limited = prepare_isolated_support_reviews([item], [report], 100)
+    assert not limited.batches and limited.omissions[0]["reason"] == "input_budget"
