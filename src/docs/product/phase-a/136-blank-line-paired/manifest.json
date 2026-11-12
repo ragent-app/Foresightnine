@@ -1,0 +1,57 @@
+{
+  "implementation_commit": "10ec55a41e65b6afea812239561e1e94921ab977",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "files": {
+    "common.py": "23faa7a7e33e12e78af03b5aaaf8eab454b4f83807e524e60a37e2679a0ada02",
+    "prepare.py": "41ec50cf1463846f65bcd7fa4777feeb9cbbc86ede3efad6370ecffbf8098a0f",
+    "run.py": "138e8201a491fb3b471ae60fda32d8ccc5f1a4e1c38e5f8d6807bfcfa41fcd72",
+    "score.py": "e11c7e7436f87160b6bc57f4102686a447b6fadf667fa4e4c6816296ce4e4631",
+    "FED_PURCHASES-input.json": "0877769a3f0a3ca19c986e946d32b0d2fb085516faa55a4fad05022797af5c1e"
+  },
+  "conditions": [
+    {
+      "task": "FED_PURCHASES",
+      "input_limit": 6000,
+      "prompt_sha256": "41be9a55ce94ff9709873e21a0c264e2c70092ad68339706b48481bb2f2d6d71",
+      "prompt_bytes": 5055,
+      "segments": [
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 2758,
+          "character_end": 6468
+        },
+        {
+          "source_id": "source_8a668505f5fe4d16b9694d2dfce28713",
+          "character_start": 6575,
+          "character_end": 8344
+        }
+      ],
+      "source_hashes": {
+        "source_8a668505f5fe4d16b9694d2dfce28713": "0c5f6b1144bf337a31807a20b0d8e12200684d079ce14f95e28c949ac7470e0a"
+      }
+    }
+  ],
+  "prior_result_sha256": "93183b642b0a7bf11f581c5bd6ac3b1b2a1e4ff592f46fc11a0e7bc0e99193e2",
+  "prior_score_sha256": "4664c882daeebe1c1665fe8058dc815ae0da7c6587ebc9729584d6d796348414",
+  "max_calls": 1,
+  "per_call_max_total_tokens": 10000,
+  "max_total_tokens": 10000,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 143314
+}
