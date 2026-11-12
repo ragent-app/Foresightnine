@@ -92,7 +92,7 @@ class AnalysisInterrupted(Exception):
     pass
 
 
-_NUMBER = re.compile(r"(?<![\w.])\(?\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)?(?![\w.])")
+_NUMBER = re.compile(r"(?<![A-Za-z0-9_.])\(?\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)?(?![A-Za-z0-9_.])")
 _FRACTION = re.compile(r"(?<![\w./-])(-\s*)?(?:(\d+)-)?(\d+)/(\d+)(?![\w./-])")
 _RATE_PART = r"-?(?:\d+(?:-\d+)?/\d+|\d+(?:\.\d+)?)"
 _RATE_RANGE = re.compile(rf"^({_RATE_PART})\s*(?:\bto\b|[–—])\s*({_RATE_PART})$", re.IGNORECASE)

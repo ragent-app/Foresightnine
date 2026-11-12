@@ -71,6 +71,16 @@ def test_formula_scale_factor_does_not_suggest_unrelated_percent_fact():
     assert suggest_percentage_evidence([statement], [hundred])[0]["suggested_fact_evidence"][0]["fact_id"] == "a"
 
 
+def test_unquoted_chinese_percentage_is_flagged_without_claiming_semantic_support():
+    claim = {"text": "同比2.6%，不可误读为环比。", "citations": [{"source_id": "one", "quotation": "same month one year Percent 2.0"}]}
+    result = suggest_percentage_evidence([claim], [])[0]
+    assert result["uncited_percentages"] == ["2.6%"]
+    assert "uncited_percentages" not in claim
+    assert not suggest_percentage_evidence([{**claim, "citations": [{"quotation": "同比2.6%"}],
+                                             "uncited_percentages": ["fabricated"]}], [])[0].get("uncited_percentages")
+    assert not suggest_percentage_evidence([{"text": "增长(120-100)/100 × 100%", "citations": []}], [])[0].get("uncited_percentages")
+
+
 def test_chinese_usd_conversion_flags_only_anchored_unmatched_amounts():
     quote = "2023 revenue 53717, 2024 revenue 57063 million USD"
     def sourced(id, value, year):

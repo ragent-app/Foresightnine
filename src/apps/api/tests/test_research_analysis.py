@@ -23,6 +23,7 @@ def test_fractional_rate_notation_is_converted_exactly():
     assert _quoted_numbers("-1/2") == {Decimal("-0.5")}
     assert _quoted_numbers("- 1/2") == {Decimal("-0.5")}
     assert Decimal("0.3333333333333333333333333333") not in _quoted_numbers("1/3")
+    assert Decimal("2.6") in _quoted_numbers("同比2.6%，环比0.3%")
 
 
 def test_invalid_numeric_fact_is_omitted_without_discarding_grounded_claims():

@@ -42,8 +42,8 @@ class CalculationError(ValueError):
     """The available inputs do not support the requested calculation."""
 
 
-_TEXT_NUMBER = re.compile(r"(?<![\w.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
-_TEXT_PERCENT = re.compile(r"(?<![\w.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
+_TEXT_NUMBER = re.compile(r"(?<![A-Za-z0-9_.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+_TEXT_PERCENT = re.compile(r"(?<![A-Za-z0-9_.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
 _RATIO_SCALE_PREFIX = re.compile(r"(?:/|÷)\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)*\s*[×*]\s*$")
 
 

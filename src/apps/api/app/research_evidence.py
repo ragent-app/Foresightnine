@@ -12,8 +12,7 @@ from .research_calculations import NumericFact, _is_ratio_scale_factor
 from .research_analysis import _quoted_numbers
 
 
-_PERCENT = re.compile(r"(?<![\w.])([-−]?\d+(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
-_NUMBER = re.compile(r"(?<![\w.])[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+_PERCENT = re.compile(r"(?<![A-Za-z0-9_.])([-−]?\d+(?:\.\d+)?)\s*(?:%|％|percent\b)", re.IGNORECASE)
 _ZH_USD_AMOUNT = re.compile(r"(?<![\d,.])([-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(万亿|千万|百万|十万|亿|万|千)?\s*(美元|美金)")
 _ZH_USD_TO_MILLIONS = {"万亿": Decimal("1000000"), "亿": Decimal("100"), "千万": Decimal("10"),
                        "百万": Decimal("1"), "十万": Decimal("0.1"), "万": Decimal("0.01"),
@@ -116,6 +115,7 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
     for claim in claims:
         entry = deepcopy(claim)
         entry.pop("suggested_fact_evidence", None)
+        entry.pop("uncited_percentages", None)
         text = entry.get("text")
         citations = entry.get("citations")
         if not isinstance(text, str) or not isinstance(citations, list):
@@ -125,16 +125,17 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
         for citation in citations:
             quote = citation.get("quotation") if isinstance(citation, dict) else None
             if isinstance(quote, str):
-                for match in _NUMBER.finditer(quote):
-                    try: existing.add(Decimal(match.group().replace(",", "").replace("−", "-")))
-                    except InvalidOperation: pass
+                existing.update(_quoted_numbers(quote))
         suggested = []
+        uncited = []
         seen: set[Decimal] = set()
         for match in _PERCENT.finditer(text):
             if _is_ratio_scale_factor(text, match):
                 continue
             try: value = Decimal(match.group(1).replace("−", "-"))
             except InvalidOperation: continue
+            if value not in existing and match.group(0) not in uncited and len(uncited) < 5:
+                uncited.append(match.group(0))
             candidates = by_value.get(value, [])
             if value in seen or value in existing or len(candidates) != 1:
                 continue
@@ -146,6 +147,8 @@ def suggest_percentage_evidence(claims: list[dict], facts: list[dict]) -> list[d
             if len(suggested) == 5: break
         if suggested:
             entry["suggested_fact_evidence"] = suggested
+        if uncited:
+            entry["uncited_percentages"] = uncited
         output.append(entry)
     return output
 

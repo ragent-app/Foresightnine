@@ -44,6 +44,7 @@ def test_flags_anchored_claim_percentage_but_handles_rounding_and_stale_results(
     assert differences == [{"claim_index": 0, "calculation_index": 0, "claimed_value": "4.21",
                             "calculated_value": "4.20", "unit": "percent", "status": "requires_review"}]
     assert claim_calculation_differences([{"text": "Using 642,637, the margin is 4.2%."}], [margin], [numerator, denominator]) == []
+    assert claim_calculation_differences([{"text": "分母为642,637，利润率为4.21%。"}], [margin], [numerator, denominator])[0]["calculated_value"] == "4.20"
     assert claim_calculation_differences([{"text": "The margin is 4.21%."}], [margin], [numerator, denominator]) == []
     assert claim_calculation_differences(claims, [margin], [numerator, {**denominator, "value": "642638"}]) == []
     assert claim_calculation_differences(claims, [{**margin, "value": "4.21"}], [numerator, denominator]) == []
