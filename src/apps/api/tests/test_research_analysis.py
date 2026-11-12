@@ -858,6 +858,14 @@ def test_numeric_prefix_restoration_does_not_overlap_previous_window():
     assert _restore_numeric_prefix(text, windows) == windows
 
 
+def test_parenthesized_percent_with_explicit_direction_is_not_lost():
+    assert Decimal("0.1") in _quoted_numbers("PCE increased $23.7 billion (0.1 percent).")
+    assert Decimal("-0.1") in _quoted_numbers("PCE decreased $23.7 billion (0.1 percent).")
+    assert Decimal("0.1") not in _quoted_numbers("PCE decreased $23.7 billion (0.1 percent).")
+    assert Decimal("0.1") not in _quoted_numbers("The value was (0.1 percent).")
+    assert Decimal("-100") in _quoted_numbers("The loss was (100) for the period.")
+
+
 def test_multi_part_question_can_use_three_windows_when_budget_permits(monkeypatch):
     import app.research_analysis as analysis
     text = ("Revenue increased. " + "Other unrelated text. " * 100 + "Debt declined. " +

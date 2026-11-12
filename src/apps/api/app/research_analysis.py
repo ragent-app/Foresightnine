@@ -144,6 +144,10 @@ class AnalysisInterrupted(Exception):
 
 _NUMBER = re.compile(r"(?<![A-Za-z0-9_.])\(?\s*[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*\)?(?![A-Za-z0-9_.])")
 _FRACTION = re.compile(r"(?<![A-Za-z0-9_./-])(-\s*)?(?:(\d+)-)?(\d+)/(\d+)(?![A-Za-z0-9_./-])")
+_DIRECTIONAL_PAREN_PERCENT = re.compile(
+    r"\b(increased|rose|grew|decreased|declined|fell|dropped)\s+(?:by\s+)?"
+    r"(?:(?:[$€£¥]\s*)?\d+(?:,\d{3})*(?:\.\d+)?\s+(?:thousand|million|billion|trillion)\s*)?"
+    r"\(\s*(\d+(?:\.\d+)?)\s*(?:percent|%)\s*\)", re.IGNORECASE)
 _RATE_PART = r"-?(?:\d+(?:-\d+)?/\d+|\d+(?:\.\d+)?)"
 _RATE_RANGE = re.compile(rf"^({_RATE_PART})\s*(?:%|percent)?\s*(?:\bto\b|至|到|[–—])\s*({_RATE_PART})\s*(?:%|percent)?$", re.IGNORECASE)
 _EQUIVALENT_VALUES = re.compile(r"^([^()（）]{1,100}?)\s*(?:\(([^()（）]{1,100})\)|（([^()（）]{1,100})）)$")
@@ -185,6 +189,12 @@ def _quoted_numbers(quotation: str) -> set[Decimal]:
         if reduced == 1:
             number = Decimal(whole) + Decimal(numerator) / Decimal(denominator)
             values.add(-number if sign else number)
+    # A unit inside parentheses is not an accounting parenthesis around a
+    # bare number. Recognize it only when an adjacent verb gives direction;
+    # neutral parenthesized percentages remain ambiguous and are not inferred.
+    for match in _DIRECTIONAL_PAREN_PERCENT.finditer(quotation):
+        number = Decimal(match.group(2))
+        values.add(-number if match.group(1).casefold() in {"decreased", "declined", "fell", "dropped"} else number)
     return values
 
 

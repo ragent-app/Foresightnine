@@ -24,7 +24,7 @@ REVIEW_SYSTEM_PROMPT = (
     "claim return supports, does_not_support, contradicts, or uncertain in the requested "
     "JSON schema. This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v20"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v21"
 
 
 class ReviewEntry(BaseModel):

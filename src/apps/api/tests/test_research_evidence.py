@@ -649,3 +649,12 @@ def test_component_direction_accepts_common_english_movement_word_orders():
             obtained_at=datetime.now(timezone.utc),content_sha256="test",permissions=SourcePermissions(store=True,display=True))
         citation={"source_id":"s","quotation":text,"location":{"character_start":0,"character_end":len(text)}}
         assert flag_component_direction([{"text":claim,"citations":[citation]}],[report])[0]["balance_direction_warnings"][0]["basis"]==basis
+
+
+def test_directional_parenthesized_percentage_is_not_marked_uncited():
+    claim = {"text": "PCE increased 0.1 percent.", "citations": [{"quotation": "PCE increased $23.7 billion (0.1 percent)."}]}
+    assert not suggest_percentage_evidence([claim], [])[0].get("uncited_percentages")
+    opposite = {**claim, "citations": [{"quotation": "PCE decreased $23.7 billion (0.1 percent)."}]}
+    assert suggest_percentage_evidence([opposite], [])[0]["uncited_percentages"] == ["0.1 percent"]
+    ambiguous = {**claim, "citations": [{"quotation": "The change was (0.1 percent)."}]}
+    assert suggest_percentage_evidence([ambiguous], [])[0]["uncited_percentages"] == ["0.1 percent"]
