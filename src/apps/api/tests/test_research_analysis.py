@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.research_analysis import AnalysisInterrupted, analyze, _select_window, _select_windows, _quoted_numbers
+from app.research_analysis import AnalysisInterrupted, analyze, _comparison_windows, _select_window, _select_windows, _quoted_numbers
 from decimal import Decimal
 from app.research_sources import ResearchSource, SourcePermissions
 
@@ -359,6 +359,19 @@ def test_multilingual_comparison_reserves_budget_for_each_source(reverse):
     assert set(result.source_ids) == {"positive", "negative"}
     assert all(any(source_id in gap and "remaining text" in gap for gap in result.limitations)
                for source_id in ("positive", "negative"))
+
+
+def test_comparison_windows_keep_unequal_extracted_passages_within_budget():
+    month = "From the preceding month, the" + " " * 90 + "\nPCE price index for December" + " " * 75 + "\nincreased 0.3 percent."
+    year = "From the same month one year" + " " * 30 + "\nago, the PCE price index increased 2.6 percent."
+    text = "Unrelated heading. " * 40 + month + "\nOther context. " * 10 + year + "\nAppendix. " * 40
+    result = _comparison_windows(text, "价格指数较上月和较上年同期分别多少？", 440)
+    assert result is not None and len(result) == 2
+    assert all(text[start:start + len(part)] == part for start, part in result)
+    assert "preceding month" in result[0][1] and "0.3 percent" in result[0][1]
+    assert "same month one year" in result[1][1] and "2.6 percent" in result[1][1]
+    assert sum(len(part) for _, part in result) <= 440
+    assert _comparison_windows(text, "价格指数较上月和较上年同期分别多少？", 100) is None
 
 
 def test_chinese_year_and_relevance_outrank_unrelated_numeric_density():

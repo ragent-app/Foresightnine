@@ -33,7 +33,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v7"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v8"
 
 
 class Citation(BaseModel):
@@ -197,6 +197,43 @@ def _select_window(text: str, question: str, length: int,
     return _select_windows(text, question, length, 1, should_stop)[0]
 
 
+def _comparison_windows(text: str, question: str, size: int) -> list[tuple[int, str]] | None:
+    """Keep unequal comparison passages intact when extracted columns add whitespace.
+
+    This is only a retrieval heuristic, not evidence that either percentage
+    answers the question. Original offsets and the overall size limit remain
+    unchanged; fall back to ranked windows when both spans cannot fit.
+    """
+    lower = question.casefold()
+    if not (any(x in lower for x in ("环比", "较上月", "month-on-month", "preceding month", "monthly")) and
+            any(x in lower for x in ("同比", "较上年同期", "year-on-year", "year over year", "year-over-year"))):
+        return None
+    spans = []
+    for pattern in (r"\b(?:preceding|previous)\s+month\b", r"\bsame\s+month\s+one\s+year\b"):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            return None
+        number = re.search(r"\d+(?:\.\d+)?\s*(?:percent\b|%)", text[match.end():match.end() + 400], re.IGNORECASE)
+        if not number:
+            return None
+        spans.append([max(0, match.start() - 12), match.end() + number.end()])
+    spans.sort()
+    if spans[0][1] > spans[1][0] or sum(end - start for start, end in spans) > size:
+        return None
+    remaining = size - sum(end - start for start, end in spans)
+    # Distribute spare context without overlapping the other passage.
+    for i in range(2):
+        start, end = spans[i]
+        left_limit = spans[i - 1][1] if i else 0
+        right_limit = spans[i + 1][0] if i + 1 < len(spans) else len(text)
+        allowance = remaining // (2 - i)
+        left = min(start - left_limit, allowance // 2)
+        right = min(right_limit - end, allowance - left)
+        spans[i] = [start - left, end + right]
+        remaining -= left + right
+    return [(start, text[start:end]) for start, end in spans]
+
+
 def _select_windows(text: str, question: str, length: int, count: int,
                     should_stop: Callable[[], bool] | None = None) -> list[tuple[int, str]]:
     """Select bounded, non-overlapping passages with original-text offsets."""
@@ -342,6 +379,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         source_budget_limit = current_bytes + max(0, max_prompt_chars - current_bytes) // (len(eligible) - index)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
             if split and size >= 2:
+                comparisons = _comparison_windows(source.text, question, size)
+                if comparisons is not None:
+                    return comparisons
                 return sorted(_select_windows(source.text, question, size // 2, 2, should_stop), key=lambda item: item[0])
             return [_select_window(source.text, question, size, should_stop)]
 
