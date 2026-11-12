@@ -1,0 +1,31 @@
+{
+  "implementation_commit": "fb98b6b1904e28f577bf14fc3fa537a867067052",
+  "task_sha256": "8786788db8e13db6ab58f20bbbc9041ff73db33554f751e1d60d21bc10dcc9a8",
+  "prepare_sha256": "9691e5c666fa49184966910621d7a9b0e3d6282bf353e3f9968f601e3fee978d",
+  "run_sha256": "66709728156982726a1c646dd54ddc2a60e3914781efc5c48ae3325583a6dbd9",
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "prompt": {
+    "sha256": "26b7cc144dcd0aa2abd21efc8d033005d6c812649d93fdae4fa5f5a9adcfdb26",
+    "bytes": 5021
+  },
+  "segments": [
+    {
+      "source_id": "source_22400000000000000000000000000001",
+      "character_start": 298841,
+      "character_end": 302668,
+      "model_source_id": "ref-1"
+    }
+  ],
+  "source_hash": "2cf482f78cce5038a1e750ca7b53ba96409854cb56e21eb2081532dcaa04ecf6",
+  "text_hash": "e0c3647c693f464170616a39de830a9fd0523f4b34141f3592a6660498f4f48f",
+  "max_calls": 1,
+  "max_tokens": 10000,
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_elapsed_seconds": 120,
+  "model": "glm-5.3-flash",
+  "search": false,
+  "support_review": false,
+  "retries": 0,
+  "cost_usd": "unknown"
+}

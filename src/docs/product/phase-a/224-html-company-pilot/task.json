@@ -1,0 +1,12 @@
+{
+  "question": "根据所附 Cisco 2024 年报，列出 2024 和 2023 财年的总收入、期间和单位，计算同比变化，并引用原文说明一个有关收入变化的限制。",
+  "source_id": "source_22400000000000000000000000000001",
+  "title": "Cisco FY2024 SEC 10-K",
+  "source_sha256": "2cf482f78cce5038a1e750ca7b53ba96409854cb56e21eb2081532dcaa04ecf6",
+  "text_sha256": "e0c3647c693f464170616a39de830a9fd0523f4b34141f3592a6660498f4f48f",
+  "reference": {
+    "revenue_2024_million_usd": "53803",
+    "revenue_2023_million_usd": "56998",
+    "growth_percent": "-5.61"
+  }
+}
