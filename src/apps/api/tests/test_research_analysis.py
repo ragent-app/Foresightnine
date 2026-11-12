@@ -1643,6 +1643,27 @@ def test_joined_table_rows_are_separate_incomplete_claim_citations():
     assert not run(header + '\n' + row, 'Total revenue | 100 | 80 ... Years Ended | 2024 | 2023').claims
 
 
+def test_joined_adjacent_table_rows_recover_only_original_rows_for_review():
+    from app.research_analysis import _joined_adjacent_table_rows
+    first = '| [colspan=3] Product | $ | 39,253 | | [colspan=3] | $ | 43,142 |'
+    second = '| [colspan=3] Services | [colspan=2] 14,550 | | [colspan=3] | [colspan=2] 13,856 |'
+    text = first + '\n' + second
+    quote = 'Product | $ | 39,253 | $ | 43,142 | Services | 14,550 | 13,856'
+    assert _joined_adjacent_table_rows(text, [(0, text)], quote) == [(0, len(first)), (len(first)+1, len(text))]
+    assert not _joined_adjacent_table_rows(text, [(0, text)], quote.replace('13,856', '13,857'))
+    assert not _joined_adjacent_table_rows(text, [(0, text)], 'Services | 14,550 | 13,856 | Product | $ | 39,253 | $ | 43,142')
+    separated = first + '\n| [colspan=2] Other | 1 | 2 |\n' + second
+    assert not _joined_adjacent_table_rows(separated, [(0, separated)], quote)
+    repeated = text + '\n' + text
+    assert not _joined_adjacent_table_rows(repeated, [(0, repeated)], quote)
+    assert not _joined_adjacent_table_rows(text, [(0, first), (len(first)+1, second)], quote)
+    result = analyze('Compare product and services.', [source('s',text=text)], None, lambda _: ({
+        'claims':[{'text':'Product fell and services rose.', 'citations':[{'source_id':'s','quotation':quote}]}]}, 1))
+    assert result.claims[0]['support_status'] == 'incomplete'
+    assert [item['quotation'] for item in result.claims[0]['citations']] == [first, second]
+    assert all(item['quotation_match'] == 'table_markup_expanded' for item in result.claims[0]['citations'])
+
+
 def test_recovered_table_rows_with_multiple_matches_remain_ambiguous():
     row = '| [colspan=3] Revenue | $ | 100 | | [colspan=3] | $ | 90 |'
     text = row + '\n' + row + '\n'

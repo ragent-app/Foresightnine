@@ -364,6 +364,36 @@ def _table_markup_rows(source_text: str, passages: list[tuple[int, str]], quotat
                     return found
     return found
 
+
+def _joined_adjacent_table_rows(source_text: str, passages: list[tuple[int, str]], quotation: str,
+                                should_stop: Callable[[], bool] | None = None) -> list[tuple[int, int]]:
+    """Locate two original adjacent rows from a model's joined table excerpt.
+
+    This recovers candidate rows, not the model's fictional continuous quote;
+    neither column meaning nor the claim's support is established.
+    """
+    if len(quotation) > 1000 or '\n' in quotation or not 3 <= quotation.count('|') <= 20:
+        return []
+    candidates = set()
+    for marker in (m.start() for m in re.finditer(r'\|', quotation)):
+        left, right = quotation[:marker].strip(), quotation[marker + 1:].strip()
+        if '|' not in left or '|' not in right:
+            continue
+        first = _table_markup_rows(source_text, passages, left, should_stop)
+        if len(first) != 1:
+            continue
+        second = _table_markup_rows(source_text, passages, right, should_stop)
+        if len(second) != 1:
+            continue
+        a, b = first[0], second[0]
+        if (a[1] <= b[0] and b[0] - a[1] <= 16 and not source_text[a[1]:b[0]].strip() and
+                any(start <= a[0] and b[1] <= start + len(passage) for start, passage in passages)):
+            candidates.add((a, b))
+            if len(candidates) > 1:
+                return []
+    return list(next(iter(candidates))) if len(candidates) == 1 else []
+
+
 def _counterargument_absence_only(text: str) -> bool:
     """Recognize a narrow absence statement, not a supported counterargument.
 
@@ -2479,6 +2509,29 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 try:
                     location, quotation, matching = quotation_location(source, citation.quotation, citation.source_page)
                 except InvalidAnalysis:
+                    remaining_citations = len(item.citations) - citation_index - 1
+                    joined_rows = _joined_adjacent_table_rows(source.text, model_text[source.source_id],
+                                                               citation.quotation, should_stop)
+                    if joined_rows and len(citations) + len(joined_rows) + remaining_citations <= 10:
+                        recovered_rows = []
+                        for start, end in joined_rows:
+                            try:
+                                loc, original, _ = quotation_location(source, source.text[start:end], citation.source_page)
+                            except InvalidAnalysis:
+                                recovered_rows = []
+                                break
+                            if (loc.get('status') == 'ambiguous' or loc.get('character_start') != start or
+                                    loc.get('character_end') != end or partial_boundary(source, loc)):
+                                recovered_rows = []
+                                break
+                            recovered_rows.append({'source_id':source.source_id, 'location':loc,
+                                'quotation_match':'table_markup_expanded', 'quotation':original,
+                                'support_status':'not_independently_verified'})
+                        if len(recovered_rows) == 2:
+                            citations.extend(recovered_rows)
+                            limitations.append("A joined quotation was split into separately located passages; support requires review.")
+                            omitted = True
+                            continue
                     # Some models join independently quoted passages with
                     # "and" or an ellipsis. Preserve separate original texts;
                     # ellipsis locations can remain explicitly ambiguous.
@@ -2487,7 +2540,6 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     if len(fragments) == 1:
                         fragments = re.split(r"\s*(?:\.{3}|…)\s*", citation.quotation)
                         split_kind = "split_ellipsis"
-                    remaining_citations = len(item.citations) - citation_index - 1
                     recovered = []
                     if (2 <= len(fragments) <= 3 and all(len(part.strip()) >= 4 for part in fragments) and
                             len(citations) + len(fragments) + remaining_citations <= 10):
