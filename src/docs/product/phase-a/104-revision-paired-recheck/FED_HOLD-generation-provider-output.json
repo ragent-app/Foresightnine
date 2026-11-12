@@ -1,0 +1,78 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; September 20 2023 FOMC statement.",
+  "payload": {
+    "claims": [
+      {
+        "text": "联邦基金目标利率区间维持在 5-1/4 至 5-1/2（5.25%–5.5%），美联储决定维持不变。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "the Committee decided to maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent."
+          }
+        ]
+      },
+      {
+        "text": "后续政策将考虑的因素：继续评估新增信息及其对货币政策的影响。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "The Committee will continue to assess additional information and its implications for monetary policy."
+          }
+        ]
+      },
+      {
+        "text": "在决定进一步政策幅度时，委员会将考虑货币政策的累计收紧、货币政策影响经济活动和通胀的滞后性、以及经济和金融发展。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "the Committee will take into account the cumulative tightening of monetary policy, the lags with which monetary policy affects economic activity and inflation, and economic and financial developments."
+          }
+        ]
+      },
+      {
+        "text": "委员会还将继续缩减其持有的资产。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "the Committee will continue reducing its holdings"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "提供的文本为片段（partial），仅显示维持决定及部分考量因素，不能排除声明其他部分存在相反或补充的政策倾向表述（如对进一步紧缩的态度）。",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "quotation": "In determining the extent of additional "
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "所提供的文本为声明摘录，非完整声明，缺少关于经济状况（通胀、就业）的描述段落。",
+      "无法从摘录中确认投票成员名单及是否有异议。",
+      "缩减持债的细节（规模、上限）不在所提供摘录中。",
+      "声明的发布时间为声明元数据中的日期，未经独立核实。"
+    ],
+    "facts": [
+      {
+        "fact_id": "ffr_target_range_maintained",
+        "label": "联邦基金目标利率区间",
+        "value": "5.25%-5.50%",
+        "unit": "percent",
+        "currency": "USD",
+        "period": "2023-09-20 FOMC",
+        "citation": {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "quotation": "maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1171,
+  "prompt_sha256": "a9c010b4e590d4589eed5fc3c198a0e1ff1a4f7acb8acf87403bbb0f6a12419f",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

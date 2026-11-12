@@ -1,0 +1,192 @@
+{
+  "source_attribution": "Board of Governors of the Federal Reserve System; September 20 2023 FOMC statement.",
+  "id": "FED_HOLD",
+  "manifest_sha256": "065724ae68227ed993020f6291c5f29e2fdfa72976be0762bad91e6b893a469a",
+  "operation_status": "completed",
+  "operation_id": "operation:f3dee19e5394cb64fd0f814d",
+  "poll_errors": [],
+  "elapsed_seconds_observed": 14.178,
+  "cost_usd": "unknown",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+        "title": "Federal Reserve September 20 2023 FOMC statement (extracted text)",
+        "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20230920a1.pdf",
+        "event_at": null,
+        "published_at": "2023-09-20T18:00:00+00:00",
+        "obtained_at": "2026-11-12T10:08:58.806685+00:00",
+        "revised_at": null,
+        "content_sha256": "586590cd7caa4eae0b3fd8fd2a6d7e28ff4fc6924bc3e246fb3006dfe5b111b2",
+        "is_simulated": false,
+        "pdf_text_order": null,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "联邦基金目标利率区间维持在 5-1/4 至 5-1/2（5.25%–5.5%），美联储决定维持不变。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 675,
+              "character_end": 779
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to maintain the\ntarget range for the federal funds rate at 5-1/4 to 5-1/2 percent."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "后续政策将考虑的因素：继续评估新增信息及其对货币政策的影响。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 780,
+              "character_end": 882
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "The Committee will continue to\nassess additional information and its implications for monetary policy."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "在决定进一步政策幅度时，委员会将考虑货币政策的累计收紧、货币政策影响经济活动和通胀的滞后性、以及经济和金融发展。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 1006,
+              "character_end": 1206
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the\nCommittee will take into account the cumulative tightening of monetary policy, the lags with\nwhich monetary policy affects economic activity and inflation, and economic and financial\ndevelopments."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "委员会还将继续缩减其持有的资产。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 1220,
+              "character_end": 1269
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee will continue reducing its holdings"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "提供的文本为片段（partial），仅显示维持决定及部分考量因素，不能排除声明其他部分存在相反或补充的政策倾向表述（如对进一步紧缩的态度）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+            "location": {
+              "character_start": 883,
+              "character_end": 922
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "In determining the extent\nof additional"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_d91bb078ea31474fb33f1ff0a9401c93: only character ranges 661–923, 1005–1269 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Model-reported limitation (not independently verified): 所提供的文本为声明摘录，非完整声明，缺少关于经济状况（通胀、就业）的描述段落。",
+      "Model-reported limitation (not independently verified): 无法从摘录中确认投票成员名单及是否有异议。",
+      "Model-reported limitation (not independently verified): 缩减持债的细节（规模、上限）不在所提供摘录中。",
+      "Model-reported limitation (not independently verified): 声明的发布时间为声明元数据中的日期，未经独立核实。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:f3dee19e5394cb64fd0f814d",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1171,
+      "cost_usd": null,
+      "generation_tokens": 1171,
+      "support_review_tokens": null,
+      "require_counterarguments": true,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_omissions": [],
+      "support_review_failed_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 12.741,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "a9c010b4e590d4589eed5fc3c198a0e1ff1a4f7acb8acf87403bbb0f6a12419f",
+      "prompt_characters": 1934,
+      "prompt_bytes": 2054,
+      "selection_method": "ranked_nonoverlapping_windows_v28",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "character_start": 661,
+          "character_end": 923
+        },
+        {
+          "source_id": "source_d91bb078ea31474fb33f1ff0a9401c93",
+          "character_start": 1005,
+          "character_end": 1269
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_d91bb078ea31474fb33f1ff0a9401c93": "586590cd7caa4eae0b3fd8fd2a6d7e28ff4fc6924bc3e246fb3006dfe5b111b2"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  }
+}

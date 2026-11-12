@@ -1,0 +1,96 @@
+{
+  "source_attribution": "U.S. Bureau of Economic Analysis; third-quarter 2024 second and third official GDP estimates.",
+  "payload": {
+    "claims": [
+      {
+        "text": "2024年第三季度美国实际GDP按年化率计算，第二次估计为2.8%。",
+        "citations": [
+          {
+            "source_id": "source_20bd17ab9d75424aafe5b33229d32d43",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.8 percent in the third quarter of 2024"
+          }
+        ]
+      },
+      {
+        "text": "第三次估计将同一季度的年化增长率上修至3.1%。",
+        "citations": [
+          {
+            "source_id": "source_308d821886f74e75a89a603716e5e21e",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.1 percent in the third quarter of 2024"
+          }
+        ]
+      },
+      {
+        "text": "修订方向为向上修正，主要原因是出口和消费者支出被上调。",
+        "citations": [
+          {
+            "source_id": "source_308d821886f74e75a89a603716e5e21e",
+            "quotation": "The update primarily reflected upward revisions to exports and consumer spending that were partly offset by a downward revision to private inventory investment."
+          }
+        ]
+      },
+      {
+        "text": "上调被私人存货投资的向下修订部分抵消。",
+        "citations": [
+          {
+            "source_id": "source_308d821886f74e75a89a603716e5e21e",
+            "quotation": "partly offset by a downward revision to private inventory investment"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无来源提供反方观点；文本为官方估计，不含对修订本身的质疑。",
+        "citations": [
+          {
+            "source_id": "source_308d821886f74e75a89a603716e5e21e",
+            "quotation": "according to the \"third\" estimate"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "两次估计的具体修订幅度（百分点数）未在摘录中给出，需由用户申请基于2.8%与3.1%两项事实的差异计算。",
+      "出口、消费支出和私人存货投资修订的具体金额未在摘录文本中提供。",
+      "来源覆盖为部分（partial），摘录并非完整公告，无法核实分项明细表格数据。",
+      "公告日期为声明日期（declared），未经独立核实；发布日期（2024-11-27与2024-12-19）与所覆盖的2024年第三季度期间应予区分。"
+    ],
+    "facts": [
+      {
+        "fact_id": "gdp_q3_2024_second",
+        "label": "second estimate real GDP annualized growth",
+        "value": "2.8",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2024 Q3",
+        "citation": {
+          "source_id": "source_20bd17ab9d75424aafe5b33229d32d43",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.8 percent in the third quarter of 2024"
+        }
+      },
+      {
+        "fact_id": "gdp_q3_2024_third",
+        "label": "third estimate real GDP annualized growth",
+        "value": "3.1",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2024 Q3",
+        "citation": {
+          "source_id": "source_308d821886f74e75a89a603716e5e21e",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.1 percent in the third quarter of 2024"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "gdp_q3_2024_third",
+        "second_fact_id": "gdp_q3_2024_second"
+      }
+    ]
+  },
+  "reported_tokens": 1353,
+  "prompt_sha256": "2b423eb62e3337c17093b005700ee879832435eb6c09a9566735da486c04010e",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d"
+}

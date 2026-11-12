@@ -1,0 +1,47 @@
+{
+  "manifest_sha256": "065724ae68227ed993020f6291c5f29e2fdfa72976be0762bad91e6b893a469a",
+  "semantic_support": "not independently established",
+  "tasks": {
+    "GDP_REVISION": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 1353,
+      "expected_detail": {
+        "second_2_8": true,
+        "third_3_1": true,
+        "annualized": true,
+        "upward_components": true,
+        "offset_inventory": false
+      },
+      "checks": {
+        "expected": false,
+        "all_citations_located": true,
+        "no_system_warnings": true,
+        "research_complete": false,
+        "budget_and_provenance": true
+      },
+      "mechanical_pass": false
+    },
+    "FED_HOLD": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 1171,
+      "expected_detail": {
+        "hold_and_range": true,
+        "tightening": false,
+        "lags": true,
+        "conditions": false
+      },
+      "checks": {
+        "expected": false,
+        "all_citations_located": true,
+        "no_system_warnings": false,
+        "research_complete": false,
+        "budget_and_provenance": true
+      },
+      "mechanical_pass": false
+    }
+  },
+  "passed": 0,
+  "total": 2
+}
