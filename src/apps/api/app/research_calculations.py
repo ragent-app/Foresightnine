@@ -219,10 +219,9 @@ def _spanned_table_period_conflict(source_text: str, start: int, value: Decimal,
             return None
         years = [(a, b, parsed_year(cell)) for a, b, cell in cells if parsed_year(cell)]
         if len(years) >= 2:
-            if len({year for _, _, year in years}) != len(years):
+            if any(cell and not parsed_year(cell) and cell.casefold() != "variance" for _, _, cell in cells):
                 return None
-            if any(cell and not parsed_year(cell) for _, _, cell in cells):
-                return None
+            selected_years = years
             title_found = False
             for title_line in reversed(lines[max(0, i - 4):i]):
                 title_row = parse_row(title_line)
@@ -232,11 +231,29 @@ def _spanned_table_period_conflict(source_text: str, start: int, value: Decimal,
                 if len(content) == 1 and re.fullmatch(r"years?\s+ended", content[0], re.IGNORECASE):
                     title_found = True
                     break
+                # Some financial statements put quarterly and annual
+                # columns under separate spanning headings and repeat years.
+                # Only inspect the annual group when every nonempty heading
+                # is a recognized period and the selected cell lies inside
+                # exactly one such group. This is still a warning, not proof
+                # that extractor markers reflect the original HTML.
+                if content and all(re.fullmatch(r"(?:years?|(?:three|six|nine)\s+months?)\s+ended", cell, re.IGNORECASE) for cell in content):
+                    groups = [(a, b, cell) for a, b, cell in title_row if cell]
+                    group = [(a, b, cell) for a, b, cell in groups
+                             if a <= positions[0][0] and positions[0][1] <= b]
+                    if (len(group) != 1 or not re.fullmatch(r"years?\s+ended", group[0][2], re.IGNORECASE) or
+                            any(sum(a <= ya and yb <= b for a, b, _ in groups) != 1 for ya, yb, _ in years)):
+                        return None
+                    selected_years = [(a, b, year) for a, b, year in years
+                                      if group[0][0] <= a and b <= group[0][1]]
+                    title_found = True
+                    break
                 if content:
                     break
-            if not title_found:
+            if (not title_found or len(selected_years) < 2 or
+                    len({year for _, _, year in selected_years}) != len(selected_years)):
                 return None
-            candidates = [year for a, b, year in years if a <= positions[0][0] and positions[0][1] <= b]
+            candidates = [year for a, b, year in selected_years if a <= positions[0][0] and positions[0][1] <= b]
             if len(candidates) == 1 and candidates[0] != year_match.group(1):
                 return {"declared_year": year_match.group(1), "column_year": candidates[0]}
             return None

@@ -329,6 +329,26 @@ def test_spanned_table_period_conflict_needs_complete_unique_consistent_columns(
         assert check(changed) is None
 
 
+def test_spanned_table_conflict_distinguishes_annual_from_quarterly_columns():
+    from decimal import Decimal
+    from app.research_calculations import table_period_conflict
+    title = '| [colspan=3] | [colspan=15] Three Months Ended | [colspan=3] | [colspan=15] Years Ended | [colspan=3] |\n'
+    dates = ('| [colspan=3] | [colspan=3] July 27, 2024 | [colspan=3] | [colspan=3] July 29, 2023 | [colspan=3] | [colspan=3] Variance | [colspan=3] | '
+             '[colspan=3] July 27, 2024 | [colspan=3] | [colspan=3] July 29, 2023 | [colspan=3] | [colspan=3] Variance | [colspan=3] |\n')
+    row = '| [colspan=3] Revenue | $ | 13,642 | | [colspan=3] | $ | 15,203 | | [colspan=3] | [colspan=2] (10) | % | [colspan=3] | $ | 53,803 | | [colspan=3] | $ | 56,998 | | [colspan=3] | [colspan=2] (6) | % | [colspan=3] |\n'
+    text = title + dates + row
+    def check(t, quotation='53,803', value='53803', period='Fiscal Year Ended July 29, 2023'):
+        return table_period_conflict(t, t.index(quotation), quotation, Decimal(value), period)
+    assert check(text) == {'declared_year': '2023', 'column_year': '2024'}
+    assert check(text, period='Fiscal Year Ended July 27, 2024') is None
+    assert check(text, quotation='13,642', value='13642') is None
+    assert check(text.replace('Years Ended', 'Unaudited')) is None
+    assert check(text.replace('Three Months Ended', 'Unclear period')) is None
+    ambiguous = text.replace('[colspan=3] July 29, 2023 | [colspan=3] | [colspan=3] Variance | [colspan=3] |\n',
+                             '[colspan=3] July 27, 2024 | [colspan=3] | [colspan=3] Variance | [colspan=3] |\n')
+    assert check(ambiguous) is None
+
+
 def test_decrease_wording_matches_negative_growth_only_with_local_unnegated_cue():
     current, prior = fact('current','5641','2023'), fact('prior','9108','2022')
     calculation = calculate(CalculationRequest(formula='growth_percent', first=current, second=prior))
