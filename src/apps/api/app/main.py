@@ -2086,6 +2086,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
     effective_question = request.question_override if request.question_override is not None else topic.request.question
     provider, _personal = _model_provider_for_request(http_request)
+    if isinstance(provider, OpenAICompatibleLlmProvider):
+        provider = provider.for_research()
     generate_structured = getattr(provider, "generate_structured", None)
     checkpoint_parent: str | None = None
     # Preserve idempotency keys issued before this optional field existed.

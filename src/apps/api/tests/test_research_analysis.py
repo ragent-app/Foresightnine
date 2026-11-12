@@ -1468,3 +1468,15 @@ def test_pure_evidence_gap_is_a_limitation_not_a_substantive_counterargument():
     result = analyze("Assess revenue.", [report], None, lambda _: (raw, 1))
     assert not result.counterarguments
     assert any("future guidance" in note for note in result.limitations)
+
+
+def test_larger_research_prompt_budget_can_include_complete_source_without_changing_text():
+    text = "Revenue context. " * 240
+    report = source("large", text=text)
+    small_prompts, large_prompts = [], []
+    analyze("Revenue?", [report], None, lambda prompt: (small_prompts.append(json.loads(prompt)) or {}, 0), max_prompt_chars=2000)
+    analyze("Revenue?", [report], None, lambda prompt: (large_prompts.append(json.loads(prompt)) or {}, 0), max_prompt_chars=6000)
+    assert all(part["source_coverage"] == "partial" for part in small_prompts[0]["sources"])
+    assert len(large_prompts[0]["sources"]) == 1
+    assert large_prompts[0]["sources"][0]["source_coverage"] == "complete"
+    assert large_prompts[0]["sources"][0]["text"] == text

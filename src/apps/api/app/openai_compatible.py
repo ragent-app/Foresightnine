@@ -8,7 +8,7 @@ used only after a non-empty environment secret has been confirmed.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from http.client import HTTPConnection, HTTPSConnection, HTTPException
 import ipaddress
 import json
@@ -277,6 +277,19 @@ def _llm_timeout_from_environment() -> float:
     if not math.isfinite(timeout) or not 0 < timeout <= 180:
         raise ProviderFailure("provider_configuration_invalid", "LLM timeout configuration is invalid.", retryable=False)
     return timeout
+
+
+def _research_input_limit_from_environment(default: int) -> int:
+    """Allow a bounded deployment input budget; reservations use the same limit."""
+    raw = os.environ.get("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", "").strip()
+    if not raw:
+        return default
+    if not re.fullmatch(r"[0-9]{1,5}", raw):
+        raise ProviderFailure("provider_configuration_invalid", "LLM input budget configuration is invalid.", retryable=False)
+    limit = int(raw)
+    if not 1 <= limit <= 12000:
+        raise ProviderFailure("provider_configuration_invalid", "LLM input budget configuration is invalid.", retryable=False)
+    return limit
 
 
 @dataclass(frozen=True)
@@ -663,6 +676,14 @@ class OpenAICompatibleLlmProvider(LlmProvider):
         # conservative budget unchanged, but give this fixed Coding profile
         # enough room for all ten rubric items and the final structured answer.
         return cls(settings, policy=effective_policy, transport=transport, sleeper=sleeper)
+
+    def for_research(self) -> "OpenAICompatibleLlmProvider":
+        """Clone only when a separate bounded research input limit is configured."""
+        limit = _research_input_limit_from_environment(self.policy.max_input_tokens)
+        if limit == self.policy.max_input_tokens:
+            return self
+        return type(self)(self.settings, policy=replace(self.policy, max_input_tokens=limit),
+                          transport=self.transport, sleeper=self.sleeper, configuration_error=self.configuration_error)
 
     def __repr__(self) -> str:
         configured = self.settings is not None and bool(self.settings.api_key)

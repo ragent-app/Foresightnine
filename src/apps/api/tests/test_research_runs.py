@@ -1843,3 +1843,38 @@ def test_material_topic_accepts_versioned_run_questions_and_idempotency(monkeypa
     assert exported['version']['content']['run']['question_override'] == 'What was cash?'
     invalid = {'parent_version_id':updated['versions'][-1]['version_id'],'question_override':'   '}
     assert client.post(path+'/runs', headers={**headers,'Idempotency-Key':'question-empty'}, json=invalid).status_code == 422
+
+
+def test_larger_provider_input_limit_requires_matching_research_budget(monkeypatch):
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    calls, reservations = [], []
+    class Provider:
+        name = "expanded-input-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=6000, max_output_tokens=4000)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            calls.append(prompt)
+            return {"claims": [{"text": "Revenue was 100", "citations": [{"source_id": source_id, "quotation": "Revenue was 100"}]}]}, 20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: reservations.append(kwargs["token_budget"]))
+    monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    registered = client.post("/v1/auth/local/register", json={"email":"expanded-context@example.test", "password":"correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + registered["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title":"Report", "text":"Revenue was 100.", "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question":"Revenue?", "source_ids":[source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    parent = topic["versions"][-1]["version_id"]
+    for limit, expected_calls in ((9999, 0), (10000, 1)):
+        receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": f"expanded-{limit}"}, json={"parent_version_id":parent,"max_total_tokens":limit,"require_counterarguments":False})
+        assert receipt.status_code == 202
+        op = receipt.json()["operation"]["operation_id"]
+        for _ in range(100):
+            status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if status in ("completed", "failed"): break
+            time.sleep(.02)
+        assert status == "completed" and len(calls) == expected_calls
+        result = client.get(path, headers=headers).json()["versions"][-1]
+        assert result["content"]["run"]["provider_input_token_limit"] == 6000
+        if not expected_calls: assert result["content"]["run"]["error"] == "provider_budget_exhausted"
+        parent = result["version_id"]
+    assert reservations == [10000]

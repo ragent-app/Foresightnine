@@ -736,3 +736,20 @@ def test_invalid_structured_output_retains_only_valid_reported_usage(monkeypatch
     assert raised.value.reported_tokens == expected
     assert secret_in_output not in str(raised.value)
     assert raised.value.__cause__ is None
+
+
+
+def test_research_input_budget_is_bounded_and_does_not_change_shared_provider(monkeypatch):
+    configure(monkeypatch)
+    provider = OpenAICompatibleLlmProvider.from_environment()
+    default_limit = provider.policy.max_input_tokens
+    assert provider.for_research() is provider
+    monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", "6000")
+    research_provider = provider.for_research()
+    assert research_provider.policy.max_input_tokens == 6000
+    assert provider.policy.max_input_tokens == default_limit
+    assert research_provider.transport is provider.transport
+    for raw in ("0", "12001", "-1", "3.5", "not-a-number"):
+        monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", raw)
+        with pytest.raises(ProviderFailure, match="configuration"):
+            provider.for_research()
