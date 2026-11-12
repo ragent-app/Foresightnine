@@ -1,0 +1,71 @@
+{
+  "implementation_commit": "32105ed10a26b6b3c12e2ccc86e641d2151a6e4f",
+  "model": "glm-5.3-flash",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "system_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "review_method": "bounded_quotation_context_model_review_v20",
+  "review_system_sha256": "e16a721ac76c399da19b0ee0da9ed6ab4a71468f440c055354d81f022d8a3407",
+  "files": {
+    "common.py": "cdb45bc0e70412f1af3cf3d46c40fddcc51ff77beb6930169d64a8607f7960d4",
+    "prepare.py": "f48f578aefca1c8707cb3380c78a647e55bbfd3d326f15b80fff9d44302e5abd",
+    "run.py": "4510e89f0879b93978cd61d9df6e21bae5a13b9575e2f3f2ba7168173ba1912b",
+    "score.py": "9bb779eb23611a1f6cf9a2d61f71eb3ba74c2195452f0ad4313fa477435ee6d5"
+  },
+  "source_files": {
+    "tasks.json": "e3c96d73bab1f5c1ac0c849e312c6fbb6dce82fe9ea3cfe7e42e0f9b6ea47cc0",
+    "reference.json": "76bf591f6b8c7315546f1f6be795047ec118cb7697e6720b39ce8ed6f05c73b5",
+    "bea-2022-07.pdf": "4afb1bf8ddacd6526104b6897b4b8c24e5c7366479f749ad1eb9c05838473e1e",
+    "score.py": "6ec0940899c038324610203b6dcadfcd688c931344ef8eb1cc63223fd5424e61"
+  },
+  "conditions": [
+    {
+      "task": "PCE_2022_07",
+      "prompt_sha256": "1503ac99f9988936836860031c5a233839b86002f78fcc9d82857b64064467dd",
+      "prompt_bytes": 4901,
+      "segments": [
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 286,
+          "character_end": 1421,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 2024,
+          "character_end": 3162,
+          "model_source_id": "ref-1"
+        },
+        {
+          "source_id": "source_16100000000000000000000000000001",
+          "character_start": 7045,
+          "character_end": 8164,
+          "model_source_id": "ref-1"
+        }
+      ],
+      "source_hashes": {
+        "source_16100000000000000000000000000001": "62f9844d79c63ed4d75120e7c7b7905a62224bc8dc83d387c60b71b76e750181"
+      }
+    }
+  ],
+  "input_limit": 6000,
+  "output_limit": 4000,
+  "max_calls": 2,
+  "max_total_tokens": 20000,
+  "run_elapsed_seconds": 120,
+  "timeout_seconds": 60,
+  "search_calls": 0,
+  "retries": 0,
+  "cost_usd": "unknown",
+  "previous_known_tokens": 184679
+}
