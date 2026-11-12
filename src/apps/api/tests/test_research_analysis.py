@@ -524,11 +524,32 @@ def test_repeated_quotation_returns_candidates_instead_of_false_unique_location(
                 "facts": [{"fact_id": "a", "label": "Revenue", "value": "100", "unit": "USD",
                            "currency": "USD", "period": "2023", "citation": citation}]}, 10
     result = analyze("Revenue?", [report], None, model)
+    assert result.claims[0]["support_status"] == "incomplete"
     for location in (result.facts[0]["location"], result.claims[0]["citations"][0]["location"]):
         assert location["status"] == "ambiguous" and "character_start" not in location
         assert len(location["matches"]) == 2 and not location["truncated"]
         assert all(report.text[item["character_start"]:item["character_end"]] == "Revenue 100" for item in location["matches"])
     assert sum("location is ambiguous" in item for item in result.limitations) == 1
+
+
+def test_pdf_ambiguous_citation_suggests_but_does_not_resolve_same_page():
+    text = 'Bank A report. Common ratio 100.\fBank B report. Common ratio 100.'
+    report = source('s', text=text).model_copy(update={'retrieval_method':'user_pdf'})
+    def run(anchor, report=report):
+        citations = [{'source_id':'s','quotation':'Common ratio 100.'}]
+        citations.extend({'source_id':'s','quotation':q} for q in anchor)
+        return analyze('Compare banks?', [report], None, lambda _: ({'claims':[{'text':'Ratio reported', 'citations':citations}]}, 1))
+    result = run(['Bank B report.'])
+    claim = result.claims[0]; location = claim['citations'][0]['location']
+    assert claim['support_status'] == 'incomplete' and location['status'] == 'ambiguous'
+    assert len(location['matches']) == 2 and location['same_page_candidate_index'] == 1
+    assert all(text[x['character_start']:x['character_end']] == 'Common ratio 100.' for x in location['matches'])
+    assert 'same_page_candidate_index' not in run(['Bank A report.', 'Bank B report.']).claims[0]['citations'][0]['location']
+    assert 'same_page_candidate_index' not in run(['Bank B report.'], report.model_copy(update={'retrieval_method':'user_supplied'})).claims[0]['citations'][0]['location']
+    long_text = ('Common ratio 100.\f' * 7) + 'Bank B report. Common ratio 100.'
+    long_report = source('s', text=long_text).model_copy(update={'retrieval_method':'user_pdf'})
+    bounded = run(['Bank B report.'], long_report).claims[0]['citations'][0]['location']
+    assert bounded['truncated'] and 'same_page_candidate_index' not in bounded
 
 
 def test_repeated_quotation_candidate_count_is_bounded():

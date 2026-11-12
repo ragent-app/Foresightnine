@@ -4,7 +4,7 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 export const MAX_RESEARCH_PDF_BYTES = 5_000_000;
 
 export interface SourcePosition { page?: number; character_start?: number; character_end?: number }
-export interface SourceLocation extends SourcePosition { status?: string; matches?: SourcePosition[]; truncated?: boolean }
+export interface SourceLocation extends SourcePosition { status?: string; matches?: SourcePosition[]; truncated?: boolean; same_page_candidate_index?: number }
 export interface SourceContextResult { title: string; before: string; selected: string; after: string; page_start: number | null; page_end: number | null }
 export interface ResearchClaim {
   text: string;

@@ -33,6 +33,8 @@ export function SourceContext({ sourceId, location, quotation, en, load, candida
 
   if (location?.status === "ambiguous" && Array.isArray(location.matches)) return <div className="source-context">
     <p>{en ? "This quotation has multiple matching locations. Compare the candidates." : "这段引文有多个匹配位置，请对比候选位置。"}</p>
+    {typeof location.same_page_candidate_index === "number" && Number.isInteger(location.same_page_candidate_index) && location.same_page_candidate_index >= 0 && location.same_page_candidate_index < location.matches.length ?
+      <p>{en ? `Location ${location.same_page_candidate_index + 1} is near another citation on the same page. This does not establish the correct location or support.` : `候选位置 ${location.same_page_candidate_index + 1} 与另一条引文位于同页附近；这不能证明位置正确或支持结论。`}</p> : null}
     {location.matches.slice(0, 5).map((match, index) => match && typeof match === "object" ? <SourceContext key={`${match.character_start}:${match.character_end}:${index}`}
       sourceId={sourceId} location={{ ...(typeof match.character_start === "number" ? { character_start: match.character_start } : {}),
         ...(typeof match.character_end === "number" ? { character_end: match.character_end } : {}),

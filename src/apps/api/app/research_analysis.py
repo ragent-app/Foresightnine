@@ -386,6 +386,29 @@ def _counterargument_evidence_gap_only(text: str) -> bool:
                 re.fullmatch(conditional, value, re.IGNORECASE))
 
 
+def _suggest_same_page_candidates(citations: list[dict[str, Any]], sources: dict[str, ResearchSource]) -> None:
+    """Annotate, never resolve, a repeated PDF quotation near another citation."""
+    for index, citation in enumerate(citations):
+        location = citation.get("location")
+        source = sources.get(citation.get("source_id"))
+        if (source is None or source.retrieval_method != "user_pdf" or not isinstance(location, dict) or
+                location.get("status") != "ambiguous" or location.get("truncated") or
+                not isinstance(location.get("matches"), list)):
+            continue
+        anchors = []
+        for other_index, other in enumerate(citations):
+            loc = other.get("location")
+            if (other_index != index and other.get("source_id") == source.source_id and
+                    not other.get("partial_token") and isinstance(loc, dict) and not loc.get("status") and
+                    type(loc.get("page")) is int and type(loc.get("character_start")) is int):
+                anchors.append((loc["page"], loc["character_start"]))
+        candidates = [i for i, match in enumerate(location["matches"]) if isinstance(match, dict) and
+                      type(match.get("page")) is int and type(match.get("character_start")) is int and
+                      any(match["page"] == page and abs(match["character_start"] - start) <= 5000 for page, start in anchors)]
+        if len(candidates) == 1:
+            location["same_page_candidate_index"] = candidates[0]
+
+
 def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[str, Any]] | None:
     """Split an explicit finite percentage range into independently checked bounds."""
     if len(value) > 220:
@@ -2360,7 +2383,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             limitations.append("A model-generated quotation cuts through a word or number; review the surrounding source.")
                     omitted = True
                     continue
-                if matching in {"table_markup_expanded", "pdf_line_hyphen_restored"}:
+                if matching in {"table_markup_expanded", "pdf_line_hyphen_restored"} or location.get("status") == "ambiguous":
                     incomplete_boundary = True
                 entry = {"source_id": source.source_id,
                          "location": location, "quotation_match": matching,
@@ -2379,6 +2402,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 if not citations:
                     limitations.append("A model-generated claim without a valid quotation was omitted.")
                     continue
+            _suggest_same_page_candidates(citations, source_map)
             checked.append({"text": item.text, "kind": "model_interpretation", "citations": citations,
                             "support_status": "incomplete" if (omitted or incomplete_boundary) and citations else
                                 "not_independently_verified" if citations else "unsupported"})
