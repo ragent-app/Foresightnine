@@ -1,0 +1,51 @@
+{
+  "status": "completed",
+  "raw": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 1,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 2,
+        "verdict": "uncertain"
+      }
+    ]
+  },
+  "verdicts": [
+    "supports",
+    "supports",
+    "uncertain"
+  ],
+  "narrow_nonblind_pass": true,
+  "reported_tokens": 741,
+  "elapsed_seconds": 9.264,
+  "cost_usd": "unknown",
+  "segments": [
+    {
+      "claim_index": 0,
+      "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+      "character_start": 238,
+      "character_end": 344,
+      "context_radius": 0
+    },
+    {
+      "claim_index": 1,
+      "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+      "character_start": 961,
+      "character_end": 1132,
+      "context_radius": 0
+    },
+    {
+      "claim_index": 2,
+      "source_id": "source_9ed81bc67bfb4ca5b203a6ba0ee08490",
+      "character_start": 1133,
+      "character_end": 1171,
+      "context_radius": 0
+    }
+  ]
+}
