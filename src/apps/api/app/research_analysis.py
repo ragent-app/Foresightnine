@@ -36,7 +36,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v16"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v17"
 
 
 class Citation(BaseModel):
@@ -626,6 +626,19 @@ def _select_windows(text: str, question: str, length: int, count: int,
         if (wants_monetary_amount and re.search(r"\b(?:millions?|billions?|trillions?)\s+of\s+dollars\b", passage) and
                 re.search(r"\b(?:dollars|income|revenue|sales)\b[^\n]{0,120}\d", passage)):
             score += 250
+        if wants_previous_period and wants_monetary_amount and "change from preceding period (months)" in passage:
+            # Prefer a complete monthly row, including the header, over a
+            # higher-density fragment that ends before the requested month.
+            # This is a retrieval cue only: do not infer column alignment.
+            month_pattern = r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\b"
+            for row in re.finditer(r"(?m)^[ \t]*\d+[ \t]+[^\n]{1,80}\b(?:income|revenue|sales)\b[^\n]*\n", passage):
+                prior = passage[max(0, row.start() - 240):row.start()]
+                lines = prior.splitlines()
+                months = max((len(re.findall(month_pattern, line)) for line in lines), default=0)
+                numbers = re.findall(r"(?<![\w.])-?\d+(?:\.\d+)?", row.group())
+                if months >= 3 and len(numbers) >= months + 1:
+                    score += 1000
+                    break
         if wants_vote and re.search(r"\bvoting\s+against\s+this\s+action\b", passage):
             score += 1000
         if wants_second_estimate and re.search(r"\bin\s+the\s+second\s+estimate\b", passage):
@@ -689,15 +702,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 {"source_id": "id", "quotation": "quote"}]}],
                 "counterarguments": [{"text": "counterargument", "citations": [
                     {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
-                "facts": [{"fact_id": "unique id", "label": "metric", "value": "quoted number",
+                "facts": [{"fact_id": "id", "label": "metric", "value": "number",
                            "unit": "unit", "currency": "currency or null", "period": "period",
                            "citation": {"source_id": "id", "quotation": "quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
-                                  "first_fact_id": "current or numerator id", "second_fact_id": "baseline or denominator id"}]},
+                                  "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}]},
             "evidence_guidance": "Quote one continuous source passage; never join passages or quote metadata. "
-                "For table findings, cite relevant headers, units and numeric rows separately. "
+                "Cite table headers, units and rows separately. "
                 "Put missing evidence in limitations. Excerpts are not the whole source. "
-                "PDF gaps may be compressed; check columns. Dates are declared, not verified; distinguish publication from period."}
+                "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 

@@ -185,7 +185,7 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
         assert "missing evidence in limitations" in payload["evidence_guidance"]
         assert "one continuous source passage" in payload["evidence_guidance"]
         assert "never join passages or quote metadata" in payload["evidence_guidance"]
-        assert "cite relevant headers, units and numeric rows separately" in payload["evidence_guidance"]
+        assert "Cite table headers, units and rows separately" in payload["evidence_guidance"]
         return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
 
     result = analyze("What would contradict this?", [source("s")], None, model)
@@ -891,3 +891,14 @@ def test_model_table_fact_flags_currency_missing_from_the_quotation():
     assert result.facts[0]["currency_quote_missing"] is True
     assert any("currency identifier is absent" in note for note in result.limitations)
     assert result.facts[0]["verification"] == "model_extraction_not_independently_verified"
+
+
+def test_monthly_table_retrieval_prefers_complete_row_with_header():
+    table = ("Change from Preceding Period (Months)\n[Billions of dollars]\nSeasonally adjusted at annual rates\n"
+             "2024\nMarch April May June July Aug. Sept. Oct.\n"
+             "1 Personal income 144.0 36.2 73.2 42.5 68.4 45.1 74.4 147.4 1\n")
+    text = "personal income dollar data " * 60 + table + "personal income dollar data " * 60
+    selected = _select_window(text, "2024年9月个人收入较前月变化的美元金额是多少？", 250)
+    assert "Change from Preceding Period (Months)" in selected[1]
+    assert "Sept." in selected[1] and "74.4" in selected[1] and "147.4" in selected[1]
+    assert text[selected[0]:selected[0] + len(selected[1])] == selected[1]
