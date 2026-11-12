@@ -810,6 +810,8 @@ def test_related_claim_quotation_is_limited_to_unique_visible_matching_source():
     assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(claims,[duplicated]),[duplicated])[1].get("suggested_related_quotations")
     changed=[claims[0],{**claims[1],"text":"Goods fell $9.6 million."}]
     assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(changed,[src]),[src])[1].get("suggested_related_quotations")
+    split_donor=[{**claims[0],"citations":[{**claims[0]["citations"][0],"quotation_match":"split_ellipsis"}]},claims[1]]
+    assert not suggest_related_claim_quotations(flag_uncited_dollar_amounts(split_donor,[src]),[src])[1].get("suggested_related_quotations")
 
 
 def test_related_quotation_suggests_percentages_from_table_for_ambiguous_target():

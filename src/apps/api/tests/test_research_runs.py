@@ -2402,6 +2402,48 @@ def test_pdf_line_hyphen_caution_survives_claim_edits(monkeypatch):
     assert saved.json()["versions"][-2]["content"]["claims"][0]["support_status"]=="incomplete"
 
 
+def test_split_ellipsis_caution_survives_claim_edits(monkeypatch):
+    from uuid import uuid4
+    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+    source_id = ""
+    class Provider:
+        name = "split-ellipsis-edit-test"
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=6000, max_output_tokens=1500)
+        def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+            return {"claims": [{"text": "Example revenue was 100.", "citations": [{"source_id": source_id,
+                "quotation": "Issuer Example ... Revenue was 100"}]}]}, 20
+    monkeypatch.setattr(api, "challenge_provider", Provider())
+    client = TestClient(api.app)
+    reg = client.post("/v1/auth/local/register", json={"email": f"ellipsis-{uuid4().hex}@example.test",
+        "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + reg["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+        "text": "Issuer Example. " + "Context. " * 140 + "Revenue was 100.",
+        "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Issuer and revenue?",
+        "source_ids": [source_id]}).json()
+    path = "/v2/research/topics/" + topic["topic_id"]
+    response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "ellipsis-edit"}, json={
+        "parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": False})
+    assert response.status_code == 202, response.text
+    operation = response.json()["operation"]["operation_id"]
+    for _ in range(100):
+        status = client.get(path + "/runs/" + operation, headers=headers).json()["operation"]["status"]
+        if status in {"completed", "failed"}: break
+        time.sleep(.02)
+    assert status == "completed"
+    version = client.get(path, headers=headers).json()["versions"][-1]
+    claim = version["content"]["claims"][0]
+    assert claim["support_status"] == "incomplete"
+    assert [c["quotation_match"] for c in claim["citations"]] == ["split_ellipsis", "split_ellipsis"]
+    edited = deepcopy(version["content"])
+    edited["claims"][0]["text"] = "Example reported revenue."
+    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": version["version_id"], "content": edited})
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["versions"][-1]["content"]["claims"][0]["support_status"] == "incomplete"
+    assert saved.json()["versions"][-2]["content"]["claims"][0]["support_status"] == "incomplete"
+
+
 def test_inferred_negative_dollar_change_remains_unusable_for_recalculation_after_edit(monkeypatch):
     from uuid import uuid4
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")

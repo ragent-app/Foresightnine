@@ -1161,7 +1161,7 @@ def suggest_related_claim_quotations(claims: list[dict], sources: list[ResearchS
             if found is None:
                 continue
             sid, quote, loc, source = found
-            if citation.get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded", "split_conjunction"}:
+            if citation.get("quotation_match") in {"pdf_line_hyphen_restored", "table_markup_expanded", "split_conjunction", "split_ellipsis"}:
                 continue
             # A period may terminate a sentence immediately after a decimal.
             # These are candidates only: a bare number does not establish a unit.
