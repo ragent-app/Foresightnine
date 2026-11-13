@@ -112,6 +112,7 @@ from .research_source_policy import prepare_sources, summarize_sources, summariz
 from .research_discovery import collect_source_candidates
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
+from .research_lifecycle import ResearchVersionChain
 from .research_assessment import assess_research_outcome
 from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
@@ -2531,7 +2532,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     elif request.max_input_tokens_per_call is not None:
         raise ApiProblem(422, "invalid_request", "The selected provider does not support a per-run input limit.")
     generate_structured = getattr(provider, "generate_structured", None)
-    checkpoint_parent: str | None = None
+    version_chain = ResearchVersionChain(research_topics, account.account_id, topic_id, request.parent_version_id, source_ids)
     focus = None
     if request.focus_citation is not None:
         try:
@@ -2556,7 +2557,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         return summarize_source_processing(sources, topic.request.as_of, segments)
 
     def build(operation_id: str) -> tuple[ResearchRunResult, str]:
-        nonlocal checkpoint_parent
         started = monotonic()
         deadline = started + request.max_elapsed_seconds
         budget = ResearchExecutionBudget(request.max_model_calls, request.max_search_calls,
@@ -2760,11 +2760,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # Persist the first usable snapshot even when no optional follow-up is
         # requested. Later checkpoints and the final result descend from it.
         def save_initial_checkpoint() -> None:
-            nonlocal checkpoint_parent
             try:
-                current = research_topics.get(account.account_id, topic_id).versions[-1]
-                if current.version_id != request.parent_version_id:
-                    raise TopicVersionConflict()
+                current = version_chain.current()
                 partial = assemble_research_content(
                     summary=current.content.summary, source_candidates=discovered,
                     sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
@@ -2787,10 +2784,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                          'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
                          'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
                          'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
-                    parent_version_id=request.parent_version_id, content=partial, note=current.note),
-                    source_ids=source_ids, created_by='agent')
-                checkpoint_parent = saved.versions[-1].version_id
+                version_chain.save(current, partial)
             except (TopicNotFound, TopicVersionConflict) as error:
                 raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
 
@@ -2831,12 +2825,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         else:
                             counterpoint_hash = followup.prompt_sha256
                             def save_counterpoint_checkpoint() -> None:
-                                nonlocal checkpoint_parent
                                 try:
-                                    current = research_topics.get(account.account_id, topic_id).versions[-1]
-                                    expected = checkpoint_parent or request.parent_version_id
-                                    if current.version_id != expected:
-                                        raise TopicVersionConflict()
+                                    current = version_chain.current()
                                     partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
                                         sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
                                         limitations=[*discovery_notes, *analysis.limitations,
@@ -2861,10 +2851,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                              'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
                                              'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
                                              'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                    saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
-                                        parent_version_id=expected, content=partial, note=current.note),
-                                        source_ids=source_ids, created_by='agent')
-                                    checkpoint_parent = saved.versions[-1].version_id
+                                    version_chain.save(current, partial)
                                 except (TopicNotFound, TopicVersionConflict) as error:
                                     raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
                             if not operations.store.checkpoint_if_running(operation_id, save_counterpoint_checkpoint):
@@ -2983,15 +2970,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         prior_usage = usage
                         gap_attempted = False
                         def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
-                            nonlocal calls, usage, search_calls, gap_usage, gap_hash, gap_attempted, checkpoint_parent, gap_search_status, gap_search_hash
+                            nonlocal calls, usage, search_calls, gap_usage, gap_hash, gap_attempted, gap_search_status, gap_search_hash
                             _raise_if_operation_cancelled(operation_id)
                             def save_gap_checkpoint() -> None:
-                                nonlocal checkpoint_parent
                                 try:
-                                    current = research_topics.get(account.account_id, topic_id).versions[-1]
-                                    expected = checkpoint_parent or request.parent_version_id
-                                    if current.version_id != expected:
-                                        raise TopicVersionConflict()
+                                    current = version_chain.current()
                                     partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
                                         sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
                                         limitations=[*discovery_notes, *analysis.limitations,
@@ -3016,9 +2999,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                              'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
                                              'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
                                              'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                    saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
-                                        parent_version_id=expected, content=partial, note=current.note), source_ids=source_ids, created_by='agent')
-                                    checkpoint_parent = saved.versions[-1].version_id
+                                    version_chain.save(current, partial)
                                 except (TopicNotFound, TopicVersionConflict) as error:
                                     raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
                             if request.gap_search:
@@ -3213,12 +3194,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         review_omissions.sort(key=lambda item: item["claim_index"])
 
                     def save_isolated_checkpoint() -> None:
-                        nonlocal checkpoint_parent
                         try:
-                            current = research_topics.get(account.account_id, topic_id).versions[-1]
-                            expected = checkpoint_parent or request.parent_version_id
-                            if current.version_id != expected:
-                                raise TopicVersionConflict()
+                            current = version_chain.current()
                             partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
                                 sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
                                 limitations=[*discovery_notes, *analysis.limitations,
@@ -3254,9 +3231,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
                                      "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
                                      "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                            saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
-                                parent_version_id=expected, content=partial, note=current.note), source_ids=source_ids, created_by="agent")
-                            checkpoint_parent = saved.versions[-1].version_id
+                            version_chain.save(current, partial)
                         except (TopicNotFound, TopicVersionConflict) as error:
                             raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
 
@@ -3380,12 +3355,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     review_omissions = batch.omissions
                     if batch.indexes:
                         def save_generation_checkpoint() -> None:
-                            nonlocal checkpoint_parent
                             try:
-                                current = research_topics.get(account.account_id, topic_id).versions[-1]
-                                expected_parent = checkpoint_parent or request.parent_version_id
-                                if current.version_id != expected_parent:
-                                    raise TopicVersionConflict()
+                                current = version_chain.current()
                                 partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
                                     sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
                                     claims=claims, limitations=[*discovery_notes, *analysis.limitations,
@@ -3422,10 +3393,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
                                          "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
                                          "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
-                                    parent_version_id=expected_parent, content=partial, note=current.note),
-                                    source_ids=source_ids, created_by="agent")
-                                checkpoint_parent = saved.versions[-1].version_id
+                                version_chain.save(current, partial)
                             except (TopicNotFound, TopicVersionConflict) as error:
                                 raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
                         if not operations.store.checkpoint_if_running(operation_id, save_generation_checkpoint):
@@ -3529,14 +3497,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         assert isinstance(result, ResearchRunResult)
         # Refuse to save a stale result over a user's intervening edit.
         try:
-            parent = research_topics.get(account.account_id, topic_id).versions[-1]
-            expected_parent = checkpoint_parent or result.parent_version_id
-            if parent.version_id != expected_parent:
-                raise TopicVersionConflict()
+            parent = version_chain.current()
             content = result.content.model_copy(update={"summary": parent.content.summary})
-            research_topics.add_version(account.account_id, topic_id, VersionInput(
-                parent_version_id=expected_parent, content=content, note=parent.note),
-                source_ids=source_ids, created_by="agent")
+            version_chain.save(parent, content)
         except (TopicNotFound, TopicVersionConflict) as error:
             raise ApiProblem(409, "lifecycle_conflict", "Research changed before the result was saved.") from error
 
