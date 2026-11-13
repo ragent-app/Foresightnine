@@ -2565,6 +2565,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         official_fetch_calls = 0
         official_fetch_status = "not_requested" if not request.auto_fetch_official else "no_eligible_source"
         discovered: list[dict[str, Any]] = []
+        search_receipts: list[dict[str, Any]] = []
         discovery_notes: list[str] = []
         search_status = "not_requested"
         usage: int | None = None
@@ -2606,7 +2607,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                  question_override=request.question_override, analysis=plan_analysis,
                                  source_processing=source_processing([]), planning_requested=True,
                                  planning=plan_result, request=request,
-                                 budget_accounted_tokens=context.accounted_tokens),
+                                 budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts),
                              'model_calls': context.calls, 'total_tokens': context.usage,
                              'search_calls': 0, 'search_status': 'not_started',
                              'official_fetch_calls': 0, 'official_fetch_status': 'not_started' if request.auto_fetch_official else 'not_requested',
@@ -2632,6 +2633,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 query=discovery_query(user_question, topic.request.scope, request.include_scope_in_search),
                 convert=_candidate_response, as_of=topic.request.as_of, context=context)
             search_calls, search_status = context.search_calls, discovery.status
+            search_receipts.append({'stage': 'initial', 'status': discovery.status,
+                                    'attempted': discovery.attempted, 'reason': discovery.reason,
+                                    'retryable': discovery.retryable, 'omitted': discovery.omitted})
             discovered.extend(discovery.candidates)
             if search_status == 'cost_unknown':
                 discovery_notes.append('Source discovery was skipped because search pricing is unknown under the requested cost cap.')
@@ -2763,7 +2767,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 question_override=request.question_override, analysis=analysis,
                 source_processing=source_processing(analysis.segments),
                 planning_requested=request.plan_research, planning=plan_result, request=request,
-                budget_accounted_tokens=context.accounted_tokens)
+                budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts)
 
         def prepare_claims() -> list[dict[str, Any]]:
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
@@ -3029,6 +3033,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     convert=_candidate_response, as_of=topic.request.as_of, context=context,
                                     existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap')
                                 search_calls, gap_search_status = context.search_calls, discovery.status
+                                search_receipts.append({'stage': 'gap', 'status': discovery.status,
+                                    'attempted': discovery.attempted, 'reason': discovery.reason,
+                                    'retryable': discovery.retryable, 'omitted': discovery.omitted})
                                 if discovery.attempted:
                                     gap_search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
                                 discovered.extend(discovery.candidates)

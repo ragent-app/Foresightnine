@@ -30,6 +30,8 @@ class DiscoveryResult:
     candidates: list[dict[str, Any]]
     omitted: int = 0
     attempted: bool = False
+    reason: str | None = None
+    retryable: bool = False
 
 
 def execute_source_search(*, provider: Any, provider_name: str, query: str,
@@ -57,9 +59,18 @@ def execute_source_search(*, provider: Any, provider_name: str, query: str,
             as_of=as_of, existing_urls=existing_urls, capacity=capacity, stage=stage)
         status = ('failed' if stage is None and not result.candidates else 'partial') if result.omitted else 'completed'
         return DiscoveryResult(status, result.candidates, result.omitted, attempted=True)
-    except (ProviderFailure, ApiProblem, TypeError, ValueError):
+    except (ProviderFailure, ApiProblem, TypeError, ValueError) as error:
         context.ensure_running()
-        return DiscoveryResult('failed', [], attempted=context.search_calls > previous_calls)
+        code = error.code if isinstance(error, ProviderFailure) else error.error_code if isinstance(error, ApiProblem) else None
+        reason = {
+            'search_timeout': 'timeout', 'search_provider_timeout': 'timeout',
+            'search_provider_rate_limited': 'rate_limited', 'rate_limited': 'rate_limited',
+            'search_provider_unavailable': 'unavailable', 'search_provider_unconfigured': 'unavailable',
+            'search_response_invalid': 'invalid_response', 'search_provider_rejected': 'rejected',
+            'search_budget_exhausted': 'budget_exhausted',
+        }.get(code, 'other_failure')
+        return DiscoveryResult('failed', [], attempted=context.search_calls > previous_calls,
+                               reason=reason, retryable=bool(getattr(error, 'retryable', False)))
 
 
 def collect_source_candidates(raw_candidates: list | tuple, *, provider_name: str,

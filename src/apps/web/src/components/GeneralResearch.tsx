@@ -11,6 +11,7 @@ import { CounterpointRelation } from "./CounterpointRelation";
 import { UserFactLinks } from "./UserFactLinks";
 import { ResearchChecklist } from "./ResearchChecklist";
 import { ResearchQuestions } from "./ResearchQuestions";
+import { ResearchSearchStatus } from "./ResearchSearchStatus";
 import { StructuredFactDetails } from "./StructuredFactDetails";
 import { StructuredComparison } from "./StructuredComparison";
 import { SourceCoverage } from "./SourceCoverage";
@@ -885,6 +886,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.content.run.counterpoint_requested ? <p>{en ? "Counterpoint follow-up: " : "反方补充："}{en ? String(current.content.run.counterpoint_status) : ({ not_started: "未开始", pending: "保存时未完成", completed: "已完成", partial: "部分完成", needs_review: "有引用但存在证据警示，需复核", no_evidence: "未找到可用反方", not_needed: "已有反方", unavailable: "不可用", budget_exhausted: "预算不足", input_budget: "输入预算不足", capacity_reached: "反方数量已达上限", failed: "失败" } as Record<string, string>)[String(current.content.run.counterpoint_status)] ?? String(current.content.run.counterpoint_status)}。{en ? "Model output is not independently verified." : "模型输出尚未独立核验。"}</p> : null}
       {current.content.run.support_review_requested ? <p>{en ? "Review during this run: " : "本次运行的模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ not_started: "未开始", pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
       {!hasUnsavedReview ? <ResearchQuestions value={current.content.run.research_questions} links={current.content.run.question_links} claims={claims} sources={sourceMetadata} en={en} /> : null}
+      <ResearchSearchStatus value={current.content.run.source_search_receipts} en={en} />
       <SourceProcessing value={current.content.run.source_processing} sources={sourceMetadata} en={en} />
       <SourceCoverage sources={current.content.sources} en={en} />
       {!hasUnsavedReview ? <ResearchChecklist value={current.content.run.research_gaps} en={en} /> : null}
