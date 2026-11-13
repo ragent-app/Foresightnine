@@ -1709,7 +1709,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
             focus: tuple[str, int, int] | None = None, scope: str = "",
             counterargument_reference_count: int | None = None,
-            planning_steps: list[str] | None = None) -> AnalysisResult:
+            planning_steps: list[str] | None = None,
+            require_counterarguments: bool = True) -> AnalysisResult:
     # Scope belongs to the user's untrusted request. Including it in the
     # question also lets source selection account for the intended coverage.
     if scope:
@@ -1758,6 +1759,12 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 "Put missing evidence and unresolved uncertainty in limitations. "
                 "Excerpts are partial; do not generalize an absence to unseen material. "
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
+    if not require_counterarguments:
+        data["evidence_guidance"] += (
+            " Counterarguments are optional for this task. Include relevant conflicting evidence "
+            "or qualifications when the question or sources call for them; otherwise an empty "
+            "counterarguments list is acceptable. Do not invent an opposition."
+        )
     plan = [step.strip()[:300] for step in (planning_steps or [])[:6] if isinstance(step, str) and step.strip()]
     retrieval_question = question
     if plan:

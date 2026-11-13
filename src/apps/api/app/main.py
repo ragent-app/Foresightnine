@@ -2861,7 +2861,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             analysis = analyze(effective_question, sources, topic.request.as_of, generate,
                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
                                on_prepare=lambda segments: attempted_prompt.update({"segments": segments}),
-                               focus=focus, scope=topic.request.scope, planning_steps=planning_steps)
+                               focus=focus, scope=topic.request.scope, planning_steps=planning_steps,
+                               require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
         except (AnalysisInterrupted, ProviderFailure, InvalidAnalysis) as error:
             unavailable_reason = ("provider_budget_exhausted" if isinstance(error, AnalysisInterrupted) else
                                   error.code if isinstance(error, ProviderFailure) else "invalid_model_output")
@@ -3043,7 +3044,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 checked = analyze(effective_question, sources, topic.request.as_of,
                                     lambda _: (restricted_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
                                     should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope,
-                                    counterargument_reference_count=followup.prior_findings_included, planning_steps=planning_steps)
+                                    counterargument_reference_count=followup.prior_findings_included, planning_steps=planning_steps,
+                                    require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
                                 if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
                                     raise InvalidAnalysis('Counterpoint source selection changed.')
                                 raw_leads = extract_answer_candidates(raw_counterpoint)
@@ -3051,7 +3053,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     try:
                                         checked_leads = analyze(effective_question, sources, topic.request.as_of,
                                             lambda _: ({'claims':raw_leads}, None), max_prompt_chars=max_prompt_chars,
-                                            should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope, planning_steps=planning_steps)
+                                            should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope, planning_steps=planning_steps,
+                                            require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
                                         if checked_leads.prompt_sha256 == analysis.prompt_sha256 and checked_leads.segments == analysis.segments:
                                             supplemental_citation_leads = checked_leads.claims
                                     except (InvalidAnalysis, AnalysisInterrupted):
@@ -3257,7 +3260,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         try:
                             gap_result = analyze(target.question, sources, topic.request.as_of, generate_gap,
                                 max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
-                                scope=topic.request.scope)
+                                scope=topic.request.scope,
+                                require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
                             if not gap_attempted:
                                 gap_status = 'input_unavailable'
                             else:
