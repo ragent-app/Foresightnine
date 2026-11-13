@@ -39,7 +39,7 @@ SYSTEM_PROMPT = (
 )
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v51"
+SELECTION_METHOD = "general_lexical_with_legacy_fallback_v52"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1857,7 +1857,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             generic_selection = False
             windows = (structured_parts if structured_parts and
                        sum(len(part) for _, part in structured_parts) <= size else None)
-            if windows is None and plan and split and size >= generic_window_count and general_index is not None:
+            if windows is None and split and size >= generic_window_count and general_index is not None:
                 windows = general_index.select(size, generic_window_count) or None
                 generic_selection = windows is not None
             if windows is None:
@@ -1890,7 +1890,17 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                                      for start, part in remainder):
                                 windows = sorted([early_total, *remainder], key=lambda item: item[0])
                 else:
-                    windows = [_select_window(selection_text, retrieval_question, size, should_stop, source_title=source.title)]
+                    windows = general_index.select(size, 1) if general_index is not None else []
+                    if windows:
+                        generic_selection = True
+                        start, passage = windows[0]
+                        # The index ranks bounded chunks; use the remaining
+                        # single-window allowance for surrounding context.
+                        start = max(0, min(start - max(0, size - len(passage)) // 3,
+                                           max(0, len(selection_text) - size)))
+                        windows = [(start, selection_text[start:start + size])]
+                    else:
+                        windows = [_select_window(selection_text, retrieval_question, size, should_stop, source_title=source.title)]
             windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
             if generic_selection:
                 restored = _restore_numeric_prefix(selection_text, windows)
