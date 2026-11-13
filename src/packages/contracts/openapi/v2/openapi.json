@@ -1002,6 +1002,11 @@
             "title": "Parent Version Id",
             "type": "string"
           },
+          "plan_research": {
+            "default": false,
+            "title": "Plan Research",
+            "type": "boolean"
+          },
           "question_override": {
             "anyOf": [
               {

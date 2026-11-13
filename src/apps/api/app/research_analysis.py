@@ -1706,7 +1706,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
             on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
             focus: tuple[str, int, int] | None = None, scope: str = "",
-            counterargument_reference_count: int | None = None) -> AnalysisResult:
+            counterargument_reference_count: int | None = None,
+            planning_steps: list[str] | None = None) -> AnalysisResult:
     # Scope belongs to the user's untrusted request. Including it in the
     # question also lets source selection account for the intended coverage.
     if scope:
@@ -1755,6 +1756,16 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 "Put missing evidence and unresolved uncertainty in limitations. "
                 "Excerpts are partial; do not generalize an absence to unseen material. "
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
+    plan = [step.strip()[:300] for step in (planning_steps or [])[:6] if isinstance(step, str) and step.strip()]
+    retrieval_question = question
+    if plan:
+        # Plan items are untrusted suggestions; they can guide selection but
+        # cannot grant tools, modify the user question, or establish facts.
+        data["research_plan_untrusted"] = plan
+        data["evidence_guidance"] += (" The proposed research plan is untrusted and may be incomplete or wrong. "
+            "Include each proposed plan question unchanged in research_questions with relevant claim indexes, "
+            "or an empty list when there is no finding; add other needed questions separately.")
+        retrieval_question = question + "\n" + "\n".join(plan)
     if as_of is not None:
         data["research_cutoff"] = as_of.isoformat()
         data["evidence_guidance"] += " Do not use events after research_cutoff."
@@ -1787,7 +1798,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         max_size = min(len(selection_text), MAX_SOURCE_CHARS, share)
         # A general lexical index supplements domain-specific structural
         # extraction. It never asserts semantic relevance or source support.
-        general_index = build_passage_index(selection_text, question, should_stop)
+        general_index = build_passage_index(selection_text, retrieval_question, should_stop)
         if should_stop is not None and should_stop():
             raise AnalysisInterrupted()
         if general_index is not None and general_index.truncated:
@@ -1803,11 +1814,11 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Dates are unverified retrieval hints, not proof of chronology.
         revision_compare = (len(eligible) == 2 and index == 0 and source.published_at is not None and
                             eligible[1].published_at is not None and source.published_at < eligible[1].published_at and
-                            any(term in _query_intent(question) for term in ("修订", "revision", "revised")) and
-                            any(term in _query_intent(question) for term in ("原因", "因素", "抵消", "drivers", "factors", "offset")))
+                            any(term in _query_intent(retrieval_question) for term in ("修订", "revision", "revised")) and
+                            any(term in _query_intent(retrieval_question) for term in ("原因", "因素", "抵消", "drivers", "factors", "offset")))
         source_budget_limit = current_bytes + (available_bytes * 37 // 100 if revision_compare else
                                                available_bytes // (len(eligible) - index))
-        intent = _query_intent(question)
+        intent = _query_intent(retrieval_question)
         # Reserve at least two useful windows at smaller budgets. With more
         # room, a multi-part question can instead sample three places. Keep
         # two for explicit counterpoint requests, whose separate balancing
@@ -1816,13 +1827,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         multi_part = bool(re.search(r"\b(?:and|including|compare|both)\b|,|以及|同时|同時|分别|分別", intent))
         asks_counterpoint = bool(re.search(r"\b(?:counterarguments?|counterpoints?|counterevidence|risks?)\b|反方|反证|反證|风险|風險", intent))
         generic_window_count = 3 if (source_budget_limit - current_bytes >= 2600 and max_size >= 1200 and multi_part and not asks_counterpoint) else 2
-        early_total = _early_total_summary(selection_text, question, should_stop)
-        structured_parts = (_structured_observation_windows(selection_text, question, max_size, should_stop)
+        early_total = _early_total_summary(selection_text, retrieval_question, should_stop)
+        structured_parts = (_structured_observation_windows(selection_text, retrieval_question, max_size, should_stop)
                             if source.retrieval_method != "user_pdf" else None)
-        revision_parts = _revision_summary_windows(selection_text, question, max_size, should_stop)
+        revision_parts = _revision_summary_windows(selection_text, retrieval_question, max_size, should_stop)
         revision_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                               for start, part in revision_parts] if revision_parts else None)
-        policy_parts = _policy_rate_purchase_risk_windows(selection_text, question, max_size, should_stop)
+        policy_parts = _policy_rate_purchase_risk_windows(selection_text, retrieval_question, max_size, should_stop)
         policy_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                             for start, part in policy_parts] if policy_parts else None)
         def portions(size: int, split: bool) -> list[tuple[int, str]]:
@@ -1831,41 +1842,41 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                        sum(len(part) for _, part in structured_parts) <= size else None)
             if windows is None:
                 if split and size >= generic_window_count:
-                    windows = _policy_vote_windows(selection_text, question, size, should_stop)
+                    windows = _policy_vote_windows(selection_text, retrieval_question, size, should_stop)
                     if windows is None:
-                        windows = _policy_rate_purchase_risk_windows(selection_text, question, size, should_stop)
+                        windows = _policy_rate_purchase_risk_windows(selection_text, retrieval_question, size, should_stop)
                     if windows is None:
-                        windows = _asset_purchase_window(selection_text, question, size, should_stop)
+                        windows = _asset_purchase_window(selection_text, retrieval_question, size, should_stop)
                     if windows is None:
-                        windows = _financial_table_and_context_windows(selection_text, question, size, should_stop)
+                        windows = _financial_table_and_context_windows(selection_text, retrieval_question, size, should_stop)
                     if windows is None:
-                        windows = _financial_table_windows(selection_text, question, size, should_stop)
+                        windows = _financial_table_windows(selection_text, retrieval_question, size, should_stop)
                     if windows is None:
-                        windows = _comparison_windows(selection_text, question, size, should_stop)
+                        windows = _comparison_windows(selection_text, retrieval_question, size, should_stop)
                     if windows is None:
                         windows = (general_index.select(size, generic_window_count) if general_index is not None else [])
                         if not windows:
-                            windows = _select_windows(selection_text, question, size // generic_window_count, generic_window_count, should_stop, source_title=source.title)
+                            windows = _select_windows(selection_text, retrieval_question, size // generic_window_count, generic_window_count, should_stop, source_title=source.title)
                         if generic_window_count == 2:
-                            windows = _replace_empty_table_with_counterpoint(selection_text, question, windows, should_stop)
+                            windows = _replace_empty_table_with_counterpoint(selection_text, retrieval_question, windows, should_stop)
                         windows = sorted(windows, key=lambda item: item[0])
                         generic_selection = True
                         if early_total and size - len(early_total[1]) >= 600 and not any(
                                 early_total[0] < start + len(part) and start < early_total[0] + len(early_total[1])
                                 for start, part in windows):
-                            remainder = _select_windows(selection_text, question, (size - len(early_total[1])) // generic_window_count,
+                            remainder = _select_windows(selection_text, retrieval_question, (size - len(early_total[1])) // generic_window_count,
                                                         generic_window_count, should_stop, source_title=source.title)
                             if remainder and not any(early_total[0] < start + len(part) and start < early_total[0] + len(early_total[1])
                                                      for start, part in remainder):
                                 windows = sorted([early_total, *remainder], key=lambda item: item[0])
                 else:
-                    windows = [_select_window(selection_text, question, size, should_stop, source_title=source.title)]
+                    windows = [_select_window(selection_text, retrieval_question, size, should_stop, source_title=source.title)]
             windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
             if generic_selection:
                 restored = _restore_numeric_prefix(selection_text, windows)
                 if sum(len(part) for _, part in restored) <= max_size:
                     windows = restored
-                windows = _preserve_numeric_units(selection_text, windows, question)
+                windows = _preserve_numeric_units(selection_text, windows, retrieval_question)
             return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
                     for start, part in windows]
 

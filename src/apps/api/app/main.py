@@ -108,6 +108,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
+from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -2508,6 +2509,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         run_request_payload.pop("counterpoint_followup", None)
     if not request.gap_followup:
         run_request_payload.pop("gap_followup", None)
+    if not request.plan_research:
+        run_request_payload.pop("plan_research", None)
     if request.focus_citation is None:
         run_request_payload.pop("focus_citation", None)
     existing = operations.replay_async(endpoint=f"/v1/research/topics/{topic_id}/runs", idempotency_key=idempotency_key,
@@ -2730,13 +2733,75 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         attempted_prompt: dict[str, Any] = {}
         base_prompt_text: str | None = None
         analysis_error_detail: str | None = None
+        planning_status = 'not_requested'
+        planning_usage: int | None = None
+        planning_hash: str | None = None
+        planning_error: str | None = None
+        planning_steps: list[str] = []
+        generation_call_usage: int | None = None
+
+        # Optional plan is a separate, explicitly budgeted model call. It is
+        # advisory only and cannot authorize sources, tools or external search.
+        if request.plan_research:
+            planning_status = 'unavailable'
+            policy = getattr(provider, 'policy', None)
+            input_limit = getattr(policy, 'max_input_tokens', None)
+            output_limit = getattr(policy, 'max_output_tokens', None)
+            timeout = getattr(policy, 'timeout_seconds', None)
+            eligible_sources, _ = prepare_sources(sources, topic.request.as_of)
+            if request.max_cost_usd is not None:
+                planning_status = 'cost_unknown'
+            elif not effective_question or not eligible_sources or not callable(generate_structured):
+                planning_status = 'unavailable'
+            elif (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
+                  input_limit <= 0 or output_limit <= 0 or not isinstance(timeout, (int, float)) or not 0 < timeout <= 180):
+                planning_status = 'unavailable'
+            else:
+                per_call = input_limit + output_limit
+                if request.max_model_calls < 2 or 2 * per_call > request.max_total_tokens or monotonic() >= deadline:
+                    planning_status = 'budget_exhausted'
+                else:
+                    prompt = plan_prompt(effective_question, topic.request.scope)
+                    if len(prompt.encode('utf-8')) + len(PLAN_SYSTEM_PROMPT.encode('utf-8')) + 512 > input_limit:
+                        planning_status = 'input_budget'
+                    else:
+                        call_id = f'{operation_id}:research-plan'
+                        attempted = False
+                        try:
+                            parameters = inspect.signature(generate_structured).parameters
+                            if 'timeout_seconds' not in parameters:
+                                raise ProviderFailure('provider_budget_unknown', 'Provider limits cannot be enforced.', retryable=False)
+                            _raise_if_operation_cancelled(operation_id)
+                            remaining = deadline - monotonic()
+                            if remaining <= 0:
+                                raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
+                            _reserve_model_call(http_request, call_id, token_budget=per_call)
+                            calls += 1
+                            attempted = True
+                            planning_hash = sha256(prompt.encode('utf-8')).hexdigest()
+                            try:
+                                raw, reported = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
+                                    system=PLAN_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
+                                planning_usage = reported if type(reported) is int and reported >= 0 else None
+                                planning_steps = parse_plan(raw)
+                                planning_status = 'completed'
+                            except ProviderFailure as error:
+                                planning_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                raise
+                            finally:
+                                _settle_model_call(http_request, call_id, planning_usage)
+                        except (ProviderFailure, ValidationError, TypeError, ValueError, ApiProblem) as error:
+                            _raise_if_operation_cancelled(operation_id)
+                            planning_status = 'failed'
+                            planning_error = error.code if isinstance(error, ProviderFailure) else 'planning_unavailable'
+                        if attempted:
+                            usage = planning_usage
+        _raise_if_operation_cancelled(operation_id)
 
         def generate(prompt: str) -> tuple[dict[str, Any], int | None]:
-            nonlocal calls, usage, base_prompt_text
-            if request.max_model_calls == 0:
-                raise ProviderFailure("provider_budget_exhausted", "Model call budget is zero.", retryable=False)
-            # A currency cap cannot be guaranteed without a provider quote and
-            # usage pricing. Fail closed rather than silently overspending it.
+            nonlocal calls, usage, base_prompt_text, generation_call_usage
+            if calls >= request.max_model_calls:
+                raise ProviderFailure("provider_budget_exhausted", "Model call budget is exhausted.", retryable=False)
             if request.max_cost_usd is not None:
                 raise ProviderFailure("provider_budget_unknown", "Model pricing is not configured for the requested cost cap.", retryable=False)
             if not callable(generate_structured):
@@ -2754,33 +2819,30 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     not 0 < timeout <= 180 or "timeout_seconds" not in parameters):
                 raise ProviderFailure("provider_budget_unknown", "Provider limits cannot be enforced.", retryable=False)
             token_reservation = input_limit + output_limit
-            if token_reservation > request.max_total_tokens:
+            consumed = usage if calls and usage is not None else calls * token_reservation
+            if consumed + token_reservation > request.max_total_tokens:
                 raise ProviderFailure("provider_budget_exhausted", "Model token budget is insufficient.", retryable=False)
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
+            before_calls, prior_usage = calls, usage
             _reserve_model_call(http_request, operation_id, token_budget=token_reservation)
-            calls = 1
+            calls += 1
             base_prompt_text = prompt
-            # Retain non-sensitive prompt provenance even if the provider
-            # returns invalid output or fails after accepting the request.
             attempted_prompt.update({"prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
                 "prompt_characters": len(prompt), "prompt_bytes": len(prompt.encode("utf-8"))})
             try:
-                payload, reported_usage = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
+                payload, reported = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
                     system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
-                # Treat missing or malformed usage as unknown; settlement and
-                # subsequent reservations then use the per-call bound.
-                usage = reported_usage if type(reported_usage) is int and reported_usage >= 0 else None
-                return payload, usage
+                generation_call_usage = reported if type(reported) is int and reported >= 0 else None
+                return payload, generation_call_usage
             except ProviderFailure as error:
-                usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                generation_call_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
                 raise
             finally:
-                # An attempted remote request can incur charges even if the
-                # response is lost. Unknown token usage settles the reserved
-                # token budget; provider currency cost remains unknown.
-                _settle_model_call(http_request, operation_id, usage)
+                _settle_model_call(http_request, operation_id, generation_call_usage)
+                usage = (generation_call_usage if before_calls == 0 else
+                         prior_usage + generation_call_usage if prior_usage is not None and generation_call_usage is not None else None)
 
         try:
             max_input_tokens = getattr(getattr(provider, "policy", None), "max_input_tokens", 3000)
@@ -2790,7 +2852,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             analysis = analyze(effective_question, sources, topic.request.as_of, generate,
                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
                                on_prepare=lambda segments: attempted_prompt.update({"segments": segments}),
-                               focus=focus, scope=topic.request.scope)
+                               focus=focus, scope=topic.request.scope, planning_steps=planning_steps)
         except (AnalysisInterrupted, ProviderFailure, InvalidAnalysis) as error:
             unavailable_reason = ("provider_budget_exhausted" if isinstance(error, AnalysisInterrupted) else
                                   error.code if isinstance(error, ProviderFailure) else "invalid_model_output")
@@ -2809,6 +2871,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             analysis = AnalysisResult([], [], [*source_notes, "Research analysis could not be completed: " + unavailable_reason],
                                       selected_ids, usage, **attempted_prompt)
         _raise_if_operation_cancelled(operation_id)
+        if planning_steps:
+            # Track each proposed plan item even if the model omits it from
+            # its output. Only exact matching associates a finding; this does
+            # not assert that the finding answers the question.
+            planned_questions = [{'question': step, 'claim_indexes': []} for step in planning_steps]
+            analysis = replace(analysis, research_questions=merge_research_questions(
+                planned_questions, analysis.research_questions, {i: i for i in range(len(analysis.claims))}))
         supplemental_citation_leads: list[dict[str, Any]] = []
         def prepare_claims() -> list[dict[str, Any]]:
             claims = [{**item, "role": "support"} for item in analysis.claims]
@@ -2833,7 +2902,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             claims = flag_truncated_previous_findings(claims)
             return claims
         claims = prepare_claims()
-        generation_usage = usage
+        generation_usage = generation_call_usage
         counterpoint_status = "not_requested"
         counterpoint_usage: int | None = None
         counterpoint_hash: str | None = None
@@ -2857,7 +2926,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     counterpoint_status = 'unavailable'
                 else:
                     per_call = input_limit + output_limit
-                    first_charge = generation_usage if generation_usage is not None else per_call
+                    first_charge = usage if usage is not None else calls * per_call
                     if calls >= request.max_model_calls or first_charge + per_call > request.max_total_tokens or monotonic() >= deadline:
                         counterpoint_status = 'budget_exhausted'
                     else:
@@ -2882,6 +2951,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                             'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
                                      'research_questions':analysis.research_questions,
+                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
+                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
+                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
+                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
                                              **({'question_override':request.question_override} if request.question_override is not None else {}),
                                              'model_calls':calls, 'total_tokens':generation_usage, 'generation_tokens':generation_usage,
                                              'counterpoint_requested':True, 'counterpoint_status':'pending',
@@ -2911,6 +2984,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 _raise_if_operation_cancelled(operation_id)
                                 raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
                             call_id = f'{operation_id}:counterpoint'
+                            before_counterpoint_usage = usage
                             counterpoint_attempted = False
                             try:
                                 _raise_if_operation_cancelled(operation_id)
@@ -2943,7 +3017,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 checked = analyze(effective_question, sources, topic.request.as_of,
                                     lambda _: (restricted_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
                                     should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope,
-                                    counterargument_reference_count=followup.prior_findings_included)
+                                    counterargument_reference_count=followup.prior_findings_included, planning_steps=planning_steps)
                                 if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
                                     raise InvalidAnalysis('Counterpoint source selection changed.')
                                 raw_leads = extract_answer_candidates(raw_counterpoint)
@@ -2951,7 +3025,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     try:
                                         checked_leads = analyze(effective_question, sources, topic.request.as_of,
                                             lambda _: ({'claims':raw_leads}, None), max_prompt_chars=max_prompt_chars,
-                                            should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
+                                            should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope, planning_steps=planning_steps)
                                         if checked_leads.prompt_sha256 == analysis.prompt_sha256 and checked_leads.segments == analysis.segments:
                                             supplemental_citation_leads = checked_leads.claims
                                     except (InvalidAnalysis, AnalysisInterrupted):
@@ -2987,7 +3061,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 counterpoint_status = 'failed'
                                 counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
                             if counterpoint_attempted:
-                                usage = generation_usage + counterpoint_usage if generation_usage is not None and counterpoint_usage is not None else None
+                                usage = before_counterpoint_usage + counterpoint_usage if before_counterpoint_usage is not None and counterpoint_usage is not None else None
         # Optional evidence-gap follow-up is deliberately bounded to the
         # already authorized sources. It never turns search leads into inputs.
         gap_status = 'not_requested'
@@ -3038,6 +3112,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                             'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
                                      'research_questions':analysis.research_questions,
+                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
+                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
+                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
+                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
                                              **({'question_override':request.question_override} if request.question_override is not None else {}),
                                              'model_calls':calls, 'total_tokens':prior_usage, 'generation_tokens':generation_usage,
                                              'counterpoint_requested':request.counterpoint_followup, 'counterpoint_status':counterpoint_status,
@@ -3219,6 +3297,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
                                 run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
                                      'research_questions':analysis.research_questions,
+                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
+                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
+                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
+                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
                                      **({"question_override": request.question_override} if request.question_override is not None else {}),
                                      "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
                                      "support_review_tokens": review_usage, "cost_usd": None,
@@ -3392,6 +3474,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
                                      'research_questions':analysis.research_questions,
+                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
+                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
+                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
+                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
                                          **({"question_override": request.question_override} if request.question_override is not None else {}),
                                          "model_calls": calls, "total_tokens": pre_review_usage, "cost_usd": None,
                                          "cost_status": "unknown" if calls or search_calls else "no_external_call",
@@ -3479,8 +3565,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
                         (not request.support_review or review_supports_all) and
                         (not request.gap_followup or gap_status in {'not_needed', 'completed'}) and
+                        (not request.plan_research or planning_status == 'completed') and
                         not any(not item.get('claim_indexes') for item in analysis.research_questions))
         limitations = [*discovery_notes, *analysis.limitations]
+        if request.plan_research:
+            limitations.append('The model-generated research plan is an unverified guide and may omit relevant questions.')
+            if planning_status != 'completed':
+                limitations.append('The requested research plan did not complete; the result used the original question.')
         if any(not item.get('claim_indexes') for item in analysis.research_questions):
             limitations.append('A model-suggested research question has no linked finding; its coverage remains unestablished.')
         if request.gap_followup and gap_status not in {'not_needed', 'completed'}:
@@ -3559,6 +3650,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
                                      'research_questions':analysis.research_questions,
+                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
+                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
+                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
+                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
                      **({"question_override": request.question_override} if request.question_override is not None else {}),
                      "model_calls": calls, "total_tokens": usage, "cost_usd": None,
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,

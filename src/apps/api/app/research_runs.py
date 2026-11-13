@@ -39,6 +39,7 @@ class ResearchRunRequest(BaseModel):
     support_review_mode: Literal["batch", "isolated"] = "batch"
     counterpoint_followup: bool = Field(default=False, strict=True)
     gap_followup: bool = Field(default=False, strict=True)
+    plan_research: bool = Field(default=False, strict=True)
     require_counterarguments: bool = True
     include_scope_in_search: bool = False
     auto_fetch_official: bool = Field(default=False, strict=True)
