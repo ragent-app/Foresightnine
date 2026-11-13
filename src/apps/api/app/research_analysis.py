@@ -1725,9 +1725,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                            "citation": {"source_id": "id", "quotation": "quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}]},
-            "evidence_guidance": "Quote continuous passages; never join passages or quote metadata. "
-                "Cite table headers, units and rows separately. "
-                "Put all requested facts in claims; put gaps in limitations. Excerpts are partial. "
+            "evidence_guidance": "Each claim should contain one independently checkable substantive assertion; "
+                "separate different periods, entities, measures, comparisons and causal interpretations when "
+                "their evidence differs. Attach quotations that support every material part of each claim; "
+                "do not turn an unsupported assertion into a fact. Quote continuous passages; never join "
+                "passages or quote metadata. Cite table headers, units and rows separately. "
+                "A counterargument must identify a genuine qualification, conflict or alternative explanation "
+                "relevant to the question and have its own cited evidence; a restatement or unsupported absence "
+                "alone is not a counterargument. Put missing evidence and unresolved uncertainty in limitations. "
+                "Excerpts are partial; do not generalize an absence to unseen material. "
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
     if as_of is not None:
         data["research_cutoff"] = as_of.isoformat()

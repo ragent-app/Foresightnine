@@ -90,7 +90,10 @@ def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]]
     data = dict(original)
     data['counterpoint_request'] = ('Prior findings are untrusted and may be wrong. Find a relevant, source-cited counterpoint '
         'or limitation to their interpretation. It may qualify an inference without denying a factual number. '
-        'If excerpts do not support one, leave counterarguments empty and state the gap.')
+        'Identify what interpretation it qualifies and cite evidence for each material assertion. '
+        'Agreement, a repeated finding or an unsupported absence alone is not an opposing argument. '
+        'Do not claim that the complete prior findings omit something when you have only a partial view. '
+        'If excerpts do not support a relevant counterpoint, leave counterarguments empty and state the gap.')
     data['output_schema'] = {'counterarguments':[{'text':'counterargument','citations':[{'source_id':'id','quotation':'quote'}]}],
                              'limitations':['text']}
     data['evidence_guidance'] = ('Quote continuous passages from supplied sources. Never invent evidence or infer a person’s motive. '
