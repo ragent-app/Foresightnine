@@ -37,6 +37,20 @@ def incomplete_requested_stages(run: dict[str, Any]) -> list[str]:
             (not isinstance(run.get(status), str) or run[status] not in accepted)]
 
 
+def model_review_outcomes(claims: list[dict]) -> dict[str, list[int]]:
+    """Group recorded review opinions, including missing or unrecognized reviews.
+
+    These are model opinions about citations, not independent verification.
+    """
+    outcomes: dict[str, list[int]] = {name: [] for name in
+        ('supports', 'does_not_support', 'contradicts', 'uncertain', 'not_reviewed')}
+    for index, claim in enumerate(claims):
+        review = claim.get('support_review') if isinstance(claim, dict) else None
+        verdict = review.get('verdict') if isinstance(review, dict) else None
+        outcomes[verdict if isinstance(verdict, str) and verdict in outcomes else 'not_reviewed'].append(index)
+    return outcomes
+
+
 def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list[dict],
                   calculation_differences: list[dict], amount_differences: list[dict],
                   run: dict[str, Any]) -> dict[str, Any]:
@@ -98,6 +112,14 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
                         ('support_review', 'model_review_incomplete')):
         if stage in incomplete:
             add(code)
+    if run.get('support_review_requested') is True:
+        outcomes = model_review_outcomes(claims)
+        for verdict, code in (('does_not_support', 'model_review_does_not_support'),
+                              ('contradicts', 'model_review_contradiction'),
+                              ('uncertain', 'model_review_uncertain'),
+                              ('not_reviewed', 'model_review_missing')):
+            if outcomes[verdict]:
+                add(code, outcomes[verdict], kind='claim')
     if run.get('support_review_requested') and run.get('require_counterarguments') is True:
         unreviewed_relation = [i for i in counter if not isinstance(claims[i].get('support_review'), dict) or
                                claims[i]['support_review'].get('relevance') != 'relevant']

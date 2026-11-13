@@ -12,7 +12,7 @@ from .research_analysis import AnalysisResult
 from .research_calculations import (calculation_input_status, calculation_result_status,
                                     claim_calculation_differences)
 from .research_evidence import claim_amount_differences, evidence_differences
-from .research_quality import CLAIM_EVIDENCE_WARNINGS, incomplete_requested_stages
+from .research_quality import CLAIM_EVIDENCE_WARNINGS, incomplete_requested_stages, model_review_outcomes
 from .research_runs import ResearchRunRequest
 
 
@@ -47,10 +47,11 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
     processing_incomplete = processing_incomplete or any(
         item['eligibility'] != 'eligible' or item['initial_selection'] != 'complete'
         for item in source_states)
-    review_supports_all = (review_status == "complete" and all(
-        c.get("support_review", {}).get("verdict") == "supports" and
-        (c.get('role') != 'counterargument' or not request.require_counterarguments or
-         c.get('support_review', {}).get('relevance') == 'relevant') for c in claims))
+    review_outcomes = model_review_outcomes(claims)
+    review_supports_all = (review_status == "complete" and not any(
+        review_outcomes[name] for name in ('does_not_support', 'contradicts', 'uncertain', 'not_reviewed')) and all(
+        c.get('role') != 'counterargument' or not request.require_counterarguments or
+        (isinstance(c.get('support_review'), dict) and c['support_review'].get('relevance') == 'relevant') for c in claims))
     incomplete_stages = incomplete_requested_stages({
         'planning_requested': request.plan_research, 'planning_status': planning_status,
         'counterpoint_requested': request.counterpoint_followup, 'counterpoint_status': counterpoint_status,
@@ -93,6 +94,8 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
         limitations.append("No counterarguments were provided; this does not establish that none exist.")
     if request.support_review:
         limitations.append("A second model assessment is not independent proof that evidence supports a claim.")
+        if any(review_outcomes[name] for name in ('does_not_support', 'contradicts', 'uncertain', 'not_reviewed')):
+            limitations.append('Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.')
         if request.require_counterarguments and any(
                 c.get('role') == 'counterargument' and c.get('support_review', {}).get('relevance') != 'relevant' for c in claims):
             limitations.append('Counterpoint relevance was not supported by a complete model review; the relationship remains unverified.')
@@ -147,5 +150,5 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
         complete = False
         limitations.append("Provider-reported token use exceeded the requested budget; the result is partial.")
     if not complete:
-        limitations.append("The research is partial: supported claims or counterarguments are incomplete.")
+        limitations.append("The research is partial: review the recorded findings, requested steps and outstanding limitations.")
     return ResearchAssessment(complete, limitations, differences, calculation_differences, amount_differences)

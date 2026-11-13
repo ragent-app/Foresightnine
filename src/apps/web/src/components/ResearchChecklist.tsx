@@ -20,6 +20,10 @@ const labels: Record<string, readonly [string, string]> = {
   gap_source_search_incomplete: ["The requested gap-focused source search did not complete.", "请求的缺口来源搜索未完成。"],
   gap_followup_incomplete: ["The requested evidence-gap follow-up did not complete.", "请求的证据缺口补充未完成。"],
   model_review_incomplete: ["The requested model review did not finish for all findings.", "请求的模型复查未覆盖全部条目。"],
+  model_review_does_not_support: ["The model review found insufficient citation support for these items; verify its assessment.", "模型复查认为这些条目的引文不支持结论，请核查该判断。"],
+  model_review_contradiction: ["The model review identified possible contradictions; verify the evidence.", "模型复查发现可能的矛盾，请核查证据。"],
+  model_review_uncertain: ["The model review was uncertain about citation support for these items.", "模型复查无法确定这些条目的引文是否支持结论。"],
+  model_review_missing: ["The requested model review has no recorded opinion for these items.", "请求的模型复查没有为这些条目留下判断。"],
   counterpoint_followup_incomplete: ["The requested counterargument follow-up did not complete.", "请求的反方补充未完成。"],
   last_run_partial: ["The last run returned partial results; review its limitations.", "上次运行部分完成，请查看其限制和缺口。"],
 };
