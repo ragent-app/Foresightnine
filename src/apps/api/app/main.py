@@ -2591,6 +2591,40 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         planning_steps = list(plan_result.steps)
         _raise_if_operation_cancelled(operation_id)
 
+        if plan_result.attempted:
+            def save_planning_checkpoint() -> None:
+                try:
+                    current = version_chain.current()
+                    plan_analysis = AnalysisResult(claims=[], counterarguments=[], limitations=[], source_ids=[],
+                        total_tokens=context.usage,
+                        research_questions=[{'question': step, 'claim_indexes': []} for step in planning_steps])
+                    partial = assemble_research_content(
+                        summary=current.content.summary, source_candidates=[], sources=[], analysis=plan_analysis,
+                        claims=[], limitations=['The planning call is saved; source discovery and analysis have not finished.'],
+                        run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': 'planning',
+                             **build_run_core(question_origin=question_origin,
+                                 default_task=DOCUMENT_OVERVIEW_QUESTION if question_origin == 'document_overview_default' else None,
+                                 question_override=request.question_override, analysis=plan_analysis,
+                                 source_processing=source_processing([]), planning_requested=True,
+                                 planning=plan_result, request=request,
+                                 budget_accounted_tokens=context.accounted_tokens),
+                             'model_calls': context.calls, 'total_tokens': context.usage,
+                             'search_calls': 0, 'search_status': 'not_started',
+                             'official_fetch_calls': 0, 'official_fetch_status': 'not_started' if request.auto_fetch_official else 'not_requested',
+                             'cost_usd': None, 'cost_status': 'unknown',
+                             'model': getattr(getattr(provider, 'settings', None), 'model', None),
+                             'provider': getattr(provider, 'name', None),
+                             'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
+                             'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
+                             'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                    version_chain.save(current, partial)
+                except (TopicNotFound, TopicVersionConflict) as error:
+                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+
+            if not operations.store.checkpoint_if_running(operation_id, save_planning_checkpoint):
+                _raise_if_operation_cancelled(operation_id)
+                raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
+
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
         if (not sources or request.auto_fetch_official) and user_question and request.max_search_calls:
