@@ -112,7 +112,7 @@ from .research_source_policy import prepare_sources, summarize_sources, summariz
 from .research_budget import ResearchExecutionBudget
 from .research_planning import PLAN_SYSTEM_PROMPT
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
-from .research_artifacts import assemble_initial_artifacts, prepare_run_claims
+from .research_artifacts import assemble_initial_artifacts, prepare_claim_evidence, prepare_run_claims
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -1903,9 +1903,6 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                 fact['scale_quote_missing'] = True
         for entry in content.calculations:
             entry["input_status"] = calculation_input_status(entry, content.facts)
-        content.claims = suggest_percentage_evidence(content.claims, content.facts)
-        content.claims = flag_uncited_percentage_points(flag_uncited_basis_points(content.claims))
-        content.claims = suggest_percentage_calculations(content.claims, content.calculations, content.facts)
         for claim in content.claims:
             citations = claim.get("citations")
             if not isinstance(citations, list):
@@ -1917,23 +1914,17 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                         citation_sources[source_id] = research_sources.get(account.account_id, source_id)
                     except SourceNotFound:
                         pass
-        content.claims = flag_uncited_quarters(flag_uncited_dollar_amounts(flag_uncited_usd_amounts(content.claims, list(citation_sources.values())), list(citation_sources.values())), list(citation_sources.values()))
-        content.claims = suggest_usd_amount_evidence(content.claims, content.facts, list(citation_sources.values()))
-        content.claims = suggest_uncited_numeric_facts(content.claims, content.facts, list(citation_sources.values()))
-        eligible_comparison_sources, _ = prepare_sources(list(citation_sources.values()), topic.request.as_of)
-        content.claims = suggest_cross_source_comparison_evidence(content.claims, content.facts, eligible_comparison_sources)
-        content.claims = suggest_related_with_supplemental_leads(content.claims, list(citation_sources.values()),
-                                                               previous_supplemental_leads(previous.content.claims))
-        content.claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(content.claims, list(citation_sources.values())))
-        content.claims = flag_component_direction(flag_citation_subject_context(content.claims, list(citation_sources.values())), list(citation_sources.values()))
-        content.claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(content.claims, list(citation_sources.values())), list(citation_sources.values()))
+        current_sources = list(citation_sources.values())
+        eligible_comparison_sources, _ = prepare_sources(current_sources, topic.request.as_of)
         previous_hashes = previous.content.run.get('source_hashes', {})
         previous_segments = previous.content.run.get('selected_segments', [])
-        if isinstance(previous_hashes, dict):
-            date_sources = [s for s in eligible_comparison_sources if previous_hashes.get(s.source_id) == s.content_sha256]
-            content.claims = suggest_excerpt_dates(content.claims, date_sources, previous_segments)
-        content.claims = flag_counterpoint_agreement(content.claims)
-        content.claims = flag_truncated_previous_findings(content.claims)
+        date_sources = ([source for source in eligible_comparison_sources
+                         if previous_hashes.get(source.source_id) == source.content_sha256]
+                        if isinstance(previous_hashes, dict) else None)
+        content.claims = prepare_claim_evidence(
+            content.claims, content.facts, content.calculations, current_sources, eligible_comparison_sources,
+            date_sources, previous_segments, previous_supplemental_leads(previous.content.claims),
+            check_source_scope=False)
         content.evidence_differences = evidence_differences(content.facts)
         content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
         content.amount_differences = claim_amount_differences(content.claims, content.facts)
