@@ -2571,7 +2571,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
-        if not sources and effective_question and request.max_search_calls:
+        if (not sources or request.auto_fetch_official) and effective_question and request.max_search_calls:
             search = getattr(evidence_provider, "search", None)
             if request.max_cost_usd is not None:
                 search_status = "cost_unknown"
@@ -2634,9 +2634,18 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # hosts in this bounded path; discovered snippets are never evidence.
         # Historical content may have changed since its published date, so no
         # automatic source is attached to a cutoff-constrained research run.
-        if (request.auto_fetch_official and not sources and request.selected_source_ids != [] and
-                topic.request.as_of is None and request.max_cost_usd is None):
+        if (request.auto_fetch_official and request.selected_source_ids != [] and
+                len(available_ids) < 100 and topic.request.as_of is None and request.max_cost_usd is None):
+            # Existing materials remain in the run. Do not spend the single
+            # bounded retrieval attempt on a source already attached.
+            existing_urls = set()
+            for existing_source in sources:
+                if existing_source.url:
+                    existing_parts = urlsplit(str(existing_source.url))
+                    existing_urls.add(urlunsplit((existing_parts.scheme, existing_parts.netloc, existing_parts.path, "", "")))
             for candidate in discovered:
+                if candidate['url'] in existing_urls:
+                    continue
                 parts = urlsplit(candidate["url"])
                 if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov", "www.sec.gov"}
                         or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
@@ -2711,8 +2720,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             official_fetch_status = "cost_unknown"
         elif request.auto_fetch_official and request.selected_source_ids == []:
             official_fetch_status = "empty_selection"
-        elif request.auto_fetch_official and sources:
-            official_fetch_status = "not_needed"
+        elif request.auto_fetch_official and len(available_ids) >= 100:
+            official_fetch_status = "source_capacity"
+            discovery_notes.append("Official source retrieval was skipped because this research already has the maximum number of sources.")
 
         attempted_prompt: dict[str, Any] = {}
         base_prompt_text: str | None = None
