@@ -37,25 +37,40 @@ class ResearchExecutionContext:
     now: Callable[[], float] = monotonic
     calls: int = 0
     usage: int | None = None
+    # Separate conservative admission accounting from provider-reported usage.
+    # Unknown calls consume their reservation; known calls consume reported use.
+    accounted_tokens: int = 0
 
-    def start_model(self, call_id: str, tokens: int) -> tuple[int, int | None]:
-        before = self.calls, self.usage
+    def model_exhaustion(self, per_call: int, *, required_calls: int = 1) -> str | None:
+        return self.budget.model_exhaustion(calls=self.calls, usage=self.accounted_tokens,
+            per_call=per_call, now=self.now(), required_calls=required_calls)
+
+    def start_model(self, call_id: str, tokens: int) -> tuple[int, int | None, int]:
+        self.ensure_running()
+        if self.cost_limited:
+            raise ProviderFailure('provider_budget_unknown', 'Model pricing is unavailable for the requested cost cap.', retryable=False)
+        reason = self.model_exhaustion(tokens)
+        if reason:
+            raise ProviderFailure('provider_budget_unknown' if reason == 'provider_limit' else 'provider_budget_exhausted',
+                                  'Model execution budget is unavailable or exhausted.', retryable=False)
+        before = self.calls, self.usage, tokens
         self.reserve(call_id, tokens)
         self.calls += 1
         return before
 
-    def finish_model(self, call_id: str, tokens: int | None, before: tuple[int, int | None]) -> None:
-        previous_calls, previous_usage = before
+    def finish_model(self, call_id: str, tokens: int | None, before: tuple[int, int | None, int]) -> None:
+        previous_calls, previous_usage, reserved = before
         try:
             self.settle(call_id, tokens)
         finally:
+            self.accounted_tokens += tokens if tokens is not None else reserved
             self.usage = (tokens if previous_calls == 0 else
                           previous_usage + tokens if previous_usage is not None and tokens is not None else None)
 
-    def abort_model_before_call(self, call_id: str, before: tuple[int, int | None]) -> None:
+    def abort_model_before_call(self, call_id: str, before: tuple[int, int | None, int]) -> None:
         """Release a reservation only when no provider invocation occurred."""
         self.settle(call_id, 0)
-        self.calls, self.usage = before
+        self.calls, self.usage = before[:2]
 
 
 @dataclass(frozen=True)
@@ -86,8 +101,7 @@ def execute_planning(*, requested: bool, question: str, scope: str, sources_avai
             input_limit <= 0 or output_limit <= 0 or not isinstance(timeout, (int, float)) or not 0 < timeout <= 180):
         return PlanningResult('unavailable')
     per_call = input_limit + output_limit
-    reason = context.budget.model_exhaustion(calls=context.calls, usage=context.usage, per_call=per_call,
-                                             now=context.now(), required_calls=2)
+    reason = context.model_exhaustion(per_call, required_calls=2)
     if reason:
         return PlanningResult('unavailable' if reason == 'provider_limit' else 'budget_exhausted')
     prompt = plan_prompt(question, scope)
@@ -165,8 +179,7 @@ def execute_generation(*, question: str, scope: str, sources: list[ResearchSourc
                 not 0 < timeout <= 180 or 'timeout_seconds' not in parameters):
             raise ProviderFailure('provider_budget_unknown', 'Provider limits cannot be enforced.', retryable=False)
         token_reservation = input_limit + output_limit
-        reason = context.budget.model_exhaustion(calls=context.calls, usage=context.usage,
-                                                 per_call=token_reservation, now=context.now())
+        reason = context.model_exhaustion(token_reservation)
         if reason:
             raise ProviderFailure('provider_budget_unknown' if reason == 'provider_limit' else 'provider_budget_exhausted',
                                   'Model execution budget is unavailable or exhausted.', retryable=False)

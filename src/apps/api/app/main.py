@@ -2749,7 +2749,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 default_task=DOCUMENT_OVERVIEW_QUESTION if question_origin == 'document_overview_default' else None,
                 question_override=request.question_override, analysis=analysis,
                 source_processing=source_processing(analysis.segments),
-                planning_requested=request.plan_research, planning=plan_result, request=request)
+                planning_requested=request.plan_research, planning=plan_result, request=request,
+                budget_accounted_tokens=context.accounted_tokens)
 
         def prepare_claims() -> list[dict[str, Any]]:
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
@@ -2819,7 +2820,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     counterpoint_status = 'unavailable'
                 else:
                     per_call = input_limit + output_limit
-                    reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=per_call, now=monotonic())
+                    reason = context.model_exhaustion(per_call)
                     if reason:
                         counterpoint_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
                     else:
@@ -2975,7 +2976,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     gap_status = 'unavailable'
                 else:
                     per_call = input_limit + output_limit
-                    reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=per_call, now=monotonic())
+                    reason = context.model_exhaustion(per_call)
                     if reason:
                         gap_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
                     else:
@@ -3202,7 +3203,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     isolated_records = [{"claim_index": b.indexes[0], "prompt_sha256": b.prompt_sha256,
                                          "segments": b.segments, "status": "not_started"} for b in plan.batches]
                     claims = [{key: value for key, value in claim.items() if key != "support_review"} for claim in claims]
-                    consumed = pre_review_usage if pre_review_usage is not None else calls * per_call
                     review_usages: list[int | None] = []
 
                     def isolated_omission(index: int, reason: str | None) -> None:
@@ -3268,7 +3268,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     for position, batch in enumerate(plan.batches):
                         index = batch.indexes[0]
                         _raise_if_operation_cancelled(operation_id)
-                        reason = budget.model_exhaustion(calls=calls, usage=consumed, per_call=per_call, now=monotonic())
+                        reason = context.model_exhaustion(per_call)
                         if reason:
                             for pending in plan.batches[position:]:
                                 isolated_omission(pending.indexes[0], reason)
@@ -3325,7 +3325,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             finally:
                                 context.finish_model(call_id, reported, before_call)
                                 review_usages.append(reported)
-                                consumed += reported if reported is not None else per_call
                                 review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
                                 usage = context.usage
                             _raise_if_operation_cancelled(operation_id)
@@ -3367,7 +3366,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 # Once the provider reports a valid first-call usage, it has
                 # replaced that call's reservation. Reserve the full bound for
                 # the next call; retain the first bound only if usage is unknown.
-                budget_reason = budget.model_exhaustion(calls=calls, usage=pre_review_usage, per_call=per_call, now=monotonic())
+                budget_reason = context.model_exhaustion(per_call)
                 if budget_reason:
                     review_status = "budget_exhausted"
                     review_omissions = [{"claim_index": index, "reason": budget_reason} for index in range(len(claims))]
