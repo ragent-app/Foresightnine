@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .storage import JsonDocumentRepository, StorageConflictError
 from .research_provenance import derive_evidence_links, derive_question_links, normalize_claim_links, normalize_research_questions, normalize_user_fact_links
 from .research_quality import research_gaps
+from .research_stage_summary import summarize_research_stages
 from .research_calculations import calculation_result_status
 
 
@@ -201,6 +202,7 @@ class ResearchTopics:
             claims=content.claims, calculations=content.calculations, sources=content.sources,
             calculation_differences=content.calculation_differences,
             amount_differences=content.amount_differences, run=content.run)
+        content.run['stage_summary'] = summarize_research_stages(content.run)
         updated.versions.append(ResearchVersion(version_id=f"version_{uuid4().hex}",
             parent_version_id=request.parent_version_id, created_at=now,
             content=content, review=request.review, note=request.note,

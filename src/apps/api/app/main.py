@@ -2607,7 +2607,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                  question_override=request.question_override, analysis=plan_analysis,
                                  source_processing=source_processing([]), planning_requested=True,
                                  planning=plan_result, request=request,
-                                 budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts),
+                                 budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts,
+                                 generation_status='not_started'),
                              'model_calls': context.calls, 'total_tokens': context.usage,
                              'search_calls': 0, 'search_status': 'not_started',
                              'official_fetch_calls': 0, 'official_fetch_status': 'not_started' if request.auto_fetch_official else 'not_requested',
@@ -2758,6 +2759,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         generation_call_usage = generation.generation_tokens
         base_prompt_text, max_prompt_chars = generation.prompt_text, generation.max_prompt_chars
         unavailable_reason, analysis_error_detail = generation.unavailable_reason, generation.error_detail
+        generation_status = 'failed' if unavailable_reason else 'completed' if generation.prompt_text is not None else 'not_started'
         analysis = assemble_initial_artifacts(analysis, sources, topic.request.as_of, planning_steps)
         supplemental_citation_leads: list[dict[str, Any]] = []
 
@@ -2767,7 +2769,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 question_override=request.question_override, analysis=analysis,
                 source_processing=source_processing(analysis.segments),
                 planning_requested=request.plan_research, planning=plan_result, request=request,
-                budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts)
+                budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts,
+                generation_status=generation_status)
 
         def prepare_claims() -> list[dict[str, Any]]:
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)

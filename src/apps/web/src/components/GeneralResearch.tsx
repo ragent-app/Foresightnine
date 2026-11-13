@@ -12,6 +12,7 @@ import { UserFactLinks } from "./UserFactLinks";
 import { ResearchChecklist } from "./ResearchChecklist";
 import { ResearchQuestions } from "./ResearchQuestions";
 import { ResearchSearchStatus } from "./ResearchSearchStatus";
+import { ResearchStageSummary } from "./ResearchStageSummary";
 import { StructuredFactDetails } from "./StructuredFactDetails";
 import { StructuredComparison } from "./StructuredComparison";
 import { SourceCoverage } from "./SourceCoverage";
@@ -873,6 +874,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <ul>{runInputs.sources.map((source) => <li key={source.source_id}>{source.source_id} · SHA-256: {source.content_sha256} · {source.is_simulated ? (en ? "Simulated; excluded from real research" : "模拟资料，排除于真实研究") : (en ? "Model processing" : "模型处理") + ": " + (source.permissions.model_input ? (en ? "allowed" : "允许") : (en ? "not allowed" : "未允许"))}</li>)}</ul>
       </details> : null}
       {operation && ["failed", "cancelled"].includes(operation.status) ? <p role="status">{en ? "This run cannot resume from a checkpoint. Saved versions remain available. Starting another run makes new external requests; previous requests may still be billed." : "此运行无法从检查点续跑，已保存的版本仍可查看。再次运行会发起新的外部请求，之前的请求仍可能产生费用。"}</p> : null}
+      <ResearchStageSummary value={current.content.run.stage_summary} en={en} />
       {current.content.run.status ? <p>{en ? "Last run result: " : "上次运行结果："}{statusLabel(String(current.content.run.status), en)}</p> : null}
       {current.content.run.question_origin === "document_overview_default" ? <p>{en ? "This version used the default document-overview task because no question was provided." : "本版本未收到用户问题，使用了默认资料概览任务。"}</p> : null}
       {current.content.run.checkpoint === "planning" ? <p role="status">{en ? "Planning was saved; source discovery and analysis may not have finished." : "研究规划已保存；来源发现和分析可能尚未完成。"}</p> : null}
