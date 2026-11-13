@@ -14,6 +14,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .storage import JsonDocumentRepository, StorageConflictError
+from .research_provenance import derive_evidence_links
 
 
 class ResearchInput(BaseModel):
@@ -177,9 +178,13 @@ class ResearchTopics:
         combined_source_ids = list(dict.fromkeys([*topic.versions[-1].source_ids, *(source_ids or [])]))
         if len(combined_source_ids) > 100:
             raise ValueError("A research version can include at most 100 sources.")
+        content = deepcopy(request.content)
+        # Compute from the server-accepted snapshot on every version, including
+        # user edits and checkpoints; do not trust a client-supplied link map.
+        content.run['evidence_links'] = derive_evidence_links(content.claims, content.facts, content.calculations)
         updated.versions.append(ResearchVersion(version_id=f"version_{uuid4().hex}",
             parent_version_id=request.parent_version_id, created_at=now,
-            content=deepcopy(request.content), review=request.review, note=request.note,
+            content=content, review=request.review, note=request.note,
             source_ids=combined_source_ids, created_by=created_by))
         updated.updated_at = now
         try:
