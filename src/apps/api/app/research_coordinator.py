@@ -45,10 +45,17 @@ class ResearchExecutionContext:
         return before
 
     def finish_model(self, call_id: str, tokens: int | None, before: tuple[int, int | None]) -> None:
-        self.settle(call_id, tokens)
         previous_calls, previous_usage = before
-        self.usage = (tokens if previous_calls == 0 else
-                      previous_usage + tokens if previous_usage is not None and tokens is not None else None)
+        try:
+            self.settle(call_id, tokens)
+        finally:
+            self.usage = (tokens if previous_calls == 0 else
+                          previous_usage + tokens if previous_usage is not None and tokens is not None else None)
+
+    def abort_model_before_call(self, call_id: str, before: tuple[int, int | None]) -> None:
+        """Release a reservation only when no provider invocation occurred."""
+        self.settle(call_id, 0)
+        self.calls, self.usage = before
 
 
 @dataclass(frozen=True)

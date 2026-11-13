@@ -2901,16 +2901,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 _raise_if_operation_cancelled(operation_id)
                                 raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
                             call_id = f'{operation_id}:counterpoint'
-                            before_counterpoint_usage = usage
-                            counterpoint_attempted = False
                             try:
                                 _raise_if_operation_cancelled(operation_id)
                                 remaining = deadline - monotonic()
                                 if remaining <= 0:
                                     raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-                                _reserve_model_call(http_request, call_id, token_budget=per_call)
-                                calls += 1
-                                counterpoint_attempted = True
+                                before_call = context.start_model(call_id, per_call)
+                                calls = context.calls
                                 try:
                                     raw_counterpoint, reported = generate_structured(followup.prompt,
                                         cancel_event=operations.cancel_event(operation_id), system=RESEARCH_SYSTEM_PROMPT,
@@ -2920,7 +2917,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     counterpoint_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
                                     raise
                                 finally:
-                                    _settle_model_call(http_request, call_id, counterpoint_usage)
+                                    context.finish_model(call_id, counterpoint_usage, before_call)
+                                    usage = context.usage
                                 _raise_if_operation_cancelled(operation_id)
                                 if not isinstance(raw_counterpoint, dict) or 'counterarguments' not in raw_counterpoint:
                                     raise InvalidAnalysis('Counterpoint output lacks the requested field.')
@@ -2979,8 +2977,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 _raise_if_operation_cancelled(operation_id)
                                 counterpoint_status = 'failed'
                                 counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
-                            if counterpoint_attempted:
-                                usage = before_counterpoint_usage + counterpoint_usage if before_counterpoint_usage is not None and counterpoint_usage is not None else None
+        calls, usage = context.calls, context.usage
         # Optional evidence-gap follow-up is deliberately bounded to the
         # already authorized sources. It never turns search leads into inputs.
         gap_status = 'not_requested'
@@ -3016,7 +3013,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         prior_usage = usage
                         gap_attempted = False
                         def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
-                            nonlocal calls, search_calls, gap_usage, gap_hash, gap_attempted, checkpoint_parent, gap_search_status, gap_search_hash
+                            nonlocal calls, usage, search_calls, gap_usage, gap_hash, gap_attempted, checkpoint_parent, gap_search_status, gap_search_hash
                             _raise_if_operation_cancelled(operation_id)
                             def save_gap_checkpoint() -> None:
                                 nonlocal checkpoint_parent
@@ -3136,8 +3133,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             if remaining <= 0:
                                 raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
                             call_id = f'{operation_id}:gap-followup'
-                            _reserve_model_call(http_request, call_id, token_budget=per_call)
-                            calls += 1
+                            before_call = context.start_model(call_id, per_call)
+                            calls = context.calls
                             gap_attempted = True
                             gap_hash = sha256(prompt.encode('utf-8')).hexdigest()
                             try:
@@ -3149,7 +3146,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 gap_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
                                 raise
                             finally:
-                                _settle_model_call(http_request, call_id, gap_usage)
+                                context.finish_model(call_id, gap_usage, before_call)
+                                usage = context.usage
                         try:
                             gap_result = analyze(target.question, sources, topic.request.as_of, generate_gap,
                                 max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
@@ -3218,8 +3216,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             _raise_if_operation_cancelled(operation_id)
                             gap_status = 'failed'
                             gap_error = error.code if isinstance(error, ProviderFailure) else 'gap_followup_unavailable'
-                        if gap_attempted:
-                            usage = prior_usage + gap_usage if prior_usage is not None and gap_usage is not None else None
+        calls, usage = context.calls, context.usage
         if request.gap_search and gap_search_status == 'not_started' and gap_status == 'not_needed':
             gap_search_status = 'no_gaps'
         pre_review_usage = usage
@@ -3355,16 +3352,16 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         call_id = f"{operation_id}:support-review:{index}"
                         reported: int | None = None
                         try:
-                            _reserve_model_call(http_request, call_id, token_budget=per_call)
+                            before_call = context.start_model(call_id, per_call)
                             remaining = deadline - monotonic()
                             if remaining <= 0:
-                                _settle_model_call(http_request, call_id, 0)
+                                context.abort_model_before_call(call_id, before_call)
                                 for pending in plan.batches[position:]:
                                     isolated_omission(pending.indexes[0], "time_budget")
                                 if not review_indexes:
                                     review_status = "budget_exhausted"
                                 break
-                            calls += 1
+                            calls = context.calls
                             review_indexes.append(index)
                             review_segments.extend(batch.segments)
                             isolated_records[position]["status"] = "in_progress"
@@ -3375,12 +3372,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
                             except BaseException:
                                 # No provider call has been made yet.
-                                _settle_model_call(http_request, call_id, 0)
+                                context.abort_model_before_call(call_id, before_call)
+                                calls, usage = context.calls, context.usage
                                 raise
                             remaining = deadline - monotonic()
                             if remaining <= 0:
-                                _settle_model_call(http_request, call_id, 0)
-                                calls -= 1
+                                context.abort_model_before_call(call_id, before_call)
+                                calls = context.calls
                                 review_indexes.pop()
                                 if batch.segments:
                                     del review_segments[-len(batch.segments):]
@@ -3399,11 +3397,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 reported = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
                                 raise
                             finally:
-                                _settle_model_call(http_request, call_id, reported)
+                                context.finish_model(call_id, reported, before_call)
                                 review_usages.append(reported)
                                 consumed += reported if reported is not None else per_call
                                 review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
-                                usage = pre_review_usage + review_usage if pre_review_usage is not None and review_usage is not None else None
+                                usage = context.usage
                             _raise_if_operation_cancelled(operation_id)
                             mapped_index, verdict = parse_isolated_support_review_details(batch, raw_review)
                             claims[mapped_index] = {**claims[mapped_index], "support_review":
@@ -3523,15 +3521,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
                         review_hash, review_segments, review_indexes = batch.prompt_sha256, batch.segments, batch.indexes
                         review_call_id = f"{operation_id}:support-review"
-                        review_attempted = False
                         try:
                             _raise_if_operation_cancelled(operation_id)
                             remaining = deadline - monotonic()
                             if remaining <= 0:
                                 raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
-                            _reserve_model_call(http_request, review_call_id, token_budget=per_call)
-                            calls += 1
-                            review_attempted = True
+                            before_call = context.start_model(review_call_id, per_call)
+                            calls = context.calls
                             try:
                                 raw_review, reported_review_usage = generate_structured(batch.prompt,
                                     cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
@@ -3541,7 +3537,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 review_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
                                 raise
                             finally:
-                                _settle_model_call(http_request, review_call_id, review_usage)
+                                context.finish_model(review_call_id, review_usage, before_call)
+                                usage = context.usage
                             claims, missing_reviews = apply_partial_support_review(claims, batch, raw_review)
                             review_omissions.extend({"claim_index": index, "reason": "model_omitted"} for index in missing_reviews)
                             review_status = "partial" if batch.omitted or missing_reviews else "complete"
@@ -3549,8 +3546,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             review_status = "failed"
                             review_failed_indexes = batch.indexes
                             review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
-                        if review_attempted:
-                            usage = pre_review_usage + review_usage if pre_review_usage is not None and review_usage is not None else None
+        calls, usage = context.calls, context.usage
         _raise_if_operation_cancelled(operation_id)
         differences = evidence_differences(analysis.facts)
         calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
