@@ -101,14 +101,14 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, calculation_result_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, source_eligibility, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review_details, review_record)
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
-from .research_coverage import initial_source_coverage
+from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
 from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
 from .research_structured_data import extract_structured_observations
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
@@ -2554,37 +2554,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         except (StopIteration, IndexError, KeyError, TypeError, ValueError) as error:
             raise ApiProblem(422, "invalid_request", "The selected quotation is unavailable for focused research.") from error
 
+    # Bind this run's mutable source list to the shared, network-free policy.
     def source_summaries(analyzed_ids: list[str], segments: object) -> list[dict[str, Any]]:
-        return [{"source_id": s.source_id, "title": s.title,
-                 "url": urlunsplit((urlsplit(str(s.url)).scheme, urlsplit(str(s.url)).netloc,
-                     urlsplit(str(s.url)).path, "", "")) if s.url else None,
-                 "event_at": s.event_at.isoformat() if s.event_at else None,
-                 "published_at": s.published_at.isoformat() if s.published_at else None,
-                 "obtained_at": s.obtained_at.isoformat(),
-                 "revised_at": s.revised_at.isoformat() if s.revised_at else None,
-                 "content_sha256": s.content_sha256, "is_simulated": s.is_simulated,
-                 "initial_prompt_coverage": initial_source_coverage(s.source_id, len(s.text), segments),
-                 "pdf_text_order": s.pdf_text_order,
-                 "derived_from_source_id": s.derived_from_source_id,
-                 "verification": "user_declared_not_verified"}
-                for s in sources if s.source_id in analyzed_ids]
+        return summarize_sources(sources, analyzed_ids, segments)
 
     def source_processing(segments: object) -> list[dict[str, Any]]:
-        records = []
-        for source, eligibility in source_eligibility(sources, topic.request.as_of):
-            row: dict[str, Any] = {'source_id': source.source_id, 'eligibility': eligibility}
-            if eligibility == 'eligible':
-                coverage = initial_source_coverage(source.source_id, len(source.text), segments)
-                has_segment = isinstance(segments, list) and any(
-                    isinstance(item, dict) and item.get('source_id') == source.source_id for item in segments)
-                row['initial_selection'] = ('not_selected' if isinstance(segments, list) and not has_segment
-                                            else coverage['status'])
-                row['selected_characters'] = coverage['selected_characters']
-                row['text_characters'] = coverage['text_characters']
-            else:
-                row['initial_selection'] = 'excluded'
-            records.append(row)
-        return records
+        return summarize_source_processing(sources, topic.request.as_of, segments)
 
     def build(operation_id: str) -> tuple[ResearchRunResult, str]:
         nonlocal checkpoint_parent

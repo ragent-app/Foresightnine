@@ -17,7 +17,6 @@ from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from itertools import islice, product
 from typing import Any, Callable, Literal
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -27,6 +26,7 @@ from .research_table_provenance import annual_table_value_alignment, bounded_tab
 from .research_xbrl import match_inline_fact
 from .research_retrieval import build_passage_index
 from .research_structured_data import extract_structured_observations
+from .research_source_policy import MAX_SOURCES, prepare_sources, source_eligibility
 
 
 SYSTEM_PROMPT = (
@@ -39,7 +39,6 @@ SYSTEM_PROMPT = (
 )
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
-MAX_SOURCES = 20
 SELECTION_METHOD = "ranked_nonoverlapping_windows_v51"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
@@ -550,55 +549,6 @@ def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[
     except ValidationError:
         return None
     return split
-
-
-def source_eligibility(sources: list[ResearchSource], as_of: datetime | None) -> list[tuple[ResearchSource, str]]:
-    """Classify each selected source without relying on presentation text."""
-    result: list[tuple[ResearchSource, str]] = []
-    eligible_count = 0
-    for source in sources:
-        parsed = urlsplit(str(source.url)) if source.url else None
-        host = (parsed.hostname or "").lower().rstrip(".") if parsed else ""
-        is_fred = (host in {"fred.stlouisfed.org", "alfred.stlouisfed.org"} or
-                   host.endswith(".fred.stlouisfed.org") or
-                   (host == "api.stlouisfed.org" and parsed is not None and parsed.path.lower().startswith("/fred")))
-        if source.is_simulated:
-            code = 'simulated'
-        elif is_fred:
-            code = 'source_not_authorized'
-        elif not source.permissions.model_input:
-            code = 'model_permission_missing'
-        elif not source.permissions.display:
-            code = 'display_permission_missing'
-        elif as_of is not None and (source.published_at is None or source.published_at > as_of or
-                                    (source.revised_at is not None and source.revised_at > as_of)):
-            code = 'availability_unestablished'
-        elif eligible_count >= MAX_SOURCES:
-            code = 'source_limit'
-        else:
-            code = 'eligible'
-            eligible_count += 1
-        result.append((source, code))
-    return result
-
-
-def prepare_sources(sources: list[ResearchSource], as_of: datetime | None) -> tuple[list[ResearchSource], list[str]]:
-    eligible: list[ResearchSource] = []
-    limitations: list[str] = []
-    messages = {'simulated': 'simulated material is excluded from real research.',
-                'source_not_authorized': 'FRED use is not authorized for this experiment.',
-                'model_permission_missing': 'model processing permission is not granted.',
-                'display_permission_missing': 'display permission is not granted.',
-                'availability_unestablished': 'availability at the requested time is not established.',
-                'source_limit': 'exceeds the source count budget; not processed.'}
-    for source, code in source_eligibility(sources, as_of):
-        if code != 'eligible':
-            limitations.append(f"Source {source.source_id}: {messages[code]}")
-        else:
-            eligible.append(source)
-            if as_of is not None:
-                limitations.append(f"Source {source.source_id}: publication and revision history are user-declared and not independently verified.")
-    return eligible, limitations
 
 
 def _select_window(text: str, question: str, length: int,
