@@ -98,7 +98,7 @@ from .services import (
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
-from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
+from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
@@ -112,12 +112,13 @@ from .research_discovery import execute_source_search
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
 from .research_lifecycle import ResearchVersionChain
+from .research_official_retrieval import execute_official_retrieval, official_source_id
 from .research_workflow import ResearchWorkflow
 from .research_assessment import assess_research_outcome
 from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
-from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
+from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
 from .research_uploads import HtmlUploadRequest, PdfFailure, PdfReextractRequest, PdfUploadRequest, extract_pdf, extract_uploaded_html
 
@@ -2659,101 +2660,18 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # hosts in this bounded path; discovered snippets are never evidence.
         # Historical content may have changed since its published date, so no
         # automatic source is attached to a cutoff-constrained research run.
-        with workflow.stage('source_retrieval') as stage_state:
-            if (request.auto_fetch_official and user_question and request.selected_source_ids != [] and
-                    len(available_ids) < 100 and topic.request.as_of is None and request.max_cost_usd is None):
-                # Existing materials remain in the run. Do not spend the single
-                # bounded retrieval attempt on a source already attached.
-                existing_urls = set()
-                for existing_source in sources:
-                    if existing_source.url:
-                        existing_parts = urlsplit(str(existing_source.url))
-                        existing_urls.add(urlunsplit((existing_parts.scheme, existing_parts.netloc, existing_parts.path, "", "")))
-                for candidate in discovered:
-                    if candidate['url'] in existing_urls:
-                        continue
-                    parts = urlsplit(candidate["url"])
-                    if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov", "www.sec.gov"}
-                            or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
-                        continue
-                    permissions = SourcePermissions(store=True, display=True, model_input=True, export=True)
-                    try:
-                        source_request = FetchSourceRequest(url=candidate["url"], title=candidate["title"][:500],
-                                                            permissions=permissions)
-                    except ValidationError:
-                        continue
-                    sec_agent = None
-                    if parts.hostname == "www.sec.gov":
-                        try:
-                            sec_agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
-                        except SecFailure:
-                            official_fetch_status = "sec_contact_unconfigured"
-                            if "SEC access is not configured; other supported sources may still be available." not in discovery_notes:
-                                discovery_notes.append("SEC access is not configured; other supported sources may still be available.")
-                            continue
-                    remaining = deadline - monotonic()
-                    if remaining <= 0:
-                        official_fetch_status = "time_budget"
-                        discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
-                        break
-                    try:
-                        _reserve_search_call(http_request)
-                        if sec_agent is not None and not reserve_sec_request(SOURCE_RATE_LIMITS):
-                            raise ApiProblem(429, "rate_limited", "SEC request limit reached.", retryable=True)
-                        remaining = deadline - monotonic()
-                        if remaining <= 0:
-                            official_fetch_status = "time_budget"
-                            discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
-                            break
-                        official_fetch_calls = 1
-                        if sec_agent is not None:
-                            fetched = fetch_sec_filing(source_request, sec_agent, timeout_seconds=min(15.0, remaining))
-                            retrieval = {"retrieval_method": "sec_filing_html", "original_html_base64": fetched.original_base64}
-                            content_type = "text/html"
-                        elif parts.path.casefold().endswith(".pdf"):
-                            fetched = fetch_official_pdf(source_request, timeout_seconds=min(15.0, remaining))
-                            retrieval = {"retrieval_method": "user_pdf", "original_pdf_base64": fetched.original_pdf_base64,
-                                         "pdf_text_order": "layout"}
-                            content_type = fetched.content_type
-                        else:
-                            fetched = fetch_official_text(source_request, timeout_seconds=min(15.0, remaining))
-                            retrieval = {"retrieval_method": "official_html", "original_html_base64": fetched.original_html_base64}
-                            content_type = fetched.content_type
-                        _raise_if_operation_cancelled(operation_id)
-                        # This planned ID is part of the immutable run-input
-                        # receipt before the request, so a saved source remains
-                        # retrievable even if the process dies before version save.
-                        source_id = "source_" + sha256((operation_id + ":official-source:0").encode()).hexdigest()[:32]
-                        source = research_sources.create(account.account_id, SourceInput(title=source_request.title,
-                            text=fetched.text, url=source_request.url, kind="official", permissions=permissions),
-                            **retrieval, response_sha256=fetched.response_sha256,
-                            response_content_type=content_type, source_id=source_id)
-                        sources.append(source)
-                        source_ids.append(source.source_id)
-                        official_fetch_status = "completed"
-                        candidate["status"] = "retrieved_unverified"
-                        candidate["source_id"] = source.source_id
-                        discovery_notes.append("The official document was retrieved with user-granted model permission; its content and dates remain unverified.")
-                    except (FetchFailure, SecFailure, ValidationError, ValueError, ApiProblem):
-                        _raise_if_operation_cancelled(operation_id)
-                        official_fetch_status = "failed"
-                        discovery_notes.append("The official source could not be retrieved; the search result remains an unverified lead.")
-                    break  # One bounded retrieval attempt, with no hidden retries.
-            elif request.auto_fetch_official and not user_question:
-                official_fetch_status = "question_missing"
-                discovery_notes.append("Automatic source discovery requires a user-provided question; the document overview did not start a search.")
-            elif request.auto_fetch_official and topic.request.as_of is not None:
-                official_fetch_status = "historical_cutoff"
-                discovery_notes.append("Automatic retrieval is unavailable for historical cutoffs because revision history is not established.")
-            elif request.auto_fetch_official and request.max_cost_usd is not None:
-                official_fetch_status = "cost_unknown"
-            elif request.auto_fetch_official and request.selected_source_ids == []:
-                official_fetch_status = "empty_selection"
-            elif request.auto_fetch_official and len(available_ids) >= 100:
-                official_fetch_status = "source_capacity"
-                discovery_notes.append("Official source retrieval was skipped because this research already has the maximum number of sources.")
-
-            stage_state.status = official_fetch_status
+        official = workflow.run('source_retrieval', lambda: execute_official_retrieval(
+            request=request, question=user_question, as_of=topic.request.as_of, available_count=len(available_ids),
+            candidates=discovered, sources=sources, owner_id=account.account_id, operation_id=operation_id,
+            store=research_sources, sec_agent_config=os.environ.get('FORESIGHTNINE_SEC_USER_AGENT') or os.environ.get('SEC_USER_AGENT'),
+            reserve_sec=lambda: reserve_sec_request(SOURCE_RATE_LIMITS), context=context), lambda result: result.status)
+        official_fetch_status, official_fetch_calls = official.status, official.calls
+        discovery_notes.extend(official.notes)
+        if official.source is not None and official.candidate_index is not None:
+            sources.append(official.source)
+            source_ids.append(official.source.source_id)
+            discovered[official.candidate_index]['status'] = 'retrieved_unverified'
+            discovered[official.candidate_index]['source_id'] = official.source.source_id
         generation = workflow.run('analysis', lambda: execute_generation(
             question=effective_question, scope=topic.request.scope, sources=sources, as_of=topic.request.as_of,
             provider=provider, generate=generate_structured, context=context, call_id=operation_id, focus=focus,
@@ -3558,7 +3476,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                          "is_simulated": item.is_simulated, "permissions": item.permissions.model_dump(mode="json")}
                         for item in sources],
             "budget": {key: value for key, value in run_request_payload.items() if key != "question_override"},
-            **({"planned_official_source_id": "source_" + sha256((operation_id + ":official-source:0").encode()).hexdigest()[:32]}
+            **({"planned_official_source_id": official_source_id(operation_id)}
                if request.auto_fetch_official else {}),
             "model": getattr(getattr(provider, "settings", None), "model", None),
             "provider": getattr(provider, "name", None),
