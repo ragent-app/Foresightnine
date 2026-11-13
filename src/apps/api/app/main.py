@@ -112,7 +112,7 @@ from .research_source_policy import prepare_sources, summarize_sources, summariz
 from .research_budget import ResearchExecutionBudget
 from .research_planning import PLAN_SYSTEM_PROMPT
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
-from .research_structured_data import extract_structured_observations
+from .research_artifacts import assemble_initial_artifacts, prepare_run_claims
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -2768,52 +2768,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         generation_call_usage = generation.generation_tokens
         base_prompt_text, max_prompt_chars = generation.prompt_text, generation.max_prompt_chars
         unavailable_reason, analysis_error_detail = generation.unavailable_reason, generation.error_detail
-        # Structured source rows are extracted deterministically from only
-        # eligible sources included in this run. They are source observations,
-        # not independently verified facts or claims about their relevance.
-        eligible_structured_sources, _ = prepare_sources(sources, topic.request.as_of)
-        observed, structured_truncated = extract_structured_observations(
-            [source for source in eligible_structured_sources if source.source_id in analysis.source_ids],
-            max_facts=max(0, min(200, 2000 - len(analysis.facts))))
-        existing_fact_ids = {fact.get('fact_id') for fact in analysis.facts if isinstance(fact, dict)}
-        observed = [fact for fact in observed if fact['fact_id'] not in existing_fact_ids]
-        if observed:
-            note = 'Structured observations were extracted from a stored source snapshot; identity, timing and financial meaning are not independently verified.'
-            analysis = replace(analysis, facts=[*analysis.facts, *observed],
-                limitations=list(dict.fromkeys([*analysis.limitations, note])))
-        if structured_truncated:
-            analysis = replace(analysis, limitations=[*analysis.limitations,
-                'Some structured source observations were not processed because a source or run limit was reached.'])
-        if planning_steps:
-            # Track each proposed plan item even if the model omits it from
-            # its output. Only exact matching associates a finding; this does
-            # not assert that the finding answers the question.
-            planned_questions = [{'question': step, 'claim_indexes': []} for step in planning_steps]
-            analysis = replace(analysis, research_questions=merge_research_questions(
-                planned_questions, analysis.research_questions, {i: i for i in range(len(analysis.claims))}))
+        analysis = assemble_initial_artifacts(analysis, sources, topic.request.as_of, planning_steps)
         supplemental_citation_leads: list[dict[str, Any]] = []
+
         def prepare_claims() -> list[dict[str, Any]]:
-            claims = [{**item, "role": "support"} for item in analysis.claims]
-            claims.extend({**item, "role": "counterargument"} for item in analysis.counterarguments)
-            claims = suggest_percentage_evidence(claims, analysis.facts)
-            claims = flag_uncited_percentage_points(flag_uncited_basis_points(claims))
-            claims = suggest_percentage_calculations(claims, analysis.calculations, analysis.facts)
-            claims = flag_uncited_quarters(flag_uncited_dollar_amounts(flag_uncited_usd_amounts(claims, sources), sources), sources)
-            claims = suggest_usd_amount_evidence(claims, analysis.facts, sources)
-            claims = suggest_uncited_numeric_facts(claims, analysis.facts, sources)
-            eligible_comparison_sources, _ = prepare_sources(sources, topic.request.as_of)
-            claims = suggest_cross_source_comparison_evidence(claims, analysis.facts,
-                        [source for source in eligible_comparison_sources if source.source_id in analysis.source_ids])
-            claims = suggest_related_with_supplemental_leads(claims, sources, supplemental_citation_leads)
-            claims = flag_rate_level_point_warnings(flag_publication_date_mismatches(claims, sources))
-            claims = flag_component_direction(flag_citation_subject_context(claims, sources), sources)
-            claims = flag_uncited_exact_dates(flag_uncited_causal_attribution(claims, sources), sources)
-            eligible_date_sources, _ = prepare_sources(sources, topic.request.as_of)
-            claims = suggest_excerpt_dates(claims, eligible_date_sources, analysis.segments)
-            claims = flag_partial_source_absence(claims, sources, analysis.segments)
-            claims = flag_counterpoint_agreement(claims)
-            claims = flag_truncated_previous_findings(claims)
-            return claims
+            return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
         claims = prepare_claims()
         generation_usage = generation_call_usage
         counterpoint_status = "not_requested"
