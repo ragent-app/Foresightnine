@@ -71,6 +71,13 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
     lines.push(`\n${label("Source", "来源")} ${i + 1}`);
     for (const [key, value] of Object.entries(source)) add(key, value);
   });
+  if (items(c.sources).length) {
+    section(label("Initial prompt source selection (not proof of comprehension)", "首次模型输入资料范围（不证明模型理解）"));
+    items(c.sources).forEach((source, i) => {
+      add(`${label("Source", "来源")} ${i + 1}`, source.title ?? source.source_id);
+      add(label("Extracted text coverage", "提取文本选取范围"), source.initial_prompt_coverage);
+    });
+  }
   if (c.run && Object.keys(c.run).length) {
     section(label("Recorded run", "已记录的运行"));
     for (const [key, value] of Object.entries(c.run)) add(key, value);

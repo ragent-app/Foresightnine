@@ -12,6 +12,7 @@ import { ResearchChecklist } from "./ResearchChecklist";
 import { ResearchQuestions } from "./ResearchQuestions";
 import { StructuredFactDetails } from "./StructuredFactDetails";
 import { StructuredComparison } from "./StructuredComparison";
+import { SourceCoverage } from "./SourceCoverage";
 import { canUseCitationSource } from "../source-text-search";
 
 interface Props { baseUrl: string | null; accountId: string | null; language: Language }
@@ -834,6 +835,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.content.run.counterpoint_requested ? <p>{en ? "Counterpoint follow-up: " : "反方补充："}{en ? String(current.content.run.counterpoint_status) : ({ pending: "保存时未完成", completed: "已完成", partial: "部分完成", needs_review: "有引用但存在证据警示，需复核", no_evidence: "未找到可用反方", not_needed: "已有反方", unavailable: "不可用", budget_exhausted: "预算不足", input_budget: "输入预算不足", capacity_reached: "反方数量已达上限", failed: "失败" } as Record<string, string>)[String(current.content.run.counterpoint_status)] ?? String(current.content.run.counterpoint_status)}。{en ? "Model output is not independently verified." : "模型输出尚未独立核验。"}</p> : null}
       {current.content.run.support_review_requested ? <p>{en ? "Review during this run: " : "本次运行的模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
       {!hasUnsavedReview ? <ResearchQuestions value={current.content.run.research_questions} claims={claims} en={en} /> : null}
+      <SourceCoverage sources={current.content.sources} en={en} />
       {!hasUnsavedReview ? <ResearchChecklist value={current.content.run.research_gaps} en={en} /> : null}
       <h3>{en ? "Sources" : "资料来源"}</h3>
       {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><CandidateDate publishedAt={candidate.published_at} cutoff={topic.request.as_of} en={en} />{candidate.status === "retrieved_unverified" ? <small>{en ? "Retrieved for this run; content remains unverified." : "本次已获取，内容仍需核验。"}</small> : <Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Attach source" : "添加此来源"}</Button>}</article>)}</section> : null}

@@ -108,6 +108,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
                                     prepare_isolated_support_reviews, parse_isolated_support_review_details, review_record)
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
+from .research_coverage import initial_source_coverage
 from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
 from .research_structured_data import extract_structured_observations
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
@@ -2551,7 +2552,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         except (StopIteration, IndexError, KeyError, TypeError, ValueError) as error:
             raise ApiProblem(422, "invalid_request", "The selected quotation is unavailable for focused research.") from error
 
-    def source_summaries(analyzed_ids: list[str]) -> list[dict[str, Any]]:
+    def source_summaries(analyzed_ids: list[str], segments: object) -> list[dict[str, Any]]:
         return [{"source_id": s.source_id, "title": s.title,
                  "url": urlunsplit((urlsplit(str(s.url)).scheme, urlsplit(str(s.url)).netloc,
                      urlsplit(str(s.url)).path, "", "")) if s.url else None,
@@ -2560,6 +2561,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                  "obtained_at": s.obtained_at.isoformat(),
                  "revised_at": s.revised_at.isoformat() if s.revised_at else None,
                  "content_sha256": s.content_sha256, "is_simulated": s.is_simulated,
+                 "initial_prompt_coverage": initial_source_coverage(s.source_id, len(s.text), segments),
                  "pdf_text_order": s.pdf_text_order,
                  "derived_from_source_id": s.derived_from_source_id,
                  "verification": "user_declared_not_verified"}
@@ -2966,7 +2968,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     if current.version_id != request.parent_version_id:
                                         raise TopicVersionConflict()
                                     partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                        sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                        sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
                                         evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
                                         calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
                                         amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
@@ -3131,7 +3133,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     if current.version_id != expected:
                                         raise TopicVersionConflict()
                                     partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                        sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                        sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
                                         evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
                                         calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
                                         amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
@@ -3386,7 +3388,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             if current.version_id != expected:
                                 raise TopicVersionConflict()
                             partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
                                 evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
                                 calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
                                 amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
@@ -3565,7 +3567,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 if current.version_id != expected_parent:
                                     raise TopicVersionConflict()
                                 partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                    sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                    sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
                                     evidence_differences=evidence_differences(analysis.facts),
                                     calculations=analysis.calculations,
                                     calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
@@ -3755,7 +3757,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("The research is partial: supported claims or counterarguments are incomplete.")
         result = ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
             parent_version_id=request.parent_version_id, status="completed" if complete else "partial",
-            content=ResearchContent(source_candidates=discovered, sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+            content=ResearchContent(source_candidates=discovered, sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
                 evidence_differences=differences,
                 calculations=analysis.calculations, calculation_differences=calculation_differences, amount_differences=amount_differences,
                 claims=claims, limitations=limitations,
