@@ -112,6 +112,7 @@ from .research_discovery import execute_source_search
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
 from .research_lifecycle import ResearchVersionChain
+from .research_workflow import ResearchWorkflow
 from .research_assessment import assess_research_outcome
 from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
@@ -2580,13 +2581,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
             settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens),
             reserve_search=lambda: _reserve_search_call(http_request))
+        workflow = ResearchWorkflow(context)
 
         # Planning is optional and uses only the user-authorized question and
         # scope. Its suggestions cannot grant tools or expand search inputs.
-        plan_result = execute_planning(
+        plan_result = workflow.run('planning', lambda: execute_planning(
             requested=request.plan_research, question=effective_question, scope=topic.request.scope,
             provider=provider, generate=generate_structured,
-            context=context, call_id=f'{operation_id}:research-plan')
+            context=context, call_id=f'{operation_id}:research-plan'), lambda result: result.status)
         planning_status = plan_result.status
         planning_steps = list(plan_result.steps)
         _raise_if_operation_cancelled(operation_id)
@@ -2608,7 +2610,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                  source_processing=source_processing([]), planning_requested=True,
                                  planning=plan_result, request=request,
                                  budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts,
-                                 generation_status='not_started'),
+                                 workflow_receipts=workflow.snapshot(), generation_status='not_started'),
                              'model_calls': context.calls, 'total_tokens': context.usage,
                              'search_calls': 0, 'search_status': 'not_started',
                              'official_fetch_calls': 0, 'official_fetch_status': 'not_started' if request.auto_fetch_official else 'not_requested',
@@ -2629,10 +2631,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
         if (not sources or request.auto_fetch_official) and user_question and request.max_search_calls:
-            discovery = execute_source_search(provider=evidence_provider,
+            discovery = workflow.run('source_discovery', lambda: execute_source_search(provider=evidence_provider,
                 provider_name=_provider_name(evidence_provider, 'search'),
                 query=discovery_query(user_question, topic.request.scope, request.include_scope_in_search),
-                convert=_candidate_response, as_of=topic.request.as_of, context=context)
+                convert=_candidate_response, as_of=topic.request.as_of, context=context), lambda result: result.status)
             search_calls, search_status = context.search_calls, discovery.status
             search_receipts.append({'stage': 'initial', 'status': discovery.status,
                                     'attempted': discovery.attempted, 'reason': discovery.reason,
@@ -2750,11 +2752,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             official_fetch_status = "source_capacity"
             discovery_notes.append("Official source retrieval was skipped because this research already has the maximum number of sources.")
 
-        generation = execute_generation(
+        workflow.record('source_retrieval', official_fetch_status)
+        generation = workflow.run('analysis', lambda: execute_generation(
             question=effective_question, scope=topic.request.scope, sources=sources, as_of=topic.request.as_of,
             provider=provider, generate=generate_structured, context=context, call_id=operation_id, focus=focus,
             planning_steps=planning_steps,
-            require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
+            require_counterarguments=request.require_counterarguments or request.counterpoint_followup),
+            lambda result: 'failed' if result.unavailable_reason else 'completed' if result.prompt_text is not None else 'not_started')
         analysis, calls, usage = generation.analysis, generation.calls, generation.usage
         generation_call_usage = generation.generation_tokens
         base_prompt_text, max_prompt_chars = generation.prompt_text, generation.max_prompt_chars
@@ -2770,7 +2774,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 source_processing=source_processing(analysis.segments),
                 planning_requested=request.plan_research, planning=plan_result, request=request,
                 budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts,
-                generation_status=generation_status)
+                workflow_receipts=workflow.snapshot(), generation_status=generation_status)
 
         def prepare_claims() -> list[dict[str, Any]]:
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
@@ -2955,6 +2959,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 counterpoint_status = 'failed'
                                 counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
         calls, usage = context.calls, context.usage
+        workflow.record('counterpoint', counterpoint_status)
         # Optional evidence-gap follow-up is deliberately bounded to the
         # already authorized sources. It never turns search leads into inputs.
         gap_status = 'not_requested'
@@ -3031,10 +3036,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 existing_urls = {item.get('url') for item in discovered}
                                 existing_urls.update(urlunsplit((urlsplit(str(source.url)).scheme, urlsplit(str(source.url)).netloc,
                                     urlsplit(str(source.url)).path, '', '')) for source in sources if source.url)
-                                discovery = execute_source_search(provider=evidence_provider,
+                                discovery = workflow.run('gap_search', lambda: execute_source_search(provider=evidence_provider,
                                     provider_name=_provider_name(evidence_provider, 'search'), query=target.search_query,
                                     convert=_candidate_response, as_of=topic.request.as_of, context=context,
-                                    existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap')
+                                    existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap'),
+                                    lambda result: result.status)
                                 search_calls, gap_search_status = context.search_calls, discovery.status
                                 search_receipts.append({'stage': 'gap', 'status': discovery.status,
                                     'attempted': discovery.attempted, 'reason': discovery.reason,
@@ -3142,6 +3148,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         calls, usage = context.calls, context.usage
         if request.gap_search and gap_search_status == 'not_started' and gap_status == 'not_needed':
             gap_search_status = 'no_gaps'
+        workflow.record('gap_followup', gap_status)
         pre_review_usage = usage
         # Numeric candidates must be considered before model review. A review
         # verdict cannot clear a known calculation or unit discrepancy.
@@ -3431,12 +3438,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
         calls, usage = context.calls, context.usage
         _raise_if_operation_cancelled(operation_id)
-        assessment = assess_research_outcome(
+        workflow.record('support_review', review_status)
+        assessment = workflow.run('delivery_assessment', lambda: assess_research_outcome(
             request=request, analysis=analysis, claims=claims,
             source_states=source_processing(analysis.segments), discovery_notes=discovery_notes,
             review_status=review_status, counterpoint_status=counterpoint_status,
             gap_status=gap_status, gap_search_status=gap_search_status,
-            planning_status=planning_status, deadline=deadline, usage=usage)
+            planning_status=planning_status, deadline=deadline, usage=usage),
+            lambda result: 'completed' if result.complete else 'partial')
         complete, limitations = assessment.complete, assessment.limitations
         differences = assessment.differences
         calculation_differences, amount_differences = assessment.calculation_differences, assessment.amount_differences

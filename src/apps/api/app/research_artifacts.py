@@ -35,7 +35,7 @@ from .research_runs import ResearchRunRequest
 def build_run_core(*, question_origin: str, default_task: str | None, question_override: str | None,
                    analysis: AnalysisResult, source_processing: list[dict], planning_requested: bool,
                    planning: PlanningResult, request: ResearchRunRequest, budget_accounted_tokens: int,
-                   search_receipts: list[dict], generation_status: str) -> dict[str, Any]:
+                   search_receipts: list[dict], workflow_receipts: list[dict], generation_status: str) -> dict[str, Any]:
     """Common stage metadata, without changing the legacy run record format."""
     return {'question_origin': question_origin,
             **({'default_task': default_task} if default_task is not None else {}),
@@ -45,6 +45,7 @@ def build_run_core(*, question_origin: str, default_task: str | None, question_o
             'available_fact_ids': analysis.available_fact_ids,
             'settled_model_budget_accounted_tokens': budget_accounted_tokens,
             'source_search_receipts': [dict(item) for item in search_receipts],
+            'workflow_receipts': [dict(item) for item in workflow_receipts],
             'generation_status': generation_status,
             'planning_requested': planning_requested, 'planning_status': planning.status,
             'planning_steps': list(planning.steps), 'planning_tokens': planning.tokens,
