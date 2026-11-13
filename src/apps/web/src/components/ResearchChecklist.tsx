@@ -4,6 +4,7 @@ type Cue = { code: string; indexes?: number[]; index_kind?: string; count?: numb
 
 const labels: Record<string, readonly [string, string]> = {
   no_analyzed_sources: ["No source was analyzed in the last run.", "上次运行没有已分析的来源。"],
+  source_processing_incomplete: ["Some selected sources were excluded or not fully selected for the initial prompt.", "部分已选资料被排除，或未完整选入首次模型输入。"],
   no_findings: ["No finding was retained.", "没有保留研究结论。"],
   subquestions_unlinked: ["Some model-suggested subquestions have no linked finding.", "部分模型建议的子问题没有关联结论。"],
   citations_missing_or_incomplete: ["Findings have missing or incomplete citations.", "部分研究条目缺少完整引文。"],

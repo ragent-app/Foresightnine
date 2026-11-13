@@ -552,9 +552,10 @@ def _split_rate_range(fact: dict[str, Any], value: str, unit: str) -> list[dict[
     return split
 
 
-def prepare_sources(sources: list[ResearchSource], as_of: datetime | None) -> tuple[list[ResearchSource], list[str]]:
-    eligible: list[ResearchSource] = []
-    limitations: list[str] = []
+def source_eligibility(sources: list[ResearchSource], as_of: datetime | None) -> list[tuple[ResearchSource, str]]:
+    """Classify each selected source without relying on presentation text."""
+    result: list[tuple[ResearchSource, str]] = []
+    eligible_count = 0
     for source in sources:
         parsed = urlsplit(str(source.url)) if source.url else None
         host = (parsed.hostname or "").lower().rstrip(".") if parsed else ""
@@ -562,20 +563,37 @@ def prepare_sources(sources: list[ResearchSource], as_of: datetime | None) -> tu
                    host.endswith(".fred.stlouisfed.org") or
                    (host == "api.stlouisfed.org" and parsed is not None and parsed.path.lower().startswith("/fred")))
         if source.is_simulated:
-            limitations.append(f"Source {source.source_id}: simulated material is excluded from real research.")
+            code = 'simulated'
         elif is_fred:
-            limitations.append(f"Source {source.source_id}: FRED use is not authorized for this experiment.")
+            code = 'source_not_authorized'
         elif not source.permissions.model_input:
-            limitations.append(f"Source {source.source_id}: model processing permission is not granted.")
+            code = 'model_permission_missing'
         elif not source.permissions.display:
-            # A model can reproduce source text in any generated field, not
-            # just a citation. Exclude it until output redaction is robust.
-            limitations.append(f"Source {source.source_id}: display permission is not granted.")
+            code = 'display_permission_missing'
         elif as_of is not None and (source.published_at is None or source.published_at > as_of or
                                     (source.revised_at is not None and source.revised_at > as_of)):
-            limitations.append(f"Source {source.source_id}: availability at the requested time is not established.")
-        elif len(eligible) >= MAX_SOURCES:
-            limitations.append(f"Source {source.source_id}: exceeds the source count budget; not processed.")
+            code = 'availability_unestablished'
+        elif eligible_count >= MAX_SOURCES:
+            code = 'source_limit'
+        else:
+            code = 'eligible'
+            eligible_count += 1
+        result.append((source, code))
+    return result
+
+
+def prepare_sources(sources: list[ResearchSource], as_of: datetime | None) -> tuple[list[ResearchSource], list[str]]:
+    eligible: list[ResearchSource] = []
+    limitations: list[str] = []
+    messages = {'simulated': 'simulated material is excluded from real research.',
+                'source_not_authorized': 'FRED use is not authorized for this experiment.',
+                'model_permission_missing': 'model processing permission is not granted.',
+                'display_permission_missing': 'display permission is not granted.',
+                'availability_unestablished': 'availability at the requested time is not established.',
+                'source_limit': 'exceeds the source count budget; not processed.'}
+    for source, code in source_eligibility(sources, as_of):
+        if code != 'eligible':
+            limitations.append(f"Source {source.source_id}: {messages[code]}")
         else:
             eligible.append(source)
             if as_of is not None:

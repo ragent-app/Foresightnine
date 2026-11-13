@@ -35,6 +35,10 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
     attempted = bool(run.get('operation_id'))
     if attempted and not sources:
         add('no_analyzed_sources')
+    source_states = run.get('source_processing')
+    if isinstance(source_states, list) and any(isinstance(item, dict) and
+            (item.get('eligibility') != 'eligible' or item.get('initial_selection') != 'complete') for item in source_states):
+        add('source_processing_incomplete')
     support = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and claim.get('role') != 'counterargument']
     counter = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and claim.get('role') == 'counterargument']
     if attempted and not support:

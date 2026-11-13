@@ -101,7 +101,7 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, prepare_sources, source_eligibility, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
@@ -2567,6 +2567,23 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                  "verification": "user_declared_not_verified"}
                 for s in sources if s.source_id in analyzed_ids]
 
+    def source_processing(segments: object) -> list[dict[str, Any]]:
+        records = []
+        for source, eligibility in source_eligibility(sources, topic.request.as_of):
+            row: dict[str, Any] = {'source_id': source.source_id, 'eligibility': eligibility}
+            if eligibility == 'eligible':
+                coverage = initial_source_coverage(source.source_id, len(source.text), segments)
+                has_segment = isinstance(segments, list) and any(
+                    isinstance(item, dict) and item.get('source_id') == source.source_id for item in segments)
+                row['initial_selection'] = ('not_selected' if isinstance(segments, list) and not has_segment
+                                            else coverage['status'])
+                row['selected_characters'] = coverage['selected_characters']
+                row['text_characters'] = coverage['text_characters']
+            else:
+                row['initial_selection'] = 'excluded'
+            records.append(row)
+        return records
+
     def build(operation_id: str) -> tuple[ResearchRunResult, str]:
         nonlocal checkpoint_parent
         started = monotonic()
@@ -2977,6 +2994,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                             'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
                                      'research_questions':analysis.research_questions,
+                                     'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
@@ -3144,6 +3162,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                             'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
                                      'research_questions':analysis.research_questions,
+                                     'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
@@ -3400,6 +3419,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
                                 run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
                                      'research_questions':analysis.research_questions,
+                                     'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
@@ -3580,6 +3600,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
                                      'research_questions':analysis.research_questions,
+                                     'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
@@ -3667,6 +3688,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "currency identifier is absent from its quotation", "unit scale is absent from its quotation",
             "simulated material is excluded", "percentage fact included a model-declared currency",
             "excluded from automatic calculations", "PDF text may have missing word spacing"))
+        processing_incomplete = processing_incomplete or any(
+            item['eligibility'] != 'eligible' or item['initial_selection'] != 'complete'
+            for item in source_processing(analysis.segments))
         review_supports_all = (review_status == "complete" and all(
             c.get("support_review", {}).get("verdict") == "supports" and
             (c.get('role') != 'counterargument' or not request.require_counterarguments or
@@ -3767,6 +3791,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
                                      'research_questions':analysis.research_questions,
+                                     'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
