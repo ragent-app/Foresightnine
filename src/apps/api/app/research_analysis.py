@@ -120,9 +120,16 @@ class CalculationPlan(BaseModel):
     second_fact_id: str = Field(min_length=1, max_length=200)
 
 
+class ResearchQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    question: str = Field(min_length=1, max_length=500)
+    claim_indexes: list[Any] = Field(default_factory=list, max_length=20)
+
+
 class AnalysisOutput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     claims: list[Claim] = Field(default_factory=list, max_length=30)
+    research_questions: list[ResearchQuestion] = Field(default_factory=list, max_length=10)
     counterarguments: list[Counterargument] = Field(default_factory=list, max_length=20)
     limitations: list[str] = Field(default_factory=list, max_length=30)
     facts: list[ModelFact] = Field(default_factory=list, max_length=100)
@@ -142,6 +149,7 @@ class AnalysisResult:
     prompt_characters: int = 0
     prompt_bytes: int = 0
     segments: list[dict[str, Any]] = field(default_factory=list)
+    research_questions: list[dict[str, Any]] = field(default_factory=list)
 
 
 class InvalidAnalysis(ValueError):
@@ -1724,7 +1732,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         used_refs.add(ref)
         prompt_refs[source.source_id] = ref
     data = {"question": question, "sources": [],
-            "output_schema": {"claims": [{"text": "claim", "citations": [
+            "output_schema": {"research_questions": [{"question": "subquestion", "claim_indexes": [0]}],
+                "claims": [{"text": "claim", "citations": [
                 {"source_id": "id", "quotation": "quote"}]}],
                 "counterarguments": [{"text": "counterargument", "responds_to_claim_indexes": [0], "citations": [
                     {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
@@ -1733,7 +1742,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                            "citation": {"source_id": "id", "quotation": "quote"}}],
                 "calculations": [{"formula": "growth_percent|margin_percent|difference",
                                   "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}]},
-            "evidence_guidance": "Each claim should contain one independently checkable substantive assertion; "
+            "evidence_guidance": "List the important subquestions of the user's request and the zero-based indexes of findings relevant to each; use an empty list for unanswered subquestions. "
+                "Each claim should contain one independently checkable substantive assertion; "
                 "separate different periods, entities, measures, comparisons and causal interpretations when "
                 "their evidence differs. Attach quotations that support every material part of each claim; "
                 "do not turn an unsupported assertion into a fact. Quote continuous passages; never join "
@@ -2140,6 +2150,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             cleaned.pop("explanation")
             discarded_annotations += 1
         for field, extra, limit, max_rows in (("claims", "status", 100, 30), ("counterarguments", "status", 100, 20),
+                                              ("research_questions", "status", 100, 10),
                                               ("calculations", "note", 1000, 50)):
             rows = raw.get(field)
             if not isinstance(rows, list) or len(rows) > max_rows:
@@ -2801,8 +2812,21 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                 "not_independently_verified" if citations else "unsupported"})
         return checked
 
-    return AnalysisResult(check_claims(result.claims), check_claims(result.counterarguments, counterargument=True),
+    checked_support = check_claims(result.claims)
+    checked_counter = check_claims(result.counterarguments, counterargument=True)
+    research_questions = []
+    for question_item in result.research_questions:
+        refs: list[int] = []
+        for index in question_item.claim_indexes:
+            if type(index) is int and index in support_index_map and support_index_map[index] not in refs:
+                refs.append(support_index_map[index])
+            else:
+                note = "A suggested research question referenced an invalid or omitted finding; that link was not retained."
+                if note not in limitations:
+                    limitations.append(note)
+        research_questions.append({'question': question_item.question, 'claim_indexes': refs})
+    return AnalysisResult(checked_support, checked_counter,
                           limitations + ["Matching a quotation does not independently establish that it supports a claim."]
                           + [MODEL_LIMITATION_PREFIX + value for value in result.limitations], [s.source_id for s in processed], tokens,
                           checked_facts, checked_calculations, sha256(prompt.encode("utf-8")).hexdigest(),
-                          len(prompt), len(prompt.encode("utf-8")), segments)
+                          len(prompt), len(prompt.encode("utf-8")), segments, research_questions)

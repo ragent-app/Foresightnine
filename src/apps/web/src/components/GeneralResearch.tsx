@@ -9,6 +9,7 @@ import { CitationEditor } from "./CitationEditor";
 import { ResearchEvidenceLinks } from "./ResearchEvidenceLinks";
 import { CounterpointRelation } from "./CounterpointRelation";
 import { ResearchChecklist } from "./ResearchChecklist";
+import { ResearchQuestions } from "./ResearchQuestions";
 import { canUseCitationSource } from "../source-text-search";
 
 interface Props { baseUrl: string | null; accountId: string | null; language: Language }
@@ -89,6 +90,8 @@ function localizeLimitation(value: string, en: boolean): string {
     "A percentage matches a quoted number without an explicit percent unit; check the original unit and table context.": "结论中的百分比只匹配到引文中的数值，引文未明确标出百分比单位，请核对原文及表头。",
     "A counterpoint claims prior findings omit information, but the model received only part of those findings; review the full prior result.": "反方声称原结论遗漏信息，但模型只看到部分原结论，请核对完整研究。",
     "A proposed counterargument relationship was invalid or referred to an omitted finding; it was not retained.": "一条反方关联指向无效或已省略的结论，未予保留。",
+    "A model-suggested research question has no linked finding; its coverage remains unestablished.": "模型建议的子问题没有关联结论，覆盖情况尚未确定。",
+    "A suggested research question referenced an invalid or omitted finding; that link was not retained.": "建议的子问题引用了无效或被省略的结论，该关联未保留。",
     "The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.": "请求的证据缺口补充未完成；原有结论和缺口仍可查看。",
     "The evidence-gap follow-up is model generated and is not independent verification.": "证据缺口补充由模型生成，不构成独立核验。",
     "Some follow-up facts or calculations were omitted because their identifiers or limits could not be reconciled.": "部分补充事实或计算因标识或数量限制无法合并，已省略。",
@@ -812,6 +815,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
       {current.content.run.checkpoint === "counterpoint" ? <p role="status">{en ? "Generation was saved before the counterpoint follow-up; the additional call may be incomplete." : "已在反方补充调用前保存研究草稿；该额外调用可能尚未完成。"}</p> : null}
       {current.content.run.counterpoint_requested ? <p>{en ? "Counterpoint follow-up: " : "反方补充："}{en ? String(current.content.run.counterpoint_status) : ({ pending: "保存时未完成", completed: "已完成", partial: "部分完成", needs_review: "有引用但存在证据警示，需复核", no_evidence: "未找到可用反方", not_needed: "已有反方", unavailable: "不可用", budget_exhausted: "预算不足", input_budget: "输入预算不足", capacity_reached: "反方数量已达上限", failed: "失败" } as Record<string, string>)[String(current.content.run.counterpoint_status)] ?? String(current.content.run.counterpoint_status)}。{en ? "Model output is not independently verified." : "模型输出尚未独立核验。"}</p> : null}
       {current.content.run.support_review_requested ? <p>{en ? "Review during this run: " : "本次运行的模型证据复查："}{en ? String(current.content.run.support_review_status) : ({ pending: "保存时未完成", complete: "已完成", partial: "部分完成", failed: "失败", budget_exhausted: "预算不足", not_reviewable: "无可复查内容" } as Record<string, string>)[String(current.content.run.support_review_status)] ?? String(current.content.run.support_review_status)}。{en ? "This is not independent verification." : "该结果不构成独立核验。"}</p> : null}
+      {!hasUnsavedReview ? <ResearchQuestions value={current.content.run.research_questions} claims={claims} en={en} /> : null}
       {!hasUnsavedReview ? <ResearchChecklist value={current.content.run.research_gaps} en={en} /> : null}
       <h3>{en ? "Sources" : "资料来源"}</h3>
       {current.content.source_candidates?.length ? <section className="general-candidates"><p>{en ? "Unverified source candidates" : "待核验的来源线索"}</p>{current.content.source_candidates.map((candidate, index) => <article key={index}><strong>{candidate.title}</strong><CandidateDate publishedAt={candidate.published_at} cutoff={topic.request.as_of} en={en} />{candidate.status === "retrieved_unverified" ? <small>{en ? "Retrieved for this run; content remains unverified." : "本次已获取，内容仍需核验。"}</small> : <Button disabled={busy || running} onClick={() => selectCandidate(candidate)}>{en ? "Attach source" : "添加此来源"}</Button>}</article>)}</section> : null}

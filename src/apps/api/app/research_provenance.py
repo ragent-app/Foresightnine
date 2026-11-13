@@ -157,3 +157,46 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
     return {'schema_version': '1', 'index_scope': 'research_version',
             'meaning': 'recorded_links_not_semantic_verification', 'truncated': truncated,
             'claims': claim_links, 'calculations': calculation_links}
+
+
+def normalize_research_questions(raw: object, claims: list[dict], previous_raw: object,
+                                 previous_claims: list[dict], *, model_generated: bool) -> list[dict]:
+    """Convert bounded model index suggestions to version-local claim IDs.
+
+    User versions inherit server-owned suggestions only while their targets
+    retain the same text and citations. Links are suggestions, never coverage
+    verdicts; unresolved indexes remain visibly unlinked.
+    """
+    supports = [claim for claim in claims if isinstance(claim, dict) and claim.get('role') != 'counterargument']
+    current = {claim['claim_id']: claim for claim in supports if isinstance(claim.get('claim_id'), str)}
+    previous = {claim['claim_id']: claim for claim in previous_claims
+                if isinstance(claim, dict) and isinstance(claim.get('claim_id'), str)}
+    rows = raw if model_generated else previous_raw
+    if not isinstance(rows, list):
+        return []
+    output = []
+    for row in rows[:20]:
+        if not isinstance(row, dict) or not isinstance(row.get('question'), str) or not row['question'].strip():
+            continue
+        question = row['question'].strip()[:500]
+        refs: list[str] = []
+        if model_generated:
+            indexes = row.get('claim_indexes')
+            if isinstance(indexes, list):
+                for index in indexes[:20]:
+                    if type(index) is int and 0 <= index < len(supports):
+                        claim_id = supports[index].get('claim_id')
+                        if isinstance(claim_id, str) and claim_id not in refs:
+                            refs.append(claim_id)
+        else:
+            ids = row.get('claim_ids')
+            if isinstance(ids, list):
+                for claim_id in ids[:20]:
+                    if not isinstance(claim_id, str) or claim_id in refs or claim_id not in current or claim_id not in previous:
+                        continue
+                    old, new = previous[claim_id], current[claim_id]
+                    if all(old.get(key) == new.get(key) for key in ('text', 'role', 'citations')):
+                        refs.append(claim_id)
+        output.append({'question': question, 'claim_ids': refs, 'origin': 'model_suggestion',
+                       'status': 'linked_not_verified' if refs else 'no_linked_finding'})
+    return output

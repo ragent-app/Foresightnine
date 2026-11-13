@@ -39,6 +39,11 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
     counter = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and claim.get('role') == 'counterargument']
     if attempted and not support:
         add('no_findings')
+    questions = run.get('research_questions')
+    if isinstance(questions, list):
+        unlinked_questions = [i for i, item in enumerate(questions) if isinstance(item, dict) and not item.get('claim_ids')]
+        if unlinked_questions:
+            add('subquestions_unlinked', unlinked_questions, kind='question')
     uncited = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and
                (not isinstance(claim.get('citations'), list) or not claim['citations'] or claim.get('support_status') in {'unsupported', 'incomplete'})]
     if uncited:

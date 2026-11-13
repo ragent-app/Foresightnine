@@ -13,10 +13,12 @@ from .research_quality import CLAIM_EVIDENCE_WARNINGS
 @dataclass(frozen=True)
 class GapFocus:
     claim_indexes: tuple[int, ...]
+    question_indexes: tuple[int, ...]
     question: str
 
 
-def build_gap_focus(question: str, claims: list[dict], max_items: int = 3) -> GapFocus | None:
+def build_gap_focus(question: str, claims: list[dict], research_questions: list[dict] | None = None,
+                    max_items: int = 3) -> GapFocus | None:
     """Select findings with explicit recorded gaps, not topic-specific words."""
     if not isinstance(question, str) or not question.strip() or not 1 <= max_items <= 3:
         return None
@@ -32,15 +34,20 @@ def build_gap_focus(question: str, claims: list[dict], max_items: int = 3) -> Ga
                 (not isinstance(citations, list) or not citations or claim.get('support_status') in ('unsupported', 'incomplete') or
                  any(claim.get(name) for name in CLAIM_EVIDENCE_WARNINGS) or review_gap)):
             candidates.append((index, text.strip()[:300]))
-    selected = candidates[:max_items]
-    if not selected:
+    unanswered = [(index, item['question'].strip()[:300]) for index, item in enumerate((research_questions or [])[:20])
+                  if isinstance(item, dict) and isinstance(item.get('question'), str) and item['question'].strip()
+                  and not item.get('claim_indexes')]
+    selected_questions = unanswered[:max_items]
+    selected = candidates[:max_items - len(selected_questions)]
+    if not selected and not selected_questions:
         return None
-    # This text is passed as part of the untrusted question, not as a system
-    # instruction, and never sent to a search provider by this helper.
-    snippets = '\n'.join(f'[{index}] {text}' for index, text in selected)
-    combined = (question.strip()[:3000] + '\nUntrusted prior findings requiring additional source evidence; '
-                'do not assume they are true:\n' + snippets)
-    return GapFocus(tuple(index for index, _ in selected), combined)
+    # Text here is untrusted model/user data, never system instructions and
+    # never sent to an external search provider by this helper.
+    snippets = '\n'.join([*(f'question [{index}] {text}' for index, text in selected_questions),
+                          *(f'finding [{index}] {text}' for index, text in selected)])
+    combined = (question.strip()[:3000] + '\nUntrusted prior subquestions and findings requiring additional source evidence; '
+                'do not assume they are true or complete:\n' + snippets)
+    return GapFocus(tuple(index for index, _ in selected), tuple(index for index, _ in selected_questions), combined)
 
 
 def remap_followup_artifacts(facts: list[dict], calculations: list[dict], *, operation_id: str,
@@ -99,3 +106,32 @@ def remap_followup_artifacts(facts: list[dict], calculations: list[dict], *, ope
             item['fact_id'] = mapping[item['fact_id']]
         output_calculations.append(copied)
     return output_facts, output_calculations, omitted
+
+
+def merge_research_questions(original: list[dict], followup: list[dict], index_map: dict[int, int]) -> list[dict]:
+    """Merge only text-identical model subquestions and validated references.
+
+    Similar wording is not taken as semantic equivalence. All links remain
+    model suggestions; no question is marked answered by this operation.
+    """
+    from copy import deepcopy
+    output = deepcopy(original[:20])
+    positions = {item.get('question', '').strip().casefold(): i for i, item in enumerate(output)
+                 if isinstance(item, dict) and isinstance(item.get('question'), str)}
+    for item in followup[:10]:
+        if not isinstance(item, dict) or not isinstance(item.get('question'), str):
+            continue
+        text = item['question'].strip()
+        if not text:
+            continue
+        refs = item.get('claim_indexes')
+        mapped = [index_map[index] for index in refs if type(index) is int and index in index_map] if isinstance(refs, list) else []
+        key = text.casefold()
+        if key in positions:
+            row = output[positions[key]]
+            existing = row.get('claim_indexes') if isinstance(row.get('claim_indexes'), list) else []
+            row['claim_indexes'] = list(dict.fromkeys([*existing, *mapped]))[:20]
+        elif len(output) < 20:
+            positions[key] = len(output)
+            output.append({'question': text[:500], 'claim_indexes': list(dict.fromkeys(mapped))[:20]})
+    return output

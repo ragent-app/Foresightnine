@@ -5,6 +5,7 @@ type Cue = { code: string; indexes?: number[]; index_kind?: string; count?: numb
 const labels: Record<string, readonly [string, string]> = {
   no_analyzed_sources: ["No source was analyzed in the last run.", "上次运行没有已分析的来源。"],
   no_findings: ["No finding was retained.", "没有保留研究结论。"],
+  subquestions_unlinked: ["Some model-suggested subquestions have no linked finding.", "部分模型建议的子问题没有关联结论。"],
   citations_missing_or_incomplete: ["Findings have missing or incomplete citations.", "部分研究条目缺少完整引文。"],
   evidence_warnings: ["Evidence warnings require review.", "部分研究条目存在证据警示，需要核查。"],
   no_counterpoint: ["A counterargument was requested but none was retained.", "本次要求反方，但没有保留反方条目。"],
@@ -26,7 +27,7 @@ export function ResearchChecklist({ value, en }: Props) {
     <h3>{en ? "Review checklist" : "研究待核查项"}</h3>
     <p>{en ? "Generated from the saved record. An empty checklist does not verify the findings, prove evidence support or rule out other gaps." : "根据已保存记录生成。待办为空不代表结论已核实、证据充分或不存在其他缺口。"}</p>
     {items.length ? <ul>{items.map((item) => <li key={item.code}>{labels[item.code][en ? 0 : 1]}
-      {Array.isArray(item.indexes) && item.indexes.length ? <span> {item.index_kind === "calculation" ? (en ? "Calculations" : "计算") : (en ? "Items" : "研究条目")} {item.indexes.filter(Number.isInteger).map((i) => i + 1).join("、")}{item.truncated ? (en ? " (additional items omitted)" : "（还有未列出的条目）") : ""}.</span> : null}
+      {Array.isArray(item.indexes) && item.indexes.length ? <span> {item.index_kind === "calculation" ? (en ? "Calculations" : "计算") : item.index_kind === "question" ? (en ? "Subquestions" : "子问题") : (en ? "Items" : "研究条目")} {item.indexes.filter(Number.isInteger).map((i) => i + 1).join("、")}{item.truncated ? (en ? " (additional items omitted)" : "（还有未列出的条目）") : ""}.</span> : null}
     </li>)}</ul> : <p>{en ? "No recorded checklist items." : "没有已记录的待核查项。"}</p>}
   </section>;
 }
