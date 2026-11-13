@@ -600,6 +600,41 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
                 return "changed"
             if candidates[0].get("source_value_warnings"):
                 return "unverifiable"
+        # Structured snapshots carry explicit entity and metric identity.
+        # Do not combine mismatched or partially identified contexts merely
+        # because the units and numbers happen to match.
+        structured = [by_id[item.fact_id][0] for item in expected]
+        if any(fact.get('extraction_method') == 'sec_company_concept_row_v1' for fact in structured):
+            if not all(fact.get('extraction_method') == 'sec_company_concept_row_v1' and
+                       isinstance(fact.get('structured_metadata'), dict) for fact in structured):
+                return 'unverifiable'
+            contexts = [fact['structured_metadata'] for fact in structured]
+            if (not all(isinstance(ctx.get('entity_id'), str) and isinstance(ctx.get('metric_id'), str) for ctx in contexts) or
+                    contexts[0]['entity_id'] != contexts[1]['entity_id']):
+                return 'unverifiable'
+            formula = calculation.get('formula_id')
+            same_metric = contexts[0]['metric_id'] == contexts[1]['metric_id']
+            if formula == 'growth_percent' and not same_metric:
+                return 'unverifiable'
+            try:
+                ends = [date.fromisoformat(ctx['period_end']) for ctx in contexts]
+                starts = [date.fromisoformat(ctx['period_start']) if ctx.get('period_start') else None for ctx in contexts]
+                if (starts[0] is None) != (starts[1] is None):
+                    return 'unverifiable'
+                same_period = ends[0] == ends[1] and starts[0] == starts[1]
+                if formula == 'growth_percent' and ends[0] <= ends[1]:
+                    return 'unverifiable'
+                if formula == 'margin_percent' and not same_period:
+                    return 'unverifiable'
+                if formula == 'difference' and not same_metric and not same_period:
+                    return 'unverifiable'
+                if formula in {'growth_percent', 'difference'} and same_metric and not same_period and starts[0] is not None:
+                    if not (starts[0] > ends[1] or starts[1] > ends[0]):
+                        return 'unverifiable'
+                    if abs((ends[0] - starts[0]).days - (ends[1] - starts[1]).days) > 7:
+                        return 'unverifiable'
+            except (KeyError, TypeError, ValueError):
+                return 'unverifiable'
         proofs = [by_id[item.fact_id][0].get('xbrl_source_consistency') if xbrl_source_consistent(by_id[item.fact_id][0]) else None for item in expected]
         if any(proofs):
             if not all(proofs) or proofs[0].get('entity_cik') != proofs[1].get('entity_cik') or proofs[0].get('source_sha256') != proofs[1].get('source_sha256'):

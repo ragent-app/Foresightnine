@@ -109,6 +109,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
+from .research_structured_data import extract_structured_observations
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -1878,6 +1879,10 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
                                 if isinstance(citation, dict):
                                     citation["support_status"] = "not_independently_verified"
                     if field == "facts":
+                        # User changes cannot retain server-extracted provider
+                        # identity and accounting context as an attestation.
+                        entry.pop('extraction_method', None)
+                        entry.pop('structured_metadata', None)
                         # Confirmations are issued only by the dedicated action;
                         # any edit invalidates the prior attestation.
                         entry.pop("direction_confirmation", None)
@@ -2871,6 +2876,22 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             analysis = AnalysisResult([], [], [*source_notes, "Research analysis could not be completed: " + unavailable_reason],
                                       selected_ids, usage, **attempted_prompt)
         _raise_if_operation_cancelled(operation_id)
+        # Structured source rows are extracted deterministically from only
+        # eligible sources included in this run. They are source observations,
+        # not independently verified facts or claims about their relevance.
+        eligible_structured_sources, _ = prepare_sources(sources, topic.request.as_of)
+        observed, structured_truncated = extract_structured_observations(
+            [source for source in eligible_structured_sources if source.source_id in analysis.source_ids],
+            max_facts=max(0, min(200, 2000 - len(analysis.facts))))
+        existing_fact_ids = {fact.get('fact_id') for fact in analysis.facts if isinstance(fact, dict)}
+        observed = [fact for fact in observed if fact['fact_id'] not in existing_fact_ids]
+        if observed:
+            analysis = replace(analysis, facts=[*analysis.facts, *observed],
+                limitations=[*analysis.limitations,
+                    'Structured observations were extracted from a stored source snapshot; identity, timing and financial meaning are not independently verified.'])
+        if structured_truncated:
+            analysis = replace(analysis, limitations=[*analysis.limitations,
+                'Some structured source observations were not processed because the per-run limit was reached.'])
         if planning_steps:
             # Track each proposed plan item even if the model omits it from
             # its output. Only exact matching associates a finding; this does
