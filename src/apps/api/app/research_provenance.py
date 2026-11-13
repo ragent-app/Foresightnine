@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from typing import Any
+from uuid import uuid4
 
 
 MAX_ENTRIES = 2000
@@ -23,6 +24,49 @@ def _location_key(source_id: object, location: object) -> tuple[str, int, int] |
     if location.get('status') or type(start) is not int or type(end) is not int or not 0 <= start < end:
         return None
     return source_id, start, end
+
+
+def normalize_claim_links(claims: list[dict], previous_claims: list[dict]) -> None:
+    """Assign server-controlled identities and retain only local claim links.
+
+    Links express a recorded relationship, not semantic agreement or support.
+    Legacy claims receive IDs in the next version; prior versions are untouched.
+    """
+    previous_ids = {entry.get('claim_id') for entry in previous_claims
+                    if isinstance(entry, dict) and isinstance(entry.get('claim_id'), str)}
+    used: set[str] = set()
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        candidate = claim.get('claim_id')
+        if not isinstance(candidate, str) or candidate not in previous_ids or candidate in used:
+            candidate = 'claim_' + uuid4().hex
+        claim['claim_id'] = candidate
+        used.add(candidate)
+    support_ids = {claim['claim_id'] for claim in claims if isinstance(claim, dict)
+                   and claim.get('role') != 'counterargument'}
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        raw = claim.pop('responds_to_claim_ids', [])
+        claim.pop('responds_to_omitted', None)
+        if claim.get('role') != 'counterargument':
+            continue
+        if not isinstance(raw, list):
+            claim['responds_to_omitted'] = 1
+            continue
+        kept: list[str] = []
+        omitted = 0
+        for target in raw[:20]:
+            if isinstance(target, str) and target in support_ids and target not in kept:
+                kept.append(target)
+            else:
+                omitted += 1
+        omitted += max(0, len(raw) - 20)
+        if kept:
+            claim['responds_to_claim_ids'] = kept
+        if omitted:
+            claim['responds_to_omitted'] = omitted
 
 
 def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: list[dict]) -> dict[str, Any]:
@@ -65,7 +109,8 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
                           'source_id': source_id if isinstance(source_id, str) else None,
                           'location_recorded': key is not None,
                           'same_passage_fact_ids': same_passage[:MAX_FACT_MATCHES]})
-        claim_links.append({'claim_index': index,
+        claim_links.append({'claim_index': index, 'claim_id': claim.get('claim_id'),
+                            'responds_to_claim_ids': claim.get('responds_to_claim_ids', []),
                             'role': 'counterargument' if claim.get('role') == 'counterargument' else 'support',
                             'citations': links})
 

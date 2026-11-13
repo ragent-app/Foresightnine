@@ -9,6 +9,9 @@ export interface SourceContextResult { title: string; before: string; selected: 
 export interface SourceTableStructure { status: "available" | "unavailable" | "busy" | "timeout"; source_sha256?: string; truncated_before?: boolean; rows?: { text: string; width: number; cells: { start: number; end: number; text: string; kind: "td" | "th" }[] }[] }
 export interface ResearchClaim {
   text: string;
+  claim_id?: string;
+  responds_to_claim_ids?: string[];
+  responds_to_omitted?: number;
   authorship?: string;
   role?: string;
   support_status?: string;
