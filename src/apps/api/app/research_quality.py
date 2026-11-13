@@ -65,6 +65,9 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
     unverified_calculations = [i for i, item in enumerate(calculations) if isinstance(item, dict) and item.get('input_status') != 'matched']
     if unverified_calculations:
         add('calculation_inputs_unverified', unverified_calculations, kind='calculation')
+    unchecked_results = [i for i, item in enumerate(calculations) if isinstance(item, dict) and item.get('result_status') != 'matched']
+    if unchecked_results:
+        add('calculation_results_unverified', unchecked_results, kind='calculation')
     if calculation_differences or amount_differences:
         add('calculation_or_amount_differences')
     if run.get('planning_requested') and run.get('planning_status') != 'completed':

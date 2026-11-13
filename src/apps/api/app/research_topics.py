@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .storage import JsonDocumentRepository, StorageConflictError
 from .research_provenance import derive_evidence_links, normalize_claim_links, normalize_research_questions
 from .research_quality import research_gaps
+from .research_calculations import calculation_result_status
 
 
 class ResearchInput(BaseModel):
@@ -180,6 +181,11 @@ class ResearchTopics:
         if len(combined_source_ids) > 100:
             raise ValueError("A research version can include at most 100 sources.")
         content = deepcopy(request.content)
+        # Never trust a client-supplied result status. Recompute against the
+        # saved formula and input snapshot for every newly created version.
+        for calculation in content.calculations:
+            if isinstance(calculation, dict):
+                calculation['result_status'] = calculation_result_status(calculation)
         normalize_claim_links(content.claims, topic.versions[-1].content.claims, model_generated=created_by == 'agent')
         content.run['research_questions'] = normalize_research_questions(
             content.run.get('research_questions'), content.claims,

@@ -13,6 +13,7 @@ const labels: Record<string, readonly [string, string]> = {
   counterpoint_target_unlinked: ["Counterarguments have no recorded or suggested finding to review against.", "部分反方未关联或建议关联具体结论。"],
   counterpoint_relevance_unverified: ["Counterpoint relevance was not supported by the requested model review.", "请求的模型复查未确认部分反方与原结论相关。"],
   calculation_inputs_unverified: ["Calculation inputs are missing, changed or not verified.", "部分计算的输入缺失、变更或尚未核查。"],
+  calculation_results_unverified: ["Some saved calculation results do not match the engine or cannot be recomputed.", "部分已保存计算结果与引擎重算不一致或无法重算。"],
   calculation_or_amount_differences: ["Potential differences between findings, amounts or calculations require review.", "结论、金额或计算存在待核查差异。"],
   research_planning_incomplete: ["The requested research plan did not complete.", "请求的研究规划未完成。"],
   gap_source_search_incomplete: ["The requested gap-focused source search did not complete.", "请求的缺口来源搜索未完成。"],

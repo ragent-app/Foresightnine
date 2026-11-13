@@ -719,6 +719,36 @@ def calculate(request: CalculationRequest) -> dict:
             "rounding": "half_up", "decimal_places": request.decimal_places}
 
 
+def calculation_result_status(calculation: dict) -> str:
+    """Recompute a saved result without asserting that its inputs are true.
+
+    Older, incomplete and unsupported formula records remain unverifiable.
+    This compares the stored formula, output and rounding to the engine; it
+    does not certify authorship, source validity or economic interpretation.
+    """
+    try:
+        inputs = calculation.get('inputs')
+        if not isinstance(inputs, list) or len(inputs) != 2 or any(not isinstance(item, dict) for item in inputs):
+            return 'unverifiable'
+        fields = ('fact_id', 'value', 'unit', 'currency', 'period')
+        first, second = ({key: item[key] for key in fields if key in item} for item in inputs)
+        places = calculation.get('decimal_places')
+        if type(places) is not int:
+            return 'unverifiable'
+        request = CalculationRequest.model_validate({'formula': calculation.get('formula_id'),
+            'first': first, 'second': second, 'decimal_places': places})
+        expected = calculate(request)
+        value = Decimal(str(calculation.get('value')))
+        if not value.is_finite():
+            return 'unverifiable'
+        fields_to_match = ('formula_version', 'expression', 'unit', 'currency', 'rounding')
+        if value != Decimal(expected['value']) or any(calculation.get(key) != expected[key] for key in fields_to_match):
+            return 'mismatch'
+        return 'matched'
+    except (ValidationError, CalculationError, InvalidOperation, TypeError, ValueError, KeyError, OverflowError):
+        return 'unverifiable'
+
+
 def _positive_percentage_describes_decrease(text: str, number_start: int, raw: str) -> bool:
     """Recognize only an immediately stated decrease, not its magnitude or cause."""
     if raw.startswith(("-", "+", "−")):
