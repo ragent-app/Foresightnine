@@ -34,12 +34,27 @@ class ResearchExecutionContext:
     cancel_event: Callable[[], Any]
     reserve: Callable[[str, int], None]
     settle: Callable[[str, int | None], None]
+    reserve_search: Callable[[], None]
     now: Callable[[], float] = monotonic
     calls: int = 0
     usage: int | None = None
     # Separate conservative admission accounting from provider-reported usage.
     # Unknown calls consume their reservation; known calls consume reported use.
     accounted_tokens: int = 0
+    search_calls: int = 0
+
+    def search_exhaustion(self) -> str | None:
+        return self.budget.search_exhaustion(calls=self.search_calls, now=self.now())
+
+    def start_search(self) -> None:
+        """Admit one discovery request; fetched documents use their own boundary."""
+        self.ensure_running()
+        if self.cost_limited:
+            raise ProviderFailure('search_cost_unknown', 'Search pricing is unavailable for the requested cost cap.', retryable=False)
+        if self.search_exhaustion():
+            raise ProviderFailure('search_budget_exhausted', 'Search budget or time is exhausted.', retryable=False)
+        self.reserve_search()
+        self.search_calls += 1
 
     def model_exhaustion(self, per_call: int, *, required_calls: int = 1) -> str | None:
         return self.budget.model_exhaustion(calls=self.calls, usage=self.accounted_tokens,

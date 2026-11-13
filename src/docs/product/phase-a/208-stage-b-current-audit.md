@@ -218,3 +218,5 @@
 [334 号首次分析检查点](334-stage-b-architecture-boundary.md)为所有研究运行保存首次成果，并让后续阶段沿版本链保存；尚未测试，不表示具备自动续跑能力。
 
 [334 号统一模型预算准入](334-stage-b-architecture-boundary.md)集中处理各阶段的调用、时间和保守 Token 计入；尚未测试，不改变阶段 B 状态。
+
+[334 号统一来源搜索运行控制](334-stage-b-architecture-boundary.md)将首次与缺口搜索接入共同预算和取消边界；尚未测试或执行外部搜索，不改变阶段 B 状态。

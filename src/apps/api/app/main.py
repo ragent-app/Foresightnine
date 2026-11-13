@@ -2573,6 +2573,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         _raise_if_operation_cancelled(operation_id)
         if research_topics.get(account.account_id, topic_id).versions[-1].version_id != request.parent_version_id:
             raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before running.")
+        context = ResearchExecutionContext(
+            budget=budget, cost_limited=request.max_cost_usd is not None,
+            ensure_running=lambda: _raise_if_operation_cancelled(operation_id),
+            cancel_event=lambda: operations.cancel_event(operation_id),
+            reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
+            settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens),
+            reserve_search=lambda: _reserve_search_call(http_request))
 
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
@@ -2594,8 +2601,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         raise ProviderFailure("search_budget_unsupported", "Search provider cannot enforce the time budget.", retryable=False)
                     if monotonic() >= deadline:
                         raise ProviderFailure("search_timeout", "Search time budget is exhausted.", retryable=False)
-                    _reserve_search_call(http_request)
-                    search_calls = 1
+                    context.start_search()
+                    search_calls = context.search_calls
                     raw_candidates = search(discovery_query(user_question, topic.request.scope, request.include_scope_in_search), limit=5,
                                             deadline=deadline, cancel_event=operations.cancel_event(operation_id))
                     if not isinstance(raw_candidates, (list, tuple)):
@@ -2717,13 +2724,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # The planning stage has explicit capabilities and returns its own
         # receipt; the API continues to own admission and durable lifecycle.
         eligible_sources, _ = prepare_sources(sources, topic.request.as_of)
-        context = ResearchExecutionContext(
-            budget=budget, cost_limited=request.max_cost_usd is not None,
-            ensure_running=lambda: _raise_if_operation_cancelled(operation_id),
-            cancel_event=lambda: operations.cancel_event(operation_id),
-            reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
-            settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens),
-            calls=calls, usage=usage)
         plan_result = execute_planning(
             requested=request.plan_research, question=effective_question, scope=topic.request.scope,
             sources_available=bool(eligible_sources), provider=provider, generate=generate_structured,
@@ -3030,7 +3030,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 search = getattr(evidence_provider, 'search', None)
                                 if request.max_cost_usd is not None:
                                     gap_search_status = 'cost_unknown'
-                                elif budget.search_exhaustion(calls=search_calls, now=monotonic()):
+                                elif context.search_exhaustion():
                                     gap_search_status = 'budget_exhausted'
                                 elif not getattr(evidence_provider, 'supports_project_search', False) or not callable(search):
                                     gap_search_status = 'unavailable'
@@ -3040,8 +3040,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         if 'deadline' not in parameters or 'cancel_event' not in parameters:
                                             raise ProviderFailure('search_budget_unsupported', 'Search budget cannot be enforced.', retryable=False)
                                         _raise_if_operation_cancelled(operation_id)
-                                        _reserve_search_call(http_request)
-                                        search_calls += 1
+                                        context.start_search()
+                                        search_calls = context.search_calls
                                         gap_search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
                                         raw_candidates = search(target.search_query, limit=5, deadline=deadline,
                                             cancel_event=operations.cancel_event(operation_id))
