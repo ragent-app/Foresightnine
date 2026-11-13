@@ -2659,100 +2659,101 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # hosts in this bounded path; discovered snippets are never evidence.
         # Historical content may have changed since its published date, so no
         # automatic source is attached to a cutoff-constrained research run.
-        if (request.auto_fetch_official and user_question and request.selected_source_ids != [] and
-                len(available_ids) < 100 and topic.request.as_of is None and request.max_cost_usd is None):
-            # Existing materials remain in the run. Do not spend the single
-            # bounded retrieval attempt on a source already attached.
-            existing_urls = set()
-            for existing_source in sources:
-                if existing_source.url:
-                    existing_parts = urlsplit(str(existing_source.url))
-                    existing_urls.add(urlunsplit((existing_parts.scheme, existing_parts.netloc, existing_parts.path, "", "")))
-            for candidate in discovered:
-                if candidate['url'] in existing_urls:
-                    continue
-                parts = urlsplit(candidate["url"])
-                if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov", "www.sec.gov"}
-                        or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
-                    continue
-                permissions = SourcePermissions(store=True, display=True, model_input=True, export=True)
-                try:
-                    source_request = FetchSourceRequest(url=candidate["url"], title=candidate["title"][:500],
-                                                        permissions=permissions)
-                except ValidationError:
-                    continue
-                sec_agent = None
-                if parts.hostname == "www.sec.gov":
-                    try:
-                        sec_agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
-                    except SecFailure:
-                        official_fetch_status = "sec_contact_unconfigured"
-                        if "SEC access is not configured; other supported sources may still be available." not in discovery_notes:
-                            discovery_notes.append("SEC access is not configured; other supported sources may still be available.")
+        with workflow.stage('source_retrieval') as stage_state:
+            if (request.auto_fetch_official and user_question and request.selected_source_ids != [] and
+                    len(available_ids) < 100 and topic.request.as_of is None and request.max_cost_usd is None):
+                # Existing materials remain in the run. Do not spend the single
+                # bounded retrieval attempt on a source already attached.
+                existing_urls = set()
+                for existing_source in sources:
+                    if existing_source.url:
+                        existing_parts = urlsplit(str(existing_source.url))
+                        existing_urls.add(urlunsplit((existing_parts.scheme, existing_parts.netloc, existing_parts.path, "", "")))
+                for candidate in discovered:
+                    if candidate['url'] in existing_urls:
                         continue
-                remaining = deadline - monotonic()
-                if remaining <= 0:
-                    official_fetch_status = "time_budget"
-                    discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
-                    break
-                try:
-                    _reserve_search_call(http_request)
-                    if sec_agent is not None and not reserve_sec_request(SOURCE_RATE_LIMITS):
-                        raise ApiProblem(429, "rate_limited", "SEC request limit reached.", retryable=True)
+                    parts = urlsplit(candidate["url"])
+                    if (parts.scheme != "https" or parts.hostname not in {"www.bea.gov", "www.federalreserve.gov", "www.sec.gov"}
+                            or parts.username is not None or parts.password is not None or parts.port not in (None, 443)):
+                        continue
+                    permissions = SourcePermissions(store=True, display=True, model_input=True, export=True)
+                    try:
+                        source_request = FetchSourceRequest(url=candidate["url"], title=candidate["title"][:500],
+                                                            permissions=permissions)
+                    except ValidationError:
+                        continue
+                    sec_agent = None
+                    if parts.hostname == "www.sec.gov":
+                        try:
+                            sec_agent = validate_user_agent(os.environ.get("FORESIGHTNINE_SEC_USER_AGENT") or os.environ.get("SEC_USER_AGENT"))
+                        except SecFailure:
+                            official_fetch_status = "sec_contact_unconfigured"
+                            if "SEC access is not configured; other supported sources may still be available." not in discovery_notes:
+                                discovery_notes.append("SEC access is not configured; other supported sources may still be available.")
+                            continue
                     remaining = deadline - monotonic()
                     if remaining <= 0:
                         official_fetch_status = "time_budget"
                         discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
                         break
-                    official_fetch_calls = 1
-                    if sec_agent is not None:
-                        fetched = fetch_sec_filing(source_request, sec_agent, timeout_seconds=min(15.0, remaining))
-                        retrieval = {"retrieval_method": "sec_filing_html", "original_html_base64": fetched.original_base64}
-                        content_type = "text/html"
-                    elif parts.path.casefold().endswith(".pdf"):
-                        fetched = fetch_official_pdf(source_request, timeout_seconds=min(15.0, remaining))
-                        retrieval = {"retrieval_method": "user_pdf", "original_pdf_base64": fetched.original_pdf_base64,
-                                     "pdf_text_order": "layout"}
-                        content_type = fetched.content_type
-                    else:
-                        fetched = fetch_official_text(source_request, timeout_seconds=min(15.0, remaining))
-                        retrieval = {"retrieval_method": "official_html", "original_html_base64": fetched.original_html_base64}
-                        content_type = fetched.content_type
-                    _raise_if_operation_cancelled(operation_id)
-                    # This planned ID is part of the immutable run-input
-                    # receipt before the request, so a saved source remains
-                    # retrievable even if the process dies before version save.
-                    source_id = "source_" + sha256((operation_id + ":official-source:0").encode()).hexdigest()[:32]
-                    source = research_sources.create(account.account_id, SourceInput(title=source_request.title,
-                        text=fetched.text, url=source_request.url, kind="official", permissions=permissions),
-                        **retrieval, response_sha256=fetched.response_sha256,
-                        response_content_type=content_type, source_id=source_id)
-                    sources.append(source)
-                    source_ids.append(source.source_id)
-                    official_fetch_status = "completed"
-                    candidate["status"] = "retrieved_unverified"
-                    candidate["source_id"] = source.source_id
-                    discovery_notes.append("The official document was retrieved with user-granted model permission; its content and dates remain unverified.")
-                except (FetchFailure, SecFailure, ValidationError, ValueError, ApiProblem):
-                    _raise_if_operation_cancelled(operation_id)
-                    official_fetch_status = "failed"
-                    discovery_notes.append("The official source could not be retrieved; the search result remains an unverified lead.")
-                break  # One bounded retrieval attempt, with no hidden retries.
-        elif request.auto_fetch_official and not user_question:
-            official_fetch_status = "question_missing"
-            discovery_notes.append("Automatic source discovery requires a user-provided question; the document overview did not start a search.")
-        elif request.auto_fetch_official and topic.request.as_of is not None:
-            official_fetch_status = "historical_cutoff"
-            discovery_notes.append("Automatic retrieval is unavailable for historical cutoffs because revision history is not established.")
-        elif request.auto_fetch_official and request.max_cost_usd is not None:
-            official_fetch_status = "cost_unknown"
-        elif request.auto_fetch_official and request.selected_source_ids == []:
-            official_fetch_status = "empty_selection"
-        elif request.auto_fetch_official and len(available_ids) >= 100:
-            official_fetch_status = "source_capacity"
-            discovery_notes.append("Official source retrieval was skipped because this research already has the maximum number of sources.")
+                    try:
+                        _reserve_search_call(http_request)
+                        if sec_agent is not None and not reserve_sec_request(SOURCE_RATE_LIMITS):
+                            raise ApiProblem(429, "rate_limited", "SEC request limit reached.", retryable=True)
+                        remaining = deadline - monotonic()
+                        if remaining <= 0:
+                            official_fetch_status = "time_budget"
+                            discovery_notes.append("Official source retrieval did not start because the time budget was exhausted.")
+                            break
+                        official_fetch_calls = 1
+                        if sec_agent is not None:
+                            fetched = fetch_sec_filing(source_request, sec_agent, timeout_seconds=min(15.0, remaining))
+                            retrieval = {"retrieval_method": "sec_filing_html", "original_html_base64": fetched.original_base64}
+                            content_type = "text/html"
+                        elif parts.path.casefold().endswith(".pdf"):
+                            fetched = fetch_official_pdf(source_request, timeout_seconds=min(15.0, remaining))
+                            retrieval = {"retrieval_method": "user_pdf", "original_pdf_base64": fetched.original_pdf_base64,
+                                         "pdf_text_order": "layout"}
+                            content_type = fetched.content_type
+                        else:
+                            fetched = fetch_official_text(source_request, timeout_seconds=min(15.0, remaining))
+                            retrieval = {"retrieval_method": "official_html", "original_html_base64": fetched.original_html_base64}
+                            content_type = fetched.content_type
+                        _raise_if_operation_cancelled(operation_id)
+                        # This planned ID is part of the immutable run-input
+                        # receipt before the request, so a saved source remains
+                        # retrievable even if the process dies before version save.
+                        source_id = "source_" + sha256((operation_id + ":official-source:0").encode()).hexdigest()[:32]
+                        source = research_sources.create(account.account_id, SourceInput(title=source_request.title,
+                            text=fetched.text, url=source_request.url, kind="official", permissions=permissions),
+                            **retrieval, response_sha256=fetched.response_sha256,
+                            response_content_type=content_type, source_id=source_id)
+                        sources.append(source)
+                        source_ids.append(source.source_id)
+                        official_fetch_status = "completed"
+                        candidate["status"] = "retrieved_unverified"
+                        candidate["source_id"] = source.source_id
+                        discovery_notes.append("The official document was retrieved with user-granted model permission; its content and dates remain unverified.")
+                    except (FetchFailure, SecFailure, ValidationError, ValueError, ApiProblem):
+                        _raise_if_operation_cancelled(operation_id)
+                        official_fetch_status = "failed"
+                        discovery_notes.append("The official source could not be retrieved; the search result remains an unverified lead.")
+                    break  # One bounded retrieval attempt, with no hidden retries.
+            elif request.auto_fetch_official and not user_question:
+                official_fetch_status = "question_missing"
+                discovery_notes.append("Automatic source discovery requires a user-provided question; the document overview did not start a search.")
+            elif request.auto_fetch_official and topic.request.as_of is not None:
+                official_fetch_status = "historical_cutoff"
+                discovery_notes.append("Automatic retrieval is unavailable for historical cutoffs because revision history is not established.")
+            elif request.auto_fetch_official and request.max_cost_usd is not None:
+                official_fetch_status = "cost_unknown"
+            elif request.auto_fetch_official and request.selected_source_ids == []:
+                official_fetch_status = "empty_selection"
+            elif request.auto_fetch_official and len(available_ids) >= 100:
+                official_fetch_status = "source_capacity"
+                discovery_notes.append("Official source retrieval was skipped because this research already has the maximum number of sources.")
 
-        workflow.record('source_retrieval', official_fetch_status)
+            stage_state.status = official_fetch_status
         generation = workflow.run('analysis', lambda: execute_generation(
             question=effective_question, scope=topic.request.scope, sources=sources, as_of=topic.request.as_of,
             provider=provider, generate=generate_structured, context=context, call_id=operation_id, focus=focus,
@@ -2821,145 +2822,146 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         counterpoint_error: str | None = None
         counterpoint_discarded_fields = 0
         counterpoint_omitted_rows = 0
-        if request.counterpoint_followup:
-            counterpoint_status = "not_needed" if calls and analysis.claims else "unavailable"
-            initial_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                   *claim_amount_differences(claims, analysis.facts)]
-            has_cited_counterpoint = has_usable_counterpoint(claims, {item['claim_index'] for item in initial_differences})
-            if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) >= 20:
-                counterpoint_status = 'capacity_reached'
-            if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) < 20 and base_prompt_text is not None:
-                policy = getattr(provider, 'policy', None)
-                input_limit = getattr(policy, 'max_input_tokens', None)
-                output_limit = getattr(policy, 'max_output_tokens', None)
-                timeout = getattr(policy, 'timeout_seconds', None)
-                if (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
-                        not isinstance(timeout, (int, float))):
-                    counterpoint_status = 'unavailable'
-                else:
-                    per_call = input_limit + output_limit
-                    reason = context.model_exhaustion(per_call)
-                    if reason:
-                        counterpoint_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
+        with workflow.stage('counterpoint') as stage_state:
+            if request.counterpoint_followup:
+                counterpoint_status = "not_needed" if calls and analysis.claims else "unavailable"
+                initial_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                       *claim_amount_differences(claims, analysis.facts)]
+                has_cited_counterpoint = has_usable_counterpoint(claims, {item['claim_index'] for item in initial_differences})
+                if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) >= 20:
+                    counterpoint_status = 'capacity_reached'
+                if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) < 20 and base_prompt_text is not None:
+                    policy = getattr(provider, 'policy', None)
+                    input_limit = getattr(policy, 'max_input_tokens', None)
+                    output_limit = getattr(policy, 'max_output_tokens', None)
+                    timeout = getattr(policy, 'timeout_seconds', None)
+                    if (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
+                            not isinstance(timeout, (int, float))):
+                        counterpoint_status = 'unavailable'
                     else:
-                        followup = prepare_counterpoint_prompt(base_prompt_text, analysis.claims,
-                            max(1, min(48000, input_limit - len(RESEARCH_SYSTEM_PROMPT.encode('utf-8')) - 512)))
-                        if followup is None:
-                            counterpoint_status = 'input_budget'
+                        per_call = input_limit + output_limit
+                        reason = context.model_exhaustion(per_call)
+                        if reason:
+                            counterpoint_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
                         else:
-                            counterpoint_hash = followup.prompt_sha256
-                            def save_counterpoint_checkpoint() -> None:
-                                try:
-                                    current = version_chain.current()
-                                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
-                                        limitations=[*discovery_notes, *analysis.limitations,
-                                            'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
-                                        run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
-                                     **run_core(),
-                                             'model_calls':calls, 'total_tokens':usage, 'generation_tokens':generation_usage,
-                                             'counterpoint_requested':True, 'counterpoint_status':'pending',
-                                             'counterpoint_prompt_sha256':counterpoint_hash, 'cost_usd':None,
-                                             'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
-                                             'prompt_characters':analysis.prompt_characters, 'prompt_bytes':analysis.prompt_bytes,
-                                             'system_prompt_sha256':sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
-                                             'model':getattr(getattr(provider, 'settings', None), 'model', None),
-                                             'provider':getattr(provider, 'name', None),
-                                             'require_counterarguments':request.require_counterarguments,
-                                             'support_review_requested':request.support_review,
-                                             'support_review_status':'pending' if request.support_review else 'not_requested',
-                                             'search_calls':search_calls, 'search_status':search_status,
-                                             'official_fetch_calls':official_fetch_calls, 'official_fetch_status':official_fetch_status,
-                                             'selected_segments':analysis.segments, 'selection_method':RESEARCH_SELECTION_METHOD,
-                                             'source_hashes':{s.source_id:s.content_sha256 for s in sources},
-                                             'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
-                                             'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
-                                             'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                    version_chain.save(current, partial)
-                                except (TopicNotFound, TopicVersionConflict) as error:
-                                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
-                            if not operations.store.checkpoint_if_running(operation_id, save_counterpoint_checkpoint):
-                                _raise_if_operation_cancelled(operation_id)
-                                raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
-                            call_id = f'{operation_id}:counterpoint'
-                            try:
-                                _raise_if_operation_cancelled(operation_id)
-                                remaining = deadline - monotonic()
-                                if remaining <= 0:
-                                    raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-                                before_call = context.start_model(call_id, per_call)
-                                calls = context.calls
-                                try:
-                                    raw_counterpoint, reported = generate_structured(followup.prompt,
-                                        cancel_event=operations.cancel_event(operation_id), system=RESEARCH_SYSTEM_PROMPT,
-                                        timeout_seconds=min(float(timeout), remaining))
-                                    counterpoint_usage = reported if type(reported) is int and reported >= 0 else None
-                                except ProviderFailure as error:
-                                    counterpoint_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                    raise
-                                finally:
-                                    context.finish_model(call_id, counterpoint_usage, before_call)
-                                    usage = context.usage
-                                _raise_if_operation_cancelled(operation_id)
-                                if not isinstance(raw_counterpoint, dict) or 'counterarguments' not in raw_counterpoint:
-                                    raise InvalidAnalysis('Counterpoint output lacks the requested field.')
-                                allowed_fields = {'counterarguments', 'limitations'}
-                                counterpoint_discarded_fields = len(set(raw_counterpoint) - allowed_fields)
-                                restricted_counterpoint = {key:raw_counterpoint[key] for key in allowed_fields if key in raw_counterpoint}
-                                filtered_rows = filter_counterpoint_rows(restricted_counterpoint['counterarguments'])
-                                if filtered_rows is None:
-                                    raise InvalidAnalysis('Counterpoint rows exceed the allowed structure or limit.')
-                                restricted_counterpoint['counterarguments'], counterpoint_omitted_rows = filtered_rows
-                                checked = analyze(effective_question, sources, topic.request.as_of,
-                                    lambda _: (restricted_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
-                                    should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope,
-                                    counterargument_reference_count=followup.prior_findings_included, planning_steps=planning_steps,
-                                    require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
-                                if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
-                                    raise InvalidAnalysis('Counterpoint source selection changed.')
-                                raw_leads = extract_answer_candidates(raw_counterpoint)
-                                if raw_leads:
+                            followup = prepare_counterpoint_prompt(base_prompt_text, analysis.claims,
+                                max(1, min(48000, input_limit - len(RESEARCH_SYSTEM_PROMPT.encode('utf-8')) - 512)))
+                            if followup is None:
+                                counterpoint_status = 'input_budget'
+                            else:
+                                counterpoint_hash = followup.prompt_sha256
+                                def save_counterpoint_checkpoint() -> None:
                                     try:
-                                        checked_leads = analyze(effective_question, sources, topic.request.as_of,
-                                            lambda _: ({'claims':raw_leads}, None), max_prompt_chars=max_prompt_chars,
-                                            should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope, planning_steps=planning_steps,
-                                            require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
-                                        if checked_leads.prompt_sha256 == analysis.prompt_sha256 and checked_leads.segments == analysis.segments:
-                                            supplemental_citation_leads = checked_leads.claims
-                                    except (InvalidAnalysis, AnalysisInterrupted):
-                                        # Leads are optional; retain the validated follow-up on failure.
-                                        supplemental_citation_leads = []
-                                first_followup_index = len(analysis.claims) + len(analysis.counterarguments)
-                                room = 20 - len(analysis.counterarguments)
-                                retained_counterpoints = [{**item, **({'prior_findings_truncated':True} if followup.truncated_findings else {})}
-                                                          for item in checked.counterarguments[:room]]
-                                truncated_counterpoints = len(checked.counterarguments) > room
-                                analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *retained_counterpoints],
-                                    limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
-                                        'Counterpoint follow-up uses a model and is not independent verification.',
-                                        *(['Extra counterpoint response fields were not used as findings; any citation leads require review.'] if counterpoint_discarded_fields else []),
-                                        *(['Some malformed counterpoints were omitted; review the remaining results.'] if counterpoint_omitted_rows else []),
-                                        *(['Some follow-up counterpoints were omitted because the result limit was reached.'] if truncated_counterpoints else [])])))
-                                claims = prepare_claims()
-                                followup_claims = claims[first_followup_index:]
-                                followup_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                                        *claim_amount_differences(claims, analysis.facts)]
-                                excluded = {item['claim_index'] - first_followup_index for item in followup_differences
-                                            if item['claim_index'] >= first_followup_index}
-                                if not any(item.get('citations') for item in retained_counterpoints):
-                                    counterpoint_status = 'no_evidence'
-                                elif truncated_counterpoints or counterpoint_omitted_rows:
-                                    counterpoint_status = 'partial'
-                                elif not has_usable_counterpoint(followup_claims, excluded):
-                                    counterpoint_status = 'needs_review'
-                                else:
-                                    counterpoint_status = 'completed'
-                            except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
-                                _raise_if_operation_cancelled(operation_id)
-                                counterpoint_status = 'failed'
-                                counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
-        calls, usage = context.calls, context.usage
-        workflow.record('counterpoint', counterpoint_status)
+                                        current = version_chain.current()
+                                        partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                                            sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
+                                            limitations=[*discovery_notes, *analysis.limitations,
+                                                'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
+                                            run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
+                                         **run_core(),
+                                                 'model_calls':calls, 'total_tokens':usage, 'generation_tokens':generation_usage,
+                                                 'counterpoint_requested':True, 'counterpoint_status':'pending',
+                                                 'counterpoint_prompt_sha256':counterpoint_hash, 'cost_usd':None,
+                                                 'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
+                                                 'prompt_characters':analysis.prompt_characters, 'prompt_bytes':analysis.prompt_bytes,
+                                                 'system_prompt_sha256':sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
+                                                 'model':getattr(getattr(provider, 'settings', None), 'model', None),
+                                                 'provider':getattr(provider, 'name', None),
+                                                 'require_counterarguments':request.require_counterarguments,
+                                                 'support_review_requested':request.support_review,
+                                                 'support_review_status':'pending' if request.support_review else 'not_requested',
+                                                 'search_calls':search_calls, 'search_status':search_status,
+                                                 'official_fetch_calls':official_fetch_calls, 'official_fetch_status':official_fetch_status,
+                                                 'selected_segments':analysis.segments, 'selection_method':RESEARCH_SELECTION_METHOD,
+                                                 'source_hashes':{s.source_id:s.content_sha256 for s in sources},
+                                                 'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
+                                                 'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
+                                                 'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                                        version_chain.save(current, partial)
+                                    except (TopicNotFound, TopicVersionConflict) as error:
+                                        raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+                                if not operations.store.checkpoint_if_running(operation_id, save_counterpoint_checkpoint):
+                                    _raise_if_operation_cancelled(operation_id)
+                                    raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
+                                call_id = f'{operation_id}:counterpoint'
+                                try:
+                                    _raise_if_operation_cancelled(operation_id)
+                                    remaining = deadline - monotonic()
+                                    if remaining <= 0:
+                                        raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
+                                    before_call = context.start_model(call_id, per_call)
+                                    calls = context.calls
+                                    try:
+                                        raw_counterpoint, reported = generate_structured(followup.prompt,
+                                            cancel_event=operations.cancel_event(operation_id), system=RESEARCH_SYSTEM_PROMPT,
+                                            timeout_seconds=min(float(timeout), remaining))
+                                        counterpoint_usage = reported if type(reported) is int and reported >= 0 else None
+                                    except ProviderFailure as error:
+                                        counterpoint_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                        raise
+                                    finally:
+                                        context.finish_model(call_id, counterpoint_usage, before_call)
+                                        usage = context.usage
+                                    _raise_if_operation_cancelled(operation_id)
+                                    if not isinstance(raw_counterpoint, dict) or 'counterarguments' not in raw_counterpoint:
+                                        raise InvalidAnalysis('Counterpoint output lacks the requested field.')
+                                    allowed_fields = {'counterarguments', 'limitations'}
+                                    counterpoint_discarded_fields = len(set(raw_counterpoint) - allowed_fields)
+                                    restricted_counterpoint = {key:raw_counterpoint[key] for key in allowed_fields if key in raw_counterpoint}
+                                    filtered_rows = filter_counterpoint_rows(restricted_counterpoint['counterarguments'])
+                                    if filtered_rows is None:
+                                        raise InvalidAnalysis('Counterpoint rows exceed the allowed structure or limit.')
+                                    restricted_counterpoint['counterarguments'], counterpoint_omitted_rows = filtered_rows
+                                    checked = analyze(effective_question, sources, topic.request.as_of,
+                                        lambda _: (restricted_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
+                                        should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope,
+                                        counterargument_reference_count=followup.prior_findings_included, planning_steps=planning_steps,
+                                        require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
+                                    if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
+                                        raise InvalidAnalysis('Counterpoint source selection changed.')
+                                    raw_leads = extract_answer_candidates(raw_counterpoint)
+                                    if raw_leads:
+                                        try:
+                                            checked_leads = analyze(effective_question, sources, topic.request.as_of,
+                                                lambda _: ({'claims':raw_leads}, None), max_prompt_chars=max_prompt_chars,
+                                                should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope, planning_steps=planning_steps,
+                                                require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
+                                            if checked_leads.prompt_sha256 == analysis.prompt_sha256 and checked_leads.segments == analysis.segments:
+                                                supplemental_citation_leads = checked_leads.claims
+                                        except (InvalidAnalysis, AnalysisInterrupted):
+                                            # Leads are optional; retain the validated follow-up on failure.
+                                            supplemental_citation_leads = []
+                                    first_followup_index = len(analysis.claims) + len(analysis.counterarguments)
+                                    room = 20 - len(analysis.counterarguments)
+                                    retained_counterpoints = [{**item, **({'prior_findings_truncated':True} if followup.truncated_findings else {})}
+                                                              for item in checked.counterarguments[:room]]
+                                    truncated_counterpoints = len(checked.counterarguments) > room
+                                    analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *retained_counterpoints],
+                                        limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
+                                            'Counterpoint follow-up uses a model and is not independent verification.',
+                                            *(['Extra counterpoint response fields were not used as findings; any citation leads require review.'] if counterpoint_discarded_fields else []),
+                                            *(['Some malformed counterpoints were omitted; review the remaining results.'] if counterpoint_omitted_rows else []),
+                                            *(['Some follow-up counterpoints were omitted because the result limit was reached.'] if truncated_counterpoints else [])])))
+                                    claims = prepare_claims()
+                                    followup_claims = claims[first_followup_index:]
+                                    followup_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                                            *claim_amount_differences(claims, analysis.facts)]
+                                    excluded = {item['claim_index'] - first_followup_index for item in followup_differences
+                                                if item['claim_index'] >= first_followup_index}
+                                    if not any(item.get('citations') for item in retained_counterpoints):
+                                        counterpoint_status = 'no_evidence'
+                                    elif truncated_counterpoints or counterpoint_omitted_rows:
+                                        counterpoint_status = 'partial'
+                                    elif not has_usable_counterpoint(followup_claims, excluded):
+                                        counterpoint_status = 'needs_review'
+                                    else:
+                                        counterpoint_status = 'completed'
+                                except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
+                                    _raise_if_operation_cancelled(operation_id)
+                                    counterpoint_status = 'failed'
+                                    counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
+            calls, usage = context.calls, context.usage
+            stage_state.status = counterpoint_status
         # Optional evidence-gap follow-up is deliberately bounded to the
         # already authorized sources. It never turns search leads into inputs.
         gap_status = 'not_requested'
@@ -2973,182 +2975,183 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         gap_segments: list[dict[str, Any]] = []
         gap_input_fact_ids: list[str] = []
         gap_error: str | None = None
-        if request.gap_followup:
-            gap_status = 'not_needed' if calls and analysis.claims else 'unavailable'
-            target = build_gap_focus(effective_question, claims, analysis.research_questions) if calls and sources else None
-            if target is not None:
-                gap_targets = list(target.claim_indexes)
-                gap_input_targets = list(target.claim_indexes)
-                gap_question_targets = list(target.question_indexes)
-                policy = getattr(provider, 'policy', None)
-                input_limit = getattr(policy, 'max_input_tokens', None)
-                output_limit = getattr(policy, 'max_output_tokens', None)
-                timeout = getattr(policy, 'timeout_seconds', None)
-                if not isinstance(input_limit, int) or not isinstance(output_limit, int) or not isinstance(timeout, (int, float)):
-                    gap_status = 'unavailable'
-                else:
-                    per_call = input_limit + output_limit
-                    reason = context.model_exhaustion(per_call)
-                    if reason:
-                        gap_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
+        with workflow.stage('gap_followup') as stage_state:
+            if request.gap_followup:
+                gap_status = 'not_needed' if calls and analysis.claims else 'unavailable'
+                target = build_gap_focus(effective_question, claims, analysis.research_questions) if calls and sources else None
+                if target is not None:
+                    gap_targets = list(target.claim_indexes)
+                    gap_input_targets = list(target.claim_indexes)
+                    gap_question_targets = list(target.question_indexes)
+                    policy = getattr(provider, 'policy', None)
+                    input_limit = getattr(policy, 'max_input_tokens', None)
+                    output_limit = getattr(policy, 'max_output_tokens', None)
+                    timeout = getattr(policy, 'timeout_seconds', None)
+                    if not isinstance(input_limit, int) or not isinstance(output_limit, int) or not isinstance(timeout, (int, float)):
+                        gap_status = 'unavailable'
                     else:
-                        prior_usage = usage
-                        gap_attempted = False
-                        def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
-                            nonlocal calls, usage, search_calls, gap_usage, gap_hash, gap_attempted, gap_search_status, gap_search_hash
-                            _raise_if_operation_cancelled(operation_id)
-                            def save_gap_checkpoint() -> None:
-                                try:
-                                    current = version_chain.current()
-                                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
-                                        limitations=[*discovery_notes, *analysis.limitations,
-                                            'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
-                                        run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
-                                     **run_core(),
-                                             'model_calls':calls, 'total_tokens':prior_usage, 'generation_tokens':generation_usage,
-                                             'counterpoint_requested':request.counterpoint_followup, 'counterpoint_status':counterpoint_status,
-                                             'counterpoint_tokens':counterpoint_usage, 'gap_followup_requested':True,
-                                             'gap_followup_status':'pending', 'gap_followup_targets':gap_targets,
-                                             'gap_followup_question_targets':gap_question_targets,
-                                             'gap_search_requested':request.gap_search, 'gap_search_status':gap_search_status,
-                                             'gap_search_query_sha256':gap_search_hash,
-                                             'support_review_requested':request.support_review,
-                                             'support_review_status':'pending' if request.support_review else 'not_requested',
-                                             'require_counterarguments':request.require_counterarguments,
-                                             'source_hashes':{s.source_id:s.content_sha256 for s in sources},
-                                             'selected_segments':analysis.segments, 'selection_method':RESEARCH_SELECTION_METHOD,
-                                             'search_calls':search_calls, 'search_status':search_status,
-                                             'official_fetch_calls':official_fetch_calls, 'official_fetch_status':official_fetch_status,
-                                             'cost_usd':None, 'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
-                                             'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
-                                             'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
-                                             'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                    version_chain.save(current, partial)
-                                except (TopicNotFound, TopicVersionConflict) as error:
-                                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
-                            if request.gap_search:
-                                gap_search_status = 'pending'
-                            if not operations.store.checkpoint_if_running(operation_id, save_gap_checkpoint):
+                        per_call = input_limit + output_limit
+                        reason = context.model_exhaustion(per_call)
+                        if reason:
+                            gap_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
+                        else:
+                            prior_usage = usage
+                            gap_attempted = False
+                            def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
+                                nonlocal calls, usage, search_calls, gap_usage, gap_hash, gap_attempted, gap_search_status, gap_search_hash
                                 _raise_if_operation_cancelled(operation_id)
-                                raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
-                            if request.gap_search:
-                                existing_urls = {item.get('url') for item in discovered}
-                                existing_urls.update(urlunsplit((urlsplit(str(source.url)).scheme, urlsplit(str(source.url)).netloc,
-                                    urlsplit(str(source.url)).path, '', '')) for source in sources if source.url)
-                                discovery = workflow.run('gap_search', lambda: execute_source_search(provider=evidence_provider,
-                                    provider_name=_provider_name(evidence_provider, 'search'), query=target.search_query,
-                                    convert=_candidate_response, as_of=topic.request.as_of, context=context,
-                                    existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap'),
-                                    lambda result: result.status)
-                                search_calls, gap_search_status = context.search_calls, discovery.status
-                                search_receipts.append({'stage': 'gap', 'status': discovery.status,
-                                    'attempted': discovery.attempted, 'reason': discovery.reason,
-                                    'retryable': discovery.retryable, 'omitted': discovery.omitted})
-                                if discovery.attempted:
-                                    gap_search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
-                                discovered.extend(discovery.candidates)
-                                if discovery.status in {'completed', 'partial'}:
-                                    discovery_notes.append('Additional gap-search results are unverified leads; they are not evidence or model input.')
-                                if discovery.omitted:
-                                    discovery_notes.append('Some gap-search candidates were invalid or exceeded the display limit and were omitted.')
-                                if discovery.status == 'failed':
-                                    discovery_notes.append('Additional gap-focused source search failed or was rate limited.')
-                                # Preserve candidates and actual search state before the next external call.
+                                def save_gap_checkpoint() -> None:
+                                    try:
+                                        current = version_chain.current()
+                                        partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                                            sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
+                                            limitations=[*discovery_notes, *analysis.limitations,
+                                                'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
+                                            run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
+                                         **run_core(),
+                                                 'model_calls':calls, 'total_tokens':prior_usage, 'generation_tokens':generation_usage,
+                                                 'counterpoint_requested':request.counterpoint_followup, 'counterpoint_status':counterpoint_status,
+                                                 'counterpoint_tokens':counterpoint_usage, 'gap_followup_requested':True,
+                                                 'gap_followup_status':'pending', 'gap_followup_targets':gap_targets,
+                                                 'gap_followup_question_targets':gap_question_targets,
+                                                 'gap_search_requested':request.gap_search, 'gap_search_status':gap_search_status,
+                                                 'gap_search_query_sha256':gap_search_hash,
+                                                 'support_review_requested':request.support_review,
+                                                 'support_review_status':'pending' if request.support_review else 'not_requested',
+                                                 'require_counterarguments':request.require_counterarguments,
+                                                 'source_hashes':{s.source_id:s.content_sha256 for s in sources},
+                                                 'selected_segments':analysis.segments, 'selection_method':RESEARCH_SELECTION_METHOD,
+                                                 'search_calls':search_calls, 'search_status':search_status,
+                                                 'official_fetch_calls':official_fetch_calls, 'official_fetch_status':official_fetch_status,
+                                                 'cost_usd':None, 'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
+                                                 'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
+                                                 'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
+                                                 'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                                        version_chain.save(current, partial)
+                                    except (TopicNotFound, TopicVersionConflict) as error:
+                                        raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+                                if request.gap_search:
+                                    gap_search_status = 'pending'
                                 if not operations.store.checkpoint_if_running(operation_id, save_gap_checkpoint):
                                     _raise_if_operation_cancelled(operation_id)
                                     raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
-                            remaining = deadline - monotonic()
-                            if remaining <= 0:
-                                raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-                            call_id = f'{operation_id}:gap-followup'
-                            before_call = context.start_model(call_id, per_call)
-                            calls = context.calls
-                            gap_attempted = True
-                            gap_hash = sha256(prompt.encode('utf-8')).hexdigest()
+                                if request.gap_search:
+                                    existing_urls = {item.get('url') for item in discovered}
+                                    existing_urls.update(urlunsplit((urlsplit(str(source.url)).scheme, urlsplit(str(source.url)).netloc,
+                                        urlsplit(str(source.url)).path, '', '')) for source in sources if source.url)
+                                    discovery = workflow.run('gap_search', lambda: execute_source_search(provider=evidence_provider,
+                                        provider_name=_provider_name(evidence_provider, 'search'), query=target.search_query,
+                                        convert=_candidate_response, as_of=topic.request.as_of, context=context,
+                                        existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap'),
+                                        lambda result: result.status)
+                                    search_calls, gap_search_status = context.search_calls, discovery.status
+                                    search_receipts.append({'stage': 'gap', 'status': discovery.status,
+                                        'attempted': discovery.attempted, 'reason': discovery.reason,
+                                        'retryable': discovery.retryable, 'omitted': discovery.omitted})
+                                    if discovery.attempted:
+                                        gap_search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
+                                    discovered.extend(discovery.candidates)
+                                    if discovery.status in {'completed', 'partial'}:
+                                        discovery_notes.append('Additional gap-search results are unverified leads; they are not evidence or model input.')
+                                    if discovery.omitted:
+                                        discovery_notes.append('Some gap-search candidates were invalid or exceeded the display limit and were omitted.')
+                                    if discovery.status == 'failed':
+                                        discovery_notes.append('Additional gap-focused source search failed or was rate limited.')
+                                    # Preserve candidates and actual search state before the next external call.
+                                    if not operations.store.checkpoint_if_running(operation_id, save_gap_checkpoint):
+                                        _raise_if_operation_cancelled(operation_id)
+                                        raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
+                                remaining = deadline - monotonic()
+                                if remaining <= 0:
+                                    raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
+                                call_id = f'{operation_id}:gap-followup'
+                                before_call = context.start_model(call_id, per_call)
+                                calls = context.calls
+                                gap_attempted = True
+                                gap_hash = sha256(prompt.encode('utf-8')).hexdigest()
+                                try:
+                                    raw, reported = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
+                                        system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
+                                    gap_usage = reported if type(reported) is int and reported >= 0 else None
+                                    return raw, gap_usage
+                                except ProviderFailure as error:
+                                    gap_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                    raise
+                                finally:
+                                    context.finish_model(call_id, gap_usage, before_call)
+                                    usage = context.usage
                             try:
-                                raw, reported = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
-                                    system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
-                                gap_usage = reported if type(reported) is int and reported >= 0 else None
-                                return raw, gap_usage
-                            except ProviderFailure as error:
-                                gap_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                raise
-                            finally:
-                                context.finish_model(call_id, gap_usage, before_call)
-                                usage = context.usage
-                        try:
-                            gap_result = analyze(target.question, sources, topic.request.as_of, generate_gap,
-                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
-                                scope=topic.request.scope,
-                                require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
-                            if not gap_attempted:
-                                gap_status = 'input_unavailable'
-                            else:
-                                old_count = len(analysis.claims)
-                                gap_facts, gap_calculations, artifact_omissions = remap_followup_artifacts(
-                                    gap_result.facts, gap_result.calculations, operation_id=operation_id,
-                                    existing_fact_ids={fact['fact_id'] for fact in analysis.facts if isinstance(fact.get('fact_id'), str)},
-                                    existing_facts=analysis.facts,
-                                    max_facts=max(0, 2000 - len(analysis.facts)),
-                                    max_calculations=max(0, 2000 - len(analysis.calculations)))
-                                for calculation in gap_calculations:
-                                    calculation['input_status'] = calculation_input_status(calculation, [*analysis.facts, *gap_facts])
-                                # Preserve baseline entries and bound the additional output.
-                                support_room = max(0, 30 - old_count)
-                                extra_claims = gap_result.claims[:support_room]
-                                # Inserted supporting findings shift the saved
-                                # positions of the original counterarguments.
-                                gap_targets = [i if i < old_count else i + len(extra_claims) for i in gap_input_targets]
-                                index_map = {i: old_count + i for i in range(len(extra_claims))}
-                                counter_room = max(0, 20 - len(analysis.counterarguments))
-                                extra_counterpoints = []
-                                for item in gap_result.counterarguments[:counter_room]:
-                                    item = dict(item)
-                                    targets = item.get('suggested_responds_to_claim_indexes', [])
-                                    if isinstance(targets, list):
-                                        mapped = [index_map[i] for i in targets if type(i) is int and i in index_map]
-                                        if mapped:
-                                            item['suggested_responds_to_claim_indexes'] = mapped
-                                        else:
-                                            item.pop('suggested_responds_to_claim_indexes', None)
-                                    extra_counterpoints.append(item)
-                                # Each model invocation saw its own source
-                                # selection. Do not union them when deciding
-                                # whether any one model read a whole source.
-                                gap_segments = list(gap_result.segments)
-                                gap_input_fact_ids = list(gap_result.available_fact_ids)
-                                added = bool(extra_claims or extra_counterpoints or gap_facts or gap_calculations)
-                                gap_status = 'completed' if added else 'no_evidence'
-                                if len(gap_result.claims) > support_room or len(gap_result.counterarguments) > counter_room or artifact_omissions:
-                                    gap_status = 'partial'
-                                analysis = replace(analysis, claims=[*analysis.claims, *extra_claims],
-                                    counterarguments=[*analysis.counterarguments, *extra_counterpoints],
-                                    facts=[*analysis.facts, *gap_facts], calculations=[*analysis.calculations, *gap_calculations],
-                                    research_questions=merge_research_questions(analysis.research_questions, gap_result.research_questions, index_map),
-                                    source_ids=list(dict.fromkeys([*analysis.source_ids, *gap_result.source_ids])),
-                                    limitations=list(dict.fromkeys([*analysis.limitations, *gap_result.limitations,
-                                        'The evidence-gap follow-up is model generated and is not independent verification.',
-                                        *(['Some follow-up facts or calculations were omitted because their identifiers or limits could not be reconciled.']
-                                          if artifact_omissions else [])])))
-                                claims = prepare_claims()
-                                # Recompute full-source absence for each added
-                                # finding against the excerpts actually sent to
-                                # that call, rather than the original selection.
-                                new_indexes = [*range(old_count, old_count + len(extra_claims)),
-                                    *range(len(analysis.claims) + len(analysis.counterarguments) - len(extra_counterpoints),
-                                           len(analysis.claims) + len(analysis.counterarguments))]
-                                for claim_index in new_indexes:
-                                    claims[claim_index] = flag_partial_source_absence(
-                                        [claims[claim_index]], sources, gap_segments)[0]
-                        except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
-                            _raise_if_operation_cancelled(operation_id)
-                            gap_status = 'failed'
-                            gap_error = error.code if isinstance(error, ProviderFailure) else 'gap_followup_unavailable'
-        calls, usage = context.calls, context.usage
-        if request.gap_search and gap_search_status == 'not_started' and gap_status == 'not_needed':
-            gap_search_status = 'no_gaps'
-        workflow.record('gap_followup', gap_status)
+                                gap_result = analyze(target.question, sources, topic.request.as_of, generate_gap,
+                                    max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
+                                    scope=topic.request.scope,
+                                    require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
+                                if not gap_attempted:
+                                    gap_status = 'input_unavailable'
+                                else:
+                                    old_count = len(analysis.claims)
+                                    gap_facts, gap_calculations, artifact_omissions = remap_followup_artifacts(
+                                        gap_result.facts, gap_result.calculations, operation_id=operation_id,
+                                        existing_fact_ids={fact['fact_id'] for fact in analysis.facts if isinstance(fact.get('fact_id'), str)},
+                                        existing_facts=analysis.facts,
+                                        max_facts=max(0, 2000 - len(analysis.facts)),
+                                        max_calculations=max(0, 2000 - len(analysis.calculations)))
+                                    for calculation in gap_calculations:
+                                        calculation['input_status'] = calculation_input_status(calculation, [*analysis.facts, *gap_facts])
+                                    # Preserve baseline entries and bound the additional output.
+                                    support_room = max(0, 30 - old_count)
+                                    extra_claims = gap_result.claims[:support_room]
+                                    # Inserted supporting findings shift the saved
+                                    # positions of the original counterarguments.
+                                    gap_targets = [i if i < old_count else i + len(extra_claims) for i in gap_input_targets]
+                                    index_map = {i: old_count + i for i in range(len(extra_claims))}
+                                    counter_room = max(0, 20 - len(analysis.counterarguments))
+                                    extra_counterpoints = []
+                                    for item in gap_result.counterarguments[:counter_room]:
+                                        item = dict(item)
+                                        targets = item.get('suggested_responds_to_claim_indexes', [])
+                                        if isinstance(targets, list):
+                                            mapped = [index_map[i] for i in targets if type(i) is int and i in index_map]
+                                            if mapped:
+                                                item['suggested_responds_to_claim_indexes'] = mapped
+                                            else:
+                                                item.pop('suggested_responds_to_claim_indexes', None)
+                                        extra_counterpoints.append(item)
+                                    # Each model invocation saw its own source
+                                    # selection. Do not union them when deciding
+                                    # whether any one model read a whole source.
+                                    gap_segments = list(gap_result.segments)
+                                    gap_input_fact_ids = list(gap_result.available_fact_ids)
+                                    added = bool(extra_claims or extra_counterpoints or gap_facts or gap_calculations)
+                                    gap_status = 'completed' if added else 'no_evidence'
+                                    if len(gap_result.claims) > support_room or len(gap_result.counterarguments) > counter_room or artifact_omissions:
+                                        gap_status = 'partial'
+                                    analysis = replace(analysis, claims=[*analysis.claims, *extra_claims],
+                                        counterarguments=[*analysis.counterarguments, *extra_counterpoints],
+                                        facts=[*analysis.facts, *gap_facts], calculations=[*analysis.calculations, *gap_calculations],
+                                        research_questions=merge_research_questions(analysis.research_questions, gap_result.research_questions, index_map),
+                                        source_ids=list(dict.fromkeys([*analysis.source_ids, *gap_result.source_ids])),
+                                        limitations=list(dict.fromkeys([*analysis.limitations, *gap_result.limitations,
+                                            'The evidence-gap follow-up is model generated and is not independent verification.',
+                                            *(['Some follow-up facts or calculations were omitted because their identifiers or limits could not be reconciled.']
+                                              if artifact_omissions else [])])))
+                                    claims = prepare_claims()
+                                    # Recompute full-source absence for each added
+                                    # finding against the excerpts actually sent to
+                                    # that call, rather than the original selection.
+                                    new_indexes = [*range(old_count, old_count + len(extra_claims)),
+                                        *range(len(analysis.claims) + len(analysis.counterarguments) - len(extra_counterpoints),
+                                               len(analysis.claims) + len(analysis.counterarguments))]
+                                    for claim_index in new_indexes:
+                                        claims[claim_index] = flag_partial_source_absence(
+                                            [claims[claim_index]], sources, gap_segments)[0]
+                            except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
+                                _raise_if_operation_cancelled(operation_id)
+                                gap_status = 'failed'
+                                gap_error = error.code if isinstance(error, ProviderFailure) else 'gap_followup_unavailable'
+            calls, usage = context.calls, context.usage
+            if request.gap_search and gap_search_status == 'not_started' and gap_status == 'not_needed':
+                gap_search_status = 'no_gaps'
+            stage_state.status = gap_status
         pre_review_usage = usage
         # Numeric candidates must be considered before model review. A review
         # verdict cannot clear a known calculation or unit discrepancy.
@@ -3165,237 +3168,76 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                                    for index in range(len(claims))] if request.support_review else [])
         review_failed_indexes: list[int] = []
         isolated_records: list[dict[str, Any]] = []
-        if request.support_review and request.support_review_mode == "isolated":
-            review_status = "not_reviewable"
-            policy = getattr(provider, "policy", None)
-            input_limit = getattr(policy, "max_input_tokens", None)
-            output_limit = getattr(policy, "max_output_tokens", None)
-            timeout = getattr(policy, "timeout_seconds", None)
-            if calls and claims and calls >= request.max_model_calls:
-                review_status = "budget_exhausted"
-                review_omissions = [{"claim_index": i, "reason": "call_budget"} for i in range(len(claims))]
-            elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
-                per_call = input_limit + output_limit
-                review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
-                review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if i in discrepancy_indexes else {})}
-                                 for i, claim in enumerate(claims)]
-                try:
-                    plan = prepare_isolated_support_reviews(review_claims,
-                        [s for s in sources if s.source_id in analysis.source_ids], review_budget,
-                        should_stop=lambda: monotonic() >= deadline or operations.cancel_event(operation_id).is_set())
-                except AnalysisInterrupted:
-                    _raise_if_operation_cancelled(operation_id)
-                    plan = None
+        with workflow.stage('support_review') as stage_state:
+            if request.support_review and request.support_review_mode == "isolated":
+                review_status = "not_reviewable"
+                policy = getattr(provider, "policy", None)
+                input_limit = getattr(policy, "max_input_tokens", None)
+                output_limit = getattr(policy, "max_output_tokens", None)
+                timeout = getattr(policy, "timeout_seconds", None)
+                if calls and claims and calls >= request.max_model_calls:
                     review_status = "budget_exhausted"
-                    review_omissions = [{"claim_index": i, "reason": "time_budget"} for i in range(len(claims))]
-                if plan is not None:
-                    review_omissions = list(plan.omissions) + [{"claim_index": b.indexes[0], "reason": "not_started"} for b in plan.batches]
-                    review_omissions.sort(key=lambda item: item["claim_index"])
-                    isolated_records = [{"claim_index": b.indexes[0], "prompt_sha256": b.prompt_sha256,
-                                         "segments": b.segments, "status": "not_started"} for b in plan.batches]
-                    claims = [{key: value for key, value in claim.items() if key != "support_review"} for claim in claims]
-                    review_usages: list[int | None] = []
-
-                    def isolated_omission(index: int, reason: str | None) -> None:
-                        nonlocal review_omissions
-                        review_omissions = [item for item in review_omissions if item["claim_index"] != index]
-                        if reason is not None:
-                            review_omissions.append({"claim_index": index, "reason": reason})
-                        review_omissions.sort(key=lambda item: item["claim_index"])
-
-                    def save_isolated_checkpoint() -> None:
-                        try:
-                            current = version_chain.current()
-                            partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                                sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
-                                limitations=[*discovery_notes, *analysis.limitations,
-                                    "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
-                                run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
-                                     **run_core(),
-                                                                          "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
-                                     "support_review_tokens": review_usage, "cost_usd": None,
-                                     "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
-                                     "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
-                                     "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
-                                     "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
-                                     "gap_followup_question_targets":gap_question_targets,
-                                     "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
-                                     "gap_search_query_sha256":gap_search_hash,
-                                     "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
-                                     "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
-                                     "counterpoint_discarded_fields":counterpoint_discarded_fields,
-                                     "counterpoint_omitted_rows":counterpoint_omitted_rows,
-                                     "cost_status": "unknown" if calls or search_calls else "no_external_call",
-                                     "support_review_requested": True, "support_review_mode": "isolated",
-                                     "support_review_status": "pending", "support_review_method": ISOLATED_REVIEW_METHOD,
-                                     "support_review_indexes": list(review_indexes), "support_review_omissions": list(review_omissions),
-                                     "support_review_calls": list(isolated_records), "search_calls": search_calls,
-                                     "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
-                                     "require_counterarguments": request.require_counterarguments,
-                                     "model": getattr(getattr(provider, "settings", None), "model", None),
-                                     "provider": getattr(provider, "name", None), "prompt_sha256": analysis.prompt_sha256,
-                                     "prompt_characters": analysis.prompt_characters, "prompt_bytes": analysis.prompt_bytes,
-                                     "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
-                                     "selection_method": RESEARCH_SELECTION_METHOD, "selected_segments": analysis.segments,
-                                     "source_hashes": {s.source_id: s.content_sha256 for s in sources},
-                                     "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
-                                     "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
-                                     "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                            version_chain.save(current, partial)
-                        except (TopicNotFound, TopicVersionConflict) as error:
-                            raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
-
-                    if plan.batches:
-                        if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
-                            _raise_if_operation_cancelled(operation_id)
-                            raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                        review_status = "partial"
-                    for position, batch in enumerate(plan.batches):
-                        index = batch.indexes[0]
-                        _raise_if_operation_cancelled(operation_id)
-                        reason = context.model_exhaustion(per_call)
-                        if reason:
-                            for pending in plan.batches[position:]:
-                                isolated_omission(pending.indexes[0], reason)
-                            if not review_indexes:
-                                review_status = "budget_exhausted"
-                            break
-                        call_id = f"{operation_id}:support-review:{index}"
-                        reported: int | None = None
-                        try:
-                            before_call = context.start_model(call_id, per_call)
-                            remaining = deadline - monotonic()
-                            if remaining <= 0:
-                                context.abort_model_before_call(call_id, before_call)
-                                for pending in plan.batches[position:]:
-                                    isolated_omission(pending.indexes[0], "time_budget")
-                                if not review_indexes:
-                                    review_status = "budget_exhausted"
-                                break
-                            calls = context.calls
-                            review_indexes.append(index)
-                            review_segments.extend(batch.segments)
-                            isolated_records[position]["status"] = "in_progress"
-                            isolated_omission(index, "in_progress")
-                            try:
-                                if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
-                                    _raise_if_operation_cancelled(operation_id)
-                                    raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                            except BaseException:
-                                # No provider call has been made yet.
-                                context.abort_model_before_call(call_id, before_call)
-                                calls, usage = context.calls, context.usage
-                                raise
-                            remaining = deadline - monotonic()
-                            if remaining <= 0:
-                                context.abort_model_before_call(call_id, before_call)
-                                calls = context.calls
-                                review_indexes.pop()
-                                if batch.segments:
-                                    del review_segments[-len(batch.segments):]
-                                isolated_records[position]["status"] = "not_started"
-                                for pending in plan.batches[position:]:
-                                    isolated_omission(pending.indexes[0], "time_budget")
-                                if not review_indexes:
-                                    review_status = "budget_exhausted"
-                                break
-                            try:
-                                raw_review, reported_raw = generate_structured(batch.prompt,
-                                    cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
-                                    timeout_seconds=min(float(timeout), remaining))
-                                reported = reported_raw if type(reported_raw) is int and reported_raw >= 0 else None
-                            except ProviderFailure as error:
-                                reported = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                raise
-                            finally:
-                                context.finish_model(call_id, reported, before_call)
-                                review_usages.append(reported)
-                                review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
-                                usage = context.usage
-                            _raise_if_operation_cancelled(operation_id)
-                            mapped_index, verdict = parse_isolated_support_review_details(batch, raw_review)
-                            claims[mapped_index] = {**claims[mapped_index], "support_review":
-                                review_record(batch, mapped_index, verdict.verdict, ISOLATED_REVIEW_METHOD, relevance=verdict.relevance)}
-                            isolated_records[position].update(status="completed", reported_tokens=reported)
-                            isolated_omission(index, None)
-                            if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
-                                _raise_if_operation_cancelled(operation_id)
-                                raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                        except (ProviderFailure, InvalidReview, ApiProblem) as error:
-                            _raise_if_operation_cancelled(operation_id)
-                            # Version conflicts must remain visible rather than
-                            # being converted into a successful partial review.
-                            if isinstance(error, ApiProblem) and error.error_code == "lifecycle_conflict":
-                                raise
-                            review_status = "failed"
-                            review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
-                            review_failed_indexes.append(index)
-                            isolated_records[position].update(status="failed", reported_tokens=reported)
-                            isolated_omission(index, "review_failed")
-                            for pending in plan.batches[position + 1:]:
-                                isolated_omission(pending.indexes[0], "review_failure")
-                            break
-                    if review_status not in {"failed", "budget_exhausted"} and plan.batches:
-                        review_status = "partial" if review_omissions else "complete"
-        elif request.support_review:
-            review_status = "not_reviewable"
-            policy = getattr(provider, "policy", None)
-            input_limit = getattr(policy, "max_input_tokens", None)
-            output_limit = getattr(policy, "max_output_tokens", None)
-            timeout = getattr(policy, "timeout_seconds", None)
-            if calls and claims and calls >= request.max_model_calls:
-                review_status = "budget_exhausted"
-                review_omissions = [{"claim_index": index, "reason": "call_budget"} for index in range(len(claims))]
-            elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
-                per_call = input_limit + output_limit
-                # Once the provider reports a valid first-call usage, it has
-                # replaced that call's reservation. Reserve the full bound for
-                # the next call; retain the first bound only if usage is unknown.
-                budget_reason = context.model_exhaustion(per_call)
-                if budget_reason:
-                    review_status = "budget_exhausted"
-                    review_omissions = [{"claim_index": index, "reason": budget_reason} for index in range(len(claims))]
-                else:
-                    # Only sources already admitted by the first analysis can
-                    # be reviewed; no extra retrieval or permission escalation.
+                    review_omissions = [{"claim_index": i, "reason": "call_budget"} for i in range(len(claims))]
+                elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
+                    per_call = input_limit + output_limit
                     review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
-                    review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if index in discrepancy_indexes else {})}
-                                     for index, claim in enumerate(claims)]
-                    batch = prepare_support_review(review_claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
-                    review_omissions = batch.omissions
-                    if batch.indexes:
-                        def save_generation_checkpoint() -> None:
+                    review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if i in discrepancy_indexes else {})}
+                                     for i, claim in enumerate(claims)]
+                    try:
+                        plan = prepare_isolated_support_reviews(review_claims,
+                            [s for s in sources if s.source_id in analysis.source_ids], review_budget,
+                            should_stop=lambda: monotonic() >= deadline or operations.cancel_event(operation_id).is_set())
+                    except AnalysisInterrupted:
+                        _raise_if_operation_cancelled(operation_id)
+                        plan = None
+                        review_status = "budget_exhausted"
+                        review_omissions = [{"claim_index": i, "reason": "time_budget"} for i in range(len(claims))]
+                    if plan is not None:
+                        review_omissions = list(plan.omissions) + [{"claim_index": b.indexes[0], "reason": "not_started"} for b in plan.batches]
+                        review_omissions.sort(key=lambda item: item["claim_index"])
+                        isolated_records = [{"claim_index": b.indexes[0], "prompt_sha256": b.prompt_sha256,
+                                             "segments": b.segments, "status": "not_started"} for b in plan.batches]
+                        claims = [{key: value for key, value in claim.items() if key != "support_review"} for claim in claims]
+                        review_usages: list[int | None] = []
+
+                        def isolated_omission(index: int, reason: str | None) -> None:
+                            nonlocal review_omissions
+                            review_omissions = [item for item in review_omissions if item["claim_index"] != index]
+                            if reason is not None:
+                                review_omissions.append({"claim_index": index, "reason": reason})
+                            review_omissions.sort(key=lambda item: item["claim_index"])
+
+                        def save_isolated_checkpoint() -> None:
                             try:
                                 current = version_chain.current()
                                 partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                                    sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
-                                    claims=claims, limitations=[*discovery_notes, *analysis.limitations,
-                                        "Generation is saved; support review is pending or was interrupted."],
-                                    run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
-                                     **run_core(),
-                                                                                  "model_calls": calls, "total_tokens": pre_review_usage, "cost_usd": None,
-                                         "cost_status": "unknown" if calls or search_calls else "no_external_call",
-                                         "generation_tokens": generation_usage, "support_review_requested": True,
+                                    sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
+                                    limitations=[*discovery_notes, *analysis.limitations,
+                                        "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
+                                    run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
+                                         **run_core(),
+                                                                              "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
+                                         "support_review_tokens": review_usage, "cost_usd": None,
                                          "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
-                                     "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
-                                     "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
-                                     "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
-                                     "gap_followup_question_targets":gap_question_targets,
-                                     "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
-                                     "gap_search_query_sha256":gap_search_hash,
-                                     "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
+                                         "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
+                                         "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
+                                         "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
+                                         "gap_followup_question_targets":gap_question_targets,
+                                         "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
+                                         "gap_search_query_sha256":gap_search_hash,
+                                         "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
                                          "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                          "counterpoint_discarded_fields":counterpoint_discarded_fields,
                                          "counterpoint_omitted_rows":counterpoint_omitted_rows,
-                                         "require_counterarguments": request.require_counterarguments,
-                                         "support_review_status": "pending", "support_review_indexes": batch.indexes,
-                                         "support_review_method": REVIEW_METHOD, "support_review_prompt_sha256": batch.prompt_sha256,
-                                         "support_review_segments": batch.segments,
-                                         "support_review_omissions": batch.omissions, "search_calls": search_calls,
+                                         "cost_status": "unknown" if calls or search_calls else "no_external_call",
+                                         "support_review_requested": True, "support_review_mode": "isolated",
+                                         "support_review_status": "pending", "support_review_method": ISOLATED_REVIEW_METHOD,
+                                         "support_review_indexes": list(review_indexes), "support_review_omissions": list(review_omissions),
+                                         "support_review_calls": list(isolated_records), "search_calls": search_calls,
                                          "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
+                                         "require_counterarguments": request.require_counterarguments,
                                          "model": getattr(getattr(provider, "settings", None), "model", None),
-                                         "provider": getattr(provider, "name", None),
-                                         "prompt_sha256": analysis.prompt_sha256,
+                                         "provider": getattr(provider, "name", None), "prompt_sha256": analysis.prompt_sha256,
                                          "prompt_characters": analysis.prompt_characters, "prompt_bytes": analysis.prompt_bytes,
                                          "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
                                          "selection_method": RESEARCH_SELECTION_METHOD, "selected_segments": analysis.segments,
@@ -3406,39 +3248,201 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 version_chain.save(current, partial)
                             except (TopicNotFound, TopicVersionConflict) as error:
                                 raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
-                        if not operations.store.checkpoint_if_running(operation_id, save_generation_checkpoint):
+
+                        if plan.batches:
+                            if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
+                                _raise_if_operation_cancelled(operation_id)
+                                raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
+                            review_status = "partial"
+                        for position, batch in enumerate(plan.batches):
+                            index = batch.indexes[0]
                             _raise_if_operation_cancelled(operation_id)
-                            raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                        review_hash, review_segments, review_indexes = batch.prompt_sha256, batch.segments, batch.indexes
-                        review_call_id = f"{operation_id}:support-review"
-                        try:
-                            _raise_if_operation_cancelled(operation_id)
-                            remaining = deadline - monotonic()
-                            if remaining <= 0:
-                                raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
-                            before_call = context.start_model(review_call_id, per_call)
-                            calls = context.calls
+                            reason = context.model_exhaustion(per_call)
+                            if reason:
+                                for pending in plan.batches[position:]:
+                                    isolated_omission(pending.indexes[0], reason)
+                                if not review_indexes:
+                                    review_status = "budget_exhausted"
+                                break
+                            call_id = f"{operation_id}:support-review:{index}"
+                            reported: int | None = None
                             try:
-                                raw_review, reported_review_usage = generate_structured(batch.prompt,
-                                    cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
-                                    timeout_seconds=min(float(timeout), remaining))
-                                review_usage = reported_review_usage if type(reported_review_usage) is int and reported_review_usage >= 0 else None
-                            except ProviderFailure as error:
-                                review_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                raise
-                            finally:
-                                context.finish_model(review_call_id, review_usage, before_call)
-                                usage = context.usage
-                            claims, missing_reviews = apply_partial_support_review(claims, batch, raw_review)
-                            review_omissions.extend({"claim_index": index, "reason": "model_omitted"} for index in missing_reviews)
-                            review_status = "partial" if batch.omitted or missing_reviews else "complete"
-                        except (ProviderFailure, InvalidReview, ApiProblem) as error:
-                            review_status = "failed"
-                            review_failed_indexes = batch.indexes
-                            review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
-        calls, usage = context.calls, context.usage
-        _raise_if_operation_cancelled(operation_id)
-        workflow.record('support_review', review_status)
+                                before_call = context.start_model(call_id, per_call)
+                                remaining = deadline - monotonic()
+                                if remaining <= 0:
+                                    context.abort_model_before_call(call_id, before_call)
+                                    for pending in plan.batches[position:]:
+                                        isolated_omission(pending.indexes[0], "time_budget")
+                                    if not review_indexes:
+                                        review_status = "budget_exhausted"
+                                    break
+                                calls = context.calls
+                                review_indexes.append(index)
+                                review_segments.extend(batch.segments)
+                                isolated_records[position]["status"] = "in_progress"
+                                isolated_omission(index, "in_progress")
+                                try:
+                                    if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
+                                        _raise_if_operation_cancelled(operation_id)
+                                        raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
+                                except BaseException:
+                                    # No provider call has been made yet.
+                                    context.abort_model_before_call(call_id, before_call)
+                                    calls, usage = context.calls, context.usage
+                                    raise
+                                remaining = deadline - monotonic()
+                                if remaining <= 0:
+                                    context.abort_model_before_call(call_id, before_call)
+                                    calls = context.calls
+                                    review_indexes.pop()
+                                    if batch.segments:
+                                        del review_segments[-len(batch.segments):]
+                                    isolated_records[position]["status"] = "not_started"
+                                    for pending in plan.batches[position:]:
+                                        isolated_omission(pending.indexes[0], "time_budget")
+                                    if not review_indexes:
+                                        review_status = "budget_exhausted"
+                                    break
+                                try:
+                                    raw_review, reported_raw = generate_structured(batch.prompt,
+                                        cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
+                                        timeout_seconds=min(float(timeout), remaining))
+                                    reported = reported_raw if type(reported_raw) is int and reported_raw >= 0 else None
+                                except ProviderFailure as error:
+                                    reported = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                    raise
+                                finally:
+                                    context.finish_model(call_id, reported, before_call)
+                                    review_usages.append(reported)
+                                    review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
+                                    usage = context.usage
+                                _raise_if_operation_cancelled(operation_id)
+                                mapped_index, verdict = parse_isolated_support_review_details(batch, raw_review)
+                                claims[mapped_index] = {**claims[mapped_index], "support_review":
+                                    review_record(batch, mapped_index, verdict.verdict, ISOLATED_REVIEW_METHOD, relevance=verdict.relevance)}
+                                isolated_records[position].update(status="completed", reported_tokens=reported)
+                                isolated_omission(index, None)
+                                if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
+                                    _raise_if_operation_cancelled(operation_id)
+                                    raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
+                            except (ProviderFailure, InvalidReview, ApiProblem) as error:
+                                _raise_if_operation_cancelled(operation_id)
+                                # Version conflicts must remain visible rather than
+                                # being converted into a successful partial review.
+                                if isinstance(error, ApiProblem) and error.error_code == "lifecycle_conflict":
+                                    raise
+                                review_status = "failed"
+                                review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
+                                review_failed_indexes.append(index)
+                                isolated_records[position].update(status="failed", reported_tokens=reported)
+                                isolated_omission(index, "review_failed")
+                                for pending in plan.batches[position + 1:]:
+                                    isolated_omission(pending.indexes[0], "review_failure")
+                                break
+                        if review_status not in {"failed", "budget_exhausted"} and plan.batches:
+                            review_status = "partial" if review_omissions else "complete"
+            elif request.support_review:
+                review_status = "not_reviewable"
+                policy = getattr(provider, "policy", None)
+                input_limit = getattr(policy, "max_input_tokens", None)
+                output_limit = getattr(policy, "max_output_tokens", None)
+                timeout = getattr(policy, "timeout_seconds", None)
+                if calls and claims and calls >= request.max_model_calls:
+                    review_status = "budget_exhausted"
+                    review_omissions = [{"claim_index": index, "reason": "call_budget"} for index in range(len(claims))]
+                elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
+                    per_call = input_limit + output_limit
+                    # Once the provider reports a valid first-call usage, it has
+                    # replaced that call's reservation. Reserve the full bound for
+                    # the next call; retain the first bound only if usage is unknown.
+                    budget_reason = context.model_exhaustion(per_call)
+                    if budget_reason:
+                        review_status = "budget_exhausted"
+                        review_omissions = [{"claim_index": index, "reason": budget_reason} for index in range(len(claims))]
+                    else:
+                        # Only sources already admitted by the first analysis can
+                        # be reviewed; no extra retrieval or permission escalation.
+                        review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
+                        review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if index in discrepancy_indexes else {})}
+                                         for index, claim in enumerate(claims)]
+                        batch = prepare_support_review(review_claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
+                        review_omissions = batch.omissions
+                        if batch.indexes:
+                            def save_generation_checkpoint() -> None:
+                                try:
+                                    current = version_chain.current()
+                                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
+                                        claims=claims, limitations=[*discovery_notes, *analysis.limitations,
+                                            "Generation is saved; support review is pending or was interrupted."],
+                                        run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
+                                         **run_core(),
+                                                                                      "model_calls": calls, "total_tokens": pre_review_usage, "cost_usd": None,
+                                             "cost_status": "unknown" if calls or search_calls else "no_external_call",
+                                             "generation_tokens": generation_usage, "support_review_requested": True,
+                                             "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
+                                         "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
+                                         "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
+                                         "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
+                                         "gap_followup_question_targets":gap_question_targets,
+                                         "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
+                                         "gap_search_query_sha256":gap_search_hash,
+                                         "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
+                                             "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
+                                             "counterpoint_discarded_fields":counterpoint_discarded_fields,
+                                             "counterpoint_omitted_rows":counterpoint_omitted_rows,
+                                             "require_counterarguments": request.require_counterarguments,
+                                             "support_review_status": "pending", "support_review_indexes": batch.indexes,
+                                             "support_review_method": REVIEW_METHOD, "support_review_prompt_sha256": batch.prompt_sha256,
+                                             "support_review_segments": batch.segments,
+                                             "support_review_omissions": batch.omissions, "search_calls": search_calls,
+                                             "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
+                                             "model": getattr(getattr(provider, "settings", None), "model", None),
+                                             "provider": getattr(provider, "name", None),
+                                             "prompt_sha256": analysis.prompt_sha256,
+                                             "prompt_characters": analysis.prompt_characters, "prompt_bytes": analysis.prompt_bytes,
+                                             "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+                                             "selection_method": RESEARCH_SELECTION_METHOD, "selected_segments": analysis.segments,
+                                             "source_hashes": {s.source_id: s.content_sha256 for s in sources},
+                                             "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
+                                             "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
+                                             "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                                    version_chain.save(current, partial)
+                                except (TopicNotFound, TopicVersionConflict) as error:
+                                    raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
+                            if not operations.store.checkpoint_if_running(operation_id, save_generation_checkpoint):
+                                _raise_if_operation_cancelled(operation_id)
+                                raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
+                            review_hash, review_segments, review_indexes = batch.prompt_sha256, batch.segments, batch.indexes
+                            review_call_id = f"{operation_id}:support-review"
+                            try:
+                                _raise_if_operation_cancelled(operation_id)
+                                remaining = deadline - monotonic()
+                                if remaining <= 0:
+                                    raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
+                                before_call = context.start_model(review_call_id, per_call)
+                                calls = context.calls
+                                try:
+                                    raw_review, reported_review_usage = generate_structured(batch.prompt,
+                                        cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
+                                        timeout_seconds=min(float(timeout), remaining))
+                                    review_usage = reported_review_usage if type(reported_review_usage) is int and reported_review_usage >= 0 else None
+                                except ProviderFailure as error:
+                                    review_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                    raise
+                                finally:
+                                    context.finish_model(review_call_id, review_usage, before_call)
+                                    usage = context.usage
+                                claims, missing_reviews = apply_partial_support_review(claims, batch, raw_review)
+                                review_omissions.extend({"claim_index": index, "reason": "model_omitted"} for index in missing_reviews)
+                                review_status = "partial" if batch.omitted or missing_reviews else "complete"
+                            except (ProviderFailure, InvalidReview, ApiProblem) as error:
+                                review_status = "failed"
+                                review_failed_indexes = batch.indexes
+                                review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
+            calls, usage = context.calls, context.usage
+            _raise_if_operation_cancelled(operation_id)
+            stage_state.status = review_status
         assessment = workflow.run('delivery_assessment', lambda: assess_research_outcome(
             request=request, analysis=analysis, claims=claims,
             source_states=source_processing(analysis.segments), discovery_notes=discovery_notes,

@@ -6,7 +6,8 @@ supplied explicitly and retain their own permissions, budgets and checkpoints.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, TypeVar
+from contextlib import contextmanager
+from typing import Any, Callable, Iterator, TypeVar
 
 from .research_coordinator import ResearchExecutionContext
 
@@ -17,9 +18,19 @@ T = TypeVar('T')
 class StageReceipt:
     stage: str
     status: str
-    model_calls: int | None
-    search_calls: int | None
+    model_calls_admitted: int
+    search_calls_admitted: int
     elapsed_ms: int | None
+    schema_version: str = '1'
+
+
+@dataclass
+class ActiveStage:
+    stage: str
+    start_calls: int
+    start_searches: int
+    started_at: float
+    status: str = 'in_progress'
 
 
 @dataclass
@@ -27,25 +38,34 @@ class ResearchWorkflow:
     """Coordinate explicit stage handlers through one run context."""
     context: ResearchExecutionContext
     receipts: list[StageReceipt] = field(default_factory=list)
+    active: list[ActiveStage] = field(default_factory=list)
+
+    @contextmanager
+    def stage(self, name: str) -> Iterator[ActiveStage]:
+        """Track one stage, including any checkpoint saved before it ends."""
+        self.context.ensure_running()
+        stage = ActiveStage(name, self.context.calls, self.context.search_calls, self.context.now())
+        self.active.append(stage)
+        try:
+            yield stage
+        except BaseException:
+            stage.status = 'failed'
+            raise
+        finally:
+            self.active.remove(stage)
+            self.receipts.append(self._receipt(stage))
+
+    def _receipt(self, stage: ActiveStage) -> StageReceipt:
+        return StageReceipt(stage=stage.stage, status=stage.status,
+            model_calls_admitted=self.context.calls - stage.start_calls,
+            search_calls_admitted=self.context.search_calls - stage.start_searches,
+            elapsed_ms=max(0, int((self.context.now() - stage.started_at) * 1000)))
 
     def run(self, stage: str, handler: Callable[[], T], status: Callable[[T], str]) -> T:
-        self.context.ensure_running()
-        before_models, before_searches, started = self.context.calls, self.context.search_calls, self.context.now()
-        outcome = 'failed'
-        try:
+        with self.stage(stage) as active:
             result = handler()
-            outcome = status(result)
+            active.status = status(result)
             return result
-        finally:
-            self.receipts.append(StageReceipt(stage=stage, status=outcome,
-                model_calls=self.context.calls - before_models,
-                search_calls=self.context.search_calls - before_searches,
-                elapsed_ms=max(0, int((self.context.now() - started) * 1000))))
-
-    def record(self, stage: str, status: str) -> None:
-        """Record an externally coordinated stage without inventing its timing."""
-        self.receipts.append(StageReceipt(stage=stage, status=status,
-                                          model_calls=None, search_calls=None, elapsed_ms=None))
 
     def snapshot(self) -> list[dict[str, Any]]:
-        return [asdict(item) for item in self.receipts]
+        return [asdict(item) for item in self.receipts] + [asdict(self._receipt(item)) for item in self.active]
