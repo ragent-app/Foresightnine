@@ -2581,6 +2581,16 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens),
             reserve_search=lambda: _reserve_search_call(http_request))
 
+        # Planning is optional and uses only the user-authorized question and
+        # scope. Its suggestions cannot grant tools or expand search inputs.
+        plan_result = execute_planning(
+            requested=request.plan_research, question=effective_question, scope=topic.request.scope,
+            provider=provider, generate=generate_structured,
+            context=context, call_id=f'{operation_id}:research-plan')
+        planning_status = plan_result.status
+        planning_steps = list(plan_result.steps)
+        _raise_if_operation_cancelled(operation_id)
+
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
         if (not sources or request.auto_fetch_official) and user_question and request.max_search_calls:
@@ -2720,17 +2730,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         elif request.auto_fetch_official and len(available_ids) >= 100:
             official_fetch_status = "source_capacity"
             discovery_notes.append("Official source retrieval was skipped because this research already has the maximum number of sources.")
-
-        # The planning stage has explicit capabilities and returns its own
-        # receipt; the API continues to own admission and durable lifecycle.
-        eligible_sources, _ = prepare_sources(sources, topic.request.as_of)
-        plan_result = execute_planning(
-            requested=request.plan_research, question=effective_question, scope=topic.request.scope,
-            sources_available=bool(eligible_sources), provider=provider, generate=generate_structured,
-            context=context, call_id=f'{operation_id}:research-plan')
-        planning_status = plan_result.status
-        planning_steps = list(plan_result.steps)
-        _raise_if_operation_cancelled(operation_id)
 
         generation = execute_generation(
             question=effective_question, scope=topic.request.scope, sources=sources, as_of=topic.request.as_of,

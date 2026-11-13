@@ -98,7 +98,7 @@ class PlanningResult:
     attempted: bool = False
 
 
-def execute_planning(*, requested: bool, question: str, scope: str, sources_available: bool,
+def execute_planning(*, requested: bool, question: str, scope: str,
                      provider: Any, generate: Any, context: ResearchExecutionContext,
                      call_id: str) -> PlanningResult:
     """Plan over the permitted scope without granting new tool permissions."""
@@ -106,7 +106,7 @@ def execute_planning(*, requested: bool, question: str, scope: str, sources_avai
         return PlanningResult('not_requested')
     if context.cost_limited:
         return PlanningResult('cost_unknown')
-    if not question or not sources_available or not callable(generate):
+    if not question or not callable(generate):
         return PlanningResult('unavailable')
     policy = getattr(provider, 'policy', None)
     input_limit = getattr(policy, 'max_input_tokens', None)
