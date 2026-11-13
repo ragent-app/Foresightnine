@@ -934,6 +934,11 @@
             "title": "Gap Followup",
             "type": "boolean"
           },
+          "gap_search": {
+            "default": false,
+            "title": "Gap Search",
+            "type": "boolean"
+          },
           "include_scope_in_search": {
             "default": false,
             "title": "Include Scope In Search",
@@ -984,7 +989,7 @@
           },
           "max_search_calls": {
             "default": 1,
-            "maximum": 1.0,
+            "maximum": 2.0,
             "minimum": 0.0,
             "title": "Max Search Calls",
             "type": "integer"

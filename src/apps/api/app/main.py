@@ -2514,6 +2514,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         run_request_payload.pop("counterpoint_followup", None)
     if not request.gap_followup:
         run_request_payload.pop("gap_followup", None)
+    if not request.gap_search:
+        run_request_payload.pop("gap_search", None)
     if not request.plan_research:
         run_request_payload.pop("plan_research", None)
     if request.focus_citation is None:
@@ -3087,6 +3089,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # Optional evidence-gap follow-up is deliberately bounded to the
         # already authorized sources. It never turns search leads into inputs.
         gap_status = 'not_requested'
+        gap_search_status = 'not_requested' if not request.gap_search else 'not_started'
+        gap_search_hash: str | None = None
         gap_usage: int | None = None
         gap_hash: str | None = None
         gap_targets: list[int] = []
@@ -3117,7 +3121,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         prior_usage = usage
                         gap_attempted = False
                         def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
-                            nonlocal calls, gap_usage, gap_hash, gap_attempted, checkpoint_parent
+                            nonlocal calls, search_calls, gap_usage, gap_hash, gap_attempted, checkpoint_parent, gap_search_status, gap_search_hash
                             _raise_if_operation_cancelled(operation_id)
                             def save_gap_checkpoint() -> None:
                                 nonlocal checkpoint_parent
@@ -3146,6 +3150,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                              'counterpoint_tokens':counterpoint_usage, 'gap_followup_requested':True,
                                              'gap_followup_status':'pending', 'gap_followup_targets':gap_targets,
                                              'gap_followup_question_targets':gap_question_targets,
+                                             'gap_search_requested':request.gap_search, 'gap_search_status':gap_search_status,
+                                             'gap_search_query_sha256':gap_search_hash,
                                              'support_review_requested':request.support_review,
                                              'support_review_status':'pending' if request.support_review else 'not_requested',
                                              'require_counterarguments':request.require_counterarguments,
@@ -3162,9 +3168,72 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     checkpoint_parent = saved.versions[-1].version_id
                                 except (TopicNotFound, TopicVersionConflict) as error:
                                     raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+                            if request.gap_search:
+                                gap_search_status = 'pending'
                             if not operations.store.checkpoint_if_running(operation_id, save_gap_checkpoint):
                                 _raise_if_operation_cancelled(operation_id)
                                 raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
+                            if request.gap_search:
+                                search = getattr(evidence_provider, 'search', None)
+                                if request.max_cost_usd is not None:
+                                    gap_search_status = 'cost_unknown'
+                                elif search_calls >= request.max_search_calls or monotonic() >= deadline:
+                                    gap_search_status = 'budget_exhausted'
+                                elif not getattr(evidence_provider, 'supports_project_search', False) or not callable(search):
+                                    gap_search_status = 'unavailable'
+                                else:
+                                    try:
+                                        parameters = inspect.signature(search).parameters
+                                        if 'deadline' not in parameters or 'cancel_event' not in parameters:
+                                            raise ProviderFailure('search_budget_unsupported', 'Search budget cannot be enforced.', retryable=False)
+                                        _raise_if_operation_cancelled(operation_id)
+                                        _reserve_search_call(http_request)
+                                        search_calls += 1
+                                        gap_search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
+                                        raw_candidates = search(target.search_query, limit=5, deadline=deadline,
+                                            cancel_event=operations.cancel_event(operation_id))
+                                        if not isinstance(raw_candidates, (list, tuple)):
+                                            raise ProviderFailure('search_response_invalid', 'Search returned invalid results.', retryable=False)
+                                        provider_name = _provider_name(evidence_provider, 'search')
+                                        existing_urls = {item.get('url') for item in discovered}
+                                        existing_urls.update(urlunsplit((urlsplit(str(source.url)).scheme, urlsplit(str(source.url)).netloc,
+                                            urlsplit(str(source.url)).path, '', '')) for source in sources if source.url)
+                                        invalid = 0
+                                        for raw in raw_candidates[:5]:
+                                            try:
+                                                candidate = _candidate_response(raw, provider_name)
+                                                ClientSearchEvidenceProvider().validate_url(str(candidate.url))
+                                            except (ProviderFailure, ValidationError, ValueError):
+                                                invalid += 1
+                                                continue
+                                            if topic.request.as_of is not None and (candidate.published_at is None or
+                                                    candidate.published_at.date() >= topic.request.as_of.astimezone(timezone.utc).date()):
+                                                continue
+                                            parts = urlsplit(str(candidate.url))
+                                            address = urlunsplit((parts.scheme, parts.netloc, parts.path, '', ''))
+                                            if address in existing_urls:
+                                                continue
+                                            if len(discovered) >= 10:
+                                                invalid += 1
+                                                continue
+                                            existing_urls.add(address)
+                                            discovered.append({'title':candidate.title, 'url':address,
+                                                'published_at':candidate.published_at.isoformat() if candidate.published_at else None,
+                                                'retrieved_at':candidate.retrieved_at.isoformat(),
+                                                'search_result_hash':candidate.search_result_hash,
+                                                'search_provider':provider_name, 'status':'unverified', 'discovery_stage':'gap'})
+                                        gap_search_status = 'partial' if invalid else 'completed'
+                                        discovery_notes.append('Additional gap-search results are unverified leads; they are not evidence or model input.')
+                                        if invalid:
+                                            discovery_notes.append('Some gap-search candidates were invalid or exceeded the display limit and were omitted.')
+                                    except (ProviderFailure, ApiProblem, TypeError, ValueError):
+                                        _raise_if_operation_cancelled(operation_id)
+                                        gap_search_status = 'failed'
+                                        discovery_notes.append('Additional gap-focused source search failed or was rate limited.')
+                                # Preserve candidates and actual search state before the next external call.
+                                if not operations.store.checkpoint_if_running(operation_id, save_gap_checkpoint):
+                                    _raise_if_operation_cancelled(operation_id)
+                                    raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
                             remaining = deadline - monotonic()
                             if remaining <= 0:
                                 raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
@@ -3252,6 +3321,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             gap_error = error.code if isinstance(error, ProviderFailure) else 'gap_followup_unavailable'
                         if gap_attempted:
                             usage = prior_usage + gap_usage if prior_usage is not None and gap_usage is not None else None
+        if request.gap_search and gap_search_status == 'not_started' and gap_status == 'not_needed':
+            gap_search_status = 'no_gaps'
         pre_review_usage = usage
         # Numeric candidates must be considered before model review. A review
         # verdict cannot clear a known calculation or unit discrepancy.
@@ -3336,6 +3407,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
                                      "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
                                      "gap_followup_question_targets":gap_question_targets,
+                                     "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
+                                     "gap_search_query_sha256":gap_search_hash,
                                      "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
                                      "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                      "counterpoint_discarded_fields":counterpoint_discarded_fields,
@@ -3515,6 +3588,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
                                      "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
                                      "gap_followup_question_targets":gap_question_targets,
+                                     "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
+                                     "gap_search_query_sha256":gap_search_hash,
                                      "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
                                          "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                          "counterpoint_discarded_fields":counterpoint_discarded_fields,
@@ -3595,6 +3670,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
                         (not request.support_review or review_supports_all) and
                         (not request.gap_followup or gap_status in {'not_needed', 'completed'}) and
+                        (not request.gap_search or gap_search_status in {'completed', 'no_gaps'}) and
                         (not request.plan_research or planning_status == 'completed') and
                         not any(not item.get('claim_indexes') for item in analysis.research_questions))
         limitations = [*discovery_notes, *analysis.limitations]
@@ -3604,6 +3680,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 limitations.append('The requested research plan did not complete; the result used the original question.')
         if any(not item.get('claim_indexes') for item in analysis.research_questions):
             limitations.append('A model-suggested research question has no linked finding; its coverage remains unestablished.')
+        if request.gap_search and gap_search_status not in {'completed', 'no_gaps'}:
+            limitations.append('The requested gap-focused source search did not complete; existing findings remain available.')
         if request.gap_followup and gap_status not in {'not_needed', 'completed'}:
             limitations.append('The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.')
         if any(c.get('counterpoint_relevance_unverified') for c in claims):
@@ -3697,6 +3775,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
                      "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
                                      "gap_followup_question_targets":gap_question_targets,
+                                     "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
+                                     "gap_search_query_sha256":gap_search_hash,
                      "gap_followup_error":gap_error, "gap_followup_segments":gap_segments,
                      "gap_followup_input_fact_ids":gap_input_fact_ids,
                      "counterpoint_discarded_fields":counterpoint_discarded_fields,

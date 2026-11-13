@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .research_topics import ResearchContent
 
@@ -39,15 +39,22 @@ class ResearchRunRequest(BaseModel):
     support_review_mode: Literal["batch", "isolated"] = "batch"
     counterpoint_followup: bool = Field(default=False, strict=True)
     gap_followup: bool = Field(default=False, strict=True)
+    gap_search: bool = Field(default=False, strict=True)
     plan_research: bool = Field(default=False, strict=True)
     require_counterarguments: bool = True
     include_scope_in_search: bool = False
     auto_fetch_official: bool = Field(default=False, strict=True)
     focus_citation: FocusCitation | None = None
-    max_search_calls: int = Field(default=1, ge=0, le=1)
+    max_search_calls: int = Field(default=1, ge=0, le=2)
     max_elapsed_seconds: int = Field(default=60, ge=1, le=180)
     max_total_tokens: int = Field(default=10000, ge=0, le=20000)
     max_cost_usd: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_gap_search(self) -> ResearchRunRequest:
+        if self.gap_search and (not self.gap_followup or self.max_search_calls < 1):
+            raise ValueError("Gap search requires gap follow-up and a search budget.")
+        return self
 
     @field_validator("selected_source_ids")
     @classmethod

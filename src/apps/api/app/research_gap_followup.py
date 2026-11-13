@@ -15,6 +15,7 @@ class GapFocus:
     claim_indexes: tuple[int, ...]
     question_indexes: tuple[int, ...]
     question: str
+    search_query: str
 
 
 def build_gap_focus(question: str, claims: list[dict], research_questions: list[dict] | None = None,
@@ -47,7 +48,11 @@ def build_gap_focus(question: str, claims: list[dict], research_questions: list[
                           *(f'finding [{index}] {text}' for index, text in selected)])
     combined = (question.strip()[:3000] + '\nUntrusted prior subquestions and findings requiring additional source evidence; '
                 'do not assume they are true or complete:\n' + snippets)
-    return GapFocus(tuple(index for index, _ in selected), tuple(index for index, _ in selected_questions), combined)
+    # Sending this query outside the process requires separate user consent.
+    # It may include user or model text derived from private materials.
+    detail = (selected_questions or selected)[0][1]
+    query = ' '.join((question.strip()[:29] + ' ' + detail[:40]).split())[:70]
+    return GapFocus(tuple(index for index, _ in selected), tuple(index for index, _ in selected_questions), combined, query)
 
 
 def remap_followup_artifacts(facts: list[dict], calculations: list[dict], *, operation_id: str,

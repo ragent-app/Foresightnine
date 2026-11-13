@@ -65,6 +65,8 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
         add('calculation_or_amount_differences')
     if run.get('planning_requested') and run.get('planning_status') != 'completed':
         add('research_planning_incomplete')
+    if run.get('gap_search_requested') and run.get('gap_search_status') not in {'completed', 'no_gaps'}:
+        add('gap_source_search_incomplete')
     if run.get('gap_followup_requested') and run.get('gap_followup_status') not in {'completed', 'not_needed'}:
         add('gap_followup_incomplete')
     if run.get('support_review_requested') and run.get('support_review_status') != 'complete':
