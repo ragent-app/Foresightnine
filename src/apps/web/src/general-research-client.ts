@@ -13,6 +13,8 @@ export interface ResearchClaim {
   responds_to_claim_ids?: string[];
   suggested_responds_to_claim_ids?: string[];
   responds_to_omitted?: number;
+  user_fact_links?: { fact_id: string; relation: "support" | "oppose"; attribution?: string; status?: string }[];
+  user_fact_links_omitted?: number;
   authorship?: string;
   role?: string;
   support_status?: string;

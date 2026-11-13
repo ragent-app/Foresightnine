@@ -14,7 +14,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .storage import JsonDocumentRepository, StorageConflictError
-from .research_provenance import derive_evidence_links, normalize_claim_links, normalize_research_questions
+from .research_provenance import derive_evidence_links, normalize_claim_links, normalize_research_questions, normalize_user_fact_links
 from .research_quality import research_gaps
 from .research_calculations import calculation_result_status
 
@@ -187,6 +187,8 @@ class ResearchTopics:
             if isinstance(calculation, dict):
                 calculation['result_status'] = calculation_result_status(calculation)
         normalize_claim_links(content.claims, topic.versions[-1].content.claims, model_generated=created_by == 'agent')
+        normalize_user_fact_links(content.claims, content.facts, topic.versions[-1].content.claims,
+                                  topic.versions[-1].content.facts, model_generated=created_by == 'agent')
         content.run['research_questions'] = normalize_research_questions(
             content.run.get('research_questions'), content.claims,
             topic.versions[-1].content.run.get('research_questions'), topic.versions[-1].content.claims,

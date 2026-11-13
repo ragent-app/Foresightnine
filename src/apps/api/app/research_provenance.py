@@ -162,6 +162,7 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
         claim_links.append({'claim_index': index, 'claim_id': claim.get('claim_id'),
                             'responds_to_claim_ids': claim.get('responds_to_claim_ids', []),
                             'suggested_responds_to_claim_ids': claim.get('suggested_responds_to_claim_ids', []),
+                            'user_fact_links': claim.get('user_fact_links', []),
                             'role': 'counterargument' if claim.get('role') == 'counterargument' else 'support',
                             'citations': links})
 
@@ -181,6 +182,53 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
     return {'schema_version': '1', 'index_scope': 'research_version',
             'meaning': 'recorded_links_not_semantic_verification', 'truncated': truncated,
             'claims': claim_links, 'calculations': calculation_links}
+
+
+def normalize_user_fact_links(claims: list[dict], facts: list[dict], previous_claims: list[dict],
+                              previous_facts: list[dict], *, model_generated: bool) -> None:
+    """Keep only user-declared, version-local relations to unchanged facts."""
+    def unique_facts(items: list[dict]) -> dict[str, dict]:
+        counts = Counter(item.get('fact_id') for item in items
+                         if isinstance(item, dict) and isinstance(item.get('fact_id'), str))
+        return {item['fact_id']: item for item in items if isinstance(item, dict) and
+                isinstance(item.get('fact_id'), str) and counts[item['fact_id']] == 1}
+
+    current, previous = unique_facts(facts), unique_facts(previous_facts)
+    prior_claims = {item['claim_id']: item for item in previous_claims if isinstance(item, dict) and
+                    isinstance(item.get('claim_id'), str)}
+    fact_fields = ('fact_id', 'label', 'value', 'unit', 'currency', 'period', 'source_id', 'quotation', 'location')
+    claim_fields = ('text', 'role', 'citations')
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        prior = prior_claims.get(claim.get('claim_id'))
+        same_claim = prior is not None and all(prior.get(key) == claim.get(key) for key in claim_fields)
+        proposed = prior.get('user_fact_links', []) if model_generated and same_claim else (
+            [] if model_generated else claim.get('user_fact_links', []))
+        claim.pop('user_fact_links', None)
+        claim.pop('user_fact_links_omitted', None)
+        if not isinstance(proposed, list):
+            claim['user_fact_links_omitted'] = 1
+            continue
+        kept: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        omitted = max(0, len(proposed) - 20)
+        for link in proposed[:20]:
+            fact_id = link.get('fact_id') if isinstance(link, dict) else None
+            relation = link.get('relation') if isinstance(link, dict) else None
+            valid = (isinstance(fact_id, str) and isinstance(relation, str) and relation in {'support', 'oppose'} and
+                     fact_id in current and fact_id in previous and (prior is None or same_claim) and
+                     all(current[fact_id].get(key) == previous[fact_id].get(key) for key in fact_fields))
+            if not valid or (fact_id, relation) in seen:
+                omitted += 1
+                continue
+            seen.add((fact_id, relation))
+            kept.append({'fact_id': fact_id, 'relation': relation, 'attribution': 'user',
+                         'status': 'not_independently_verified'})
+        if kept:
+            claim['user_fact_links'] = kept
+        if omitted:
+            claim['user_fact_links_omitted'] = omitted
 
 
 def normalize_research_questions(raw: object, claims: list[dict], previous_raw: object,

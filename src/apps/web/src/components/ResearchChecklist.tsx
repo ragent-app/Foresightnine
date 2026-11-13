@@ -9,6 +9,7 @@ const labels: Record<string, readonly [string, string]> = {
   subquestions_unlinked: ["Some model-suggested subquestions have no linked finding.", "部分模型建议的子问题没有关联结论。"],
   citations_missing_or_incomplete: ["Findings have missing or incomplete citations.", "部分研究条目缺少完整引文。"],
   evidence_warnings: ["Evidence warnings require review.", "部分研究条目存在证据警示，需要核查。"],
+  user_fact_links_omitted: ["Some user-declared figure links were omitted and require review.", "部分用户关联的数值未保留，需要重新核查。"],
   no_counterpoint: ["A counterargument was requested but none was retained.", "本次要求反方，但没有保留反方条目。"],
   counterpoint_target_unlinked: ["Counterarguments have no recorded or suggested finding to review against.", "部分反方未关联或建议关联具体结论。"],
   counterpoint_relevance_unverified: ["Counterpoint relevance was not supported by the requested model review.", "请求的模型复查未确认部分反方与原结论相关。"],

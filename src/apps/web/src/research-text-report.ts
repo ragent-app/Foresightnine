@@ -48,6 +48,8 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
       add(label("Location", "位置"), citation.location);
       add(label("Quotation status", "引文状态"), {match: citation.quotation_match ?? null, partial_token: citation.partial_token ?? false, support: citation.support_status ?? null});
     }
+    if (claim.user_fact_links !== undefined) add(label("User-declared figure links (not verified)", "用户关联数值（未经核验）"), claim.user_fact_links);
+    if (claim.user_fact_links_omitted !== undefined) add(label("Omitted figure links", "未保留的数值关联数"), claim.user_fact_links_omitted);
     for (const key of ["source_scope_absence_unverified", "causal_attribution_unverified", "counterpoint_relevance_unverified", "prior_findings_truncated", "prior_findings_scope_unverified", "uncited_exact_dates", "publication_date_warnings", "rate_unit_warnings", "uncited_amounts", "uncited_claim_amounts", "uncited_dollar_amounts", "uncited_quarters", "balance_direction_warnings", "uncited_percentages", "percentage_unit_unverified", "uncited_percentage_bounds", "reused_percentages", "uncited_basis_points", "uncited_percentage_points", "uncited_fact_values", "citation_context_warnings", "suggested_fact_evidence", "suggested_related_quotations", "suggested_calculations"]) if (claim[key] !== undefined) add(key, claim[key]);
   });
   section(label("Extracted figures", "提取的数值"));

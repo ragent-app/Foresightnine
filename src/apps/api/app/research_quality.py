@@ -56,6 +56,9 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
               any(claim.get(name) for name in CLAIM_EVIDENCE_WARNINGS)]
     if warned:
         add('evidence_warnings', warned, kind='claim')
+    omitted_fact_links = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and claim.get('user_fact_links_omitted')]
+    if omitted_fact_links:
+        add('user_fact_links_omitted', omitted_fact_links, kind='claim')
     if support and run.get('require_counterarguments') is True and not counter:
         add('no_counterpoint')
     unlinked = [i for i in counter if not claims[i].get('responds_to_claim_ids') and
