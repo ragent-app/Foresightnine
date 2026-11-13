@@ -8,7 +8,6 @@ from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 from hashlib import sha256
 import json
-import inspect
 import logging
 import os
 import re
@@ -109,7 +108,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
 from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
-from .research_discovery import collect_source_candidates
+from .research_discovery import execute_source_search
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
 from .research_lifecycle import ResearchVersionChain
@@ -2628,45 +2627,26 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
         if (not sources or request.auto_fetch_official) and user_question and request.max_search_calls:
-            search = getattr(evidence_provider, "search", None)
-            if request.max_cost_usd is not None:
-                search_status = "cost_unknown"
-                discovery_notes.append("Source discovery was skipped because search pricing is unknown under the requested cost cap.")
-            elif not getattr(evidence_provider, "supports_project_search", False) or not callable(search):
-                search_status = "unavailable"
-                discovery_notes.append("Source discovery is unavailable; attach source material manually.")
-            else:
-                try:
-                    try:
-                        parameters = inspect.signature(search).parameters
-                    except (TypeError, ValueError) as error:
-                        raise ProviderFailure("search_budget_unsupported", "Search provider cannot enforce the time budget.", retryable=False) from error
-                    if "deadline" not in parameters or "cancel_event" not in parameters:
-                        raise ProviderFailure("search_budget_unsupported", "Search provider cannot enforce the time budget.", retryable=False)
-                    if monotonic() >= deadline:
-                        raise ProviderFailure("search_timeout", "Search time budget is exhausted.", retryable=False)
-                    context.start_search()
-                    search_calls = context.search_calls
-                    raw_candidates = search(discovery_query(user_question, topic.request.scope, request.include_scope_in_search), limit=5,
-                                            deadline=deadline, cancel_event=operations.cancel_event(operation_id))
-                    if not isinstance(raw_candidates, (list, tuple)):
-                        raise ProviderFailure("search_response_invalid", "Search provider returned invalid results.", retryable=False)
-                    provider_name = _provider_name(evidence_provider, "search")
-                    normalized = collect_source_candidates(raw_candidates, provider_name=provider_name,
-                        convert=_candidate_response, as_of=topic.request.as_of)
-                    discovered.extend(normalized.candidates)
-                    invalid_candidates = normalized.omitted
-                    search_status = ("partial" if discovered else "failed") if invalid_candidates else "completed"
-                    if invalid_candidates:
-                        discovery_notes.append("Some search candidates could not be validated and were omitted." if discovered
-                                               else "No eligible search candidates remained after validation.")
-                    discovery_notes.append("Search candidates are unverified leads, not evidence. Attach and authorize material before analysis." if not request.auto_fetch_official else
-                                           "Search candidates are unverified leads, not evidence; only an explicitly authorized retrieved source can be analyzed.")
-                    if topic.request.as_of is not None:
-                        discovery_notes.append("Historical search publication dates are not independently verified.")
-                except (ProviderFailure, ApiProblem):
-                    search_status = "failed"
-                    discovery_notes.append("Source discovery failed or was rate limited; attach source material manually.")
+            discovery = execute_source_search(provider=evidence_provider,
+                provider_name=_provider_name(evidence_provider, 'search'),
+                query=discovery_query(user_question, topic.request.scope, request.include_scope_in_search),
+                convert=_candidate_response, as_of=topic.request.as_of, context=context)
+            search_calls, search_status = context.search_calls, discovery.status
+            discovered.extend(discovery.candidates)
+            if search_status == 'cost_unknown':
+                discovery_notes.append('Source discovery was skipped because search pricing is unknown under the requested cost cap.')
+            elif search_status == 'unavailable':
+                discovery_notes.append('Source discovery is unavailable; attach source material manually.')
+            elif search_status in {'failed', 'budget_exhausted'} and not discovery.omitted:
+                discovery_notes.append('Source discovery failed or was rate limited; attach source material manually.')
+            if discovery.omitted:
+                discovery_notes.append('Some search candidates could not be validated and were omitted.' if discovered
+                                       else 'No eligible search candidates remained after validation.')
+            if search_status in {'completed', 'partial'} or discovery.omitted:
+                discovery_notes.append('Search candidates are unverified leads, not evidence. Attach and authorize material before analysis.' if not request.auto_fetch_official else
+                                       'Search candidates are unverified leads, not evidence; only an explicitly authorized retrieved source can be analyzed.')
+                if topic.request.as_of is not None:
+                    discovery_notes.append('Historical search publication dates are not independently verified.')
         _raise_if_operation_cancelled(operation_id)
         # The optional batch permission applies only to supported official
         # hosts in this bounded path; discovered snippets are never evidence.
@@ -3041,43 +3021,23 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 _raise_if_operation_cancelled(operation_id)
                                 raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
                             if request.gap_search:
-                                search = getattr(evidence_provider, 'search', None)
-                                if request.max_cost_usd is not None:
-                                    gap_search_status = 'cost_unknown'
-                                elif context.search_exhaustion():
-                                    gap_search_status = 'budget_exhausted'
-                                elif not getattr(evidence_provider, 'supports_project_search', False) or not callable(search):
-                                    gap_search_status = 'unavailable'
-                                else:
-                                    try:
-                                        parameters = inspect.signature(search).parameters
-                                        if 'deadline' not in parameters or 'cancel_event' not in parameters:
-                                            raise ProviderFailure('search_budget_unsupported', 'Search budget cannot be enforced.', retryable=False)
-                                        _raise_if_operation_cancelled(operation_id)
-                                        context.start_search()
-                                        search_calls = context.search_calls
-                                        gap_search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
-                                        raw_candidates = search(target.search_query, limit=5, deadline=deadline,
-                                            cancel_event=operations.cancel_event(operation_id))
-                                        if not isinstance(raw_candidates, (list, tuple)):
-                                            raise ProviderFailure('search_response_invalid', 'Search returned invalid results.', retryable=False)
-                                        provider_name = _provider_name(evidence_provider, 'search')
-                                        existing_urls = {item.get('url') for item in discovered}
-                                        existing_urls.update(urlunsplit((urlsplit(str(source.url)).scheme, urlsplit(str(source.url)).netloc,
-                                            urlsplit(str(source.url)).path, '', '')) for source in sources if source.url)
-                                        normalized = collect_source_candidates(raw_candidates, provider_name=provider_name,
-                                            convert=_candidate_response, as_of=topic.request.as_of,
-                                            existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap')
-                                        discovered.extend(normalized.candidates)
-                                        invalid = normalized.omitted
-                                        gap_search_status = 'partial' if invalid else 'completed'
-                                        discovery_notes.append('Additional gap-search results are unverified leads; they are not evidence or model input.')
-                                        if invalid:
-                                            discovery_notes.append('Some gap-search candidates were invalid or exceeded the display limit and were omitted.')
-                                    except (ProviderFailure, ApiProblem, TypeError, ValueError):
-                                        _raise_if_operation_cancelled(operation_id)
-                                        gap_search_status = 'failed'
-                                        discovery_notes.append('Additional gap-focused source search failed or was rate limited.')
+                                existing_urls = {item.get('url') for item in discovered}
+                                existing_urls.update(urlunsplit((urlsplit(str(source.url)).scheme, urlsplit(str(source.url)).netloc,
+                                    urlsplit(str(source.url)).path, '', '')) for source in sources if source.url)
+                                discovery = execute_source_search(provider=evidence_provider,
+                                    provider_name=_provider_name(evidence_provider, 'search'), query=target.search_query,
+                                    convert=_candidate_response, as_of=topic.request.as_of, context=context,
+                                    existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap')
+                                search_calls, gap_search_status = context.search_calls, discovery.status
+                                if discovery.attempted:
+                                    gap_search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
+                                discovered.extend(discovery.candidates)
+                                if discovery.status in {'completed', 'partial'}:
+                                    discovery_notes.append('Additional gap-search results are unverified leads; they are not evidence or model input.')
+                                if discovery.omitted:
+                                    discovery_notes.append('Some gap-search candidates were invalid or exceeded the display limit and were omitted.')
+                                if discovery.status == 'failed':
+                                    discovery_notes.append('Additional gap-focused source search failed or was rate limited.')
                                 # Preserve candidates and actual search state before the next external call.
                                 if not operations.store.checkpoint_if_running(operation_id, save_gap_checkpoint):
                                     _raise_if_operation_cancelled(operation_id)
