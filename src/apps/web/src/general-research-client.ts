@@ -103,6 +103,7 @@ export function searchCandidateDate(publishedAt?: string | null, cutoff?: string
 }
 export interface RunInputSnapshot {
   captured_at: string;
+  question_origin?: "user" | "document_overview_default";
   parent_version_id: string;
   as_of: string | null;
   planned_official_source_id?: string;

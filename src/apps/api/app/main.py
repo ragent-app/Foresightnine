@@ -106,7 +106,7 @@ from .research_evidence import claim_amount_differences, evidence_differences, f
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review_details, review_record)
-from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
+from .research_runs import CLAIM_EVIDENCE_WARNINGS, DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_coverage import initial_source_coverage
 from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
@@ -2500,7 +2500,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         sources = [research_sources.get(account.account_id, source_id) for source_id in source_ids]
     except (TopicNotFound, SourceNotFound) as error:
         raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
-    effective_question = request.question_override if request.question_override is not None else topic.request.question
+    user_question = request.question_override if request.question_override is not None else topic.request.question
+    question_origin = 'user' if user_question else 'document_overview_default'
+    effective_question = user_question or DOCUMENT_OVERVIEW_QUESTION
     # Preserve idempotency keys issued before this optional field existed.
     run_request_payload = _request_payload(request)
     if request.require_counterarguments:
@@ -2603,7 +2605,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
-        if (not sources or request.auto_fetch_official) and effective_question and request.max_search_calls:
+        if (not sources or request.auto_fetch_official) and user_question and request.max_search_calls:
             search = getattr(evidence_provider, "search", None)
             if request.max_cost_usd is not None:
                 search_status = "cost_unknown"
@@ -2623,7 +2625,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                         raise ProviderFailure("search_timeout", "Search time budget is exhausted.", retryable=False)
                     _reserve_search_call(http_request)
                     search_calls = 1
-                    raw_candidates = search(discovery_query(effective_question, topic.request.scope, request.include_scope_in_search), limit=5,
+                    raw_candidates = search(discovery_query(user_question, topic.request.scope, request.include_scope_in_search), limit=5,
                                             deadline=deadline, cancel_event=operations.cancel_event(operation_id))
                     if not isinstance(raw_candidates, (list, tuple)):
                         raise ProviderFailure("search_response_invalid", "Search provider returned invalid results.", retryable=False)
@@ -2666,7 +2668,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # hosts in this bounded path; discovered snippets are never evidence.
         # Historical content may have changed since its published date, so no
         # automatic source is attached to a cutoff-constrained research run.
-        if (request.auto_fetch_official and request.selected_source_ids != [] and
+        if (request.auto_fetch_official and user_question and request.selected_source_ids != [] and
                 len(available_ids) < 100 and topic.request.as_of is None and request.max_cost_usd is None):
             # Existing materials remain in the run. Do not spend the single
             # bounded retrieval attempt on a source already attached.
@@ -2745,6 +2747,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     official_fetch_status = "failed"
                     discovery_notes.append("The official source could not be retrieved; the search result remains an unverified lead.")
                 break  # One bounded retrieval attempt, with no hidden retries.
+        elif request.auto_fetch_official and not user_question:
+            official_fetch_status = "question_missing"
+            discovery_notes.append("Automatic source discovery requires a user-provided question; the document overview did not start a search.")
         elif request.auto_fetch_official and topic.request.as_of is not None:
             official_fetch_status = "historical_cutoff"
             discovery_notes.append("Automatic retrieval is unavailable for historical cutoffs because revision history is not established.")
@@ -2993,6 +2998,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         limitations=[*discovery_notes, *analysis.limitations,
                                             'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
+                                     'question_origin':question_origin,
+                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
                                      'research_questions':analysis.research_questions,
                                      'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
@@ -3161,6 +3168,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         limitations=[*discovery_notes, *analysis.limitations,
                                             'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
+                                     'question_origin':question_origin,
+                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
                                      'research_questions':analysis.research_questions,
                                      'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
@@ -3418,6 +3427,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 limitations=[*discovery_notes, *analysis.limitations,
                                     "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
                                 run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
+                                     'question_origin':question_origin,
+                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
                                      'research_questions':analysis.research_questions,
                                      'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
@@ -3599,6 +3610,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     claims=claims, limitations=[*discovery_notes, *analysis.limitations,
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
+                                     'question_origin':question_origin,
+                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
                                      'research_questions':analysis.research_questions,
                                      'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
@@ -3794,6 +3807,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 calculations=analysis.calculations, calculation_differences=calculation_differences, amount_differences=amount_differences,
                 claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
+                                     'question_origin':question_origin,
+                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
                                      'research_questions':analysis.research_questions,
                                      'source_processing':source_processing(analysis.segments),
                                      'available_fact_ids':analysis.available_fact_ids,
@@ -3890,6 +3905,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "schema_version": "1", "operation_id": operation_id, "owner_id": account.account_id,
             "topic_id": topic_id, "parent_version_id": request.parent_version_id,
             "captured_at": lifecycle_clock.now().isoformat(),
+            "question_origin": question_origin,
+            **({"default_task": DOCUMENT_OVERVIEW_QUESTION} if question_origin == "document_overview_default" else {}),
             "question_sha256": sha256(effective_question.encode("utf-8")).hexdigest(),
             **({"scope_sha256": sha256(topic.request.scope.encode("utf-8")).hexdigest()} if topic.request.scope else {}),
             "as_of": topic.request.as_of.isoformat() if topic.request.as_of else None,

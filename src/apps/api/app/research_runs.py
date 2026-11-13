@@ -11,6 +11,11 @@ from .research_topics import ResearchContent
 
 from .research_quality import CLAIM_EVIDENCE_WARNINGS
 
+DOCUMENT_OVERVIEW_QUESTION = (
+    "Summarize the supplied material's main verifiable findings, relevant figures, "
+    "limitations and unresolved questions. Cite the material and do not assume an investment decision."
+)
+
 
 def has_usable_counterpoint(claims: list[dict], excluded_indexes: set[int] | None = None) -> bool:
     """Identify a cited candidate with no known evidence warnings, not proof of relevance."""
