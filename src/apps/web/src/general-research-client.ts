@@ -21,7 +21,7 @@ export interface ResearchClaim {
   prior_findings_truncated?: boolean;
   prior_findings_scope_unverified?: boolean;
   source_scope_absence_unverified?: boolean;
-  support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false; diagnostic_only?: boolean; reported_verdict?: string; guard_reasons?: string[] };
+  support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false; diagnostic_only?: boolean; reported_verdict?: string; guard_reasons?: string[]; relevance?: "relevant" | "not_relevant" | "uncertain" | "not_assessed"; reported_relevance?: string; relevance_context_complete?: boolean };
   citations?: { source_id: string; quotation?: string; quotation_match?: string; partial_token?: boolean; support_status?: string; location?: SourceLocation }[];
   suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];
   suggested_related_quotations?: { source_id: string; quotation: string; location: SourceLocation; matched_amounts: string[]; from_claim_index: number; status: string }[];

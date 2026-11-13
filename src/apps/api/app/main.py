@@ -105,7 +105,7 @@ from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTIO
 from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_partial_source_absence, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
-                                    prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
+                                    prepare_isolated_support_reviews, parse_isolated_support_review_details, review_record)
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
@@ -3432,9 +3432,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
                                 usage = pre_review_usage + review_usage if pre_review_usage is not None and review_usage is not None else None
                             _raise_if_operation_cancelled(operation_id)
-                            mapped_index, verdict = parse_isolated_support_review(batch, raw_review)
+                            mapped_index, verdict = parse_isolated_support_review_details(batch, raw_review)
                             claims[mapped_index] = {**claims[mapped_index], "support_review":
-                                review_record(batch, mapped_index, verdict, ISOLATED_REVIEW_METHOD)}
+                                review_record(batch, mapped_index, verdict.verdict, ISOLATED_REVIEW_METHOD, relevance=verdict.relevance)}
                             isolated_records[position].update(status="completed", reported_tokens=reported)
                             isolated_omission(index, None)
                             if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
@@ -3587,7 +3587,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "simulated material is excluded", "percentage fact included a model-declared currency",
             "excluded from automatic calculations", "PDF text may have missing word spacing"))
         review_supports_all = (review_status == "complete" and all(
-            c.get("support_review", {}).get("verdict") == "supports" for c in claims))
+            c.get("support_review", {}).get("verdict") == "supports" and
+            (c.get('role') != 'counterargument' or not request.require_counterarguments or
+             c.get('support_review', {}).get('relevance') == 'relevant') for c in claims))
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not unverified_calculations and not differences and not calculation_differences and not amount_differences and
                         not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
@@ -3618,6 +3620,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("No counterarguments were provided; this does not establish that none exist.")
         if request.support_review:
             limitations.append("A second model assessment is not independent proof that evidence supports a claim.")
+            if request.require_counterarguments and any(
+                    c.get('role') == 'counterargument' and c.get('support_review', {}).get('relevance') != 'relevant' for c in claims):
+                limitations.append('Counterpoint relevance was not supported by a complete model review; the relationship remains unverified.')
             if review_status != "complete":
                 limitations.append("The requested model support review did not cover all claims.")
         if differences:

@@ -69,6 +69,11 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
         add('gap_followup_incomplete')
     if run.get('support_review_requested') and run.get('support_review_status') != 'complete':
         add('model_review_incomplete')
+    if run.get('support_review_requested') and run.get('require_counterarguments') is True:
+        unreviewed_relation = [i for i in counter if not isinstance(claims[i].get('support_review'), dict) or
+                               claims[i]['support_review'].get('relevance') != 'relevant']
+        if unreviewed_relation:
+            add('counterpoint_relevance_unverified', unreviewed_relation, kind='claim')
     if run.get('counterpoint_requested') and run.get('counterpoint_status') not in {'completed', 'not_needed'}:
         add('counterpoint_followup_incomplete')
     if attempted and run.get('status') == 'partial':
