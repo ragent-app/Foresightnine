@@ -111,7 +111,7 @@ from .research_gap_followup import build_gap_focus, merge_research_questions, re
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
 from .research_budget import ResearchExecutionBudget
 from .research_planning import PLAN_SYSTEM_PROMPT
-from .research_coordinator import execute_planning
+from .research_coordinator import execute_generation, execute_planning
 from .research_structured_data import extract_structured_observations
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
@@ -2740,11 +2740,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             official_fetch_status = "source_capacity"
             discovery_notes.append("Official source retrieval was skipped because this research already has the maximum number of sources.")
 
-        attempted_prompt: dict[str, Any] = {}
-        base_prompt_text: str | None = None
-        analysis_error_detail: str | None = None
-        generation_call_usage: int | None = None
-
         # The planning stage has explicit capabilities and returns its own
         # receipt; the API continues to own admission and durable lifecycle.
         eligible_sources, _ = prepare_sources(sources, topic.request.as_of)
@@ -2765,79 +2760,20 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             usage = planning_usage
         _raise_if_operation_cancelled(operation_id)
 
-        def generate(prompt: str) -> tuple[dict[str, Any], int | None]:
-            nonlocal calls, usage, base_prompt_text, generation_call_usage
-            if request.max_cost_usd is not None:
-                raise ProviderFailure("provider_budget_unknown", "Model pricing is not configured for the requested cost cap.", retryable=False)
-            if not callable(generate_structured):
-                raise ProviderFailure("provider_unavailable", "A structured research model is not configured.", retryable=False)
-            policy = getattr(provider, "policy", None)
-            input_limit = getattr(policy, "max_input_tokens", None)
-            output_limit = getattr(policy, "max_output_tokens", None)
-            timeout = getattr(policy, "timeout_seconds", None)
-            try:
-                parameters = inspect.signature(generate_structured).parameters
-            except (TypeError, ValueError) as error:
-                raise ProviderFailure("provider_budget_unknown", "Provider limits cannot be enforced.", retryable=False) from error
-            if (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
-                    input_limit <= 0 or output_limit <= 0 or not isinstance(timeout, (int, float)) or
-                    not 0 < timeout <= 180 or "timeout_seconds" not in parameters):
-                raise ProviderFailure("provider_budget_unknown", "Provider limits cannot be enforced.", retryable=False)
-            token_reservation = input_limit + output_limit
-            budget_reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=token_reservation, now=monotonic())
-            if budget_reason:
-                raise ProviderFailure("provider_budget_unknown" if budget_reason == 'provider_limit' else "provider_budget_exhausted",
-                                      "Model execution budget is unavailable or exhausted.", retryable=False)
-            remaining = deadline - monotonic()
-            if remaining <= 0:
-                raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
-            before_calls, prior_usage = calls, usage
-            _reserve_model_call(http_request, operation_id, token_budget=token_reservation)
-            calls += 1
-            base_prompt_text = prompt
-            attempted_prompt.update({"prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
-                "prompt_characters": len(prompt), "prompt_bytes": len(prompt.encode("utf-8"))})
-            try:
-                payload, reported = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
-                    system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
-                generation_call_usage = reported if type(reported) is int and reported >= 0 else None
-                return payload, generation_call_usage
-            except ProviderFailure as error:
-                generation_call_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                raise
-            finally:
-                _settle_model_call(http_request, operation_id, generation_call_usage)
-                usage = (generation_call_usage if before_calls == 0 else
-                         prior_usage + generation_call_usage if prior_usage is not None and generation_call_usage is not None else None)
-
-        try:
-            max_input_tokens = getattr(getattr(provider, "policy", None), "max_input_tokens", 3000)
-            # Reserve room for the system instruction and transport framing;
-            # byte length is a conservative approximation, not a provider tokenizer.
-            max_prompt_chars = max(1, min(48000, int(max_input_tokens) - len(RESEARCH_SYSTEM_PROMPT.encode("utf-8")) - 512))
-            analysis = analyze(effective_question, sources, topic.request.as_of, generate,
-                               max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
-                               on_prepare=lambda segments: attempted_prompt.update({"segments": segments}),
-                               focus=focus, scope=topic.request.scope, planning_steps=planning_steps,
-                               require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
-        except (AnalysisInterrupted, ProviderFailure, InvalidAnalysis) as error:
-            unavailable_reason = ("provider_budget_exhausted" if isinstance(error, AnalysisInterrupted) else
-                                  error.code if isinstance(error, ProviderFailure) else "invalid_model_output")
-            if isinstance(error, InvalidAnalysis):
-                # InvalidAnalysis messages are fixed internal diagnostics and
-                # contain neither source text nor provider output.
-                analysis_error_detail = str(error)
-            from .research_analysis import AnalysisResult
-            # on_prepare records only eligible, bounded source selections. A
-            # selected source is not evidence that a model call succeeded (or
-            # even started); the operation and model-call record show that.
-            selected_ids = list(dict.fromkeys(segment["source_id"] for segment in attempted_prompt.get("segments", [])))
-            _, source_notes = prepare_sources(sources, topic.request.as_of)
-            if selected_ids:
-                source_notes.append("Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.")
-            analysis = AnalysisResult([], [], [*source_notes, "Research analysis could not be completed: " + unavailable_reason],
-                                      selected_ids, usage, **attempted_prompt)
-        _raise_if_operation_cancelled(operation_id)
+        generation = execute_generation(
+            question=effective_question, scope=topic.request.scope, sources=sources, as_of=topic.request.as_of,
+            provider=provider, generate=generate_structured, budget=budget, calls=calls, usage=usage,
+            cost_limited=request.max_cost_usd is not None, call_id=operation_id, focus=focus,
+            planning_steps=planning_steps,
+            require_counterarguments=request.require_counterarguments or request.counterpoint_followup,
+            ensure_running=lambda: _raise_if_operation_cancelled(operation_id),
+            cancel_event=lambda: operations.cancel_event(operation_id),
+            reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
+            settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens))
+        analysis, calls, usage = generation.analysis, generation.calls, generation.usage
+        generation_call_usage = generation.generation_tokens
+        base_prompt_text, max_prompt_chars = generation.prompt_text, generation.max_prompt_chars
+        unavailable_reason, analysis_error_detail = generation.unavailable_reason, generation.error_detail
         # Structured source rows are extracted deterministically from only
         # eligible sources included in this run. They are source observations,
         # not independently verified facts or claims about their relevance.
