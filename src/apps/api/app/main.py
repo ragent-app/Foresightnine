@@ -105,7 +105,7 @@ from .research_evidence import claim_amount_differences, evidence_differences, f
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review_details, review_record)
-from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
+from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
 from .research_discovery import execute_source_search
@@ -116,7 +116,7 @@ from .research_official_retrieval import execute_official_retrieval, official_so
 from .research_workflow import ResearchWorkflow
 from .research_assessment import assess_research_outcome
 from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
-from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
+from .research_counterpoint_stage import execute_counterpoint
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text
 from .research_sec import SecConceptRequest, SecIdentityRequest, SecFailure, fetch_sec_concept, fetch_sec_filing, search_sec_identities, reserve_sec_request, validate_user_agent
@@ -2734,152 +2734,50 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         if not operations.store.checkpoint_if_running(operation_id, save_initial_checkpoint):
             _raise_if_operation_cancelled(operation_id)
             raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
-        counterpoint_status = "not_requested"
-        counterpoint_usage: int | None = None
-        counterpoint_hash: str | None = None
-        counterpoint_error: str | None = None
-        counterpoint_discarded_fields = 0
-        counterpoint_omitted_rows = 0
-        with workflow.stage('counterpoint') as stage_state:
-            if request.counterpoint_followup:
-                counterpoint_status = "not_needed" if calls and analysis.claims else "unavailable"
-                initial_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                       *claim_amount_differences(claims, analysis.facts)]
-                has_cited_counterpoint = has_usable_counterpoint(claims, {item['claim_index'] for item in initial_differences})
-                if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) >= 20:
-                    counterpoint_status = 'capacity_reached'
-                if calls and analysis.claims and not has_cited_counterpoint and len(analysis.counterarguments) < 20 and base_prompt_text is not None:
-                    policy = getattr(provider, 'policy', None)
-                    input_limit = getattr(policy, 'max_input_tokens', None)
-                    output_limit = getattr(policy, 'max_output_tokens', None)
-                    timeout = getattr(policy, 'timeout_seconds', None)
-                    if (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
-                            not isinstance(timeout, (int, float))):
-                        counterpoint_status = 'unavailable'
-                    else:
-                        per_call = input_limit + output_limit
-                        reason = context.model_exhaustion(per_call)
-                        if reason:
-                            counterpoint_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
-                        else:
-                            followup = prepare_counterpoint_prompt(base_prompt_text, analysis.claims,
-                                max(1, min(48000, input_limit - len(RESEARCH_SYSTEM_PROMPT.encode('utf-8')) - 512)))
-                            if followup is None:
-                                counterpoint_status = 'input_budget'
-                            else:
-                                counterpoint_hash = followup.prompt_sha256
-                                def save_counterpoint_checkpoint() -> None:
-                                    try:
-                                        current = version_chain.current()
-                                        partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                                            sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
-                                            limitations=[*discovery_notes, *analysis.limitations,
-                                                'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
-                                            run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
-                                         **run_core(),
-                                                 'model_calls':calls, 'total_tokens':usage, 'generation_tokens':generation_usage,
-                                                 'counterpoint_requested':True, 'counterpoint_status':'pending',
-                                                 'counterpoint_prompt_sha256':counterpoint_hash, 'cost_usd':None,
-                                                 'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
-                                                 'prompt_characters':analysis.prompt_characters, 'prompt_bytes':analysis.prompt_bytes,
-                                                 'system_prompt_sha256':sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
-                                                 'model':getattr(getattr(provider, 'settings', None), 'model', None),
-                                                 'provider':getattr(provider, 'name', None),
-                                                 'require_counterarguments':request.require_counterarguments,
-                                                 'support_review_requested':request.support_review,
-                                                 'support_review_status':'pending' if request.support_review else 'not_requested',
-                                                 'search_calls':search_calls, 'search_status':search_status,
-                                                 'official_fetch_calls':official_fetch_calls, 'official_fetch_status':official_fetch_status,
-                                                 'selected_segments':analysis.segments, 'selection_method':RESEARCH_SELECTION_METHOD,
-                                                 'source_hashes':{s.source_id:s.content_sha256 for s in sources},
-                                                 'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
-                                                 'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
-                                                 'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                        version_chain.save(current, partial)
-                                    except (TopicNotFound, TopicVersionConflict) as error:
-                                        raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
-                                if not operations.store.checkpoint_if_running(operation_id, save_counterpoint_checkpoint):
-                                    _raise_if_operation_cancelled(operation_id)
-                                    raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
-                                call_id = f'{operation_id}:counterpoint'
-                                try:
-                                    _raise_if_operation_cancelled(operation_id)
-                                    remaining = deadline - monotonic()
-                                    if remaining <= 0:
-                                        raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-                                    before_call = context.start_model(call_id, per_call)
-                                    calls = context.calls
-                                    try:
-                                        raw_counterpoint, reported = generate_structured(followup.prompt,
-                                            cancel_event=operations.cancel_event(operation_id), system=RESEARCH_SYSTEM_PROMPT,
-                                            timeout_seconds=min(float(timeout), remaining))
-                                        counterpoint_usage = reported if type(reported) is int and reported >= 0 else None
-                                    except ProviderFailure as error:
-                                        counterpoint_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                        raise
-                                    finally:
-                                        context.finish_model(call_id, counterpoint_usage, before_call)
-                                        usage = context.usage
-                                    _raise_if_operation_cancelled(operation_id)
-                                    if not isinstance(raw_counterpoint, dict) or 'counterarguments' not in raw_counterpoint:
-                                        raise InvalidAnalysis('Counterpoint output lacks the requested field.')
-                                    allowed_fields = {'counterarguments', 'limitations'}
-                                    counterpoint_discarded_fields = len(set(raw_counterpoint) - allowed_fields)
-                                    restricted_counterpoint = {key:raw_counterpoint[key] for key in allowed_fields if key in raw_counterpoint}
-                                    filtered_rows = filter_counterpoint_rows(restricted_counterpoint['counterarguments'])
-                                    if filtered_rows is None:
-                                        raise InvalidAnalysis('Counterpoint rows exceed the allowed structure or limit.')
-                                    restricted_counterpoint['counterarguments'], counterpoint_omitted_rows = filtered_rows
-                                    checked = analyze(effective_question, sources, topic.request.as_of,
-                                        lambda _: (restricted_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
-                                        should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope,
-                                        counterargument_reference_count=followup.prior_findings_included, planning_steps=planning_steps,
-                                        require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
-                                    if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
-                                        raise InvalidAnalysis('Counterpoint source selection changed.')
-                                    raw_leads = extract_answer_candidates(raw_counterpoint)
-                                    if raw_leads:
-                                        try:
-                                            checked_leads = analyze(effective_question, sources, topic.request.as_of,
-                                                lambda _: ({'claims':raw_leads}, None), max_prompt_chars=max_prompt_chars,
-                                                should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope, planning_steps=planning_steps,
-                                                require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
-                                            if checked_leads.prompt_sha256 == analysis.prompt_sha256 and checked_leads.segments == analysis.segments:
-                                                supplemental_citation_leads = checked_leads.claims
-                                        except (InvalidAnalysis, AnalysisInterrupted):
-                                            # Leads are optional; retain the validated follow-up on failure.
-                                            supplemental_citation_leads = []
-                                    first_followup_index = len(analysis.claims) + len(analysis.counterarguments)
-                                    room = 20 - len(analysis.counterarguments)
-                                    retained_counterpoints = [{**item, **({'prior_findings_truncated':True} if followup.truncated_findings else {})}
-                                                              for item in checked.counterarguments[:room]]
-                                    truncated_counterpoints = len(checked.counterarguments) > room
-                                    analysis = replace(analysis, counterarguments=[*analysis.counterarguments, *retained_counterpoints],
-                                        limitations=list(dict.fromkeys([*analysis.limitations, *checked.limitations,
-                                            'Counterpoint follow-up uses a model and is not independent verification.',
-                                            *(['Extra counterpoint response fields were not used as findings; any citation leads require review.'] if counterpoint_discarded_fields else []),
-                                            *(['Some malformed counterpoints were omitted; review the remaining results.'] if counterpoint_omitted_rows else []),
-                                            *(['Some follow-up counterpoints were omitted because the result limit was reached.'] if truncated_counterpoints else [])])))
-                                    claims = prepare_claims()
-                                    followup_claims = claims[first_followup_index:]
-                                    followup_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                                            *claim_amount_differences(claims, analysis.facts)]
-                                    excluded = {item['claim_index'] - first_followup_index for item in followup_differences
-                                                if item['claim_index'] >= first_followup_index}
-                                    if not any(item.get('citations') for item in retained_counterpoints):
-                                        counterpoint_status = 'no_evidence'
-                                    elif truncated_counterpoints or counterpoint_omitted_rows:
-                                        counterpoint_status = 'partial'
-                                    elif not has_usable_counterpoint(followup_claims, excluded):
-                                        counterpoint_status = 'needs_review'
-                                    else:
-                                        counterpoint_status = 'completed'
-                                except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
-                                    _raise_if_operation_cancelled(operation_id)
-                                    counterpoint_status = 'failed'
-                                    counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
-            calls, usage = context.calls, context.usage
-            stage_state.status = counterpoint_status
+        def save_counterpoint_checkpoint(counterpoint_hash: str) -> None:
+            def save() -> None:
+                try:
+                    current = version_chain.current()
+                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
+                        limitations=[*discovery_notes, *analysis.limitations,
+                            'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
+                        run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': 'counterpoint',
+                             **run_core(), 'model_calls': context.calls, 'total_tokens': context.usage,
+                             'generation_tokens': generation_usage, 'counterpoint_requested': True,
+                             'counterpoint_status': 'pending', 'counterpoint_prompt_sha256': counterpoint_hash,
+                             'cost_usd': None, 'cost_status': 'unknown', 'prompt_sha256': analysis.prompt_sha256,
+                             'prompt_characters': analysis.prompt_characters, 'prompt_bytes': analysis.prompt_bytes,
+                             'system_prompt_sha256': sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
+                             'model': getattr(getattr(provider, 'settings', None), 'model', None),
+                             'provider': getattr(provider, 'name', None), 'require_counterarguments': request.require_counterarguments,
+                             'support_review_requested': request.support_review,
+                             'support_review_status': 'pending' if request.support_review else 'not_requested',
+                             'search_calls': search_calls, 'search_status': search_status,
+                             'official_fetch_calls': official_fetch_calls, 'official_fetch_status': official_fetch_status,
+                             'selected_segments': analysis.segments, 'selection_method': RESEARCH_SELECTION_METHOD,
+                             'source_hashes': {s.source_id: s.content_sha256 for s in sources},
+                             'max_model_calls': request.max_model_calls, 'max_total_tokens': request.max_total_tokens,
+                             'max_elapsed_seconds': request.max_elapsed_seconds, 'max_search_calls': request.max_search_calls,
+                             'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                    version_chain.save(current, partial)
+                except (TopicNotFound, TopicVersionConflict) as error:
+                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+            if not operations.store.checkpoint_if_running(operation_id, save):
+                _raise_if_operation_cancelled(operation_id)
+                raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
+
+        counterpoint = workflow.run('counterpoint', lambda: execute_counterpoint(
+            request=request, analysis=analysis, claims=claims, leads=supplemental_citation_leads,
+            question=effective_question, scope=topic.request.scope, sources=sources, as_of=topic.request.as_of,
+            focus=focus, planning_steps=planning_steps, base_prompt=base_prompt_text, max_prompt_chars=max_prompt_chars,
+            provider=provider, generate=generate_structured, context=context, call_id=f'{operation_id}:counterpoint',
+            checkpoint=save_counterpoint_checkpoint), lambda result: result.status)
+        analysis, claims, supplemental_citation_leads = counterpoint.analysis, counterpoint.claims, counterpoint.leads
+        counterpoint_status, counterpoint_usage = counterpoint.status, counterpoint.tokens
+        counterpoint_hash, counterpoint_error = counterpoint.prompt_sha256, counterpoint.error
+        counterpoint_discarded_fields, counterpoint_omitted_rows = counterpoint.discarded_fields, counterpoint.omitted_rows
+        calls, usage = context.calls, context.usage
         # Optional evidence-gap follow-up is deliberately bounded to the
         # already authorized sources. It never turns search leads into inputs.
         gap_status = 'not_requested'
