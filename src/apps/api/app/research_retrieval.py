@@ -9,12 +9,15 @@ from dataclasses import dataclass
 from math import log
 import re
 from typing import Callable
+from unicodedata import east_asian_width
 
 
 _STOP = frozenset('the and for with from that this what which where when why how does did into '
                   'about using explain compare provide describe please their its are was were '
                   'have has had not but can could would should'.split())
-_WORD = re.compile(r'[a-z]{3,}|(?<!\d)(?:19|20)\d{2}(?!\d)|[\u3400-\u9fff]{2,}', re.IGNORECASE)
+# Unicode words let the same selector handle accented and non-Latin text.
+# Wide-script runs are split into overlapping pairs without a domain lexicon.
+_WORD = re.compile(r'[^\W_]+', re.UNICODE)
 MAX_TERMS = 32
 MAX_CHUNKS = 2500
 CHUNK_SIZE = 1200
@@ -76,12 +79,12 @@ def build_passage_index(text: str, query: str, should_stop: Callable[[], bool] |
     """
     def tokenize(value: str) -> list[str]:
         found: list[str] = []
-        for match in _WORD.finditer(value.casefold()):
+        for match in _WORD.finditer(value.lower()):
             token = match.group()
             candidates = ([token[i:i + 2] for i in range(len(token) - 1)]
-                          if '\u3400' <= token[0] <= '\u9fff' else [token])
+                          if len(token) > 1 and east_asian_width(token[0]) in {'W', 'F'} else [token])
             for term in candidates:
-                if term not in _STOP and term not in found:
+                if len(term) >= 2 and term not in _STOP and term not in found:
                     found.append(term)
                     if len(found) >= MAX_TERMS:
                         return found

@@ -39,7 +39,7 @@ SYSTEM_PROMPT = (
 )
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
-SELECTION_METHOD = "general_lexical_with_legacy_fallback_v52"
+SELECTION_METHOD = "multilingual_lexical_with_legacy_fallback_v53"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
