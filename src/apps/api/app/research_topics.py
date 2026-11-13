@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .storage import JsonDocumentRepository, StorageConflictError
 from .research_provenance import derive_evidence_links, normalize_claim_links
+from .research_quality import research_gaps
 
 
 class ResearchInput(BaseModel):
@@ -183,6 +184,10 @@ class ResearchTopics:
         # Compute from the server-accepted snapshot on every version, including
         # user edits and checkpoints; do not trust a client-supplied link map.
         content.run['evidence_links'] = derive_evidence_links(content.claims, content.facts, content.calculations)
+        content.run['research_gaps'] = research_gaps(
+            claims=content.claims, calculations=content.calculations, sources=content.sources,
+            calculation_differences=content.calculation_differences,
+            amount_differences=content.amount_differences, run=content.run)
         updated.versions.append(ResearchVersion(version_id=f"version_{uuid4().hex}",
             parent_version_id=request.parent_version_id, created_at=now,
             content=content, review=request.review, note=request.note,

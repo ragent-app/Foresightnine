@@ -9,14 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .research_topics import ResearchContent
 
 
-CLAIM_EVIDENCE_WARNINGS = (
-    'counterpoint_relevance_unverified', 'percentage_unit_unverified', 'prior_findings_scope_unverified',
-    'source_scope_absence_unverified', 'causal_attribution_unverified', 'uncited_exact_dates',
-    'publication_date_warnings', 'rate_unit_warnings', 'uncited_amounts', 'uncited_claim_amounts',
-    'uncited_dollar_amounts', 'uncited_quarters', 'balance_direction_warnings', 'uncited_percentages',
-    'uncited_percentage_bounds', 'reused_percentages', 'uncited_basis_points',
-    'uncited_percentage_points', 'uncited_fact_values', 'citation_context_warnings',
-)
+from .research_quality import CLAIM_EVIDENCE_WARNINGS
 
 
 def has_usable_counterpoint(claims: list[dict], excluded_indexes: set[int] | None = None) -> bool:
