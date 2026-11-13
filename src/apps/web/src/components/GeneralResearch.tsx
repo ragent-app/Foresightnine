@@ -92,6 +92,7 @@ function localizeLimitation(value: string, en: boolean): string {
     "A counterpoint claims prior findings omit information, but the model received only part of those findings; review the full prior result.": "反方声称原结论遗漏信息，但模型只看到部分原结论，请核对完整研究。",
     "A proposed counterargument relationship was invalid or referred to an omitted finding; it was not retained.": "一条反方关联指向无效或已省略的结论，未予保留。",
     "Some structured source observations were not processed because the per-run limit was reached.": "结构化来源数值超过单次处理上限，部分未处理。",
+    "A model repeated a structured fact ID; the original source observation was retained.": "模型重复使用了结构化事实标识，已保留原始来源观察值。",
     "Structured observations were extracted from a stored source snapshot; identity, timing and financial meaning are not independently verified.": "结构化数值从已保存资料快照提取；对象、时间和金融含义尚未独立核验。",
     "The model-generated research plan is an unverified guide and may omit relevant questions.": "模型生成的研究计划仅供参考，可能遗漏相关问题。",
     "The requested research plan did not complete; the result used the original question.": "请求的研究计划未完成，研究使用原始问题继续。",

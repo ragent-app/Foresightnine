@@ -51,7 +51,8 @@ def build_gap_focus(question: str, claims: list[dict], research_questions: list[
 
 
 def remap_followup_artifacts(facts: list[dict], calculations: list[dict], *, operation_id: str,
-                             existing_fact_ids: set[str], max_facts: int, max_calculations: int) -> tuple[list[dict], list[dict], int]:
+                             existing_fact_ids: set[str], existing_facts: list[dict],
+                             max_facts: int, max_calculations: int) -> tuple[list[dict], list[dict], int]:
     """Give follow-up facts unique IDs and preserve only valid calculations.
 
     This only changes identifiers, never values or evidence. Inline XBRL
@@ -64,11 +65,27 @@ def remap_followup_artifacts(facts: list[dict], calculations: list[dict], *, ope
 
     counts = Counter(item.get('fact_id') for item in facts if isinstance(item, dict) and isinstance(item.get('fact_id'), str))
     mapping: dict[str, str] = {}
+    existing_by_id: dict[str, list[dict]] = {}
+    for item in existing_facts:
+        if isinstance(item, dict) and isinstance(item.get('fact_id'), str):
+            existing_by_id.setdefault(item['fact_id'], []).append(item)
     output_facts: list[dict] = []
     omitted = 0
     for index, fact in enumerate(facts):
         old_id = fact.get('fact_id') if isinstance(fact, dict) else None
-        if not isinstance(old_id, str) or not old_id or counts[old_id] != 1 or len(output_facts) >= max_facts:
+        if not isinstance(old_id, str) or not old_id or counts[old_id] != 1:
+            omitted += 1
+            continue
+        existing = existing_by_id.get(old_id, [])
+        identity_keys = ('source_id', 'quotation', 'location', 'value', 'unit', 'currency', 'period',
+                         'extraction_method', 'structured_metadata')
+        if (fact.get('extraction_method') == 'sec_company_concept_row_v1' and len(existing) == 1 and
+                all(existing[0].get(key) == fact.get(key) for key in identity_keys)):
+            # The same server-derived source row was already retained. Reuse
+            # it for explicit calculations without duplicating the evidence.
+            mapping[old_id] = old_id
+            continue
+        if len(output_facts) >= max_facts:
             omitted += 1
             continue
         new_id = 'gap_' + sha256(f'{operation_id}:{index}:{old_id}'.encode()).hexdigest()[:32]

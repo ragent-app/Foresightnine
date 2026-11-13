@@ -2886,9 +2886,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         existing_fact_ids = {fact.get('fact_id') for fact in analysis.facts if isinstance(fact, dict)}
         observed = [fact for fact in observed if fact['fact_id'] not in existing_fact_ids]
         if observed:
+            note = 'Structured observations were extracted from a stored source snapshot; identity, timing and financial meaning are not independently verified.'
             analysis = replace(analysis, facts=[*analysis.facts, *observed],
-                limitations=[*analysis.limitations,
-                    'Structured observations were extracted from a stored source snapshot; identity, timing and financial meaning are not independently verified.'])
+                limitations=list(dict.fromkeys([*analysis.limitations, note])))
         if structured_truncated:
             analysis = replace(analysis, limitations=[*analysis.limitations,
                 'Some structured source observations were not processed because the per-run limit was reached.'])
@@ -2972,6 +2972,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                             'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
                                      'research_questions':analysis.research_questions,
+                                     'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
                                      'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
@@ -3092,6 +3093,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         gap_input_targets: list[int] = []
         gap_question_targets: list[int] = []
         gap_segments: list[dict[str, Any]] = []
+        gap_input_fact_ids: list[str] = []
         gap_error: str | None = None
         if request.gap_followup:
             gap_status = 'not_needed' if calls and analysis.claims else 'unavailable'
@@ -3133,6 +3135,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                             'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
                                      'research_questions':analysis.research_questions,
+                                     'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
                                      'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
@@ -3191,6 +3194,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 gap_facts, gap_calculations, artifact_omissions = remap_followup_artifacts(
                                     gap_result.facts, gap_result.calculations, operation_id=operation_id,
                                     existing_fact_ids={fact['fact_id'] for fact in analysis.facts if isinstance(fact.get('fact_id'), str)},
+                                    existing_facts=analysis.facts,
                                     max_facts=max(0, 2000 - len(analysis.facts)),
                                     max_calculations=max(0, 2000 - len(analysis.calculations)))
                                 for calculation in gap_calculations:
@@ -3218,6 +3222,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 # selection. Do not union them when deciding
                                 # whether any one model read a whole source.
                                 gap_segments = list(gap_result.segments)
+                                gap_input_fact_ids = list(gap_result.available_fact_ids)
                                 added = bool(extra_claims or extra_counterpoints or gap_facts or gap_calculations)
                                 gap_status = 'completed' if added else 'no_evidence'
                                 if len(gap_result.claims) > support_room or len(gap_result.counterarguments) > counter_room or artifact_omissions:
@@ -3318,6 +3323,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
                                 run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
                                      'research_questions':analysis.research_questions,
+                                     'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
                                      'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
@@ -3330,7 +3336,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
                                      "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
                                      "gap_followup_question_targets":gap_question_targets,
-                                     "gap_followup_segments":gap_segments, "gap_followup_error":gap_error,
+                                     "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
                                      "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                      "counterpoint_discarded_fields":counterpoint_discarded_fields,
                                      "counterpoint_omitted_rows":counterpoint_omitted_rows,
@@ -3495,6 +3501,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
                                      'research_questions':analysis.research_questions,
+                                     'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
                                      'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
@@ -3508,7 +3515,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
                                      "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
                                      "gap_followup_question_targets":gap_question_targets,
-                                     "gap_followup_segments":gap_segments, "gap_followup_error":gap_error,
+                                     "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
                                          "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                          "counterpoint_discarded_fields":counterpoint_discarded_fields,
                                          "counterpoint_omitted_rows":counterpoint_omitted_rows,
@@ -3671,6 +3678,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
                                      'research_questions':analysis.research_questions,
+                                     'available_fact_ids':analysis.available_fact_ids,
                                      'planning_requested':request.plan_research, 'planning_status':planning_status,
                                      'planning_steps':planning_steps, 'planning_tokens':planning_usage,
                                      'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
@@ -3685,6 +3693,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
                                      "gap_followup_question_targets":gap_question_targets,
                      "gap_followup_error":gap_error, "gap_followup_segments":gap_segments,
+                     "gap_followup_input_fact_ids":gap_input_fact_ids,
                      "counterpoint_discarded_fields":counterpoint_discarded_fields,
                      "counterpoint_omitted_rows":counterpoint_omitted_rows,
                      "counterpoint_error":counterpoint_error,

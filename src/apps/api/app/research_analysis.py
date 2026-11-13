@@ -26,6 +26,7 @@ from .research_calculations import CalculationError, CalculationRequest, Numeric
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_xbrl import match_inline_fact
 from .research_retrieval import build_passage_index
+from .research_structured_data import extract_structured_observations
 
 
 SYSTEM_PROMPT = (
@@ -150,6 +151,7 @@ class AnalysisResult:
     prompt_bytes: int = 0
     segments: list[dict[str, Any]] = field(default_factory=list)
     research_questions: list[dict[str, Any]] = field(default_factory=list)
+    available_fact_ids: list[str] = field(default_factory=list)
 
 
 class InvalidAnalysis(ValueError):
@@ -1777,6 +1779,44 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
+    # Reserve a small, bounded share of the prompt for provider-supplied
+    # structured observations. The model may request calculations using their
+    # IDs, but cannot cite a row unless it appears in an analyzed excerpt.
+    structured_model_facts: list[dict[str, Any]] = []
+    if focus is None:
+        structured_candidates, _ = extract_structured_observations(eligible, max_facts=200)
+        requested_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', retrieval_question))
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for fact in structured_candidates:
+            grouped.setdefault(fact['source_id'], []).append(fact)
+        for items in grouped.values():
+            items.sort(key=lambda fact: -int(any(year in str(fact.get('period', '')) for year in requested_years)))
+        base_bytes = len(serialize().encode('utf-8'))
+        fact_budget = min(max_prompt_chars // 4, max(0, max_prompt_chars - base_bytes - 400))
+        if fact_budget > 0 and grouped:
+            base_guidance = data['evidence_guidance']
+            data['evidence_guidance'] += (" Available structured observations are unverified tool data. "
+                "Their IDs may be used for calculation requests; cite only passages present in sources.")
+            data['available_facts'] = []
+            for position in range(4):
+                for source_id, facts in grouped.items():
+                    if position >= len(facts) or len(structured_model_facts) >= 8:
+                        continue
+                    fact = facts[position]
+                    metadata = fact.get('structured_metadata', {})
+                    candidate = {'fact_id': fact['fact_id'], 'source_id': prompt_refs[source_id],
+                                 'label': fact['label'][:120], 'value': fact['value'], 'unit': fact['unit'],
+                                 'currency': fact.get('currency'), 'period': fact['period'],
+                                 'entity_id': metadata.get('entity_id'), 'metric_id': metadata.get('metric_id')}
+                    data['available_facts'].append(candidate)
+                    if len(serialize().encode('utf-8')) - base_bytes > fact_budget:
+                        data['available_facts'].pop()
+                    else:
+                        structured_model_facts.append(fact)
+            if not structured_model_facts:
+                data.pop('available_facts', None)
+                data['evidence_guidance'] = base_guidance
+
     model_text: dict[str, list[tuple[int, str]]] = {}
     processed: list[ResearchSource] = []
     remaining = MAX_TOTAL_CHARS
@@ -2143,6 +2183,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         data["sources"] = baseline_sources
         for example in citation_examples:
             del example["source_page"]
+    if structured_model_facts:
+        processed_ids = {source.source_id for source in processed}
+        included_ids = {fact['fact_id'] for fact in structured_model_facts if fact['source_id'] in processed_ids}
+        structured_model_facts = [fact for fact in structured_model_facts if fact['fact_id'] in included_ids]
+        data['available_facts'] = [item for item in data['available_facts'] if item['fact_id'] in included_ids]
+        if not structured_model_facts:
+            data.pop('available_facts', None)
     prompt = serialize()
     segments = [{"source_id": s.source_id, "character_start": start, "character_end": start + len(passage),
                  **({"model_source_id": prompt_refs[s.source_id]} if prompt_refs[s.source_id] != s.source_id else {})}
@@ -2481,8 +2528,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         return any(partial_ascii_token(source.text, item["character_start"], item["character_end"])
                    for item in positions)
 
-    checked_facts: list[dict[str, Any]] = []
+    if structured_model_facts:
+        limitations.append('Structured observations were extracted from a stored source snapshot; identity, timing and financial meaning are not independently verified.')
+    checked_facts: list[dict[str, Any]] = [dict(fact) for fact in structured_model_facts]
     numeric_facts: dict[str, NumericFact] = {}
+    for fact in structured_model_facts:
+        numeric_facts[fact['fact_id']] = NumericFact.model_validate(
+            {key: fact[key] for key in ('fact_id', 'value', 'unit', 'currency', 'period') if key in fact})
     currency_context_noted = False
     currency_quote_noted = False
     table_alignment_noted = False
@@ -2495,6 +2547,11 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     table_traces: dict[tuple[str, int], dict] = {}
     fact_ids = Counter(item.fact_id for item in result.facts)
     for item in result.facts:
+        if item.fact_id in numeric_facts:
+            note = "A model repeated a structured fact ID; the original source observation was retained."
+            if note not in limitations:
+                limitations.append(note)
+            continue
         source = source_map.get(item.citation.source_id)
         if source is None or fact_ids[item.fact_id] != 1:
             limitations.append("A model-generated fact had an invalid source or ambiguous identifier and was omitted.")
@@ -2840,4 +2897,5 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                           limitations + ["Matching a quotation does not independently establish that it supports a claim."]
                           + [MODEL_LIMITATION_PREFIX + value for value in result.limitations], [s.source_id for s in processed], tokens,
                           checked_facts, checked_calculations, sha256(prompt.encode("utf-8")).hexdigest(),
-                          len(prompt), len(prompt.encode("utf-8")), segments, research_questions)
+                          len(prompt), len(prompt.encode("utf-8")), segments, research_questions,
+                          [fact['fact_id'] for fact in structured_model_facts])
