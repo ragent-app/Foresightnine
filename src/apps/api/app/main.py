@@ -110,7 +110,8 @@ from .research_runs import CLAIM_EVIDENCE_WARNINGS, DOCUMENT_OVERVIEW_QUESTION, 
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
 from .research_budget import ResearchExecutionBudget
-from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
+from .research_planning import PLAN_SYSTEM_PROMPT
+from .research_coordinator import execute_planning
 from .research_structured_data import extract_structured_observations
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
@@ -2742,71 +2743,26 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         attempted_prompt: dict[str, Any] = {}
         base_prompt_text: str | None = None
         analysis_error_detail: str | None = None
-        planning_status = 'not_requested'
-        planning_usage: int | None = None
-        planning_hash: str | None = None
-        planning_error: str | None = None
-        planning_steps: list[str] = []
         generation_call_usage: int | None = None
 
-        # Optional plan is a separate, explicitly budgeted model call. It is
-        # advisory only and cannot authorize sources, tools or external search.
-        if request.plan_research:
-            planning_status = 'unavailable'
-            policy = getattr(provider, 'policy', None)
-            input_limit = getattr(policy, 'max_input_tokens', None)
-            output_limit = getattr(policy, 'max_output_tokens', None)
-            timeout = getattr(policy, 'timeout_seconds', None)
-            eligible_sources, _ = prepare_sources(sources, topic.request.as_of)
-            if request.max_cost_usd is not None:
-                planning_status = 'cost_unknown'
-            elif not effective_question or not eligible_sources or not callable(generate_structured):
-                planning_status = 'unavailable'
-            elif (not isinstance(input_limit, int) or not isinstance(output_limit, int) or
-                  input_limit <= 0 or output_limit <= 0 or not isinstance(timeout, (int, float)) or not 0 < timeout <= 180):
-                planning_status = 'unavailable'
-            else:
-                per_call = input_limit + output_limit
-                reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=per_call,
-                                                 now=monotonic(), required_calls=2)
-                if reason:
-                    planning_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
-                else:
-                    prompt = plan_prompt(effective_question, topic.request.scope)
-                    if len(prompt.encode('utf-8')) + len(PLAN_SYSTEM_PROMPT.encode('utf-8')) + 512 > input_limit:
-                        planning_status = 'input_budget'
-                    else:
-                        call_id = f'{operation_id}:research-plan'
-                        attempted = False
-                        try:
-                            parameters = inspect.signature(generate_structured).parameters
-                            if 'timeout_seconds' not in parameters:
-                                raise ProviderFailure('provider_budget_unknown', 'Provider limits cannot be enforced.', retryable=False)
-                            _raise_if_operation_cancelled(operation_id)
-                            remaining = deadline - monotonic()
-                            if remaining <= 0:
-                                raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-                            _reserve_model_call(http_request, call_id, token_budget=per_call)
-                            calls += 1
-                            attempted = True
-                            planning_hash = sha256(prompt.encode('utf-8')).hexdigest()
-                            try:
-                                raw, reported = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
-                                    system=PLAN_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
-                                planning_usage = reported if type(reported) is int and reported >= 0 else None
-                                planning_steps = parse_plan(raw)
-                                planning_status = 'completed'
-                            except ProviderFailure as error:
-                                planning_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                raise
-                            finally:
-                                _settle_model_call(http_request, call_id, planning_usage)
-                        except (ProviderFailure, ValidationError, TypeError, ValueError, ApiProblem) as error:
-                            _raise_if_operation_cancelled(operation_id)
-                            planning_status = 'failed'
-                            planning_error = error.code if isinstance(error, ProviderFailure) else 'planning_unavailable'
-                        if attempted:
-                            usage = planning_usage
+        # The planning stage has explicit capabilities and returns its own
+        # receipt; the API continues to own admission and durable lifecycle.
+        eligible_sources, _ = prepare_sources(sources, topic.request.as_of)
+        plan_result = execute_planning(
+            requested=request.plan_research, question=effective_question, scope=topic.request.scope,
+            sources_available=bool(eligible_sources), provider=provider, generate=generate_structured,
+            budget=budget, calls=calls, usage=usage, cost_limited=request.max_cost_usd is not None,
+            call_id=f'{operation_id}:research-plan',
+            ensure_running=lambda: _raise_if_operation_cancelled(operation_id),
+            cancel_event=lambda: operations.cancel_event(operation_id),
+            reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
+            settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens))
+        planning_status, planning_usage = plan_result.status, plan_result.tokens
+        planning_hash, planning_error = plan_result.prompt_sha256, plan_result.error
+        planning_steps = list(plan_result.steps)
+        if plan_result.attempted:
+            calls += 1
+            usage = planning_usage
         _raise_if_operation_cancelled(operation_id)
 
         def generate(prompt: str) -> tuple[dict[str, Any], int | None]:
