@@ -110,9 +110,8 @@ from .research_runs import CLAIM_EVIDENCE_WARNINGS, DOCUMENT_OVERVIEW_QUESTION, 
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
 from .research_budget import ResearchExecutionBudget
-from .research_planning import PLAN_SYSTEM_PROMPT
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
-from .research_artifacts import assemble_initial_artifacts, prepare_claim_evidence, prepare_run_claims
+from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -2745,8 +2744,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             requested=request.plan_research, question=effective_question, scope=topic.request.scope,
             sources_available=bool(eligible_sources), provider=provider, generate=generate_structured,
             context=context, call_id=f'{operation_id}:research-plan')
-        planning_status, planning_usage = plan_result.status, plan_result.tokens
-        planning_hash, planning_error = plan_result.prompt_sha256, plan_result.error
+        planning_status = plan_result.status
         planning_steps = list(plan_result.steps)
         _raise_if_operation_cancelled(operation_id)
 
@@ -2761,6 +2759,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         unavailable_reason, analysis_error_detail = generation.unavailable_reason, generation.error_detail
         analysis = assemble_initial_artifacts(analysis, sources, topic.request.as_of, planning_steps)
         supplemental_citation_leads: list[dict[str, Any]] = []
+
+        def run_core() -> dict[str, Any]:
+            return build_run_core(question_origin=question_origin,
+                default_task=DOCUMENT_OVERVIEW_QUESTION if question_origin == 'document_overview_default' else None,
+                question_override=request.question_override, analysis=analysis,
+                source_processing=source_processing(analysis.segments),
+                planning_requested=request.plan_research, planning=plan_result)
 
         def prepare_claims() -> list[dict[str, Any]]:
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
@@ -2805,25 +2810,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     current = research_topics.get(account.account_id, topic_id).versions[-1]
                                     if current.version_id != request.parent_version_id:
                                         raise TopicVersionConflict()
-                                    partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                        sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
-                                        evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
-                                        calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                        amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
+                                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
                                         limitations=[*discovery_notes, *analysis.limitations,
                                             'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'counterpoint',
-                                     'question_origin':question_origin,
-                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
-                                     'research_questions':analysis.research_questions,
-                                     'source_processing':source_processing(analysis.segments),
-                                     'available_fact_ids':analysis.available_fact_ids,
-                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
-                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
-                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
-                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
-                                             **({'question_override':request.question_override} if request.question_override is not None else {}),
-                                             'model_calls':calls, 'total_tokens':generation_usage, 'generation_tokens':generation_usage,
+                                     **run_core(),
+                                             'model_calls':calls, 'total_tokens':usage, 'generation_tokens':generation_usage,
                                              'counterpoint_requested':True, 'counterpoint_status':'pending',
                                              'counterpoint_prompt_sha256':counterpoint_hash, 'cost_usd':None,
                                              'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
@@ -2972,24 +2965,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                     expected = checkpoint_parent or request.parent_version_id
                                     if current.version_id != expected:
                                         raise TopicVersionConflict()
-                                    partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                        sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
-                                        evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
-                                        calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                        amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
+                                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
                                         limitations=[*discovery_notes, *analysis.limitations,
                                             'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
                                         run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
-                                     'question_origin':question_origin,
-                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
-                                     'research_questions':analysis.research_questions,
-                                     'source_processing':source_processing(analysis.segments),
-                                     'available_fact_ids':analysis.available_fact_ids,
-                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
-                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
-                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
-                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
-                                             **({'question_override':request.question_override} if request.question_override is not None else {}),
+                                     **run_core(),
                                              'model_calls':calls, 'total_tokens':prior_usage, 'generation_tokens':generation_usage,
                                              'counterpoint_requested':request.counterpoint_followup, 'counterpoint_status':counterpoint_status,
                                              'counterpoint_tokens':counterpoint_usage, 'gap_followup_requested':True,
@@ -3231,25 +3212,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             expected = checkpoint_parent or request.parent_version_id
                             if current.version_id != expected:
                                 raise TopicVersionConflict()
-                            partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
-                                evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
-                                calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
+                            partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                                sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
                                 limitations=[*discovery_notes, *analysis.limitations,
                                     "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
                                 run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
-                                     'question_origin':question_origin,
-                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
-                                     'research_questions':analysis.research_questions,
-                                     'source_processing':source_processing(analysis.segments),
-                                     'available_fact_ids':analysis.available_fact_ids,
-                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
-                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
-                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
-                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
-                                     **({"question_override": request.question_override} if request.question_override is not None else {}),
-                                     "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
+                                     **run_core(),
+                                                                          "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
                                      "support_review_tokens": review_usage, "cost_usd": None,
                                      "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
                                      "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
@@ -3411,26 +3380,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 expected_parent = checkpoint_parent or request.parent_version_id
                                 if current.version_id != expected_parent:
                                     raise TopicVersionConflict()
-                                partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
-                                    sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
-                                    evidence_differences=evidence_differences(analysis.facts),
-                                    calculations=analysis.calculations,
-                                    calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                    amount_differences=claim_amount_differences(claims, analysis.facts),
+                                partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                                    sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
                                     claims=claims, limitations=[*discovery_notes, *analysis.limitations,
                                         "Generation is saved; support review is pending or was interrupted."],
                                     run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
-                                     'question_origin':question_origin,
-                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
-                                     'research_questions':analysis.research_questions,
-                                     'source_processing':source_processing(analysis.segments),
-                                     'available_fact_ids':analysis.available_fact_ids,
-                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
-                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
-                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
-                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
-                                         **({"question_override": request.question_override} if request.question_override is not None else {}),
-                                         "model_calls": calls, "total_tokens": pre_review_usage, "cost_usd": None,
+                                     **run_core(),
+                                                                                  "model_calls": calls, "total_tokens": pre_review_usage, "cost_usd": None,
                                          "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                          "generation_tokens": generation_usage, "support_review_requested": True,
                                          "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
@@ -3610,22 +3566,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             limitations.append("The research is partial: supported claims or counterarguments are incomplete.")
         result = ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
             parent_version_id=request.parent_version_id, status="completed" if complete else "partial",
-            content=ResearchContent(source_candidates=discovered, sources=source_summaries(analysis.source_ids, analysis.segments), facts=analysis.facts,
-                evidence_differences=differences,
-                calculations=analysis.calculations, calculation_differences=calculation_differences, amount_differences=amount_differences,
-                claims=claims, limitations=limitations,
+            content=assemble_research_content(source_candidates=discovered, sources=source_summaries(analysis.source_ids, analysis.segments),
+                analysis=analysis, differences=differences, calculation_differences=calculation_differences,
+                amount_differences=amount_differences, claims=claims, limitations=limitations,
                 run={"operation_id": operation_id, "status": "completed" if complete else "partial",
-                                     'question_origin':question_origin,
-                                     **({'default_task':DOCUMENT_OVERVIEW_QUESTION} if question_origin == 'document_overview_default' else {}),
-                                     'research_questions':analysis.research_questions,
-                                     'source_processing':source_processing(analysis.segments),
-                                     'available_fact_ids':analysis.available_fact_ids,
-                                     'planning_requested':request.plan_research, 'planning_status':planning_status,
-                                     'planning_steps':planning_steps, 'planning_tokens':planning_usage,
-                                     'planning_prompt_sha256':planning_hash, 'planning_error':planning_error,
-                                     'planning_system_sha256':sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if request.plan_research else None,
-                     **({"question_override": request.question_override} if request.question_override is not None else {}),
-                     "model_calls": calls, "total_tokens": usage, "cost_usd": None,
+                                     **run_core(),
+                                          "model_calls": calls, "total_tokens": usage, "cost_usd": None,
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,
                      "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
                      "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,

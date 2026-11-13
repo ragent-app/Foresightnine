@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime
+from hashlib import sha256
 from typing import Any
 
 from .research_analysis import AnalysisResult
-from .research_calculations import suggest_percentage_calculations
+from .research_calculations import claim_calculation_differences, suggest_percentage_calculations
 from .research_evidence import (
+    claim_amount_differences, evidence_differences,
     flag_citation_subject_context, flag_component_direction, flag_counterpoint_agreement,
     flag_partial_source_absence, flag_publication_date_mismatches, flag_rate_level_point_warnings,
     flag_truncated_previous_findings, flag_uncited_basis_points, flag_uncited_causal_attribution,
@@ -24,6 +26,40 @@ from .research_gap_followup import merge_research_questions
 from .research_source_policy import prepare_sources
 from .research_sources import ResearchSource
 from .research_structured_data import extract_structured_observations
+from .research_topics import ResearchContent
+from .research_coordinator import PlanningResult
+from .research_planning import PLAN_SYSTEM_PROMPT
+
+
+def build_run_core(*, question_origin: str, default_task: str | None, question_override: str | None,
+                   analysis: AnalysisResult, source_processing: list[dict], planning_requested: bool,
+                   planning: PlanningResult) -> dict[str, Any]:
+    """Common stage metadata, without changing the legacy run record format."""
+    return {'question_origin': question_origin,
+            **({'default_task': default_task} if default_task is not None else {}),
+            **({'question_override': question_override} if question_override is not None else {}),
+            'research_questions': analysis.research_questions,
+            'source_processing': source_processing,
+            'available_fact_ids': analysis.available_fact_ids,
+            'planning_requested': planning_requested, 'planning_status': planning.status,
+            'planning_steps': list(planning.steps), 'planning_tokens': planning.tokens,
+            'planning_prompt_sha256': planning.prompt_sha256, 'planning_error': planning.error,
+            'planning_system_sha256': sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if planning_requested else None}
+
+
+def assemble_research_content(*, source_candidates: list[dict], sources: list[dict], analysis: AnalysisResult,
+                              claims: list[dict], limitations: list[str], run: dict,
+                              summary: str = '', differences: list[dict] | None = None,
+                              calculation_differences: list[dict] | None = None,
+                              amount_differences: list[dict] | None = None) -> ResearchContent:
+    """Build one consistent artifact snapshot for checkpoints and delivery."""
+    return ResearchContent(summary=summary, source_candidates=source_candidates, sources=sources,
+        facts=analysis.facts, calculations=analysis.calculations, claims=claims, limitations=limitations, run=run,
+        evidence_differences=evidence_differences(analysis.facts) if differences is None else differences,
+        calculation_differences=(claim_calculation_differences(claims, analysis.calculations, analysis.facts)
+                                 if calculation_differences is None else calculation_differences),
+        amount_differences=(claim_amount_differences(claims, analysis.facts)
+                            if amount_differences is None else amount_differences))
 
 
 def assemble_initial_artifacts(analysis: AnalysisResult, sources: list[ResearchSource],
