@@ -99,7 +99,7 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisResult, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
 from .research_verification import REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT
 from .research_review_stage import ReviewStageResult, execute_support_review
@@ -110,6 +110,7 @@ from .research_discovery import execute_source_search
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
 from .research_lifecycle import ResearchVersionChain
+from .research_checkpoints import ResearchCheckpointPublisher
 from .research_official_retrieval import execute_official_retrieval, official_source_id
 from .research_workflow import ResearchWorkflow
 from .research_assessment import assess_research_outcome
@@ -2592,40 +2593,45 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         planning_steps = list(plan_result.steps)
         _raise_if_operation_cancelled(operation_id)
 
-        if plan_result.attempted:
-            def save_planning_checkpoint() -> None:
-                try:
-                    current = version_chain.current()
-                    plan_analysis = AnalysisResult(claims=[], counterarguments=[], limitations=[], source_ids=[],
-                        total_tokens=context.usage,
-                        research_questions=[{'question': step, 'claim_indexes': []} for step in planning_steps])
-                    partial = assemble_research_content(
-                        summary=current.content.summary, source_candidates=[], sources=[], analysis=plan_analysis,
-                        claims=[], limitations=['The planning call is saved; source discovery and analysis have not finished.'],
-                        run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': 'planning',
-                             **build_run_core(question_origin=question_origin,
-                                 default_task=DOCUMENT_OVERVIEW_QUESTION if question_origin == 'document_overview_default' else None,
-                                 question_override=request.question_override, analysis=plan_analysis,
-                                 source_processing=source_processing([]), planning_requested=True,
-                                 planning=plan_result, request=request,
-                                 budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts,
-                                 workflow_receipts=workflow.snapshot(), generation_status='not_started'),
-                             'model_calls': context.calls, 'total_tokens': context.usage,
-                             'search_calls': 0, 'search_status': 'not_started',
-                             'official_fetch_calls': 0, 'official_fetch_status': 'not_started' if request.auto_fetch_official else 'not_requested',
-                             'cost_usd': None, 'cost_status': 'unknown',
-                             'model': getattr(getattr(provider, 'settings', None), 'model', None),
-                             'provider': getattr(provider, 'name', None),
-                             'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
-                             'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
-                             'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                    version_chain.save(current, partial)
-                except (TopicNotFound, TopicVersionConflict) as error:
-                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+        generation_usage: int | None = None
+        generation_status = 'not_started'
 
-            if not operations.store.checkpoint_if_running(operation_id, save_planning_checkpoint):
-                _raise_if_operation_cancelled(operation_id)
-                raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
+        def core_for(snapshot: AnalysisResult) -> dict[str, Any]:
+            return build_run_core(question_origin=question_origin,
+                default_task=DOCUMENT_OVERVIEW_QUESTION if question_origin == 'document_overview_default' else None,
+                question_override=request.question_override, analysis=snapshot,
+                source_processing=source_processing(snapshot.segments),
+                planning_requested=request.plan_research, planning=plan_result, request=request,
+                budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts,
+                workflow_receipts=workflow.snapshot(), generation_status=generation_status)
+
+        def checkpoint_metadata(snapshot: AnalysisResult) -> dict[str, Any]:
+            return {'model_calls': context.calls, 'total_tokens': context.usage, 'generation_tokens': generation_usage,
+                    'search_calls': context.search_calls, 'search_status': search_status,
+                    'official_fetch_calls': official_fetch_calls, 'official_fetch_status': official_fetch_status,
+                    'cost_usd': None, 'cost_status': 'unknown' if context.calls or context.search_calls or official_fetch_calls else 'no_external_call',
+                    'model': getattr(getattr(provider, 'settings', None), 'model', None),
+                    'provider': getattr(provider, 'name', None), 'prompt_sha256': snapshot.prompt_sha256,
+                    'prompt_characters': snapshot.prompt_characters, 'prompt_bytes': snapshot.prompt_bytes,
+                    'system_prompt_sha256': sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
+                    'selected_segments': snapshot.segments, 'selection_method': RESEARCH_SELECTION_METHOD,
+                    'source_hashes': {source.source_id: source.content_sha256 for source in sources},
+                    'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
+                    'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
+                    'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None}
+
+        checkpoints = ResearchCheckpointPublisher(operation_id=operation_id, versions=version_chain, context=context,
+            candidates=discovered, sources=source_summaries, core=core_for, metadata=checkpoint_metadata,
+            admit=lambda save: operations.store.checkpoint_if_running(operation_id, save))
+
+        if plan_result.attempted:
+            plan_analysis = AnalysisResult(claims=[], counterarguments=[], limitations=[], source_ids=[],
+                total_tokens=context.usage,
+                research_questions=[{'question': step, 'claim_indexes': []} for step in planning_steps])
+            checkpoints.publish(checkpoint='planning', analysis=plan_analysis, claims=[],
+                limitations=['The planning call is saved; source discovery and analysis have not finished.'],
+                extra={'search_status': 'not_started',
+                       'official_fetch_status': 'not_started' if request.auto_fetch_official else 'not_requested'})
 
         # Search results are leads only: they never become evidence or model
         # input until the user separately attaches appropriately licensed text.
@@ -2685,85 +2691,26 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         supplemental_citation_leads: list[dict[str, Any]] = []
 
         def run_core() -> dict[str, Any]:
-            return build_run_core(question_origin=question_origin,
-                default_task=DOCUMENT_OVERVIEW_QUESTION if question_origin == 'document_overview_default' else None,
-                question_override=request.question_override, analysis=analysis,
-                source_processing=source_processing(analysis.segments),
-                planning_requested=request.plan_research, planning=plan_result, request=request,
-                budget_accounted_tokens=context.accounted_tokens, search_receipts=search_receipts,
-                workflow_receipts=workflow.snapshot(), generation_status=generation_status)
+            return core_for(analysis)
 
         def prepare_claims() -> list[dict[str, Any]]:
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
         claims = prepare_claims()
         generation_usage = generation_call_usage
 
-        # Persist the first usable snapshot even when no optional follow-up is
-        # requested. Later checkpoints and the final result descend from it.
-        def save_initial_checkpoint() -> None:
-            try:
-                current = version_chain.current()
-                partial = assemble_research_content(
-                    summary=current.content.summary, source_candidates=discovered,
-                    sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
-                    claims=claims, limitations=[*discovery_notes, *analysis.limitations,
-                        'Initial analysis is saved; subsequent stages and final delivery may not have completed.'],
-                    run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': 'initial_analysis',
-                         **run_core(), 'model_calls': calls, 'total_tokens': usage,
-                         'generation_tokens': generation_usage, 'search_calls': search_calls,
-                         'search_status': search_status, 'official_fetch_calls': official_fetch_calls,
-                         'official_fetch_status': official_fetch_status,
-                         'cost_usd': None, 'cost_status': 'unknown' if calls or search_calls or official_fetch_calls else 'no_external_call',
-                         'error': unavailable_reason, 'analysis_error_detail': analysis_error_detail,
-                         'prompt_sha256': analysis.prompt_sha256, 'prompt_characters': analysis.prompt_characters,
-                         'prompt_bytes': analysis.prompt_bytes,
-                         'system_prompt_sha256': sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
-                         'model': getattr(getattr(provider, 'settings', None), 'model', None),
-                         'provider': getattr(provider, 'name', None),
-                         'selected_segments': analysis.segments, 'selection_method': RESEARCH_SELECTION_METHOD,
-                         'source_hashes': {s.source_id: s.content_sha256 for s in sources},
-                         'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
-                         'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
-                         'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                version_chain.save(current, partial)
-            except (TopicNotFound, TopicVersionConflict) as error:
-                raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+        # Save the first result before any optional follow-up or review.
+        checkpoints.publish(checkpoint='initial_analysis', analysis=analysis, claims=claims,
+            limitations=[*discovery_notes, *analysis.limitations,
+                'Initial analysis is saved; subsequent stages and final delivery may not have completed.'],
+            extra={'error': unavailable_reason, 'analysis_error_detail': analysis_error_detail})
 
-        if not operations.store.checkpoint_if_running(operation_id, save_initial_checkpoint):
-            _raise_if_operation_cancelled(operation_id)
-            raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
         def save_counterpoint_checkpoint(counterpoint_hash: str) -> None:
-            def save() -> None:
-                try:
-                    current = version_chain.current()
-                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
-                        limitations=[*discovery_notes, *analysis.limitations,
-                            'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
-                        run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': 'counterpoint',
-                             **run_core(), 'model_calls': context.calls, 'total_tokens': context.usage,
-                             'generation_tokens': generation_usage, 'counterpoint_requested': True,
-                             'counterpoint_status': 'pending', 'counterpoint_prompt_sha256': counterpoint_hash,
-                             'cost_usd': None, 'cost_status': 'unknown', 'prompt_sha256': analysis.prompt_sha256,
-                             'prompt_characters': analysis.prompt_characters, 'prompt_bytes': analysis.prompt_bytes,
-                             'system_prompt_sha256': sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
-                             'model': getattr(getattr(provider, 'settings', None), 'model', None),
-                             'provider': getattr(provider, 'name', None), 'require_counterarguments': request.require_counterarguments,
-                             'support_review_requested': request.support_review,
-                             'support_review_status': 'pending' if request.support_review else 'not_requested',
-                             'search_calls': search_calls, 'search_status': search_status,
-                             'official_fetch_calls': official_fetch_calls, 'official_fetch_status': official_fetch_status,
-                             'selected_segments': analysis.segments, 'selection_method': RESEARCH_SELECTION_METHOD,
-                             'source_hashes': {s.source_id: s.content_sha256 for s in sources},
-                             'max_model_calls': request.max_model_calls, 'max_total_tokens': request.max_total_tokens,
-                             'max_elapsed_seconds': request.max_elapsed_seconds, 'max_search_calls': request.max_search_calls,
-                             'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                    version_chain.save(current, partial)
-                except (TopicNotFound, TopicVersionConflict) as error:
-                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
-            if not operations.store.checkpoint_if_running(operation_id, save):
-                _raise_if_operation_cancelled(operation_id)
-                raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
+            checkpoints.publish(checkpoint='counterpoint', analysis=analysis, claims=claims,
+                limitations=[*discovery_notes, *analysis.limitations,
+                    'Generation is saved; counterpoint follow-up is pending or was interrupted.'],
+                extra={'counterpoint_requested': True, 'counterpoint_status': 'pending',
+                       'counterpoint_prompt_sha256': counterpoint_hash,
+                       'support_review_status': 'pending' if request.support_review else 'not_requested'})
 
         counterpoint = workflow.run('counterpoint', lambda: execute_counterpoint(
             request=request, analysis=analysis, claims=claims, leads=supplemental_citation_leads,
@@ -2777,39 +2724,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         counterpoint_discarded_fields, counterpoint_omitted_rows = counterpoint.discarded_fields, counterpoint.omitted_rows
         calls, usage = context.calls, context.usage
         def save_gap_checkpoint(gap: GapStageResult) -> None:
-            def save() -> None:
-                try:
-                    current = version_chain.current()
-                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
-                        limitations=[*discovery_notes, *gap.notes, *analysis.limitations,
-                            'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
-                        run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': 'gap_followup',
-                             **run_core(), 'model_calls': context.calls, 'total_tokens': context.usage,
-                             'generation_tokens': generation_usage,
-                             'counterpoint_requested': request.counterpoint_followup, 'counterpoint_status': counterpoint_status,
-                             'counterpoint_tokens': counterpoint_usage, 'gap_followup_requested': True,
-                             'gap_followup_status': 'pending', 'gap_followup_targets': gap.targets,
-                             'gap_followup_question_targets': gap.question_targets,
-                             'gap_search_requested': request.gap_search, 'gap_search_status': gap.search_status,
-                             'gap_search_query_sha256': gap.search_hash,
-                             'support_review_requested': request.support_review,
-                             'support_review_status': 'pending' if request.support_review else 'not_requested',
-                             'require_counterarguments': request.require_counterarguments,
-                             'source_hashes': {s.source_id: s.content_sha256 for s in sources},
-                             'selected_segments': analysis.segments, 'selection_method': RESEARCH_SELECTION_METHOD,
-                             'search_calls': context.search_calls, 'search_status': search_status,
-                             'official_fetch_calls': official_fetch_calls, 'official_fetch_status': official_fetch_status,
-                             'cost_usd': None, 'cost_status': 'unknown', 'prompt_sha256': analysis.prompt_sha256,
-                             'max_model_calls': request.max_model_calls, 'max_total_tokens': request.max_total_tokens,
-                             'max_elapsed_seconds': request.max_elapsed_seconds, 'max_search_calls': request.max_search_calls,
-                             'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                    version_chain.save(current, partial)
-                except (TopicNotFound, TopicVersionConflict) as error:
-                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
-            if not operations.store.checkpoint_if_running(operation_id, save):
-                _raise_if_operation_cancelled(operation_id)
-                raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
+            checkpoints.publish(checkpoint='gap_followup', analysis=analysis, claims=claims,
+                limitations=[*discovery_notes, *gap.notes, *analysis.limitations,
+                    'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
+                extra={'counterpoint_status': counterpoint_status, 'counterpoint_tokens': counterpoint_usage,
+                       'gap_followup_requested': True, 'gap_followup_status': 'pending',
+                       'gap_followup_targets': gap.targets, 'gap_followup_question_targets': gap.question_targets,
+                       'gap_search_status': gap.search_status, 'gap_search_query_sha256': gap.search_hash,
+                       'support_review_status': 'pending' if request.support_review else 'not_requested'})
 
         gap = workflow.run('gap_followup', lambda: execute_gap_followup(
             request=request, analysis=analysis, claims=claims, leads=supplemental_citation_leads,
@@ -2826,54 +2748,28 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         discovery_notes.extend(gap.notes)
         calls, usage, search_calls = context.calls, context.usage, context.search_calls
         def save_review_checkpoint(review: ReviewStageResult, checkpoint_name: str) -> None:
-            def save() -> None:
-                try:
-                    current = version_chain.current()
-                    isolated = checkpoint_name == 'isolated_review'
-                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=review.claims,
-                        limitations=[*discovery_notes, *analysis.limitations,
-                            'Generation and completed isolated reviews are saved; remaining reviews may be incomplete.' if isolated else
-                            'Generation is saved; support review is pending or was interrupted.'],
-                        run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': checkpoint_name,
-                             **run_core(), 'model_calls': context.calls, 'total_tokens': context.usage,
-                             'generation_tokens': generation_usage, 'support_review_tokens': review.tokens,
-                             'cost_usd': None, 'cost_status': 'unknown' if context.calls or context.search_calls or official_fetch_calls else 'no_external_call',
-                             'counterpoint_requested': request.counterpoint_followup, 'counterpoint_status': counterpoint_status,
-                             'counterpoint_tokens': counterpoint_usage, 'counterpoint_prompt_sha256': counterpoint_hash,
-                             'counterpoint_discarded_fields': counterpoint_discarded_fields,
-                             'counterpoint_omitted_rows': counterpoint_omitted_rows,
-                             'gap_followup_requested': request.gap_followup, 'gap_followup_status': gap_status,
-                             'gap_followup_tokens': gap_usage, 'gap_followup_prompt_sha256': gap_hash,
-                             'gap_followup_targets': gap_targets, 'gap_followup_input_targets': gap_input_targets,
-                             'gap_followup_question_targets': gap_question_targets,
-                             'gap_search_requested': request.gap_search, 'gap_search_status': gap_search_status,
-                             'gap_search_query_sha256': gap_search_hash, 'gap_followup_segments': gap_segments,
-                             'gap_followup_input_fact_ids': gap_input_fact_ids, 'gap_followup_error': gap_error,
-                             'support_review_requested': True, 'support_review_mode': request.support_review_mode,
-                             'support_review_status': 'pending', 'support_review_method': ISOLATED_REVIEW_METHOD if isolated else REVIEW_METHOD,
-                             'support_review_prompt_sha256': review.prompt_sha256,
-                             'support_review_indexes': list(review.indexes), 'support_review_segments': list(review.segments),
-                             'support_review_omissions': list(review.omissions),
-                             **({'support_review_calls': list(review.isolated_records)} if isolated else {}),
-                             'search_calls': context.search_calls, 'search_status': search_status,
-                             'official_fetch_calls': official_fetch_calls, 'official_fetch_status': official_fetch_status,
-                             'require_counterarguments': request.require_counterarguments,
-                             'model': getattr(getattr(provider, 'settings', None), 'model', None),
-                             'provider': getattr(provider, 'name', None), 'prompt_sha256': analysis.prompt_sha256,
-                             'prompt_characters': analysis.prompt_characters, 'prompt_bytes': analysis.prompt_bytes,
-                             'system_prompt_sha256': sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
-                             'selection_method': RESEARCH_SELECTION_METHOD, 'selected_segments': analysis.segments,
-                             'source_hashes': {s.source_id: s.content_sha256 for s in sources},
-                             'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
-                             'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
-                             'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                    version_chain.save(current, partial)
-                except (TopicNotFound, TopicVersionConflict) as error:
-                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
-            if not operations.store.checkpoint_if_running(operation_id, save):
-                _raise_if_operation_cancelled(operation_id)
-                raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
+            isolated = checkpoint_name == 'isolated_review'
+            checkpoints.publish(checkpoint=checkpoint_name, analysis=analysis, claims=review.claims,
+                limitations=[*discovery_notes, *analysis.limitations,
+                    'Generation and completed isolated reviews are saved; remaining reviews may be incomplete.' if isolated else
+                    'Generation is saved; support review is pending or was interrupted.'],
+                extra={'support_review_tokens': review.tokens,
+                       'counterpoint_status': counterpoint_status, 'counterpoint_tokens': counterpoint_usage,
+                       'counterpoint_prompt_sha256': counterpoint_hash,
+                       'counterpoint_discarded_fields': counterpoint_discarded_fields,
+                       'counterpoint_omitted_rows': counterpoint_omitted_rows,
+                       'gap_followup_status': gap_status, 'gap_followup_tokens': gap_usage,
+                       'gap_followup_prompt_sha256': gap_hash, 'gap_followup_targets': gap_targets,
+                       'gap_followup_input_targets': gap_input_targets, 'gap_followup_question_targets': gap_question_targets,
+                       'gap_search_status': gap_search_status, 'gap_search_query_sha256': gap_search_hash,
+                       'gap_followup_segments': gap_segments, 'gap_followup_input_fact_ids': gap_input_fact_ids,
+                       'gap_followup_error': gap_error, 'support_review_requested': True,
+                       'support_review_mode': request.support_review_mode, 'support_review_status': 'pending',
+                       'support_review_method': ISOLATED_REVIEW_METHOD if isolated else REVIEW_METHOD,
+                       'support_review_prompt_sha256': review.prompt_sha256,
+                       'support_review_indexes': list(review.indexes), 'support_review_segments': list(review.segments),
+                       'support_review_omissions': list(review.omissions),
+                       **({'support_review_calls': list(review.isolated_records)} if isolated else {})})
 
         review = workflow.run('support_review', lambda: execute_support_review(
             request=request, analysis=analysis, claims=claims, sources=sources, provider=provider,
@@ -2930,7 +2826,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      "search_calls": search_calls, "search_status": search_status,
                      "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
                      "elapsed_seconds": round(monotonic() - started, 3),
-                     "cost_status": "unknown" if calls or search_calls else "no_external_call",
+                     "cost_status": "unknown" if calls or search_calls or official_fetch_calls else "no_external_call",
                      "model": getattr(getattr(provider, "settings", None), "model", None),
                      "provider": getattr(provider, "name", None),
                      "prompt_sha256": analysis.prompt_sha256, "prompt_characters": analysis.prompt_characters,
