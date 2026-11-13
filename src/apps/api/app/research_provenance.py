@@ -7,6 +7,7 @@ supports the other semantically. No source content is loaded or exported.
 from __future__ import annotations
 
 from collections import Counter
+import json
 from typing import Any
 from uuid import uuid4
 
@@ -34,13 +35,36 @@ def normalize_claim_links(claims: list[dict], previous_claims: list[dict], *, mo
     """
     previous_ids = {entry.get('claim_id') for entry in previous_claims
                     if isinstance(entry, dict) and isinstance(entry.get('claim_id'), str)}
+    # Generated checkpoints are created from an in-memory analysis, which
+    # does not contain IDs assigned to the previous persisted checkpoint.
+    # Reuse an ID only for a unique, exactly unchanged finding on both sides.
+    # This keeps duplicate or ambiguous entries separate and does not infer
+    # semantic equivalence between different wording or citations.
+    def identity(item: object) -> str | None:
+        if not isinstance(item, dict) or not isinstance(item.get('text'), str):
+            return None
+        try:
+            return json.dumps([item.get('text'), item.get('role'), item.get('citations')],
+                              ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        except (TypeError, ValueError):
+            return None
+
+    previous_keys = [identity(item) for item in previous_claims]
+    current_keys = [identity(item) for item in claims]
+    previous_counts = Counter(key for key in previous_keys if key is not None)
+    current_counts = Counter(key for key in current_keys if key is not None)
+    previous_by_key = {key: item.get('claim_id') for key, item in zip(previous_keys, previous_claims)
+                       if key is not None and previous_counts[key] == 1 and isinstance(item, dict)
+                       and isinstance(item.get('claim_id'), str)}
     used: set[str] = set()
-    for claim in claims:
+    for claim, key in zip(claims, current_keys):
         if not isinstance(claim, dict):
             continue
         candidate = claim.get('claim_id')
         if not isinstance(candidate, str) or candidate not in previous_ids or candidate in used:
-            candidate = 'claim_' + uuid4().hex
+            candidate = previous_by_key.get(key) if model_generated and key is not None and current_counts[key] == 1 else None
+            if candidate is None or candidate in used:
+                candidate = 'claim_' + uuid4().hex
         claim['claim_id'] = candidate
         used.add(candidate)
     supports = [claim for claim in claims if isinstance(claim, dict) and claim.get('role') != 'counterargument']
