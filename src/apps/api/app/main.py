@@ -98,7 +98,7 @@ from .services import (
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
 from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
-from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, calculation_result_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
+from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourcePermissions, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, InvalidAnalysis, analyze, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
@@ -106,11 +106,12 @@ from .research_evidence import claim_amount_differences, evidence_differences, f
 from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review_details, review_record)
-from .research_runs import CLAIM_EVIDENCE_WARNINGS, DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
+from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
+from .research_assessment import assess_research_outcome
 from .research_artifacts import assemble_initial_artifacts, assemble_research_content, build_run_core, prepare_claim_evidence, prepare_run_claims
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
@@ -3454,116 +3455,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                             review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
         calls, usage = context.calls, context.usage
         _raise_if_operation_cancelled(operation_id)
-        differences = evidence_differences(analysis.facts)
-        calculation_differences = claim_calculation_differences(claims, analysis.calculations, analysis.facts)
-        amount_differences = claim_amount_differences(claims, analysis.facts)
-        unverified_calculations = any(calculation_input_status(calculation, analysis.facts) != "matched"
-                                      for calculation in analysis.calculations)
-        unverified_calculation_results = any(calculation_result_status(calculation) != "matched"
-                                             for calculation in analysis.calculations)
-        processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
-            "not processed", "remaining text was not examined", "was omitted", "were omitted",
-            "permission is not granted", "not established", "not authorized", "quotation location is ambiguous",
-            "currency identifier is absent from its quotation", "unit scale is absent from its quotation",
-            "simulated material is excluded", "percentage fact included a model-declared currency",
-            "excluded from automatic calculations", "PDF text may have missing word spacing"))
-        processing_incomplete = processing_incomplete or any(
-            item['eligibility'] != 'eligible' or item['initial_selection'] != 'complete'
-            for item in source_processing(analysis.segments))
-        review_supports_all = (review_status == "complete" and all(
-            c.get("support_review", {}).get("verdict") == "supports" and
-            (c.get('role') != 'counterargument' or not request.require_counterarguments or
-             c.get('support_review', {}).get('relevance') == 'relevant') for c in claims))
-        complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
-                        and not processing_incomplete and not unverified_calculations and not unverified_calculation_results and not differences and not calculation_differences and not amount_differences and
-                        not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
-                        (not request.support_review or review_supports_all) and
-                        (not request.gap_followup or gap_status in {'not_needed', 'completed'}) and
-                        (not request.gap_search or gap_search_status in {'completed', 'no_gaps'}) and
-                        (not request.plan_research or planning_status == 'completed') and
-                        not any(not item.get('claim_indexes') for item in analysis.research_questions))
-        limitations = [*discovery_notes, *analysis.limitations]
-        if request.plan_research:
-            limitations.append('The model-generated research plan is an unverified guide and may omit relevant questions.')
-            if planning_status != 'completed':
-                limitations.append('The requested research plan did not complete; the result used the original question.')
-        if any(not item.get('claim_indexes') for item in analysis.research_questions):
-            limitations.append('A model-suggested research question has no linked finding; its coverage remains unestablished.')
-        if request.gap_search and gap_search_status not in {'completed', 'no_gaps'}:
-            limitations.append('The requested gap-focused source search did not complete; existing findings remain available.')
-        if request.gap_followup and gap_status not in {'not_needed', 'completed'}:
-            limitations.append('The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.')
-        if any(c.get('counterpoint_relevance_unverified') for c in claims):
-            limitations.append('A counterpoint explicitly agrees with prior findings; review whether it provides a relevant opposing argument or limitation.')
-        if any(c.get('prior_findings_scope_unverified') for c in claims):
-            limitations.append('A counterpoint claims prior findings omit information, but the model received only part of those findings; review the full prior result.')
-        if any(c.get('percentage_unit_unverified') for c in claims):
-            limitations.append('A percentage matches a quoted number without an explicit percent unit; check the original unit and table context.')
-        if any(c.get("source_scope_absence_unverified") for c in claims):
-            limitations.append("A claim says a source lacks information, but only excerpts were analyzed; the full-source absence is not established.")
-        if unverified_calculations:
-            limitations.append("A calculation has inputs that cannot be verified against the saved facts; the result is provisional.")
-        if unverified_calculation_results:
-            limitations.append("A calculation result could not be reproduced from its saved formula and inputs.")
-        if not analysis.counterarguments:
-            limitations.append("No counterarguments were provided; this does not establish that none exist.")
-        if request.support_review:
-            limitations.append("A second model assessment is not independent proof that evidence supports a claim.")
-            if request.require_counterarguments and any(
-                    c.get('role') == 'counterargument' and c.get('support_review', {}).get('relevance') != 'relevant' for c in claims):
-                limitations.append('Counterpoint relevance was not supported by a complete model review; the relationship remains unverified.')
-            if review_status != "complete":
-                limitations.append("The requested model support review did not cover all claims.")
-        if differences:
-            limitations.append("Cross-source numeric differences require entity and accounting-basis review; they are not confirmed conflicts.")
-        if calculation_differences:
-            limitations.append("A claim percentage may differ from a deterministic calculation; review the wording and calculation.")
-        if amount_differences:
-            limitations.append("A claim amount may not match the cited numeric facts after unit conversion; review the source and wording.")
-            if len(amount_differences) == 50:
-                limitations.append("At most 50 amount review candidates are shown; additional candidates may exist.")
-        if any(c.get("uncited_exact_dates") for c in claims):
-            limitations.append("An exact date in a claim is absent from its located quotations; verify the date and its meaning.")
-        if any(c.get("publication_date_warnings") for c in claims):
-            limitations.append("A claimed publication date may differ from the source's declared date; review both.")
-        if any(c.get("rate_unit_warnings") for c in claims):
-            limitations.append("An interest rate level may be expressed as percentage points; review the unit and context.")
-        if any(c.get("uncited_amounts") for c in claims):
-            limitations.append("A matched amount fact passage is not fully covered by attached quotations; check evidence and context.")
-        if any(c.get("uncited_claim_amounts") for c in claims):
-            limitations.append("An explicit USD amount could not be confirmed from the attached quotations; check currency, units, source and any calculation.")
-        if any(c.get("uncited_dollar_amounts") for c in claims):
-            limitations.append("A dollar-symbol amount could not be matched in the attached quotations; check currency, units, source and any calculation.")
-        if any(c.get("uncited_quarters") for c in claims):
-            limitations.append("An explicit quarter and year could not be matched in the attached quotations; check the period and source context.")
-        if any(c.get("balance_direction_warnings") for c in claims):
-            limitations.append("A claimed direction or contradiction may require review; check revision versus change, definitions, signs and periods.")
-        if any(c.get("uncited_fact_values") for c in claims):
-            limitations.append("A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.")
-        if any(c.get("uncited_percentage_bounds") for c in claims):
-            limitations.append("A strict percentage upper bound is not present in the attached quotations; do not treat its threshold as an exact value.")
-        if any(c.get("reused_percentages") for c in claims):
-            limitations.append("A percentage repeats within a claim; check that each measure has its own supporting evidence.")
-        if any(c.get("uncited_percentages") for c in claims):
-            limitations.append("A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.")
-        if any(c.get("uncited_basis_points") for c in claims):
-            limitations.append("A claim's basis-point figure is absent from its quotations; check the source and any calculation.")
-        if any(c.get("uncited_percentage_points") for c in claims):
-            limitations.append("A claim percentage-point figure is absent from its quotations; check the source and any calculation.")
-        if any(c.get("citation_context_warnings") for c in claims):
-            limitations.append("A quotation may omit relevant context; review the source and claim.")
-        if any(c.get("causal_attribution_unverified") for c in claims):
-            limitations.append("A causal explanation has no corresponding causal wording in its located quotations; check the original evidence.")
-        if len(differences) == 50:
-            limitations.append("At most 50 candidate differences are shown.")
-        if monotonic() > deadline:
-            complete = False
-            limitations.append("Research exceeded its time budget; the retained result is partial.")
-        if usage is not None and usage > request.max_total_tokens:
-            complete = False
-            limitations.append("Provider-reported token use exceeded the requested budget; the result is partial.")
-        if not complete:
-            limitations.append("The research is partial: supported claims or counterarguments are incomplete.")
+        assessment = assess_research_outcome(
+            request=request, analysis=analysis, claims=claims,
+            source_states=source_processing(analysis.segments), discovery_notes=discovery_notes,
+            review_status=review_status, gap_status=gap_status, gap_search_status=gap_search_status,
+            planning_status=planning_status, deadline=deadline, usage=usage)
+        complete, limitations = assessment.complete, assessment.limitations
+        differences = assessment.differences
+        calculation_differences, amount_differences = assessment.calculation_differences, assessment.amount_differences
         result = ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
             parent_version_id=request.parent_version_id, status="completed" if complete else "partial",
             content=assemble_research_content(source_candidates=discovered, sources=source_summaries(analysis.source_ids, analysis.segments),
