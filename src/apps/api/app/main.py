@@ -82,7 +82,7 @@ from .retention import RetentionPolicy, cleanup_research_state
 from .security import SecurityBoundaryMiddleware, TrustedProxyResolver, build_captcha_verifier, build_security_config
 from .telemetry import record_provider_failure, record_stale_data_denial, telemetry
 from .phase4_live import LivePhase4Adapter
-from .phase3 import ChallengeDraft, ChallengeInput, ClientSearchEvidenceProvider, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
+from .phase3 import ChallengeDraft, ChallengeInput, LlmProvider, ProviderFailure, SearchEvidenceBundle, build_llm_provider, build_search_evidence_provider
 from .openai_compatible import OpenAICompatibleLlmProvider
 from .phase4 import DeterministicMockProbabilityAssessor, DeterministicMockWorldlineGenerator, ProbabilityAssessmentInput, WorldlineGenerationInput
 from .providers import FixedClock, MockDataProvider, MockFactorProvider, MockResearchProvider, RuntimeClock, build_attestation
@@ -109,6 +109,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
 from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
+from .research_discovery import collect_source_candidates
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
 from .research_assessment import assess_research_outcome
@@ -2600,28 +2601,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     if not isinstance(raw_candidates, (list, tuple)):
                         raise ProviderFailure("search_response_invalid", "Search provider returned invalid results.", retryable=False)
                     provider_name = _provider_name(evidence_provider, "search")
-                    invalid_candidates = 0
-                    for raw in raw_candidates[:5]:
-                        try:
-                            candidate = _candidate_response(raw, provider_name)
-                            ClientSearchEvidenceProvider().validate_url(str(candidate.url))
-                        except (ProviderFailure, ValidationError, ValueError):
-                            # Search is an untrusted list: reject just the bad
-                            # lead without discarding independently valid ones.
-                            invalid_candidates += 1
-                            continue
-                        # A date is not a publication timestamp. In historical
-                        # mode omit unknown or same-day/future leads.
-                        if topic.request.as_of is not None and (candidate.published_at is None or
-                                candidate.published_at.date() >= topic.request.as_of.astimezone(timezone.utc).date()):
-                            continue
-                        parts = urlsplit(str(candidate.url))
-                        discovered.append({"title": candidate.title,
-                            "url": urlunsplit((parts.scheme, parts.netloc, parts.path, "", "")),
-                            "published_at": candidate.published_at.isoformat() if candidate.published_at else None,
-                            "retrieved_at": candidate.retrieved_at.isoformat(),
-                            "search_result_hash": candidate.search_result_hash,
-                            "search_provider": provider_name, "status": "unverified"})
+                    normalized = collect_source_candidates(raw_candidates, provider_name=provider_name,
+                        convert=_candidate_response, as_of=topic.request.as_of)
+                    discovered.extend(normalized.candidates)
+                    invalid_candidates = normalized.omitted
                     search_status = ("partial" if discovered else "failed") if invalid_candidates else "completed"
                     if invalid_candidates:
                         discovery_notes.append("Some search candidates could not be validated and were omitted." if discovered
@@ -3025,30 +3008,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                         existing_urls = {item.get('url') for item in discovered}
                                         existing_urls.update(urlunsplit((urlsplit(str(source.url)).scheme, urlsplit(str(source.url)).netloc,
                                             urlsplit(str(source.url)).path, '', '')) for source in sources if source.url)
-                                        invalid = 0
-                                        for raw in raw_candidates[:5]:
-                                            try:
-                                                candidate = _candidate_response(raw, provider_name)
-                                                ClientSearchEvidenceProvider().validate_url(str(candidate.url))
-                                            except (ProviderFailure, ValidationError, ValueError):
-                                                invalid += 1
-                                                continue
-                                            if topic.request.as_of is not None and (candidate.published_at is None or
-                                                    candidate.published_at.date() >= topic.request.as_of.astimezone(timezone.utc).date()):
-                                                continue
-                                            parts = urlsplit(str(candidate.url))
-                                            address = urlunsplit((parts.scheme, parts.netloc, parts.path, '', ''))
-                                            if address in existing_urls:
-                                                continue
-                                            if len(discovered) >= 10:
-                                                invalid += 1
-                                                continue
-                                            existing_urls.add(address)
-                                            discovered.append({'title':candidate.title, 'url':address,
-                                                'published_at':candidate.published_at.isoformat() if candidate.published_at else None,
-                                                'retrieved_at':candidate.retrieved_at.isoformat(),
-                                                'search_result_hash':candidate.search_result_hash,
-                                                'search_provider':provider_name, 'status':'unverified', 'discovery_stage':'gap'})
+                                        normalized = collect_source_candidates(raw_candidates, provider_name=provider_name,
+                                            convert=_candidate_response, as_of=topic.request.as_of,
+                                            existing_urls=existing_urls, capacity=max(0, 10 - len(discovered)), stage='gap')
+                                        discovered.extend(normalized.candidates)
+                                        invalid = normalized.omitted
                                         gap_search_status = 'partial' if invalid else 'completed'
                                         discovery_notes.append('Additional gap-search results are unverified leads; they are not evidence or model input.')
                                         if invalid:
