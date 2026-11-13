@@ -29,11 +29,12 @@ from .research_structured_data import extract_structured_observations
 from .research_topics import ResearchContent
 from .research_coordinator import PlanningResult
 from .research_planning import PLAN_SYSTEM_PROMPT
+from .research_runs import ResearchRunRequest
 
 
 def build_run_core(*, question_origin: str, default_task: str | None, question_override: str | None,
                    analysis: AnalysisResult, source_processing: list[dict], planning_requested: bool,
-                   planning: PlanningResult) -> dict[str, Any]:
+                   planning: PlanningResult, request: ResearchRunRequest) -> dict[str, Any]:
     """Common stage metadata, without changing the legacy run record format."""
     return {'question_origin': question_origin,
             **({'default_task': default_task} if default_task is not None else {}),
@@ -44,7 +45,18 @@ def build_run_core(*, question_origin: str, default_task: str | None, question_o
             'planning_requested': planning_requested, 'planning_status': planning.status,
             'planning_steps': list(planning.steps), 'planning_tokens': planning.tokens,
             'planning_prompt_sha256': planning.prompt_sha256, 'planning_error': planning.error,
-            'planning_system_sha256': sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if planning_requested else None}
+            'planning_system_sha256': sha256(PLAN_SYSTEM_PROMPT.encode('utf-8')).hexdigest() if planning_requested else None,
+            # Checkpoints may precede optional stages. Record the full request
+            # even there; the caller overrides these defaults as stages run.
+            'counterpoint_requested': request.counterpoint_followup,
+            'counterpoint_status': 'not_started' if request.counterpoint_followup else 'not_requested',
+            'gap_search_requested': request.gap_search,
+            'gap_search_status': 'not_started' if request.gap_search else 'not_requested',
+            'gap_followup_requested': request.gap_followup,
+            'gap_followup_status': 'not_started' if request.gap_followup else 'not_requested',
+            'support_review_requested': request.support_review,
+            'support_review_status': 'not_started' if request.support_review else 'not_requested',
+            'require_counterarguments': request.require_counterarguments}
 
 
 def assemble_research_content(*, source_candidates: list[dict], sources: list[dict], analysis: AnalysisResult,

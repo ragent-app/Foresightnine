@@ -2766,7 +2766,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 default_task=DOCUMENT_OVERVIEW_QUESTION if question_origin == 'document_overview_default' else None,
                 question_override=request.question_override, analysis=analysis,
                 source_processing=source_processing(analysis.segments),
-                planning_requested=request.plan_research, planning=plan_result)
+                planning_requested=request.plan_research, planning=plan_result, request=request)
 
         def prepare_claims() -> list[dict[str, Any]]:
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
