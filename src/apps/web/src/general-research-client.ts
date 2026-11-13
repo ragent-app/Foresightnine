@@ -223,6 +223,8 @@ export function researchClient(baseUrl: string) {
         ...(budget.maxCostUsd ? { max_cost_usd: budget.maxCostUsd } : {}) } satisfies ResearchV2.ResearchRunRequest, key),
     operation: (topicId: string, operationId: string) => request<{ operation: ResearchOperation }>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}`),
+    progress: (topicId: string, operationId: string) => request<{ version_id: string | null; checkpoint: string | null; result_status: string | null; created_at: string | null }>(
+      `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}/progress`),
     runs: (topicId: string) => request<{ operation: ResearchOperation }[]>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs`),
     runInputs: (topicId: string, operationId: string) => request<RunInputSnapshot>(

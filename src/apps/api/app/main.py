@@ -3609,6 +3609,26 @@ def get_research_run_inputs(topic_id: str, operation_id: str, http_request: Requ
     return {key: value for key, value in record.items() if key != "owner_id"}
 
 
+@app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/progress", include_in_schema=False)
+def get_research_run_progress(topic_id: str, operation_id: str, http_request: Request) -> dict:
+    """Return the latest persisted checkpoint, not an estimate of work completed."""
+    account = _authenticated_account(http_request.headers.get("Authorization"))
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    operations.require_owner(operation_id, f"account:{account.account_id}")
+    operation = operations._cache_operation(operation_id)
+    if operation.endpoint != f"/v1/research/topics/{topic_id}/runs":
+        raise ApiProblem(404, "not_found", "Research run not found.")
+    for version in reversed(topic.versions):
+        run = version.content.run
+        if version.created_by == 'agent' and run.get('operation_id') == operation_id:
+            return {'version_id': version.version_id, 'checkpoint': run.get('checkpoint'),
+                    'result_status': run.get('status'), 'created_at': version.created_at}
+    return {'version_id': None, 'checkpoint': None, 'result_status': None, 'created_at': None}
+
+
 def _operation_owner_subject(request: Request) -> str:
     """Return the non-secret subject used to namespace operation receipts."""
     account = getattr(request.state, "model_account", None)

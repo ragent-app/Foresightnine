@@ -259,6 +259,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const [editingFacts, setEditingFacts] = useState(false);
   const [editingClaims, setEditingClaims] = useState(false);
   const [operation, setOperation] = useState<ResearchOperation | null>(null);
+  const [savedProgress, setSavedProgress] = useState<{ version_id: string | null; checkpoint: string | null } | null>(null);
   const [runInputs, setRunInputs] = useState<RunInputSnapshot | null>(null);
   const [runQuestion, setRunQuestion] = useState("");
   const [allowSearch, setAllowSearch] = useState(true);
@@ -286,6 +287,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   const pendingSource = useRef<{ fingerprint: string; sourceId: string; file: File | null } | null>(null);
   const pendingReextract = useRef<{ accountId: string; topicId: string; sourceId: string; textOrder: "layout" | "reading"; key: string; newSourceId?: string } | null>(null);
   const sourceDetails = useRef<HTMLDetailsElement>(null);
+  const activeTopicId = useRef<string | null>(null);
+  activeTopicId.current = topic?.topic_id ?? null;
   const latest = topic?.versions[topic.versions.length - 1];
   const current = topic?.versions.find((item) => item.version_id === selectedVersionId) ?? latest;
   const isLatest = current?.version_id === latest?.version_id;
@@ -338,6 +341,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
   useEffect(() => {
     let active = true;
     setRunInputs(null);
+    setSavedProgress(null);
     if (api && topic && operation) void api.runInputs(topic.topic_id, operation.operation_id)
       .then((inputs) => { if (active) setRunInputs(inputs); })
       .catch(() => { if (active) setRunInputs(null); });
@@ -349,6 +353,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     let active = true;
     let timer: number | undefined;
     let delay = 1500;
+    let progressSequence = 0;
     const poll = async () => {
       try {
         const { operation: next } = await api.operation(topic.topic_id, operation.operation_id);
@@ -359,6 +364,10 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
           if (active) { setTopic(updated); setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item)); setPollNotice(""); setOperation(remaining ?? next); }
           return;
         }
+        const sequence = ++progressSequence;
+        void api.progress(topic.topic_id, operation.operation_id).then((progress) => {
+          if (active && sequence === progressSequence) setSavedProgress(progress);
+        }).catch(() => { /* Operation polling remains authoritative if progress is unavailable. */ });
         setPollNotice(""); setOperation(next); delay = 1500;
       } catch (error) {
         if (!active) return;
@@ -716,6 +725,20 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     catch { setNotice(en ? "Cancellation could not be confirmed." : "无法确认取消结果。"); }
     finally { setBusy(false); }
   }
+  async function openSavedProgress() {
+    if (!api || !topic || !savedProgress?.version_id || hasUnsavedReview) return;
+    const topicId = topic.topic_id, versionId = savedProgress.version_id;
+    setBusy(true);
+    try {
+      const updated = await api.get(topicId);
+      if (activeTopicId.current !== topicId) return;
+      if (!updated.versions.some((version) => version.version_id === versionId)) throw new Error("checkpoint_unavailable");
+      setTopic(updated); setSelectedVersionId(versionId);
+      setTopics((items) => items.map((item) => item.topic_id === topicId ? updated : item));
+    } catch {
+      if (activeTopicId.current === topicId) setNotice(en ? "Could not open the saved research stage." : "无法打开已保存的研究阶段。");
+    } finally { setBusy(false); }
+  }
   async function exportResearch(metadataOnly: boolean, textReport = false) {
     if (!api || !topic || !current) return;
     if (hasUnsavedReview) { setNotice(en ? "Save your edits before exporting." : "请先保存当前修改，再导出。"); return; }
@@ -838,6 +861,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         <Field label={en ? "Maximum cost in USD (optional)" : "费用上限（美元，可选）"} helper={en ? "If provider pricing is unknown, a cost cap prevents external calls." : "供应商价格未知时，设置费用上限会阻止外部调用。"}><Input type="number" min="0" step="0.01" value={maxCost} disabled={busy || running || (pendingRun.current?.topicId === topic.topic_id && pendingRun.current?.versionId === current.version_id)} onChange={(event) => setMaxCost(event.target.value)} /></Field>
       </details>
       {operation ? <p role="status">{en ? "Run status: " : "运行状态："}{statusLabel(operation.status, en)}{running ? <> <Button disabled={busy} onClick={() => void cancel()}>{en ? "Cancel" : "取消"}</Button></> : null}</p> : null}
+      {running && savedProgress?.version_id ? <p role="status">{en ? "A research stage has been saved; later steps may still be running." : "已保存阶段成果，后续步骤可能仍在运行。"} <Button disabled={busy || hasUnsavedReview} onClick={() => void openSavedProgress()}>{en ? "View saved stage" : "查看阶段成果"}</Button></p> : null}
       {pollNotice ? <p role="status">{pollNotice}</p> : null}
       {runInputs ? <details className="general-source"><summary>{en ? "Run input snapshot" : "运行时输入记录"}</summary>
         <p>{en ? "Captured" : "记录时间"}: {new Date(runInputs.captured_at).toLocaleString()} · {en ? "Source version" : "输入版本"}: {runInputs.parent_version_id}</p>
