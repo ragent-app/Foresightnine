@@ -25,6 +25,32 @@ from .research_source_policy import prepare_sources
 from .research_sources import ResearchSource
 
 
+@dataclass
+class ResearchExecutionContext:
+    """Run-scoped budget and explicit lifecycle capabilities for stages."""
+    budget: ResearchExecutionBudget
+    cost_limited: bool
+    ensure_running: Callable[[], None]
+    cancel_event: Callable[[], Any]
+    reserve: Callable[[str, int], None]
+    settle: Callable[[str, int | None], None]
+    now: Callable[[], float] = monotonic
+    calls: int = 0
+    usage: int | None = None
+
+    def start_model(self, call_id: str, tokens: int) -> tuple[int, int | None]:
+        before = self.calls, self.usage
+        self.reserve(call_id, tokens)
+        self.calls += 1
+        return before
+
+    def finish_model(self, call_id: str, tokens: int | None, before: tuple[int, int | None]) -> None:
+        self.settle(call_id, tokens)
+        previous_calls, previous_usage = before
+        self.usage = (tokens if previous_calls == 0 else
+                      previous_usage + tokens if previous_usage is not None and tokens is not None else None)
+
+
 @dataclass(frozen=True)
 class PlanningResult:
     status: str
@@ -36,15 +62,12 @@ class PlanningResult:
 
 
 def execute_planning(*, requested: bool, question: str, scope: str, sources_available: bool,
-                     provider: Any, generate: Any, budget: ResearchExecutionBudget,
-                     calls: int, usage: int | None, cost_limited: bool, call_id: str,
-                     ensure_running: Callable[[], None], cancel_event: Callable[[], Any],
-                     reserve: Callable[[str, int], None], settle: Callable[[str, int | None], None],
-                     now: Callable[[], float] = monotonic) -> PlanningResult:
+                     provider: Any, generate: Any, context: ResearchExecutionContext,
+                     call_id: str) -> PlanningResult:
     """Plan over the permitted scope without granting new tool permissions."""
     if not requested:
         return PlanningResult('not_requested')
-    if cost_limited:
+    if context.cost_limited:
         return PlanningResult('cost_unknown')
     if not question or not sources_available or not callable(generate):
         return PlanningResult('unavailable')
@@ -56,7 +79,8 @@ def execute_planning(*, requested: bool, question: str, scope: str, sources_avai
             input_limit <= 0 or output_limit <= 0 or not isinstance(timeout, (int, float)) or not 0 < timeout <= 180):
         return PlanningResult('unavailable')
     per_call = input_limit + output_limit
-    reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=per_call, now=now(), required_calls=2)
+    reason = context.budget.model_exhaustion(calls=context.calls, usage=context.usage, per_call=per_call,
+                                             now=context.now(), required_calls=2)
     if reason:
         return PlanningResult('unavailable' if reason == 'provider_limit' else 'budget_exhausted')
     prompt = plan_prompt(question, scope)
@@ -68,15 +92,15 @@ def execute_planning(*, requested: bool, question: str, scope: str, sources_avai
     try:
         if 'timeout_seconds' not in inspect.signature(generate).parameters:
             raise ProviderFailure('provider_budget_unknown', 'Provider limits cannot be enforced.', retryable=False)
-        ensure_running()
-        remaining = budget.deadline - now()
+        context.ensure_running()
+        remaining = context.budget.deadline - context.now()
         if remaining <= 0:
             raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-        reserve(call_id, per_call)
+        before = context.start_model(call_id, per_call)
         attempted = True
         prompt_hash = sha256(prompt.encode('utf-8')).hexdigest()
         try:
-            raw, reported = generate(prompt, cancel_event=cancel_event(), system=PLAN_SYSTEM_PROMPT,
+            raw, reported = generate(prompt, cancel_event=context.cancel_event(), system=PLAN_SYSTEM_PROMPT,
                                      timeout_seconds=min(float(timeout), remaining))
             tokens = reported if type(reported) is int and reported >= 0 else None
             steps = tuple(parse_plan(raw))
@@ -84,10 +108,10 @@ def execute_planning(*, requested: bool, question: str, scope: str, sources_avai
             tokens = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
             raise
         finally:
-            settle(call_id, tokens)
+            context.finish_model(call_id, tokens, before)
         return PlanningResult('completed', steps, tokens, prompt_hash, attempted=True)
     except (ProviderFailure, ValidationError, TypeError, ValueError, ApiProblem) as error:
-        ensure_running()
+        context.ensure_running()
         code = error.code if isinstance(error, ProviderFailure) else 'planning_unavailable'
         return PlanningResult('failed', tokens=tokens, prompt_sha256=prompt_hash, error=code, attempted=attempted)
 
@@ -105,13 +129,9 @@ class GenerationResult:
 
 
 def execute_generation(*, question: str, scope: str, sources: list[ResearchSource], as_of: datetime | None,
-                       provider: Any, generate: Any, budget: ResearchExecutionBudget, calls: int,
-                       usage: int | None, cost_limited: bool, call_id: str,
+                       provider: Any, generate: Any, context: ResearchExecutionContext, call_id: str,
                        focus: tuple[str, int, int] | None, planning_steps: list[str],
-                       require_counterarguments: bool, ensure_running: Callable[[], None],
-                       cancel_event: Callable[[], Any], reserve: Callable[[str, int], None],
-                       settle: Callable[[str, int | None], None],
-                       now: Callable[[], float] = monotonic) -> GenerationResult:
+                       require_counterarguments: bool) -> GenerationResult:
     """Run the first analysis with explicit source, budget and lifecycle capabilities."""
     attempted_prompt: dict[str, Any] = {}
     prompt_text: str | None = None
@@ -120,8 +140,8 @@ def execute_generation(*, question: str, scope: str, sources: list[ResearchSourc
     error_detail: str | None = None
 
     def generate_once(prompt: str) -> tuple[dict[str, Any], int | None]:
-        nonlocal calls, usage, prompt_text, generation_tokens
-        if cost_limited:
+        nonlocal prompt_text, generation_tokens
+        if context.cost_limited:
             raise ProviderFailure('provider_budget_unknown', 'Model pricing is not configured for the requested cost cap.', retryable=False)
         if not callable(generate):
             raise ProviderFailure('provider_unavailable', 'A structured research model is not configured.', retryable=False)
@@ -138,21 +158,20 @@ def execute_generation(*, question: str, scope: str, sources: list[ResearchSourc
                 not 0 < timeout <= 180 or 'timeout_seconds' not in parameters):
             raise ProviderFailure('provider_budget_unknown', 'Provider limits cannot be enforced.', retryable=False)
         token_reservation = input_limit + output_limit
-        reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=token_reservation, now=now())
+        reason = context.budget.model_exhaustion(calls=context.calls, usage=context.usage,
+                                                 per_call=token_reservation, now=context.now())
         if reason:
             raise ProviderFailure('provider_budget_unknown' if reason == 'provider_limit' else 'provider_budget_exhausted',
                                   'Model execution budget is unavailable or exhausted.', retryable=False)
-        remaining = budget.deadline - now()
+        remaining = context.budget.deadline - context.now()
         if remaining <= 0:
             raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-        before_calls, prior_usage = calls, usage
-        reserve(call_id, token_reservation)
-        calls += 1
+        before = context.start_model(call_id, token_reservation)
         prompt_text = prompt
         attempted_prompt.update({'prompt_sha256': sha256(prompt.encode('utf-8')).hexdigest(),
                                  'prompt_characters': len(prompt), 'prompt_bytes': len(prompt.encode('utf-8'))})
         try:
-            payload, reported = generate(prompt, cancel_event=cancel_event(), system=RESEARCH_SYSTEM_PROMPT,
+            payload, reported = generate(prompt, cancel_event=context.cancel_event(), system=RESEARCH_SYSTEM_PROMPT,
                                          timeout_seconds=min(float(timeout), remaining))
             generation_tokens = reported if type(reported) is int and reported >= 0 else None
             return payload, generation_tokens
@@ -160,9 +179,7 @@ def execute_generation(*, question: str, scope: str, sources: list[ResearchSourc
             generation_tokens = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
             raise
         finally:
-            settle(call_id, generation_tokens)
-            usage = (generation_tokens if before_calls == 0 else
-                     prior_usage + generation_tokens if prior_usage is not None and generation_tokens is not None else None)
+            context.finish_model(call_id, generation_tokens, before)
 
     max_input_tokens = getattr(getattr(provider, 'policy', None), 'max_input_tokens', 3000)
     # Selection can still report source coverage when provider limits are
@@ -171,7 +188,7 @@ def execute_generation(*, question: str, scope: str, sources: list[ResearchSourc
     max_prompt_chars = max(1, min(48000, selection_limit - len(RESEARCH_SYSTEM_PROMPT.encode('utf-8')) - 512))
     try:
         analysis = analyze(question, sources, as_of, generate_once, max_prompt_chars=max_prompt_chars,
-                           should_stop=lambda: now() >= budget.deadline,
+                           should_stop=lambda: context.now() >= context.budget.deadline,
                            on_prepare=lambda segments: attempted_prompt.update({'segments': segments}),
                            focus=focus, scope=scope, planning_steps=planning_steps,
                            require_counterarguments=require_counterarguments)
@@ -185,7 +202,7 @@ def execute_generation(*, question: str, scope: str, sources: list[ResearchSourc
         if selected_ids:
             source_notes.append('Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.')
         analysis = AnalysisResult([], [], [*source_notes, 'Research analysis could not be completed: ' + unavailable_reason],
-                                  selected_ids, usage, **attempted_prompt)
-    ensure_running()
-    return GenerationResult(analysis, calls, usage, generation_tokens, prompt_text, max_prompt_chars,
+                                  selected_ids, context.usage, **attempted_prompt)
+    context.ensure_running()
+    return GenerationResult(analysis, context.calls, context.usage, generation_tokens, prompt_text, max_prompt_chars,
                             unavailable_reason, error_detail)

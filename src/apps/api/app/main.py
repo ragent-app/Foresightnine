@@ -111,7 +111,7 @@ from .research_gap_followup import build_gap_focus, merge_research_questions, re
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
 from .research_budget import ResearchExecutionBudget
 from .research_planning import PLAN_SYSTEM_PROMPT
-from .research_coordinator import execute_generation, execute_planning
+from .research_coordinator import ResearchExecutionContext, execute_generation, execute_planning
 from .research_structured_data import extract_structured_observations
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
@@ -2743,33 +2743,27 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # The planning stage has explicit capabilities and returns its own
         # receipt; the API continues to own admission and durable lifecycle.
         eligible_sources, _ = prepare_sources(sources, topic.request.as_of)
-        plan_result = execute_planning(
-            requested=request.plan_research, question=effective_question, scope=topic.request.scope,
-            sources_available=bool(eligible_sources), provider=provider, generate=generate_structured,
-            budget=budget, calls=calls, usage=usage, cost_limited=request.max_cost_usd is not None,
-            call_id=f'{operation_id}:research-plan',
+        context = ResearchExecutionContext(
+            budget=budget, cost_limited=request.max_cost_usd is not None,
             ensure_running=lambda: _raise_if_operation_cancelled(operation_id),
             cancel_event=lambda: operations.cancel_event(operation_id),
             reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
-            settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens))
+            settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens),
+            calls=calls, usage=usage)
+        plan_result = execute_planning(
+            requested=request.plan_research, question=effective_question, scope=topic.request.scope,
+            sources_available=bool(eligible_sources), provider=provider, generate=generate_structured,
+            context=context, call_id=f'{operation_id}:research-plan')
         planning_status, planning_usage = plan_result.status, plan_result.tokens
         planning_hash, planning_error = plan_result.prompt_sha256, plan_result.error
         planning_steps = list(plan_result.steps)
-        if plan_result.attempted:
-            calls += 1
-            usage = planning_usage
         _raise_if_operation_cancelled(operation_id)
 
         generation = execute_generation(
             question=effective_question, scope=topic.request.scope, sources=sources, as_of=topic.request.as_of,
-            provider=provider, generate=generate_structured, budget=budget, calls=calls, usage=usage,
-            cost_limited=request.max_cost_usd is not None, call_id=operation_id, focus=focus,
+            provider=provider, generate=generate_structured, context=context, call_id=operation_id, focus=focus,
             planning_steps=planning_steps,
-            require_counterarguments=request.require_counterarguments or request.counterpoint_followup,
-            ensure_running=lambda: _raise_if_operation_cancelled(operation_id),
-            cancel_event=lambda: operations.cancel_event(operation_id),
-            reserve=lambda call_id, tokens: _reserve_model_call(http_request, call_id, token_budget=tokens),
-            settle=lambda call_id, tokens: _settle_model_call(http_request, call_id, tokens))
+            require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
         analysis, calls, usage = generation.analysis, generation.calls, generation.usage
         generation_call_usage = generation.generation_tokens
         base_prompt_text, max_prompt_chars = generation.prompt_text, generation.max_prompt_chars
