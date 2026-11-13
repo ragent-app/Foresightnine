@@ -40,7 +40,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v50"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v51"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1863,7 +1863,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         max_size = min(len(selection_text), MAX_SOURCE_CHARS, share)
         # A general lexical index supplements domain-specific structural
         # extraction. It never asserts semantic relevance or source support.
-        general_index = build_passage_index(selection_text, retrieval_question, should_stop)
+        general_index = build_passage_index(selection_text, question if plan else retrieval_question, should_stop,
+                                            facets=plan if plan else None)
         if should_stop is not None and should_stop():
             raise AnalysisInterrupted()
         if general_index is not None and general_index.truncated:
@@ -1891,7 +1892,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # not proof that any requested facet was covered.
         multi_part = bool(re.search(r"\b(?:and|including|compare|both)\b|,|以及|同时|同時|分别|分別", intent))
         asks_counterpoint = bool(re.search(r"\b(?:counterarguments?|counterpoints?|counterevidence|risks?)\b|反方|反证|反證|风险|風險", intent))
-        generic_window_count = 3 if (source_budget_limit - current_bytes >= 2600 and max_size >= 1200 and multi_part and not asks_counterpoint) else 2
+        generic_window_count = 3 if (source_budget_limit - current_bytes >= 2600 and max_size >= 1200 and
+                                     (bool(plan) or multi_part and not asks_counterpoint)) else 2
         early_total = _early_total_summary(selection_text, retrieval_question, should_stop)
         structured_parts = (_structured_observation_windows(selection_text, retrieval_question, max_size, should_stop)
                             if source.retrieval_method != "user_pdf" else None)
@@ -1905,6 +1907,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             generic_selection = False
             windows = (structured_parts if structured_parts and
                        sum(len(part) for _, part in structured_parts) <= size else None)
+            if windows is None and plan and split and size >= generic_window_count and general_index is not None:
+                windows = general_index.select(size, generic_window_count) or None
+                generic_selection = windows is not None
             if windows is None:
                 if split and size >= generic_window_count:
                     windows = _policy_vote_windows(selection_text, retrieval_question, size, should_stop)
@@ -1926,7 +1931,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                             windows = _replace_empty_table_with_counterpoint(selection_text, retrieval_question, windows, should_stop)
                         windows = sorted(windows, key=lambda item: item[0])
                         generic_selection = True
-                        if early_total and size - len(early_total[1]) >= 600 and not any(
+                        if not plan and early_total and size - len(early_total[1]) >= 600 and not any(
                                 early_total[0] < start + len(part) and start < early_total[0] + len(early_total[1])
                                 for start, part in windows):
                             remainder = _select_windows(selection_text, retrieval_question, (size - len(early_total[1])) // generic_window_count,
@@ -1994,9 +1999,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             selected = focused(lo)
         elif max_size == len(selection_text) and fits([(0, source.text)]):
             selected = [(0, source.text)]
-        elif revision_original and fits(revision_original):
+        elif not plan and revision_original and fits(revision_original):
             selected = revision_original
-        elif policy_original and fits(policy_original):
+        elif not plan and policy_original and fits(policy_original):
             selected = policy_original
         else:
             split = len(selection_text) > 2000

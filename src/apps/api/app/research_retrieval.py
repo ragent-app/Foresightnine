@@ -27,6 +27,7 @@ class Passage:
     score: float
     hits: frozenset[str]
     anchor: int
+    facets: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -42,14 +43,17 @@ class PassageIndex:
         count = min(count, total_chars, len(self.passages))
         chosen: list[Passage] = []
         covered: set[str] = set()
+        covered_facets: set[int] = set()
         remaining = list(self.passages)
         for _ in range(count):
             if not remaining:
                 break
             # Prefer additional query coverage, while retaining lexical rank.
-            best = max(remaining, key=lambda p: (p.score + 0.5 * len(p.hits - covered), -p.start))
+            best = max(remaining, key=lambda p: (p.score + 0.5 * len(p.hits - covered) +
+                                                  2.0 * len(p.facets - covered_facets), -p.start))
             chosen.append(best)
             covered.update(best.hits)
+            covered_facets.update(best.facets)
             remaining.remove(best)
         windows = []
         share, extra = divmod(total_chars, len(chosen))
@@ -62,21 +66,36 @@ class PassageIndex:
         return sorted(windows, key=lambda item: item[0])
 
 
-def build_passage_index(text: str, query: str, should_stop: Callable[[], bool] | None = None) -> PassageIndex | None:
+def build_passage_index(text: str, query: str, should_stop: Callable[[], bool] | None = None, *,
+                        facets: list[str] | None = None) -> PassageIndex | None:
     """Index bounded chunks and rank lexical candidates without domain rules.
 
     The query and source may be in different languages; no match is not proof
     of irrelevance, so the caller must provide its own fallback and expose
     partial source coverage. The cancellation callback may raise.
     """
+    def tokenize(value: str) -> list[str]:
+        found: list[str] = []
+        for match in _WORD.finditer(value.casefold()):
+            token = match.group()
+            candidates = ([token[i:i + 2] for i in range(len(token) - 1)]
+                          if '\u3400' <= token[0] <= '\u9fff' else [token])
+            for term in candidates:
+                if term not in _STOP and term not in found:
+                    found.append(term)
+                    if len(found) >= MAX_TERMS:
+                        return found
+        return found
+
+    groups = [tokenize(query[:2000])]
+    groups.extend(tokenize(value[:300]) for value in (facets or [])[:6] if isinstance(value, str))
     terms: list[str] = []
-    for match in _WORD.finditer(query[:2000].casefold()):
-        token = match.group()
-        candidates = ([token[i:i + 2] for i in range(len(token) - 1)]
-                      if '\u3400' <= token[0] <= '\u9fff' else [token])
-        for term in candidates:
-            if term not in _STOP and term not in terms:
-                terms.append(term)
+    # Round-robin across question and facets: a long question must not spend
+    # the entire lexical budget before any proposed subquestion is considered.
+    for position in range(MAX_TERMS):
+        for group in groups:
+            if position < len(group) and group[position] not in terms:
+                terms.append(group[position])
                 if len(terms) == MAX_TERMS:
                     break
         if len(terms) == MAX_TERMS:
@@ -111,6 +130,7 @@ def build_passage_index(text: str, query: str, should_stop: Callable[[], bool] |
         if not hits:
             continue
         best_term = max(hits, key=lambda term: weights[term])
+        facet_hits = frozenset(index for index, group in enumerate(groups[1:]) if any(term in hits for term in group))
         ranked.append(Passage(left, right, sum(weights[term] for term in hits),
-                              frozenset(hits), left + hits[best_term]))
+                              frozenset(hits), left + hits[best_term], facet_hits))
     return PassageIndex(text, tuple(ranked), start < len(text))
