@@ -12,7 +12,7 @@ from .research_analysis import AnalysisResult
 from .research_calculations import (calculation_input_status, calculation_result_status,
                                     claim_calculation_differences)
 from .research_evidence import claim_amount_differences, evidence_differences
-from .research_quality import CLAIM_EVIDENCE_WARNINGS
+from .research_quality import CLAIM_EVIDENCE_WARNINGS, incomplete_requested_stages
 from .research_runs import ResearchRunRequest
 
 
@@ -28,7 +28,7 @@ class ResearchAssessment:
 def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisResult,
                             claims: list[dict], source_states: list[dict],
                             discovery_notes: list[str], review_status: str,
-                            gap_status: str, gap_search_status: str, planning_status: str,
+                            counterpoint_status: str, gap_status: str, gap_search_status: str, planning_status: str,
                             deadline: float, usage: int | None) -> ResearchAssessment:
     """Evaluate the assembled result without making external calls."""
     differences = evidence_differences(analysis.facts)
@@ -51,13 +51,18 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
         c.get("support_review", {}).get("verdict") == "supports" and
         (c.get('role') != 'counterargument' or not request.require_counterarguments or
          c.get('support_review', {}).get('relevance') == 'relevant') for c in claims))
+    incomplete_stages = incomplete_requested_stages({
+        'planning_requested': request.plan_research, 'planning_status': planning_status,
+        'counterpoint_requested': request.counterpoint_followup, 'counterpoint_status': counterpoint_status,
+        'gap_search_requested': request.gap_search, 'gap_search_status': gap_search_status,
+        'gap_followup_requested': request.gap_followup, 'gap_followup_status': gap_status,
+        'support_review_requested': request.support_review, 'support_review_status': review_status,
+    })
     complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                     and not processing_incomplete and not unverified_calculations and not unverified_calculation_results and not differences and not calculation_differences and not amount_differences and
                     not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
                     (not request.support_review or review_supports_all) and
-                    (not request.gap_followup or gap_status in {'not_needed', 'completed'}) and
-                    (not request.gap_search or gap_search_status in {'completed', 'no_gaps'}) and
-                    (not request.plan_research or planning_status == 'completed') and
+                    not incomplete_stages and
                     not any(not item.get('claim_indexes') for item in analysis.research_questions))
     limitations = [*discovery_notes, *analysis.limitations]
     if request.plan_research:
@@ -66,10 +71,12 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
             limitations.append('The requested research plan did not complete; the result used the original question.')
     if any(not item.get('claim_indexes') for item in analysis.research_questions):
         limitations.append('A model-suggested research question has no linked finding; its coverage remains unestablished.')
-    if request.gap_search and gap_search_status not in {'completed', 'no_gaps'}:
+    if 'gap_search' in incomplete_stages:
         limitations.append('The requested gap-focused source search did not complete; existing findings remain available.')
-    if request.gap_followup and gap_status not in {'not_needed', 'completed'}:
+    if 'gap_followup' in incomplete_stages:
         limitations.append('The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.')
+    if 'counterpoint' in incomplete_stages:
+        limitations.append('The requested counterpoint follow-up did not complete; existing findings and gaps remain available.')
     if any(c.get('counterpoint_relevance_unverified') for c in claims):
         limitations.append('A counterpoint explicitly agrees with prior findings; review whether it provides a relevant opposing argument or limitation.')
     if any(c.get('prior_findings_scope_unverified') for c in claims):

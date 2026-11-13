@@ -3458,7 +3458,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         assessment = assess_research_outcome(
             request=request, analysis=analysis, claims=claims,
             source_states=source_processing(analysis.segments), discovery_notes=discovery_notes,
-            review_status=review_status, gap_status=gap_status, gap_search_status=gap_search_status,
+            review_status=review_status, counterpoint_status=counterpoint_status,
+            gap_status=gap_status, gap_search_status=gap_search_status,
             planning_status=planning_status, deadline=deadline, usage=usage)
         complete, limitations = assessment.complete, assessment.limitations
         differences = assessment.differences

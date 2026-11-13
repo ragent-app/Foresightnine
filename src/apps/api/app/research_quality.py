@@ -19,6 +19,24 @@ CLAIM_EVIDENCE_WARNINGS = (
 MAX_REFS = 50
 
 
+def incomplete_requested_stages(run: dict[str, Any]) -> list[str]:
+    """Return requested stages that lack an acceptable execution outcome.
+
+    Execution completion is not a judgment about the truth of the output.
+    Missing state is treated as incomplete only for explicitly requested stages.
+    """
+    stages = (
+        ('planning', 'planning_requested', 'planning_status', {'completed'}),
+        ('counterpoint', 'counterpoint_requested', 'counterpoint_status', {'completed', 'not_needed'}),
+        ('gap_search', 'gap_search_requested', 'gap_search_status', {'completed', 'no_gaps'}),
+        ('gap_followup', 'gap_followup_requested', 'gap_followup_status', {'completed', 'not_needed'}),
+        ('support_review', 'support_review_requested', 'support_review_status', {'complete'}),
+    )
+    return [name for name, requested, status, accepted in stages
+            if run.get(requested) is True and
+            (not isinstance(run.get(status), str) or run[status] not in accepted)]
+
+
 def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list[dict],
                   calculation_differences: list[dict], amount_differences: list[dict],
                   run: dict[str, Any]) -> dict[str, Any]:
@@ -73,20 +91,19 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
         add('calculation_results_unverified', unchecked_results, kind='calculation')
     if calculation_differences or amount_differences:
         add('calculation_or_amount_differences')
-    if run.get('planning_requested') and run.get('planning_status') != 'completed':
-        add('research_planning_incomplete')
-    if run.get('gap_search_requested') and run.get('gap_search_status') not in {'completed', 'no_gaps'}:
-        add('gap_source_search_incomplete')
-    if run.get('gap_followup_requested') and run.get('gap_followup_status') not in {'completed', 'not_needed'}:
-        add('gap_followup_incomplete')
-    if run.get('support_review_requested') and run.get('support_review_status') != 'complete':
-        add('model_review_incomplete')
+    incomplete = incomplete_requested_stages(run)
+    for stage, code in (('planning', 'research_planning_incomplete'),
+                        ('gap_search', 'gap_source_search_incomplete'),
+                        ('gap_followup', 'gap_followup_incomplete'),
+                        ('support_review', 'model_review_incomplete')):
+        if stage in incomplete:
+            add(code)
     if run.get('support_review_requested') and run.get('require_counterarguments') is True:
         unreviewed_relation = [i for i in counter if not isinstance(claims[i].get('support_review'), dict) or
                                claims[i]['support_review'].get('relevance') != 'relevant']
         if unreviewed_relation:
             add('counterpoint_relevance_unverified', unreviewed_relation, kind='claim')
-    if run.get('counterpoint_requested') and run.get('counterpoint_status') not in {'completed', 'not_needed'}:
+    if 'counterpoint' in incomplete:
         add('counterpoint_followup_incomplete')
     if attempted and run.get('status') == 'partial':
         add('last_run_partial')
