@@ -99,11 +99,10 @@ from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInp
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
-from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, AnalysisInterrupted, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
+from .research_analysis import SYSTEM_PROMPT as RESEARCH_SYSTEM_PROMPT, SELECTION_METHOD as RESEARCH_SELECTION_METHOD, _directional_negative_amount, _directional_negative_percent, _quoted_numbers
 from .research_evidence import claim_amount_differences, evidence_differences, flag_counterpoint_agreement, flag_truncated_previous_findings, flag_publication_date_mismatches, flag_rate_level_point_warnings, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_citation_subject_context, flag_uncited_causal_attribution, flag_uncited_exact_dates, previous_supplemental_leads, suggest_excerpt_dates, suggest_percentage_evidence, suggest_related_with_supplemental_leads, suggest_usd_amount_evidence, suggest_uncited_numeric_facts, suggest_cross_source_comparison_evidence
-from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT, InvalidReview,
-                                    apply_partial_support_review, prepare_support_review,
-                                    prepare_isolated_support_reviews, parse_isolated_support_review_details, review_record)
+from .research_verification import REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW_SYSTEM_PROMPT
+from .research_review_stage import ReviewStageResult, execute_support_review
 from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query
 from .research_gap_stage import GapStageResult, execute_gap_followup
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
@@ -2826,297 +2825,65 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         gap_segments, gap_input_fact_ids = gap.segments, gap.input_fact_ids
         discovery_notes.extend(gap.notes)
         calls, usage, search_calls = context.calls, context.usage, context.search_calls
-        pre_review_usage = usage
-        # Numeric candidates must be considered before model review. A review
-        # verdict cannot clear a known calculation or unit discrepancy.
-        pre_review_differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
-                                  *claim_amount_differences(claims, analysis.facts)]
-        discrepancy_indexes = {item["claim_index"] for item in pre_review_differences}
-        review_usage: int | None = None
-        review_status = "not_requested"
-        review_error: str | None = None
-        review_hash: str | None = None
-        review_segments: list[dict[str, int | str]] = []
-        review_indexes: list[int] = []
-        review_omissions: list[dict[str, Any]] = ([{"claim_index": index, "reason": "not_started"}
-                                                   for index in range(len(claims))] if request.support_review else [])
-        review_failed_indexes: list[int] = []
-        isolated_records: list[dict[str, Any]] = []
-        with workflow.stage('support_review') as stage_state:
-            if request.support_review and request.support_review_mode == "isolated":
-                review_status = "not_reviewable"
-                policy = getattr(provider, "policy", None)
-                input_limit = getattr(policy, "max_input_tokens", None)
-                output_limit = getattr(policy, "max_output_tokens", None)
-                timeout = getattr(policy, "timeout_seconds", None)
-                if calls and claims and calls >= request.max_model_calls:
-                    review_status = "budget_exhausted"
-                    review_omissions = [{"claim_index": i, "reason": "call_budget"} for i in range(len(claims))]
-                elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
-                    per_call = input_limit + output_limit
-                    review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
-                    review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if i in discrepancy_indexes else {})}
-                                     for i, claim in enumerate(claims)]
-                    try:
-                        plan = prepare_isolated_support_reviews(review_claims,
-                            [s for s in sources if s.source_id in analysis.source_ids], review_budget,
-                            should_stop=lambda: monotonic() >= deadline or operations.cancel_event(operation_id).is_set())
-                    except AnalysisInterrupted:
-                        _raise_if_operation_cancelled(operation_id)
-                        plan = None
-                        review_status = "budget_exhausted"
-                        review_omissions = [{"claim_index": i, "reason": "time_budget"} for i in range(len(claims))]
-                    if plan is not None:
-                        review_omissions = list(plan.omissions) + [{"claim_index": b.indexes[0], "reason": "not_started"} for b in plan.batches]
-                        review_omissions.sort(key=lambda item: item["claim_index"])
-                        isolated_records = [{"claim_index": b.indexes[0], "prompt_sha256": b.prompt_sha256,
-                                             "segments": b.segments, "status": "not_started"} for b in plan.batches]
-                        claims = [{key: value for key, value in claim.items() if key != "support_review"} for claim in claims]
-                        review_usages: list[int | None] = []
+        def save_review_checkpoint(review: ReviewStageResult, checkpoint_name: str) -> None:
+            def save() -> None:
+                try:
+                    current = version_chain.current()
+                    isolated = checkpoint_name == 'isolated_review'
+                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
+                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=review.claims,
+                        limitations=[*discovery_notes, *analysis.limitations,
+                            'Generation and completed isolated reviews are saved; remaining reviews may be incomplete.' if isolated else
+                            'Generation is saved; support review is pending or was interrupted.'],
+                        run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': checkpoint_name,
+                             **run_core(), 'model_calls': context.calls, 'total_tokens': context.usage,
+                             'generation_tokens': generation_usage, 'support_review_tokens': review.tokens,
+                             'cost_usd': None, 'cost_status': 'unknown' if context.calls or context.search_calls or official_fetch_calls else 'no_external_call',
+                             'counterpoint_requested': request.counterpoint_followup, 'counterpoint_status': counterpoint_status,
+                             'counterpoint_tokens': counterpoint_usage, 'counterpoint_prompt_sha256': counterpoint_hash,
+                             'counterpoint_discarded_fields': counterpoint_discarded_fields,
+                             'counterpoint_omitted_rows': counterpoint_omitted_rows,
+                             'gap_followup_requested': request.gap_followup, 'gap_followup_status': gap_status,
+                             'gap_followup_tokens': gap_usage, 'gap_followup_prompt_sha256': gap_hash,
+                             'gap_followup_targets': gap_targets, 'gap_followup_input_targets': gap_input_targets,
+                             'gap_followup_question_targets': gap_question_targets,
+                             'gap_search_requested': request.gap_search, 'gap_search_status': gap_search_status,
+                             'gap_search_query_sha256': gap_search_hash, 'gap_followup_segments': gap_segments,
+                             'gap_followup_input_fact_ids': gap_input_fact_ids, 'gap_followup_error': gap_error,
+                             'support_review_requested': True, 'support_review_mode': request.support_review_mode,
+                             'support_review_status': 'pending', 'support_review_method': ISOLATED_REVIEW_METHOD if isolated else REVIEW_METHOD,
+                             'support_review_prompt_sha256': review.prompt_sha256,
+                             'support_review_indexes': list(review.indexes), 'support_review_segments': list(review.segments),
+                             'support_review_omissions': list(review.omissions),
+                             **({'support_review_calls': list(review.isolated_records)} if isolated else {}),
+                             'search_calls': context.search_calls, 'search_status': search_status,
+                             'official_fetch_calls': official_fetch_calls, 'official_fetch_status': official_fetch_status,
+                             'require_counterarguments': request.require_counterarguments,
+                             'model': getattr(getattr(provider, 'settings', None), 'model', None),
+                             'provider': getattr(provider, 'name', None), 'prompt_sha256': analysis.prompt_sha256,
+                             'prompt_characters': analysis.prompt_characters, 'prompt_bytes': analysis.prompt_bytes,
+                             'system_prompt_sha256': sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
+                             'selection_method': RESEARCH_SELECTION_METHOD, 'selected_segments': analysis.segments,
+                             'source_hashes': {s.source_id: s.content_sha256 for s in sources},
+                             'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
+                             'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
+                             'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                    version_chain.save(current, partial)
+                except (TopicNotFound, TopicVersionConflict) as error:
+                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+            if not operations.store.checkpoint_if_running(operation_id, save):
+                _raise_if_operation_cancelled(operation_id)
+                raise ApiProblem(409, 'lifecycle_conflict', 'Research run ended before the checkpoint was saved.')
 
-                        def isolated_omission(index: int, reason: str | None) -> None:
-                            nonlocal review_omissions
-                            review_omissions = [item for item in review_omissions if item["claim_index"] != index]
-                            if reason is not None:
-                                review_omissions.append({"claim_index": index, "reason": reason})
-                            review_omissions.sort(key=lambda item: item["claim_index"])
-
-                        def save_isolated_checkpoint() -> None:
-                            try:
-                                current = version_chain.current()
-                                partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                                    sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
-                                    limitations=[*discovery_notes, *analysis.limitations,
-                                        "Generation and completed isolated reviews are saved; remaining reviews may be incomplete."],
-                                    run={"operation_id": operation_id, "status": "partial", "checkpoint": "isolated_review",
-                                         **run_core(),
-                                                                              "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
-                                         "support_review_tokens": review_usage, "cost_usd": None,
-                                         "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
-                                         "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
-                                         "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
-                                         "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
-                                         "gap_followup_question_targets":gap_question_targets,
-                                         "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
-                                         "gap_search_query_sha256":gap_search_hash,
-                                         "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
-                                         "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
-                                         "counterpoint_discarded_fields":counterpoint_discarded_fields,
-                                         "counterpoint_omitted_rows":counterpoint_omitted_rows,
-                                         "cost_status": "unknown" if calls or search_calls else "no_external_call",
-                                         "support_review_requested": True, "support_review_mode": "isolated",
-                                         "support_review_status": "pending", "support_review_method": ISOLATED_REVIEW_METHOD,
-                                         "support_review_indexes": list(review_indexes), "support_review_omissions": list(review_omissions),
-                                         "support_review_calls": list(isolated_records), "search_calls": search_calls,
-                                         "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
-                                         "require_counterarguments": request.require_counterarguments,
-                                         "model": getattr(getattr(provider, "settings", None), "model", None),
-                                         "provider": getattr(provider, "name", None), "prompt_sha256": analysis.prompt_sha256,
-                                         "prompt_characters": analysis.prompt_characters, "prompt_bytes": analysis.prompt_bytes,
-                                         "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
-                                         "selection_method": RESEARCH_SELECTION_METHOD, "selected_segments": analysis.segments,
-                                         "source_hashes": {s.source_id: s.content_sha256 for s in sources},
-                                         "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
-                                         "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
-                                         "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                version_chain.save(current, partial)
-                            except (TopicNotFound, TopicVersionConflict) as error:
-                                raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
-
-                        if plan.batches:
-                            if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
-                                _raise_if_operation_cancelled(operation_id)
-                                raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                            review_status = "partial"
-                        for position, batch in enumerate(plan.batches):
-                            index = batch.indexes[0]
-                            _raise_if_operation_cancelled(operation_id)
-                            reason = context.model_exhaustion(per_call)
-                            if reason:
-                                for pending in plan.batches[position:]:
-                                    isolated_omission(pending.indexes[0], reason)
-                                if not review_indexes:
-                                    review_status = "budget_exhausted"
-                                break
-                            call_id = f"{operation_id}:support-review:{index}"
-                            reported: int | None = None
-                            try:
-                                before_call = context.start_model(call_id, per_call)
-                                remaining = deadline - monotonic()
-                                if remaining <= 0:
-                                    context.abort_model_before_call(call_id, before_call)
-                                    for pending in plan.batches[position:]:
-                                        isolated_omission(pending.indexes[0], "time_budget")
-                                    if not review_indexes:
-                                        review_status = "budget_exhausted"
-                                    break
-                                calls = context.calls
-                                review_indexes.append(index)
-                                review_segments.extend(batch.segments)
-                                isolated_records[position]["status"] = "in_progress"
-                                isolated_omission(index, "in_progress")
-                                try:
-                                    if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
-                                        _raise_if_operation_cancelled(operation_id)
-                                        raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                                except BaseException:
-                                    # No provider call has been made yet.
-                                    context.abort_model_before_call(call_id, before_call)
-                                    calls, usage = context.calls, context.usage
-                                    raise
-                                remaining = deadline - monotonic()
-                                if remaining <= 0:
-                                    context.abort_model_before_call(call_id, before_call)
-                                    calls = context.calls
-                                    review_indexes.pop()
-                                    if batch.segments:
-                                        del review_segments[-len(batch.segments):]
-                                    isolated_records[position]["status"] = "not_started"
-                                    for pending in plan.batches[position:]:
-                                        isolated_omission(pending.indexes[0], "time_budget")
-                                    if not review_indexes:
-                                        review_status = "budget_exhausted"
-                                    break
-                                try:
-                                    raw_review, reported_raw = generate_structured(batch.prompt,
-                                        cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
-                                        timeout_seconds=min(float(timeout), remaining))
-                                    reported = reported_raw if type(reported_raw) is int and reported_raw >= 0 else None
-                                except ProviderFailure as error:
-                                    reported = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                    raise
-                                finally:
-                                    context.finish_model(call_id, reported, before_call)
-                                    review_usages.append(reported)
-                                    review_usage = sum(review_usages) if all(value is not None for value in review_usages) else None
-                                    usage = context.usage
-                                _raise_if_operation_cancelled(operation_id)
-                                mapped_index, verdict = parse_isolated_support_review_details(batch, raw_review)
-                                claims[mapped_index] = {**claims[mapped_index], "support_review":
-                                    review_record(batch, mapped_index, verdict.verdict, ISOLATED_REVIEW_METHOD, relevance=verdict.relevance)}
-                                isolated_records[position].update(status="completed", reported_tokens=reported)
-                                isolated_omission(index, None)
-                                if not operations.store.checkpoint_if_running(operation_id, save_isolated_checkpoint):
-                                    _raise_if_operation_cancelled(operation_id)
-                                    raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                            except (ProviderFailure, InvalidReview, ApiProblem) as error:
-                                _raise_if_operation_cancelled(operation_id)
-                                # Version conflicts must remain visible rather than
-                                # being converted into a successful partial review.
-                                if isinstance(error, ApiProblem) and error.error_code == "lifecycle_conflict":
-                                    raise
-                                review_status = "failed"
-                                review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
-                                review_failed_indexes.append(index)
-                                isolated_records[position].update(status="failed", reported_tokens=reported)
-                                isolated_omission(index, "review_failed")
-                                for pending in plan.batches[position + 1:]:
-                                    isolated_omission(pending.indexes[0], "review_failure")
-                                break
-                        if review_status not in {"failed", "budget_exhausted"} and plan.batches:
-                            review_status = "partial" if review_omissions else "complete"
-            elif request.support_review:
-                review_status = "not_reviewable"
-                policy = getattr(provider, "policy", None)
-                input_limit = getattr(policy, "max_input_tokens", None)
-                output_limit = getattr(policy, "max_output_tokens", None)
-                timeout = getattr(policy, "timeout_seconds", None)
-                if calls and claims and calls >= request.max_model_calls:
-                    review_status = "budget_exhausted"
-                    review_omissions = [{"claim_index": index, "reason": "call_budget"} for index in range(len(claims))]
-                elif calls and claims and isinstance(input_limit, int) and isinstance(output_limit, int) and isinstance(timeout, (int, float)):
-                    per_call = input_limit + output_limit
-                    # Once the provider reports a valid first-call usage, it has
-                    # replaced that call's reservation. Reserve the full bound for
-                    # the next call; retain the first bound only if usage is unknown.
-                    budget_reason = context.model_exhaustion(per_call)
-                    if budget_reason:
-                        review_status = "budget_exhausted"
-                        review_omissions = [{"claim_index": index, "reason": budget_reason} for index in range(len(claims))]
-                    else:
-                        # Only sources already admitted by the first analysis can
-                        # be reviewed; no extra retrieval or permission escalation.
-                        review_budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode("utf-8")) - 512))
-                        review_claims = [{**claim, **({"numeric_discrepancy_for_review": True} if index in discrepancy_indexes else {})}
-                                         for index, claim in enumerate(claims)]
-                        batch = prepare_support_review(review_claims, [s for s in sources if s.source_id in analysis.source_ids], review_budget)
-                        review_omissions = batch.omissions
-                        if batch.indexes:
-                            def save_generation_checkpoint() -> None:
-                                try:
-                                    current = version_chain.current()
-                                    partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
-                                        sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
-                                        claims=claims, limitations=[*discovery_notes, *analysis.limitations,
-                                            "Generation is saved; support review is pending or was interrupted."],
-                                        run={"operation_id": operation_id, "status": "partial", "checkpoint": "generation",
-                                         **run_core(),
-                                                                                      "model_calls": calls, "total_tokens": pre_review_usage, "cost_usd": None,
-                                             "cost_status": "unknown" if calls or search_calls else "no_external_call",
-                                             "generation_tokens": generation_usage, "support_review_requested": True,
-                                             "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
-                                         "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
-                                         "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
-                                         "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
-                                         "gap_followup_question_targets":gap_question_targets,
-                                         "gap_search_requested":request.gap_search, "gap_search_status":gap_search_status,
-                                         "gap_search_query_sha256":gap_search_hash,
-                                         "gap_followup_segments":gap_segments, "gap_followup_input_fact_ids":gap_input_fact_ids, "gap_followup_error":gap_error,
-                                             "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
-                                             "counterpoint_discarded_fields":counterpoint_discarded_fields,
-                                             "counterpoint_omitted_rows":counterpoint_omitted_rows,
-                                             "require_counterarguments": request.require_counterarguments,
-                                             "support_review_status": "pending", "support_review_indexes": batch.indexes,
-                                             "support_review_method": REVIEW_METHOD, "support_review_prompt_sha256": batch.prompt_sha256,
-                                             "support_review_segments": batch.segments,
-                                             "support_review_omissions": batch.omissions, "search_calls": search_calls,
-                                             "official_fetch_calls": official_fetch_calls, "official_fetch_status": official_fetch_status,
-                                             "model": getattr(getattr(provider, "settings", None), "model", None),
-                                             "provider": getattr(provider, "name", None),
-                                             "prompt_sha256": analysis.prompt_sha256,
-                                             "prompt_characters": analysis.prompt_characters, "prompt_bytes": analysis.prompt_bytes,
-                                             "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
-                                             "selection_method": RESEARCH_SELECTION_METHOD, "selected_segments": analysis.segments,
-                                             "source_hashes": {s.source_id: s.content_sha256 for s in sources},
-                                             "max_model_calls": request.max_model_calls, "max_search_calls": request.max_search_calls,
-                                             "max_elapsed_seconds": request.max_elapsed_seconds, "max_total_tokens": request.max_total_tokens,
-                                             "max_cost_usd": str(request.max_cost_usd) if request.max_cost_usd is not None else None})
-                                    version_chain.save(current, partial)
-                                except (TopicNotFound, TopicVersionConflict) as error:
-                                    raise ApiProblem(409, "lifecycle_conflict", "Research changed before the checkpoint was saved.") from error
-                            if not operations.store.checkpoint_if_running(operation_id, save_generation_checkpoint):
-                                _raise_if_operation_cancelled(operation_id)
-                                raise ApiProblem(409, "lifecycle_conflict", "Research run ended before the checkpoint was saved.")
-                            review_hash, review_segments, review_indexes = batch.prompt_sha256, batch.segments, batch.indexes
-                            review_call_id = f"{operation_id}:support-review"
-                            try:
-                                _raise_if_operation_cancelled(operation_id)
-                                remaining = deadline - monotonic()
-                                if remaining <= 0:
-                                    raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
-                                before_call = context.start_model(review_call_id, per_call)
-                                calls = context.calls
-                                try:
-                                    raw_review, reported_review_usage = generate_structured(batch.prompt,
-                                        cancel_event=operations.cancel_event(operation_id), system=REVIEW_SYSTEM_PROMPT,
-                                        timeout_seconds=min(float(timeout), remaining))
-                                    review_usage = reported_review_usage if type(reported_review_usage) is int and reported_review_usage >= 0 else None
-                                except ProviderFailure as error:
-                                    review_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
-                                    raise
-                                finally:
-                                    context.finish_model(review_call_id, review_usage, before_call)
-                                    usage = context.usage
-                                claims, missing_reviews = apply_partial_support_review(claims, batch, raw_review)
-                                review_omissions.extend({"claim_index": index, "reason": "model_omitted"} for index in missing_reviews)
-                                review_status = "partial" if batch.omitted or missing_reviews else "complete"
-                            except (ProviderFailure, InvalidReview, ApiProblem) as error:
-                                review_status = "failed"
-                                review_failed_indexes = batch.indexes
-                                review_error = error.code if isinstance(error, ProviderFailure) else "review_unavailable"
-            calls, usage = context.calls, context.usage
-            _raise_if_operation_cancelled(operation_id)
-            stage_state.status = review_status
+        review = workflow.run('support_review', lambda: execute_support_review(
+            request=request, analysis=analysis, claims=claims, sources=sources, provider=provider,
+            generate=generate_structured, context=context, operation_id=operation_id,
+            checkpoint=save_review_checkpoint), lambda result: result.status)
+        claims, review_status, review_usage, review_error = review.claims, review.status, review.tokens, review.error
+        review_hash, review_segments, review_indexes = review.prompt_sha256, review.segments, review.indexes
+        review_omissions, review_failed_indexes, isolated_records = review.omissions, review.failed_indexes, review.isolated_records
+        calls, usage = context.calls, context.usage
+        _raise_if_operation_cancelled(operation_id)
         assessment = workflow.run('delivery_assessment', lambda: assess_research_outcome(
             request=request, analysis=analysis, claims=claims,
             source_states=source_processing(analysis.segments), discovery_notes=discovery_notes,
