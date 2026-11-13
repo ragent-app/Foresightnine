@@ -3869,6 +3869,22 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     def record_inputs(operation_id: str) -> None:
         # Write before any external call, within operation admission. Replays do
         # not replace the original snapshot or send the provider another request.
+        # The shared topic lock remains held through PostgreSQL admission; the
+        # memory operation store serializes admissions with its condition lock.
+        # Thus different keys cannot start concurrent runs for the same topic.
+        def has_running_research() -> bool:
+            endpoint = f"/v1/research/topics/{topic_id}/runs"
+            owner = f"account:{account.account_id}"
+            for other_id, session in operations.store.session_ids().items():
+                if session != topic_id or other_id == operation_id:
+                    continue
+                record = operations.store.get_operation(other_id)
+                if (record and record.get('owner_subject') == owner and record.get('endpoint') == endpoint and
+                        record.get('status') in {'pending', 'running'}):
+                    return True
+            return False
+        if RESEARCH_TOPICS.with_advisory_lock(f"research-run:{topic_id}", has_running_research):
+            raise ApiProblem(409, 'lifecycle_conflict', 'Another research run is already active for this topic.')
         policy = getattr(provider, "policy", None)
         RESEARCH_RUN_INPUTS.put(operation_id, {
             "schema_version": "1", "operation_id": operation_id, "owner_id": account.account_id,

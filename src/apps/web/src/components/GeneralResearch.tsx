@@ -346,8 +346,9 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         const { operation: next } = await api.operation(topic.topic_id, operation.operation_id);
         if (!active) return;
         if (!["pending", "running"].includes(next.status)) {
-          const updated = await api.get(topic.topic_id);
-          if (active) { setTopic(updated); setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item)); setPollNotice(""); setOperation(next); }
+          const [updated, runs] = await Promise.all([api.get(topic.topic_id), api.runs(topic.topic_id)]);
+          const remaining = runs.find((item) => ["pending", "running"].includes(item.operation.status))?.operation;
+          if (active) { setTopic(updated); setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item)); setPollNotice(""); setOperation(remaining ?? next); }
           return;
         }
         setPollNotice(""); setOperation(next); delay = 1500;
@@ -565,7 +566,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
     setBusy(true); setNotice("");
     try {
       const [updated, runs] = await Promise.all([api.get(topicId), api.runs(topicId)]);
-      setTopic(updated); setSelectedVersionId(""); setRunSearchScope(false); setOperation(runs[0]?.operation ?? null);
+      setTopic(updated); setSelectedVersionId(""); setRunSearchScope(false); setOperation(runs.find((item) => ["pending", "running"].includes(item.operation.status))?.operation ?? runs[0]?.operation ?? null);
       setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
     } catch { setNotice(en ? "Could not open research." : "无法打开研究。"); }
     finally { setBusy(false); }
@@ -608,7 +609,18 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
         setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
       }
       setOperation(receipt.operation); }
-    catch { setNotice(en ? "Could not start research." : "无法启动研究。"); }
+    catch (error) {
+      if (error instanceof ResearchRequestError && error.status === 409) {
+        pendingRun.current = null;
+        try {
+          const [updated, runs] = await Promise.all([api.get(topic.topic_id), api.runs(topic.topic_id)]);
+          setTopic(updated); setSelectedVersionId("");
+          setTopics((items) => items.map((item) => item.topic_id === updated.topic_id ? updated : item));
+          setOperation(runs.find((item) => ["pending", "running"].includes(item.operation.status))?.operation ?? runs[0]?.operation ?? null);
+          setNotice(en ? "The research changed or a run is already active. The current state was reloaded." : "研究已发生变化或已有运行正在进行，已重新加载当前状态。");
+        } catch { setNotice(en ? "The research changed or a run may be active. Reopen it before starting again." : "研究已发生变化或可能已有运行，请重新打开后再操作。"); }
+      } else setNotice(en ? "Could not start research. Retry uses the same request to avoid duplicating a run." : "无法确认研究是否启动；重试会沿用同一次请求，避免重复运行。");
+    }
     finally { setBusy(false); }
   }
   async function save(review: "draft" | "confirmed" | "reservation") {
