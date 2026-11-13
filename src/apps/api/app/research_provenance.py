@@ -16,6 +16,7 @@ MAX_ENTRIES = 2000
 MAX_CITATIONS = 10
 MAX_INPUTS = 20
 MAX_FACT_MATCHES = 20
+MAX_QUESTION_LINKS = 50
 
 
 def _location_key(source_id: object, location: object) -> tuple[str, int, int] | None:
@@ -182,6 +183,61 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
     return {'schema_version': '1', 'index_scope': 'research_version',
             'meaning': 'recorded_links_not_semantic_verification', 'truncated': truncated,
             'claims': claim_links, 'calculations': calculation_links}
+
+
+def derive_question_links(questions: object, claims: list[dict]) -> dict[str, Any]:
+    """Connect saved subquestions to their recorded findings, sources and counterpoints.
+
+    Relations retain their original attribution: model-suggested subquestion
+    links and counterpoint links remain suggestions. Neither presence nor absence
+    of a link is a semantic coverage or evidence-quality verdict.
+    """
+    rows = questions if isinstance(questions, list) else []
+    by_id = {item['claim_id']: item for item in claims[:MAX_ENTRIES]
+             if isinstance(item, dict) and isinstance(item.get('claim_id'), str)}
+    counterpoints = [item for item in claims[:MAX_ENTRIES]
+                     if isinstance(item, dict) and item.get('role') == 'counterargument'
+                     and isinstance(item.get('claim_id'), str)]
+    truncated = len(rows) > 20 or len(claims) > MAX_ENTRIES
+    result: list[dict[str, Any]] = []
+    for index, question in enumerate(rows[:20]):
+        if not isinstance(question, dict):
+            continue
+        raw_ids = question.get('claim_ids')
+        ids = list(dict.fromkeys(item for item in raw_ids
+                                 if isinstance(item, str) and item in by_id)) if isinstance(raw_ids, list) else []
+        sources: list[str] = []
+        for claim_id in ids:
+            citations = by_id[claim_id].get('citations')
+            if not isinstance(citations, list):
+                continue
+            for citation in citations[:MAX_CITATIONS]:
+                source_id = citation.get('source_id') if isinstance(citation, dict) else None
+                if isinstance(source_id, str) and source_id and source_id not in sources:
+                    sources.append(source_id)
+            truncated = truncated or len(citations) > MAX_CITATIONS
+        related: list[dict[str, Any]] = []
+        targets = set(ids)
+        for counter in counterpoints:
+            for field, attribution in (('responds_to_claim_ids', 'recorded'),
+                                       ('suggested_responds_to_claim_ids', 'model_suggested')):
+                links = counter.get(field)
+                matched = list(dict.fromkeys(link for link in links
+                                             if isinstance(link, str) and link in targets)) if isinstance(links, list) else []
+                if matched:
+                    counter_citations = counter.get('citations')
+                    counter_sources = list(dict.fromkeys(citation['source_id'] for citation in counter_citations[:MAX_CITATIONS]
+                        if isinstance(citation, dict) and isinstance(citation.get('source_id'), str) and citation['source_id'])) if isinstance(counter_citations, list) else []
+                    truncated = truncated or (isinstance(counter_citations, list) and len(counter_citations) > MAX_CITATIONS)
+                    related.append({'claim_id': counter['claim_id'], 'attribution': attribution,
+                                    'finding_ids': matched[:MAX_QUESTION_LINKS], 'source_ids': counter_sources})
+        truncated = truncated or len(ids) > MAX_QUESTION_LINKS or len(sources) > MAX_QUESTION_LINKS or len(related) > MAX_QUESTION_LINKS
+        result.append({'question_index': index, 'finding_ids': ids[:MAX_QUESTION_LINKS],
+                       'source_ids': sources[:MAX_QUESTION_LINKS],
+                       'counterpoints': related[:MAX_QUESTION_LINKS]})
+    return {'schema_version': '1', 'index_scope': 'research_version',
+            'meaning': 'recorded_relationships_not_verified_coverage', 'truncated': truncated,
+            'questions': result}
 
 
 def normalize_user_fact_links(claims: list[dict], facts: list[dict], previous_claims: list[dict],
