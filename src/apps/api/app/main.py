@@ -2913,7 +2913,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 limitations=list(dict.fromkeys([*analysis.limitations, note])))
         if structured_truncated:
             analysis = replace(analysis, limitations=[*analysis.limitations,
-                'Some structured source observations were not processed because the per-run limit was reached.'])
+                'Some structured source observations were not processed because a source or run limit was reached.'])
         if planning_steps:
             # Track each proposed plan item even if the model omits it from
             # its output. Only exact matching associates a finding; this does

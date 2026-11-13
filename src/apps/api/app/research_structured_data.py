@@ -26,7 +26,7 @@ MAX_OBSERVATIONS = 100
 _CURRENCIES = frozenset('USD EUR GBP JPY CNY HKD KRW CAD AUD CHF SGD INR TWD NZD SEK NOK DKK BRL ZAR'.split())
 
 
-def _sec_company_concept(source: ResearchSource) -> list[dict]:
+def _sec_company_concept(source: ResearchSource) -> tuple[list[dict], bool]:
     """Read exact JSON observation lines from the SEC connector's snapshot."""
     # The source URL is produced by the SEC adapter; retain the explicitly
     # requested entity and concept rather than inferring identity from labels.
@@ -34,7 +34,7 @@ def _sec_company_concept(source: ResearchSource) -> list[dict]:
     match = re.fullmatch(r'/api/xbrl/companyconcept/CIK(\d{10})/(us-gaap|ifrs-full|dei)/([A-Za-z][A-Za-z0-9_]*)\.json',
                          address.path) if address and address.hostname == 'data.sec.gov' else None
     if match is None:
-        return []
+        return [], False
     entity_id, taxonomy, concept = match.groups()
     rows: list[dict] = []
     offset = 0
@@ -42,8 +42,6 @@ def _sec_company_concept(source: ResearchSource) -> list[dict]:
         raw = line.rstrip('\r\n')
         start = offset
         offset += len(line)
-        if len(rows) >= MAX_OBSERVATIONS:
-            break
         if not raw.startswith('{') or len(raw) > 1000:
             continue
         try:
@@ -66,6 +64,8 @@ def _sec_company_concept(source: ResearchSource) -> list[dict]:
             numeric = NumericFact(fact_id=fact_id, value=value, unit=unit, currency=currency, period=period)
         except (ValueError, TypeError, KeyError, InvalidOperation, ValidationError, json.JSONDecodeError):
             continue
+        if len(rows) >= MAX_OBSERVATIONS:
+            return rows, True
         metadata = {}
         for key in ('fy', 'fp', 'form', 'accn', 'frame'):
             value = item.get(key)
@@ -80,27 +80,34 @@ def _sec_company_concept(source: ResearchSource) -> list[dict]:
                                              'period_start': start_date.isoformat() if start_date else None,
                                              'period_end': end.isoformat(),
                                              'filing_date': filed.isoformat() if filed else None, **metadata}})
-    return rows
+    return rows, False
 
 
-_ADAPTERS: dict[str, Callable[[ResearchSource], list[dict]]] = {'sec_companyconcept': _sec_company_concept}
+_ADAPTERS: dict[str, Callable[[ResearchSource], tuple[list[dict], bool]]] = {'sec_companyconcept': _sec_company_concept}
 
 
 def extract_structured_observations(sources: list[ResearchSource], *, max_facts: int = 200) -> tuple[list[dict], bool]:
     """Extract bounded observations; explicitly report a capacity cutoff."""
-    output: list[dict] = []
+    groups: list[list[dict]] = []
     truncated = False
     for source in sources:
         adapter = _ADAPTERS.get(source.retrieval_method)
         if adapter is None or source.is_simulated or not source.permissions.model_input or not source.permissions.display:
             continue
-        if len(output) >= max_facts:
-            truncated = True
-            break
-        rows = adapter(source)
-        remaining = max_facts - len(output)
-        output.extend(rows[:remaining])
-        if len(rows) > remaining:
-            truncated = True
-            break
+        rows, source_truncated = adapter(source)
+        truncated = truncated or source_truncated
+        if rows:
+            groups.append(rows)
+    # Interleave provider-ordered observations so a long first source cannot
+    # consume the entire run budget before other selected sources are seen.
+    # This is allocation fairness, not a claim that the rows are comparable.
+    limit = max(0, max_facts)
+    truncated = truncated or sum(map(len, groups)) > limit
+    output: list[dict] = []
+    for index in range(max((len(rows) for rows in groups), default=0)):
+        for rows in groups:
+            if len(output) >= limit:
+                return output, truncated
+            if index < len(rows):
+                output.append(rows[index])
     return output, truncated
