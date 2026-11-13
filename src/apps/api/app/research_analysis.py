@@ -25,6 +25,7 @@ from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spac
 from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_xbrl import match_inline_fact
+from .research_retrieval import build_passage_index
 
 
 SYSTEM_PROMPT = (
@@ -38,7 +39,7 @@ SYSTEM_PROMPT = (
 MAX_SOURCE_CHARS = 8_000
 MAX_TOTAL_CHARS = 10_000
 MAX_SOURCES = 20
-SELECTION_METHOD = "ranked_nonoverlapping_windows_v49"
+SELECTION_METHOD = "ranked_nonoverlapping_windows_v50"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -1765,6 +1766,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         def original_offset(position: int) -> int:
             return horizontal_offset(blank_offset(position))
         max_size = min(len(selection_text), MAX_SOURCE_CHARS, share)
+        # A general lexical index supplements domain-specific structural
+        # extraction. It never asserts semantic relevance or source support.
+        general_index = build_passage_index(selection_text, question, should_stop)
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        if general_index is not None and general_index.truncated:
+            limitations.append(f"Source {source.source_id}: the general retrieval index did not cover the full document; unseen text was not examined.")
         # Character quotas alone do not partition the provider's byte budget:
         # Chinese text and JSON escaping can consume several bytes per character.
         # Reserve an equal share of the remaining serialized bytes for each
@@ -1816,7 +1824,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     if windows is None:
                         windows = _comparison_windows(selection_text, question, size, should_stop)
                     if windows is None:
-                        windows = _select_windows(selection_text, question, size // generic_window_count, generic_window_count, should_stop, source_title=source.title)
+                        windows = (general_index.select(size, generic_window_count) if general_index is not None else [])
+                        if not windows:
+                            windows = _select_windows(selection_text, question, size // generic_window_count, generic_window_count, should_stop, source_title=source.title)
                         if generic_window_count == 2:
                             windows = _replace_empty_table_with_counterpoint(selection_text, question, windows, should_stop)
                         windows = sorted(windows, key=lambda item: item[0])
