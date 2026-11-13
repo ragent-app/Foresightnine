@@ -109,6 +109,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
 from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
 from .research_source_policy import prepare_sources, summarize_sources, summarize_source_processing
+from .research_budget import ResearchExecutionBudget
 from .research_planning import PLAN_SYSTEM_PROMPT, parse_plan, plan_prompt
 from .research_structured_data import extract_structured_observations
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
@@ -2565,6 +2566,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         nonlocal checkpoint_parent
         started = monotonic()
         deadline = started + request.max_elapsed_seconds
+        budget = ResearchExecutionBudget(request.max_model_calls, request.max_search_calls,
+                                         request.max_total_tokens, deadline)
         calls = 0
         search_calls = 0
         official_fetch_calls = 0
@@ -2764,8 +2767,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 planning_status = 'unavailable'
             else:
                 per_call = input_limit + output_limit
-                if request.max_model_calls < 2 or 2 * per_call > request.max_total_tokens or monotonic() >= deadline:
-                    planning_status = 'budget_exhausted'
+                reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=per_call,
+                                                 now=monotonic(), required_calls=2)
+                if reason:
+                    planning_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
                 else:
                     prompt = plan_prompt(effective_question, topic.request.scope)
                     if len(prompt.encode('utf-8')) + len(PLAN_SYSTEM_PROMPT.encode('utf-8')) + 512 > input_limit:
@@ -2806,8 +2811,6 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
         def generate(prompt: str) -> tuple[dict[str, Any], int | None]:
             nonlocal calls, usage, base_prompt_text, generation_call_usage
-            if calls >= request.max_model_calls:
-                raise ProviderFailure("provider_budget_exhausted", "Model call budget is exhausted.", retryable=False)
             if request.max_cost_usd is not None:
                 raise ProviderFailure("provider_budget_unknown", "Model pricing is not configured for the requested cost cap.", retryable=False)
             if not callable(generate_structured):
@@ -2825,9 +2828,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     not 0 < timeout <= 180 or "timeout_seconds" not in parameters):
                 raise ProviderFailure("provider_budget_unknown", "Provider limits cannot be enforced.", retryable=False)
             token_reservation = input_limit + output_limit
-            consumed = usage if calls and usage is not None else calls * token_reservation
-            if consumed + token_reservation > request.max_total_tokens:
-                raise ProviderFailure("provider_budget_exhausted", "Model token budget is insufficient.", retryable=False)
+            budget_reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=token_reservation, now=monotonic())
+            if budget_reason:
+                raise ProviderFailure("provider_budget_unknown" if budget_reason == 'provider_limit' else "provider_budget_exhausted",
+                                      "Model execution budget is unavailable or exhausted.", retryable=False)
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise ProviderFailure("provider_budget_exhausted", "Research time budget is exhausted.", retryable=False)
@@ -2949,9 +2953,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     counterpoint_status = 'unavailable'
                 else:
                     per_call = input_limit + output_limit
-                    first_charge = usage if usage is not None else calls * per_call
-                    if calls >= request.max_model_calls or first_charge + per_call > request.max_total_tokens or monotonic() >= deadline:
-                        counterpoint_status = 'budget_exhausted'
+                    reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=per_call, now=monotonic())
+                    if reason:
+                        counterpoint_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
                     else:
                         followup = prepare_counterpoint_prompt(base_prompt_text, analysis.claims,
                             max(1, min(48000, input_limit - len(RESEARCH_SYSTEM_PROMPT.encode('utf-8')) - 512)))
@@ -3119,9 +3123,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     gap_status = 'unavailable'
                 else:
                     per_call = input_limit + output_limit
-                    consumed = usage if usage is not None else calls * per_call
-                    if calls >= request.max_model_calls or consumed + per_call > request.max_total_tokens or monotonic() >= deadline:
-                        gap_status = 'budget_exhausted'
+                    reason = budget.model_exhaustion(calls=calls, usage=usage, per_call=per_call, now=monotonic())
+                    if reason:
+                        gap_status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
                     else:
                         prior_usage = usage
                         gap_attempted = False
@@ -3185,7 +3189,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 search = getattr(evidence_provider, 'search', None)
                                 if request.max_cost_usd is not None:
                                     gap_search_status = 'cost_unknown'
-                                elif search_calls >= request.max_search_calls or monotonic() >= deadline:
+                                elif budget.search_exhaustion(calls=search_calls, now=monotonic()):
                                     gap_search_status = 'budget_exhausted'
                                 elif not getattr(evidence_provider, 'supports_project_search', False) or not callable(search):
                                     gap_search_status = 'unavailable'
@@ -3455,9 +3459,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     for position, batch in enumerate(plan.batches):
                         index = batch.indexes[0]
                         _raise_if_operation_cancelled(operation_id)
-                        reason = ("call_budget" if calls >= request.max_model_calls else
-                                  "token_budget" if consumed + per_call > request.max_total_tokens else
-                                  "time_budget" if monotonic() >= deadline else None)
+                        reason = budget.model_exhaustion(calls=calls, usage=consumed, per_call=per_call, now=monotonic())
                         if reason:
                             for pending in plan.batches[position:]:
                                 isolated_omission(pending.indexes[0], reason)
@@ -3555,10 +3557,9 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 # Once the provider reports a valid first-call usage, it has
                 # replaced that call's reservation. Reserve the full bound for
                 # the next call; retain the first bound only if usage is unknown.
-                first_charge = pre_review_usage if pre_review_usage is not None else calls * per_call
-                if request.max_total_tokens < first_charge + per_call or monotonic() >= deadline:
+                budget_reason = budget.model_exhaustion(calls=calls, usage=pre_review_usage, per_call=per_call, now=monotonic())
+                if budget_reason:
                     review_status = "budget_exhausted"
-                    budget_reason = "token_budget" if request.max_total_tokens < first_charge + per_call else "time_budget"
                     review_omissions = [{"claim_index": index, "reason": budget_reason} for index in range(len(claims))]
                 else:
                     # Only sources already admitted by the first analysis can
