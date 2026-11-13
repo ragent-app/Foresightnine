@@ -929,6 +929,11 @@
               }
             ]
           },
+          "gap_followup": {
+            "default": false,
+            "title": "Gap Followup",
+            "type": "boolean"
+          },
           "include_scope_in_search": {
             "default": false,
             "title": "Include Scope In Search",

@@ -80,7 +80,7 @@ export interface ResearchOperation {
 export interface SourceMetadata { original_pdf_available?: boolean; original_html_available?: boolean; derived_from_source_id?: string | null; pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string; published_at?: string | null }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
-export interface RunBudget { selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; counterpointFollowup?: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean; autoFetchOfficial?: boolean }
+export interface RunBudget { selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; counterpointFollowup?: boolean; gapFollowup?: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean; autoFetchOfficial?: boolean }
 
 export function sourceDiscoveryQuery(question: string, scope: string, includeScope: boolean): string {
   const q = Array.from(question.trim()), s = Array.from(scope.trim());
@@ -204,8 +204,9 @@ export function researchClient(baseUrl: string) {
     run: (topicId: string, parent: string, key: string, budget: RunBudget) => request<{ operation: ResearchOperation }>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs`, { parent_version_id: parent,
         max_search_calls: budget.search ? 1 : 0, max_elapsed_seconds: budget.maxElapsedSeconds,
-        max_total_tokens: budget.maxTotalTokens, max_model_calls: budget.supportReview && budget.supportReviewMode === "isolated" ? budget.maxModelCalls ?? 2 : 1 + Number(budget.supportReview) + Number(budget.counterpointFollowup ?? false), support_review: budget.supportReview,
+        max_total_tokens: budget.maxTotalTokens, max_model_calls: budget.supportReview && budget.supportReviewMode === "isolated" ? budget.maxModelCalls ?? 2 : 1 + Number(budget.supportReview) + Number(budget.counterpointFollowup ?? false) + Number(budget.gapFollowup ?? false), support_review: budget.supportReview,
         ...(budget.counterpointFollowup ? { counterpoint_followup: true } : {}),
+        ...(budget.gapFollowup ? { gap_followup: true } : {}),
         ...(budget.supportReview && budget.supportReviewMode === "isolated" ? { support_review_mode: "isolated" } : {}),
         require_counterarguments: budget.requireCounterarguments,
         ...(budget.maxInputTokensPerCall !== undefined ? { max_input_tokens_per_call: budget.maxInputTokensPerCall } : {}),

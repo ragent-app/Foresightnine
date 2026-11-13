@@ -11,6 +11,7 @@ const labels: Record<string, readonly [string, string]> = {
   counterpoint_target_unlinked: ["Counterarguments have no recorded or suggested finding to review against.", "部分反方未关联或建议关联具体结论。"],
   calculation_inputs_unverified: ["Calculation inputs are missing, changed or not verified.", "部分计算的输入缺失、变更或尚未核查。"],
   calculation_or_amount_differences: ["Potential differences between findings, amounts or calculations require review.", "结论、金额或计算存在待核查差异。"],
+  gap_followup_incomplete: ["The requested evidence-gap follow-up did not complete.", "请求的证据缺口补充未完成。"],
   model_review_incomplete: ["The requested model review did not finish for all findings.", "请求的模型复查未覆盖全部条目。"],
   counterpoint_followup_incomplete: ["The requested counterargument follow-up did not complete.", "请求的反方补充未完成。"],
   last_run_partial: ["The last run returned partial results; review its limitations.", "上次运行部分完成，请查看其限制和缺口。"],

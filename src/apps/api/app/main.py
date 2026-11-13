@@ -107,6 +107,7 @@ from .research_verification import (REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIE
                                     apply_partial_support_review, prepare_support_review,
                                     prepare_isolated_support_reviews, parse_isolated_support_review, review_record)
 from .research_runs import CLAIM_EVIDENCE_WARNINGS, ResearchRunRequest, ResearchRunResult, discovery_query, has_usable_counterpoint
+from .research_gap_followup import build_gap_focus, remap_followup_artifacts
 from .research_counterpoint import extract_answer_candidates, filter_counterpoint_rows, prepare_counterpoint_prompt
 from .research_topics import ResearchContent
 from .research_fetch import HTML_EXTRACTION_DISCLOSURE, FetchFailure, FetchSourceRequest, fetch_official_text, fetch_official_pdf
@@ -2505,6 +2506,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         run_request_payload.pop("support_review_mode", None)
     if not request.counterpoint_followup:
         run_request_payload.pop("counterpoint_followup", None)
+    if not request.gap_followup:
+        run_request_payload.pop("gap_followup", None)
     if request.focus_citation is None:
         run_request_payload.pop("focus_citation", None)
     existing = operations.replay_async(endpoint=f"/v1/research/topics/{topic_id}/runs", idempotency_key=idempotency_key,
@@ -2984,6 +2987,161 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 counterpoint_error = error.code if isinstance(error, ProviderFailure) else 'counterpoint_unavailable'
                             if counterpoint_attempted:
                                 usage = generation_usage + counterpoint_usage if generation_usage is not None and counterpoint_usage is not None else None
+        # Optional evidence-gap follow-up is deliberately bounded to the
+        # already authorized sources. It never turns search leads into inputs.
+        gap_status = 'not_requested'
+        gap_usage: int | None = None
+        gap_hash: str | None = None
+        gap_targets: list[int] = []
+        gap_input_targets: list[int] = []
+        gap_segments: list[dict[str, Any]] = []
+        gap_error: str | None = None
+        if request.gap_followup:
+            gap_status = 'not_needed' if calls and analysis.claims else 'unavailable'
+            target = build_gap_focus(effective_question, claims) if calls and sources else None
+            if target is not None:
+                gap_targets = list(target.claim_indexes)
+                gap_input_targets = list(target.claim_indexes)
+                policy = getattr(provider, 'policy', None)
+                input_limit = getattr(policy, 'max_input_tokens', None)
+                output_limit = getattr(policy, 'max_output_tokens', None)
+                timeout = getattr(policy, 'timeout_seconds', None)
+                if not isinstance(input_limit, int) or not isinstance(output_limit, int) or not isinstance(timeout, (int, float)):
+                    gap_status = 'unavailable'
+                else:
+                    per_call = input_limit + output_limit
+                    consumed = usage if usage is not None else calls * per_call
+                    if calls >= request.max_model_calls or consumed + per_call > request.max_total_tokens or monotonic() >= deadline:
+                        gap_status = 'budget_exhausted'
+                    else:
+                        prior_usage = usage
+                        gap_attempted = False
+                        def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
+                            nonlocal calls, gap_usage, gap_hash, gap_attempted, checkpoint_parent
+                            _raise_if_operation_cancelled(operation_id)
+                            def save_gap_checkpoint() -> None:
+                                nonlocal checkpoint_parent
+                                try:
+                                    current = research_topics.get(account.account_id, topic_id).versions[-1]
+                                    expected = checkpoint_parent or request.parent_version_id
+                                    if current.version_id != expected:
+                                        raise TopicVersionConflict()
+                                    partial = ResearchContent(summary=current.content.summary, source_candidates=discovered,
+                                        sources=source_summaries(analysis.source_ids), facts=analysis.facts,
+                                        evidence_differences=evidence_differences(analysis.facts), calculations=analysis.calculations,
+                                        calculation_differences=claim_calculation_differences(claims, analysis.calculations, analysis.facts),
+                                        amount_differences=claim_amount_differences(claims, analysis.facts), claims=claims,
+                                        limitations=[*discovery_notes, *analysis.limitations,
+                                            'Generation is saved; evidence-gap follow-up is pending or was interrupted.'],
+                                        run={'operation_id':operation_id, 'status':'partial', 'checkpoint':'gap_followup',
+                                             **({'question_override':request.question_override} if request.question_override is not None else {}),
+                                             'model_calls':calls, 'total_tokens':prior_usage, 'generation_tokens':generation_usage,
+                                             'counterpoint_requested':request.counterpoint_followup, 'counterpoint_status':counterpoint_status,
+                                             'counterpoint_tokens':counterpoint_usage, 'gap_followup_requested':True,
+                                             'gap_followup_status':'pending', 'gap_followup_targets':gap_targets,
+                                             'support_review_requested':request.support_review,
+                                             'support_review_status':'pending' if request.support_review else 'not_requested',
+                                             'require_counterarguments':request.require_counterarguments,
+                                             'source_hashes':{s.source_id:s.content_sha256 for s in sources},
+                                             'selected_segments':analysis.segments, 'selection_method':RESEARCH_SELECTION_METHOD,
+                                             'search_calls':search_calls, 'search_status':search_status,
+                                             'official_fetch_calls':official_fetch_calls, 'official_fetch_status':official_fetch_status,
+                                             'cost_usd':None, 'cost_status':'unknown', 'prompt_sha256':analysis.prompt_sha256,
+                                             'max_model_calls':request.max_model_calls, 'max_total_tokens':request.max_total_tokens,
+                                             'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
+                                             'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                                    saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
+                                        parent_version_id=expected, content=partial, note=current.note), source_ids=source_ids, created_by='agent')
+                                    checkpoint_parent = saved.versions[-1].version_id
+                                except (TopicNotFound, TopicVersionConflict) as error:
+                                    raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+                            if not operations.store.checkpoint_if_running(operation_id, save_gap_checkpoint):
+                                _raise_if_operation_cancelled(operation_id)
+                                raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
+                            remaining = deadline - monotonic()
+                            if remaining <= 0:
+                                raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
+                            call_id = f'{operation_id}:gap-followup'
+                            _reserve_model_call(http_request, call_id, token_budget=per_call)
+                            calls += 1
+                            gap_attempted = True
+                            gap_hash = sha256(prompt.encode('utf-8')).hexdigest()
+                            try:
+                                raw, reported = generate_structured(prompt, cancel_event=operations.cancel_event(operation_id),
+                                    system=RESEARCH_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
+                                gap_usage = reported if type(reported) is int and reported >= 0 else None
+                                return raw, gap_usage
+                            except ProviderFailure as error:
+                                gap_usage = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
+                                raise
+                            finally:
+                                _settle_model_call(http_request, call_id, gap_usage)
+                        try:
+                            gap_result = analyze(target.question, sources, topic.request.as_of, generate_gap,
+                                max_prompt_chars=max_prompt_chars, should_stop=lambda: monotonic() >= deadline,
+                                scope=topic.request.scope)
+                            if not gap_attempted:
+                                gap_status = 'input_unavailable'
+                            else:
+                                old_count = len(analysis.claims)
+                                gap_facts, gap_calculations, artifact_omissions = remap_followup_artifacts(
+                                    gap_result.facts, gap_result.calculations, operation_id=operation_id,
+                                    existing_fact_ids={fact['fact_id'] for fact in analysis.facts if isinstance(fact.get('fact_id'), str)},
+                                    max_facts=max(0, 2000 - len(analysis.facts)),
+                                    max_calculations=max(0, 2000 - len(analysis.calculations)))
+                                for calculation in gap_calculations:
+                                    calculation['input_status'] = calculation_input_status(calculation, [*analysis.facts, *gap_facts])
+                                # Preserve baseline entries and bound the additional output.
+                                support_room = max(0, 30 - old_count)
+                                extra_claims = gap_result.claims[:support_room]
+                                # Inserted supporting findings shift the saved
+                                # positions of the original counterarguments.
+                                gap_targets = [i if i < old_count else i + len(extra_claims) for i in gap_input_targets]
+                                index_map = {i: old_count + i for i in range(len(extra_claims))}
+                                counter_room = max(0, 20 - len(analysis.counterarguments))
+                                extra_counterpoints = []
+                                for item in gap_result.counterarguments[:counter_room]:
+                                    item = dict(item)
+                                    targets = item.get('suggested_responds_to_claim_indexes', [])
+                                    if isinstance(targets, list):
+                                        mapped = [index_map[i] for i in targets if type(i) is int and i in index_map]
+                                        if mapped:
+                                            item['suggested_responds_to_claim_indexes'] = mapped
+                                        else:
+                                            item.pop('suggested_responds_to_claim_indexes', None)
+                                    extra_counterpoints.append(item)
+                                # Each model invocation saw its own source
+                                # selection. Do not union them when deciding
+                                # whether any one model read a whole source.
+                                gap_segments = list(gap_result.segments)
+                                added = bool(extra_claims or extra_counterpoints or gap_facts or gap_calculations)
+                                gap_status = 'completed' if added else 'no_evidence'
+                                if len(gap_result.claims) > support_room or len(gap_result.counterarguments) > counter_room or artifact_omissions:
+                                    gap_status = 'partial'
+                                analysis = replace(analysis, claims=[*analysis.claims, *extra_claims],
+                                    counterarguments=[*analysis.counterarguments, *extra_counterpoints],
+                                    facts=[*analysis.facts, *gap_facts], calculations=[*analysis.calculations, *gap_calculations],
+                                    source_ids=list(dict.fromkeys([*analysis.source_ids, *gap_result.source_ids])),
+                                    limitations=list(dict.fromkeys([*analysis.limitations, *gap_result.limitations,
+                                        'The evidence-gap follow-up is model generated and is not independent verification.',
+                                        *(['Some follow-up facts or calculations were omitted because their identifiers or limits could not be reconciled.']
+                                          if artifact_omissions else [])])))
+                                claims = prepare_claims()
+                                # Recompute full-source absence for each added
+                                # finding against the excerpts actually sent to
+                                # that call, rather than the original selection.
+                                new_indexes = [*range(old_count, old_count + len(extra_claims)),
+                                    *range(len(analysis.claims) + len(analysis.counterarguments) - len(extra_counterpoints),
+                                           len(analysis.claims) + len(analysis.counterarguments))]
+                                for claim_index in new_indexes:
+                                    claims[claim_index] = flag_partial_source_absence(
+                                        [claims[claim_index]], sources, gap_segments)[0]
+                        except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
+                            _raise_if_operation_cancelled(operation_id)
+                            gap_status = 'failed'
+                            gap_error = error.code if isinstance(error, ProviderFailure) else 'gap_followup_unavailable'
+                        if gap_attempted:
+                            usage = prior_usage + gap_usage if prior_usage is not None and gap_usage is not None else None
         pre_review_usage = usage
         # Numeric candidates must be considered before model review. A review
         # verdict cannot clear a known calculation or unit discrepancy.
@@ -3058,6 +3216,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                      "model_calls": calls, "total_tokens": usage, "generation_tokens": generation_usage,
                                      "support_review_tokens": review_usage, "cost_usd": None,
                                      "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
+                                     "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
+                                     "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
+                                     "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
+                                     "gap_followup_segments":gap_segments, "gap_followup_error":gap_error,
                                      "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                      "counterpoint_discarded_fields":counterpoint_discarded_fields,
                                      "counterpoint_omitted_rows":counterpoint_omitted_rows,
@@ -3226,6 +3388,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                          "cost_status": "unknown" if calls or search_calls else "no_external_call",
                                          "generation_tokens": generation_usage, "support_review_requested": True,
                                          "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
+                                     "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
+                                     "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
+                                     "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
+                                     "gap_followup_segments":gap_segments, "gap_followup_error":gap_error,
                                          "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
                                          "counterpoint_discarded_fields":counterpoint_discarded_fields,
                                          "counterpoint_omitted_rows":counterpoint_omitted_rows,
@@ -3301,8 +3467,11 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
                         and not processing_incomplete and not unverified_calculations and not differences and not calculation_differences and not amount_differences and
                         not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
-                        (not request.support_review or review_supports_all))
+                        (not request.support_review or review_supports_all) and
+                        (not request.gap_followup or gap_status in {'not_needed', 'completed'}))
         limitations = [*discovery_notes, *analysis.limitations]
+        if request.gap_followup and gap_status not in {'not_needed', 'completed'}:
+            limitations.append('The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.')
         if any(c.get('counterpoint_relevance_unverified') for c in claims):
             limitations.append('A counterpoint explicitly agrees with prior findings; review whether it provides a relevant opposing argument or limitation.')
         if any(c.get('prior_findings_scope_unverified') for c in claims):
@@ -3381,6 +3550,10 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                      "generation_tokens": generation_usage, "support_review_tokens": review_usage,
                      "counterpoint_requested":request.counterpoint_followup, "counterpoint_status":counterpoint_status,
                      "counterpoint_tokens":counterpoint_usage, "counterpoint_prompt_sha256":counterpoint_hash,
+                     "gap_followup_requested":request.gap_followup, "gap_followup_status":gap_status,
+                     "gap_followup_tokens":gap_usage, "gap_followup_prompt_sha256":gap_hash,
+                     "gap_followup_targets":gap_targets, "gap_followup_input_targets":gap_input_targets,
+                     "gap_followup_error":gap_error, "gap_followup_segments":gap_segments,
                      "counterpoint_discarded_fields":counterpoint_discarded_fields,
                      "counterpoint_omitted_rows":counterpoint_omitted_rows,
                      "counterpoint_error":counterpoint_error,
