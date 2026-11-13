@@ -2755,6 +2755,47 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             return prepare_run_claims(analysis, sources, topic.request.as_of, supplemental_citation_leads)
         claims = prepare_claims()
         generation_usage = generation_call_usage
+
+        # Persist the first usable snapshot even when no optional follow-up is
+        # requested. Later checkpoints and the final result descend from it.
+        def save_initial_checkpoint() -> None:
+            nonlocal checkpoint_parent
+            try:
+                current = research_topics.get(account.account_id, topic_id).versions[-1]
+                if current.version_id != request.parent_version_id:
+                    raise TopicVersionConflict()
+                partial = assemble_research_content(
+                    summary=current.content.summary, source_candidates=discovered,
+                    sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis,
+                    claims=claims, limitations=[*discovery_notes, *analysis.limitations,
+                        'Initial analysis is saved; subsequent stages and final delivery may not have completed.'],
+                    run={'operation_id': operation_id, 'status': 'partial', 'checkpoint': 'initial_analysis',
+                         **run_core(), 'model_calls': calls, 'total_tokens': usage,
+                         'generation_tokens': generation_usage, 'search_calls': search_calls,
+                         'search_status': search_status, 'official_fetch_calls': official_fetch_calls,
+                         'official_fetch_status': official_fetch_status,
+                         'cost_usd': None, 'cost_status': 'unknown' if calls or search_calls or official_fetch_calls else 'no_external_call',
+                         'error': unavailable_reason, 'analysis_error_detail': analysis_error_detail,
+                         'prompt_sha256': analysis.prompt_sha256, 'prompt_characters': analysis.prompt_characters,
+                         'prompt_bytes': analysis.prompt_bytes,
+                         'system_prompt_sha256': sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest(),
+                         'model': getattr(getattr(provider, 'settings', None), 'model', None),
+                         'provider': getattr(provider, 'name', None),
+                         'selected_segments': analysis.segments, 'selection_method': RESEARCH_SELECTION_METHOD,
+                         'source_hashes': {s.source_id: s.content_sha256 for s in sources},
+                         'max_model_calls': request.max_model_calls, 'max_search_calls': request.max_search_calls,
+                         'max_elapsed_seconds': request.max_elapsed_seconds, 'max_total_tokens': request.max_total_tokens,
+                         'max_cost_usd': str(request.max_cost_usd) if request.max_cost_usd is not None else None})
+                saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
+                    parent_version_id=request.parent_version_id, content=partial, note=current.note),
+                    source_ids=source_ids, created_by='agent')
+                checkpoint_parent = saved.versions[-1].version_id
+            except (TopicNotFound, TopicVersionConflict) as error:
+                raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before the checkpoint was saved.') from error
+
+        if not operations.store.checkpoint_if_running(operation_id, save_initial_checkpoint):
+            _raise_if_operation_cancelled(operation_id)
+            raise ApiProblem(409, 'lifecycle_conflict', 'Research ended before the checkpoint was saved.')
         counterpoint_status = "not_requested"
         counterpoint_usage: int | None = None
         counterpoint_hash: str | None = None
@@ -2792,7 +2833,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 nonlocal checkpoint_parent
                                 try:
                                     current = research_topics.get(account.account_id, topic_id).versions[-1]
-                                    if current.version_id != request.parent_version_id:
+                                    expected = checkpoint_parent or request.parent_version_id
+                                    if current.version_id != expected:
                                         raise TopicVersionConflict()
                                     partial = assemble_research_content(summary=current.content.summary, source_candidates=discovered,
                                         sources=source_summaries(analysis.source_ids, analysis.segments), analysis=analysis, claims=claims,
@@ -2819,7 +2861,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                              'max_elapsed_seconds':request.max_elapsed_seconds, 'max_search_calls':request.max_search_calls,
                                              'max_cost_usd':str(request.max_cost_usd) if request.max_cost_usd is not None else None})
                                     saved = research_topics.add_version(account.account_id, topic_id, VersionInput(
-                                        parent_version_id=request.parent_version_id, content=partial, note=current.note),
+                                        parent_version_id=expected, content=partial, note=current.note),
                                         source_ids=source_ids, created_by='agent')
                                     checkpoint_parent = saved.versions[-1].version_id
                                 except (TopicNotFound, TopicVersionConflict) as error:
