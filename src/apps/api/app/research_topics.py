@@ -179,7 +179,7 @@ class ResearchTopics:
         if len(combined_source_ids) > 100:
             raise ValueError("A research version can include at most 100 sources.")
         content = deepcopy(request.content)
-        normalize_claim_links(content.claims, topic.versions[-1].content.claims)
+        normalize_claim_links(content.claims, topic.versions[-1].content.claims, model_generated=created_by == 'agent')
         # Compute from the server-accepted snapshot on every version, including
         # user edits and checkpoints; do not trust a client-supplied link map.
         content.run['evidence_links'] = derive_evidence_links(content.claims, content.facts, content.calculations)

@@ -11,6 +11,7 @@ export interface ResearchClaim {
   text: string;
   claim_id?: string;
   responds_to_claim_ids?: string[];
+  suggested_responds_to_claim_ids?: string[];
   responds_to_omitted?: number;
   authorship?: string;
   role?: string;

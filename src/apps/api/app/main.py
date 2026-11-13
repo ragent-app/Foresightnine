@@ -2938,7 +2938,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                 restricted_counterpoint['counterarguments'], counterpoint_omitted_rows = filtered_rows
                                 checked = analyze(effective_question, sources, topic.request.as_of,
                                     lambda _: (restricted_counterpoint, counterpoint_usage), max_prompt_chars=max_prompt_chars,
-                                    should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope)
+                                    should_stop=lambda: monotonic() >= deadline, focus=focus, scope=topic.request.scope,
+                                    counterargument_reference_count=followup.prior_findings_included)
                                 if checked.prompt_sha256 != analysis.prompt_sha256 or checked.segments != analysis.segments:
                                     raise InvalidAnalysis('Counterpoint source selection changed.')
                                 raw_leads = extract_answer_candidates(raw_counterpoint)

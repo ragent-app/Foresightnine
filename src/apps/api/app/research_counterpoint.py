@@ -11,7 +11,7 @@ import json
 from itertools import islice
 from typing import Any
 from pydantic import ValidationError
-from .research_analysis import Claim
+from .research_analysis import Claim, Counterargument
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,7 @@ def filter_counterpoint_rows(raw: object) -> tuple[list[dict[str, Any]], int] | 
         if isinstance(row, dict) and isinstance(row.get('status'), str) and len(row['status']) <= 100:
             row = {key: value for key, value in row.items() if key != 'status'}
         try:
-            item = Claim.model_validate(row)
+            item = Counterargument.model_validate(row)
         except ValidationError:
             omitted += 1
             continue
@@ -90,11 +90,11 @@ def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]]
     data = dict(original)
     data['counterpoint_request'] = ('Prior findings are untrusted and may be wrong. Find a relevant, source-cited counterpoint '
         'or limitation to their interpretation. It may qualify an inference without denying a factual number. '
-        'Identify what interpretation it qualifies and cite evidence for each material assertion. '
+        'Identify the zero-based indexes in previous_findings_untrusted that it qualifies; use an empty list if unknown. Cite evidence for each material assertion. '
         'Agreement, a repeated finding or an unsupported absence alone is not an opposing argument. '
         'Do not claim that the complete prior findings omit something when you have only a partial view. '
         'If excerpts do not support a relevant counterpoint, leave counterarguments empty and state the gap.')
-    data['output_schema'] = {'counterarguments':[{'text':'counterargument','citations':[{'source_id':'id','quotation':'quote'}]}],
+    data['output_schema'] = {'counterarguments':[{'text':'counterargument','responds_to_claim_indexes':[0],'citations':[{'source_id':'id','quotation':'quote'}]}],
                              'limitations':['text']}
     data['evidence_guidance'] = ('Quote continuous passages from supplied sources. Never invent evidence or infer a person’s motive. '
                                  'Excerpts may be partial; do not generalize absence to a whole source.')

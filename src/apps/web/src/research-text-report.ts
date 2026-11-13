@@ -41,7 +41,7 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
   empty(items(c.claims).length);
   items(c.claims).forEach((claim, i) => {
     lines.push(`\n${label("Finding", "条目")} ${i + 1}`);
-    for (const [key, a, b] of [["role", "Role", "类型"], ["claim_id", "Finding ID", "条目标识"], ["responds_to_claim_ids", "Related finding IDs (not verified)", "关联结论标识（未经核验）"], ["responds_to_omitted", "Omitted invalid relationships", "已省略的无效关联数"], ["text", "Text", "内容"], ["authorship", "Authorship", "作者类型"], ["kind", "Kind", "内容类型"], ["verification", "Verification", "核验状态"], ["support_status", "Support status", "支持状态"], ["support_review", "Model review (not independent)", "模型复查（非独立核验）"]] as const) add(label(a,b), claim[key]);
+    for (const [key, a, b] of [["role", "Role", "类型"], ["claim_id", "Finding ID", "条目标识"], ["responds_to_claim_ids", "Related finding IDs (not verified)", "关联结论标识（未经核验）"], ["suggested_responds_to_claim_ids", "Model-suggested finding IDs (not verified)", "模型建议的关联结论标识（未经核验）"], ["responds_to_omitted", "Omitted invalid relationships", "已省略的无效关联数"], ["text", "Text", "内容"], ["authorship", "Authorship", "作者类型"], ["kind", "Kind", "内容类型"], ["verification", "Verification", "核验状态"], ["support_status", "Support status", "支持状态"], ["support_review", "Model review (not independent)", "模型复查（非独立核验）"]] as const) add(label(a,b), claim[key]);
     for (const citation of items(claim.citations)) {
       add(label("Citation source", "引文来源"), citation.source_id);
       add(label("Quotation", "引文"), citation.quotation);

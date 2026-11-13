@@ -69,6 +69,12 @@ class Claim(BaseModel):
     citations: list[Citation] = Field(default_factory=list, max_length=10)
 
 
+class Counterargument(Claim):
+    # Model-proposed indexes are hints only. Validation against the findings
+    # actually visible to the model happens after claim/citation filtering.
+    responds_to_claim_indexes: list[Any] = Field(default_factory=list, max_length=20)
+
+
 class ModelFact(NumericFact):
     label: str = Field(min_length=1, max_length=300)
     citation: Citation
@@ -117,7 +123,7 @@ class CalculationPlan(BaseModel):
 class AnalysisOutput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     claims: list[Claim] = Field(default_factory=list, max_length=30)
-    counterarguments: list[Claim] = Field(default_factory=list, max_length=20)
+    counterarguments: list[Counterargument] = Field(default_factory=list, max_length=20)
     limitations: list[str] = Field(default_factory=list, max_length=30)
     facts: list[ModelFact] = Field(default_factory=list, max_length=100)
     calculations: list[CalculationPlan] = Field(default_factory=list, max_length=50)
@@ -1691,7 +1697,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             generate: Callable[[str], tuple[dict[str, Any], int | None]], *,
             max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
             on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
-            focus: tuple[str, int, int] | None = None, scope: str = "") -> AnalysisResult:
+            focus: tuple[str, int, int] | None = None, scope: str = "",
+            counterargument_reference_count: int | None = None) -> AnalysisResult:
     # Scope belongs to the user's untrusted request. Including it in the
     # question also lets source selection account for the intended coverage.
     if scope:
@@ -1719,7 +1726,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     data = {"question": question, "sources": [],
             "output_schema": {"claims": [{"text": "claim", "citations": [
                 {"source_id": "id", "quotation": "quote"}]}],
-                "counterarguments": [{"text": "counterargument", "citations": [
+                "counterarguments": [{"text": "counterargument", "responds_to_claim_indexes": [0], "citations": [
                     {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
                 "facts": [{"fact_id": "id", "label": "metric", "value": "number",
                            "unit": "unit", "currency": "currency or null", "period": "period",
@@ -1733,7 +1740,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 "passages or quote metadata. Cite table headers, units and rows separately. "
                 "A counterargument must identify a genuine qualification, conflict or alternative explanation "
                 "relevant to the question and have its own cited evidence; a restatement or unsupported absence "
-                "alone is not a counterargument. Put missing evidence and unresolved uncertainty in limitations. "
+                "alone is not a counterargument. For each counterargument, list the zero-based claim indexes it "
+                "qualifies; use an empty list if the relationship is unknown. "
+                "Put missing evidence and unresolved uncertainty in limitations. "
                 "Excerpts are partial; do not generalize an absence to unseen material. "
                 "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
     if as_of is not None:
@@ -2645,9 +2654,13 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         except CalculationError as error:
             limitations.append(f"A requested calculation was omitted: {error}")
 
+    # Map model output indexes to findings retained after citation validation.
+    # Follow-ups use only the subset actually shown in their separate prompt.
+    support_index_map: dict[int, int] = ({i: i for i in range(max(0, min(counterargument_reference_count, 20)))}
+                                         if counterargument_reference_count is not None else {})
     def check_claims(items: list[Claim], *, counterargument: bool = False) -> list[dict[str, Any]]:
         checked = []
-        for item in items:
+        for original_index, item in enumerate(items):
             if counterargument and (_counterargument_absence_only(item.text) or _counterargument_evidence_gap_only(item.text)):
                 note = ("A model-reported absence of counterarguments is an unverified limitation, not counterevidence."
                         if _counterargument_absence_only(item.text) else
@@ -2771,7 +2784,19 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     limitations.append("A model-generated claim without a valid quotation was omitted.")
                     continue
             _suggest_same_page_candidates(citations, source_map)
+            if not counterargument:
+                support_index_map[original_index] = len(checked)
+            proposed = []
+            if counterargument and isinstance(item, Counterargument):
+                for target in item.responds_to_claim_indexes:
+                    if type(target) is int and target in support_index_map and support_index_map[target] not in proposed:
+                        proposed.append(support_index_map[target])
+                    else:
+                        note = "A proposed counterargument relationship was invalid or referred to an omitted finding; it was not retained."
+                        if note not in limitations:
+                            limitations.append(note)
             checked.append({"text": item.text, "kind": "model_interpretation", "citations": citations,
+                            **({'suggested_responds_to_claim_indexes': proposed} if proposed else {}),
                             "support_status": "incomplete" if (omitted or incomplete_boundary) and citations else
                                 "not_independently_verified" if citations else "unsupported"})
         return checked
