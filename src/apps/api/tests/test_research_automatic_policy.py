@@ -11,20 +11,18 @@ from app.research_runs import ResearchRunRequest, resolve_automatic_research_req
 
 
 @pytest.mark.parametrize('payload,available,expected', [
-    ({}, True, (None, None, None, None, True, True, True, True, True)),
-    ({}, False, (None, None, None, None, True, True, True, False, False)),
-    ({'max_model_calls':1,'max_search_calls':0}, True, (1, 0, None, None, False, False, False, False, False)),
-    ({'max_model_calls':0,'max_total_tokens':0,'max_elapsed_seconds':5,'plan_research':False,
-      'gap_followup':False,'support_review':False,'gap_search':False,'auto_fetch_official':False}, True,
-     (0, None, 0, 5, False, False, False, False, False)),
-    ({'selected_source_ids':[]}, True, (None, None, None, None, True, True, True, False, False)),
-    ({'gap_followup':False}, True, (None, None, None, None, True, False, True, False, True)),
+    ({}, True, (None, None, None, None, True)),
+    ({}, False, (None, None, None, None, False)),
+    ({'max_model_calls':1,'max_search_calls':0}, True, (1, 0, None, None, False)),
+    ({'max_model_calls':0,'max_total_tokens':0,'max_elapsed_seconds':5,'auto_fetch_official':False}, True,
+     (0, None, 0, 5, False)),
+    ({'selected_source_ids':[]}, True, (None, None, None, None, False)),
+    ({'discover_sources':False}, True, (None, None, None, None, False)),
 ])
 def test_automatic_defaults_respect_explicit_values_and_bounds(payload, available, expected):
     original = ResearchRunRequest(parent_version_id='v1', **payload)
     result = resolve_automatic_research_request(original, search_available=available)
     assert (result.max_model_calls, result.max_search_calls, result.max_total_tokens, result.max_elapsed_seconds,
-            result.plan_research, result.gap_followup, result.support_review, result.gap_search,
             result.auto_fetch_official) == expected
     for key, value in payload.items():
         assert getattr(result, key) == value
@@ -143,12 +141,11 @@ def test_explicit_empty_selection_blocks_implicit_search_but_keeps_explicit_budg
     assert manual.max_search_calls==1 and not manual.auto_fetch_official
 
 
-def test_explicit_gap_search_resolves_missing_dependency_but_rejects_conflict():
+@pytest.mark.parametrize('field,value', [
+    ('support_review', True), ('support_review_mode', 'batch'), ('counterpoint_followup', True), ('gap_followup', True),
+    ('gap_search', True), ('plan_research', True), ('require_counterarguments', False), ('include_scope_in_search', True),
+    ('evidence_strategy', 'delegated')])
+def test_removed_staged_pipeline_fields_are_rejected(field, value):
     from pydantic import ValidationError
-    incoming=ResearchRunRequest(parent_version_id='v1',gap_search=True)
-    resolved=resolve_automatic_research_request(incoming,search_available=True)
-    assert resolved.gap_search and resolved.gap_followup
     with pytest.raises(ValidationError):
-        ResearchRunRequest(parent_version_id='v1',gap_search=True,gap_followup=False)
-    with pytest.raises(ValidationError):
-        ResearchRunRequest(parent_version_id='v1',gap_search=True,max_search_calls=0)
+        ResearchRunRequest(parent_version_id='v1', **{field: value})

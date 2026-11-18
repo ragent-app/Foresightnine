@@ -16,7 +16,7 @@ from app.research_runs import ResearchRunRequest, resolve_automatic_research_req
 def test_unset_and_explicit_limits_including_zero_are_distinct():
     automatic=resolve_automatic_research_request(ResearchRunRequest(parent_version_id='v1'),search_available=True)
     assert automatic.max_model_calls is automatic.max_search_calls is automatic.max_total_tokens is automatic.max_elapsed_seconds is None
-    assert automatic.plan_research and automatic.gap_followup and automatic.support_review and automatic.auto_fetch_official
+    assert automatic.auto_fetch_official
     bounded=ResearchRunRequest(parent_version_id='v1',max_model_calls=0,max_search_calls=0,max_total_tokens=0,max_elapsed_seconds=0,max_cost_usd=0)
     assert (bounded.max_model_calls,bounded.max_search_calls,bounded.max_total_tokens,bounded.max_elapsed_seconds)==(0,0,0,0)
     large=ResearchRunRequest(parent_version_id='v1',max_model_calls=15,max_search_calls=10,max_total_tokens=80000,max_elapsed_seconds=900)

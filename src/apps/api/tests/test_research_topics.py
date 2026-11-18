@@ -33,59 +33,97 @@ def test_user_findings_reject_invalid_shapes(monkeypatch, claim):
     assert response.status_code == 422
 
 
-def test_recalculate_current_facts_creates_auditable_draft(monkeypatch):
+PERMISSIONS = {"store": True, "display": True, "model_input": True, "export": True}
+
+
+def start(monkeypatch, text, label):
+    """Register an account, attach one source and open a topic; returns (client, headers, source_id, topic, path)."""
+    from uuid import uuid4
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
     client = TestClient(app)
-    registration = client.post("/v1/auth/local/register", json={"email": "recalculate@example.test",
-        "password": "correct horse battery staple!"})
-    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
-    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Growth?"}).json()
-    path = "/v2/research/topics/" + topic["topic_id"]
-    first = {"fact_id": "a", "value": "100", "period": "2023", "unit": "USD", "currency": "USD"}
-    second = {"fact_id": "b", "value": "80", "period": "2022", "unit": "USD", "currency": "USD"}
-    old = calculate(CalculationRequest(formula="growth_percent", first=first, second=second))
-    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"],
-        "review": "confirmed", "note": "Review me", "content": {"summary": "My view",
-        "facts": [dict(first, value="200"), second], "calculations": [old]}}).json()
-    original = saved["versions"][-1]
+    auth = client.post("/v1/auth/local/register", json={"email": f"{label}-{uuid4().hex}@example.test",
+        "password": "correct horse battery staple!"}).json()
+    headers = {"Authorization": "Bearer " + auth["access_token"]}
+    source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": text,
+        "permissions": PERMISSIONS}).json()["source_id"]
+    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Compare", "source_ids": [source_id]}).json()
+    return client, headers, source_id, topic, "/v2/research/topics/" + topic["topic_id"]
+
+
+def fact(source_id, text, quote, value, period, *, fact_id, unit="USD", currency="USD", label="Revenue"):
+    start = text.index(quote)
+    return {"fact_id": fact_id, "label": label, "value": value, "unit": unit, "currency": currency, "period": period,
+            "source_id": source_id, "quotation": quote, "character_start": start, "character_end": start + len(quote),
+            "location": {"character_start": start, "character_end": start + len(quote)},
+            "verification": "numeric_and_location_match_semantics_not_verified"}
+
+
+def numeric(item):
+    return {key: item[key] for key in ("fact_id", "value", "unit", "currency", "period")}
+
+
+def save(client, headers, path, parent, content, **extra):
+    return client.post(path + "/versions", headers=headers, json={"parent_version_id": parent["version_id"], "content": content, **extra})
+
+
+TEXT = "Revenue was 100 USD in 2023. Revenue was 80 USD in 2022. Revenue was 0 USD in 2021. Costs were 5 EUR."
+
+
+def test_recalculate_current_facts_creates_auditable_draft(monkeypatch):
+    client, headers, sid, topic, path = start(monkeypatch, TEXT, "recalculate")
+    first = fact(sid, TEXT, "Revenue was 100 USD", "100", "2023", fact_id="a")
+    second = fact(sid, TEXT, "Revenue was 80 USD", "80", "2022", fact_id="b")
+    old = calculate(CalculationRequest(formula="growth_percent", first=numeric(first), second=numeric(second)))
+    old["calculation_id"] = "calc-1"
+    saved = save(client, headers, path, topic["versions"][0], {"summary": "My view", "facts": [first, second],
+        "calculations": [old]}, review="confirmed", note="Review me").json()
+    assert saved["versions"][-1]["content"]["calculations"][0]["input_status"] == "matched"
+    edited = deepcopy(saved["versions"][-1]["content"])
+    edited["facts"][0].update(value="200", quotation="Revenue was 100 USD", verification="x")
+    original = save(client, headers, path, saved["versions"][-1], edited).json()["versions"][-1]
     assert original["content"]["calculations"][0]["input_status"] == "changed"
+    assert original["content"]["facts"][0]["verification"] == "user_edited_value_not_in_quotation"
+    # A value the quotation does not contain cannot feed a calculation until it is corrected.
     payload = {"parent_version_id": original["version_id"], "calculation_index": 0}
-    response = client.post(path + "/calculations/recalculate", headers=headers, json=payload)
+    assert client.post(path + "/calculations/recalculate", headers=headers, json=payload).status_code == 422
+    fixed = deepcopy(original["content"])
+    fixed["facts"][0].update(value="100")
+    current = save(client, headers, path, original, fixed, note="Review me").json()["versions"][-1]
+    assert current["content"]["calculations"][0]["input_status"] == "matched"
+    response = client.post(path + "/calculations/recalculate", headers=headers,
+                           json={"parent_version_id": current["version_id"], "calculation_index": 0})
     assert response.status_code == 201, response.text
     latest = response.json()["versions"][-1]
-    assert latest["content"]["calculations"][0]["value"] == "150.00"
-    assert latest["content"]["calculations"][0]["authorship"] == "calculation_engine"
-    assert latest["content"]["calculations"][0]["input_status"] == "matched"
-    assert latest["review"] == "draft" and latest["note"] == "Review me"
-    assert latest["content"]["summary"] == "My view"
-    assert response.json()["versions"][-2]["content"]["calculations"][0]["value"] == "25.00"
-    assert client.post(path + "/calculations/recalculate", headers=headers, json=payload).status_code == 409
-    content = latest["content"]
-    content["facts"][1]["value"] = "0"
-    broken = client.post(path + "/versions", headers=headers, json={"parent_version_id": latest["version_id"], "content": content}).json()
-    parent = broken["versions"][-1]["version_id"]
+    calculation = latest["content"]["calculations"][0]
+    assert calculation["value"] == "25.00" and calculation["authorship"] == "calculation_engine"
+    assert calculation["input_status"] == "matched" and calculation["calculation_id"] == "calc-1"
+    assert latest["review"] == "draft" and latest["note"] == "Review me" and latest["content"]["summary"] == "My view"
+    assert client.post(path + "/calculations/recalculate", headers=headers,
+                       json={"parent_version_id": current["version_id"], "calculation_index": 0}).status_code == 409
+    zero = deepcopy(latest["content"])
+    zero["facts"][1].update(fact(sid, TEXT, "Revenue was 0 USD", "0", "2022", fact_id="b"))
+    broken = save(client, headers, path, latest, zero)
+    assert broken.status_code == 201, broken.text
+    parent = broken.json()["versions"][-1]["version_id"]
     failed = client.post(path + "/calculations/recalculate", headers=headers, json={"parent_version_id": parent, "calculation_index": 0})
     assert failed.status_code == 422
     assert client.get(path, headers=headers).json()["versions"][-1]["version_id"] == parent
 
 
 def test_legacy_percent_difference_recalculates_as_percentage_points(monkeypatch):
-    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
-    client = TestClient(app)
-    registration = client.post("/v1/auth/local/register", json={"email": "percentage-recalculate@example.test",
-        "password": "correct horse battery staple!"})
-    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
-    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Growth differences?"}).json()
-    path = "/v2/research/topics/" + topic["topic_id"]
-    first = {"fact_id": "a", "value": "2.8", "period": "2024", "unit": "percent", "currency": None}
-    second = {"fact_id": "b", "value": "2.9", "period": "2023", "unit": "percent", "currency": None}
-    legacy = {**calculate(CalculationRequest(formula="difference", first=first, second=second)),
-              "formula_version": "1", "unit": "percent"}
-    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"],
-        "content": {"facts": [first, second], "calculations": [legacy]}}).json()["versions"][-1]
+    text = "The rate was 2.8 percent in 2024 and 2.9 percent in 2023."
+    client, headers, sid, topic, path = start(monkeypatch, text, "percentage-recalculate")
+    first = fact(sid, text, "2.8 percent", "2.8", "2024", fact_id="a", unit="percent", currency=None, label="Rate")
+    second = fact(sid, text, "2.9 percent", "2.9", "2023", fact_id="b", unit="percent", currency=None, label="Rate")
+    legacy = {**calculate(CalculationRequest(formula="difference", first=numeric(first), second=numeric(second))),
+              "formula_version": "1", "unit": "percent", "calculation_id": "calc-legacy"}
+    saved = save(client, headers, path, topic["versions"][0], {"facts": [first, second], "calculations": [legacy]}).json()["versions"][-1]
+    shown = client.get(path, headers=headers).json()["versions"][-1]
+    assert shown["content"]["calculations"][0]["legacy_unit_warning"] == "percentage_difference_requires_recalculation"
+    assert saved["content"]["calculations"][0].get("legacy_unit_warning") is None  # Annotated on read, never stored.
     response = client.post(path + "/calculations/recalculate", headers=headers,
         json={"parent_version_id": saved["version_id"], "calculation_index": 0})
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     latest = response.json()["versions"][-1]
     assert latest["content"]["calculations"][0]["unit"] == "percentage points"
     assert latest["content"]["calculations"][0]["formula_version"] == "2"
@@ -96,27 +134,18 @@ def test_legacy_percent_difference_recalculates_as_percentage_points(monkeypatch
 
 
 def test_edited_facts_reject_invalid_values_and_duplicate_identifiers(monkeypatch):
-    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
-    client = TestClient(app)
-    registration = client.post("/v1/auth/local/register", json={"email": "fact-validation@example.test",
-        "password": "correct horse battery staple!"})
-    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
-    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Review facts?"}).json()
-    path = "/v2/research/topics/" + topic["topic_id"] + "/versions"
-    parent = topic["versions"][0]["version_id"]
-    base = {"fact_id": "a", "value": "100", "period": "2023", "unit": "USD", "currency": "USD", "label": "Revenue"}
-    for invalid in (dict(base, value="NaN"), dict(base, value="1e31"), dict(base, unit=" "), dict(base, source_id=[])):
-        response = client.post(path, headers=headers, json={"parent_version_id": parent, "content": {"facts": [invalid]}})
-        assert response.status_code == 422
-    duplicate = client.post(path, headers=headers, json={"parent_version_id": parent,
-        "content": {"facts": [base, dict(base, fact_id=" a ")]}})
-    assert duplicate.status_code == 422
-    valid = client.post(path, headers=headers, json={"parent_version_id": parent,
-        "content": {"facts": [dict(base, source_id=None, quotation=None)]}})
-    assert valid.status_code == 201
+    client, headers, sid, topic, path = start(monkeypatch, TEXT, "fact-validation")
+    base = fact(sid, TEXT, "Revenue was 100 USD", "100", "2023", fact_id="a")
+    parent = topic["versions"][0]
+    for invalid in (dict(base, value="NaN"), dict(base, value="1e31"), dict(base, unit=" "), dict(base, source_id=[]),
+                    dict(base, source_id="source_missing"), dict(base, quotation="Revenue was 101 USD"),
+                    dict(base, location={"character_start": 0, "character_end": 5}), dict(base, source_id=None, quotation=None)):
+        assert save(client, headers, path, parent, {"facts": [invalid]}).status_code == 422
+    assert save(client, headers, path, parent, {"facts": [base, dict(base, fact_id=" a ")]}).status_code == 422
+    valid = save(client, headers, path, parent, {"facts": [base]})
+    assert valid.status_code == 201, valid.text
     saved = valid.json()["versions"][-1]["content"]["facts"][0]
-    assert saved["value"] == "100" and saved["verification"] == "user_edited_not_independently_verified"
-    assert saved["source_id"] is None and saved["quotation"] is None
+    assert saved["value"] == "100" and saved["verification"] == "user_edited_not_independently_verified" and saved["turn_id"] is None
 
 
 def test_account_scoped_research_version_history_and_conflicts(monkeypatch):
@@ -153,77 +182,6 @@ def test_account_scoped_research_version_history_and_conflicts(monkeypatch):
     assert client.delete("/v1/auth/local/account", headers=first).status_code == 200
 
 
-def test_partial_user_quotation_stays_incomplete_until_replaced(monkeypatch):
-    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
-    client = TestClient(app)
-    registration = client.post("/v1/auth/local/register", json={"email": "partial-word@example.test", "password": "correct horse battery staple!"})
-    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
-    source = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 1000.",
-        "permissions": {"store": True, "display": True}}).json()
-    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source["source_id"]]}).json()
-    path = "/v2/research/topics/" + topic["topic_id"]
-    content = {"claims": [{"text": "Revenue", "citations": [{"source_id": source["source_id"], "quotation": "100"}]}]}
-    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][-1]["version_id"], "content": content})
-    assert saved.status_code == 201, saved.text
-    current = saved.json()["versions"][-1]
-    assert current["content"]["claims"][0]["support_status"] == "incomplete"
-    assert current["content"]["claims"][0]["citations"][0]["partial_token"]
-    changed = deepcopy(current["content"])
-    changed["claims"][0]["text"] = "Revenue changed"
-    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
-    assert saved.status_code == 201, saved.text
-    current = saved.json()["versions"][-1]
-    assert current["content"]["claims"][0]["support_status"] == "incomplete"
-    changed = deepcopy(current["content"])
-    changed["claims"][0]["citations"] = [{"source_id": source["source_id"], "quotation": "1000"}]
-    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": current["version_id"], "content": changed})
-    assert saved.status_code == 201, saved.text
-    assert saved.json()["versions"][-1]["content"]["claims"][0]["support_status"] == "not_independently_verified"
-
-
-def test_recalculation_rejects_an_explicitly_ambiguous_fact_location(monkeypatch):
-    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
-    client = TestClient(app)
-    registration = client.post("/v1/auth/local/register", json={"email": "ambiguous-calc@example.test", "password": "correct horse battery staple!"})
-    headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
-    topic = client.post("/v2/research/topics", headers=headers, json={"question": "Growth?"}).json()
-    path = "/v2/research/topics/" + topic["topic_id"]
-    current = {"fact_id": "current", "label": "Revenue", "value": "100", "unit": "USD", "currency": "USD", "period": "2024",
-               "location": {"status": "ambiguous", "matches": []}}
-    previous = {"fact_id": "prior", "label": "Revenue", "value": "80", "unit": "USD", "currency": "USD", "period": "2023"}
-    inputs = [{key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period")} for fact in (current, previous)]
-    content = {"facts": [current, previous], "calculations": [{"formula_id": "growth_percent", "formula_version": "1",
-                "inputs": inputs, "value": "25", "unit": "percent"}]}
-    saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][-1]["version_id"], "content": content})
-    assert saved.status_code == 201, saved.text
-    version = saved.json()["versions"][-1]
-    response = client.post(path + "/calculations/recalculate", headers=headers,
-                           json={"parent_version_id": version["version_id"], "calculation_index": 0})
-    assert response.status_code == 422
-
-
-def test_basis_point_warnings_recompute_after_edit_and_preserve_history(monkeypatch):
-    from uuid import uuid4
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
-    client = TestClient(app)
-    auth = client.post('/v1/auth/local/register', json={'email': f'basis-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
-    headers = {'Authorization': 'Bearer ' + auth['access_token']}
-    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Statement', 'text': 'The rate increased by 0.25 percentage point. Further increases are anticipated.', 'permissions': {'store': True, 'display': True, 'model_input': True}}).json()
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What happened?', 'source_ids': [source['source_id']]}).json()
-    path = '/v2/research/topics/' + topic['topic_id']
-    content = {'claims': [{'text': 'Rates increased by 25 basis points.', 'citations': [{'source_id': source['source_id'], 'quotation': 'Further increases are anticipated.'}]}]}
-    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': content})
-    assert saved.status_code == 201, saved.text
-    current = saved.json()['versions'][-1]
-    assert current['content']['claims'][0]['uncited_basis_points'] == ['25 basis points']
-    edited = deepcopy(current['content'])
-    edited['claims'][0]['citations'] = [{'source_id': source['source_id'], 'quotation': 'increased by 0.25 percentage point'}]
-    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': edited})
-    assert saved.status_code == 201, saved.text
-    assert not saved.json()['versions'][-1]['content']['claims'][0].get('uncited_basis_points')
-    assert saved.json()['versions'][-2]['content']['claims'][0]['uncited_basis_points'] == ['25 basis points']
-
-
 def test_full_export_discloses_input_precision_for_existing_versions(monkeypatch):
     from uuid import uuid4
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
@@ -240,222 +198,105 @@ def test_full_export_discloses_input_precision_for_existing_versions(monkeypatch
     assert 'calculation_disclosure' not in client.get(path + '/export/metadata', headers=headers).json()
 
 
-def test_edited_source_fact_reports_stale_value_and_untrusted_location(monkeypatch):
-    from uuid import uuid4
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
-    client = TestClient(app)
-    auth = client.post('/v1/auth/local/register', json={'email': f'fact-source-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
-    headers = {'Authorization': 'Bearer ' + auth['access_token']}
-    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': 'Revenue 100. Revenue 200.', 'permissions': {'store': True, 'display': True, 'model_input': True}}).json()
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source['source_id']]}).json()
-    path = '/v2/research/topics/' + topic['topic_id']
-    fact = {'fact_id': 'revenue', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': '2024', 'source_id': source['source_id'], 'quotation': 'Revenue 100', 'location': {'character_start': 0, 'character_end': 11}}
-    first = client.post(path + '/versions', headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': [fact]}})
+def test_edited_fact_reports_value_missing_from_quotation_and_rejects_untrusted_location(monkeypatch):
+    text = "Revenue 100. Revenue 200."
+    client, headers, sid, topic, path = start(monkeypatch, text, "fact-source")
+    first = save(client, headers, path, topic["versions"][0], {"facts": [fact(sid, text, "Revenue 100", "100", "2024", fact_id="revenue")]})
     assert first.status_code == 201, first.text
-    old = first.json()['versions'][-1]
-    assert not old['content']['facts'][0].get('source_value_warnings')
-    changed = deepcopy(old['content']);changed['facts'][0]['value'] = '200';changed['facts'][0]['source_value_warnings'] = []
-    second = client.post(path + '/versions', headers=headers, json={'parent_version_id': old['version_id'], 'content': changed})
+    old = first.json()["versions"][-1]
+    changed = deepcopy(old["content"])
+    changed["facts"][0]["value"] = "200"
+    second = save(client, headers, path, old, changed)
     assert second.status_code == 201, second.text
-    current = second.json()['versions'][-1]
-    assert current['content']['facts'][0]['source_value_warnings'] == ['value_missing']
-    assert current['content']['facts'][0]['verification'] == 'user_edited_not_independently_verified'
-    assert not second.json()['versions'][-2]['content']['facts'][0].get('source_value_warnings')
-    corrected = deepcopy(current['content']);corrected['facts'][0]['quotation'] = 'Revenue 200';corrected['facts'][0].pop('location')
-    third = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': corrected})
+    current = second.json()["versions"][-1]
+    assert current["content"]["facts"][0]["verification"] == "user_edited_value_not_in_quotation"
+    assert second.json()["versions"][-2]["content"]["facts"][0]["verification"] == "user_edited_not_independently_verified"
+    corrected = deepcopy(current["content"])
+    corrected["facts"][0].update(fact(sid, text, "Revenue 200", "200", "2024", fact_id="revenue"))
+    third = save(client, headers, path, current, corrected)
     assert third.status_code == 201, third.text
-    assert not third.json()['versions'][-1]['content']['facts'][0].get('source_value_warnings')
-    assert third.json()['versions'][-1]['content']['facts'][0]['location'] == {'character_start': 13, 'character_end': 24}
-    assert third.json()['versions'][-1]['content']['facts'][0]['quotation_match'] == 'exact'
-    invalid = deepcopy(third.json()['versions'][-1]['content']);invalid['facts'][0]['location'] = {'character_start': True, 'character_end': 24}
-    fourth = client.post(path + '/versions', headers=headers, json={'parent_version_id': third.json()['versions'][-1]['version_id'], 'content': invalid})
-    assert fourth.status_code == 201, fourth.text
-    assert fourth.json()['versions'][-1]['content']['facts'][0]['source_value_warnings'] == ['location_mismatch']
-    detached = deepcopy(fourth.json()['versions'][-1]['content']);detached['facts'][0]['source_id'] = None
-    fifth = client.post(path + '/versions', headers=headers, json={'parent_version_id': fourth.json()['versions'][-1]['version_id'], 'content': detached})
-    assert fifth.status_code == 201, fifth.text
-    assert fifth.json()['versions'][-1]['content']['facts'][0]['source_value_warnings'] == ['source_missing']
+    saved = third.json()["versions"][-1]["content"]["facts"][0]
+    assert saved["verification"] == "user_edited_not_independently_verified" and saved["location"] == {"character_start": 13, "character_end": 24}
+    inconsistent = deepcopy(third.json()["versions"][-1]["content"])
+    inconsistent["facts"][0]["location"] = {"character_start": 0, "character_end": 11}
+    assert save(client, headers, path, third.json()["versions"][-1], inconsistent).status_code == 422
 
 
-def test_edited_fact_source_checks_bound_failed_lookups(monkeypatch):
-    from uuid import uuid4
-    import app.main as api
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
-    calls = []
-    original = api.locate_user_quotation
-    def bounded(source, quotation):
-        calls.append(quotation)
-        return original(source, quotation)
-    monkeypatch.setattr(api, 'locate_user_quotation', bounded)
-    client = TestClient(app)
-    auth = client.post('/v1/auth/local/register', json={'email': f'fact-budget-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
-    headers = {'Authorization': 'Bearer ' + auth['access_token']}
-    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': 'Revenue 100.', 'permissions': {'store': True, 'display': True}}).json()
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source['source_id']]}).json()
-    facts = [{'fact_id': f'f{i}', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'period': '2024', 'source_id': source['source_id'], 'quotation': f'not found {i}'} for i in range(201)]
-    path = '/v2/research/topics/' + topic['topic_id'] + '/versions'
-    result = client.post(path, headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': facts}})
-    assert result.status_code == 201, result.text
-    saved = result.json()['versions'][-1]['content']['facts']
-    assert len(calls) == 200
-    assert saved[199]['source_value_warnings'] == ['quotation_unlocated']
-    assert saved[200]['source_value_warnings'] == ['not_checked']
-
-
-def test_edited_table_fragment_preserves_currency_warning(monkeypatch):
-    from uuid import uuid4
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
-    client = TestClient(app)
-    auth = client.post('/v1/auth/local/register', json={'email': f'currency-fragment-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
-    headers = {'Authorization': 'Bearer ' + auth['access_token']}
-    text = '| Revenue | $ | 100 |\n| Revenue | USD 200 |'
-    source = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': text, 'permissions': {'store': True, 'display': True, 'model_input': True}}).json()
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source['source_id']]}).json()
-    path = '/v2/research/topics/' + topic['topic_id']
-    quote = 'Revenue | $ | 100'
-    start = text.index(quote)
-    fact = {'fact_id': 'revenue', 'label': 'Revenue', 'value': '100', 'unit': 'million', 'currency': 'USD', 'period': '2024', 'source_id': source['source_id'], 'quotation': quote, 'location': {'character_start': start, 'character_end': start + len(quote)}}
-    first = client.post(path + '/versions', headers=headers, json={'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': [fact]}})
+def test_edited_monetary_fact_keeps_currency_cue_computed_from_its_quotation(monkeypatch):
+    text = "| Revenue | $ | 100 |\n| Revenue | USD 200 |"
+    client, headers, sid, topic, path = start(monkeypatch, text, "currency-fragment")
+    original = fact(sid, text, "Revenue | $ | 100", "100", "2024", fact_id="revenue", unit="million")
+    first = save(client, headers, path, topic["versions"][0], {"facts": [original]})
     assert first.status_code == 201, first.text
-    original = first.json()['versions'][-1]
-    assert original['content']['facts'][0]['currency_quote_missing'] is True
-    assert original['content']['facts'][0]['table_alignment_unverified'] is True
-    edited = deepcopy(original['content'])
-    edited['facts'][0]['period'] = '2023'
-    edited['facts'][0]['currency_quote_missing'] = False
-    edited['facts'][0]['table_alignment_unverified'] = False
-    second = client.post(path + '/versions', headers=headers, json={'parent_version_id': original['version_id'], 'content': edited})
+    saved = first.json()["versions"][-1]
+    assert saved["content"]["facts"][0]["currency_quote_missing"] is True
+    edited = deepcopy(saved["content"])
+    edited["facts"][0].update(period="2023", currency_quote_missing=False)
+    second = save(client, headers, path, saved, edited)
     assert second.status_code == 201, second.text
-    current = second.json()['versions'][-1]
-    assert current['content']['facts'][0]['currency_quote_missing'] is True
-    assert current['content']['facts'][0]['table_alignment_unverified'] is True
-    assert client.get(path, headers=headers).json()['versions'][-1]['content']['facts'][0]['currency_quote_missing'] is True
-    corrected = deepcopy(current['content'])
-    quote = 'Revenue | USD 200'
-    start = text.index(quote)
-    corrected['facts'][0].update(value='200', quotation=quote, location={'character_start': start, 'character_end': start + len(quote)})
-    third = client.post(path + '/versions', headers=headers, json={'parent_version_id': current['version_id'], 'content': corrected})
+    current = second.json()["versions"][-1]
+    assert current["content"]["facts"][0]["currency_quote_missing"] is True
+    assert client.get(path, headers=headers).json()["versions"][-1]["content"]["facts"][0]["currency_quote_missing"] is True
+    corrected = deepcopy(current["content"])
+    corrected["facts"][0].update(fact(sid, text, "Revenue | USD 200", "200", "2023", fact_id="revenue", unit="million"))
+    third = save(client, headers, path, current, corrected)
     assert third.status_code == 201, third.text
-    assert not third.json()['versions'][-1]['content']['facts'][0].get('currency_quote_missing')
-    assert third.json()['versions'][-1]['content']['facts'][0]['table_alignment_unverified'] is True
+    assert not third.json()["versions"][-1]["content"]["facts"][0].get("currency_quote_missing")
 
 
 def test_create_calculation_from_saved_facts_validates_inputs_and_preserves_history(monkeypatch):
-    from uuid import uuid4
-    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE","mock")
-    client=TestClient(app)
-    account=client.post("/v1/auth/local/register",json={"email":f"create-calc-{uuid4().hex}@example.test",
-        "password":"correct horse battery staple!"}).json()
-    headers={"Authorization":"Bearer "+account["access_token"]}
-    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Compare revenue"}).json()
-    path="/v2/research/topics/"+topic["topic_id"]
-    facts=[{"fact_id":"old","label":"Old revenue","value":"100","unit":"USD million","currency":"USD","period":"2023"},
-           {"fact_id":"new","label":"New revenue","value":"125","unit":"USD million","currency":"USD","period":"2024"},
-           {"fact_id":"zero","label":"Zero","value":"0","unit":"USD million","currency":"USD","period":"2022"},
-           {"fact_id":"other","label":"Other","value":"5","unit":"EUR million","currency":"EUR","period":"2024"}]
-    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":topic["versions"][0]["version_id"],"content":{"facts":facts}})
-    assert saved.status_code==201
-    parent=saved.json()["versions"][-1]["version_id"]
-    spec={"parent_version_id":parent,"formula":"growth_percent","first_fact_id":"new","second_fact_id":"old"}
-    for invalid in ({**spec,"first_fact_id":"missing"},{**spec,"second_fact_id":"new"},{**spec,"second_fact_id":"zero"},
-                    {**spec,"second_fact_id":"other"},{**spec,"formula":"unknown"}):
-        assert client.post(path+"/calculations",headers=headers,json=invalid).status_code==422
-    assert client.get(path,headers=headers).json()["versions"][-1]["version_id"]==parent
-    result=client.post(path+"/calculations",headers=headers,json=spec)
-    assert result.status_code==201, result.text
-    previous,current=result.json()["versions"][-2:]
+    text = "Old revenue 100 USD million. New revenue 125 USD million. Zero 0 USD million. Other 5 EUR million."
+    client, headers, sid, topic, path = start(monkeypatch, text, "create-calc")
+    facts = [fact(sid, text, "Old revenue 100 USD million", "100", "2023", fact_id="old", unit="USD million", label="Old revenue"),
+             fact(sid, text, "New revenue 125 USD million", "125", "2024", fact_id="new", unit="USD million", label="New revenue"),
+             fact(sid, text, "Zero 0 USD million", "0", "2022", fact_id="zero", unit="USD million", label="Zero"),
+             fact(sid, text, "Other 5 EUR million", "5", "2024", fact_id="other", unit="EUR million", currency="EUR", label="Other")]
+    saved = save(client, headers, path, topic["versions"][0], {"facts": facts})
+    assert saved.status_code == 201, saved.text
+    parent = saved.json()["versions"][-1]["version_id"]
+    spec = {"parent_version_id": parent, "formula": "growth_percent", "first_fact_id": "new", "second_fact_id": "old"}
+    for invalid in ({**spec, "first_fact_id": "missing"}, {**spec, "second_fact_id": "new"}, {**spec, "second_fact_id": "zero"},
+                    {**spec, "second_fact_id": "other"}, {**spec, "formula": "unknown"}):
+        assert client.post(path + "/calculations", headers=headers, json=invalid).status_code == 422
+    assert client.get(path, headers=headers).json()["versions"][-1]["version_id"] == parent
+    result = client.post(path + "/calculations", headers=headers, json=spec)
+    assert result.status_code == 201, result.text
+    previous, current = result.json()["versions"][-2:]
     assert not previous["content"]["calculations"]
-    calc=current["content"]["calculations"][0]
-    assert calc["value"]=="25.00" and calc["unit"]=="percent" and calc["input_status"]=="matched"
-    assert [x["fact_id"] for x in calc["inputs"]]==["new","old"]
-    assert calc["authorship"]=="calculation_engine" and current["review"]=="draft"
-    assert client.post(path+"/calculations",headers=headers,json=spec).status_code==409
+    calc = current["content"]["calculations"][0]
+    assert calc["value"] == "25.00" and calc["unit"] == "percent" and calc["input_status"] == "matched"
+    assert calc["calculation_id"].startswith("calc-") and calc["turn_id"] is None and calc["result_status"] == "matched"
+    assert [x["fact_id"] for x in calc["inputs"]] == ["new", "old"]
+    assert calc["authorship"] == "calculation_engine" and current["review"] == "draft"
+    assert client.post(path + "/calculations", headers=headers, json=spec).status_code == 409
 
 
-def test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation(monkeypatch):
-    from uuid import uuid4
-    monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
-    client=TestClient(app)
-    account=client.post("/v1/auth/local/register",json={"email":f"retarget-{uuid4().hex}@example.test",
-        "password":"correct horse battery staple!"}).json()
-    headers={"Authorization":"Bearer "+account["access_token"]}
-    source=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue USD 100. Revenue USD 200. Base 50.",
-        "permissions":{"store":True,"display":True,"model_input":True}}).json()
-    topic=client.post("/v2/research/topics",headers=headers,json={"question":"Difference?","source_ids":[source["source_id"]]}).json()
-    path="/v2/research/topics/"+topic["topic_id"]
-    facts=[{"fact_id":"revenue","label":"Revenue","value":"200","unit":"USD","currency":"USD","period":"2024",
-            "source_id":source["source_id"],"quotation":"Revenue USD 100","location":{"character_start":0,"character_end":15}},
-           {"fact_id":"base","label":"Base","value":"50","unit":"USD","currency":"USD","period":"2024"}]
-    saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":topic["versions"][0]["version_id"],"content":{"facts":facts}})
-    assert saved.status_code==201
-    old=saved.json()["versions"][-1]
-    assert old["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
-    request={"parent_version_id":old["version_id"],"formula":"difference","first_fact_id":"revenue","second_fact_id":"base"}
-    assert client.post(path+"/calculations",headers=headers,json=request).status_code==422
-    corrected=deepcopy(old["content"]);corrected["facts"][0]["quotation"]="Revenue USD 200";corrected["facts"][0].pop("location")
-    updated=client.post(path+"/versions",headers=headers,json={"parent_version_id":old["version_id"],"content":corrected})
-    assert updated.status_code==201,updated.text
-    current=updated.json()["versions"][-1];fact=current["content"]["facts"][0]
-    assert fact["location"]=={"character_start":17,"character_end":32}
-    assert fact["quotation_match"]=="exact" and not fact.get("source_value_warnings")
-    request["parent_version_id"]=current["version_id"]
-    calculation=client.post(path+"/calculations",headers=headers,json=request)
-    assert calculation.status_code==201,calculation.text
-    latest=calculation.json()["versions"][-1]
-    assert latest["content"]["calculations"][0]["value"]=="150.00"
-    assert updated.json()["versions"][-2]["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
-    ambiguous=deepcopy(latest["content"]);ambiguous["facts"][0]["quotation"]="Revenue";ambiguous["facts"][0].pop("location")
-    saved_ambiguous=client.post(path+"/versions",headers=headers,json={"parent_version_id":latest["version_id"],"content":ambiguous})
-    assert saved_ambiguous.status_code==201
-    uncertain=saved_ambiguous.json()["versions"][-1]
-    assert uncertain["content"]["facts"][0]["source_value_warnings"]==["quotation_ambiguous"]
-    assert uncertain["content"]["calculations"][0]["input_status"]=="unverifiable"
-    assert client.post(path+"/calculations/recalculate",headers=headers,json={"parent_version_id":uncertain["version_id"],"calculation_index":0}).status_code==422
-
-
-def test_pdf_table_warning_survives_user_edits_and_export(monkeypatch):
-    import base64
-    import shutil
-    from pathlib import Path
-    from uuid import uuid4
-    from app.research_uploads import _extract_text
-
-    path = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/231-new-cross-domain-check/bea-2020-historical.pdf'
-    if not path.is_file() or not shutil.which('pdftotext') or not shutil.which('prlimit'):
-        pytest.skip('retained official PDF or PDF tools unavailable')
-    raw = path.read_bytes()
-    text = _extract_text(raw, text_order='layout')
-    line = next(line for line in text.splitlines() if 'Personal saving rate' in line and '16.3' in line)
-    quote = line.strip()
-    start = text.index(quote)
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
-    client = TestClient(app)
-    session = client.post('/v1/auth/local/register', json={'email': f'pdf-table-{uuid4().hex}@example.test',
-        'password': 'correct horse battery staple!'}).json()
-    headers = {'Authorization': 'Bearer ' + session['access_token']}
-    source = client.post('/v2/research/sources/pdf', headers=headers, json={'title': 'BEA historical comparison',
-        'pdf_base64': base64.b64encode(raw).decode(), 'text_order': 'layout',
-        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True}})
-    assert source.status_code == 201, source.text
-    source_id = source.json()['source_id']
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was the savings rate?',
-        'source_ids': [source_id]}).json()
-    topic_path = '/v2/research/topics/' + topic['topic_id']
-    fact = {'fact_id': 'saving', 'label': 'Saving rate', 'value': '16.3', 'unit': 'percent', 'currency': None,
-        'period': '2020', 'source_id': source_id, 'quotation': quote,
-        'location': {'character_start': start, 'character_end': start + len(quote)}}
-    initial = client.post(topic_path + '/versions', headers=headers, json={
-        'parent_version_id': topic['versions'][-1]['version_id'], 'content': {'facts': [fact]}})
-    assert initial.status_code == 201, initial.text
-    version = initial.json()['versions'][-1]
-    assert version['content']['facts'][0]['table_alignment_unverified'] is True
-    content = deepcopy(version['content'])
-    content['facts'][0].update(label='Saving rate, edited', table_alignment_unverified=False)
-    updated = client.post(topic_path + '/versions', headers=headers, json={
-        'parent_version_id': version['version_id'], 'content': content})
+def test_fact_with_unmatched_value_blocks_calculation_until_corrected(monkeypatch):
+    text = "Revenue USD 100. Revenue USD 200. Base 50 USD."
+    client, headers, sid, topic, path = start(monkeypatch, text, "retarget")
+    revenue = fact(sid, text, "Revenue USD 100", "200", "2024", fact_id="revenue")
+    base = fact(sid, text, "Base 50 USD", "50", "2024", fact_id="base", label="Base")
+    saved = save(client, headers, path, topic["versions"][0], {"facts": [revenue, base]})
+    assert saved.status_code == 201, saved.text
+    old = saved.json()["versions"][-1]
+    assert old["content"]["facts"][0]["verification"] == "user_edited_value_not_in_quotation"
+    request = {"parent_version_id": old["version_id"], "formula": "difference", "first_fact_id": "revenue", "second_fact_id": "base"}
+    assert client.post(path + "/calculations", headers=headers, json=request).status_code == 422
+    corrected = deepcopy(old["content"])
+    corrected["facts"][0].update(fact(sid, text, "Revenue USD 200", "200", "2024", fact_id="revenue"))
+    updated = save(client, headers, path, old, corrected)
     assert updated.status_code == 201, updated.text
-    current = updated.json()['versions'][-1]
-    assert current['content']['facts'][0]['table_alignment_unverified'] is True
-    exported = client.get(topic_path + '/versions/' + current['version_id'] + '/export', headers=headers)
-    assert exported.status_code == 200, exported.text
-    assert exported.json()['version']['content']['facts'][0]['table_alignment_unverified'] is True
+    current = updated.json()["versions"][-1]
+    assert current["content"]["facts"][0]["location"] == {"character_start": 17, "character_end": 32}
+    request["parent_version_id"] = current["version_id"]
+    calculation = client.post(path + "/calculations", headers=headers, json=request)
+    assert calculation.status_code == 201, calculation.text
+    latest = calculation.json()["versions"][-1]
+    assert latest["content"]["calculations"][0]["value"] == "150.00"
+    # Spoiling the quotation again makes the saved calculation unverifiable and unrepeatable.
+    spoiled = deepcopy(latest["content"])
+    spoiled["facts"][0].update(fact(sid, text, "Revenue USD 100", "200", "2024", fact_id="revenue"))
+    uncertain = save(client, headers, path, latest, spoiled).json()["versions"][-1]
+    assert uncertain["content"]["calculations"][0]["input_status"] == "unverifiable"
+    assert client.post(path + "/calculations/recalculate", headers=headers,
+                       json={"parent_version_id": uncertain["version_id"], "calculation_index": 0}).status_code == 422

@@ -96,7 +96,10 @@ from .services import (
     validate_worldline_bundle_semantics,
 )
 from .storage import JsonDocumentRepository, StorageConfig, StorageConflictError, StorageMode, build_repository
-from .research_topics import AttachSourcesInput, ResearchFullExport, ResearchInput, ResearchMetadataExport, ResearchTopic, ResearchTopics, TopicNotFound, TopicVersionConflict, VersionInput
+from .research_topics import (AttachSourcesInput, ReadRange, ResearchCalculation, ResearchFact, ResearchFullExport, ResearchInput, ResearchMetadataExport,
+    ResearchTopic, ResearchTopics, ResearchTurn, TopicNotFound, TopicVersionConflict, TurnUsage, VersionInput)
+from .research_progress import build_progress
+from .research_turns import gap_rows, merge_turn, prior_research_input
 from .research_calculations import CalculationError, CalculationRequest, ConfirmDirectionRequest, CreateResearchCalculationRequest, NumericFact, RecalculateRequest, calculate, calculation_input_status, claim_calculation_differences, direction_confirmation_fingerprint, direction_user_confirmed, verified_direction_proof, table_user_confirmed, xbrl_source_consistent, suggest_percentage_calculations, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict, legacy_percentage_difference_unit
 from .research_sources import ResearchSource, ResearchSources, SourceInput, SourceNotFound, SourcePermissionError, locate_user_quotation, partial_ascii_token, pdf_text_spacing_suspect, table_context_window
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
@@ -106,7 +109,7 @@ from .research_verification import REVIEW_METHOD, ISOLATED_REVIEW_METHOD, REVIEW
 from .research_review_stage import ReviewStageResult, execute_support_review
 from .research_runs import DOCUMENT_OVERVIEW_QUESTION, ResearchRunRequest, ResearchRunResult, discovery_query, resolve_automatic_research_request
 from .research_gap_stage import GapStageResult, execute_gap_followup
-from .research_source_policy import prepare_sources, source_language_hints, summarize_sources, summarize_source_processing
+from .research_source_policy import prepare_sources, source_eligibility, source_language_hints, summarize_sources, summarize_source_processing
 from .research_discovery import execute_source_search
 from .research_budget import ResearchExecutionBudget
 from .research_coordinator import ResearchExecutionContext, PlanningResult, execute_generation, execute_planning
@@ -814,25 +817,15 @@ def _candidate_response(raw: object, provider_name: str) -> SearchCandidate:
     A candidate cannot become evidence through this route.  The client must still
     show it to the user and submit a separately hashed EvidenceSubmissionRequest.
     """
-    title = getattr(raw, "title", None)
-    url = getattr(raw, "url", None)
-    excerpt = getattr(raw, "excerpt", None)
-    publisher = getattr(raw, "publisher", None)
-    raw_published_at = getattr(raw, "published_at", None)
-    independently_reviewable = getattr(raw, "independently_reviewable", None)
-    if not all(isinstance(value, str) and value for value in (title, url, excerpt)):
+    from .research_discovery import normalize_search_lead
+    try:
+        lead = normalize_search_lead(raw)
+    except (ProviderFailure, ValueError):
+        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False) from None
+    title, url, excerpt = lead.title, lead.url, lead.excerpt
+    publisher, published_at, independently_reviewable = lead.publisher, lead.published_at, lead.independently_reviewable
+    if excerpt is None or independently_reviewable is None:
         raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
-    if publisher is not None and (not isinstance(publisher, str) or not publisher):
-        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
-    if raw_published_at is not None and not isinstance(raw_published_at, date):
-        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
-    if type(independently_reviewable) is not bool:
-        raise ProviderFailure("search_response_invalid", "Search provider returned an invalid candidate.", retryable=False)
-    published_at = (
-        datetime.combine(raw_published_at, time.min, tzinfo=timezone.utc)
-        if raw_published_at is not None
-        else None
-    )
     retrieved_at = lifecycle_clock.now()
     hash_payload = {
         "search_provider": provider_name,
@@ -1559,32 +1552,34 @@ def create_research_topic(request: ResearchInput, authorization: str | None = He
     return research_topics.create(account.account_id, request)
 
 
+def _fact_review_flags(fact: ResearchFact) -> dict[str, bool]:
+    """Narrow lexical cues about a monetary fact's currency and scale; not source verification."""
+    data = fact.model_dump(mode="json")
+    flags: dict[str, bool] = {}
+    if monetary_currency_unspecified(data):
+        flags["currency_unspecified"] = True
+    if monetary_currency_not_in_quotation(data):
+        flags["currency_quote_missing"] = True
+    if monetary_scale_not_in_quotation(data):
+        flags["scale_quote_missing"] = True
+    return flags
+
+
 def _legacy_calculation_diagnostics(version):
     """Annotate a copy on read; never rewrite an immutable saved version."""
-    if not (any(legacy_percentage_difference_unit(item) for item in version.content.calculations) or
-            any(monetary_currency_unspecified(item) or monetary_currency_not_in_quotation(item) or monetary_scale_not_in_quotation(item) for item in version.content.facts)):
+    flagged = {fact.fact_id: flags for fact in version.content.facts if (flags := _fact_review_flags(fact))}
+    legacy = [legacy_percentage_difference_unit(item.model_dump(mode="json")) for item in version.content.calculations]
+    if not flagged and not any(legacy):
         return version
     version = version.model_copy(deep=True)
-    missing_currency_ids = set()
     for fact in version.content.facts:
-        if monetary_currency_unspecified(fact):
-            fact['currency_unspecified'] = True
-            if isinstance(fact.get('fact_id'), str):
-                missing_currency_ids.add(fact['fact_id'])
-        if monetary_currency_not_in_quotation(fact):
-            fact['currency_quote_missing'] = True
-            if isinstance(fact.get('fact_id'), str):
-                missing_currency_ids.add(fact['fact_id'])
-        if monetary_scale_not_in_quotation(fact):
-            fact['scale_quote_missing'] = True
-            if isinstance(fact.get('fact_id'), str):
-                missing_currency_ids.add(fact['fact_id'])
-    for item in version.content.calculations:
-        if legacy_percentage_difference_unit(item):
-            item["legacy_unit_warning"] = "percentage_difference_requires_recalculation"
-        inputs = item.get('inputs')
-        if isinstance(inputs, list) and any(isinstance(input_fact, dict) and isinstance(input_fact.get('fact_id'), str) and input_fact['fact_id'] in missing_currency_ids for input_fact in inputs):
-            item['input_status'] = 'unverifiable'
+        for name, value in flagged.get(fact.fact_id, {}).items():
+            setattr(fact, name, value)
+    for item, is_legacy in zip(version.content.calculations, legacy):
+        if is_legacy:
+            item.legacy_unit_warning = "percentage_difference_requires_recalculation"
+        if any(input_fact.fact_id in flagged for input_fact in item.inputs):
+            item.input_status = "unverifiable"
     return version
 
 
@@ -1695,17 +1690,12 @@ def export_research_version(topic_id: str, version_id: str, authorization: str |
     source_ids = set(topic.request.source_ids) | set(version.source_ids)
     # All source references in stored content must be authorized. A reference
     # to a missing or another account's source fails closed.
-    for entry in [*version.content.sources, *version.content.facts, *version.content.claims]:
-        source_id = entry.get("source_id")
-        if isinstance(source_id, str):
-            source_ids.add(source_id)
-        citations = entry.get("citations", [])
-        if not isinstance(citations, list):
-            raise ApiProblem(422, "invalid_request", "Research citations are invalid.")
-        for citation in citations:
-            if not isinstance(citation, dict) or not isinstance(citation.get("source_id"), str):
-                raise ApiProblem(422, "invalid_request", "Research citations are invalid.")
-            source_ids.add(citation["source_id"])
+    for row in version.content.sources:
+        if isinstance(row, dict) and isinstance(row.get("source_id"), str):
+            source_ids.add(row["source_id"])
+    source_ids.update(fact.source_id for fact in version.content.facts)
+    source_ids.update(citation.source_id for claim in version.content.claims for citation in claim.citations)
+    source_ids.update(item.source_id for turn in version.content.turns for item in turn.read_ranges)
     sources = []
     try:
         for source_id in sorted(source_ids):
@@ -1745,7 +1735,20 @@ def export_research_metadata(topic_id: str, version_id: str,
         generated_at=lifecycle_clock.now(), as_of=topic.request.as_of, review=version.review,
         created_by=version.created_by, tracked_source_count=len(set(topic.request.source_ids) | set(version.source_ids)),
         fact_count=len(version.content.facts), claim_count=len(version.content.claims),
-        calculation_count=len(version.content.calculations), limitation_count=len(version.content.limitations))
+        calculation_count=len(version.content.calculations), gap_count=len(version.content.gaps),
+        turn_count=len(version.content.turns))
+
+
+_CALCULATION_COMPUTED_FIELDS = {"input_status", "legacy_unit_warning", "result_status"}
+_FACT_COMPUTED_FIELDS = {"currency_quote_missing", "scale_quote_missing", "currency_unspecified"}
+
+
+def _fact_identity(fact: ResearchFact) -> dict:
+    return fact.model_dump(mode="json", exclude=_FACT_COMPUTED_FIELDS)
+
+
+def _calculation_identity(calculation: ResearchCalculation) -> dict:
+    return calculation.model_dump(mode="json", exclude=_CALCULATION_COMPUTED_FIELDS)
 
 
 @app.post("/v2/research/topics/{topic_id}/versions", response_model=ResearchTopic, status_code=201, include_in_schema=False)
@@ -1757,277 +1760,120 @@ def create_research_version(topic_id: str, request: VersionInput, authorization:
         if previous.version_id != request.parent_version_id:
             raise TopicVersionConflict()
         # A user may change findings, facts, and calculations, but an edited
-        # item must not masquerade as an untouched model extraction. The run
-        # receipt and source inventory are server-produced historical records.
+        # item must not masquerade as an untouched model extraction. Turns,
+        # source inventory, leads and gaps are server-produced records.
         content = request.content.model_copy(deep=True)
-        for calculation in content.calculations:
-            calculation.pop("legacy_unit_warning", None)
-        existing_citations = {json.dumps(citation, sort_keys=True, ensure_ascii=False) for claim in previous.content.claims
-                              for citation in (claim.get("citations") if isinstance(claim.get("citations"), list) else [])
-                              if isinstance(citation, dict)}
+        before = previous.content
+        if (content.turns != before.turns or content.sources != before.sources or
+                content.source_candidates != before.source_candidates or content.gaps != before.gaps):
+            raise ApiProblem(422, "invalid_request", "Server-produced research records cannot be edited.")
         allowed_sources = set(previous.source_ids)
-        checked_citations: dict[tuple[str, str], dict] = {}
-        citation_sources: dict[str, ResearchSource] = {}
-        for claim in content.claims:
-            if claim in previous.content.claims:
-                continue
-            text = claim.get("text")
-            citations = claim.get("citations", [])
-            role = claim.get("role", "support")
-            if (not isinstance(text, str) or not text.strip() or len(text) > 3000 or
-                    not isinstance(role, str) or role not in {"support", "counterargument"} or
-                    not isinstance(citations, list) or len(citations) > 10 or
-                    any(not isinstance(citation, dict) or not isinstance(citation.get("source_id"), str) or
-                        not citation["source_id"].strip() or len(citation["source_id"]) > 100 or
-                        ("quotation" in citation and (not isinstance(citation["quotation"], str) or len(citation["quotation"]) > 1000))
-                        for citation in citations)):
-                raise ApiProblem(422, "invalid_request", "Research findings or their citations are invalid.")
-            normalized = []
-            for citation in citations:
-                source_id = citation["source_id"]
-                if source_id not in allowed_sources:
-                    raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.")
-                try:
-                    if source_id not in citation_sources:
-                        citation_sources[source_id] = research_sources.get(account.account_id, source_id)
-                    source = citation_sources[source_id]
-                    if (source.is_simulated or not source.permissions.display or topic.request.as_of is not None and
-                            (source.published_at is None or source.published_at > topic.request.as_of or
-                             (source.revised_at is not None and source.revised_at > topic.request.as_of))):
-                        raise ValueError("Source availability at the research cutoff is not established.")
-                except (SourceNotFound, ValueError) as error:
-                    raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.") from error
-                if json.dumps(citation, sort_keys=True, ensure_ascii=False) in existing_citations:
-                    # Preserve existing citation locations after rechecking access and cutoff.
-                    retained_citation = deepcopy(citation)
-                    location = retained_citation.get("location")
-                    positions = (location.get("matches", []) if location.get("status") == "ambiguous" else [location]) if isinstance(location, dict) else []
-                    for position in positions:
-                        if not isinstance(position, dict):
-                            continue
-                        start, end = position.get("character_start"), position.get("character_end")
-                        if (type(start) is int and type(end) is int and 0 <= start < end <= len(source.text)
-                                and source.text[start:end] == retained_citation.get("quotation") and partial_ascii_token(source.text, start, end)):
-                            retained_citation["partial_token"] = True
-                    normalized.append(retained_citation)
-                    continue
-                quotation = citation.get("quotation")
-                if (not isinstance(quotation, str) or not quotation.strip()
-                        or len(checked_citations) >= 200 and (source_id, quotation) not in checked_citations):
-                    raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.")
-                key = (source_id, quotation)
-                if key not in checked_citations:
-                    try:
-                        checked_citations[key] = locate_user_quotation(source, quotation)
-                    except ValueError as error:
-                        raise ApiProblem(422, "invalid_request", "Citation must match an attached, displayable, time-eligible source.") from error
-                normalized.append(deepcopy(checked_citations[key]))
-            claim["citations"] = normalized
-        fact_id_counts = Counter(item["fact_id"].strip() for item in content.facts if isinstance(item.get("fact_id"), str))
-        prior_counts = Counter(item.get("fact_id") for item in previous.content.facts if isinstance(item.get("fact_id"), str))
-        prior_facts = {item["fact_id"]: item for item in previous.content.facts
-                       if isinstance(item.get("fact_id"), str) and prior_counts[item["fact_id"]] == 1}
-        fact_check_limit = max(0, 200 - len(checked_citations))
-        fact_check_attempts = 0
-        for fact in content.facts:
-            if fact in previous.content.facts:
-                continue
+        loaded: dict[str, ResearchSource] = {}
+
+        def usable_source(source_id: str, message: str) -> ResearchSource:
+            if source_id not in allowed_sources:
+                raise ApiProblem(422, "invalid_request", message)
             try:
-                numeric = NumericFact.model_validate({key: fact[key] for key in
-                    ("fact_id", "value", "unit", "currency", "period") if key in fact})
-            except ValidationError as error:
-                raise ApiProblem(422, "invalid_request", "Research fact value, unit, currency, or period is invalid.") from error
-            if fact_id_counts[numeric.fact_id] != 1:
-                raise ApiProblem(422, "invalid_request", "Research fact identifiers must be unique.")
-            if ("label" in fact and (not isinstance(fact["label"], str) or not fact["label"].strip() or len(fact["label"]) > 300) or
-                    "source_id" in fact and fact["source_id"] is not None and (not isinstance(fact["source_id"], str) or not fact["source_id"].strip() or len(fact["source_id"]) > 100) or
-                    "quotation" in fact and fact["quotation"] is not None and (not isinstance(fact["quotation"], str) or len(fact["quotation"]) > 1000)):
-                raise ApiProblem(422, "invalid_request", "Research fact provenance is invalid.")
-            if fact.get("source_id") is not None:
-                source_id = fact["source_id"]
-                if source_id not in allowed_sources:
-                    raise ApiProblem(422, "invalid_request", "Research fact must use an attached real source.")
-                try:
-                    if source_id not in citation_sources:
-                        citation_sources[source_id] = research_sources.get(account.account_id, source_id)
-                    if citation_sources[source_id].is_simulated:
-                        raise ValueError("Simulated source cannot be used as real evidence.")
-                except (SourceNotFound, ValueError) as error:
-                    raise ApiProblem(422, "invalid_request", "Research fact must use an attached real source.") from error
-            fact.update(numeric.model_dump(mode="json"))
-            prior_fact = prior_facts.get(numeric.fact_id)
-            # A client cannot mint a conversion record; retain only the exact
-            # server-issued record for an unchanged, fingerprint-bound fact.
-            fact.pop('direction_derivation', None)
-            if prior_fact and verified_direction_proof(prior_fact) and direction_confirmation_fingerprint(fact) == direction_confirmation_fingerprint(prior_fact):
-                fact['direction_derivation'] = deepcopy(prior_fact['direction_derivation'])
-            quotation_changed = (prior_fact is None or prior_fact.get("source_id") != fact.get("source_id") or
-                                 prior_fact.get("quotation") != fact.get("quotation"))
-            if quotation_changed:
-                fact.pop("quotation_match", None)
-            elif prior_fact and prior_fact.get("quotation_match") in {"table_markup_expanded", "pdf_line_hyphen_restored"}:
-                # The client cannot clear a source-recovery warning while
-                # retaining the same unreviewed quotation.
-                fact["quotation_match"] = prior_fact["quotation_match"]
-            # User edits can retain an older source quotation and location.
-            # Recompute visible review cues instead of treating that retained
-            # provenance as evidence for the edited value.
-            fact.pop("source_value_warnings", None)
-            fact.pop("direction_context_unverified", None)
-            quote = fact.get("quotation")
-            if (isinstance(quote, str) and numeric.value not in _quoted_numbers(quote) and
-                    (_directional_negative_percent(numeric.value, numeric.unit, quote) or
-                     _directional_negative_amount(numeric.value, numeric.unit, quote, numeric.currency))):
-                fact["direction_context_unverified"] = True
-            fact.pop("currency_context_unverified", None)
-            if is_percent_unit(numeric.unit) and numeric.currency is not None:
-                fact["currency_context_unverified"] = True
-            fact.pop('currency_unspecified', None)
-            if monetary_currency_unspecified(fact):
-                fact['currency_unspecified'] = True
-            fact.pop("currency_conflict_unverified", None)
-            if currency_value_conflict(numeric.currency, numeric.value, quote):
-                fact["currency_conflict_unverified"] = True
-            fact.pop("currency_quote_missing", None)
-            fact.pop("table_alignment_unverified", None)
-            fact.pop("table_period_conflict", None)
-            if not is_percent_unit(numeric.unit) and table_currency_quote_missing(numeric.currency, quote):
-                fact["currency_quote_missing"] = True
-            if monetary_currency_not_in_quotation(fact):
-                fact['currency_quote_missing'] = True
-            fact.pop('scale_quote_missing', None)
-            if monetary_scale_not_in_quotation(fact):
-                fact['scale_quote_missing'] = True
-            if fact.get("source_id") is not None:
-                source_id = fact["source_id"]
-                source = citation_sources[source_id]
-                warnings = []
-                if (not source.permissions.display or topic.request.as_of is not None and
+                if source_id not in loaded:
+                    loaded[source_id] = research_sources.get(account.account_id, source_id)
+                source = loaded[source_id]
+                if (source.is_simulated or not source.permissions.display or topic.request.as_of is not None and
                         (source.published_at is None or source.published_at > topic.request.as_of or
                          (source.revised_at is not None and source.revised_at > topic.request.as_of))):
-                    warnings.append("source_unavailable")
-                elif not isinstance(quote, str) or not quote.strip():
-                    warnings.append("quotation_missing")
-                else:
-                    key = (source_id, quote)
-                    if key not in checked_citations and fact_check_attempts >= fact_check_limit:
-                        warnings.append("not_checked")
-                    else:
-                        try:
-                            if key not in checked_citations:
-                                fact_check_attempts += 1
-                                checked_citations[key] = locate_user_quotation(source, quote)
-                            checked = checked_citations[key]
-                            location = checked["location"]
-                            if location.get("status") == "ambiguous":
-                                warnings.append("quotation_ambiguous")
-                            elif checked.get("partial_token"):
-                                warnings.append("quotation_partial")
-                            else:
-                                if (quotation_is_table_row(source.text, location.get("character_start"), quote) or
-                                        (source.retrieval_method == "user_pdf" and source.pdf_text_order == "layout" and
-                                         quotation_is_pdf_layout_row(source.text, location.get("character_start"), quote))):
-                                    fact["table_alignment_unverified"] = True
-                                    conflict = table_period_conflict(source.text, location.get("character_start"), quote, numeric.value, numeric.period)
-                                    if conflict:
-                                        fact["table_period_conflict"] = conflict
-                                if (not is_percent_unit(numeric.unit) and
-                                        quotation_is_inside_table_row(source.text, location.get("character_start"), quote) and
-                                        table_currency_quote_missing(numeric.currency, "|" + quote)):
-                                    fact["currency_quote_missing"] = True
-                                saved_location = fact.get("location")
-                                if saved_location is None:
-                                    # A new quotation can request server-side
-                                    # location instead of supplying coordinates.
-                                    fact["location"] = deepcopy(location)
-                                    fact["quotation_match"] = checked.get("quotation_match")
-                                elif (not isinstance(saved_location, dict) or
-                                        saved_location.get("status") is not None or
-                                        type(saved_location.get("character_start")) is not int or
-                                        type(saved_location.get("character_end")) is not int or
-                                        saved_location.get("character_start") != location["character_start"] or
-                                        saved_location.get("character_end") != location["character_end"]):
-                                    warnings.append("location_mismatch")
-                                elif quotation_changed:
-                                    fact["quotation_match"] = checked.get("quotation_match")
-                                if numeric.value not in _quoted_numbers(quote) and not fact.get("direction_context_unverified"):
-                                    warnings.append("value_missing")
-                        except ValueError:
-                            warnings.append("quotation_unlocated")
-                if warnings:
-                    fact["source_value_warnings"] = warnings
-            elif isinstance(quote, str) and quote.strip():
-                fact["source_value_warnings"] = ["source_missing"]
-        for field in ("claims", "facts", "calculations"):
-            originals = getattr(previous.content, field)
-            entries = getattr(content, field)
-            for entry in entries:
-                if entry not in originals:
-                    entry["authorship"] = "user"
-                    entry["verification"] = "user_edited_not_independently_verified"
-                    if field == "claims":
-                        entry.pop("support_review", None)
-                        entry.pop("source_scope_absence_unverified", None)
-                        entry["support_status"] = ("incomplete" if any(
-                            c.get("partial_token") or c.get("quotation_match") in {"table_markup_expanded", "split_conjunction", "split_ellipsis", "split_pdf_layout", "pdf_line_hyphen_restored"} or
-                            isinstance(c.get("location"), dict) and c["location"].get("status") == "ambiguous"
-                            for c in entry.get("citations", []) if isinstance(c, dict))
-                            else "not_independently_verified" if entry.get("citations") else "unsupported")
-                        if isinstance(entry.get("citations"), list):
-                            for citation in entry["citations"]:
-                                if isinstance(citation, dict):
-                                    citation["support_status"] = "not_independently_verified"
-                    if field == "facts":
-                        # User changes cannot retain server-extracted provider
-                        # identity and accounting context as an attestation.
-                        entry.pop('extraction_method', None)
-                        entry.pop('structured_metadata', None)
-                        # Confirmations are issued only by the dedicated action;
-                        # any edit invalidates the prior attestation.
-                        entry.pop("direction_confirmation", None)
-                        entry.pop("table_confirmation", None)
-                        entry.pop("table_structure_alignment", None)
-                        entry.pop("xbrl_source_consistency", None)
-                        entry.pop("numeric_normalization", None)
-                        entry.pop("range_parent_id", None)
-        # An edit may invalidate a table confirmation after the first pass.
-        # Recompute the currency cue before returning the new version.
-        for fact in content.facts:
-            if monetary_currency_not_in_quotation(fact):
-                fact['currency_quote_missing'] = True
-            if monetary_scale_not_in_quotation(fact):
-                fact['scale_quote_missing'] = True
-        for entry in content.calculations:
-            entry["input_status"] = calculation_input_status(entry, content.facts)
+                    raise ValueError("Source availability at the research cutoff is not established.")
+            except (SourceNotFound, ValueError) as error:
+                raise ApiProblem(422, "invalid_request", message) from error
+            return source
+
+        def check_span(source_id: str, quotation: str, start: int, end: int, message: str) -> None:
+            source = usable_source(source_id, message)
+            if not quotation.strip() or end > len(source.text) or source.text[start:end] != quotation:
+                raise ApiProblem(422, "invalid_request", message)
+
+        # Findings: unchanged claims pass untouched; changed ones are rechecked and marked.
+        claim_ids = [claim.claim_id for claim in content.claims]
+        if len(claim_ids) != len(set(claim_ids)):
+            raise ApiProblem(422, "invalid_request", "Research findings or their citations are invalid.")
+        parent_claims = {claim.claim_id: claim for claim in before.claims}
+        id_map: dict[str, str] = {}
+        claims = []
+        changed_claims = []
         for claim in content.claims:
-            citations = claim.get("citations")
-            if not isinstance(citations, list):
+            original = parent_claims.get(claim.claim_id)
+            if original is not None and claim == original:
+                claims.append(original.model_copy(deep=True))
                 continue
-            for citation in citations:
-                source_id = citation.get("source_id") if isinstance(citation, dict) else None
-                if isinstance(source_id, str) and source_id in allowed_sources and source_id not in citation_sources:
-                    try:
-                        citation_sources[source_id] = research_sources.get(account.account_id, source_id)
-                    except SourceNotFound:
-                        pass
-        current_sources = list(citation_sources.values())
-        eligible_comparison_sources, _ = prepare_sources(current_sources, topic.request.as_of)
-        previous_hashes = previous.content.run.get('source_hashes', {})
-        previous_segments = previous.content.run.get('selected_segments', [])
-        date_sources = ([source for source in eligible_comparison_sources
-                         if previous_hashes.get(source.source_id) == source.content_sha256]
-                        if isinstance(previous_hashes, dict) else None)
-        content.claims = prepare_claim_evidence(
-            content.claims, content.facts, content.calculations, current_sources, eligible_comparison_sources,
-            date_sources, previous_segments, previous_supplemental_leads(previous.content.claims),
-            check_source_scope=False)
-        content.evidence_differences = evidence_differences(content.facts)
-        content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
-        content.amount_differences = claim_amount_differences(content.claims, content.facts)
-        retained = previous.content.model_copy(deep=True)
-        content.run = retained.run
-        content.sources = retained.sources
-        content.source_candidates = retained.source_candidates
+            for citation in claim.citations:
+                check_span(citation.source_id, citation.quotation, citation.location.character_start,
+                           citation.location.character_end, "Citation must match an attached, displayable, time-eligible source.")
+            if original is None:
+                id_map[claim.claim_id] = "claim-" + uuid4().hex
+            saved = claim.model_copy(update={"claim_id": id_map.get(claim.claim_id, claim.claim_id),
+                                             "turn_id": original.turn_id if original is not None else None,
+                                             "edited_by_user": True})
+            claims.append(saved)
+            changed_claims.append(saved)
+        final_ids = {claim.claim_id for claim in claims}
+        for claim in changed_claims:
+            claim.challenges_claim_ids = [id_map.get(item, item) for item in claim.challenges_claim_ids]
+            if any(item not in final_ids or item == claim.claim_id for item in claim.challenges_claim_ids):
+                raise ApiProblem(422, "invalid_request", "A challenged finding must be another existing finding.")
+        content.claims = claims
+
+        fact_ids = [fact.fact_id.strip() for fact in content.facts]
+        if len(fact_ids) != len(set(fact_ids)):
+            raise ApiProblem(422, "invalid_request", "Research fact identifiers must be unique.")
+        parent_facts = {fact.fact_id: fact for fact in before.facts}
+        facts = []
+        for fact in content.facts:
+            original = parent_facts.get(fact.fact_id)
+            if original is not None and _fact_identity(fact) == _fact_identity(original):
+                facts.append(original.model_copy(deep=True))
+                continue
+            try:
+                numeric = NumericFact.model_validate({"fact_id": fact.fact_id, "value": fact.value, "unit": fact.unit,
+                                                      "currency": fact.currency, "period": fact.period})
+            except ValidationError as error:
+                raise ApiProblem(422, "invalid_request", "Research fact value, unit, currency, or period is invalid.") from error
+            if len(fact.label) > 300 or len(fact.quotation) > 1000 or len(fact.source_id) > 100:
+                raise ApiProblem(422, "invalid_request", "Research fact provenance is invalid.")
+            if (fact.location.character_start != fact.character_start or fact.location.character_end != fact.character_end):
+                raise ApiProblem(422, "invalid_request", "Research fact location is inconsistent.")
+            check_span(fact.source_id, fact.quotation, fact.character_start, fact.character_end,
+                       "Research fact must use an attached, displayable, time-eligible real source.")
+            quote_has_value = (numeric.value in _quoted_numbers(fact.quotation) or
+                               _directional_negative_percent(numeric.value, numeric.unit, fact.quotation) or
+                               _directional_negative_amount(numeric.value, numeric.unit, fact.quotation, numeric.currency))
+            saved = fact.model_copy(update={
+                "turn_id": original.turn_id if original is not None else None,
+                "verification": ("user_edited_not_independently_verified" if quote_has_value
+                                 else "user_edited_value_not_in_quotation")})
+            data = saved.model_dump(mode="json")
+            saved.currency_unspecified = True if monetary_currency_unspecified(data) else None
+            saved.currency_quote_missing = True if (
+                (not is_percent_unit(saved.unit) and table_currency_quote_missing(saved.currency, saved.quotation)) or
+                monetary_currency_not_in_quotation(data)) else None
+            saved.scale_quote_missing = True if monetary_scale_not_in_quotation(data) else None
+            facts.append(saved)
+        content.facts = facts
+
+        calculation_ids = [item.calculation_id for item in content.calculations]
+        if len(calculation_ids) != len(set(calculation_ids)):
+            raise ApiProblem(422, "invalid_request", "Research calculation identifiers must be unique.")
+        parent_calculations = {item.calculation_id: item for item in before.calculations}
+        calculations = []
+        for calculation in content.calculations:
+            original = parent_calculations.get(calculation.calculation_id)
+            if original is not None and _calculation_identity(calculation) == _calculation_identity(original):
+                calculations.append(original.model_copy(deep=True))
+                continue
+            calculations.append(calculation.model_copy(update={
+                "turn_id": original.turn_id if original is not None else None, "legacy_unit_warning": None,
+                "authorship": "user", "verification": "user_edited_not_independently_verified"}))
+        fact_rows = [fact.model_dump(mode="json") for fact in content.facts]
+        for entry in calculations:
+            entry.input_status = calculation_input_status(entry.model_dump(mode="json"), fact_rows)
+        content.calculations = calculations
         return research_topics.add_version(account.account_id, topic_id, request.model_copy(update={"content": content}))
     except TopicNotFound as error:
         raise ApiProblem(404, "not_found", "Research topic not found.") from error
@@ -2054,143 +1900,42 @@ def attach_research_sources(topic_id: str, request: AttachSourcesInput, authoriz
         raise ApiProblem(422, "invalid_request", str(error)) from error
 
 
+def _reject_unconfirmable_fact(topic_id: str, request: ConfirmDirectionRequest, authorization: str | None) -> ResearchTopic:
+    """Direction and table confirmation need legacy table metadata that native facts never carry."""
+    account = _authenticated_account(authorization)
+    try:
+        topic = research_topics.get(account.account_id, topic_id)
+    except TopicNotFound as error:
+        raise ApiProblem(404, "not_found", "Research topic not found.") from error
+    if topic.versions[-1].version_id != request.parent_version_id:
+        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before saving.")
+    raise ApiProblem(422, "invalid_request", "This figure has no table metadata to confirm.")
+
+
 @app.post("/v2/research/topics/{topic_id}/facts/confirm-direction", response_model=ResearchTopic,
           status_code=201, include_in_schema=False)
 def confirm_research_direction(topic_id: str, request: ConfirmDirectionRequest,
                                authorization: str | None = Header(default=None)) -> ResearchTopic:
-    """Record an explicit user review of one source-backed signed change."""
-    account = _authenticated_account(authorization)
-    try:
-        topic = research_topics.get(account.account_id, topic_id)
-        previous = topic.versions[-1]
-        if previous.version_id != request.parent_version_id:
-            raise TopicVersionConflict()
-        matches = [fact for fact in previous.content.facts if fact.get("fact_id") == request.fact_id]
-        if len(matches) != 1 or not matches[0].get("direction_context_unverified"):
-            raise ApiProblem(422, "invalid_request", "A unique directional fact requiring review is needed.")
-        fact = matches[0]
-        if direction_user_confirmed(fact):
-            return topic
-        source_id, quote, location = fact.get("source_id"), fact.get("quotation"), fact.get("location")
-        if (source_id not in set(previous.source_ids) or not isinstance(quote, str) or not quote or
-                not isinstance(location, dict) or location.get("status") == "ambiguous" or
-                fact.get("source_value_warnings") or fact.get("quotation_match") == "pdf_line_hyphen_restored" or fact.get("table_period_conflict") or
-                fact.get("currency_conflict_unverified") or fact.get("currency_context_unverified")):
-            raise ApiProblem(422, "invalid_request", "The directional fact or its source requires further review.")
-        source = research_sources.get(account.account_id, source_id)
-        if (source.is_simulated or not source.permissions.display or topic.request.as_of is not None and
-                (source.published_at is None or source.published_at > topic.request.as_of or
-                 source.revised_at is not None and source.revised_at > topic.request.as_of)):
-            raise ApiProblem(422, "invalid_request", "The source is unavailable for this research.")
-        checked = locate_user_quotation(source, quote)
-        located = checked.get("location", {})
-        if (located.get("status") == "ambiguous" or checked.get("partial_token") or
-                located.get("character_start") != location.get("character_start") or
-                located.get("character_end") != location.get("character_end")):
-            raise ApiProblem(422, "invalid_request", "The quotation must have a unique complete source location.")
-        numeric = NumericFact.model_validate({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})
-        if not (_directional_negative_percent(numeric.value, numeric.unit, quote) or
-                _directional_negative_amount(numeric.value, numeric.unit, quote, numeric.currency)):
-            raise ApiProblem(422, "invalid_request", "The quotation does not contain a matching directional cue.")
-        content = previous.content.model_copy(deep=True)
-        target = next(item for item in content.facts if item.get("fact_id") == request.fact_id)
-        target["direction_confirmation"] = {"confirmed_by": "user", "fact_sha256": direction_confirmation_fingerprint(target),
-                                             "confirmed_at": datetime.now(timezone.utc).isoformat()}
-        for calculation in content.calculations:
-            calculation["input_status"] = calculation_input_status(calculation, content.facts)
-        return research_topics.add_version(account.account_id, topic_id, VersionInput(
-            parent_version_id=previous.version_id, content=content, review="draft", note=previous.note))
-    except (TopicNotFound, SourceNotFound) as error:
-        raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
-    except TopicVersionConflict as error:
-        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before saving.") from error
-    except (ValueError, ValidationError) as error:
-        raise ApiProblem(422, "invalid_request", "The directional fact or its source requires further review.") from error
+    return _reject_unconfirmable_fact(topic_id, request, authorization)
 
 
 @app.post("/v2/research/topics/{topic_id}/facts/confirm-table", response_model=ResearchTopic,
           status_code=201, include_in_schema=False)
 def confirm_research_table(topic_id: str, request: ConfirmDirectionRequest,
                            authorization: str | None = Header(default=None)) -> ResearchTopic:
-    """Record a user's review of an exact, uniquely located restored table row."""
-    account = _authenticated_account(authorization)
-    try:
-        topic = research_topics.get(account.account_id, topic_id)
-        previous = topic.versions[-1]
-        if previous.version_id != request.parent_version_id:
-            raise TopicVersionConflict()
-        matches = [fact for fact in previous.content.facts if fact.get("fact_id") == request.fact_id]
-        if len(matches) != 1 or matches[0].get("quotation_match") != "table_markup_expanded":
-            raise ApiProblem(422, "invalid_request", "A unique restored table fact is required.")
-        fact = matches[0]
-        if table_user_confirmed(fact):
-            return topic
-        source_id, quote, location = fact.get("source_id"), fact.get("quotation"), fact.get("location")
-        if (source_id not in set(previous.source_ids) or not isinstance(quote, str) or not quote or
-                not isinstance(location, dict) or location.get("status") == "ambiguous" or
-                fact.get("source_value_warnings") or fact.get("table_period_conflict") or
-                isinstance(fact.get("table_structure_alignment"), dict) and fact["table_structure_alignment"].get("status") == "conflict" or
-                fact.get("currency_conflict_unverified") or fact.get("currency_context_unverified") or
-                fact.get("direction_context_unverified")):
-            raise ApiProblem(422, "invalid_request", "The fact or its source requires further review.")
-        source = research_sources.get(account.account_id, source_id)
-        if (source.is_simulated or not source.permissions.display or topic.request.as_of is not None and
-                (source.published_at is None or source.published_at > topic.request.as_of or
-                 source.revised_at is not None and source.revised_at > topic.request.as_of)):
-            raise ApiProblem(422, "invalid_request", "The source is unavailable for this research.")
-        checked = locate_user_quotation(source, quote)
-        located = checked.get("location", {})
-        if (located.get("status") == "ambiguous" or checked.get("partial_token") or
-                located.get("character_start") != location.get("character_start") or
-                located.get("character_end") != location.get("character_end") or
-                not quotation_is_table_row(source.text, located.get("character_start"), quote)):
-            raise ApiProblem(422, "invalid_request", "A unique complete table row is required.")
-        numeric = NumericFact.model_validate({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})
-        if source.original_html_base64:
-            traced = bounded_table_trace(source, located["character_start"], located["character_end"])
-            alignment = annual_table_value_alignment(traced, numeric.value, numeric.period)
-            if alignment and alignment.get("status") == "conflict":
-                raise ApiProblem(422, "invalid_request", "The fact's period conflicts with the original table column.")
-        original_cells = re.sub(r"\[(?:colspan|rowspan)=\d+\]", "", quote, flags=re.IGNORECASE)
-        if numeric.value not in _quoted_numbers(original_cells):
-            raise ApiProblem(422, "invalid_request", "The quoted row does not contain the value.")
-        content = previous.content.model_copy(deep=True)
-        target = next(item for item in content.facts if item.get("fact_id") == request.fact_id)
-        target["table_confirmation"] = {"confirmed_by": "user", "fact_sha256": direction_confirmation_fingerprint(target),
-                                        "confirmed_at": datetime.now(timezone.utc).isoformat()}
-        for calculation in content.calculations:
-            calculation["input_status"] = calculation_input_status(calculation, content.facts)
-        return research_topics.add_version(account.account_id, topic_id, VersionInput(
-            parent_version_id=previous.version_id, content=content, review="draft", note=previous.note))
-    except (TopicNotFound, SourceNotFound) as error:
-        raise ApiProblem(404, "not_found", "Research topic or source not found.") from error
-    except TopicVersionConflict as error:
-        raise ApiProblem(409, "lifecycle_conflict", "Research topic has changed; reload before saving.") from error
-    except (ValueError, ValidationError) as error:
-        raise ApiProblem(422, "invalid_request", "The fact or its source requires further review.") from error
+    return _reject_unconfirmable_fact(topic_id, request, authorization)
 
 
 def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) -> list[dict]:
     """Resolve version-owned inputs and apply the same checks for both actions."""
     facts = []
     for fact_id in fact_ids:
-        candidates = [fact for fact in content.facts if fact.get("fact_id") == fact_id]
+        candidates = [fact for fact in content.facts if fact.fact_id == fact_id]
         if len(candidates) != 1:
             raise ApiProblem(422, "invalid_request", "Calculation input facts are missing or ambiguous.")
-        fact = candidates[0]
-        if fact.get("source_value_warnings"):
+        fact = candidates[0].model_dump(mode="json")
+        if fact.get("verification") == "user_edited_value_not_in_quotation":
             raise ApiProblem(422, "invalid_request", "The fact's source quotation requires review before calculation.")
-        if fact.get("quotation_match") == "pdf_line_hyphen_restored" or (fact.get("quotation_match") == "table_markup_expanded" and not (table_user_confirmed(fact) or xbrl_source_consistent(fact))):
-            raise ApiProblem(422, "invalid_request", "The restored quotation requires review before calculation.")
-        location = fact.get("location")
-        if isinstance(location, dict) and location.get("status") == "ambiguous":
-            raise ApiProblem(422, "invalid_request", "Ambiguous fact source location requires review before calculation.")
-        if fact.get("table_period_conflict"):
-            raise ApiProblem(422, "invalid_request", "Table period and column require review before calculation.")
-        if isinstance(fact.get("table_structure_alignment"), dict) and fact["table_structure_alignment"].get("status") == "conflict":
-            raise ApiProblem(422, "invalid_request", "Table period and original column require review before calculation.")
-        if fact.get("direction_context_unverified") and not (direction_user_confirmed(fact) or verified_direction_proof(fact)):
-            raise ApiProblem(422, "invalid_request", "Value direction and subject require review before calculation.")
         if currency_value_conflict(fact.get("currency"), fact.get("value"), fact.get("quotation")):
             raise ApiProblem(422, "invalid_request", "Currency and quoted value require review before calculation.")
         if monetary_currency_unspecified(fact):
@@ -2201,7 +1946,7 @@ def _research_calculation_inputs(content: ResearchContent, fact_ids: list[str]) 
             raise ApiProblem(422, "invalid_request", "The monetary fact's unit scale is not identified in its quotation; review it before calculation.")
         if is_percent_unit(str(fact.get("unit", ""))) and fact.get("currency") is not None:
             raise ApiProblem(422, "invalid_request", "Percentage currency context requires review before calculation.")
-        facts.append({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period") if key in fact})
+        facts.append({key: fact[key] for key in ("fact_id", "value", "unit", "currency", "period")})
     return facts
 
 
@@ -2221,13 +1966,12 @@ def create_research_calculation(topic_id: str, request: CreateResearchCalculatio
         spec = CalculationRequest.model_validate({"formula": request.formula, "first": facts[0], "second": facts[1],
                                                   "decimal_places": request.decimal_places})
         result = calculate(spec)
-        if calculation_input_status(result, previous.content.facts) != "matched":
+        if calculation_input_status(result, [fact.model_dump(mode="json") for fact in previous.content.facts]) != "matched":
             raise ApiProblem(422, "invalid_request", "Calculation input evidence requires review.")
-        result.update({"input_status": "matched", "authorship": "calculation_engine"})
+        result.update({"calculation_id": "calc-" + uuid4().hex, "turn_id": None,
+                       "input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
-        content.calculations.append(result)
-        content.claims = suggest_percentage_calculations(content.claims, content.calculations, content.facts)
-        content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
+        content.calculations.append(ResearchCalculation.model_validate(result))
         return research_topics.add_version(account.account_id, topic_id, VersionInput(
             parent_version_id=previous.version_id, content=content, note=previous.note))
     except TopicNotFound as error:
@@ -2251,21 +1995,18 @@ def recalculate_research(topic_id: str, request: RecalculateRequest,
         if request.calculation_index >= len(previous.content.calculations):
             raise ApiProblem(422, "invalid_request", "Calculation does not exist in this version.")
         old = previous.content.calculations[request.calculation_index]
-        inputs = old.get("inputs")
-        if (old.get("formula_version") not in {"1", "2"} or not isinstance(inputs, list) or len(inputs) != 2 or
-                any(not isinstance(item, dict) or not isinstance(item.get("fact_id"), str) for item in inputs)):
+        if old.formula_version not in {"1", "2"} or len(old.inputs) != 2:
             raise ApiProblem(422, "invalid_request", "Calculation inputs or formula version are unavailable.")
-        facts = _research_calculation_inputs(previous.content, [item["fact_id"] for item in inputs])
-        spec = CalculationRequest.model_validate({"formula": old.get("formula_id"), "first": facts[0],
-            "second": facts[1], "decimal_places": old.get("decimal_places", 2)})
+        facts = _research_calculation_inputs(previous.content, [item.fact_id for item in old.inputs])
+        spec = CalculationRequest.model_validate({"formula": old.formula_id, "first": facts[0],
+            "second": facts[1], "decimal_places": old.decimal_places})
         result = calculate(spec)
-        if calculation_input_status(result, previous.content.facts) != "matched":
+        if calculation_input_status(result, [fact.model_dump(mode="json") for fact in previous.content.facts]) != "matched":
             raise ApiProblem(422, "invalid_request", "Calculation input evidence requires review.")
-        result.update({"input_status": "matched", "authorship": "calculation_engine"})
+        result.update({"calculation_id": old.calculation_id, "turn_id": old.turn_id,
+                       "input_status": "matched", "authorship": "calculation_engine"})
         content = previous.content.model_copy(deep=True)
-        content.calculations[request.calculation_index] = result
-        content.claims = suggest_percentage_calculations(content.claims, content.calculations, content.facts)
-        content.calculation_differences = claim_calculation_differences(content.claims, content.calculations, content.facts)
+        content.calculations[request.calculation_index] = ResearchCalculation.model_validate(result)
         return research_topics.add_version(account.account_id, topic_id, VersionInput(
             parent_version_id=previous.version_id, content=content, note=previous.note))
     except TopicNotFound as error:
@@ -2594,6 +2335,7 @@ def _runtime_provider_binding(provider: Any, request: Request) -> str:
                'credential_revision': str(getattr(config, 'updated_at', None)),
                'credential_hint': getattr(config, 'key_hint', None),
                'platform_credential_revision': os.environ.get('FORESIGHTNINE_RESEARCH_LLM_CREDENTIAL_REVISION') if getattr(provider, 'name', None) == 'anthropic_messages' else os.environ.get('FORESIGHTNINE_LLM_CREDENTIAL_REVISION'),
+               'historical_prices': os.environ.get('FORESIGHTNINE_RESEARCH_HISTORICAL_PRICES'),
                'system': SYSTEM, 'tools': [asdict(tool) for tool in TOOLS]}
     return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
@@ -2621,6 +2363,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     user_question = request.question_override if request.question_override is not None else topic.request.question
     question_origin = 'user' if user_question else 'document_overview_default'
     effective_question = user_question or DOCUMENT_OVERVIEW_QUESTION
+    from .research_runtime import SYSTEM as RUNTIME_SYSTEM
     # Presence is part of authorization: omitted controls may be resolved
     # automatically, while explicit false, zero, null, or [] are caller input.
     # Historical keys with a different payload fail closed rather than being
@@ -2631,16 +2374,33 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
     if existing is not None:
         _mark_replay(response, True)
         return existing
+    parent_version = next((item for item in topic.versions if item.version_id == request.parent_version_id), None)
+    if parent_version is None:
+        raise ApiProblem(409, "lifecycle_conflict", "Research changed before the run was admitted.")
+    # A turn is one question plus its run. A continuation keeps the original turn;
+    # a new turn needs a new question once the topic already has an answer.
+    if continuation_input is not None:
+        turn_meta = deepcopy((RESEARCH_RUN_INPUTS.get(continuation_input['operation_id']) or {}).get('turn') or {})
+        if not turn_meta:
+            raise ApiProblem(409, 'lifecycle_conflict', 'The saved runtime inputs are unavailable.')
+    else:
+        if request.question_override is None and parent_version.content.turns:
+            raise ApiProblem(422, "invalid_request", "A follow-up question is required.")
+        turn_meta = {'turn_id': 'turn-' + uuid4().hex, 'index': len(parent_version.content.turns) + 1,
+                     'question': effective_question, 'question_origin': question_origin,
+                     'focus_citation': request.focus_citation.model_dump() if request.focus_citation else None,
+                     'started_at': lifecycle_clock.now().isoformat(), 'parent_version_id': request.parent_version_id,
+                     'operation_ids': []}
     # Idempotency uses the caller's original request, while a newly admitted
     # operation persists the resolved policy. A continuation always retains
     # its original server-owned policy rather than applying today's defaults.
+    from .research_historical_prices import configured_historical_prices, fetch_historical_price_source
+    historical_config, historical_key = configured_historical_prices()
+    historical_available = historical_config is not None and topic.request.as_of is None
     if continuation_input is None:
         request = resolve_automatic_research_request(request,
-            search_available=bool(getattr(evidence_provider, 'supports_project_search', False)))
-    deterministic_source_fallback = (continuation_input is None and request.evidence_strategy == 'delegated'
-        and (request.max_model_calls == 0 or request.max_total_tokens == 0))
-    if deterministic_source_fallback:
-        request = request.model_copy(update={'evidence_strategy': 'coordinator'})
+            search_available=bool(getattr(evidence_provider, 'supports_project_search', False)),
+            historical_prices_available=historical_available)
     provider, _personal = _model_provider_for_request(http_request, research=True)
     if isinstance(provider, OpenAICompatibleLlmProvider):
         try:
@@ -2655,28 +2415,26 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             raise ApiProblem(422, "invalid_request", "The selected provider does not support a per-run input limit.")
     generate_structured = getattr(provider, "generate_structured", None)
     version_chain = ResearchVersionChain(research_topics, account.account_id, topic_id, request.parent_version_id, source_ids)
-    focus = continuation_input.get('focus') if continuation_input is not None else None
+    # A continuation restores the focus from its checkpoint; only a fresh turn resolves it.
+    focus: dict[str, Any] | None = None
     if request.focus_citation is not None and continuation_input is None:
         try:
-            parent = next(v for v in topic.versions if v.version_id == request.parent_version_id)
-            citation = parent.content.claims[request.focus_citation.claim_index]["citations"][request.focus_citation.citation_index]
-            source = next(s for s in sources if s.source_id == citation["source_id"] and
-                          s.source_id in {*topic.request.source_ids, *parent.source_ids})
+            claim = next(c for c in parent_version.content.claims if c.claim_id == request.focus_citation.claim_id)
+            citation = claim.citations[request.focus_citation.citation_index]
+            source = next(s for s in sources if s.source_id == citation.source_id and
+                          s.source_id in {*topic.request.source_ids, *parent_version.source_ids})
             eligible, _ = prepare_sources(sources, topic.request.as_of)
-            checked = locate_user_quotation(source, citation["quotation"])
-            location = checked["location"]
-            if source.source_id not in {s.source_id for s in eligible} or checked.get("partial_token") or "character_start" not in location:
+            start, end = citation.location.character_start, citation.location.character_end
+            if source.source_id not in {s.source_id for s in eligible} or source.text[start:end] != citation.quotation:
                 raise ValueError()
-            focus = (source.source_id, location["character_start"], location["character_end"])
+            focus = {'claim_id': claim.claim_id, 'source_id': source.source_id, 'quotation': citation.quotation,
+                     'character_start': start, 'character_end': end}
         except (StopIteration, IndexError, KeyError, TypeError, ValueError) as error:
             raise ApiProblem(422, "invalid_request", "The selected quotation is unavailable for focused research.") from error
 
     # Bind this run's mutable source list to the shared, network-free policy.
     def source_summaries(analyzed_ids: list[str], segments: object) -> list[dict[str, Any]]:
         return summarize_sources(sources, analyzed_ids, segments)
-
-    def source_processing(segments: object, status: str) -> list[dict[str, Any]]:
-        return summarize_source_processing(sources, topic.request.as_of, segments, generation_status=status)
 
     admitted_continuation: dict[str, Any] = {}
 
@@ -2741,22 +2499,39 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
 
         # The native tool loop is the default research execution path. Its
         # private checkpoint is persisted before each external request.
-        from .research_runtime import run_research_agent
-        from .research_topics import ResearchContent
+        from .research_runtime import HistoricalPriceRequest, gap as runtime_gap, run_research_agent
         search = getattr(evidence_provider, 'search', None)
         discover = None
         if request.discover_sources and callable(search) and getattr(evidence_provider, 'supports_project_search', False):
-            discover = lambda query: [item.model_dump(mode='json') if hasattr(item, 'model_dump') else item
-                                      for item in search(query, limit=10, deadline=context.budget.deadline,
-                                                         cancel_event=context.cancel_event())]
+            discover = lambda query: search(query, limit=10, deadline=context.budget.deadline,
+                                             cancel_event=context.cancel_event())
         def acquire(url: str, title: str):
+            nonlocal official_fetch_calls, official_fetch_status
             result = execute_official_retrieval(request=request, question=user_question, as_of=topic.request.as_of,
                 available_count=len(sources), candidates=[{'url': url, 'title': title}], sources=sources,
                 owner_id=account.account_id, operation_id=operation_id, store=research_sources,
                 sec_agent_config=os.environ.get('FORESIGHTNINE_SEC_USER_AGENT') or os.environ.get('SEC_USER_AGENT'),
                 reserve_sec=lambda: reserve_sec_request(SOURCE_RATE_LIMITS), context=context,
                 batch_id=uuid4().hex)
+            official_fetch_calls += result.calls
+            official_fetch_status = result.status
             return result.source, {'status': result.status, 'notes': result.notes, 'outcomes': result.outcomes}
+        historical_config_for_run = historical_config if historical_available and request.auto_fetch_official and request.selected_source_ids != [] else None
+        def load_historical_prices(query: HistoricalPriceRequest):
+            if historical_config_for_run is None or query.instrument_id not in {item.instrument_id for item in historical_config_for_run.instruments}:
+                return None
+            if context.cost_limited or context.now() >= context.budget.deadline:
+                raise ProviderFailure('historical_price_budget_unavailable', 'Historical prices cannot be fetched within the configured budget.', retryable=False)
+            try:
+                context.reserve_search()
+            except ApiProblem as error:
+                raise ProviderFailure('historical_price_rate_limited', 'Historical prices could not be fetched within the source service limit.', retryable=error.retryable) from None
+            return fetch_historical_price_source(config=historical_config_for_run, instrument_id=query.instrument_id,
+                start_date=query.start_date, end_date=query.end_date, api_key=historical_key,
+                timeout_seconds=min(8.0, context.budget.deadline - context.now()), cancel_event=context.cancel_event(),
+                persist=lambda item, provenance: research_sources.create(account.account_id, item,
+                    retrieval_method='historical_prices', response_sha256=provenance['provider_response_sha256'],
+                    response_content_type='application/json', provenance=provenance))
         last_runtime_state: dict[str, Any] = {}
         def save_runtime(state: dict) -> None:
             snapshot = deepcopy(state)
@@ -2764,21 +2539,23 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 'usage': context.usage, 'accounted_tokens': context.accounted_tokens,
                 'model_call_receipts': deepcopy(context.model_call_receipts)}
             snapshot['_sources'] = _research_source_fingerprints(sources)
+            snapshot['_saved_at'] = lifecycle_clock.now().isoformat()
             journal.record_runtime_checkpoint(snapshot)
             last_runtime_state.clear()
             last_runtime_state.update(snapshot)
         if continuation_input is not None:
             save_runtime(admitted_continuation['runtime'])
+        parent_now = research_topics.get(account.account_id, topic_id).versions[-1]
         outcome = run_research_agent(question=effective_question, sources=sources, model=provider,
             context=context, discover=discover, acquire=acquire if request.auto_fetch_official and request.selected_source_ids != [] else None,
+            historical_prices=load_historical_prices if historical_config_for_run is not None else None,
+            historical_instruments=tuple(item.instrument_id for item in historical_config_for_run.instruments) if historical_config_for_run is not None else (),
             checkpoint=save_runtime, initial_state=admitted_continuation.get('runtime'),
             on_submission=lambda: setattr(http_request.state, 'model_submission_started', True),
-            as_of=topic.request.as_of)
+            as_of=topic.request.as_of,
+            prior=prior_research_input(parent_now) if continuation_input is None else None, focus=focus)
         _raise_if_operation_cancelled(operation_id)
         version_chain.source_ids = list(dict.fromkeys([*version_chain.source_ids, *outcome.source_ids]))
-        claims = [{**claim, 'citations': [{'source_id': claim['source_id'], 'quotation': claim['quotation'],
-                    'location': {'character_start': claim['character_start'], 'character_end': claim['character_end']}}]}
-                  for claim in outcome.claims]
         candidates = []
         for lead in last_runtime_state.get('leads', []):
             if not isinstance(lead, dict) or not isinstance(lead.get('url'), str):
@@ -2790,17 +2567,38 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                                'status': 'unverified', 'published_at': lead.get('published_at')})
         ranges = [{'source_id': item['source_id'], 'character_start': item['start'], 'character_end': item['end']}
                   for item in last_runtime_state.get('read_ranges', [])]
-        content = ResearchContent(summary=outcome.report, source_candidates=candidates[:10], sources=source_summaries(outcome.source_ids, ranges),
-            facts=outcome.facts, calculations=outcome.calculations, claims=claims,
-            limitations=outcome.limitations, run={'operation_id': operation_id, 'runtime': 'native_tools',
-                'status': outcome.status, 'reason': outcome.reason, 'model_calls': context.calls,
-                'search_calls': context.search_calls, 'total_tokens': context.usage,
-                'assessment': {'transport': 'unknown' if outcome.reason == 'external_result_unknown' else 'observed',
-                               'structure': 'submitted' if outcome.status == 'completed' else 'partial',
-                               'evidence': 'location_checked_semantics_unverified' if claims else 'insufficient',
-                               'task': outcome.status},
-                'source_processing': source_processing(ranges, outcome.status), 'selected_segments': ranges,
-                'events': outcome.events})
+        search_events = [event for event in outcome.events if event.get('name') == 'discover_sources']
+        if search_events:
+            search_status = search_events[-1]['reason'] if search_events[-1].get('reason') else search_events[-1]['status']
+        # Eligible material that is not fully read (counting earlier turns) limits what absence can mean.
+        covered: dict[str, list[tuple[int, int]]] = {}
+        for item in [*ranges, *(r.model_dump() for t in parent_now.content.turns for r in t.read_ranges)]:
+            covered.setdefault(item['source_id'], []).append((item['character_start'], item['character_end']))
+        def fully_read(source_id: str, length: int) -> bool:
+            position = 0
+            for start, end in sorted(covered.get(source_id, [])):
+                if start > position:
+                    break
+                position = max(position, end)
+            return position >= length
+        gaps = list(outcome.gaps)
+        if any(not fully_read(item.source_id, len(item.text)) for item, code in source_eligibility(sources, topic.request.as_of)
+               if code == 'eligible'):
+            gaps.append(runtime_gap('source_selection_partial'))
+        turn = ResearchTurn(
+            turn_id=turn_meta['turn_id'], index=turn_meta['index'], question=turn_meta['question'],
+            question_origin=turn_meta['question_origin'], focus_citation=turn_meta.get('focus_citation'),
+            operation_ids=[*turn_meta['operation_ids'], operation_id], parent_version_id=turn_meta['parent_version_id'],
+            started_at=datetime.fromisoformat(turn_meta['started_at']), finished_at=lifecycle_clock.now(),
+            status=outcome.status, reason=outcome.reason, report=outcome.report, stopping_note=outcome.stopping_note,
+            claim_ids=[item['claim_id'] for item in outcome.claims], fact_ids=[item['fact_id'] for item in outcome.facts],
+            calculation_ids=[item['calculation_id'] for item in outcome.calculations], gaps=gap_rows(gaps),
+            usage=TurnUsage(model_calls=context.calls, search_calls=context.search_calls, total_tokens=context.usage or 0),
+            search_status=search_status, official_fetch_status=official_fetch_status,
+            read_ranges=[ReadRange.model_validate(item) for item in ranges], events=outcome.events)
+        content = merge_turn(parent_now.content, turn, claims=outcome.claims, facts=outcome.facts,
+                             calculations=outcome.calculations, sources=source_summaries(outcome.source_ids, ranges),
+                             source_candidates=candidates)
         return ResearchRunResult(operation_id=operation_id, topic_id=topic_id,
             parent_version_id=request.parent_version_id, status=outcome.status, content=content), topic_id
 
@@ -2809,8 +2607,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         # Refuse to save a stale result over a user's intervening edit.
         try:
             parent = version_chain.current()
-            content = result.content if result.content.run.get('runtime') == 'native_tools' else result.content.model_copy(update={"summary": parent.content.summary})
-            version_chain.save(parent, content)
+            version_chain.save(parent, result.content)
         except (TopicNotFound, TopicVersionConflict) as error:
             raise ApiProblem(409, "lifecycle_conflict", "Research changed before the result was saved.") from error
 
@@ -2863,6 +2660,8 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "topic_id": topic_id, "parent_version_id": request.parent_version_id,
             "captured_at": lifecycle_clock.now().isoformat(),
             "question_origin": question_origin,
+            "question": effective_question,
+            "turn": {**turn_meta, "operation_ids": [*turn_meta["operation_ids"], operation_id]},
             **({"default_task": DOCUMENT_OVERVIEW_QUESTION} if question_origin == "document_overview_default" else {}),
             "question_sha256": sha256(effective_question.encode("utf-8")).hexdigest(),
             **({"scope_sha256": sha256(topic.request.scope.encode("utf-8")).hexdigest()} if topic.request.scope else {}),
@@ -2875,7 +2674,7 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             "provider": getattr(provider, "name", None),
             "provider_limits": {key: getattr(policy, key, None) for key in
                                 ("max_input_tokens", "max_output_tokens", "timeout_seconds")},
-            "system_prompt_sha256": sha256(RESEARCH_SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+            "system_prompt_sha256": sha256(RUNTIME_SYSTEM.encode("utf-8")).hexdigest(),
             "selection_method": RESEARCH_SELECTION_METHOD,
         })
 
@@ -2887,6 +2686,14 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         session_id=topic_id, before_accept=record_inputs, commit_result=commit)
     _mark_replay(response, replayed)
     return result
+
+
+def _agent_turn_for(version: Any, operation_id: str) -> ResearchTurn | None:
+    """The agent-saved turn whose latest operation is this one, if the version still ends with it."""
+    if version.created_by != 'agent' or not version.content.turns:
+        return None
+    turn = version.content.turns[-1]
+    return turn if turn.operation_ids[-1] == operation_id else None
 
 
 @app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/recovery-status", include_in_schema=False)
@@ -2922,43 +2729,21 @@ def get_research_recovery_status(topic_id: str, operation_id: str, http_request:
                 or inputs.get('scope_sha256') != (sha256(topic.request.scope.encode('utf-8')).hexdigest() if topic.request.scope else None)
                 or inputs.get('as_of') != (topic.request.as_of.isoformat() if topic.request.as_of else None)
                 or (latest.version_id != inputs['parent_version_id'] and
-                    (latest.created_by != 'agent' or latest.review != 'draft' or latest.content.run.get('operation_id') != operation_id))):
+                    (latest.review != 'draft' or _agent_turn_for(latest, operation_id) is None))):
                 reason = 'changed'
         except (ValueError, TypeError, KeyError, SourceNotFound, ApiProblem):
             reason = 'unavailable'
         if operation.get('status') in {'pending', 'running'}: reason = 'running'
         elif inputs.get('runtime_continuation_operation_id'): reason = 'already_used'
         elif unknown: reason = 'unknown_external'
-        elif checkpoint.get('submission') and latest.content.run.get('operation_id') == operation_id and latest.content.run.get('status') == 'completed': reason = 'unavailable'
+        elif checkpoint.get('submission') and getattr(_agent_turn_for(latest, operation_id), 'status', None) == 'completed': reason = 'unavailable'
         return {'can_continue': reason is None and not checkpoint.get('submission'),
                 'can_deliver': reason is None and bool(checkpoint.get('submission')),
                 'reason': reason, 'checkpoint': pending.get('kind') or 'runtime', 'version_id': latest.version_id}
-    fingerprints = None
-    provider_matches = False
-    if inputs and inputs.get('owner_id') == account.account_id and inputs.get('topic_id') == topic_id:
-        try:
-            snapshot = RecoverySnapshot.model_validate(inputs.get('recovery_snapshot'))
-            sources = [research_sources.get(account.account_id, source_id) for source_id in snapshot.source_ids]
-            fingerprints = _research_source_fingerprints(sources)
-            provider, _ = _model_provider_for_request(http_request, research=True)
-            saved_request = ResearchRunRequest.model_validate(snapshot.plan.get('request'))
-            if isinstance(provider, OpenAICompatibleLlmProvider):
-                provider = provider.for_research(saved_request.max_input_tokens_per_call)
-            elif saved_request.max_input_tokens_per_call is not None:
-                raise ValueError('Provider does not support this input limit.')
-            policy = getattr(provider, 'policy', None)
-            limits = {key: getattr(policy, key, None) for key in
-                      ('max_input_tokens', 'max_output_tokens', 'timeout_seconds')}
-            provider_matches = (inputs.get('model') == getattr(getattr(provider, 'settings', None), 'model', None)
-                and inputs.get('provider') == getattr(provider, 'name', None)
-                and inputs.get('provider_limits') == limits
-                and inputs.get('system_prompt_sha256') == sha256(RESEARCH_SYSTEM_PROMPT.encode('utf-8')).hexdigest()
-                and inputs.get('selection_method') == RESEARCH_SELECTION_METHOD)
-        except (ValueError, TypeError, SourceNotFound, ApiProblem):
-            pass
-    return recovery_status(topic=topic, operation=operation, inputs=inputs, owner_id=account.account_id,
-        operation_id=operation_id, now=lifecycle_clock.now(), source_fingerprints=fingerprints,
-        provider_matches=provider_matches)
+    # Only native runtime checkpoints can be continued or delivered.
+    return {'can_continue': False, 'can_deliver': False,
+            'reason': 'running' if operation.get('status') in {'pending', 'running'} else 'no_checkpoint',
+            'checkpoint': None, 'version_id': None}
 
 
 @app.post("/v2/research/topics/{topic_id}/runs/{operation_id}/continue", response_model=OperationResponse,
@@ -2986,10 +2771,11 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
     except (ValueError, TypeError, KeyError, SourceNotFound) as error:
         raise ApiProblem(409, 'lifecycle_conflict', 'The saved runtime inputs are unavailable.') from error
     parent = topic.versions[-1]
-    if checkpoint.get('submission') and parent.content.run.get('operation_id') == operation_id and parent.content.run.get('status') == 'completed':
+    saved_turn = _agent_turn_for(parent, operation_id)
+    if checkpoint.get('submission') and saved_turn is not None and saved_turn.status == 'completed':
         raise ApiProblem(409, 'lifecycle_conflict', 'This research submission was already saved.')
     if parent.version_id != inputs['parent_version_id']:
-        if parent.created_by != 'agent' or parent.review != 'draft' or parent.content.run.get('operation_id') != operation_id:
+        if parent.review != 'draft' or saved_turn is None:
             raise ApiProblem(409, 'lifecycle_conflict', 'Research changed after the checkpoint.')
         continuation_request = continuation_request.model_copy(update={'parent_version_id': parent.version_id})
     http_request.state.research_continuation = {'operation_id': operation_id, 'source_ids': source_ids,
@@ -3006,61 +2792,10 @@ def recover_research_run(topic_id: str, operation_id: str, response: Response,
     owner = f'account:{account.account_id}'
     operations.require_owner(operation_id, owner)
     runtime_inputs = RESEARCH_RUN_INPUTS.get(operation_id) or {}
-    if runtime_inputs.get('runtime_checkpoint'):
-        if not runtime_inputs['runtime_checkpoint'].get('submission'):
-            raise ApiProblem(409, 'lifecycle_conflict', 'No completed runtime submission is available for recovery.')
-        return continue_research_run(topic_id, operation_id, response, idempotency_key, http_request)
-    endpoint = f'/v1/research/topics/{topic_id}/runs'
-    payload = {'recovery_of_operation_id': operation_id, 'mode': 'committed_artifacts_only'}
-    existing = operations.replay_async(endpoint=endpoint, idempotency_key=idempotency_key,
-                                       owner_subject=owner, request_payload=payload)
-    if existing is not None:
-        _mark_replay(response, True)
-        return existing
-    try:
-        topic = research_topics.get(account.account_id, topic_id)
-    except TopicNotFound as error:
-        raise ApiProblem(404, 'not_found', 'Research topic not found.') from error
-    operations.require_owner(operation_id, owner)
-    operation = operations.store.get_operation(operation_id)
-    plan = prepare_recovery(topic=topic, operation=operation or {}, inputs=RESEARCH_RUN_INPUTS.get(operation_id),
-                            owner_id=account.account_id, operation_id=operation_id)
-    chain = ResearchVersionChain(research_topics, account.account_id, topic_id, plan.parent_version_id, plan.source_ids)
-
-    def build_recovery(new_id: str) -> tuple[ResearchRunResult, str]:
-        _raise_if_operation_cancelled(new_id)
-        return ResearchRunResult(operation_id=new_id, topic_id=topic_id, parent_version_id=plan.parent_version_id,
-                                 status='partial', content=recovered_content(plan, new_id)), topic_id
-
-    def commit_recovery(_new_id: str, result: BaseModel) -> None:
-        assert isinstance(result, ResearchRunResult)
-        try:
-            parent = chain.current()
-            chain.save(parent, result.content.model_copy(update={'summary': parent.content.summary}))
-        except (TopicNotFound, TopicVersionConflict) as error:
-            raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before recovery was saved.') from error
-
-    def record_recovery(new_id: str) -> None:
-        def admit() -> None:
-            if research_topics.get(account.account_id, topic_id).versions[-1].version_id != plan.parent_version_id:
-                raise ApiProblem(409, 'lifecycle_conflict', 'Research changed before recovery was admitted.')
-            for other_id, session in operations.store.session_ids().items():
-                if session != topic_id or other_id == new_id:
-                    continue
-                other = operations.store.get_operation(other_id)
-                if other and other.get('owner_subject') == owner and other.get('endpoint') == endpoint and other.get('status') in {'pending', 'running'}:
-                    raise ApiProblem(409, 'lifecycle_conflict', 'Another research run is already active for this topic.')
-            RESEARCH_RUN_INPUTS.put(new_id, {'schema_version': '1', 'operation_id': new_id,
-                'owner_id': account.account_id, 'topic_id': topic_id, 'parent_version_id': plan.parent_version_id,
-                'captured_at': lifecycle_clock.now().isoformat(), 'recovery_of_operation_id': operation_id,
-                'budget': {'max_model_calls': 0, 'max_search_calls': 0}})
-        admit()
-
-    result, replayed = operations.submit_async(endpoint=endpoint, idempotency_key=idempotency_key,
-        owner_subject=owner, request_payload=payload, result_field='research', build_result=build_recovery,
-        session_id=topic_id, before_accept=record_recovery, commit_result=commit_recovery)
-    _mark_replay(response, replayed)
-    return result
+    checkpoint = runtime_inputs.get('runtime_checkpoint')
+    if not checkpoint or not checkpoint.get('submission'):
+        raise ApiProblem(409, 'lifecycle_conflict', 'No completed runtime submission is available for recovery.')
+    return continue_research_run(topic_id, operation_id, response, idempotency_key, http_request)
 
 
 @app.get("/v2/research/topics/{topic_id}/runs", response_model=list[OperationResponse], response_model_exclude_none=True, include_in_schema=False)
@@ -3111,8 +2846,9 @@ def get_research_run_inputs(topic_id: str, operation_id: str, http_request: Requ
 
 
 @app.get("/v2/research/topics/{topic_id}/runs/{operation_id}/progress", include_in_schema=False)
-def get_research_run_progress(topic_id: str, operation_id: str, http_request: Request) -> dict:
-    """Return the latest persisted checkpoint, not an estimate of work completed."""
+def get_research_run_progress(topic_id: str, operation_id: str, http_request: Request,
+                              after: Annotated[int, Query(ge=0)] = 0) -> dict:
+    """Return a sanitized view of the latest persisted checkpoint (whitelisted fields only)."""
     account = _authenticated_account(http_request.headers.get("Authorization"))
     try:
         topic = research_topics.get(account.account_id, topic_id)
@@ -3122,12 +2858,15 @@ def get_research_run_progress(topic_id: str, operation_id: str, http_request: Re
     operation = operations._cache_operation(operation_id)
     if operation.endpoint != f"/v1/research/topics/{topic_id}/runs":
         raise ApiProblem(404, "not_found", "Research run not found.")
-    for version in reversed(topic.versions):
-        run = version.content.run
-        if version.created_by == 'agent' and run.get('operation_id') == operation_id:
-            return {'version_id': version.version_id, 'checkpoint': run.get('checkpoint'),
-                    'result_status': run.get('status'), 'created_at': version.created_at}
-    return {'version_id': None, 'checkpoint': None, 'result_status': None, 'created_at': None}
+    inputs = RESEARCH_RUN_INPUTS.get(operation_id)
+    if not inputs or inputs.get("owner_id") != account.account_id or inputs.get("topic_id") != topic_id:
+        raise ApiProblem(404, "not_found", "Research run not found.")
+    version = next((v for v in reversed(topic.versions) if v.created_by == 'agent' and v.content.turns
+                    and operation_id in v.content.turns[-1].operation_ids), None)
+    return build_progress(operation_id=operation_id, operation_status=str(operation.status), inputs=inputs,
+                          checkpoint=inputs.get('runtime_checkpoint') or None,
+                          saved_turn=version.content.turns[-1] if version else None,
+                          version_id=version.version_id if version else None, after=after)
 
 
 @app.get('/v2/research/topics/{topic_id}/runs/{operation_id}/settlement', include_in_schema=False)
@@ -3153,10 +2892,9 @@ def get_research_run_settlement(topic_id: str, operation_id: str, http_request: 
     ledger = {f'{state}_calls': sum(entry.status == state for entry in entries)
               for state in ('reserved', 'settled', 'released')}
     ledger['accounted_tokens'] = sum(entry.actual_tokens or 0 for entry in entries if entry.status == 'settled')
-    latest = next((v for v in reversed(topic.versions) if v.created_by == 'agent'
-                   and v.content.run.get('operation_id') == operation_id), None)
-    run = latest.content.run if latest else {}
-    reported = run.get('total_tokens')
+    latest = next((v for v in reversed(topic.versions) if v.created_by == 'agent' and v.content.turns
+                   and operation_id in v.content.turns[-1].operation_ids), None)
+    reported = latest.content.turns[-1].usage.total_tokens if latest else None
     pending = record.get('recovery_pending')
     return {'operation_status': operation.get('status'),
             'checkpoint_version_id': latest.version_id if latest else None,

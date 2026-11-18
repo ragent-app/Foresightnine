@@ -1,5 +1,8 @@
 import json
 from datetime import datetime, timezone
+from types import SimpleNamespace
+
+import pytest
 
 from app.model_protocol import ModelResponse, ModelToolCall, ModelUsage
 from app.research_budget import ResearchExecutionBudget
@@ -37,7 +40,7 @@ class Model:
 def test_read_feedback_and_submission_uses_call_association_and_server_ids():
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'financial disclosure'}, 'a'),
                turn('submit_research', {'report': 'Revenue was 100 USD.', 'claims': [{'text': 'Revenue was 100 USD.', 'source_id': 's1',
-                    'quotation': 'Revenue was 100 USD.', 'character_start': 0, 'character_end': 20}], 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
+                    'quotation': 'Revenue was 100 USD.', 'character_start': 0, 'character_end': 20, 'role': 'support'}], 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
     saved = []
     result = run_research_agent(question='Revenue?', sources=[source()], model=m, context=context(),
                                 checkpoint=lambda s: saved.append(json.loads(json.dumps(s))))
@@ -163,13 +166,12 @@ def test_unconfirmed_failure_usage_is_not_trusted():
 
 
 def test_quotation_offsets_are_resolved_and_ambiguous_matches_are_rejected():
-    submit = {'report': 'Revenue.', 'claims': [{'text': 'Revenue', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.'}],
+    submit = {'report': 'Revenue.', 'claims': [{'text': 'Revenue', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
               'limitations': [], 'stopping_reason': 'answered'}
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
                turn('submit_research', submit, 'b')])
     result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
-    assert result.claims[0]['character_start'] == 0
-    assert result.claims[0]['character_end'] == 20
+    assert result.claims[0]['citations'][0]['location'] == {'character_start': 0, 'character_end': 20}
     repeated = source()
     repeated.text = repeated.text + ' ' + repeated.text
     m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
@@ -349,8 +351,64 @@ def test_chat_bridge_preserves_not_started_diagnostics_and_releases_reservation(
     assert c.calls == 0
 
 
+@pytest.mark.parametrize(('failure_stage', 'failures', 'expected_status', 'expected_attempts'), [
+    ('dns', 1, 'completed', 3),
+    ('dns', 3, 'partial', 4),
+    ('request_write', 1, 'partial', 2),
+])
+def test_messages_retries_only_the_unsent_turn(monkeypatch, failure_stage, failures, expected_status, expected_attempts):
+    from app.anthropic_messages import AnthropicMessagesProvider
+    from app.openai_compatible import HttpResponse, _TransportFailure
+    from app.phase3 import ProviderPolicy
+
+    def tool_response(name, arguments):
+        return HttpResponse(200, json.dumps({'role': 'assistant', 'stop_reason': 'tool_use',
+            'content': [{'type': 'tool_use', 'id': name, 'name': name, 'input': arguments}],
+            'usage': {'input_tokens': 1, 'output_tokens': 1}}), {})
+
+    bodies = []
+    def transport(method, url, headers, body, timeout, *, diagnostics, **kwargs):
+        bodies.append(body)
+        if 1 < len(bodies) <= failures + 1:
+            if failure_stage == 'request_write':
+                diagnostics.submission('started_unknown')
+            with diagnostics.stage(failure_stage):
+                raise _TransportFailure()
+        diagnostics.submission('response_received')
+        if len(bodies) == 1:
+            return tool_response('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'Read disclosure.'})
+        return tool_response('submit_research', {'report': 'Revenue was 100 USD.', 'claims': [
+            {'text': 'Revenue was 100 USD.', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
+            'limitations': [], 'stopping_reason': 'answered'})
+
+    monkeypatch.setattr('app.anthropic_messages._default_transport', transport)
+    settings = SimpleNamespace(base_url='https://example.com', model='model', api_key='fixture', allow_private_network=False)
+    provider = AnthropicMessagesProvider(settings, ProviderPolicy(retry_base_seconds=0),
+        anthropic_version='2023-06-01', auth_scheme='x-api-key', max_tokens=100)
+    c = context()
+    c.budget = ResearchExecutionBudget(2, None, None, float('inf'))
+    snapshots = []
+    result = run_research_agent(question='Revenue?', sources=[source()], model=provider, context=c,
+        checkpoint=lambda state: snapshots.append(json.loads(json.dumps(state))))
+
+    assert result.status == expected_status
+    assert result.source_ids == ['s1']
+    assert len(bodies) == expected_attempts
+    assert bodies[0] != bodies[1]
+    assert all(body == bodies[1] for body in bodies[1:])
+    if expected_status == 'completed':
+        assert result.report == 'Revenue was 100 USD.'
+        assert c.calls == 2
+        assert c.usage == 4
+    elif failure_stage == 'dns':
+        assert snapshots[-1]['pending'] is None
+        assert c.calls == 1
+    else:
+        assert snapshots[-1]['pending']['kind'] == 'model'
+        assert c.calls == 2
+
+
 def test_messages_preflight_and_injected_transport_diagnostics():
-    from types import SimpleNamespace
     from app.anthropic_messages import AnthropicMessagesProvider
     from app.model_protocol import ModelTurnInput
     from app.phase3 import ProviderFailure
@@ -430,3 +488,28 @@ def test_messages_request_diagnostic_records_actual_output_cap():
     assert metadata['provider'] == 'anthropic_messages'
     assert metadata['parameters']['max_tokens'] == 25
     assert 'private' not in json.dumps(metadata)
+
+
+@pytest.mark.parametrize('claim_role', [{}, {'role': 'interpretation'}, {'kind': 'interpretation'}])
+def test_submission_claim_requires_support_or_counterargument_role(claim_role):
+    claim = {'text': 'Revenue was 100 USD.', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.', **claim_role}
+    m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
+               turn('submit_research', {'report': 'Revenue.', 'claims': [claim], 'limitations': [], 'stopping_reason': 'answered'}, 'b'),
+               ModelResponse({'role': 'assistant', 'content': 'done'}, (), None, 'stop')])
+    result = run_research_agent(question='Q', sources=[source()], model=m, context=context())
+    assert result.status == 'partial' and result.claims == []
+    feedback = json.loads(m.inputs[-1][-1]['content'])
+    assert feedback['status'] == 'invalid'
+
+
+def test_submission_keeps_support_and_counterargument_roles_without_kind():
+    text = source()
+    text.text = 'Revenue was 100 USD. Costs rose sharply.'
+    claims = [{'text': 'Revenue was 100 USD.', 'source_id': 's1', 'quotation': 'Revenue was 100 USD.', 'role': 'support'},
+              {'text': 'Costs rose sharply.', 'source_id': 's1', 'quotation': 'Costs rose sharply.', 'role': 'counterargument'}]
+    m = Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'a'),
+               turn('submit_research', {'report': 'Mixed.', 'claims': claims, 'limitations': [], 'stopping_reason': 'answered'}, 'b')])
+    result = run_research_agent(question='Q', sources=[text], model=m, context=context())
+    assert result.status == 'completed'
+    assert [c['role'] for c in result.claims] == ['support', 'counterargument']
+    assert all('kind' not in c for c in result.claims)

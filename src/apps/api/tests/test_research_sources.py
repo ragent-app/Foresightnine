@@ -85,10 +85,12 @@ def test_metadata_export_omits_all_research_and_source_text(monkeypatch):
         "source_ids": [source["source_id"]], "as_of": "2023-01-01T00:00:00Z"}).json()
     path = "/v2/research/topics/" + topic["topic_id"]
     saved = client.post(path + "/versions", headers=first, json={"parent_version_id": topic["versions"][0]["version_id"],
-        "note": "SECRET_NOTE", "content": {"summary": "SECRET_SUMMARY", "limitations": ["SECRET_LIMITATION"],
+        "note": "SECRET_NOTE", "content": {"summary": "SECRET_SUMMARY",
             "facts": [{"fact_id": "f", "label": "SECRET_LABEL", "value": "100", "unit": "USD", "period": "2023",
-                       "source_id": source["source_id"], "quotation": "SECRET_TEXT 100"}],
-            "claims": [{"text": "SECRET_CLAIM", "citations": [{"source_id": source["source_id"], "quotation": "SECRET_TEXT 100"}]}]}})
+                       "source_id": source["source_id"], "quotation": "SECRET_TEXT 100", "character_start": 0, "character_end": 15,
+                       "location": {"character_start": 0, "character_end": 15}, "verification": "numeric_and_location_match_semantics_not_verified"}],
+            "claims": [{"text": "SECRET_CLAIM", "role": "support", "citations": [{"source_id": source["source_id"], "quotation": "SECRET_TEXT 100",
+                        "location": {"character_start": 0, "character_end": 15}}]}]}})
     assert saved.status_code == 201, saved.text
     version_id = saved.json()["versions"][-1]["version_id"]
     full = path + "/versions/" + version_id + "/export"
@@ -118,8 +120,9 @@ def test_authorized_full_export_contains_provenance_without_original_or_url_quer
         "as_of": "2023-01-02T00:00:00Z", "source_ids": [source["source_id"]]}).json()
     path = "/v2/research/topics/" + topic["topic_id"]
     saved = client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"],
-        "review": "confirmed", "content": {"summary": "Research result", "claims": [{"text": "Revenue was 100",
-          "citations": [{"source_id": source["source_id"], "quotation": "Revenue was 100."}]}]}}).json()
+        "review": "confirmed", "content": {"summary": "Research result", "claims": [{"text": "Revenue was 100", "role": "support",
+          "citations": [{"source_id": source["source_id"], "quotation": "Revenue was 100.",
+                         "location": {"character_start": 0, "character_end": 16}}]}]}}).json()
     version = saved["versions"][-1]
     before = datetime.now(timezone.utc)
     response = client.get(path + "/versions/" + version["version_id"] + "/export", headers=headers)
@@ -288,35 +291,34 @@ def test_user_citations_are_located_and_cannot_reference_unattached_or_hidden_so
     topic = client.post("/v2/research/topics", headers=owner, json={"question": "Review", "source_ids": [visible, hidden]}).json()
     path = "/v2/research/topics/" + topic["topic_id"]
     parent = topic["versions"][-1]["version_id"]
-    def save(citations):
-        return client.post(path + "/versions", headers=owner, json={"parent_version_id": parent,
-            "content": {"claims": [{"text": "User finding", "citations": citations}]}})
-    for source_id, quote in [(visible, "Not present"), (hidden, "Hidden quote"),
-                             (unattached, "Private quote"), (other_source, "Other quote"), (visible, " ")]:
-        assert save([{"source_id": source_id, "quotation": quote}]).status_code == 422
+    def save(citations, parent_version=None, claims=None):
+        return client.post(path + "/versions", headers=owner, json={"parent_version_id": parent_version or parent,
+            "content": {"claims": claims if claims is not None else [{"text": "User finding", "role": "support", "citations": citations}]}})
+    def cite(source_id, quote, start=0, end=None):
+        return {"source_id": source_id, "quotation": quote, "location": {"character_start": start, "character_end": start + len(quote) if end is None else end}}
+    for citation in [cite(visible, "Not present"), cite(hidden, "Hidden quote"), cite(unattached, "Private quote"),
+                     cite(other_source, "Other quote"), cite(visible, " "), cite(visible, "Profit 20", 0),  # Wrong position.
+                     cite(visible, "Profit 20", 13, 99)]:
+        assert save([citation]).status_code == 422
     assert len(client.get(path, headers=owner).json()["versions"]) == 1
-    saved = save([{"source_id": visible, "quotation": "Profit 20", "location": {"character_start": 0, "character_end": 2},
-                   "support_status": "verified"}, {"source_id": visible, "quotation": "Revenue 100"}])
+    saved = save([cite(visible, "Profit 20", 13), cite(visible, "Revenue 100", 24)])
     assert saved.status_code == 201, saved.text
     version = saved.json()["versions"][-1]
     claim = version["content"]["claims"][0]
-    # The second quotation has two positions, so the overall claim remains incomplete.
-    assert claim["authorship"] == "user" and claim["support_status"] == "incomplete"
-    one, multiple = claim["citations"]
+    assert claim["edited_by_user"] is True and claim["turn_id"] is None and claim["claim_id"].startswith("claim-")
+    one, second = claim["citations"]
     assert one["location"] == {"character_start": 13, "character_end": 22}
-    assert one["support_status"] == "not_independently_verified"
-    assert multiple["location"]["status"] == "ambiguous" and len(multiple["location"]["matches"]) == 2
+    assert second["location"] == {"character_start": 24, "character_end": 35}
     context = client.get("/v2/research/sources/" + visible + "/context", headers=owner,
                          params={"start": 13, "end": 22})
     assert context.json()["selected"] == "Profit 20"
     exported = client.get(path + "/versions/" + version["version_id"] + "/export", headers=owner)
     assert exported.status_code == 200 and exported.json()["version"]["content"]["claims"][0]["citations"] == claim["citations"]
-    # Editing the finding retains verified positions; removing citations makes the finding unsupported.
+    # Removing the citations of a finding is allowed; the finding stays a user edit.
     edited = {**claim, "text": "Revised finding", "citations": []}
-    updated = client.post(path + "/versions", headers=owner,
-        json={"parent_version_id": version["version_id"], "content": {"claims": [edited]}})
+    updated = save([], version["version_id"], [edited])
     assert updated.status_code == 201
-    assert updated.json()["versions"][-1]["content"]["claims"][0]["support_status"] == "unsupported"
+    assert updated.json()["versions"][-1]["content"]["claims"][0]["citations"] == []
 
 
 def test_new_user_citations_respect_historical_cutoff(monkeypatch):
@@ -354,7 +356,8 @@ def test_new_user_citations_respect_historical_cutoff(monkeypatch):
     assert client.get(source_path + before + "/text", headers={"Authorization": "Bearer " + other["access_token"]}).status_code == 404
     def save(source_id, quote):
         return client.post(path, headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"],
-            "content": {"claims": [{"text": "Finding", "citations": [{"source_id": source_id, "quotation": quote}]}]}})
+            "content": {"claims": [{"text": "Finding", "role": "support", "citations": [{"source_id": source_id, "quotation": quote,
+                        "location": {"character_start": 0, "character_end": len(quote)}}]}]}})
     for source_id, quote in [(future, "future quote"), (revised, "revised quote"), (unknown, "unknown quote")]:
         assert save(source_id, quote).status_code == 422
     assert save(before, "before quote").status_code == 201

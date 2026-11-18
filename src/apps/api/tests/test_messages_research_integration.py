@@ -35,7 +35,7 @@ def test_messages_runs_through_api_with_two_tool_turns(monkeypatch, platform):
             args = {'reads': [{'source_id': source_id}], 'rationale': 'disclosure'}
             name = 'read_sources'
         else:
-            args = {'report': 'Revenue was 100 USD.', 'claims': [{'text': 'Revenue was 100 USD.', 'source_id': source_id, 'quotation': 'Revenue was 100 USD.'}], 'limitations': [], 'stopping_reason': 'answered'}
+            args = {'report': 'Revenue was 100 USD.', 'claims': [{'text': 'Revenue was 100 USD.', 'source_id': source_id, 'quotation': 'Revenue was 100 USD.', 'role': 'support'}], 'limitations': [], 'stopping_reason': 'answered'}
             name = 'submit_research'
         return HttpResponse(200, json.dumps({'role':'assistant', 'content':[{'type':'tool_use','id':str(len(captured)),'name':name,'input':args}], 'stop_reason':'tool_use', 'usage':{'input_tokens':20,'output_tokens':10,'cache_creation_input_tokens':0,'cache_read_input_tokens':0}}), {'request-id':'req-fixture'})
     def init(self, *a, **kw):

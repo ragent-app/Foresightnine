@@ -6,7 +6,7 @@ not fetch documents or authorize their use.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 import inspect
 from typing import Any, Callable
 
@@ -16,6 +16,45 @@ from .phase3 import ClientSearchEvidenceProvider, ProviderFailure
 from .operations import ApiProblem
 from .research_coordinator import ResearchExecutionContext
 from .research_source_catalog import canonical_source_url, source_capabilities
+
+
+@dataclass(frozen=True)
+class SearchLead:
+    title: str
+    url: str
+    published_at: datetime | None
+    excerpt: str | None
+    publisher: str | None
+    independently_reviewable: bool | None
+
+
+def search_lead_url(raw: object) -> str | None:
+    value = raw.get('url') if isinstance(raw, dict) else getattr(raw, 'url', None)
+    return value if isinstance(value, str) else None
+
+
+def normalize_search_lead(raw: object) -> SearchLead:
+    """Read and validate a search result independently of its connector type."""
+    def field(name: str) -> Any:
+        return raw.get(name) if isinstance(raw, dict) else getattr(raw, name, None)
+
+    title, url = field('title'), search_lead_url(raw)
+    excerpt, publisher = field('excerpt'), field('publisher')
+    published, reviewable = field('published_at'), field('independently_reviewable')
+    if not isinstance(title, str) or not title.strip() or not isinstance(url, str) or not url.strip():
+        raise ValueError('Search result is missing its title or URL.')
+    if any(value is not None and (not isinstance(value, str) or not value.strip()) for value in (excerpt, publisher)):
+        raise ValueError('Search result has invalid text metadata.')
+    if reviewable is not None and type(reviewable) is not bool:
+        raise ValueError('Search result has invalid reviewability metadata.')
+    ClientSearchEvidenceProvider().validate_url(url)
+    if isinstance(published, str):
+        published = datetime.fromisoformat(published) if 'T' in published else date.fromisoformat(published)
+    if isinstance(published, date) and not isinstance(published, datetime):
+        published = datetime.combine(published, time.min, tzinfo=timezone.utc)
+    if published is not None and (not isinstance(published, datetime) or published.utcoffset() is None):
+        raise ValueError('Search result has an invalid publication time.')
+    return SearchLead(title, url, published, excerpt, publisher, reviewable)
 
 
 @dataclass

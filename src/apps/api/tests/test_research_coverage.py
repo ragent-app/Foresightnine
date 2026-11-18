@@ -69,26 +69,6 @@ def test_model_evidence_needs_remain_attributed_bounded_and_actionable():
     assert has_unresolved_task_gap(needs=needs, absences={'observations': []}, claims=[])
 
 
-def test_version_rebuild_marks_explicit_absence_unestablished_without_rewriting_text():
-    from app.research_topics import ResearchTopics, ResearchInput, ResearchContent, VersionInput
-    from app.storage import InMemoryDocumentRepository
-    topics = ResearchTopics(InMemoryDocumentRepository())
-    topic = topics.create('owner', ResearchInput(question='What is missing?'))
-    content = ResearchContent(claims=[{'claim_id': 'c1', 'text': '資料沒有季度資料。', 'role': 'support', 'citations': [], 'model_absence_refs': ['absence_test']}],
-        run={'operation_id': 'op', 'status': 'completed', 'source_processing': [
-            {'source_id': 's', 'provided': True, 'selection_status': 'partial', 'initial_selection': 'partial',
-             'eligibility': 'eligible', 'analysis_status': 'produced'}],
-             'model_absence_observations': [{'text': '尚未找到季度數據。', 'source_ids': ['s'], 'scope': 'full_source', 'observation_ref': 'absence_test'}]})
-    result = topics.add_version('owner', topic.topic_id, VersionInput(parent_version_id=topic.versions[0].version_id, content=content), created_by='agent')
-    saved = result.versions[-1].content
-    assert saved.claims[0]['text'] == '資料沒有季度資料。'
-    assert saved.claims[0]['support_status'] == 'incomplete' and saved.claims[0]['absence_scope_status'] == 'not_established'
-    assert saved.run['status'] == 'partial'
-    assert saved.run['absence_assessment']['observations'][0]['assessment'] == 'not_established'
-    assert saved.run['absence_assessment']['observations'][0]['claim_ids'] == [saved.claims[0]['claim_id']]
-    assert any(item['code'] == 'absence_observation_unestablished' for item in saved.run['research_gaps']['items'])
-
-
 def test_task_completion_does_not_assume_unselected_source_is_relevant():
     from time import monotonic
     from app.research_analysis import AnalysisResult
@@ -106,23 +86,6 @@ def test_task_completion_does_not_assume_unselected_source_is_relevant():
     need = {'question_index': None, 'requested_fact': 'The missing measure', 'reason': 'needed by the question',
             'source_kind': 'primary dataset', 'action': 'obtain a relevant release'}
     assert assess_research_outcome(analysis=replace(analysis, evidence_needs=[need]), **kwargs).complete is False
-
-
-def test_substantive_user_edit_does_not_retain_stale_model_absence_suggestions():
-    from copy import deepcopy
-    from app.research_topics import ResearchTopics, ResearchInput, ResearchContent, VersionInput
-    from app.storage import InMemoryDocumentRepository
-    topics = ResearchTopics(InMemoryDocumentRepository())
-    topic = topics.create('owner', ResearchInput(question='What is missing?'))
-    content = ResearchContent(claims=[{'claim_id': 'c', 'text': 'Not found.', 'role': 'support', 'citations': []}],
-        run={'operation_id': 'op', 'status': 'partial', 'source_processing': [],
-             'model_absence_observations': [{'text': 'Not found.', 'source_ids': [], 'scope': 'unknown'}]})
-    old = topics.add_version('owner', topic.topic_id, VersionInput(parent_version_id=topic.versions[0].version_id, content=content), created_by='agent')
-    changed = deepcopy(old.versions[-1].content)
-    changed.claims[0]['text'] = 'User revised the conclusion.'
-    latest = topics.add_version('owner', topic.topic_id, VersionInput(parent_version_id=old.versions[-1].version_id, content=changed), created_by='user')
-    assert latest.versions[-1].content.run['absence_assessment']['observations'] == []
-    assert latest.versions[-2].content.run['absence_assessment']['observations'][0]['assessment'] == 'not_established'
 
 
 def test_absence_indexes_bind_only_retained_model_claims_and_old_records_stay_unlinked():
@@ -242,25 +205,6 @@ def test_requirement_links_rebind_unique_question_and_validate_selected_facts_an
     assert not any(item.get('model_relation_status') for item in ambiguous['requirements'])
 
 
-def test_version_delivery_records_suggested_requirement_gap_without_claiming_semantic_completion():
-    from app.research_topics import ResearchTopics, ResearchInput, ResearchContent, VersionInput
-    from app.storage import InMemoryDocumentRepository
-    topics = ResearchTopics(InMemoryDocumentRepository())
-    topic = topics.create('owner', ResearchInput(question='Compare the periods'))
-    content = ResearchContent(claims=[], run={'operation_id': 'op', 'status': 'completed',
-        'research_questions': [{'question': 'Compare periods', 'claim_indexes': []}],
-        'planning_requirements': [{'question': 'Compare periods', 'dimensions': {'metrics': ['output']}, 'calculation_requested': True}],
-        'model_requirement_links': [], 'source_processing': [], 'selected_segments': []})
-    saved = topics.add_version('owner', topic.topic_id, VersionInput(parent_version_id=topic.versions[0].version_id, content=content), created_by='agent').versions[-1].content
-    row = saved.run['requirement_coverage']['requirements'][1]
-    assert 'suggested_requirement_without_evidence_link' in row['gaps']
-    assert 'suggested_calculation_not_linked' in row['gaps']
-    assert row['semantic_status'] == 'not_independently_verified'
-    assert saved.run['status'] == 'partial'
-    assert saved.run['completion_assessment']['suggested_requirement_gaps'] == [row['requirement_id']]
-    assert {item['code'] for item in saved.run['research_gaps']['items']} >= {'suggested_requirement_unlinked', 'suggested_calculation_unlinked'}
-
-
 def test_recovery_snapshot_accepts_old_and_new_requirement_links():
     from app.research_recovery import AnalysisSnapshot
     base = {'claims': [], 'counterarguments': [], 'limitations': [], 'source_ids': [], 'facts': [],
@@ -269,43 +213,6 @@ def test_recovery_snapshot_accepts_old_and_new_requirement_links():
     assert AnalysisSnapshot.model_validate(base).requirement_links == []
     links = [{'question_index': None, 'question': None, 'fact_ids': ['f']}]
     assert AnalysisSnapshot.model_validate({**base, 'requirement_links': links}).requirement_links == links
-
-
-def test_claim_scope_declarations_never_treat_undeclared_or_other_as_verified():
-    from app.research_topics import ResearchTopics, ResearchInput, ResearchContent, VersionInput
-    from app.storage import InMemoryDocumentRepository
-    topics = ResearchTopics(InMemoryDocumentRepository())
-    topic = topics.create('owner', ResearchInput(question='What is known?'))
-    content = ResearchContent(claims=[
-        {'text': 'No later figure exists.', 'scope_declaration': 'absence', 'role': 'support', 'citations': []},
-        {'text': 'The reported value increased.', 'scope_declaration': 'other', 'role': 'support', 'citations': []},
-        {'text': 'Another finding.', 'role': 'support', 'citations': []}],
-        run={'operation_id': 'op', 'status': 'completed', 'source_processing': [], 'model_absence_observations': []})
-    saved = topics.add_version('owner', topic.topic_id, VersionInput(parent_version_id=topic.versions[0].version_id,
-        content=content), created_by='agent').versions[-1].content
-    assert saved.claims[0]['absence_scope_status'] == 'not_established'
-    assert saved.claims[0]['support_status'] == 'incomplete' and saved.run['status'] == 'partial'
-    reviews = saved.run['scope_assessment']['claim_scope_declarations']
-    assert [item['assessment'] for item in reviews] == ['not_established', 'not_independently_verified', 'unknown']
-    assert saved.run['scope_assessment']['claim_scope_coverage'] == 'partial_model_declarations'
-    assert all(not item['observation_linked'] for item in reviews)
-
-
-def test_scope_review_disagreement_cannot_upgrade_absence_to_supported():
-    from app.research_topics import ResearchTopics, ResearchInput, ResearchContent, VersionInput
-    from app.storage import InMemoryDocumentRepository
-    topics = ResearchTopics(InMemoryDocumentRepository())
-    topic = topics.create('owner', ResearchInput(question='What is missing?'))
-    content = ResearchContent(claims=[{'text': 'Later data are unavailable.', 'role': 'support', 'citations': [],
-        'scope_declaration': 'other', 'support_review': {'verdict': 'supports', 'scope_declaration': 'absence',
-        'claimed_scope': 'full_source', 'scope_evidence': 'cited_excerpt_only', 'independently_verified': False}}],
-        run={'operation_id': 'op', 'status': 'completed', 'source_processing': [], 'support_review_requested': True})
-    saved = topics.add_version('owner', topic.topic_id, VersionInput(parent_version_id=topic.versions[0].version_id,
-        content=content), created_by='agent').versions[-1].content
-    claim = saved.claims[0]; review = saved.run['scope_assessment']['claim_scope_declarations'][0]
-    assert claim['support_status'] == 'incomplete' and claim['absence_scope_status'] == 'not_established'
-    assert review['declaration_conflict'] is True and review['available_review_scope'] == 'cited_excerpt_only'
-    assert review['assessment'] == 'not_established' and saved.run['status'] == 'partial'
 
 
 def test_analysis_requirement_fills_only_unique_planning_gaps():

@@ -250,156 +250,137 @@ def test_review_of_flagged_claim_is_diagnostic_only_even_if_model_says_supports(
     assert set(claim['support_review']['guard_reasons']) == {'uncited_quarters', 'causal_attribution_unverified'}
 
 
-def test_legacy_annual_rate_difference_is_warned_without_rewriting_history(monkeypatch):
+def _typed_fact(text, quote, fact_id, value, unit, currency, period, *, source_id, label='Revenue'):
+    start = text.index(quote)
+    return {'fact_id': fact_id, 'label': label, 'value': value, 'unit': unit, 'currency': currency, 'period': period,
+            'source_id': source_id, 'quotation': quote, 'character_start': start, 'character_end': start + len(quote),
+            'location': {'character_start': start, 'character_end': start + len(quote)},
+            'verification': 'numeric_and_location_match_semantics_not_verified'}
+
+
+def _typed_calculation(facts, formula='growth_percent', **overrides):
+    from app.research_calculations import CalculationRequest, calculate
+    inputs = [{key: fact[key] for key in ('fact_id', 'value', 'unit', 'currency', 'period')} for fact in facts]
+    return {**calculate(CalculationRequest(formula=formula, first=inputs[0], second=inputs[1])),
+            'calculation_id': 'calc-saved', 'input_status': 'matched', **overrides}
+
+
+def _legacy_setup(client, headers, text, label):
+    source_id = client.post('/v2/research/sources', headers=headers, json={'title': 'Report', 'text': text,
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True}}).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': label, 'source_ids': [source_id]}).json()
+    return source_id, topic, '/v2/research/topics/' + topic['topic_id']
+
+
+def _register(client, prefix):
     from uuid import uuid4
+    auth = client.post('/v1/auth/local/register', json={'email': f'{prefix}-{uuid4().hex}@example.test',
+        'password': 'correct horse battery staple!'}).json()
+    return {'Authorization': 'Bearer ' + auth['access_token']}
+
+
+def test_legacy_annual_rate_difference_is_warned_without_rewriting_history(monkeypatch):
     from app.research_topics import VersionInput
     monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
     client = TestClient(api.app)
-    reg = client.post('/v1/auth/local/register', json={'email': f'legacy-rate-{uuid4().hex}@example.test',
-        'password': 'correct horse battery staple!'}).json()
-    headers = {'Authorization': 'Bearer ' + reg['access_token']}
-    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Rates?'}).json()
-    facts = [{'fact_id': 'a', 'value': '1.3', 'unit': 'annual percent', 'currency': None, 'period': '2024 Q1'},
-             {'fact_id': 'b', 'value': '3.4', 'unit': 'annual percent', 'currency': None, 'period': '2023 Q4'}]
-    calculation = {'formula_id': 'difference', 'formula_version': '1', 'inputs': facts, 'value': '-2.10',
-                   'unit': 'annual percent', 'decimal_places': 2, 'input_status': 'matched'}
-    stored = api.research_topics.add_version(topic['owner_id'], topic['topic_id'], VersionInput(
+    headers = _register(client, 'legacy-rate')
+    text = 'Rate 1.3 annual percent in 2024 Q1. Rate 3.4 annual percent in 2023 Q4.'
+    source_id, topic, path = _legacy_setup(client, headers, text, 'Rates?')
+    facts = [_typed_fact(text, 'Rate 1.3 annual percent', 'a', '1.3', 'annual percent', None, '2024 Q1', source_id=source_id, label='Rate'),
+             _typed_fact(text, 'Rate 3.4 annual percent', 'b', '3.4', 'annual percent', None, '2023 Q4', source_id=source_id, label='Rate')]
+    calculation = _typed_calculation(facts, 'difference', formula_version='1', unit='annual percent')
+    owner = topic['owner_id']
+    stored = api.research_topics.add_version(owner, topic['topic_id'], VersionInput(
         parent_version_id=topic['versions'][0]['version_id'], content=ResearchContent(facts=facts, calculations=[calculation])))
     version = stored.versions[-1]
-    path = '/v2/research/topics/' + topic['topic_id']
     for response in (client.get(path, headers=headers).json()['versions'][-1],
                      client.get(path + '/versions/' + version.version_id, headers=headers).json(),
                      client.get(path + '/versions/' + version.version_id + '/export', headers=headers).json()['version']):
         assert response['content']['calculations'][0]['legacy_unit_warning'] == 'percentage_difference_requires_recalculation'
         assert response['content']['calculations'][0]['unit'] == 'annual percent'
-    assert 'legacy_unit_warning' not in api.research_topics.get(topic['owner_id'], topic['topic_id']).versions[-1].content.calculations[0]
+    assert api.research_topics.get(owner, topic['topic_id']).versions[-1].content.calculations[0].legacy_unit_warning is None
     recalc = client.post(path + '/calculations/recalculate', headers=headers,
         json={'parent_version_id': version.version_id, 'calculation_index': 0})
     assert recalc.status_code == 201, recalc.text
     current = recalc.json()['versions'][-1]['content']['calculations'][0]
     assert current['value'] == '-2.10' and current['unit'] == 'percentage points' and current['formula_version'] == '2'
-    assert 'legacy_unit_warning' not in current
+    assert current.get('legacy_unit_warning') is None
+
+
+def _monetary_case(monkeypatch, prefix, text, quotes, *, currency, repair):
+    """Store monetary facts whose quotation cannot identify the declared currency or scale, then repair them."""
+    from app.research_topics import VersionInput
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    client = TestClient(api.app)
+    headers = _register(client, prefix)
+    source_id, topic, path = _legacy_setup(client, headers, text, 'Revenue?')
+    facts = [_typed_fact(text, quote, fid, value, 'million', currency, period, source_id=source_id)
+             for (fid, value, period), quote in zip((('a', '100', '2024'), ('b', '90', '2023')), quotes)]
+    owner = topic['owner_id']
+    stored = api.research_topics.add_version(owner, topic['topic_id'], VersionInput(
+        parent_version_id=topic['versions'][0]['version_id'],
+        content=ResearchContent(facts=facts, calculations=[_typed_calculation(facts)])))
+    version = stored.versions[-1]
+    read = client.get(path, headers=headers).json()['versions'][-1]
+    exported = client.get(path + '/versions/' + version.version_id + '/export', headers=headers)
+    assert exported.status_code == 200
+    assert read['content']['calculations'][0]['input_status'] == 'unverifiable'
+    assert exported.json()['version']['content']['calculations'][0]['input_status'] == 'unverifiable'
+    original = api.research_topics.get(owner, topic['topic_id']).versions[-1].content
+    assert original.calculations[0].input_status == 'matched'  # Diagnostics are annotated on read, never stored.
+    blocked = client.post(path + '/calculations/recalculate', headers=headers,
+                          json={'parent_version_id': version.version_id, 'calculation_index': 0})
+    assert blocked.status_code == 422
+    edited = deepcopy(read['content'])
+    for fact in edited['facts']:
+        repair(fact, text)
+    saved = client.post(path + '/versions', headers=headers, json={'parent_version_id': version.version_id, 'content': edited})
+    assert saved.status_code == 201, saved.text
+    current = saved.json()['versions'][-1]
+    result = client.post(path + '/calculations/recalculate', headers=headers,
+                         json={'parent_version_id': current['version_id'], 'calculation_index': 0})
+    assert result.status_code == 201, result.text
+    return read, original, current
+
+
+def _requote(fact, text, quote):
+    start = text.index(quote)
+    fact.update(quotation=quote, character_start=start, character_end=start + len(quote),
+                location={'character_start': start, 'character_end': start + len(quote)})
 
 
 def test_legacy_monetary_calculation_requires_currency_without_rewriting_history(monkeypatch):
-    from uuid import uuid4
-    from app.research_calculations import CalculationRequest, calculate
-    from app.research_topics import VersionInput
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
-    client=TestClient(api.app)
-    auth=client.post('/v1/auth/local/register',json={'email':f'money-{uuid4().hex}@example.test',
-        'password':'correct horse battery staple!'}).json()
-    headers={'Authorization':'Bearer '+auth['access_token']}
-    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?'}).json()
-    facts=[{'fact_id':'a','label':'Revenue','value':'100','unit':'million','currency':None,'period':'2024'},
-           {'fact_id':'b','label':'Revenue','value':'90','unit':'million','currency':None,'period':'2023'}]
-    inputs=[{key:fact[key] for key in ('fact_id','value','unit','currency','period')} for fact in facts]
-    calculation=calculate(CalculationRequest(formula='growth_percent',first=inputs[0],second=inputs[1]))
-    calculation['input_status']='matched'
-    stored=api.research_topics.add_version(topic['owner_id'],topic['topic_id'],VersionInput(
-        parent_version_id=topic['versions'][0]['version_id'],content=ResearchContent(facts=facts,calculations=[calculation])))
-    version=stored.versions[-1];path='/v2/research/topics/'+topic['topic_id']
-    read=client.get(path,headers=headers).json()['versions'][-1]
+    text = 'Revenue was USD 100 million in 2024. Revenue was USD 90 million in 2023.'
+    quotes = ['Revenue was USD 100 million', 'Revenue was USD 90 million']
+    read, original, current = _monetary_case(monkeypatch, 'money', text, quotes, currency=None,
+                                             repair=lambda fact, source_text: fact.update(currency='USD'))
     assert all(f['currency_unspecified'] for f in read['content']['facts'])
-    assert read['content']['calculations'][0]['input_status']=='unverifiable'
-    exported=client.get(path+'/versions/'+version.version_id+'/export',headers=headers)
-    assert exported.status_code==200
-    assert exported.json()['version']['content']['calculations'][0]['input_status']=='unverifiable'
-    original=api.research_topics.get(topic['owner_id'],topic['topic_id']).versions[-1].content
-    assert not original.facts[0].get('currency_unspecified') and original.calculations[0]['input_status']=='matched'
-    assert client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':version.version_id,'calculation_index':0}).status_code==422
-    updated=deepcopy(read['content'])
-    for fact in updated['facts']: fact['currency']='USD'
-    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version.version_id,'content':updated})
-    assert saved.status_code==201, saved.text
-    current=saved.json()['versions'][-1]
-    assert all(not f.get('currency_unspecified') and f.get('authorship')=='user' for f in current['content']['facts'])
-    recalculated=client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':current['version_id'],'calculation_index':0})
-    assert recalculated.status_code==201, recalculated.text
+    assert not original.facts[0].currency_unspecified
+    assert all(not f.get('currency_unspecified') and f['verification'] == 'user_edited_not_independently_verified'
+               for f in current['content']['facts'])
 
 
 def test_legacy_monetary_citation_requires_currency_cue_without_rewriting_history(monkeypatch):
-    from uuid import uuid4
-    from app.research_calculations import CalculationRequest, calculate
-    from app.research_topics import VersionInput
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
-    client=TestClient(api.app)
-    auth=client.post('/v1/auth/local/register',json={'email':f'quoted-money-{uuid4().hex}@example.test',
-        'password':'correct horse battery staple!'}).json()
-    headers={'Authorization':'Bearer '+auth['access_token']}
-    text='USD Revenue was 100 million in 2024. USD Revenue was 90 million in 2023.'
-    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':text,
-        'permissions':{'store':True,'display':True,'model_input':True,'export':True}}).json()['source_id']
-    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?','source_ids':[source_id]}).json()
-    facts=[]
-    for fid,value,period in [('a','100','2024'),('b','90','2023')]:
-        quote=f'Revenue was {value} million in {period}'; start=text.index(quote)
-        facts.append({'fact_id':fid,'label':'Revenue','value':value,'unit':'million','currency':'USD','period':period,
-            'source_id':source_id,'quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)},
-            'verification':'model_extraction_not_independently_verified'})
-    inputs=[{key:fact[key] for key in ('fact_id','value','unit','currency','period')} for fact in facts]
-    calculation=calculate(CalculationRequest(formula='growth_percent',first=inputs[0],second=inputs[1]));calculation['input_status']='matched'
-    stored=api.research_topics.add_version(topic['owner_id'],topic['topic_id'],VersionInput(
-        parent_version_id=topic['versions'][0]['version_id'],content=ResearchContent(facts=facts,calculations=[calculation])))
-    version=stored.versions[-1];path='/v2/research/topics/'+topic['topic_id']
-    read=client.get(path,headers=headers).json()['versions'][-1]
+    # A table-row quotation that names no currency cannot support the declared currency until it is re-quoted.
+    text = ('| Revenue | 100 million | 2024 |\n| Revenue | 90 million | 2023 |\n'
+            '| Revenue | USD 100 million | 2024 |\n| Revenue | USD 90 million | 2023 |')
+    quotes = ['| Revenue | 100 million | 2024 |', '| Revenue | 90 million | 2023 |']
+    with_currency = {'100': '| Revenue | USD 100 million | 2024 |', '90': '| Revenue | USD 90 million | 2023 |'}
+    read, original, current = _monetary_case(monkeypatch, 'quoted-money', text, quotes, currency='USD',
+                                             repair=lambda fact, source_text: _requote(fact, source_text, with_currency[fact['value']]))
     assert all(f['currency_quote_missing'] for f in read['content']['facts'])
-    assert read['content']['calculations'][0]['input_status']=='unverifiable'
-    exported=client.get(path+'/versions/'+version.version_id+'/export',headers=headers).json()['version']
-    assert exported['content']['calculations'][0]['input_status']=='unverifiable'
-    assert not api.research_topics.get(topic['owner_id'],topic['topic_id']).versions[-1].content.facts[0].get('currency_quote_missing')
-    assert client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':version.version_id,'calculation_index':0}).status_code==422
-    edited=deepcopy(read['content'])
-    for fact in edited['facts']:
-        fact['quotation']='USD '+fact['quotation'];fact.pop('location',None);fact.pop('quotation_match',None)
-    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version.version_id,'content':edited})
-    assert saved.status_code==201, saved.text
-    current=saved.json()['versions'][-1]
+    assert not original.facts[0].currency_quote_missing
     assert all(not f.get('currency_quote_missing') for f in current['content']['facts'])
-    result=client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':current['version_id'],'calculation_index':0})
-    assert result.status_code==201, result.text
 
 
 def test_legacy_monetary_scale_requires_quotation_cue_without_rewriting_history(monkeypatch):
-    from uuid import uuid4
-    from app.research_calculations import CalculationRequest, calculate
-    from app.research_topics import VersionInput
-    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE','mock')
-    client=TestClient(api.app)
-    auth=client.post('/v1/auth/local/register',json={'email':f'quoted-scale-{uuid4().hex}@example.test',
-        'password':'correct horse battery staple!'}).json()
-    headers={'Authorization':'Bearer '+auth['access_token']}
-    text='Revenue was USD 100 million in 2024. Revenue was USD 90 million in 2023.'
-    source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':text,
-        'permissions':{'store':True,'display':True,'model_input':True,'export':True}}).json()['source_id']
-    topic=client.post('/v2/research/topics',headers=headers,json={'question':'Revenue?','source_ids':[source_id]}).json()
-    facts=[]
-    for fid,value,period in [('a','100','2024'),('b','90','2023')]:
-        quote=f'USD {value}'; start=text.index(quote)
-        facts.append({'fact_id':fid,'label':'Revenue','value':value,'unit':'million','currency':'USD','period':period,
-            'source_id':source_id,'quotation':quote,'location':{'character_start':start,'character_end':start+len(quote)},
-            'verification':'model_extraction_not_independently_verified'})
-    inputs=[{key:fact[key] for key in ('fact_id','value','unit','currency','period')} for fact in facts]
-    calculation=calculate(CalculationRequest(formula='growth_percent',first=inputs[0],second=inputs[1]));calculation['input_status']='matched'
-    stored=api.research_topics.add_version(topic['owner_id'],topic['topic_id'],VersionInput(
-        parent_version_id=topic['versions'][0]['version_id'],content=ResearchContent(facts=facts,calculations=[calculation])))
-    version=stored.versions[-1];path='/v2/research/topics/'+topic['topic_id']
-    read=client.get(path,headers=headers).json()['versions'][-1]
+    text = 'Revenue was USD 100 million in 2024. Revenue was USD 90 million in 2023.'
+    quotes = ['USD 100', 'USD 90']
+    read, original, current = _monetary_case(monkeypatch, 'quoted-scale', text, quotes, currency='USD',
+                                             repair=lambda f, t: _requote(f, t, f['quotation'] + ' million'))
     assert all(f['scale_quote_missing'] for f in read['content']['facts'])
-    assert read['content']['calculations'][0]['input_status']=='unverifiable'
-    exported=client.get(path+'/versions/'+version.version_id+'/export',headers=headers).json()['version']
-    assert exported['content']['calculations'][0]['input_status']=='unverifiable'
-    assert not api.research_topics.get(topic['owner_id'],topic['topic_id']).versions[-1].content.facts[0].get('scale_quote_missing')
-    assert client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':version.version_id,'calculation_index':0}).status_code==422
-    edited=deepcopy(read['content'])
-    for fact in edited['facts']:
-        fact['quotation']+=' million';fact.pop('location',None);fact.pop('quotation_match',None)
-    saved=client.post(path+'/versions',headers=headers,json={'parent_version_id':version.version_id,'content':edited})
-    assert saved.status_code==201, saved.text
-    current=saved.json()['versions'][-1]
+    assert not original.facts[0].scale_quote_missing
     assert all(not f.get('scale_quote_missing') for f in current['content']['facts'])
-    result=client.post(path+'/calculations/recalculate',headers=headers,json={'parent_version_id':current['version_id'],'calculation_index':0})
-    assert result.status_code==201, result.text
 
 
 def test_provisional_html_calculation_remains_partial_through_export_and_edit(monkeypatch):

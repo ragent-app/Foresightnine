@@ -6,7 +6,6 @@ from app.research_analysis import AnalysisResult
 from app.research_budget import ResearchExecutionBudget
 from app.research_coordinator import ResearchExecutionContext
 from app.research_counterpoint_stage import execute_counterpoint
-from app.research_runs import ResearchRunRequest
 
 
 def test_counterpoint_for_one_requirement_does_not_satisfy_another():
@@ -17,7 +16,7 @@ def test_counterpoint_for_one_requirement_does_not_satisfy_another():
         research_questions=[{'question':'First?', 'claim_indexes':[0]}, {'question':'Second?', 'claim_indexes':[1]}])
     context=ResearchExecutionContext(ResearchExecutionBudget(None,None,None,float('inf')),False,lambda:None,
         Event,lambda *_:None,lambda *_:None,lambda:None,calls=1)
-    options=dict(request=ResearchRunRequest(parent_version_id='v',counterpoint_followup=True),analysis=analysis,
+    options=dict(request=SimpleNamespace(counterpoint_followup=True,require_counterarguments=True),analysis=analysis,
         claims=claims,leads=[],question='Q',scope='',sources=[],as_of=None,focus=None,planning_steps=[],
         base_prompt='{}',max_prompt_chars=1000,provider=SimpleNamespace(policy=None),generate=None,context=context,
         call_id='counter',checkpoint=lambda *_:None)

@@ -14,7 +14,6 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 100,
             "minItems": 1,
             "title": "Source Ids",
             "type": "array"
@@ -25,6 +24,46 @@
           "source_ids"
         ],
         "title": "AttachSourcesInput",
+        "type": "object"
+      },
+      "CalculationInput": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_id",
+          "value",
+          "unit",
+          "period"
+        ],
+        "title": "CalculationInput",
         "type": "object"
       },
       "CalculationRequest": {
@@ -59,6 +98,32 @@
           "second"
         ],
         "title": "CalculationRequest",
+        "type": "object"
+      },
+      "Citation": {
+        "additionalProperties": false,
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/SourceLocation"
+          },
+          "quotation": {
+            "maxLength": 1000,
+            "title": "Quotation",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "quotation",
+          "location"
+        ],
+        "title": "Citation",
         "type": "object"
       },
       "ConfirmDirectionRequest": {
@@ -208,14 +273,15 @@
             "title": "Citation Index",
             "type": "integer"
           },
-          "claim_index": {
-            "minimum": 0.0,
-            "title": "Claim Index",
-            "type": "integer"
+          "claim_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Claim Id",
+            "type": "string"
           }
         },
         "required": [
-          "claim_index",
+          "claim_id",
           "citation_index"
         ],
         "title": "FocusCitation",
@@ -559,6 +625,32 @@
         "title": "PdfUploadRequest",
         "type": "object"
       },
+      "ReadRange": {
+        "additionalProperties": false,
+        "properties": {
+          "character_end": {
+            "exclusiveMinimum": 0.0,
+            "title": "Character End",
+            "type": "integer"
+          },
+          "character_start": {
+            "minimum": 0.0,
+            "title": "Character Start",
+            "type": "integer"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "character_start",
+          "character_end"
+        ],
+        "title": "ReadRange",
+        "type": "object"
+      },
       "RecalculateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -582,75 +674,276 @@
         "title": "RecalculateRequest",
         "type": "object"
       },
+      "ResearchCalculation": {
+        "additionalProperties": false,
+        "properties": {
+          "authorship": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorship"
+          },
+          "calculation_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Calculation Id",
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decimal_places": {
+            "maximum": 8.0,
+            "minimum": 0.0,
+            "title": "Decimal Places",
+            "type": "integer"
+          },
+          "expression": {
+            "title": "Expression",
+            "type": "string"
+          },
+          "formula_id": {
+            "enum": [
+              "growth_percent",
+              "margin_percent",
+              "difference"
+            ],
+            "title": "Formula Id",
+            "type": "string"
+          },
+          "formula_version": {
+            "title": "Formula Version",
+            "type": "string"
+          },
+          "input_precision_status": {
+            "title": "Input Precision Status",
+            "type": "string"
+          },
+          "input_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Status"
+          },
+          "input_verification": {
+            "title": "Input Verification",
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/CalculationInput"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Inputs",
+            "type": "array"
+          },
+          "legacy_unit_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legacy Unit Warning"
+          },
+          "period_granularity_check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Granularity Check"
+          },
+          "period_order_check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Order Check"
+          },
+          "result_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Status"
+          },
+          "rounding": {
+            "title": "Rounding",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification"
+          }
+        },
+        "required": [
+          "calculation_id",
+          "formula_id",
+          "formula_version",
+          "expression",
+          "input_verification",
+          "input_precision_status",
+          "inputs",
+          "value",
+          "unit",
+          "rounding",
+          "decimal_places"
+        ],
+        "title": "ResearchCalculation",
+        "type": "object"
+      },
+      "ResearchClaim": {
+        "additionalProperties": false,
+        "description": "One finding. `turn_id` is None for a user-authored claim.",
+        "properties": {
+          "challenges_claim_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Challenges Claim Ids",
+            "type": "array"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "maxItems": 10,
+            "title": "Citations",
+            "type": "array"
+          },
+          "claim_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "edited_by_user": {
+            "default": false,
+            "title": "Edited By User",
+            "type": "boolean"
+          },
+          "role": {
+            "enum": [
+              "support",
+              "counterargument"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 3000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "ResearchClaim",
+        "type": "object"
+      },
       "ResearchContent": {
         "additionalProperties": false,
         "properties": {
-          "amount_differences": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "maxItems": 50,
-            "title": "Amount Differences",
-            "type": "array"
-          },
-          "calculation_differences": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "maxItems": 50,
-            "title": "Calculation Differences",
-            "type": "array"
-          },
           "calculations": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ResearchCalculation"
             },
-            "maxItems": 2000,
             "title": "Calculations",
             "type": "array"
           },
           "claims": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ResearchClaim"
             },
-            "maxItems": 2000,
             "title": "Claims",
-            "type": "array"
-          },
-          "evidence_differences": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "maxItems": 50,
-            "title": "Evidence Differences",
             "type": "array"
           },
           "facts": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ResearchFact"
             },
-            "maxItems": 2000,
             "title": "Facts",
             "type": "array"
           },
-          "limitations": {
+          "gaps": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ResearchGap"
             },
-            "maxItems": 500,
-            "title": "Limitations",
+            "title": "Gaps",
             "type": "array"
-          },
-          "run": {
-            "additionalProperties": true,
-            "title": "Run",
-            "type": "object"
           },
           "source_candidates": {
             "items": {
@@ -666,7 +959,6 @@
               "additionalProperties": true,
               "type": "object"
             },
-            "maxItems": 200,
             "title": "Sources",
             "type": "array"
           },
@@ -675,9 +967,143 @@
             "maxLength": 100000,
             "title": "Summary",
             "type": "string"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchTurn"
+            },
+            "title": "Turns",
+            "type": "array"
           }
         },
         "title": "ResearchContent",
+        "type": "object"
+      },
+      "ResearchFact": {
+        "additionalProperties": false,
+        "properties": {
+          "character_end": {
+            "exclusiveMinimum": 0.0,
+            "title": "Character End",
+            "type": "integer"
+          },
+          "character_start": {
+            "minimum": 0.0,
+            "title": "Character Start",
+            "type": "integer"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "currency_quote_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency Quote Missing"
+          },
+          "currency_unspecified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency Unspecified"
+          },
+          "fact_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/SourceLocation"
+          },
+          "period": {
+            "minLength": 1,
+            "title": "Period",
+            "type": "string"
+          },
+          "quotation": {
+            "title": "Quotation",
+            "type": "string"
+          },
+          "scale_quote_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale Quote Missing"
+          },
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "unit": {
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          },
+          "verification": {
+            "title": "Verification",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_id",
+          "label",
+          "value",
+          "unit",
+          "period",
+          "source_id",
+          "quotation",
+          "character_start",
+          "character_end",
+          "location",
+          "verification"
+        ],
+        "title": "ResearchFact",
         "type": "object"
       },
       "ResearchFullExport": {
@@ -742,6 +1168,29 @@
         "title": "ResearchFullExport",
         "type": "object"
       },
+      "ResearchGap": {
+        "additionalProperties": false,
+        "description": "An unresolved gap. The UI localizes by `code`; `message` is an English fallback.",
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ResearchGap",
+        "type": "object"
+      },
       "ResearchInput": {
         "additionalProperties": false,
         "properties": {
@@ -773,7 +1222,6 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 100,
             "title": "Source Ids",
             "type": "array"
           }
@@ -833,15 +1281,15 @@
             "title": "Format",
             "type": "string"
           },
+          "gap_count": {
+            "minimum": 0.0,
+            "title": "Gap Count",
+            "type": "integer"
+          },
           "generated_at": {
             "format": "date-time",
             "title": "Generated At",
             "type": "string"
-          },
-          "limitation_count": {
-            "minimum": 0.0,
-            "title": "Limitation Count",
-            "type": "integer"
           },
           "parent_version_id": {
             "anyOf": [
@@ -878,6 +1326,11 @@
             "title": "Tracked Source Count",
             "type": "integer"
           },
+          "turn_count": {
+            "minimum": 0.0,
+            "title": "Turn Count",
+            "type": "integer"
+          },
           "version_created_at": {
             "format": "date-time",
             "title": "Version Created At",
@@ -901,7 +1354,8 @@
           "fact_count",
           "claim_count",
           "calculation_count",
-          "limitation_count"
+          "gap_count",
+          "turn_count"
         ],
         "title": "ResearchMetadataExport",
         "type": "object"
@@ -914,10 +1368,16 @@
             "title": "Auto Fetch Official",
             "type": "boolean"
           },
-          "counterpoint_followup": {
-            "default": false,
-            "title": "Counterpoint Followup",
-            "type": "boolean"
+          "discover_sources": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discover Sources"
           },
           "focus_citation": {
             "anyOf": [
@@ -928,21 +1388,6 @@
                 "type": "null"
               }
             ]
-          },
-          "gap_followup": {
-            "default": false,
-            "title": "Gap Followup",
-            "type": "boolean"
-          },
-          "gap_search": {
-            "default": false,
-            "title": "Gap Search",
-            "type": "boolean"
-          },
-          "include_scope_in_search": {
-            "default": false,
-            "title": "Include Scope In Search",
-            "type": "boolean"
           },
           "max_cost_usd": {
             "anyOf": [
@@ -961,11 +1406,16 @@
             "title": "Max Cost Usd"
           },
           "max_elapsed_seconds": {
-            "default": 60,
-            "maximum": 180.0,
-            "minimum": 1.0,
-            "title": "Max Elapsed Seconds",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Elapsed Seconds"
           },
           "max_input_tokens_per_call": {
             "anyOf": [
@@ -980,36 +1430,46 @@
             "title": "Max Input Tokens Per Call"
           },
           "max_model_calls": {
-            "default": 1,
-            "maximum": 10.0,
-            "minimum": 0.0,
-            "title": "Max Model Calls",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Model Calls"
           },
           "max_search_calls": {
-            "default": 1,
-            "maximum": 2.0,
-            "minimum": 0.0,
-            "title": "Max Search Calls",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Search Calls"
           },
           "max_total_tokens": {
-            "default": 10000,
-            "maximum": 20000.0,
-            "minimum": 0.0,
-            "title": "Max Total Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Total Tokens"
           },
           "parent_version_id": {
             "maxLength": 100,
             "minLength": 1,
             "title": "Parent Version Id",
             "type": "string"
-          },
-          "plan_research": {
-            "default": false,
-            "title": "Plan Research",
-            "type": "boolean"
           },
           "question_override": {
             "anyOf": [
@@ -1024,18 +1484,12 @@
             ],
             "title": "Question Override"
           },
-          "require_counterarguments": {
-            "default": true,
-            "title": "Require Counterarguments",
-            "type": "boolean"
-          },
           "selected_source_ids": {
             "anyOf": [
               {
                 "items": {
                   "type": "string"
                 },
-                "maxItems": 100,
                 "type": "array"
               },
               {
@@ -1048,23 +1502,8 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 100,
             "title": "Source Ids",
             "type": "array"
-          },
-          "support_review": {
-            "default": false,
-            "title": "Support Review",
-            "type": "boolean"
-          },
-          "support_review_mode": {
-            "default": "batch",
-            "enum": [
-              "batch",
-              "isolated"
-            ],
-            "title": "Support Review Mode",
-            "type": "string"
           }
         },
         "required": [
@@ -1119,6 +1558,164 @@
           "versions"
         ],
         "title": "ResearchTopic",
+        "type": "object"
+      },
+      "ResearchTurn": {
+        "additionalProperties": false,
+        "description": "One question and its run. Immutable once saved, except by continuing the same turn.",
+        "properties": {
+          "calculation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Calculation Ids",
+            "type": "array"
+          },
+          "claim_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Claim Ids",
+            "type": "array"
+          },
+          "events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "title": "Finished At",
+            "type": "string"
+          },
+          "focus_citation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TurnFocusCitation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchGap"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "index": {
+            "minimum": 1.0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "official_fetch_status": {
+            "title": "Official Fetch Status",
+            "type": "string"
+          },
+          "operation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Operation Ids",
+            "type": "array"
+          },
+          "parent_version_id": {
+            "title": "Parent Version Id",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "question_origin": {
+            "enum": [
+              "user",
+              "document_overview_default"
+            ],
+            "title": "Question Origin",
+            "type": "string"
+          },
+          "read_ranges": {
+            "items": {
+              "$ref": "#/components/schemas/ReadRange"
+            },
+            "title": "Read Ranges",
+            "type": "array"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "report": {
+            "default": "",
+            "title": "Report",
+            "type": "string"
+          },
+          "search_status": {
+            "title": "Search Status",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "partial"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stopping_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopping Note"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/TurnUsage"
+          }
+        },
+        "required": [
+          "turn_id",
+          "index",
+          "question",
+          "question_origin",
+          "operation_ids",
+          "parent_version_id",
+          "started_at",
+          "finished_at",
+          "status",
+          "reason",
+          "usage",
+          "search_status",
+          "official_fetch_status"
+        ],
+        "title": "ResearchTurn",
         "type": "object"
       },
       "ResearchVersion": {
@@ -1297,7 +1894,8 @@
             "default": "user_supplied",
             "enum": [
               "user_supplied",
-              "official"
+              "official",
+              "market_data"
             ],
             "title": "Kind",
             "type": "string"
@@ -1362,6 +1960,27 @@
           "permissions"
         ],
         "title": "SourceInput",
+        "type": "object"
+      },
+      "SourceLocation": {
+        "additionalProperties": false,
+        "description": "Half-open character range inside one source's stored text.",
+        "properties": {
+          "character_end": {
+            "title": "Character End",
+            "type": "integer"
+          },
+          "character_start": {
+            "minimum": 0.0,
+            "title": "Character Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_start",
+          "character_end"
+        ],
+        "title": "SourceLocation",
         "type": "object"
       },
       "SourcePermissions": {
@@ -1433,6 +2052,53 @@
           "label"
         ],
         "title": "SourceRef",
+        "type": "object"
+      },
+      "TurnFocusCitation": {
+        "additionalProperties": false,
+        "properties": {
+          "citation_index": {
+            "minimum": 0.0,
+            "title": "Citation Index",
+            "type": "integer"
+          },
+          "claim_id": {
+            "title": "Claim Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "citation_index"
+        ],
+        "title": "TurnFocusCitation",
+        "type": "object"
+      },
+      "TurnUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "model_calls": {
+            "minimum": 0.0,
+            "title": "Model Calls",
+            "type": "integer"
+          },
+          "search_calls": {
+            "minimum": 0.0,
+            "title": "Search Calls",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "minimum": 0.0,
+            "title": "Total Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_calls",
+          "search_calls",
+          "total_tokens"
+        ],
+        "title": "TurnUsage",
         "type": "object"
       },
       "ValidationError": {
@@ -2514,7 +3180,6 @@
     },
     "/v2/research/topics/{topic_id}/facts/confirm-direction": {
       "post": {
-        "description": "Record an explicit user review of one source-backed signed change.",
         "operationId": "confirm_research_direction_v2_research_topics__topic_id__facts_confirm_direction_post",
         "parameters": [
           {
@@ -2580,7 +3245,6 @@
     },
     "/v2/research/topics/{topic_id}/facts/confirm-table": {
       "post": {
-        "description": "Record a user's review of an exact, uniquely located restored table row.",
         "operationId": "confirm_research_table_v2_research_topics__topic_id__facts_confirm_table_post",
         "parameters": [
           {
@@ -2793,6 +3457,66 @@
         "summary": "Get Research Run"
       }
     },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/continue": {
+      "post": {
+        "description": "Continue from a server-owned, fully settled research stage checkpoint.",
+        "operationId": "continue_research_run_v2_research_topics__topic_id__runs__operation_id__continue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Continue Research Run"
+      }
+    },
     "/v2/research/topics/{topic_id}/runs/{operation_id}/inputs": {
       "get": {
         "operationId": "get_research_run_inputs_v2_research_topics__topic_id__runs__operation_id__inputs_get",
@@ -2841,6 +3565,230 @@
           }
         },
         "summary": "Get Research Run Inputs"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/progress": {
+      "get": {
+        "description": "Return a sanitized view of the latest persisted checkpoint (whitelisted fields only).",
+        "operationId": "get_research_run_progress_v2_research_topics__topic_id__runs__operation_id__progress_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Run Progress V2 Research Topics  Topic Id  Runs  Operation Id  Progress Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Run Progress"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/recover": {
+      "post": {
+        "description": "Deliver a committed checkpoint without replaying uncertain external work.",
+        "operationId": "recover_research_run_v2_research_topics__topic_id__runs__operation_id__recover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recover Research Run"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/recovery-status": {
+      "get": {
+        "description": "Read eligibility without consuming the checkpoint; admission rechecks it.",
+        "operationId": "get_research_recovery_status_v2_research_topics__topic_id__runs__operation_id__recovery_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Recovery Status V2 Research Topics  Topic Id  Runs  Operation Id  Recovery Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Recovery Status"
+      }
+    },
+    "/v2/research/topics/{topic_id}/runs/{operation_id}/settlement": {
+      "get": {
+        "description": "Account-scoped, read-only reconciliation without inferring provider usage.",
+        "operationId": "get_research_run_settlement_v2_research_topics__topic_id__runs__operation_id__settlement_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Research Run Settlement V2 Research Topics  Topic Id  Runs  Operation Id  Settlement Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Research Run Settlement"
       }
     },
     "/v2/research/topics/{topic_id}/sources": {

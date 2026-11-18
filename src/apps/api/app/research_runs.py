@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .research_topics import ResearchContent
 
@@ -27,7 +27,7 @@ def has_usable_counterpoint(claims: list[dict], excluded_indexes: set[int] | Non
 
 class FocusCitation(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    claim_index: int = Field(ge=0)
+    claim_id: str = Field(min_length=1, max_length=100)
     citation_index: int = Field(ge=0)
 
 
@@ -35,34 +35,18 @@ class ResearchRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     question_override: str | None = Field(default=None, min_length=1, max_length=10000)
     parent_version_id: str = Field(min_length=1, max_length=100)
-    evidence_strategy: Literal['delegated', 'coordinator'] = 'delegated'
     source_ids: list[str] = Field(default_factory=list)
-    # None preserves the historical behavior; [] explicitly selects no source.
+    # None selects every available source; [] explicitly selects none.
     selected_source_ids: list[str] | None = Field(default=None)
     max_model_calls: int | None = Field(default=None, ge=0, strict=True)
     max_input_tokens_per_call: int | None = Field(default=None, ge=1, strict=True)
-    support_review: bool = False
-    support_review_mode: Literal["batch", "isolated"] = "batch"
-    counterpoint_followup: bool = Field(default=False, strict=True)
-    gap_followup: bool = Field(default=False, strict=True)
-    gap_search: bool = Field(default=False, strict=True)
     discover_sources: bool | None = Field(default=None, strict=True)
-    plan_research: bool = Field(default=False, strict=True)
-    require_counterarguments: bool = True
-    include_scope_in_search: bool = False
     auto_fetch_official: bool = Field(default=False, strict=True)
     focus_citation: FocusCitation | None = None
     max_search_calls: int | None = Field(default=None, ge=0, strict=True)
     max_elapsed_seconds: int | None = Field(default=None, ge=0, strict=True)
     max_total_tokens: int | None = Field(default=None, ge=0, strict=True)
     max_cost_usd: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
-
-    @model_validator(mode="after")
-    def validate_gap_search(self) -> ResearchRunRequest:
-        if self.gap_search and (('gap_followup' in self.model_fields_set and not self.gap_followup)
-                                or (self.max_search_calls is not None and self.max_search_calls < 1)):
-            raise ValueError("Gap search requires gap follow-up and a search budget.")
-        return self
 
     @field_validator("selected_source_ids")
     @classmethod
@@ -72,7 +56,8 @@ class ResearchRunRequest(BaseModel):
         return values
 
 
-def resolve_automatic_research_request(request: ResearchRunRequest, *, search_available: bool) -> ResearchRunRequest:
+def resolve_automatic_research_request(request: ResearchRunRequest, *, search_available: bool,
+                                       historical_prices_available: bool = False) -> ResearchRunRequest:
     """Resolve omitted controls while retaining every explicit caller choice.
 
     Discovery and retrieval use only the existing configured project-search
@@ -85,20 +70,13 @@ def resolve_automatic_research_request(request: ResearchRunRequest, *, search_av
         if name not in supplied:
             updates[name] = value
 
-    explicit_empty_search = (('max_search_calls' in supplied and request.max_search_calls is not None and request.max_search_calls > 0) or
-                             ('gap_search' in supplied and request.gap_search))
-    calls = request.max_model_calls
+    explicit_empty_search = 'max_search_calls' in supplied and request.max_search_calls is not None and request.max_search_calls > 0
     searches = request.max_search_calls
-    default('plan_research', calls is None or calls >= 4)
-    default('counterpoint_followup', request.require_counterarguments if request.evidence_strategy == 'delegated' else False)
-    default('gap_followup', request.gap_search or calls is None or calls >= 2)
-    default('support_review', calls is None or calls >= 2)
     default('discover_sources', searches != 0 and (request.selected_source_ids != [] or explicit_empty_search))
     discovery_enabled = bool(updates.get('discover_sources', request.discover_sources))
     allow_discovery = search_available and discovery_enabled and searches != 0
-    gap_enabled = bool(updates.get('gap_followup', request.gap_followup))
-    default('gap_search', allow_discovery and gap_enabled)
-    default('auto_fetch_official', allow_discovery and request.selected_source_ids != [])
+    allow_historical_prices = historical_prices_available and discovery_enabled and searches != 0
+    default('auto_fetch_official', (allow_discovery or allow_historical_prices) and request.selected_source_ids != [])
     return ResearchRunRequest.model_validate({**request.model_dump(), **updates})
 
 

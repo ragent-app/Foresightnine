@@ -15,18 +15,21 @@ from .research_sources import ResearchSource
 MAX_SOURCES = 20
 
 
+def is_fred_source(url: str) -> bool:
+    parsed = urlsplit(url)
+    host = (parsed.hostname or '').lower().rstrip('.')
+    return (host in {'fred.stlouisfed.org', 'alfred.stlouisfed.org'}
+            or host.endswith('.fred.stlouisfed.org')
+            or (host == 'api.stlouisfed.org' and parsed.path.lower().startswith('/fred')))
+
+
 def source_eligibility(sources: list[ResearchSource], as_of: datetime | None) -> list[tuple[ResearchSource, str]]:
     """Classify each selected source without relying on presentation text."""
     result: list[tuple[ResearchSource, str]] = []
     for source in sources:
-        parsed = urlsplit(str(source.url)) if source.url else None
-        host = (parsed.hostname or "").lower().rstrip(".") if parsed else ""
-        is_fred = (host in {"fred.stlouisfed.org", "alfred.stlouisfed.org"} or
-                   host.endswith(".fred.stlouisfed.org") or
-                   (host == "api.stlouisfed.org" and parsed is not None and parsed.path.lower().startswith("/fred")))
         if source.is_simulated:
             code = 'simulated'
-        elif is_fred:
+        elif source.url is not None and is_fred_source(str(source.url)):
             code = 'source_not_authorized'
         elif not source.permissions.model_input:
             code = 'model_permission_missing'

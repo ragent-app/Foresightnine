@@ -106,7 +106,9 @@ def test_source_and_artifact_totals_are_not_limited_to_one_work_page():
     assert len(ResearchInput(question='Q', source_ids=ids).source_ids) == 101
     assert len(ResearchRunRequest(parent_version_id='v', source_ids=ids,
                                   max_input_tokens_per_call=50000).source_ids) == 101
-    assert len(ResearchContent(sources=[{}] * 201, facts=[{}] * 2001).facts) == 2001
+    fact = {'fact_id': 'f', 'label': 'x', 'value': '1', 'unit': 'u', 'period': 'p', 'source_id': 's', 'quotation': 'q',
+            'character_start': 0, 'character_end': 1, 'location': {'character_start': 0, 'character_end': 1}, 'verification': 'v'}
+    assert len(ResearchContent(sources=[{}] * 201, facts=[fact] * 2001).facts) == 2001
 
 
 def test_cursor_binding_rejects_changed_source_without_model_call(monkeypatch):

@@ -690,7 +690,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})
             if actual != snapshot:
                 return "changed"
-            if candidates[0].get("source_value_warnings"):
+            if candidates[0].get("source_value_warnings") or candidates[0].get("verification") == "user_edited_value_not_in_quotation":
                 return "unverifiable"
         # Structured snapshots carry explicit entity and metric identity.
         # Do not combine mismatched or partially identified contexts merely
