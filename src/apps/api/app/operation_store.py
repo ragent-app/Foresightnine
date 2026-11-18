@@ -44,6 +44,10 @@ class OperationStorePassThrough(RuntimeError):
     """Typed application errors that must cross the store boundary unchanged."""
 
 
+class OperationStoreBusy(OperationStorePassThrough):
+    """A research topic already has an active operation."""
+
+
 @dataclass(frozen=True, slots=True)
 class StoredClaim:
     endpoint: str
@@ -109,6 +113,8 @@ class OperationStore(Protocol):
     def is_cancel_requested(self, operation_id: str) -> bool: ...
 
     def checkpoint_if_running(self, operation_id: str, admission: Callable[[], None]) -> bool: ...
+
+    def renew_lease(self, operation_id: str, *, lease_owner: str, now: datetime, lease_expires_at: datetime) -> bool: ...
 
     def finish(
         self,
@@ -226,12 +232,19 @@ class InMemoryOperationStore:
             if existing is not None:
                 self._check_hash(existing, request_hash)
                 return BeginResult(False, _claim_copy(existing))
+            if session_id is not None and endpoint == f'/v1/research/topics/{session_id}/runs':
+                owner = operation.get('owner_subject')
+                if any(self._sessions.get(other_id) == session_id and other.get('endpoint') == endpoint
+                       and other.get('owner_subject') == owner and other.get('status') in {'pending', 'running'}
+                       for other_id, other in self._operations.items()):
+                    raise OperationStoreBusy('Another research run is already active for this topic.')
             claim = StoredClaim(endpoint, idempotency_key_hash, request_hash, operation_id, mode, None, response_type, None, now, now)
             self._claims[_key(endpoint, idempotency_key_hash)] = claim
             try:
                 if admission is not None:
                     admission()
                 stored_operation = deepcopy(operation)
+                stored_operation['lease_owner'] = lease_owner
                 stored_operation["lease_expires_at"] = _utc(lease_expires_at).isoformat()
                 self._operations[operation_id] = stored_operation
                 self._events[operation_id] = deepcopy(events)
@@ -358,6 +371,7 @@ class InMemoryOperationStore:
             if operation_id in self._operations:
                 return
             stored_operation = deepcopy(operation)
+            stored_operation['lease_owner'] = lease_owner
             stored_operation["lease_expires_at"] = _utc(lease_expires_at).isoformat()
             self._operations[operation_id] = stored_operation
             self._events[operation_id] = deepcopy(events)
@@ -385,6 +399,17 @@ class InMemoryOperationStore:
             deepcopy(response) if response is not None else claim.response, claim.response_type,
             deepcopy(error) if error is not None else claim.error, claim.created_at, updated_at,
         )
+
+    def renew_lease(self, operation_id: str, *, lease_owner: str, now: datetime, lease_expires_at: datetime) -> bool:
+        with self._condition:
+            current = self._operations.get(operation_id)
+            if not current or current.get('status') not in {'pending', 'running'} or current.get('lease_owner') != lease_owner:
+                return False
+            expires = current.get('lease_expires_at')
+            if expires is None or _utc(datetime.fromisoformat(expires) if isinstance(expires, str) else expires) <= _utc(now):
+                return False
+            current['lease_expires_at'] = _utc(lease_expires_at).isoformat()
+            return True
 
     def recover_expired_leases(self, *, now: datetime, operation_builder: Callable[[dict[str, Any], int], dict[str, Any]],
                                event_builder: Callable[[dict[str, Any], int], dict[str, Any]], error: dict[str, Any]) -> list[dict[str, Any]]:
@@ -528,6 +553,10 @@ class PostgresOperationStore:
         self._connection_factory = connection_factory or _default_connection_factory
         self._uses_injected_connection = connection_factory is not None
 
+    def assert_async_outside_transaction(self) -> None:
+        if current_postgres_unit_of_work(self._dsn) is not None:
+            raise OperationStoreBusy('An asynchronous operation cannot start inside an uncommitted transaction.')
+
     def _connection(self) -> Any:
         try:
             return self._connection_factory(self._dsn)
@@ -601,6 +630,16 @@ class PostgresOperationStore:
                 if claim.request_hash != request_hash:
                     raise OperationStoreConflict("Idempotency-Key was already used with a different request body.")
                 return BeginResult(False, claim)
+            if session_id is not None and endpoint == f'/v1/research/topics/{session_id}/runs':
+                # Held until both operation and session association commit.
+                cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))', (f'research-run:{session_id}',))
+                cursor.execute(f'''SELECT 1 FROM {OPERATION_SESSIONS_TABLE} s
+                    JOIN {OPERATION_STATE_TABLE} o ON o.operation_id = s.operation_id
+                    WHERE s.session_id = %s AND o.endpoint = %s AND o.status IN ('pending', 'running')
+                      AND o.operation->>'owner_subject' = %s LIMIT 1''',
+                    (session_id, endpoint, operation_doc.get('owner_subject')))
+                if cursor.fetchone() is not None:
+                    raise OperationStoreBusy('Another research run is already active for this topic.')
             if admission is not None:
                 admission()
             cursor.execute(
@@ -767,6 +806,14 @@ class PostgresOperationStore:
                 elif error is not None:
                     cursor.execute(f"UPDATE {OPERATION_IDEMPOTENCY_TABLE} SET error = %s::jsonb, response = NULL, updated_at = %s WHERE operation_id = %s", (self._jsonb(_json_document(error)), operation_doc["updated_at"], operation_id))
             return True, operation_doc
+        return self._run(action)
+
+    def renew_lease(self, operation_id: str, *, lease_owner: str, now: datetime, lease_expires_at: datetime) -> bool:
+        def action(ctx: tuple[Any, Any]) -> bool:
+            _connection, cursor = ctx
+            cursor.execute(f"UPDATE {OPERATION_STATE_TABLE} SET lease_expires_at = %s WHERE operation_id = %s AND lease_owner = %s AND status IN ('pending', 'running') AND lease_expires_at > %s",
+                           (_utc(lease_expires_at), operation_id, lease_owner, _utc(now)))
+            return cursor.rowcount == 1
         return self._run(action)
 
     def recover_expired_leases(self, *, now: datetime, operation_builder: Callable[[dict[str, Any], int], dict[str, Any]], event_builder: Callable[[dict[str, Any], int], dict[str, Any]], error: dict[str, Any]) -> list[dict[str, Any]]:

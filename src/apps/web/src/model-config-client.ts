@@ -2,12 +2,14 @@ import { normalizeApiBaseUrl } from "@foresightnine/api-client";
 import type { OAuthSession } from "./oauth-client";
 
 export type ModelConfigMode = "platform" | "personal";
+export type ModelProtocol = "openai_chat_completions" | "anthropic_messages";
 export type ModelConfigTestStatus = "ready" | "unavailable";
 
 export interface ModelConfig {
   readonly schema_version: "v1";
   readonly mode: ModelConfigMode;
   readonly configured: boolean;
+  readonly protocol?: ModelProtocol;
   readonly base_url?: string;
   readonly model?: string;
   readonly key_hint?: string;
@@ -16,6 +18,7 @@ export interface ModelConfig {
 
 export interface ModelConfigUpdate {
   readonly mode: ModelConfigMode;
+  readonly protocol?: ModelProtocol;
   readonly base_url?: string;
   readonly model?: string;
   readonly api_key?: string;
@@ -93,9 +96,11 @@ function parseOptionalTimestamp(record: Record<string, unknown>): string | undef
 export function parseModelConfig(value: unknown): ModelConfig {
   if (!value || typeof value !== "object") throw new Error("Invalid model configuration response.");
   const record = value as Record<string, unknown>;
-  if (!hasOnlyKeys(record, ["schema_version", "mode", "configured", "base_url", "model", "key_hint", "updated_at"])) throw new Error("Invalid model configuration response.");
+  if (!hasOnlyKeys(record, ["schema_version", "mode", "configured", "protocol", "base_url", "model", "key_hint", "updated_at"])) throw new Error("Invalid model configuration response.");
   if (record.schema_version !== "v1" || (record.mode !== "platform" && record.mode !== "personal") || typeof record.configured !== "boolean") throw new Error("Invalid model configuration response.");
 
+  const protocolWire = record.protocol;
+  if (protocolWire !== undefined && protocolWire !== null && protocolWire !== "openai_chat_completions" && protocolWire !== "anthropic_messages") throw new Error("Invalid model configuration protocol.");
   const baseUrlWire = record.base_url;
   const baseUrl = baseUrlWire === undefined || baseUrlWire === null ? undefined : normalizeModelBaseUrl(baseUrlWire);
   if (baseUrlWire !== undefined && baseUrlWire !== null && !baseUrl) throw new Error("Invalid model configuration response.");
@@ -105,12 +110,13 @@ export function parseModelConfig(value: unknown): ModelConfig {
   const updatedAt = parseOptionalTimestamp(record);
 
   if (record.mode === "personal" && (!record.configured || !baseUrl || !model || typeof keyHintWire !== "string")) throw new Error("Invalid personal model configuration response.");
-  if (record.mode === "platform" && (baseUrl !== undefined || model !== undefined || keyHintWire !== undefined && keyHintWire !== null)) throw new Error("Invalid platform model configuration response.");
+  if (record.mode === "platform" && (protocolWire != null || baseUrl !== undefined || model !== undefined || keyHintWire !== undefined && keyHintWire !== null)) throw new Error("Invalid platform model configuration response.");
 
   return {
     schema_version: "v1",
     mode: record.mode,
     configured: record.configured,
+    ...(record.mode === "personal" ? { protocol: protocolWire ?? "openai_chat_completions" } : {}),
     ...(baseUrl ? { base_url: baseUrl } : {}),
     ...(model ? { model } : {}),
     ...(typeof keyHintWire === "string" ? { key_hint: keyHintWire } : {}),
@@ -143,6 +149,8 @@ async function checkedJson(response: Response): Promise<unknown> {
 
 function validateUpdate(update: ModelConfigUpdate): ModelConfigUpdate {
   if (!update || typeof update !== "object" || (update.mode !== "platform" && update.mode !== "personal")) throw new Error("Invalid model configuration update.");
+  if (update.protocol !== undefined && update.protocol !== "openai_chat_completions" && update.protocol !== "anthropic_messages") throw new Error("Invalid model configuration update.");
+  if (update.mode === "platform" && update.protocol !== undefined) throw new Error("Invalid model configuration update.");
   const normalizedBaseUrl = update.base_url === undefined ? undefined : normalizeModelBaseUrl(update.base_url);
   if (update.base_url !== undefined && !normalizedBaseUrl) throw new Error("Invalid model configuration update.");
   if (update.model !== undefined && !isCleanText(update.model, MODEL_NAME_MAX_LENGTH)) throw new Error("Invalid model configuration update.");
@@ -151,6 +159,7 @@ function validateUpdate(update: ModelConfigUpdate): ModelConfigUpdate {
   if (update.api_key !== undefined && update.clear_api_key === true) throw new Error("Invalid model configuration update.");
   return {
     mode: update.mode,
+    ...(update.protocol !== undefined ? { protocol: update.protocol } : {}),
     ...(normalizedBaseUrl ? { base_url: normalizedBaseUrl } : {}),
     ...(update.model !== undefined ? { model: update.model } : {}),
     ...(update.api_key !== undefined ? { api_key: update.api_key } : {}),

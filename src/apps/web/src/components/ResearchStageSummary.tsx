@@ -19,6 +19,6 @@ export function ResearchStageSummary({ value, en }: Props) {
   if (!rows.length) return null;
   return <section className="general-source"><h3>{en ? "Saved research workflow" : "已保存的研究流程"}</h3>
     <p>{en ? "These are execution states at this version; they do not verify the findings." : "这些是本版本保存时的执行状态，不代表结论已经核验。"}</p>
-    <ol>{rows.map((item) => <li key={item.stage}>{stages[item.stage][en ? 0 : 1]}：{statuses[item.status][en ? 0 : 1]}</li>)}</ol>
+    <ol>{rows.map((item) => <li key={item.stage}>{stages[item.stage]?.[en ? 0 : 1] ?? item.stage}：{statuses[item.status]?.[en ? 0 : 1] ?? item.status}</li>)}</ol>
   </section>;
 }

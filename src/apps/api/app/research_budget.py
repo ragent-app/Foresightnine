@@ -15,26 +15,29 @@ SearchBudgetReason = Literal['search_budget', 'time_budget']
 
 @dataclass(frozen=True)
 class ResearchExecutionBudget:
-    max_model_calls: int
-    max_search_calls: int
-    max_total_tokens: int
+    max_model_calls: int | None
+    max_search_calls: int | None
+    max_total_tokens: int | None
     deadline: float
 
-    def model_exhaustion(self, *, calls: int, usage: int | None, per_call: int,
+    def model_exhaustion(self, *, calls: int, usage: int | None, per_call: int | None,
                          now: float, required_calls: int = 1) -> ModelBudgetReason | None:
-        if per_call <= 0 or required_calls <= 0 or calls < 0 or (usage is not None and usage < 0):
+        if (per_call is not None and per_call <= 0) or required_calls <= 0 or calls < 0 or (usage is not None and usage < 0):
             return 'provider_limit'
-        if calls + required_calls > self.max_model_calls:
+        if self.max_model_calls is not None and calls + required_calls > self.max_model_calls:
             return 'call_budget'
-        charged = (usage if usage is not None else calls * per_call) if calls else 0
-        if charged + required_calls * per_call > self.max_total_tokens:
-            return 'token_budget'
+        if self.max_total_tokens is not None:
+            if per_call is None or (calls and usage is None):
+                return 'provider_limit'
+            charged = usage or 0
+            if charged + required_calls * per_call > self.max_total_tokens:
+                return 'token_budget'
         if now >= self.deadline:
             return 'time_budget'
         return None
 
     def search_exhaustion(self, *, calls: int, now: float) -> SearchBudgetReason | None:
-        if calls >= self.max_search_calls:
+        if self.max_search_calls is not None and calls >= self.max_search_calls:
             return 'search_budget'
         if now >= self.deadline:
             return 'time_budget'

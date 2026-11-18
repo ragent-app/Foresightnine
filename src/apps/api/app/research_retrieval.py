@@ -23,6 +23,28 @@ MAX_CHUNKS = 2500
 CHUNK_SIZE = 1200
 
 
+def tokenize_query(value: str) -> list[str]:
+    """Same bounded lexical terms for indexing and evidence allocation."""
+    groups: list[list[str]] = []
+    for match in _WORD.finditer(value.lower()[:2000]):
+        token = match.group()
+        parts = ([token[i:i + 2] for i in range(len(token) - 1)]
+                 if len(token) > 1 and east_asian_width(token[0]) in {'W', 'F'} else [token])
+        group = list(dict.fromkeys(term for term in parts if len(term) >= 2 and term not in _STOP))
+        if len(group) > MAX_TERMS:
+            group = [group[i * (len(group) - 1) // (MAX_TERMS - 1)] for i in range(MAX_TERMS)]
+        if group:
+            groups.append(group)
+    found: list[str] = []
+    for index in range(MAX_TERMS):
+        for group in groups:
+            if index < len(group) and group[index] not in found:
+                found.append(group[index])
+                if len(found) >= MAX_TERMS:
+                    return found
+    return found
+
+
 @dataclass(frozen=True)
 class Passage:
     start: int
@@ -38,6 +60,8 @@ class PassageIndex:
     text: str
     passages: tuple[Passage, ...]
     truncated: bool
+    term_weights: tuple[tuple[str, float], ...] = ()
+    facet_terms: tuple[tuple[str, ...], ...] = ()
 
     def select(self, total_chars: int, count: int) -> list[tuple[int, str]]:
         """Return disjoint, ranked windows in source order, within the budget."""
@@ -77,21 +101,8 @@ def build_passage_index(text: str, query: str, should_stop: Callable[[], bool] |
     of irrelevance, so the caller must provide its own fallback and expose
     partial source coverage. The cancellation callback may raise.
     """
-    def tokenize(value: str) -> list[str]:
-        found: list[str] = []
-        for match in _WORD.finditer(value.lower()):
-            token = match.group()
-            candidates = ([token[i:i + 2] for i in range(len(token) - 1)]
-                          if len(token) > 1 and east_asian_width(token[0]) in {'W', 'F'} else [token])
-            for term in candidates:
-                if len(term) >= 2 and term not in _STOP and term not in found:
-                    found.append(term)
-                    if len(found) >= MAX_TERMS:
-                        return found
-        return found
-
-    groups = [tokenize(query[:2000])]
-    groups.extend(tokenize(value[:300]) for value in (facets or [])[:6] if isinstance(value, str))
+    groups = [tokenize_query(query[:2000])]
+    groups.extend(tokenize_query(value[:300]) for value in (facets or [])[:12] if isinstance(value, str))
     terms: list[str] = []
     # Round-robin across question and facets: a long question must not spend
     # the entire lexical budget before any proposed subquestion is considered.
@@ -136,4 +147,5 @@ def build_passage_index(text: str, query: str, should_stop: Callable[[], bool] |
         facet_hits = frozenset(index for index, group in enumerate(groups[1:]) if any(term in hits for term in group))
         ranked.append(Passage(left, right, sum(weights[term] for term in hits),
                               frozenset(hits), left + hits[best_term], facet_hits))
-    return PassageIndex(text, tuple(ranked), start < len(text))
+    return PassageIndex(text, tuple(ranked), start < len(text), tuple(weights.items()),
+                        tuple(tuple(term for term in group if term in weights) for group in groups[1:]))

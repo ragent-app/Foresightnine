@@ -41,7 +41,10 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
   empty(items(c.claims).length);
   items(c.claims).forEach((claim, i) => {
     lines.push(`\n${label("Finding", "条目")} ${i + 1}`);
-    for (const [key, a, b] of [["role", "Role", "类型"], ["claim_id", "Finding ID", "条目标识"], ["responds_to_claim_ids", "Related finding IDs (not verified)", "关联结论标识（未经核验）"], ["suggested_responds_to_claim_ids", "Model-suggested finding IDs (not verified)", "模型建议的关联结论标识（未经核验）"], ["responds_to_omitted", "Omitted invalid relationships", "已省略的无效关联数"], ["text", "Text", "内容"], ["authorship", "Authorship", "作者类型"], ["kind", "Kind", "内容类型"], ["verification", "Verification", "核验状态"], ["support_status", "Support status", "支持状态"], ["support_review", "Model review (not independent)", "模型复查（非独立核验）"]] as const) add(label(a,b), claim[key]);
+    for (const [key, a, b] of [["role", "Role", "类型"], ["claim_id", "Finding ID", "条目标识"], ["responds_to_claim_ids", "Related finding IDs (not verified)", "关联结论标识（未经核验）"], ["suggested_responds_to_claim_ids", "Model-suggested finding IDs (not verified)", "模型建议的关联结论标识（未经核验）"], ["responds_to_omitted", "Omitted invalid relationships", "已省略的无效关联数"], ["text", "Text", "内容"], ["authorship", "Authorship", "作者类型"], ["kind", "Kind", "内容类型"], ["verification", "Verification", "核验状态"], ["support_status", "Support status", "支持状态"], ["absence_scope_status", "Absence scope status (not established)", "缺失结论范围状态（尚未成立）"], ["support_review", "Model review (not independent)", "模型复查（非独立核验）"]] as const) add(label(a,b), claim[key]);
+    const evidenceClaims = (c.run?.evidence_links as { claims?: { claim_id?: string; assertions?: unknown[]; assertion_coverage?: string }[] } | undefined)?.claims;
+    const claimLinks = Array.isArray(evidenceClaims) ? evidenceClaims.find((row) => row.claim_id === claim.claim_id) : undefined;
+    if (claimLinks) add(label("Suggested finding breakdown (not verified)", "建议的结论分项（未经核验）"), {coverage: claimLinks.assertion_coverage, assertions: claimLinks.assertions});
     for (const citation of items(claim.citations)) {
       add(label("Citation source", "引文来源"), citation.source_id);
       add(label("Quotation", "引文"), citation.quotation);
@@ -66,7 +69,41 @@ export function formatResearchTextReport(data: ResearchV2.ResearchFullExport, en
     // Preserve every stored input, formula, precision and status, including
     // fields introduced by later compatible schema versions.
     for (const [key, value] of Object.entries(calculation)) add(key, value);
+    const links = (c.run?.evidence_links as { calculations?: { calculation_index?: number; inputs?: unknown[] }[] } | undefined)?.calculations;
+    const record = Array.isArray(links) ? links.find((item) => item.calculation_index === i) : undefined;
+    if (record) add(label("Recorded input source locations (context not independently verified)", "记录的输入来源位置（上下文未独立核验）"), record.inputs);
   });
+  if (c.run?.pdf_structure_diagnostics !== undefined) add(label("PDF geometry mapping (not a whole-document verification)", "PDF 几何映射（不代表全文核验）"), c.run.pdf_structure_diagnostics);
+  if (Array.isArray(c.run?.acquisition_decisions)) add(label("Evidence decisions (not independent proof)", "取证决定（不代表独立核验）"), c.run.acquisition_decisions.map((item: unknown) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const row = item as Record<string, unknown>;
+    const pick = (value: unknown, allowed: string[]) => typeof value === "string" && allowed.includes(value) ? value : "unknown";
+    const requirement = typeof row.requirement_id === "string" && (row.requirement_id === "user_request" || /^question:[0-9a-f]{8,64}$/.test(row.requirement_id)) ? row.requirement_id : null;
+    const sourceIds = Array.isArray(row.source_ids) ? row.source_ids.filter((id: unknown) => typeof id === "string" && /^source_[0-9a-f]{32}$/.test(id)) : [];
+    const ranges = Array.isArray(row.selected_ranges) ? row.selected_ranges.flatMap((value: unknown) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const range = value as Record<string, unknown>;
+      return typeof range.source_id === "string" && sourceIds.includes(range.source_id) && Number.isSafeInteger(range.character_start) && Number.isSafeInteger(range.character_end)
+        ? [{source_id: range.source_id, character_start: range.character_start, character_end: range.character_end}] : [];
+    }) : [];
+    return {round: Number.isSafeInteger(row.round) ? row.round : null, requirement_id: requirement,
+      action: pick(row.action, ["discover", "retrieve", "structured", "read", "counterpoint", "review", "deliver", "deliver_partial", "next_page"]),
+      reason_code: pick(row.reason_code, ["selected", "unavailable", "no_source", "missing_evidence", "unresolved_requirement", "conflict", "review_conflict", "not_reviewed", "no_progress", "no_actionable_source", "sufficient"]),
+      result_status: pick(row.result_status, ["completed", "success", "selected", "stopped", "attempted", "partial", "failed", "unavailable", "restricted", "not_requested", "no_evidence", "no_progress", "unknown"]),
+      source_ids: sourceIds, selected_ranges: ranges, remaining_gaps_recorded: Array.isArray(row.remaining_gap_codes) && row.remaining_gap_codes.length > 0,
+      stop_reason: pick(row.stop_reason, ["evidence_reviewed", "partial_delivery", "no_progress", "no_actionable_source", "sufficient"])};
+  }));
+  if (Array.isArray(c.run?.evidence_rounds)) add(label("Evidence collection rounds (leads are not evidence)", "自主取证轮次（线索不是证据）"), c.run.evidence_rounds.map((item: unknown) => {
+    if (!item || typeof item !== "object") return null;
+    const row = item as Record<string, unknown>;
+    return {round: row.round, status: row.status, search_status: row.search_status, new_source_ids: row.new_source_ids, new_ranges: row.new_ranges, remaining_source_ids: row.remaining_source_ids,
+      outcomes: Array.isArray(row.outcomes) ? row.outcomes.map((outcome: unknown) => {
+        if (!outcome || typeof outcome !== "object") return null;
+        const result = outcome as Record<string, unknown>;
+        return {candidate_index: result.candidate_index, status: result.status, source_id: result.source_id};
+      }) : []};
+  }));
+  if (c.run?.source_quality !== undefined) add(label("Recorded source identity and duplication (not independent verification)", "记录的来源身份与重复关系（非独立核验）"), c.run.source_quality);
   section(label("Sources and provenance", "来源与追溯信息"));
   empty(data.source_provenance.length);
   data.source_provenance.forEach((source, i) => {

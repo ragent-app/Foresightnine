@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from threading import RLock
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -32,6 +33,7 @@ class ModelConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     mode: Literal["platform", "personal"]
+    protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
     base_url: str | None = Field(default=None, min_length=1, max_length=2048)
     model: str | None = Field(default=None, min_length=1, max_length=128)
     api_key: str | None = Field(default=None, min_length=8, max_length=512)
@@ -41,7 +43,7 @@ class ModelConfigUpdate(BaseModel):
     def validate_key_action(self) -> "ModelConfigUpdate":
         if self.api_key is not None and self.clear_api_key:
             raise ValueError("api_key and clear_api_key are mutually exclusive")
-        if self.mode == "platform" and any((self.base_url is not None, self.model is not None, self.api_key is not None, self.clear_api_key)):
+        if self.mode == "platform" and any((self.protocol is not None, self.base_url is not None, self.model is not None, self.api_key is not None, self.clear_api_key)):
             raise ValueError("platform mode does not accept personal model fields")
         for name in ("base_url", "model", "api_key"):
             value = getattr(self, name)
@@ -56,6 +58,7 @@ class ModelConfigResponse(BaseModel):
     schema_version: Literal["v1"] = "v1"
     mode: Literal["platform", "personal"]
     configured: bool
+    protocol: Literal["openai_chat_completions", "anthropic_messages"] | None = None
     base_url: str | None = None
     model: str | None = None
     key_hint: str | None = Field(default=None, pattern=r"^••••[A-Za-z0-9]{4}$")
@@ -74,6 +77,7 @@ class StoredModelConfig(BaseModel):
     schema_version: Literal["v1"] = "v1"
     account_id: str = Field(min_length=8, max_length=80)
     mode: Literal["platform", "personal"]
+    protocol: Literal["openai_chat_completions", "anthropic_messages"] = "openai_chat_completions"
     base_url: str | None = Field(default=None, max_length=2048)
     model: str | None = Field(default=None, max_length=128)
     encrypted_api_key: str | None = Field(default=None, min_length=32, max_length=4096)
@@ -152,6 +156,7 @@ class AccountModelSettings:
         return ModelConfigResponse(
             mode="personal",
             configured=True,
+            protocol=stored.protocol,
             base_url=stored.base_url,
             model=stored.model,
             key_hint=stored.key_hint,
@@ -174,6 +179,15 @@ class AccountModelSettings:
 
                 base_url = request.base_url if request.base_url is not None else (existing.base_url if existing else None)
                 model = request.model if request.model is not None else (existing.model if existing else None)
+                protocol = request.protocol or (existing.protocol if existing else "openai_chat_completions")
+                if existing and existing.base_url and base_url and request.api_key is None:
+                    try:
+                        old, new = urlsplit(existing.base_url), urlsplit(base_url)
+                        changed = (old.scheme.lower(), old.hostname, old.port or 443) != (new.scheme.lower(), new.hostname, new.port or 443)
+                    except ValueError:
+                        raise ModelCredentialError(422, "validation_error", "Personal model configuration is invalid.") from None
+                    if changed or protocol != existing.protocol:
+                        raise ModelCredentialError(422, "validation_error", "Changing model origin or protocol requires supplying the API key again.")
                 encrypted = existing.encrypted_api_key if existing else None
                 hint = existing.key_hint if existing else None
                 if request.clear_api_key:
@@ -193,6 +207,7 @@ class AccountModelSettings:
                 self.repository.put(account_id, StoredModelConfig(
                     account_id=account_id,
                     mode="personal",
+                    protocol=protocol,
                     base_url=base_url,
                     model=model,
                     encrypted_api_key=encrypted,
@@ -204,10 +219,10 @@ class AccountModelSettings:
         locker = getattr(self.repository, "with_advisory_lock", None)
         return locker(f"model-config:{account_id}", operation) if callable(locker) else operation()
 
-    def runtime_settings(self, account_id: str) -> OpenAICompatibleSettings | None:
+    def runtime_configuration(self, account_id: str) -> tuple[OpenAICompatibleSettings | None, StoredModelConfig | None]:
         stored = self._stored(account_id)
         if stored is None or stored.mode == "platform":
-            return None
+            return None, stored
         if self.cipher is None:
             raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.")
         if not all((stored.base_url, stored.model, stored.encrypted_api_key)):
@@ -218,9 +233,12 @@ class AccountModelSettings:
                 base_url=stored.base_url,
                 model=stored.model,
                 api_key=api_key,
-            )
+            ), stored
         except ProviderFailure as error:
             raise ModelCredentialError(503, "model_credential_storage_unavailable", "Model credential storage is unavailable.") from error
+
+    def runtime_settings(self, account_id: str) -> OpenAICompatibleSettings | None:
+        return self.runtime_configuration(account_id)[0]
 
     def delete(self, account_id: str) -> None:
         self.repository.delete(account_id)

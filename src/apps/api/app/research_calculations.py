@@ -64,6 +64,98 @@ def direction_confirmation_fingerprint(fact: dict) -> str:
     return sha256(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def derive_direction_proof(fact: dict, source_text: str, source_sha256: str,
+                           context_start: int, context_end: int) -> dict | None:
+    """Derive a narrow direction cue from a uniquely located source sentence.
+
+    This checks a textual conversion, not the source's truth or the economic
+    comparability of two facts. Ambiguous syntax and unsupported units fail closed.
+    """
+    location = fact.get('location')
+    if not isinstance(location, dict) or location.get('status') == 'ambiguous':
+        return None
+    start, end = location.get('character_start'), location.get('character_end')
+    quote = fact.get('quotation')
+    if (not isinstance(source_text, str) or not isinstance(quote, str) or
+            type(start) is not int or type(end) is not int or
+            type(context_start) is not int or type(context_end) is not int or
+            not 0 <= context_start <= start < end <= context_end <= len(source_text) or
+            source_text[start:end] != quote or source_text.count(quote) != 1 or
+            sha256(source_text.encode('utf-8')).hexdigest() != source_sha256 or
+            not isinstance(fact.get('source_id'), str)):
+        return None
+    try:
+        value = Decimal(str(fact.get('value')))
+    except (InvalidOperation, ValueError):
+        return None
+    if not value.is_finite() or value >= 0 or not is_percent_unit(str(fact.get('unit', ''))) or fact.get('currency') is not None:
+        return None
+    # A single finite percentage governed directly by an explicit downward
+    # verb; reject level targets ('decreased to'), competing numbers and verbs.
+    pattern = r'\b(decreased|declined|fell|dropped)\s+(?:by\s+)?(\d+(?:\.\d+)?)\s*(?:percent\b|per\s+cent\b|%(?!\w))'
+    matches = list(re.finditer(pattern, quote, re.I))
+    if len(matches) != 1 or Decimal(matches[0].group(2)) != -value:
+        return None
+    if len(re.findall(r'\b(?:decreased|declined|fell|dropped|increased|rose|grew|up|down)\b', quote, re.I)) != 1:
+        return None
+    if len(re.findall(r'(?<![\w.])\d+(?:\.\d+)?\s*(?:percent|per\s+cent|%)', quote, re.I)) != 1:
+        return None
+    prefix = quote[:matches[0].start()].strip()
+    subject = re.split(r'[,;:\n]', prefix)[-1].strip()
+    subject = re.sub(r'^(?:the|a|an)\s+', '', subject, flags=re.I)
+    label = str(fact.get('label', '')).casefold()
+    if not subject or len(subject) > 80 or not re.fullmatch(r'[\w\s&/-]+', subject) or subject.casefold() not in label:
+        return None
+    if re.search(r'\b(?:not|never|expected|expectation|forecast|estimated|projected|projection|target|scenario|assuming|assumed|may|might|could|would|if|unless|despite)\b', quote, re.I):
+        return None
+    # Use the containing paragraph inside the selected unit, never an unrelated
+    # year or measure elsewhere in a long source.
+    paragraph_start = source_text.rfind('\n\n', context_start, start)
+    paragraph_end = source_text.find('\n\n', end, context_end)
+    context_start = paragraph_start + 2 if paragraph_start >= 0 else context_start
+    context_end = paragraph_end if paragraph_end >= 0 else context_end
+    context = source_text[context_start:context_end]
+    if len(context) > 1200:
+        return None
+    if re.search(r'\b(?:not|never|expected|expectation|forecast|estimated|projected|projection|target|scenario|assuming|assumed|may|might|could|would|if|unless|despite)\b', context, re.I):
+        return None
+    label_remainder = label.replace(subject.casefold(), ' ', 1)
+    words = re.findall(r'[a-z]+', label_remainder)
+    if any(word not in {'growth', 'change', 'rate', 'quarter', 'annual', 'estimate', 'advance', 'q'} for word in words):
+        return None
+    if re.search(r'annual', str(fact.get('unit', '')), re.I) and not re.search(r'\bannual(?:ized|ised)?\s+rate\b', context, re.I):
+        return None
+    period = str(fact.get('period', ''))
+    years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', context))
+    period_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', period))
+    if len(years) != 1 or years != period_years:
+        return None
+    quarters = {'1': r'(?:q1|first\s+quarter)', '2': r'(?:q2|second\s+quarter)',
+                '3': r'(?:q3|third\s+quarter)', '4': r'(?:q4|fourth\s+quarter)'}
+    period_quarters = [number for number, expression in quarters.items() if re.search(r'\b' + expression + r'\b', period, re.I)]
+    quote_quarters = [number for number, expression in quarters.items() if re.search(r'\b' + expression + r'\b', quote, re.I)]
+    if quote_quarters and quote_quarters != period_quarters:
+        return None
+    if period_quarters and (len(period_quarters) != 1 or not re.search(r'\b' + quarters[period_quarters[0]] + r'\b', quote, re.I)):
+        return None
+    if not period_quarters and not re.search(r'\b' + next(iter(years)) + r'\b', quote):
+        return None
+    return {'method': 'source_direction_percent_v1', 'source_id': fact['source_id'],
+            'source_sha256': source_sha256, 'context_start': context_start, 'context_end': context_end,
+            'context_sha256': sha256(context.encode('utf-8')).hexdigest(),
+            'fact_sha256': direction_confirmation_fingerprint(fact), 'direction': 'decrease',
+            'subject': subject, 'verification': 'textual_conversion_not_independent_fact_verification'}
+
+
+def verified_direction_proof(fact: dict) -> bool:
+    proof = fact.get('direction_derivation')
+    return (isinstance(proof, dict) and proof.get('method') == 'source_direction_percent_v1'
+            and proof.get('source_id') == fact.get('source_id')
+            and proof.get('fact_sha256') == direction_confirmation_fingerprint(fact)
+            and bool(re.fullmatch(r'[0-9a-f]{64}', str(proof.get('source_sha256', ''))))
+            and bool(re.fullmatch(r'[0-9a-f]{64}', str(proof.get('context_sha256', '')))))
+
+
 def direction_user_confirmed(fact: dict) -> bool:
     confirmation = fact.get("direction_confirmation")
     if not isinstance(confirmation, dict) or confirmation.get("confirmed_by") != "user":
@@ -592,7 +684,7 @@ def calculation_input_status(calculation: dict, facts: list[dict]) -> str:
             if (candidates[0].get("quotation_match") == "pdf_line_hyphen_restored" or
                 candidates[0].get("quotation_match") == "table_markup_expanded" and not (table_user_confirmed(candidates[0]) or xbrl_source_consistent(candidates[0])) or
                 isinstance(candidates[0].get("table_structure_alignment"), dict) and candidates[0]["table_structure_alignment"].get("status") == "conflict" or
-                candidates[0].get("table_period_conflict") or monetary_currency_unspecified(candidates[0]) or monetary_currency_not_in_quotation(candidates[0]) or monetary_scale_not_in_quotation(candidates[0]) or (candidates[0].get("direction_context_unverified") and not direction_user_confirmed(candidates[0])) or currency_value_conflict(
+                candidates[0].get("table_period_conflict") or monetary_currency_unspecified(candidates[0]) or monetary_currency_not_in_quotation(candidates[0]) or monetary_scale_not_in_quotation(candidates[0]) or (candidates[0].get("direction_context_unverified") and not (direction_user_confirmed(candidates[0]) or verified_direction_proof(candidates[0]))) or currency_value_conflict(
                     candidates[0].get("currency"), snapshot.value, candidates[0].get("quotation"))):
                 return "unverifiable"
             actual = NumericFact.model_validate({key: candidates[0][key] for key in fields if key in candidates[0]})

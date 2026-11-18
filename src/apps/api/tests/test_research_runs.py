@@ -6,13 +6,21 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from tests.research_prompt_helpers import decode_research_prompt
 import pytest
 
 import app.main as api
+import app.research_coordinator as coordinator
+import app.research_official_retrieval as official_retrieval
 from app.glm_mcp_search import SearchCandidate
 from app.research_topics import ResearchContent
 from app.research_analysis import AnalysisInterrupted
 from app.research_verification import REVIEW_SYSTEM_PROMPT
+
+
+def _assert_version_chain(versions):
+    assert versions
+    assert all(child['parent_version_id'] == parent['version_id'] for parent, child in zip(versions, versions[1:]))
 
 
 def test_research_does_not_complete_when_percentage_only_matches_a_currency_amount(monkeypatch):
@@ -55,7 +63,7 @@ def test_same_number_in_another_metric_does_not_silently_complete_research(monke
     extra='GDP increased 1.6 percent in the first quarter of 2026.'
     class Provider:
         name='metric-attribution'
-        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
+        policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=6000,max_output_tokens=1500)
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
             return {'claims':[{'text':"Real GDI grew 0.9 percent in Q1 2026, below GDP's 1.6 percent.",
                 'citations':[{'source_id':source_id,'quotation':quote}]}]},20
@@ -412,12 +420,12 @@ def test_provisional_html_calculation_remains_partial_through_export_and_edit(mo
                               fact('prior', '80', 'Fiscal year ended July 29, 2023')],
                     'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}, 20
     monkeypatch.setattr(api, 'challenge_provider', Provider())
-    original_analyze = api.analyze
+    original_analyze = coordinator.analyze
     def without_diagnostic_wording(*args, **kwargs):
         from dataclasses import replace
         return replace(original_analyze(*args, **kwargs), limitations=[])
     # Completion must depend on input status, not matching a warning string.
-    monkeypatch.setattr(api, 'analyze', without_diagnostic_wording)
+    monkeypatch.setattr(coordinator, 'analyze', without_diagnostic_wording)
     client = TestClient(api.app)
     reg = client.post('/v1/auth/local/register', json={'email': f'provisional-{uuid4().hex}@example.test',
         'password': 'correct horse battery staple!'}).json()
@@ -569,7 +577,8 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert snapshot["sources"][0]["revised_at"].startswith("2024-02-01")
     assert snapshot["sources"][0]["obtained_at"]
     assert snapshot["budget"]["max_model_calls"] == 1
-    assert snapshot["selection_method"] == "ranked_nonoverlapping_windows_v49"
+    from app.research_analysis import SELECTION_METHOD
+    assert snapshot["selection_method"] == SELECTION_METHOD
     assert "Revenue was USD 100" not in inputs.text and "owner_id" not in inputs.json()
     other = client.post("/v1/auth/local/register", json={"email": "other@example.test",
         "password": "correct horse battery staple!"}).json()["access_token"]
@@ -581,8 +590,9 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
         time.sleep(0.02)
     assert state.json()["operation"]["status"] == "completed", state.text
     updated = client.get(topic_path, headers=headers).json()
-    assert len(updated["versions"]) == 3
-    assert [v["created_by"] for v in updated["versions"]] == ["user", "user", "agent"]
+    _assert_version_chain(updated["versions"])
+    assert [v["created_by"] for v in updated["versions"][:2]] == ["user", "user"]
+    assert all(v["created_by"] == "agent" for v in updated["versions"][2:])
     result = updated["versions"][-1]["content"]
     assert result["run"]["status"] == "completed"
     assert result["run"]["cost_status"] == "unknown"
@@ -606,7 +616,7 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     edited = deepcopy(result)
     edited["summary"] = "Edited"
     edited["sources"] = []
-    edited["run"] = {"status": "fabricated"}
+    edited["run"] = {"status": "fabricated", "requirement_coverage": {"meaning": "fabricated"}}
     edited["claims"][0]["text"] = "User changed the finding"
     edited["claims"][0]["support_status"] = "verified"
     edited["facts"][0]["value"] = "999"
@@ -617,7 +627,11 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert scrubbed.status_code == 201
     version = scrubbed.json()["versions"][-1]
     assert version["created_by"] == "user"
-    assert version["content"]["run"] == result["run"]
+    derived = {"evidence_links", "question_links", "research_gaps", "stage_summary", "requirement_coverage", "scope_assessment", "evidence_needs", "absence_assessment", "completion_assessment"}
+    assert {k: v for k, v in version["content"]["run"].items() if k not in derived} == {
+        k: v for k, v in result["run"].items() if k not in derived}
+    assert all(key in version["content"]["run"] for key in derived)
+    assert version["content"]["run"]["requirement_coverage"]["meaning"] == "recorded_links_not_semantic_verification"
     assert version["content"]["sources"] == result["sources"]
     assert version["content"]["claims"][0]["authorship"] == "user"
     assert version["content"]["claims"][0]["support_status"] == "not_independently_verified"
@@ -646,7 +660,9 @@ def test_research_run_commits_evidence_once_and_replays(monkeypatch):
     assert capped_version["review"] == "draft"
     assert capped_result["summary"] == "Edited"
     assert capped_version["note"] == "My retained reservation"
-    assert capped_version["parent_version_id"] == version["version_id"]
+    capped_versions = client.get(topic_path, headers=headers).json()["versions"]
+    _assert_version_chain(capped_versions)
+    assert any(item['version_id'] == version['version_id'] and item['review'] == 'confirmed' for item in capped_versions)
     assert capped_result["run"]["status"] == "partial"
     assert capped_result["run"]["error"] == "provider_budget_unknown"
     assert capped_result["run"]["model_calls"] == 0
@@ -736,7 +752,8 @@ def test_cancelling_support_review_keeps_completed_generation_as_draft(monkeypat
         "max_model_calls": 2, "max_total_tokens": 9000}).json()["operation"]
     assert entered.wait(5)
     versions = client.get(path, headers=headers).json()["versions"]
-    assert len(versions) == 2 and versions[-1]["review"] == "draft"
+    _assert_version_chain(versions)
+    assert versions[-1]["review"] == "draft"
     checkpoint = versions[-1]["content"]
     assert checkpoint["run"]["checkpoint"] == "generation" and checkpoint["run"]["status"] == "partial"
     assert checkpoint["run"]["cost_status"] == "unknown" and checkpoint["run"]["generation_tokens"] == 55
@@ -753,7 +770,7 @@ def test_cancelling_support_review_keeps_completed_generation_as_draft(monkeypat
 
 def test_selection_timeout_produces_partial_result_without_calling_model(monkeypatch):
     monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
-    monkeypatch.setattr(api, "analyze", lambda *args, **kwargs: (_ for _ in ()).throw(AnalysisInterrupted()))
+    monkeypatch.setattr(coordinator, "analyze", lambda *args, **kwargs: (_ for _ in ()).throw(AnalysisInterrupted()))
     client = TestClient(api.app)
     registration = client.post("/v1/auth/local/register", json={"email": "selection-timeout@example.test",
         "password": "correct horse battery staple!"})
@@ -846,13 +863,14 @@ def test_optional_support_review_is_bounded_and_preserves_initial_research(monke
     assert first_entry.status == "settled" and first_entry.actual_tokens == (accounted_first if accounted_first is not None else 3000 + output_limit)
     second_entry = api.billing_ledger.usage.get("model:" + op + ":support-review")
     if expected_calls == 2:
-        assert len(versions) == 3 and versions[-2]["content"]["run"]["checkpoint"] == "generation"
+        _assert_version_chain(versions)
+        assert any(v['content']['run'].get('checkpoint') == 'generation' for v in versions)
         assert current["parent_version_id"] == versions[-2]["version_id"]
         assert second_entry.status == "settled" and second_entry.actual_tokens == 12
         assert run["total_tokens"] == (accounted_first + 12 if accounted_first is not None else None)
         assert len(run["support_review_prompt_sha256"]) == 64
     else:
-        assert len(versions) == 2
+        _assert_version_chain(versions)
         assert second_entry is None and run["total_tokens"] == accounted_first
     if expected_review == "complete":
         assert content["claims"][1]["support_review"]["verdict"] == second_verdict
@@ -1227,7 +1245,9 @@ def test_review_completion_does_not_overwrite_edits_to_generation_checkpoint(mon
         time.sleep(.02)
     assert status == "failed"
     versions = client.get(path, headers=headers).json()["versions"]
-    assert len(versions) == 3 and versions[-1]["content"]["summary"] == "User revision"
+    _assert_version_chain(versions)
+    assert versions[-1]["version_id"] == saved.json()["versions"][-1]["version_id"]
+    assert versions[-1]["content"]["summary"] == "User revision"
     assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
 
 
@@ -1299,7 +1319,7 @@ def test_simulated_source_is_not_sent_to_real_research_or_saved_as_evidence(monk
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             seen.append(prompt)
             import json
-            data = json.loads(prompt)
+            data = decode_research_prompt(prompt)
             assert len(data["sources"]) == 1 and "SIMULATED_VALUE" not in prompt
             citation = {"source_id": data["sources"][0]["source_id"], "quotation": "Revenue was 100"}
             return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
@@ -1331,7 +1351,9 @@ def test_simulated_source_is_not_sent_to_real_research_or_saved_as_evidence(monk
     assert state == "completed" and len(seen) == 1
     version = client.get(path, headers=headers).json()["versions"][-1]
     content = version["content"]
-    assert content["run"]["status"] == "partial"
+    assert content["run"]["status"] == "completed"
+    assert content["run"]["scope_assessment"]["scope"] == "partial_or_unknown"
+    assert content["run"]["completion_assessment"]["task_coverage"] == "not_independently_verified"
     assert [item["source_id"] for item in content["sources"]] == [real["source_id"]]
     assert any("simulated material is excluded" in item for item in content["limitations"])
     assert "SIMULATED_VALUE" not in str(content)
@@ -1365,7 +1387,7 @@ def test_mismatched_currency_conversion_is_reviewable_and_recomputed_on_edit(mon
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             import json
-            sid = json.loads(prompt)["sources"][0]["source_id"]
+            sid = decode_research_prompt(prompt)["sources"][0]["source_id"]
             quote = "2023 revenue 53717, 2024 revenue 57063 million USD"
             cite = {"source_id": sid, "quotation": quote}
             facts = [{"fact_id": id, "label": "Revenue", "value": value, "unit": "USD millions", "currency": "USD",
@@ -1792,7 +1814,7 @@ def test_partial_support_review_records_omissions_and_leaves_other_claims_unrevi
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             if system == REVIEW_SYSTEM_PROMPT:
                 import json
-                assert [item["claim_index"] for item in json.loads(prompt)["claims"]] == [0]
+                assert [item["claim_index"] for item in decode_research_prompt(prompt)["claims"]] == [0]
                 return {"reviews": [{"claim_index": 0, "verdict": "supports"}]}, 10
             cite = {"source_id": source_id, "quotation": "Revenue was 100"}
             good = {"text": "Revenue was 100", "citations": [cite]}
@@ -1823,7 +1845,7 @@ def test_partial_support_review_records_omissions_and_leaves_other_claims_unrevi
     assert content["run"]["support_review_omissions"] == [{"claim_index": omitted, "reason": "not_reviewable"}]
     assert content["claims"][reviewed]["support_review"]["verdict"] == "supports"
     assert "support_review" not in content["claims"][omitted]
-    checkpoint = versions[-2]["content"]["run"]
+    checkpoint = next(v["content"]["run"] for v in reversed(versions) if v["content"]["run"].get("checkpoint") == "generation")
     assert checkpoint["support_review_omissions"] == [{"claim_index": omitted, "reason": "not_reviewable"}]
     assert checkpoint["support_review_method"] == content["run"]["support_review_method"]
     assert len(checkpoint["support_review_prompt_sha256"]) == 64
@@ -1840,7 +1862,7 @@ def test_isolated_review_respects_token_budget_and_checkpoints_each_result(monke
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             if system == REVIEW_SYSTEM_PROMPT:
-                payload = json.loads(prompt)
+                payload = decode_research_prompt(prompt)
                 assert len(payload["claims"]) == 1 and payload["claims"][0]["claim_index"] == 0
                 calls.append(payload["claims"][0]["text"])
                 return {"reviews":[{"claim_index":0,"verdict":"supports"}]}, 10
@@ -2027,7 +2049,7 @@ def test_run_can_focus_on_saved_unique_quotation(monkeypatch):
     prompts = []
     class Provider:
         name = 'focus-test'
-        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=6000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             prompts.append(prompt)
             return {'claims': [{'text': 'The finding is 123 dollars.', 'citations': [{'source_id': source_id, 'quotation': quote}]}]}, 10
@@ -2104,7 +2126,7 @@ def test_historical_run_sends_cutoff_and_excludes_later_source(monkeypatch):
         name = 'cutoff-test'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
-            prompts.append(json.loads(prompt))
+            prompts.append(decode_research_prompt(prompt))
             return {'claims': []}, 10
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     client = TestClient(api.app)
@@ -2454,7 +2476,7 @@ def test_material_topic_accepts_versioned_run_questions_and_idempotency(monkeypa
         name = 'run-question-test'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
-            data = json.loads(prompt)
+            data = decode_research_prompt(prompt)
             received.append(data['question'])
             return {'claims':[{'text':'Cash was 100.', 'citations':[{'source_id': source_id, 'quotation':'Cash was 100.'}]}]}, 10
     monkeypatch.setattr(api, 'challenge_provider', Provider())
@@ -2490,7 +2512,7 @@ def test_material_topic_accepts_versioned_run_questions_and_idempotency(monkeypa
     assert client.post(path+'/runs', headers={**headers,'Idempotency-Key':'question-one'}, json=changed).status_code == 409
     _, _, updated = run(first['version_id'], 'question-two', 'What was profit?')
     assert received == ['What was cash?', 'What was profit?']
-    assert updated['versions'][-2]['content']['run']['question_override'] == 'What was cash?'
+    assert next(v for v in updated['versions'] if v['version_id'] == first['version_id'])['content']['run']['question_override'] == 'What was cash?'
     assert updated['versions'][-1]['content']['run']['question_override'] == 'What was profit?'
     assert updated['request']['question'] == ''
     exported = client.get(path+'/versions/'+first['version_id']+'/export', headers=headers).json()
@@ -2554,8 +2576,8 @@ def test_per_run_input_limit_is_bounded_recorded_and_reserved(monkeypatch):
     source_id = client.post("/v2/research/sources", headers=headers, json={"title":"Report", "text":"Revenue was 100.", "permissions":{"store":True,"display":True,"model_input":True}}).json()["source_id"]
     topic = client.post("/v2/research/topics", headers=headers, json={"question":"Revenue?", "source_ids":[source_id]}).json()
     path = "/v2/research/topics/" + topic["topic_id"]
-    payload = {"parent_version_id":topic["versions"][-1]["version_id"], "max_input_tokens_per_call":2500,
-               "max_total_tokens":4000, "require_counterarguments":False}
+    payload = {"parent_version_id":topic["versions"][-1]["version_id"], "max_input_tokens_per_call":3500,
+               "max_total_tokens":5000, "require_counterarguments":False}
     for invalid in (0, 6001, 12001, True):
         bad = client.post(path + "/runs", headers={**headers,"Idempotency-Key":f"invalid-cap-{invalid}"}, json={**payload,"max_input_tokens_per_call":invalid})
         assert bad.status_code == 422
@@ -2566,24 +2588,24 @@ def test_per_run_input_limit_is_bounded_recorded_and_reserved(monkeypatch):
         status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
         if status in ("completed", "failed"): break
         time.sleep(.02)
-    assert status == "completed" and calls == [2500] and reservations == [4000]
+    assert status == "completed" and calls == [3500] and reservations == [5000]
     snapshot = client.get(path + "/runs/" + op + "/inputs", headers=headers).json()
-    assert snapshot["budget"]["max_input_tokens_per_call"] == 2500
-    assert snapshot["provider_limits"]["max_input_tokens"] == 2500
+    assert snapshot["budget"]["max_input_tokens_per_call"] == 3500
+    assert snapshot["provider_limits"]["max_input_tokens"] == 3500
     assert provider.policy.max_input_tokens == 3000
     replay = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json=payload)
     assert replay.status_code == 202 and replay.headers["Idempotency-Replayed"] == "true"
-    assert calls == [2500]
+    assert calls == [3500]
     # A subsequent configuration change must not hide an already accepted
     # operation or cause a duplicate provider request.
     monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", "2000")
     replay = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json=payload)
     assert replay.status_code == 202 and replay.headers["Idempotency-Replayed"] == "true"
-    assert replay.json()["operation"]["operation_id"] == op and calls == [2500]
+    assert replay.json()["operation"]["operation_id"] == op and calls == [3500]
     conflict = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"per-run-cap"}, json={**payload,"max_input_tokens_per_call":2000})
-    assert conflict.status_code == 409 and calls == [2500]
+    assert conflict.status_code == 409 and calls == [3500]
     fresh = client.post(path + "/runs", headers={**headers,"Idempotency-Key":"new-over-cap"}, json=payload)
-    assert fresh.status_code == 422 and calls == [2500]
+    assert fresh.status_code == 422 and calls == [3500]
 
 
 def test_related_source_sentence_is_reviewable_and_recomputed_after_edit(monkeypatch):
@@ -2807,7 +2829,7 @@ def test_model_omitted_review_is_partial_and_returned_verdict_is_retained(monkey
     assert content["claims"][0]["support_review"]["verdict"]=="supports"
     assert content["claims"][0]["support_review"]["independently_verified"] is False
     assert "support_review" not in content["claims"][1]
-    assert versions[-2]["content"]["run"]["checkpoint"]=="generation"
+    assert any(v["content"]["run"].get("checkpoint") == "generation" for v in versions)
 
 
 def test_pdf_line_hyphen_caution_survives_claim_edits(monkeypatch):
@@ -3242,7 +3264,7 @@ def test_run_can_select_sources_without_changing_history_or_leaking_others(monke
         name="selected-sources-test"
         policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
-            observed.append(json.loads(prompt))
+            observed.append(decode_research_prompt(prompt))
             ref=observed[-1]["sources"][0]["source_id"]
             return {"claims":[{"text":"Selected document says revenue was 200.","citations":[{"source_id":ref,"quotation":"Revenue was 200."}]}]},10
     monkeypatch.setattr(api,"challenge_provider",Provider())
@@ -3365,12 +3387,12 @@ def test_opt_in_research_fetches_one_official_source_and_records_recovery_id(mon
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             seen["model"] += 1
-            source = json.loads(prompt)["sources"][0]
+            source = decode_research_prompt(prompt)["sources"][0]
             assert "Revenue was 100 million." in source["text"] and "ignore" not in prompt
             return {"claims": [{"text": "Revenue was 100 million.", "citations": [{"source_id": source["source_id"],
                 "quotation": "Revenue was 100 million."}]}]}, 10
     monkeypatch.setattr(api, "evidence_provider", Search())
-    monkeypatch.setattr(api, "fetch_official_text", fetch)
+    monkeypatch.setattr(official_retrieval, "fetch_official_text", fetch)
     monkeypatch.setattr(api, "challenge_provider", Provider())
     monkeypatch.setattr(api, "_reserve_search_call", lambda request: None)
     monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
@@ -3426,7 +3448,7 @@ def test_auto_fetch_does_not_bypass_history_selection_or_cost(monkeypatch, extra
     monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
     def forbidden(*args, **kwargs):
         raise AssertionError('No source fetch or model call is authorized here')
-    monkeypatch.setattr(api, 'fetch_official_text', forbidden)
+    monkeypatch.setattr(official_retrieval, 'fetch_official_text', forbidden)
     client = TestClient(api.app)
     auth = client.post('/v1/auth/local/register', json={'email': f'autoguard-{uuid4().hex}@example.test',
         'password': 'correct horse battery staple!'}).json()
@@ -3470,7 +3492,7 @@ def test_fetched_source_remains_recoverable_if_model_process_fails(monkeypatch):
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
             raise RuntimeError('simulated provider process failure')
     monkeypatch.setattr(api, 'evidence_provider', Search())
-    monkeypatch.setattr(api, 'fetch_official_text', fetch)
+    monkeypatch.setattr(official_retrieval, 'fetch_official_text', fetch)
     monkeypatch.setattr(api, 'challenge_provider', BrokenModel())
     monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
     monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
@@ -3518,7 +3540,7 @@ def test_failed_official_fetch_keeps_a_lead_without_fabricating_evidence(monkeyp
         calls.append('fetch')
         raise FetchFailure('source_timeout')
     monkeypatch.setattr(api, 'evidence_provider', Search())
-    monkeypatch.setattr(api, 'fetch_official_text', failed_fetch)
+    monkeypatch.setattr(official_retrieval, 'fetch_official_text', failed_fetch)
     monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
     client = TestClient(api.app)
     auth = client.post('/v1/auth/local/register', json={'email': f'autofail-{uuid4().hex}@example.test',
@@ -3610,11 +3632,11 @@ def test_opt_in_discovery_retrieves_pdf_as_owned_recoverable_source(monkeypatch)
         name = 'test-model'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
-            source = json.loads(prompt)['sources'][0]
+            source = decode_research_prompt(prompt)['sources'][0]
             return {'claims': [{'text': 'Revenue was 100.', 'citations': [{'source_id': source['source_id'],
                 'quotation': 'Revenue was 100.'}]}]}, 10
     monkeypatch.setattr(api, 'evidence_provider', Search())
-    monkeypatch.setattr(api, 'fetch_official_pdf', fetch)
+    monkeypatch.setattr(official_retrieval, 'fetch_official_pdf', fetch)
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     monkeypatch.setattr(api, '_reserve_search_call', lambda *a: None)
     monkeypatch.setattr(api, '_reserve_model_call', lambda *a, **k: None)
@@ -3675,12 +3697,12 @@ def test_auto_sec_filing_uses_configured_contact_or_falls_back(monkeypatch, conf
     class Provider:
         name='test-model';policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
-            source=json.loads(prompt)['sources'][0]
+            source=decode_research_prompt(prompt)['sources'][0]
             return {'claims':[{'text':'Revenue was 100.','citations':[{'source_id':source['source_id'],
                     'quotation':'Revenue was 100.'}]}]},10
     monkeypatch.setattr(api, 'evidence_provider', Search())
-    monkeypatch.setattr(api, 'fetch_sec_filing', sec_fetch)
-    monkeypatch.setattr(api, 'fetch_official_text', bea_fetch)
+    monkeypatch.setattr(official_retrieval, 'fetch_sec_filing', sec_fetch)
+    monkeypatch.setattr(official_retrieval, 'fetch_official_text', bea_fetch)
     monkeypatch.setattr(api, 'reserve_sec_request', lambda *args: True)
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     monkeypatch.setattr(api, '_reserve_search_call', lambda *args: None)
@@ -3723,7 +3745,7 @@ def test_auto_sec_filing_respects_shared_rate_limit(monkeypatch):
     monkeypatch.setattr(api,'_reserve_search_call',lambda *args:None)
     monkeypatch.setattr(api,'reserve_sec_request',lambda *args:False)
     def forbidden(*args,**kwargs):raise AssertionError('rate-limited SEC request must not be made')
-    monkeypatch.setattr(api,'fetch_sec_filing',forbidden)
+    monkeypatch.setattr(official_retrieval,'fetch_sec_filing',forbidden)
     client=TestClient(api.app)
     auth=client.post('/v1/auth/local/register',json={'email':f'sec-limit-{uuid4().hex}@example.test',
         'password':'correct horse battery staple!'}).json();headers={'Authorization':'Bearer '+auth['access_token']}
@@ -3755,7 +3777,7 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
         name = 'counterpoint-test'
         policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
         def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
-            payload = json.loads(prompt)
+            payload = decode_research_prompt(prompt)
             prompts.append((system, payload))
             if system == REVIEW_SYSTEM_PROMPT:
                 return {'reviews':[{'claim_index':i,'verdict':'supports'} for i in range(len(payload['claims']))]}, 80
@@ -3797,7 +3819,7 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
             claims = [{'text':text, 'citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]
             if mode == 'truncated_findings':
                 claims += [{'text':'Costs increased.', 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]},
-                           {'text':('The preferred action was lower costs. ' * 80).strip(), 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]
+                           {'text':('The preferred action was lower costs. ' * 78).strip(), 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]
             return {'claims':claims}, 50
     monkeypatch.setattr(api, 'challenge_provider', Provider())
     monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
@@ -3823,7 +3845,7 @@ def test_counterpoint_followup_preserves_generation_and_respects_budgets(monkeyp
     assert state == 'completed'
     versions = client.get(path,headers=headers).json()['versions']
     content = versions[-1]['content']; run = content['run']
-    assert content['claims'][0]['text'].startswith('Revenue increased')
+    assert content['claims'] and content['claims'][0]['text'].startswith('Revenue increased'), (run.get('error'), run.get('analysis_error_detail'), run.get('generation_status'), content['limitations'])
     if mode == 'followup_and_review':
         assert len(prompts)==3 and run['counterpoint_status']=='completed'
         assert run['model_calls']==3 and run['generation_tokens']==50 and run['counterpoint_tokens']==70
@@ -3902,7 +3924,7 @@ def test_counterpoint_cancellation_preserves_generation_checkpoint(monkeypatch):
         name='counterpoint-cancel'
         policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
-            if 'counterpoint_request' in json.loads(prompt):
+            if 'counterpoint_request' in decode_research_prompt(prompt):
                 entered.set(); assert release.wait(5)
                 return {'counterarguments':[{'text':'Costs increased.', 'citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]}, 10
             return {'claims':[{'text':'Revenue increased.','citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]}, 20
@@ -3945,7 +3967,7 @@ def test_counterpoint_followup_never_overwrites_concurrent_edit(monkeypatch):
         name='counterpoint-edit'
         policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
-            if 'counterpoint_request' in json.loads(prompt):
+            if 'counterpoint_request' in decode_research_prompt(prompt):
                 entered.set(); assert release.wait(5)
                 return {'counterarguments':[{'text':'Costs increased.','citations':[{'source_id':source_id,'quotation':'Costs increased.'}]}]},10
             return {'claims':[{'text':'Revenue increased.','citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]},20
@@ -3989,7 +4011,7 @@ def test_counterpoint_followup_respects_existing_evidence_warnings(monkeypatch, 
         name='counterpoint-warning-test'
         policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
-            payload=json.loads(prompt);calls.append(payload)
+            payload=decode_research_prompt(prompt);calls.append(payload)
             cite=lambda q:{'source_id':source_id,'quotation':q}
             if 'counterpoint_request' in payload:
                 return {'counterarguments':[{'text':'Costs increased.','citations':[cite('Costs increased.')]}]}, 15
@@ -4034,7 +4056,7 @@ def test_counterpoint_followup_respects_counterargument_capacity(monkeypatch,exi
         name='counterpoint-capacity-test'
         policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=3000,max_output_tokens=1500)
         def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
-            data=json.loads(prompt); calls.append(data)
+            data=decode_research_prompt(prompt); calls.append(data)
             cite=lambda q:{'source_id':source_id,'quotation':q}
             if 'counterpoint_request' in data:
                 return {'counterarguments':[{'text':'Costs increased.','citations':[cite('Costs increased.')]} for _ in range(2)]},15

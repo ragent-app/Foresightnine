@@ -75,9 +75,9 @@ class SlidingWindowLimiter:
 class ModelCallQuota:
     """At-most-once reservations for one logical idempotent provider call."""
 
-    def __init__(self, *, limit: int = 20, window_seconds: float = 86400.0, now: Callable[[], float] = monotonic) -> None:
-        if limit < 1 or window_seconds <= 0:
-            raise ValueError("quota and window must be positive")
+    def __init__(self, *, limit: int | None = None, window_seconds: float = 86400.0, now: Callable[[], float] = monotonic) -> None:
+        if (limit is not None and limit < 0) or window_seconds <= 0:
+            raise ValueError("quota must be non-negative and window positive")
         self.limit = limit
         self.window_seconds = window_seconds
         self._now = now
@@ -89,6 +89,10 @@ class ModelCallQuota:
         normalized = tuple(dict.fromkeys(subject for subject in subjects if subject))
         if not normalized:
             raise ValueError("at least one quota subject is required")
+        if self.limit is None:
+            return AbuseDecision(True)
+        if self.limit == 0:
+            return AbuseDecision(False, max(1, int(self.window_seconds)), "model_quota")
         current = self._now()
         with self._lock:
             if reservation_id in self._reservations:
@@ -118,7 +122,7 @@ class ModelCallQuota:
 
 
 class AbuseControl:
-    def __init__(self, *, ip_limit: int = 120, session_limit: int = 60, model_quota: int = 20, now: Callable[[], float] = monotonic) -> None:
+    def __init__(self, *, ip_limit: int = 120, session_limit: int = 60, model_quota: int | None = None, now: Callable[[], float] = monotonic) -> None:
         self.ip = SlidingWindowLimiter(limit=ip_limit, now=now)
         self.session = SlidingWindowLimiter(limit=session_limit, now=now)
         self.model = ModelCallQuota(limit=model_quota, now=now)

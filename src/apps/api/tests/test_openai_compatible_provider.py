@@ -7,7 +7,7 @@ import pytest
 
 import app.openai_compatible as openai_compatible
 from app.phase3 import ChallengeInput, DeterministicMockLlmProvider, ProviderFailure, ProviderPolicy, UnavailableLlmProvider, build_llm_provider
-from app.openai_compatible import GlmCodingGenerationSettings, HttpResponse, OpenAICompatibleLlmProvider, OpenAICompatibleSettings
+from app.openai_compatible import HttpResponse, OpenAICompatibleLlmProvider, OpenAICompatibleSettings
 
 
 _SECRET = "unit-test-only-provider-secret"
@@ -153,7 +153,7 @@ def test_generic_profile_success_excludes_glm_generation_fields(monkeypatch: pyt
     provider_value.generate_challenge(request())
 
     body = json.loads(captured[0])
-    assert set(body) == {"model", "messages", "max_tokens", "response_format"}
+    assert set(body) == {"model", "messages", "response_format"}
     assert not {"thinking", "reasoning_effort", "do_sample", "temperature", "top_p"}.intersection(body)
 
 
@@ -203,29 +203,6 @@ def test_account_settings_inherit_the_bounded_deployment_timeout(monkeypatch: py
     assert built.policy.timeout_seconds == 120
 
 
-def test_account_glm_coding_endpoint_uses_its_required_generation_profile(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
-    monkeypatch.setenv("FORESIGHTNINE_LLM_TIMEOUT_SECONDS", "120")
-    settings = OpenAICompatibleSettings.from_account_values(
-        base_url="https://open.bigmodel.cn/api/coding/paas/v4",
-        model="glm-5.3-flash",
-        api_key=_SECRET,
-    )
-    captured: list[bytes] = []
-
-    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
-        captured.append(body)
-        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
-
-    built = OpenAICompatibleLlmProvider(settings, transport=transport)
-    built.generate_challenge(request())
-    payload = json.loads(captured[0])
-
-    assert built.policy.timeout_seconds == 120
-    assert built.policy.max_output_tokens == 4000
-    assert payload["thinking"] == {"type": "enabled"}
-    assert payload["reasoning_effort"] == "low"
-    assert payload["do_sample"] is False
 
 
 def test_environment_timeout_rejects_unbounded_or_invalid_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -304,7 +281,7 @@ def test_429_is_retried_only_within_bounded_policy(monkeypatch: pytest.MonkeyPat
     assert attempts == 2
 
 
-def test_timeout_is_retried_only_within_bounded_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ambiguous_timeout_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts = 0
 
     def transport(*_args: object) -> HttpResponse:
@@ -314,7 +291,7 @@ def test_timeout_is_retried_only_within_bounded_policy(monkeypatch: pytest.Monke
 
     with pytest.raises(ProviderFailure, match="timed out"):
         provider(monkeypatch, transport).generate_challenge(request())
-    assert attempts == 2
+    assert attempts == 1
 
 
 def test_https_allowlist_and_secret_non_leakage(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -431,209 +408,24 @@ def test_pinned_https_connection_uses_validated_ip_and_original_tls_hostname(mon
     assert connection.sock == "tls-socket"
 
 
-def test_glm_coding_profile_pins_official_endpoint_and_keeps_secret_server_side(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: list[tuple[str, str, dict[str, str], bytes]] = []
-
-    def transport(method: str, url: str, headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
-        captured.append((method, url, headers, body))
-        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
-
-    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
-    value = OpenAICompatibleLlmProvider.from_glm_coding_environment(
-        policy=ProviderPolicy(max_attempts=1),
-        transport=transport,
-    )
-    value.generate_challenge(request())
-
-    assert captured[0][0:2] == ("POST", "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions")
-    assert json.loads(captured[0][3])["model"] == "glm-5.3-flash"
-    assert _SECRET not in captured[0][3].decode("utf-8")
-    assert _SECRET not in repr(value)
 
 
-def test_glm_coding_profile_sends_deterministic_generation_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: list[bytes] = []
-
-    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
-        captured.append(body)
-        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
-
-    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
-    OpenAICompatibleLlmProvider.from_glm_coding_environment(
-        policy=ProviderPolicy(max_attempts=1),
-        transport=transport,
-    ).generate_challenge(request())
-
-    body = json.loads(captured[0])
-    assert set(body) == {
-        "model",
-        "messages",
-        "thinking",
-        "reasoning_effort",
-        "do_sample",
-        "max_tokens",
-        "response_format",
-    }
-    assert body["thinking"] == {"type": "enabled"}
-    assert body["reasoning_effort"] == "low"
-    assert body["do_sample"] is False
-    assert "temperature" not in body
-    assert "top_p" not in body
-    assert body["max_tokens"] == 1500
-    assert body["response_format"] == {"type": "json_object"}
 
 
-def test_glm_coding_account_profile_inherits_low_reasoning_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(openai_compatible, "_require_public_dns", lambda *_args, **_kwargs: None)
-    monkeypatch.delenv("FORESIGHTNINE_GLM_CODING_REASONING_EFFORT", raising=False)
-
-    settings = OpenAICompatibleSettings.from_account_values(
-        base_url="https://open.bigmodel.cn/api/coding/paas/v4",
-        model="glm-5.3-flash",
-        api_key=_SECRET,
-    )
-
-    assert settings.glm_generation is not None
-    assert settings.glm_generation.reasoning_effort == "low"
 
 
-def test_glm_coding_profile_default_budget_allows_thinking_and_full_rubric(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: list[bytes] = []
-
-    def transport(_method: str, _url: str, _headers: dict[str, str], body: bytes, _timeout: float) -> HttpResponse:
-        captured.append(body)
-        return HttpResponse(200, json.dumps({"choices": [{"message": {"content": json.dumps(valid_payload())}}]}))
-
-    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
-    OpenAICompatibleLlmProvider.from_glm_coding_environment(transport=transport).generate_challenge(request())
-
-    assert json.loads(captured[0])["max_tokens"] == 4000
 
 
-@pytest.mark.parametrize(
-    ("name", "value"),
-    [
-        ("FORESIGHTNINE_GLM_CODING_THINKING", "maybe"),
-        ("FORESIGHTNINE_GLM_CODING_THINKING", "disabled"),
-        ("FORESIGHTNINE_GLM_CODING_THINKING", "false"),
-        ("FORESIGHTNINE_GLM_CODING_REASONING_EFFORT", "ultra"),
-        ("FORESIGHTNINE_GLM_CODING_DO_SAMPLE", "yes"),
-    ],
-)
-def test_glm_coding_profile_rejects_invalid_server_generation_config(
-    monkeypatch: pytest.MonkeyPatch,
-    name: str,
-    value: str,
-) -> None:
-    calls = 0
-
-    def transport(*_args: object) -> HttpResponse:
-        nonlocal calls
-        calls += 1
-        raise AssertionError("invalid configuration must not call the provider")
-
-    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
-    monkeypatch.setenv(name, value)
-    provider = OpenAICompatibleLlmProvider.from_glm_coding_environment(
-        policy=ProviderPolicy(max_attempts=1),
-        transport=transport,
-    )
-    with pytest.raises(ProviderFailure) as error:
-        provider.generate_challenge(request())
-    assert error.value.code == "provider_configuration_invalid"
-    assert error.value.retryable is False
-    assert calls == 0
 
 
-def test_glm_coding_profile_rejects_disabled_direct_generation_before_transport() -> None:
-    calls = 0
-
-    def transport(*_args: object) -> HttpResponse:
-        nonlocal calls
-        calls += 1
-        raise AssertionError("disabled thinking must not call the provider")
-
-    settings = OpenAICompatibleSettings(
-        base_url="https://llm.example.test/v1",
-        model="glm-5.3-flash",
-        allowed_hosts=frozenset({("llm.example.test", 443)}),
-        api_key=_SECRET,
-        glm_generation=GlmCodingGenerationSettings(thinking_enabled=False),
-    )
-    value = OpenAICompatibleLlmProvider(settings, policy=ProviderPolicy(max_attempts=1), transport=transport)
-
-    with pytest.raises(ProviderFailure, match="thinking") as error:
-        value.generate_challenge(request())
-    assert error.value.code == "provider_configuration_invalid"
-    assert error.value.retryable is False
-    assert calls == 0
 
 
-def test_glm_coding_profile_from_values_rejects_model_override_when_generation_is_present() -> None:
-    with pytest.raises(ProviderFailure, match="fixed to glm-5.3-flash") as error:
-        OpenAICompatibleSettings.from_values(
-            base_url="https://llm.example.test/v1",
-            model="glm-tenant-approved",
-            api_key=_SECRET,
-            allowlist="llm.example.test",
-            glm_generation=GlmCodingGenerationSettings(),
-        )
-    assert error.value.code == "provider_configuration_invalid"
-    assert error.value.retryable is False
 
 
-def test_glm_coding_profile_rejects_direct_settings_model_override_before_transport() -> None:
-    calls = 0
-
-    def transport(*_args: object) -> HttpResponse:
-        nonlocal calls
-        calls += 1
-        raise AssertionError("invalid model configuration must not call the provider")
-
-    settings = OpenAICompatibleSettings(
-        base_url="https://llm.example.test/v1",
-        model="glm-tenant-approved",
-        allowed_hosts=frozenset({("llm.example.test", 443)}),
-        api_key=_SECRET,
-        glm_generation=GlmCodingGenerationSettings(),
-    )
-    value = OpenAICompatibleLlmProvider(settings, policy=ProviderPolicy(max_attempts=1), transport=transport)
-
-    with pytest.raises(ProviderFailure, match="fixed to glm-5.3-flash") as error:
-        value.generate_challenge(request())
-    assert error.value.code == "provider_configuration_invalid"
-    assert error.value.retryable is False
-    assert calls == 0
 
 
-def test_glm_coding_profile_rejects_model_override_before_transport(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = 0
-
-    def transport(*_args: object) -> HttpResponse:
-        nonlocal calls
-        calls += 1
-        raise AssertionError("invalid model configuration must not call the provider")
-
-    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", _SECRET)
-    monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_MODEL", "glm-tenant-approved")
-    monkeypatch.setenv("FORESIGHTNINE_LLM_BASE_URL", "https://untrusted.example.test/v1")
-    value = OpenAICompatibleLlmProvider.from_glm_coding_environment(transport=transport)
-
-    with pytest.raises(ProviderFailure, match="fixed to glm-5.3-flash") as error:
-        value.generate_challenge(request())
-    assert error.value.code == "provider_configuration_invalid"
-    assert error.value.retryable is False
-    assert calls == 0
 
 
-def test_glm_coding_selector_stays_fail_closed_without_its_server_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FORESIGHTNINE_LLM_PROVIDER", "glm_coding")
-    monkeypatch.delenv("FORESIGHTNINE_GLM_CODING_API_KEY", raising=False)
-    built = build_llm_provider()
-
-    assert isinstance(built, OpenAICompatibleLlmProvider)
-    with pytest.raises(ProviderFailure, match="secret"):
-        built.generate_challenge(request())
 
 
 def test_5xx_is_retried_then_fails_without_accepting_a_result(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -739,27 +531,19 @@ def test_invalid_structured_output_retains_only_valid_reported_usage(monkeypatch
 
 
 
-def test_research_input_budget_is_bounded_and_does_not_change_shared_provider(monkeypatch):
+def test_research_input_budget_is_explicit_and_does_not_change_shared_provider(monkeypatch):
     configure(monkeypatch)
     provider = OpenAICompatibleLlmProvider.from_environment()
-    default_limit = provider.policy.max_input_tokens
+    assert provider.policy.max_input_tokens is None
     assert provider.for_research() is provider
-    monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", "6000")
-    research_provider = provider.for_research()
-    assert research_provider.policy.max_input_tokens == 6000
-    assert provider.policy.max_input_tokens == default_limit
-    assert research_provider.transport is provider.transport
     limited = provider.for_research(2500)
-    assert limited.policy.max_input_tokens == 2500
-    assert research_provider.policy.max_input_tokens == 6000 and provider.policy.max_input_tokens == default_limit
-    with pytest.raises(ValueError, match="deployment limit"):
-        provider.for_research(6001)
-    with pytest.raises(ValueError, match="deployment limit"):
-        provider.for_research(True)
-    for raw in ("0", "12001", "-1", "3.5", "not-a-number"):
-        monkeypatch.setenv("FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS", raw)
-        with pytest.raises(ProviderFailure, match="configuration"):
-            provider.for_research()
+    assert limited.policy.max_input_tokens == 2500 and provider.policy.max_input_tokens is None
+    assert limited.transport is provider.transport
+    assert provider.for_research(12001).policy.max_input_tokens == 12001
+    assert provider.for_research(0).policy.max_input_tokens == 0
+    for value in (-1, True):
+        with pytest.raises(ValueError):
+            provider.for_research(value)
 
 
 def test_binary_transport_preserves_bytes_without_weakening_text_or_size_limits(monkeypatch):
@@ -862,3 +646,218 @@ def test_transport_capacity_remains_bounded_when_dns_cannot_be_cancelled(monkeyp
     finally:
         release.set()
         assert finished.wait(2)
+
+
+def test_research_transport_diagnostics_and_timeouts_are_per_call(monkeypatch):
+    configure(monkeypatch)
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_MAX_INPUT_TOKENS', '6000')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CONNECT_TIMEOUT_SECONDS', '12')
+    monkeypatch.setenv('FORESIGHTNINE_LLM_RESPONSE_TIMEOUT_SECONDS', '7')
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', lambda *a, **k: ('1.1.1.1',))
+    observed = []
+    class Sock:
+        def settimeout(self, value): observed.append(('response', value))
+    class Response:
+        status = 200
+        headers = {}
+        def read(self, size): return b'{"choices":[{"message":{"content":"{\\"ok\\":true}"}}],"usage":{"total_tokens":2}}'
+    class Connection:
+        def __init__(self, host, port, address, timeout):
+            observed.append(('connect', timeout)); self.sock = Sock()
+        def connect(self): pass
+        def request(self, *args, **kwargs): pass
+        def getresponse(self): return Response()
+        def close(self): pass
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', Connection)
+    instance = OpenAICompatibleLlmProvider.from_environment().for_research()
+    snapshots=[]
+    result, usage = instance.generate_structured('private prompt', diagnostic_callback=snapshots.append)
+    assert result == {'ok': True} and usage == 2
+    assert observed[0] == ('connect', 12)
+    assert all(0 < value <= 7 for kind, value in observed[1:] if kind == 'response')
+    assert snapshots[0]['submission_state'] == 'response_received'
+    assert {x['stage'] for x in snapshots[0]['stages']} >= {'dns','request_write','response_headers','response_body'}
+    assert 'private prompt' not in repr(snapshots)
+
+
+def test_transport_diagnostics_failure_and_callback_isolation(monkeypatch):
+    configure(monkeypatch)
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', lambda *a, **k: ('1.1.1.1',))
+    class Connection:
+        def __init__(self, *args): self.sock = None
+        def connect(self): raise TimeoutError(110, 'secret should not escape')
+        def close(self): pass
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', Connection)
+    instance = OpenAICompatibleLlmProvider.from_environment()
+    snapshots=[]
+    with pytest.raises(ProviderFailure) as exc:
+        instance.generate_structured('private', diagnostic_callback=snapshots.append)
+    assert exc.value.code == 'provider_timeout'
+    assert snapshots[0]['submission_state'] == 'not_started'
+    assert 'secret' not in repr(snapshots)
+    with pytest.raises(ProviderFailure) as exc:
+        instance.generate_structured('private', diagnostic_callback=lambda _: 1/0)
+    assert exc.value.code == 'provider_timeout'
+
+
+def test_transport_timeout_configuration_rejects_invalid(monkeypatch):
+    configure(monkeypatch)
+    monkeypatch.setenv('FORESIGHTNINE_LLM_CONNECT_TIMEOUT_SECONDS', 'nan')
+    with pytest.raises(ProviderFailure) as exc:
+        OpenAICompatibleLlmProvider.from_environment().generate_structured('prompt')
+    assert exc.value.code == 'provider_configuration_invalid'
+
+
+@pytest.mark.parametrize('failed,expected_state', [
+    ('dns','not_started'), ('tcp','not_started'), ('tls','not_started'),
+    ('request_write','started_unknown'), ('response_headers','started_unknown'),
+    ('response_body','started_unknown'),
+])
+def test_transport_stage_failures_are_sanitized(monkeypatch, failed, expected_state):
+    configure(monkeypatch)
+    def dns(*a, **k):
+        if failed == 'dns': raise openai_compatible._TransportFailure()
+        return ('1.1.1.1',)
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', dns)
+    def step(name):
+        if failed == name: raise OSError(13, 'PRIVATE NETWORK ERROR')
+    class Sock:
+        def settimeout(self, value): pass
+    class Response:
+        status = 200
+        headers = {}
+        def read(self, size): step('response_body'); return b'{}'
+    class Connection:
+        def __init__(self, *a): self.sock = Sock()
+        def connect(self):
+            for name in ('tcp', 'tls'):
+                with self._diagnostics.stage(name): step(name)
+        def request(self, *a, **k): step('request_write')
+        def getresponse(self): step('response_headers'); return Response()
+        def close(self): pass
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', Connection)
+    snapshots=[]
+    with pytest.raises(ProviderFailure) as caught:
+        OpenAICompatibleLlmProvider.from_environment().generate_structured('secret', diagnostic_callback=snapshots.append)
+    assert getattr(caught.value, 'provider_response_received', False) is False
+    assert snapshots[0]['submission_state'] == expected_state
+    assert any(x['stage'] == failed and x['result'] == 'error' for x in snapshots[0]['stages'])
+    assert 'PRIVATE' not in repr(snapshots) and 'secret' not in repr(snapshots)
+
+
+def test_short_response_body_does_not_count_as_received(monkeypatch):
+    configure(monkeypatch)
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', lambda *a, **k: ('1.1.1.1',))
+    class Sock:
+        def settimeout(self, value): pass
+    class Response:
+        status = 200
+        headers = {}
+        length = 8  # http.client reports bytes still missing after a short read.
+        def read(self, size): return b'{}'
+    class Connection:
+        def __init__(self, *a): self.sock = Sock()
+        def connect(self): pass
+        def request(self, *a, **k): pass
+        def getresponse(self): return Response()
+        def close(self): pass
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', Connection)
+    snapshots = []
+    with pytest.raises(ProviderFailure) as caught:
+        OpenAICompatibleLlmProvider.from_environment().generate_structured('test', diagnostic_callback=snapshots.append)
+    assert getattr(caught.value, 'provider_response_received', False) is False
+    assert snapshots[0]['submission_state'] == 'started_unknown'
+    assert any(item['stage'] == 'response_headers' and item['result'] == 'ok' for item in snapshots[0]['stages'])
+
+
+def test_research_response_cap_bounds_blocked_response(monkeypatch):
+    from threading import Event
+    configure(monkeypatch)
+    monkeypatch.setenv('FORESIGHTNINE_LLM_RESPONSE_TIMEOUT_SECONDS', '0.05')
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', lambda *a, **k: ('1.1.1.1',))
+    released=Event()
+    class Sock:
+        def settimeout(self, value): pass
+        def shutdown(self, how): released.set()
+    class Connection:
+        def __init__(self, *a): self.sock=Sock()
+        def connect(self): pass
+        def request(self, *a, **k): pass
+        def getresponse(self): released.wait(1); raise OSError('closed')
+        def close(self): pass
+    monkeypatch.setattr(openai_compatible, '_PinnedHTTPSConnection', Connection)
+    snapshots=[]
+    with pytest.raises(ProviderFailure) as exc:
+        OpenAICompatibleLlmProvider.from_environment().generate_structured('x', diagnostic_callback=snapshots.append)
+    assert exc.value.code == 'provider_timeout'
+    assert snapshots[0]['submission_state'] == 'started_unknown'
+    assert any(x['stage'] == 'deadline' and x['result'] == 'timeout' for x in snapshots[0]['stages'])
+
+
+def test_cancel_before_submission_records_without_calling_transport(monkeypatch):
+    from threading import Event
+    configure(monkeypatch)
+    event=Event(); event.set(); snapshots=[]
+    with pytest.raises(ProviderFailure) as exc:
+        OpenAICompatibleLlmProvider.from_environment().generate_structured('x', cancel_event=event, diagnostic_callback=snapshots.append)
+    assert exc.value.code == 'provider_cancelled'
+    assert snapshots == [{'submission_state':'not_started','stages':[{'stage':'cancelled','elapsed_ms':0,'result':'cancelled'}]}]
+
+
+def test_pinned_tls_uses_remaining_connection_allowance(monkeypatch):
+    from app.transport_diagnostics import TransportDiagnostics
+    moments=iter([10.0, 13.0])
+    monkeypatch.setattr(openai_compatible, 'monotonic', lambda: next(moments))
+    observed=[]
+    class Sock:
+        def settimeout(self, value): observed.append(value)
+        def close(self): pass
+    monkeypatch.setattr(openai_compatible.socket, 'create_connection', lambda *a, **k: Sock())
+    connection = openai_compatible._PinnedHTTPSConnection('models.example.test', 443, '1.1.1.1', 15)
+    connection._diagnostics = TransportDiagnostics()
+    monkeypatch.setattr(connection._context, 'wrap_socket', lambda raw, server_hostname: raw)
+    connection.connect()
+    assert observed == [12]
+
+
+def test_dns_deadline_captures_blocked_stage_and_freezes(monkeypatch):
+    from threading import Event
+    configure(monkeypatch)
+    entered, release = Event(), Event()
+    def dns(*a, **k):
+        entered.set(); release.wait(1); return ('1.1.1.1',)
+    monkeypatch.setattr(openai_compatible, '_validated_addresses', dns)
+    snapshots=[]
+    try:
+        with pytest.raises(ProviderFailure) as exc:
+            OpenAICompatibleLlmProvider.from_environment().generate_structured('x', timeout_seconds=.05, diagnostic_callback=snapshots.append)
+        assert entered.is_set() and exc.value.code == 'provider_timeout'
+        assert snapshots[0]['submission_state'] == 'not_started'
+        assert any(x['stage'] == 'dns' and x['result'] == 'timeout' for x in snapshots[0]['stages'])
+        original = repr(snapshots)
+    finally:
+        release.set()
+    assert repr(snapshots) == original
+
+
+def test_preflight_failure_emits_not_started(monkeypatch):
+    configure(monkeypatch)
+    snapshots=[]
+    instance=OpenAICompatibleLlmProvider.from_environment()
+    monkeypatch.setattr(instance, '_request_body', lambda *a, **k: (_ for _ in ()).throw(ValueError('secret')))
+    with pytest.raises(ValueError):
+        instance.generate_structured('x', diagnostic_callback=snapshots.append)
+    assert snapshots == [{'submission_state': 'not_started', 'stages': []}]
+
+
+def test_transport_interruption_keeps_active_stage_with_full_history():
+    from app.transport_diagnostics import TransportDiagnostics
+    diagnostics = TransportDiagnostics()
+    for _ in range(64):
+        diagnostics.record('tcp', 1)
+    with diagnostics.stage('tls'):
+        diagnostics.interrupt('deadline', 100)
+    result = diagnostics.snapshot()['stages']
+    assert len(result) == 64
+    assert result[-2]['stage'] == 'tls' and result[-2]['result'] == 'timeout'
+    assert result[-1]['stage'] == 'deadline' and result[-1]['result'] == 'timeout'

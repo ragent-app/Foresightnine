@@ -37,8 +37,12 @@ def test_counterpoint_prompt_marks_truncation_and_does_not_mutate_inputs():
     payload=json.loads(result.prompt)
     assert 'truncated' not in payload['counterpoint_request']
     assert payload['previous_findings_untrusted']==['A'*300,'B'*300,'C']
-    bounded=prepare_counterpoint_prompt(json.dumps(raw),findings,800)
+    budget=next(budget for budget in range(1, 5000)
+                if prepare_counterpoint_prompt(json.dumps(raw),findings,budget) is not None)
+    bounded=prepare_counterpoint_prompt(json.dumps(raw),findings,budget)
     assert bounded is not None and bounded.truncated_findings
+    assert len(bounded.prompt.encode('utf-8')) <= budget
+    assert prepare_counterpoint_prompt(json.dumps(raw),findings,budget-1) is None
     bounded_payload=json.loads(bounded.prompt)
     assert 'truncated' in bounded_payload['counterpoint_request']
     assert len(bounded_payload['previous_findings_untrusted']) == bounded.prior_findings_included

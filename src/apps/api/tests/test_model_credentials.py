@@ -135,7 +135,7 @@ def test_authenticated_routes_isolate_keys_clear_and_route_personal_without_bill
         def supports_native_search(self) -> bool:
             return False
 
-        def generate_challenge(self, request):
+        def generate_challenge(self, request, **_kwargs):
             return self._inner.generate_challenge(request)
 
         def connection_ready(self) -> bool:
@@ -206,7 +206,7 @@ def test_invalid_auth_and_personal_failure_never_fall_back_or_bill(monkeypatch) 
         def supports_native_search(self) -> bool:
             return False
 
-        def generate_challenge(self, _request):
+        def generate_challenge(self, _request, **_kwargs):
             raise ProviderFailure("provider_unavailable", "Personal provider unavailable.", retryable=True)
 
     monkeypatch.setattr(main, "challenge_provider", PlatformProvider())
@@ -338,3 +338,37 @@ def test_operation_receipts_and_idempotency_are_account_scoped(monkeypatch) -> N
 def test_model_key_minimum_length_prevents_full_hint_disclosure(api_key: str) -> None:
     with pytest.raises(ValueError):
         _personal_request(api_key=api_key)
+
+
+def test_api_messages_protocol_and_credential_origin_rebinding(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setattr(compatible, '_require_public_dns', lambda *_a, **_k: None)
+    monkeypatch.setattr(main.model_settings, 'cipher', ModelCredentialCipher(b'm'*32))
+    client = TestClient(main.app)
+    auth = client.post('/v1/auth/local/register', json={'email':'origin@example.test','password':'correct horse battery staple!'}).json()
+    headers = {'Authorization':'Bearer '+auth['access_token']}
+    body = _personal_request().model_dump(exclude_none=True)
+    assert client.put('/v1/account/model-config',headers=headers,json=body).status_code == 200
+    assert client.put('/v1/account/model-config',headers=headers,json={'mode':'personal','base_url':'https://elsewhere.example.test/v1'}).status_code == 422
+    assert client.put('/v1/account/model-config',headers=headers,json={'mode':'personal','protocol':'anthropic_messages'}).status_code == 422
+    assert client.put('/v1/account/model-config',headers=headers,json={'mode':'personal','base_url':'https://bad.example.test:bad/v1'}).status_code == 422
+    changed = client.put('/v1/account/model-config',headers=headers,json={'mode':'personal','protocol':'anthropic_messages','api_key':SYNTHETIC_MODEL_KEY})
+    assert changed.status_code == 200 and changed.json()['protocol'] == 'anthropic_messages'
+    assert client.post('/v1/account/model-config/test',headers=headers).json() == {'status':'unavailable'}
+
+
+def test_runtime_configuration_resolves_protocol_and_key_from_one_read(monkeypatch):
+    monkeypatch.setattr(compatible, '_require_public_dns', lambda *_a, **_k: None)
+    repository = InMemoryDocumentRepository()
+    service = AccountModelSettings(repository, ModelCredentialCipher(b'r'*32))
+    account_id = 'account:atomic'
+    service.update(account_id, _personal_request(protocol='anthropic_messages'))
+    original = repository.get
+    reads = []
+    def counted(key):
+        reads.append(key)
+        return original(key)
+    monkeypatch.setattr(repository, 'get', counted)
+    settings, revision = service.runtime_configuration(account_id)
+    assert len(reads) == 1 and revision.protocol == 'anthropic_messages'
+    assert settings.api_key == SYNTHETIC_MODEL_KEY and settings.base_url == revision.base_url

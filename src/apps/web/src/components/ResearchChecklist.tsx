@@ -3,11 +3,17 @@ interface Props { value: unknown; en: boolean }
 type Cue = { code: string; indexes?: number[]; index_kind?: string; count?: number; truncated?: boolean };
 
 const labels: Record<string, readonly [string, string]> = {
+  suggested_requirement_unlinked: ["A model-suggested requirement has no linked evidence.", "模型建议的要求尚无关联证据。"],
+  suggested_calculation_unlinked: ["A model-suggested calculation has no linked result.", "模型建议的计算尚未关联结果。"],
   no_analyzed_sources: ["No source was analyzed in the last run.", "上次运行没有已分析的来源。"],
   source_processing_incomplete: ["Some selected sources were excluded or not fully selected for the initial prompt.", "部分已选资料被排除，或未完整选入首次模型输入。"],
+  source_scope_review_required: ["Review missing-information conclusions against the material actually selected.", "请根据实际选入的资料复核关于信息缺失的结论。"],
+  absence_observation_unestablished: ["A model-suggested absence has not been established.", "模型提出的信息缺失尚未确认。"],
+  model_suggested_evidence_need: ["A proposed evidence need has not been independently verified.", "建议补充的证据尚未独立核验。"],
   no_findings: ["No finding was retained.", "没有保留研究结论。"],
   subquestions_unlinked: ["Some model-suggested subquestions have no linked finding.", "部分模型建议的子问题没有关联结论。"],
   citations_missing_or_incomplete: ["Findings have missing or incomplete citations.", "部分研究条目缺少完整引文。"],
+  semantic_support_not_independently_verified: ["Citation support has not been independently verified.", "引文是否支持结论尚未独立核验。"],
   evidence_warnings: ["Evidence warnings require review.", "部分研究条目存在证据警示，需要核查。"],
   user_fact_links_omitted: ["Some user-declared figure links were omitted and require review.", "部分用户关联的数值未保留，需要重新核查。"],
   no_counterpoint: ["A counterargument was requested but none was retained.", "本次要求反方，但没有保留反方条目。"],
@@ -36,7 +42,7 @@ export function ResearchChecklist({ value, en }: Props) {
   return <section className="general-source">
     <h3>{en ? "Review checklist" : "研究待核查项"}</h3>
     <p>{en ? "Generated from the saved record. An empty checklist does not verify the findings, prove evidence support or rule out other gaps." : "根据已保存记录生成。待办为空不代表结论已核实、证据充分或不存在其他缺口。"}</p>
-    {items.length ? <ul>{items.map((item) => <li key={item.code}>{labels[item.code][en ? 0 : 1]}
+    {items.length ? <ul>{items.map((item) => <li key={item.code}>{labels[item.code]?.[en ? 0 : 1] ?? item.code}
       {Array.isArray(item.indexes) && item.indexes.length ? <span> {item.index_kind === "calculation" ? (en ? "Calculations" : "计算") : item.index_kind === "question" ? (en ? "Subquestions" : "子问题") : (en ? "Items" : "研究条目")} {item.indexes.filter(Number.isInteger).map((i) => i + 1).join("、")}{item.truncated ? (en ? " (additional items omitted)" : "（还有未列出的条目）") : ""}.</span> : null}
     </li>)}</ul> : <p>{en ? "No recorded checklist items." : "没有已记录的待核查项。"}</p>}
   </section>;

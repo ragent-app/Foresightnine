@@ -31,23 +31,13 @@ MAX_MONTHLY_TOKENS = 500_000_000
 PRO_PRODUCT_ID = "foresightnine_pro"
 MAX_PRODUCT_ID = "foresightnine_max"
 MONTHLY_BASE_PLAN_ID = "monthly"
-DEFAULT_PROVIDER_MODEL = "glm-5.3-flash"
+DEFAULT_PROVIDER_MODEL = "unknown"
 
 
 def configured_provider_model(environ: Mapping[str, str] | None = None) -> str:
-    """Return the server-selected model shown on an account entitlement.
-
-    Mirror the selected profile: GLM routes retain their fixed model, while
-    the generic adapter uses its override. This is display metadata only;
-    it does not change model routing or quotas.
-    """
+    """Return explicitly configured deployment model, or unknown."""
     environment = os.environ if environ is None else environ
-    selected = environment.get("FORESIGHTNINE_LLM_PROVIDER", "").strip().lower()
-    # Fixed GLM ignores generic model overrides; account metadata must agree.
-    if selected in {"glm_coding", "zhipu_glm_coding"}:
-        return DEFAULT_PROVIDER_MODEL
-    value = environment.get("FORESIGHTNINE_LLM_MODEL", "").strip()
-    return value or DEFAULT_PROVIDER_MODEL
+    return environment.get("FORESIGHTNINE_LLM_MODEL", "").strip() or DEFAULT_PROVIDER_MODEL
 
 
 class BillingError(RuntimeError):

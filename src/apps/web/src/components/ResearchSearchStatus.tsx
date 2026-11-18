@@ -25,7 +25,7 @@ export function ResearchSearchStatus({ value, en }: Props) {
   if (!items.length) return null;
   return <section className="general-source"><h3>{en ? "Source discovery" : "来源发现"}</h3><ul>{items.map((item, index) => <li key={`${item.stage}:${index}`}>
     {item.stage === "gap" ? (en ? "Gap search: " : "缺口搜索：") : (en ? "Initial search: " : "首次搜索：")}
-    {statuses[item.status][en ? 0 : 1]} {item.reason && reasons[item.reason] ? reasons[item.reason][en ? 0 : 1] : null}
+    {statuses[item.status]?.[en ? 0 : 1] ?? item.status} {item.reason ? reasons[item.reason]?.[en ? 0 : 1] : null}
     {item.retryable ? (en ? " A later attempt may succeed." : "稍后重试可能成功。") : null}
   </li>)}</ul></section>;
 }

@@ -141,7 +141,7 @@ def _is_hardened(environ: Mapping[str, str]) -> bool:
 class RedisAbuseSettings:
     ip_limit: int = DEFAULT_IP_LIMIT
     session_limit: int = DEFAULT_SESSION_LIMIT
-    model_quota: int = 20
+    model_quota: int | None = None
     request_window_seconds: int = DEFAULT_WINDOW_SECONDS
     model_window_seconds: int = 86400
     reservation_ttl_seconds: int = DEFAULT_RESERVATION_TTL_SECONDS
@@ -193,9 +193,9 @@ class RedisSlidingWindowLimiter:
 
 
 class RedisModelCallQuota:
-    def __init__(self, client: Any, *, limit: int = 20, window_seconds: int = 86400, reservation_ttl_seconds: int = DEFAULT_RESERVATION_TTL_SECONDS) -> None:
-        if limit < 1 or window_seconds <= 0 or reservation_ttl_seconds <= 0:
-            raise ValueError("quota, window and reservation retention must be positive")
+    def __init__(self, client: Any, *, limit: int | None = None, window_seconds: int = 86400, reservation_ttl_seconds: int = DEFAULT_RESERVATION_TTL_SECONDS) -> None:
+        if (limit is not None and limit < 0) or window_seconds <= 0 or reservation_ttl_seconds <= 0:
+            raise ValueError("quota must be non-negative and windows positive")
         self.client = client
         self.limit = limit
         self.window_seconds = window_seconds
@@ -205,6 +205,10 @@ class RedisModelCallQuota:
         normalized = tuple(dict.fromkeys(subject for subject in subjects if subject))
         if not normalized:
             raise ValueError("at least one quota subject is required")
+        if self.limit is None:
+            return AbuseDecision(True)
+        if self.limit == 0:
+            return AbuseDecision(False, max(1, self.window_seconds), "model_quota")
         reservation_hash = _marker_hash(reservation_id)
         marker_key = _key("reservation", reservation_hash)
         keys = (marker_key,) + tuple(_key("quota", _hash_subject(subject)) for subject in normalized)
@@ -283,11 +287,11 @@ def _parse_script_result(result: Any) -> tuple[bool, int]:
     return status == 1, retry_after
 
 
-def _settings(environ: Mapping[str, str], model_quota: int) -> RedisAbuseSettings:
+def _settings(environ: Mapping[str, str], model_quota: int | None) -> RedisAbuseSettings:
     return RedisAbuseSettings(
         ip_limit=_env_int(environ, "FORESIGHTNINE_IP_RATE_LIMIT", DEFAULT_IP_LIMIT),
         session_limit=_env_int(environ, "FORESIGHTNINE_SESSION_RATE_LIMIT", DEFAULT_SESSION_LIMIT),
-        model_quota=max(1, model_quota),
+        model_quota=model_quota,
         request_window_seconds=_env_int(environ, "FORESIGHTNINE_ABUSE_WINDOW_SECONDS", DEFAULT_WINDOW_SECONDS),
         model_window_seconds=_env_int(environ, "FORESIGHTNINE_MODEL_QUOTA_WINDOW_SECONDS", 86400),
         reservation_ttl_seconds=_env_int(environ, "FORESIGHTNINE_ABUSE_RESERVATION_TTL_SECONDS", DEFAULT_RESERVATION_TTL_SECONDS),
@@ -296,7 +300,7 @@ def _settings(environ: Mapping[str, str], model_quota: int) -> RedisAbuseSetting
     )
 
 
-def build_abuse_control(*, model_quota: int = 20, environ: Mapping[str, str] | None = None, redis_client: Any | None = None) -> AbuseControl | RedisAbuseControl:
+def build_abuse_control(*, model_quota: int | None = None, environ: Mapping[str, str] | None = None, redis_client: Any | None = None) -> AbuseControl | RedisAbuseControl:
     environ = os.environ if environ is None else environ
     mode = environ.get("FORESIGHTNINE_ABUSE_MODE", "").strip().lower()
     hardened = _is_hardened(environ)
@@ -307,7 +311,7 @@ def build_abuse_control(*, model_quota: int = 20, environ: Mapping[str, str] | N
     if mode == "memory":
         if hardened:
             raise RuntimeError("Redis abuse controls are required in hardened environments.")
-        return AbuseControl(model_quota=max(1, model_quota))
+        return AbuseControl(model_quota=model_quota)
     if mode != "redis":
         raise ValueError("FORESIGHTNINE_ABUSE_MODE must be memory or redis.")
     redis_url = environ.get("FORESIGHTNINE_REDIS_URL", "").strip() or environ.get("REDIS_URL", "").strip()

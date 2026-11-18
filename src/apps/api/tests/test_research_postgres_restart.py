@@ -67,7 +67,9 @@ topic = client.get(path.rsplit("/runs", 1)[0], headers=headers)
 assert topic.status_code == 200 and len(topic.json()["versions"]) == 1
 snapshot = client.get(path + "/" + op + "/inputs", headers=headers)
 assert snapshot.status_code == 200 and snapshot.json()["parent_version_id"] == state["payload"]["parent_version_id"]
-reservation = api.billing_ledger.usage.get("model:" + op)
+reservations = [entry for key, entry in api.billing_ledger.usage.items() if key == "model:" + op or key.startswith("model:" + op + ":")]
+assert len(reservations) <= 1
+reservation = reservations[0] if reservations else None
 assert reservation is not None and reservation.status == "reserved"
 retry = client.post(path, headers={**headers, "Idempotency-Key":"restart-test-key"}, json=state["payload"])
 assert retry.status_code == 202 and retry.headers["Idempotency-Replayed"] == "true"
@@ -100,16 +102,18 @@ api._reserve_model_call = hold_before_reservation
 original_add_version = api.research_topics.add_version
 def hold_after_checkpoint_write(*args, **kwargs):
     result = original_add_version(*args, **kwargs)
-    entered.set()
-    Event().wait(30)
-    raise AssertionError("process should be terminated")
+    if args[2].content.run.get("checkpoint") == "initial_analysis":
+        entered.set()
+        Event().wait(30)
+        raise AssertionError("process should be terminated")
+    return result
 api.research_topics.add_version = hold_after_checkpoint_write
 ''')
         start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
         start = start.replace('payload = {"parent_version_id":value["versions"][0]["version_id"]}',
-                              'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "max_model_calls":2, "max_total_tokens":9000}')
+                              'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "evidence_strategy":"coordinator", "max_model_calls":2, "max_total_tokens":9000}')
         recover = recover.replace('assert reservation is not None and reservation.status == "reserved"',
-                                  'assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55\nassert api.billing_ledger.usage.get("model:" + op + ":support-review") is None')
+                                  'assert reservation is not None and reservation.status == "settled" and reservation.actual_tokens == 55, repr(reservation)\nassert api.billing_ledger.usage.get("model:" + op + ":support-review") is None')
     elif phase == "review":
         start = start.replace('        entered.set()\n', '''        if system != api.REVIEW_SYSTEM_PROMPT:
             citation = {"source_id": source_id, "quotation": "Revenue was 100"}
@@ -121,7 +125,10 @@ api.research_topics.add_version = hold_after_checkpoint_write
         start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
         start = start.replace('payload = {"parent_version_id":value["versions"][0]["version_id"]}',
                               'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "max_model_calls":2, "max_total_tokens":9000}')
-        recover = recover.replace('assert topic.status_code == 200 and len(topic.json()["versions"]) == 1', '''assert topic.status_code == 200 and len(topic.json()["versions"]) == 2
+        recover = recover.replace('assert topic.status_code == 200 and len(topic.json()["versions"]) == 1', '''assert topic.status_code == 200
+versions = topic.json()["versions"]
+assert len(versions) >= 2 and all(child["parent_version_id"] == parent["version_id"] for parent, child in zip(versions, versions[1:]))
+assert sum(v["content"]["run"].get("operation_id") == op and v["content"]["run"].get("checkpoint") == "initial_analysis" for v in versions) == 1
 checkpoint = topic.json()["versions"][-1]["content"]
 assert checkpoint["run"]["checkpoint"] == "generation" and checkpoint["run"]["status"] == "partial"
 assert checkpoint["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"''')
@@ -142,7 +149,10 @@ assert review_reservation is not None and review_reservation.status == "reserved
         start = start.replace('assert source.status_code == 201, source.text', 'assert source.status_code == 201, source.text\nsource_id = source.json()["source_id"]')
         start = start.replace('payload = {"parent_version_id":value["versions"][0]["version_id"]}',
                               'payload = {"parent_version_id":value["versions"][0]["version_id"], "support_review":True, "support_review_mode":"isolated", "max_model_calls":3, "max_total_tokens":9000, "require_counterarguments":False}')
-        recover = recover.replace('assert topic.status_code == 200 and len(topic.json()["versions"]) == 1', '''assert topic.status_code == 200 and len(topic.json()["versions"]) == 5
+        recover = recover.replace('assert topic.status_code == 200 and len(topic.json()["versions"]) == 1', '''assert topic.status_code == 200
+versions = topic.json()["versions"]
+assert len(versions) >= 5 and all(child["parent_version_id"] == parent["version_id"] for parent, child in zip(versions, versions[1:]))
+assert sum(v["content"]["run"].get("operation_id") == op and v["content"]["run"].get("checkpoint") == "initial_analysis" for v in versions) == 1
 checkpoint = topic.json()["versions"][-1]["content"]
 assert checkpoint["run"]["checkpoint"] == "isolated_review" and checkpoint["run"]["status"] == "partial"
 assert checkpoint["claims"][0]["support_review"]["verdict"] == "supports"
@@ -247,7 +257,10 @@ path = state["path"]; op = state["operation"]
 check = client.get(path + "/" + op, headers=headers)
 assert check.status_code == 200 and check.json()["operation"]["status"] == "completed"
 topic = client.get(path.rsplit("/runs", 1)[0], headers=headers)
-assert topic.status_code == 200 and len(topic.json()["versions"]) == 2
+assert topic.status_code == 200
+versions = topic.json()["versions"]
+assert len(versions) >= 2 and all(child["parent_version_id"] == parent["version_id"] for parent, child in zip(versions, versions[1:]))
+assert sum(v["content"]["run"].get("operation_id") == op and v["content"]["run"].get("checkpoint") == "initial_analysis" for v in versions) == 1
 assert topic.json()["versions"][-1]["content"]["claims"][0]["citations"][0]["quotation"] == "Revenue was 100"
 usage = api.billing_ledger.usage.get("model:" + op)
 assert usage is not None and usage.status == "settled" and usage.actual_tokens == 55
@@ -255,7 +268,7 @@ retry = client.post(path, headers={**headers, "Idempotency-Key":"post-commit-key
 assert retry.status_code == 202 and retry.headers["Idempotency-Replayed"] == "true"
 assert retry.json()["operation"]["status"] == "completed"
 with open(os.environ["STAGEB_PROVIDER_CALLS"]) as f: assert f.read() == "called\n"
-assert len(client.get(path.rsplit("/runs", 1)[0], headers=headers).json()["versions"]) == 2
+assert client.get(path.rsplit("/runs", 1)[0], headers=headers).json()["versions"] == versions
 assert client.delete("/v1/auth/local/account", headers=headers).status_code == 200
 '''
     for script in (start, recover):
@@ -343,7 +356,9 @@ for _ in range(200):
     time.sleep(.05)
 assert status == "completed", status
 assert api.RESEARCH_RUN_INPUTS.get(op)["parent_version_id"] == state["payload"]["parent_version_id"]
-assert len(client.get(path.rsplit("/runs", 1)[0], headers=headers).json()["versions"]) == 2
+versions = client.get(path.rsplit("/runs", 1)[0], headers=headers).json()["versions"]
+assert len(versions) >= 2 and all(child["parent_version_id"] == parent["version_id"] for parent, child in zip(versions, versions[1:]))
+assert sum(v["content"]["run"].get("operation_id") == op and v["content"]["run"].get("checkpoint") == "initial_analysis" for v in versions) == 1
 replay = client.post(path, headers=request_headers, json=state["payload"])
 assert replay.status_code == 202 and replay.headers.get("Idempotency-Replayed") == "true"
 with open(os.environ["STAGEB_PROVIDER_CALLS"]) as f: assert f.read().splitlines() == ["called"]
@@ -607,5 +622,234 @@ assert c.delete('/v1/auth/local/account',headers=h).status_code==200
 assert c.delete('/v1/auth/local/account',headers=other).status_code==200
 '''
     for script in (seed, recover):
+        result = subprocess.run([sys.executable, '-c', script], cwd=root, env=env, capture_output=True, text=True, timeout=90)
+        assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(not os.getenv('FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'), reason='disposable PostgreSQL not configured')
+@pytest.mark.parametrize('outcome', ['invalid_schema', 'timeout'])
+def test_review_settlement_and_recovery_survive_process_restart(tmp_path, outcome):
+    """Real isolated ledger: invalid result is settled; unknown provider outcome is not replayed."""
+    env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE='postgres', FORESIGHTNINE_LOCAL_AUTH_MODE='mock',
+               FORESIGHTNINE_POSTGRES_DSN=os.environ['FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'],
+               REVIEW_TEST_STATE=str(tmp_path / 'review.json'), REVIEW_TEST_OUTCOME=outcome)
+    root = Path(__file__).resolve().parents[3]
+    start = r'''
+import json, os, sys, time
+from types import SimpleNamespace
+from uuid import uuid4
+sys.path.insert(0, 'apps/api')
+import app.main as api
+from app.phase3 import ProviderFailure
+from app.research_recovery import RecoveryJournal
+from fastapi.testclient import TestClient
+client = TestClient(api.app)
+registered = client.post('/v1/auth/local/register', json={'email':f'ledger-{uuid4().hex}@example.test','password':'correct horse battery staple!'})
+assert registered.status_code == 201, registered.text
+token = registered.json()['access_token']; headers = {'Authorization':'Bearer '+token}
+source = client.post('/v2/research/sources', headers=headers, json={'title':'Report','text':'Revenue increased. Costs increased.', 'permissions':{'store':True,'display':True,'model_input':True,'export':True}})
+assert source.status_code == 201, source.text
+source_id = source.json()['source_id']
+topic = client.post('/v2/research/topics', headers=headers, json={'question':'How did revenue and costs change?','source_ids':[source_id]})
+assert topic.status_code == 201, topic.text
+path = '/v2/research/topics/'+topic.json()['topic_id']; parent = topic.json()['versions'][-1]['version_id']
+class Provider:
+    name='local-review-settlement'
+    policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=6000,max_output_tokens=1500)
+    def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+        if system == api.REVIEW_SYSTEM_PROMPT:
+            if os.environ['REVIEW_TEST_OUTCOME'] == 'timeout':
+                raise ProviderFailure('provider_timeout','Simulated timeout.',retryable=True)
+            return {'reviews':'invalid schema'},18
+        return {'claims':[{'text':'Revenue increased.','citations':[{'source_id':source_id,'quotation':'Revenue increased.'}]}]},20
+api.challenge_provider=Provider()
+if os.environ['REVIEW_TEST_OUTCOME'] == 'invalid_schema':
+    original=RecoveryJournal.commit_checkpoint
+    def crash_after_commit(self,snapshot,*,committed_call_ids):
+        original(self,snapshot,committed_call_ids=committed_call_ids)
+        if 'support_review' in snapshot.plan.get('stage_results',{}):
+            raise RuntimeError('Simulated interruption after durable checkpoint')
+    RecoveryJournal.commit_checkpoint=crash_after_commit
+started=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'review-start'},json={'parent_version_id':parent,'support_review':True,'max_model_calls':2,'max_total_tokens':12000,'max_search_calls':0})
+assert started.status_code == 202, started.text
+op=started.json()['operation']['operation_id']
+for _ in range(500):
+    status=client.get(path+'/runs/'+op,headers=headers).json()['operation']['status']
+    if status in ('completed','failed','cancelled'): break
+    time.sleep(.02)
+else: raise AssertionError('operation did not finish')
+assert status == ('failed' if os.environ['REVIEW_TEST_OUTCOME']=='invalid_schema' else 'completed'), status
+with open(os.environ['REVIEW_TEST_STATE'],'w') as f: json.dump({'token':token,'path':path,'operation':op},f)
+'''
+    recover = r'''
+import json, os, sys, time
+from types import SimpleNamespace
+sys.path.insert(0,'apps/api')
+import app.main as api
+from fastapi.testclient import TestClient
+with open(os.environ['REVIEW_TEST_STATE']) as f: state=json.load(f)
+client=TestClient(api.app); headers={'Authorization':'Bearer '+state['token']}; path=state['path']; op=state['operation']
+class NoReplay:
+    name='local-review-settlement'
+    policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=6000,max_output_tokens=1500)
+    def generate_structured(self,*args,**kwargs): raise AssertionError('provider must not be called')
+api.challenge_provider=NoReplay()
+a=api.billing_ledger.usage.get('model:'+op); b=api.billing_ledger.usage.get('model:'+op+':support-review')
+assert a is not None and a.status=='settled' and a.actual_tokens==20
+assert b is not None and b.status=='settled'
+record=api.RESEARCH_RUN_INPUTS.get(op)
+status=client.get(path+'/runs/'+op+'/recovery-status',headers=headers)
+assert status.status_code==200, status.text
+if os.environ['REVIEW_TEST_OUTCOME']=='invalid_schema':
+    assert b.actual_tokens==18 and record['recovery_pending']==[]
+    assert record['recovery_snapshot']['plan']['stage_results']['support_review']['error']=='review_invalid_output'
+    receipts=record['recovery_snapshot']['plan']['workflow_receipts']
+    review=[item for item in receipts if item['stage']=='support_review' and item['status']=='failed'][-1]
+    assert review['model_call_receipts'][0]['processing_error']=='contract_validation'
+    assert status.json()['can_continue'], status.text
+    result=client.post(path+'/runs/'+op+'/continue',headers={**headers,'Idempotency-Key':'review-continue'},json={})
+    assert result.status_code==202, result.text
+    resumed=result.json()['operation']['operation_id']
+    for _ in range(500):
+        current=client.get(path+'/runs/'+resumed,headers=headers).json()['operation']['status']
+        if current in ('completed','failed','cancelled'): break
+        time.sleep(.02)
+    assert current=='completed', current
+    run=client.get(path,headers=headers).json()['versions'][-1]['content']['run']
+    assert run['support_review_error']=='review_invalid_output' and run['status']=='partial'
+else:
+    assert [item['stage'] for item in record['recovery_pending']]==['support_review']
+    assert not status.json()['can_continue']
+    result=client.post(path+'/runs/'+op+'/continue',headers={**headers,'Idempotency-Key':'review-timeout'},json={})
+    assert result.status_code==409, result.text
+'''
+    for script in (start, recover):
+        result = subprocess.run([sys.executable, '-c', script], cwd=root, env=env, capture_output=True, text=True, timeout=90)
+        assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(not os.getenv('FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'), reason='disposable PostgreSQL not configured')
+def test_persisted_stage_ranges_and_requirement_links_survive_version_edit_export(tmp_path):
+    """Trusted staged fixture exercises persistence and API sanitization; no model is called."""
+    env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE='postgres', FORESIGHTNINE_LOCAL_AUTH_MODE='mock',
+               FORESIGHTNINE_POSTGRES_DSN=os.environ['FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'],
+               VERSION_TEST_STATE=str(tmp_path / 'version.json'))
+    root = Path(__file__).resolve().parents[3]
+    start = r'''
+import json, os, sys
+from uuid import uuid4
+sys.path.insert(0,'apps/api')
+import app.main as api
+from app.research_topics import ResearchContent, VersionInput
+from fastapi.testclient import TestClient
+client=TestClient(api.app)
+r=client.post('/v1/auth/local/register',json={'email':f'version-{uuid4().hex}@example.test','password':'correct horse battery staple!'})
+assert r.status_code==201, r.text
+owner=r.json()['account']['account_id']; token=r.json()['access_token']; headers={'Authorization':'Bearer '+token}
+s=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue increased. Costs increased.','permissions':{'store':True,'model_input':True,'display':True,'export':True}})
+assert s.status_code==201, s.text
+sid=s.json()['source_id']
+t=client.post('/v2/research/topics',headers=headers,json={'question':'How did revenue and costs change?','source_ids':[sid]})
+assert t.status_code==201, t.text
+path='/v2/research/topics/'+t.json()['topic_id']; initial=t.json()['versions'][-1]['version_id']
+run={'operation_id':'fixture-only','status':'partial','source_processing':[{'source_id':sid,'eligibility':'eligible','provided':True,'text_characters':35,'initial_selection':'partial','selection_status':'partial','analysis_status':'produced'}],
+ 'selected_segments':[{'source_id':sid,'character_start':0,'character_end':18}],
+ 'gap_followup_requested':True,'gap_followup_status':'completed','gap_followup_segments':[{'source_id':sid,'character_start':19,'character_end':35}],
+ 'research_questions':[{'question':'How did revenue and costs change?','claim_indexes':[0]}],
+ 'planning_requirements':[{'question':'How did revenue and costs change?','dimensions':{'metrics':['revenue','costs']},'calculation_requested':False}],
+ 'model_requirement_links':[{'question_index':0,'question':'How did revenue and costs change?','fact_ids':[],'calculation_indexes':[],'source_ids':[sid]}]}
+content=ResearchContent(claims=[{'text':'Revenue increased.','scope_declaration':'other','citations':[{'source_id':sid,'quotation':'Revenue increased.'}]}],run=run)
+api.research_topics.add_version(owner,t.json()['topic_id'],VersionInput(parent_version_id=initial,content=content),created_by='agent')
+with open(os.environ['VERSION_TEST_STATE'],'w') as f: json.dump({'token':token,'path':path,'source':sid},f)
+'''
+    check = r'''
+import json,os,sys
+sys.path.insert(0,'apps/api')
+from fastapi.testclient import TestClient
+import app.main as api
+from app.storage import _drop_legacy_null_fields
+with open(os.environ['VERSION_TEST_STATE']) as f: state=json.load(f)
+client=TestClient(api.app); headers={'Authorization':'Bearer '+state['token']}; path=state['path']; sid=state['source']
+topic=client.get(path,headers=headers); assert topic.status_code==200,topic.text
+old=topic.json()['versions'][-1]; run=old['content']['run']
+row=next(x for x in run['run_source_processing'] if x['source_id']==sid)
+assert row['stage_ranges']==[{'stage':'analysis','ranges':[{'start':0,'end':18}]},{'stage':'gap_followup','ranges':[{'start':19,'end':35}]}]
+assert run['source_processing'][0]['initial_selection']=='partial'
+assert run['requirement_coverage']['requirements'] and run['requirement_coverage']['meaning']=='recorded_links_not_semantic_verification'
+from copy import deepcopy
+content=deepcopy(old['content']); content['run']['selected_segments']=[]; content['run']['gap_followup_segments']=[]
+content['run']['requirement_coverage']={'forged_client_value':True}; content['run']['scope_assessment']={'forged_client_value':True}
+content['claims'][0]['text']='User revised the finding.'; content['claims'][0]['scope_declaration']='absence'
+edit=client.post(path+'/versions',headers=headers,json={'parent_version_id':old['version_id'],'content':content,'review':'confirmed'})
+assert edit.status_code==201,edit.text
+new=edit.json()['versions'][-1]; saved=new['content']['run']
+assert new['parent_version_id']==old['version_id'] and saved['selected_segments']==run['selected_segments'] and saved['gap_followup_segments']==run['gap_followup_segments']
+assert saved['model_requirement_links']==[]
+assert 'scope_declaration' not in new['content']['claims'][0]
+for key in ('requirement_coverage','scope_assessment'): assert 'forged_client_value' not in saved[key]
+out=client.get(path+'/versions/'+new['version_id']+'/export',headers=headers)
+assert out.status_code==200,out.text
+for key in ('run_source_processing','requirement_coverage','scope_assessment'):
+    assert _drop_legacy_null_fields(out.json()['version']['content']['run'][key]) == _drop_legacy_null_fields(saved[key]), key
+'''
+    for script in (start, check):
+        result = subprocess.run([sys.executable, '-c', script], cwd=root, env=env, capture_output=True, text=True, timeout=90)
+        assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(not os.getenv('FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'), reason='disposable PostgreSQL not configured')
+def test_settled_planning_contract_failure_does_not_leave_unknown_marker(tmp_path):
+    """A returned invalid planning result is not an unknown provider call."""
+    env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE='postgres', FORESIGHTNINE_LOCAL_AUTH_MODE='mock',
+               FORESIGHTNINE_POSTGRES_DSN=os.environ['FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'],
+               PLAN_TEST_STATE=str(tmp_path / 'plan.json'))
+    root = Path(__file__).resolve().parents[3]
+    start = r'''
+import json,os,sys,time
+from uuid import uuid4
+from types import SimpleNamespace
+sys.path.insert(0,'apps/api')
+import app.main as api
+from app.research_planning import PLAN_SYSTEM_PROMPT
+from fastapi.testclient import TestClient
+client=TestClient(api.app)
+r=client.post('/v1/auth/local/register',json={'email':f'plan-{uuid4().hex}@example.test','password':'correct horse battery staple!'})
+assert r.status_code==201,r.text
+headers={'Authorization':'Bearer '+r.json()['access_token']}
+s=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue increased. Costs increased.','permissions':{'store':True,'model_input':True,'display':True,'export':True}})
+sid=s.json()['source_id']; t=client.post('/v2/research/topics',headers=headers,json={'question':'How did revenue and costs change?','source_ids':[sid]}).json()
+class Provider:
+    name='planning-contract-test'
+    policy=SimpleNamespace(timeout_seconds=5,max_input_tokens=6000,max_output_tokens=1500)
+    def generate_structured(self,prompt,*,cancel_event,system,timeout_seconds):
+        if system==PLAN_SYSTEM_PROMPT: return {'subquestions':'invalid'},17
+        return {'claims':[{'text':'Revenue increased.','citations':[{'source_id':sid,'quotation':'Revenue increased.'}]}]},20
+api.challenge_provider=Provider()
+path='/v2/research/topics/'+t['topic_id']; payload={'parent_version_id':t['versions'][0]['version_id'],'plan_research':True,'max_model_calls':2,'max_total_tokens':20000,'max_search_calls':0,'require_counterarguments':False}
+run=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'plan-test'},json=payload)
+assert run.status_code==202,run.text
+op=run.json()['operation']['operation_id']
+for _ in range(500):
+    status=client.get(path+'/runs/'+op,headers=headers).json()['operation']['status']
+    if status in ('completed','failed','cancelled'): break
+    time.sleep(.02)
+assert status=='completed',status
+with open(os.environ['PLAN_TEST_STATE'],'w') as f: json.dump({'operation':op,'path':path,'token':r.json()['access_token']},f)
+'''
+    check = r'''
+import json,os,sys
+sys.path.insert(0,'apps/api')
+import app.main as api
+from fastapi.testclient import TestClient
+with open(os.environ['PLAN_TEST_STATE']) as f: state=json.load(f)
+op=state['operation']; record=api.RESEARCH_RUN_INPUTS.get(op); assert record['recovery_pending']==[],record['recovery_pending']
+ledger=api.billing_ledger.usage.get('model:'+op+':research-plan')
+assert ledger.status=='settled' and ledger.actual_tokens==17
+receipts=record['recovery_snapshot']['plan']['workflow_receipts']
+plan=[x for x in receipts if x['stage']=='planning' and x['status']=='failed'][-1]
+assert plan['model_call_receipts'][0]['processing_error']=='contract_validation'
+assert plan['model_call_receipts'][0]['provider']=='returned' and plan['model_call_receipts'][0]['settlement']=='settled'
+'''
+    for script in (start, check):
         result = subprocess.run([sys.executable, '-c', script], cwd=root, env=env, capture_output=True, text=True, timeout=90)
         assert result.returncode == 0, result.stderr

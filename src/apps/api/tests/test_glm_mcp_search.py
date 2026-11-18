@@ -102,7 +102,7 @@ def test_glm_mcp_search_drops_private_or_malformed_result_urls() -> None:
 def test_glm_mcp_search_rejects_unexpected_protocol_tool_and_bounds_query() -> None:
     provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=lambda *_args: (_ for _ in ()).throw(AssertionError("no call expected")))
     with pytest.raises(ProviderFailure, match="length"):
-        provider.search("x" * 71)
+        provider.search("x" * 10001)
 
     replies = [
         response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session="safe-session-3"),
@@ -112,6 +112,18 @@ def test_glm_mcp_search_rejects_unexpected_protocol_tool_and_bounds_query() -> N
     provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=lambda *_args: replies.pop(0), sleeper=lambda _delay: None)
     with pytest.raises(ProviderFailure, match="expected search tool"):
         provider.search("public query")
+
+
+def test_glm_declared_query_limit_is_reported_before_search_call() -> None:
+    replies = [
+        response({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26"}}, session="limit-session"),
+        HttpResponse(202, ""),
+        response({"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "webSearchPrime", "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "maxLength": 80}}}}]}}),
+    ]
+    provider = GlmCodingMcpSearchEvidenceProvider(_SECRET, transport=lambda *_args: replies.pop(0), sleeper=lambda _delay: None)
+    with pytest.raises(ProviderFailure, match="provider-declared limit"):
+        provider.search("x" * 81)
+    assert not replies
 
 
 def test_glm_mcp_search_accepts_advertised_query_alias_and_structured_content() -> None:

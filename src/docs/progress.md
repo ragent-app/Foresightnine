@@ -1486,3 +1486,24 @@ The older baseline below is retained as historical evidence and is superseded wh
 - No persistence, streaming, rate limit, search adapter, real market data, FM engine, Web, or Android implementation yet.
 - OpenAPI is the public endpoint description; generated client artifacts will be added with the consuming clients.
 
+### 2026-11-18 Messages 研究接口离线集成
+
+Messages 适配、协议、研究运行和恢复、额度、账户配置及回执的 70 项禁网 API 测试通过；网页模型配置解析 11 项通过。平台与个人配置均通过两轮工具调用和引用落库，平台模拟响应的 60 个明确报告 token 完成结算。先前扩大批次中六项既有计费测试失败，未计入通过结果；未调用真实模型或发布，研究质量、真实服务能力和投资效果均未验证。上方 2026-11-16 段落是当时的状态记录，M1 真实金融研究验收仍未完成。
+
+研究运行按显式协议选择 Chat Completions 或 Messages；Messages 平台配置使用独立的研究端点、模型、凭据及主机允许列表。个人 Messages 端点须获得部署侧精确允许；更换凭据来源或协议时须重新提供密钥。账户余额只用于判断和预留有界调用，不作为生成上限；模型回执、未知外部状态和结算状态由持久日志记录。
+
+部署未设置 `FORESIGHTNINE_RESEARCH_MODEL_PROTOCOL` 时沿用现有 Chat 研究路由；选择 `anthropic_messages` 时必须另行提供研究专用端点、模型、密钥、凭据版本、主机允许列表、协议版本、认证方式、正的单次输出上限，以及匹配端点、模型和协议版本的原生工具与续接能力声明。个人端点还须与部署允许的 Messages 端点精确匹配。账户计费的 Chat 调用同样需要可证明的单次输出上限或能力配置，以便在调用前预留；余额不能推导模型输出上限。能力声明是部署配置，不代表已完成真实服务验证。
+
+真实验收预登记（尚未执行）：新建主题，通过普通 `/v2/research/topics/{id}/runs` 提问：“依据所附公司年度披露，比较连续两个财务年度的收入，计算同比增长率，报告期间、币种、计算输入及引用，并说明限制。”使用验收前确认允许模型使用的公司原始披露快照，记录公开时点并固定内容哈希；模型应调用确定性计算工具，并在报告中引用可核验的原文。关闭搜索和自动获取，仅开放读取所附材料、计算和提交研究所需工具，不复用历史运行或结果。取得用途获授权的独立凭据及部署配置后，在调用前冻结实际端点、模型、资料快照、协议版本、认证方式、能力声明、超时、单次输出上限和支持的参数。用户未设置的任务调用数、总 token、时间和费用预算保持未设置；账户额度只准入已配置上限的调用。记录脱敏配置、实际调用次数、引用与计算核验、用量或未知用量、延迟、结算及限制；不自动重试未知外呼。当前没有确认可用于直接 API 研究的凭据，因此尚未发起外呼或确定模型和快照。
+
+最终离线 API 命令（在 `src/apps/api` 运行）：
+
+```sh
+FORESIGHTNINE_OFFLINE_TESTS=1 .venv/bin/python -m pytest -q tests/test_messages_research_integration.py tests/test_anthropic_messages_provider.py tests/test_model_protocol_native.py tests/test_research_runtime.py tests/test_research_runtime_api.py tests/test_research_capacity_unset.py tests/test_model_credentials.py tests/test_research_model_receipts.py
+```
+
+网页命令（在 `src/apps/web` 运行）：`npm test -- --run src/model-config-client.test.ts`。最终 API 批次包含两项个人 Challenge 账户配置测试；其测试替身已补上既有调用契约中的可选关键字参数，生产 Challenge 行为未因此修改。
+
+2026-11-18 真实 Messages 验收准备：新建 [360 验收目录](product/phase-a/360-messages-runtime-validation/preregistration.md)，固定微软官方 2026 年报两期收入的最小事实摘录和独立 Decimal 对照，并准备隔离的普通研究运行与一次性提交标记。只检查了专用凭据配置是否存在：`FORESIGHTNINE_RESEARCH_LLM_API_KEY` 缺失；隔离运行的非秘密凭据版本由验收配置固定。预检在调用前停止，未冻结实际运行、未提交研究、未联系模型服务；官方网页事实与原文使用边界记录在预登记中。
+
+2026-11-18 已按用户确认使用国际区现有凭据完成一次 360 真实尝试：[结果与证据](product/phase-a/360-messages-runtime-validation/evaluation.md)。五次模型响应后，第六次在 DNS 阶段未发送即失败；研究部分完成、未生成最终报告。确定性计算得 17.79%，五次报告总用量 21,159 tokens，费用未知；结算的六条 settled 中包含一次未发送的零用量结算，不能解释为六次提供方调用。未重放。

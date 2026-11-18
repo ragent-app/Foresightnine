@@ -1,0 +1,622 @@
+{
+  "schema_version": "1",
+  "format": "research_json",
+  "topic_id": "topic_a3152afa67f648f4838b2314bb228652",
+  "generated_at": "2026-11-18T05:25:28.975640Z",
+  "request": {
+    "question": "Using only the supplied Microsoft FY2026 annual-report revenue facts, compare total revenue for the years ended June 30, 2026 and June 30, 2025. Give amounts, currency and periods; use the deterministic calculation tool to calculate year-over-year growth, show inputs and formula, cite the supporting source, and explain limitations.",
+    "source_ids": [
+      "source_1a7b696befc54738b2c0812545a21c66"
+    ],
+    "scope": "",
+    "as_of": null
+  },
+  "version": {
+    "version_id": "version_4fca290da34f4e17bfc3c3d13c428396",
+    "parent_version_id": "version_8b22d8b6a80343229fd319533a57a3b8",
+    "created_at": "2026-11-18T05:25:28.125915Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+          "title": "Microsoft FY2026 revenue facts, derived from annual report",
+          "url": "https://www.microsoft.com/investor/reports/ar26/",
+          "event_at": null,
+          "published_at": null,
+          "obtained_at": "2026-11-18T05:22:36.358285+00:00",
+          "revised_at": null,
+          "content_sha256": "f28b944991dea9709a78fbeb4a7324cf89f3a43062209e6c07879f3fe71a6ba8",
+          "is_simulated": false,
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "text_characters": 203,
+            "selected_characters": 203,
+            "status": "complete"
+          },
+          "pdf_text_order": null,
+          "derived_from_source_id": null,
+          "verification": "user_declared_not_verified"
+        }
+      ],
+      "source_candidates": [],
+      "facts": [
+        {
+          "fact_id": "fact-ba6eb482810540248ddf7c438b385229",
+          "label": "Microsoft total revenue, fiscal year ended June 30, 2026",
+          "value": "331839",
+          "unit": "millions",
+          "currency": "USD",
+          "period": "FY ended June 30, 2026",
+          "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+          "quotation": "Year ended June 30, 2026: total revenue 331,839.",
+          "character_start": 105,
+          "character_end": 153,
+          "location": {
+            "character_start": 105,
+            "character_end": 153
+          },
+          "verification": "numeric_and_location_match_semantics_not_verified",
+          "currency_quote_missing": true,
+          "scale_quote_missing": true
+        },
+        {
+          "fact_id": "fact-34a878a8a7614f8c9b135f94805da233",
+          "label": "Microsoft total revenue, fiscal year ended June 30, 2025",
+          "value": "281724",
+          "unit": "millions",
+          "currency": "USD",
+          "period": "FY ended June 30, 2025",
+          "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+          "quotation": "Year ended June 30, 2025: total revenue 281,724.",
+          "character_start": 154,
+          "character_end": 202,
+          "location": {
+            "character_start": 154,
+            "character_end": 202
+          },
+          "verification": "numeric_and_location_match_semantics_not_verified",
+          "currency_quote_missing": true,
+          "scale_quote_missing": true
+        }
+      ],
+      "evidence_differences": [],
+      "calculations": [
+        {
+          "calculation_id": "calc-4d6411bf8030454082a970e131bf5359",
+          "formula_id": "growth_percent",
+          "formula_version": "1",
+          "expression": "(first / second - 1) * 100",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "period_order_check": "not_checked",
+          "period_granularity_check": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-ba6eb482810540248ddf7c438b385229",
+              "value": "331839",
+              "unit": "millions",
+              "currency": "USD",
+              "period": "FY ended June 30, 2026"
+            },
+            {
+              "fact_id": "fact-34a878a8a7614f8c9b135f94805da233",
+              "value": "281724",
+              "unit": "millions",
+              "currency": "USD",
+              "period": "FY ended June 30, 2025"
+            }
+          ],
+          "value": "17.79",
+          "unit": "percent",
+          "currency": null,
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "result_status": "matched",
+          "input_status": "unverifiable"
+        },
+        {
+          "calculation_id": "calc-bb9b424e40e54898881d15e27d9334ab",
+          "formula_id": "difference",
+          "formula_version": "1",
+          "expression": "first - second",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established",
+          "inputs": [
+            {
+              "fact_id": "fact-ba6eb482810540248ddf7c438b385229",
+              "value": "331839",
+              "unit": "millions",
+              "currency": "USD",
+              "period": "FY ended June 30, 2026"
+            },
+            {
+              "fact_id": "fact-34a878a8a7614f8c9b135f94805da233",
+              "value": "281724",
+              "unit": "millions",
+              "currency": "USD",
+              "period": "FY ended June 30, 2025"
+            }
+          ],
+          "value": "50115.00",
+          "unit": "millions",
+          "currency": "USD",
+          "rounding": "half_up",
+          "decimal_places": 2,
+          "result_status": "matched",
+          "input_status": "unverifiable"
+        }
+      ],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [],
+      "limitations": [
+        "Provider request ended without a usable result.",
+        "Source selection is partial or unknown; absence from unseen material is not established. Review the selected ranges and obtain relevant additional material."
+      ],
+      "run": {
+        "operation_id": "operation:807fb5efc815ee55f88bf19a",
+        "runtime": "native_tools",
+        "status": "partial",
+        "reason": "provider_transport_error",
+        "model_calls": 5,
+        "search_calls": 0,
+        "total_tokens": 21159,
+        "assessment": {
+          "transport": "observed",
+          "structure": "partial",
+          "evidence": "insufficient",
+          "task": "partial"
+        },
+        "source_processing": [
+          {
+            "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+            "eligibility": "eligible",
+            "provided": true,
+            "initial_selection": "complete",
+            "selected_characters": 203,
+            "text_characters": 203,
+            "selection_status": "complete",
+            "selection_gap": null,
+            "analysis_status": "not_completed"
+          }
+        ],
+        "selected_segments": [
+          {
+            "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+            "character_start": 0,
+            "character_end": 203
+          }
+        ],
+        "events": [
+          {
+            "kind": "model",
+            "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:33464be5ad9045328e64c7606d4da723",
+            "finish_reason": "tool_use",
+            "external_state": "returned",
+            "usage": 2195,
+            "usage_detail": {
+              "input_tokens": 1980,
+              "output_tokens": 215,
+              "total_tokens": 2195,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": 0
+            },
+            "settlement": "settled",
+            "protocol_status": "normalized",
+            "evidence_status": "not_assessed",
+            "task_status": "in_progress",
+            "tool_call_ids": [
+              "call_e8b62bf9d8b9468eb533ecfe"
+            ]
+          },
+          {
+            "kind": "tool",
+            "tool_call_id": "call_e8b62bf9d8b9468eb533ecfe",
+            "name": "read_sources",
+            "status": "completed",
+            "rationale": "Need to read the supplied Microsoft FY2026 revenue facts source to extract the exact revenue figures for fiscal years ended June 30, 2026 and June 30, 2025 before citing or calculating."
+          },
+          {
+            "kind": "model",
+            "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:6b8dce0ace374e91b162f6b3146b51ee",
+            "finish_reason": "tool_use",
+            "external_state": "returned",
+            "usage": 3764,
+            "usage_detail": {
+              "input_tokens": 2428,
+              "output_tokens": 1336,
+              "total_tokens": 3764,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": 0
+            },
+            "settlement": "settled",
+            "protocol_status": "normalized",
+            "evidence_status": "not_assessed",
+            "task_status": "in_progress",
+            "tool_call_ids": [
+              "call_7f1302c0369f4fc789554fb3"
+            ]
+          },
+          {
+            "kind": "tool",
+            "tool_call_id": "call_7f1302c0369f4fc789554fb3",
+            "name": "record_facts",
+            "status": "invalid",
+            "rationale": "Record the two quoted total revenue figures (FY2026 and FY2025) exactly as stated in the supplied source so they can serve as deterministic inputs to the year-over-year growth calculation."
+          },
+          {
+            "kind": "model",
+            "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:d53ae863999949d496b5ae0caee82bc4",
+            "finish_reason": "tool_use",
+            "external_state": "returned",
+            "usage": 4245,
+            "usage_detail": {
+              "input_tokens": 3903,
+              "output_tokens": 342,
+              "total_tokens": 4245,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": 0
+            },
+            "settlement": "settled",
+            "protocol_status": "normalized",
+            "evidence_status": "not_assessed",
+            "task_status": "in_progress",
+            "tool_call_ids": [
+              "call_11033f8568404604b8a6c41e"
+            ]
+          },
+          {
+            "kind": "tool",
+            "tool_call_id": "call_11033f8568404604b8a6c41e",
+            "name": "record_facts",
+            "status": "completed",
+            "rationale": "Record the two quoted total revenue figures (FY2026: 331,839; FY2025: 281,724) exactly as stated in the supplied source so they can serve as deterministic inputs to the year-over-year growth calculation."
+          },
+          {
+            "kind": "model",
+            "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:262f4c8a3c8d4c90a06448a8ab8c327a",
+            "finish_reason": "tool_use",
+            "external_state": "returned",
+            "usage": 4982,
+            "usage_detail": {
+              "input_tokens": 4621,
+              "output_tokens": 361,
+              "total_tokens": 4982,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": 0
+            },
+            "settlement": "settled",
+            "protocol_status": "normalized",
+            "evidence_status": "not_assessed",
+            "task_status": "in_progress",
+            "tool_call_ids": [
+              "call_8f3d7cacdb1f443fb8d3d61f"
+            ]
+          },
+          {
+            "kind": "tool",
+            "tool_call_id": "call_8f3d7cacdb1f443fb8d3d61f",
+            "name": "calculate_financials",
+            "status": "completed",
+            "rationale": "Calculate deterministic year-over-year total revenue growth: (FY2026 revenue 331,839 − FY2025 revenue 281,724) ÷ FY2025 revenue 281,724 × 100, using the two recorded facts as inputs."
+          },
+          {
+            "kind": "model",
+            "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:540e209d03ef4473ba412b85214405d9",
+            "finish_reason": "tool_use",
+            "external_state": "returned",
+            "usage": 5973,
+            "usage_detail": {
+              "input_tokens": 5266,
+              "output_tokens": 707,
+              "total_tokens": 5973,
+              "cache_creation_input_tokens": null,
+              "cache_read_input_tokens": 0
+            },
+            "settlement": "settled",
+            "protocol_status": "normalized",
+            "evidence_status": "not_assessed",
+            "task_status": "in_progress",
+            "tool_call_ids": [
+              "call_c0b255aac68d43bd85c1ed92"
+            ]
+          },
+          {
+            "kind": "tool",
+            "tool_call_id": "call_c0b255aac68d43bd85c1ed92",
+            "name": "calculate_financials",
+            "status": "completed",
+            "rationale": "Compute the absolute year-over-year revenue change (FY2026 minus FY2025) to accompany the percentage growth, using the same two recorded facts."
+          },
+          {
+            "kind": "model_failure",
+            "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:8a3df9d4238d4ae78a0894838cad7c68",
+            "code": "provider_transport_error",
+            "external_state": "not_started",
+            "usage": null
+          }
+        ],
+        "research_questions": [],
+        "run_source_processing": [
+          {
+            "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+            "stage_ranges": [
+              {
+                "stage": "analysis",
+                "ranges": [
+                  {
+                    "start": 0,
+                    "end": 203
+                  }
+                ]
+              }
+            ],
+            "coverage": "complete",
+            "meaning": "analysis_and_gap_ranges_not_exhaustive_review"
+          }
+        ],
+        "scope_assessment": {
+          "schema_version": "1",
+          "meaning": "input_selection_not_exhaustive_review",
+          "scope": "partial_or_unknown",
+          "attempted": true,
+          "sources": [
+            {
+              "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+              "provided": true,
+              "selection_status": "complete",
+              "analysis_status": "not_completed"
+            }
+          ],
+          "truncated": false,
+          "claim_scope_declarations": [],
+          "claim_scope_coverage": "not_applicable",
+          "review_scope_coverage": "not_requested",
+          "absence_conclusions": "not_independently_verified",
+          "claim_indexes_requiring_scope_review": [],
+          "limitation_indexes_requiring_scope_review": [
+            0
+          ],
+          "indexes_truncated": false
+        },
+        "evidence_needs": {
+          "schema_version": "1",
+          "meaning": "review_actions_not_new_evidence",
+          "items": [
+            {
+              "evidence_type": "unexamined_or_unselected_source_material",
+              "reason": "source_selection_partial_or_unknown",
+              "action": "inspect_or_supply_relevant_material",
+              "status": "not_obtained_or_not_verified"
+            }
+          ]
+        },
+        "absence_assessment": {
+          "schema_version": "1",
+          "meaning": "model_suggestions_not_verified_absence",
+          "observations": [],
+          "truncated": false
+        },
+        "evidence_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "facts": [
+            {
+              "fact_id": "fact-ba6eb482810540248ddf7c438b385229",
+              "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+              "identity_status": "unique",
+              "citation_location_status": "recorded",
+              "attribution": "source_or_model_extraction",
+              "semantic_status": "not_independently_verified",
+              "reference_kind": "stored_text_span",
+              "dimensions_recorded": {
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "unit": true,
+                "currency": true,
+                "accounting_basis": false
+              }
+            },
+            {
+              "fact_id": "fact-34a878a8a7614f8c9b135f94805da233",
+              "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+              "identity_status": "unique",
+              "citation_location_status": "recorded",
+              "attribution": "source_or_model_extraction",
+              "semantic_status": "not_independently_verified",
+              "reference_kind": "stored_text_span",
+              "dimensions_recorded": {
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "unit": true,
+                "currency": true,
+                "accounting_basis": false
+              }
+            }
+          ],
+          "claims": [],
+          "calculations": [
+            {
+              "calculation_index": 0,
+              "inputs": [
+                {
+                  "fact_id": "fact-ba6eb482810540248ddf7c438b385229",
+                  "fact_reference": "unique",
+                  "source_id": null,
+                  "location": null,
+                  "source_context_status": "not_independently_verified"
+                },
+                {
+                  "fact_id": "fact-34a878a8a7614f8c9b135f94805da233",
+                  "fact_reference": "unique",
+                  "source_id": null,
+                  "location": null,
+                  "source_context_status": "not_independently_verified"
+                }
+              ],
+              "input_status": "unverifiable",
+              "result_status": "matched",
+              "semantic_status": "not_independently_verified"
+            },
+            {
+              "calculation_index": 1,
+              "inputs": [
+                {
+                  "fact_id": "fact-ba6eb482810540248ddf7c438b385229",
+                  "fact_reference": "unique",
+                  "source_id": null,
+                  "location": null,
+                  "source_context_status": "not_independently_verified"
+                },
+                {
+                  "fact_id": "fact-34a878a8a7614f8c9b135f94805da233",
+                  "fact_reference": "unique",
+                  "source_id": null,
+                  "location": null,
+                  "source_context_status": "not_independently_verified"
+                }
+              ],
+              "input_status": "unverifiable",
+              "result_status": "matched",
+              "semantic_status": "not_independently_verified"
+            }
+          ]
+        },
+        "question_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "truncated": false,
+          "questions": []
+        },
+        "requirement_coverage": {
+          "schema_version": "1",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "requirements": [
+            {
+              "requirement_id": "user_request",
+              "origin": "user",
+              "question_index": null,
+              "finding_ids": [],
+              "source_ids": [],
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": [],
+              "counterpoints": [],
+              "relation_status": "not_assessed",
+              "semantic_status": "not_independently_verified",
+              "gaps": [
+                "request_decomposition_not_verified"
+              ]
+            }
+          ],
+          "requested_actions": []
+        },
+        "completion_assessment": {
+          "schema_version": "1",
+          "execution_status": "no_recorded_execution_gap",
+          "assertion_link_gaps": [],
+          "unmet_requested_actions": [],
+          "suggested_requirement_gaps": [],
+          "model_reported_task_gap": false,
+          "task_coverage": "not_independently_verified",
+          "source_semantics": "not_independently_verified",
+          "meaning": "execution_record_not_task_quality_verdict"
+        },
+        "research_gaps": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "items": [
+            {
+              "code": "source_scope_review_required"
+            },
+            {
+              "code": "no_findings"
+            },
+            {
+              "code": "calculation_inputs_unverified",
+              "indexes": [
+                0,
+                1
+              ],
+              "count": 2,
+              "truncated": false,
+              "index_kind": "calculation"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ]
+        },
+        "stage_summary": {
+          "schema_version": "1",
+          "meaning": "saved_execution_not_quality_verdict",
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "unknown"
+            },
+            {
+              "stage": "sources",
+              "status": "completed"
+            },
+            {
+              "stage": "analysis",
+              "status": "unknown"
+            },
+            {
+              "stage": "review",
+              "status": "unknown"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ]
+        }
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_1a7b696befc54738b2c0812545a21c66"
+    ],
+    "created_by": "agent"
+  },
+  "source_provenance": [
+    {
+      "schema_version": "1",
+      "source_id": "source_1a7b696befc54738b2c0812545a21c66",
+      "title": "Microsoft FY2026 revenue facts, derived from annual report",
+      "kind": "user_supplied",
+      "is_simulated": false,
+      "published_at": null,
+      "event_at": null,
+      "revised_at": null,
+      "obtained_at": "2026-11-18T05:22:36.358285Z",
+      "content_sha256": "f28b944991dea9709a78fbeb4a7324cf89f3a43062209e6c07879f3fe71a6ba8",
+      "retrieval_method": "user_supplied",
+      "pdf_text_order": null,
+      "derived_from_source_id": null,
+      "response_sha256": null,
+      "response_content_type": null,
+      "permissions": {
+        "store": true,
+        "model_input": true,
+        "display": true,
+        "export": true
+      },
+      "provenance": {},
+      "url": "https://www.microsoft.com/investor/reports/ar26/",
+      "verification": "user_declared_not_verified"
+    }
+  ],
+  "disclosure": "Model interpretations and declared source permissions are not independently verified.",
+  "calculation_disclosure": "Calculations use the recorded inputs; their source precision and prior rounding are not established."
+}

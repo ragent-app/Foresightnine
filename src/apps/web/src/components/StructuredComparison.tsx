@@ -63,7 +63,7 @@ export function StructuredComparison({ facts, en, load, loadTable }: Props) {
           return <td key={entity}>{values.length ? values.map(({ fact }) => <div key={fact.fact_id}>
             <strong>{fact.value}</strong>{fact.structured_metadata?.filing_date ? <small> · {en ? "Filed" : "申报"}: {String(fact.structured_metadata.filing_date)}</small> : null}
             {fact.structured_metadata?.accn ? <small> · {String(fact.structured_metadata.accn)}</small> : null}
-            {fact.source_id ? <SourceContext sourceId={fact.source_id} location={fact.location} quotation={fact.quotation} en={en} load={load} loadTable={loadTable} /> : null}
+            {fact.source_id ? <SourceContext sourceId={fact.source_id} location={fact.location} quotation={fact.quotation ?? undefined} en={en} load={load} loadTable={loadTable} /> : null}
           </div>) : <span>{en ? "Not recorded" : "未记录"}</span>}</td>;
         })}</tr>;
       })}</tbody>

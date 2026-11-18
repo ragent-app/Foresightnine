@@ -24,7 +24,9 @@ from .research_evidence import (
 )
 from .research_gap_followup import merge_research_questions
 from .research_source_policy import prepare_sources
+from .research_coverage import safe_model_evidence_needs
 from .research_sources import ResearchSource
+from .research_source_quality import summarize_source_quality
 from .research_structured_data import extract_structured_observations
 from .research_topics import ResearchContent
 from .research_coordinator import PlanningResult
@@ -41,6 +43,13 @@ def build_run_core(*, question_origin: str, default_task: str | None, question_o
             **({'default_task': default_task} if default_task is not None else {}),
             **({'question_override': question_override} if question_override is not None else {}),
             'research_questions': analysis.research_questions,
+            'planning_requirements': list(getattr(planning, 'requirements', ())),
+            'analysis_requirements': list(getattr(analysis, 'discovered_requirements', [])),
+            'selection_diagnostics': list(getattr(analysis, 'selection_diagnostics', [])),
+            'pdf_structure_diagnostics': list(getattr(analysis, 'pdf_structure_diagnostics', [])),
+            'model_requirement_links': list(getattr(analysis, 'requirement_links', [])),
+            'model_evidence_needs': safe_model_evidence_needs(getattr(analysis, 'evidence_needs', [])),
+            'model_absence_observations': list(getattr(analysis, 'absence_observations', [])),
             'source_processing': source_processing,
             'available_fact_ids': analysis.available_fact_ids,
             'settled_model_budget_accounted_tokens': budget_accounted_tokens,
@@ -71,7 +80,8 @@ def assemble_research_content(*, source_candidates: list[dict], sources: list[di
                               amount_differences: list[dict] | None = None) -> ResearchContent:
     """Build one consistent artifact snapshot for checkpoints and delivery."""
     return ResearchContent(summary=summary, source_candidates=source_candidates, sources=sources,
-        facts=analysis.facts, calculations=analysis.calculations, claims=claims, limitations=limitations, run=run,
+        facts=analysis.facts, calculations=analysis.calculations, claims=claims, limitations=limitations,
+        run={**run, 'source_quality': summarize_source_quality(sources)},
         evidence_differences=evidence_differences(analysis.facts) if differences is None else differences,
         calculation_differences=(claim_calculation_differences(claims, analysis.calculations, analysis.facts)
                                  if calculation_differences is None else calculation_differences),
@@ -84,7 +94,7 @@ def assemble_initial_artifacts(analysis: AnalysisResult, sources: list[ResearchS
     eligible, _ = prepare_sources(sources, as_of)
     observed, truncated = extract_structured_observations(
         [source for source in eligible if source.source_id in analysis.source_ids],
-        max_facts=max(0, min(200, 2000 - len(analysis.facts))))
+        max_facts=200)
     existing_ids = {fact.get('fact_id') for fact in analysis.facts if isinstance(fact, dict)}
     observed = [fact for fact in observed if fact['fact_id'] not in existing_ids]
     if observed:

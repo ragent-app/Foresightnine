@@ -30,7 +30,7 @@ class ResearchCheckpointPublisher:
             try:
                 parent = self.versions.current()
                 content = assemble_research_content(summary=parent.content.summary,
-                    source_candidates=self.candidates, sources=self.sources(analysis.source_ids, analysis.segments),
+                    source_candidates=self.candidates[-10:], sources=self.sources(analysis.source_ids, analysis.segments),
                     analysis=analysis, claims=claims, limitations=limitations,
                     run={'operation_id': self.operation_id, 'status': 'partial', 'checkpoint': checkpoint,
                          **self.core(analysis), **self.metadata(analysis), **(extra or {})})

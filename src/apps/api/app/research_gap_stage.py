@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from hashlib import sha256
+import inspect
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
@@ -12,13 +13,41 @@ from .phase3 import ProviderFailure
 from .research_analysis import SYSTEM_PROMPT, AnalysisInterrupted, AnalysisResult, InvalidAnalysis, analyze
 from .research_artifacts import prepare_run_claims
 from .research_calculations import calculation_input_status
-from .research_coordinator import ResearchExecutionContext
+from .research_coordinator import ResearchExecutionContext, research_prompt_fits, research_prompt_budget
+from .research_output_contract import ANALYSIS_CONTRACT
 from .research_discovery import execute_source_search
 from .research_evidence import flag_partial_source_absence
-from .research_gap_followup import build_gap_focus, merge_research_questions, remap_followup_artifacts
+from .research_gap_followup import build_gap_focus, gap_context_refs, merge_research_questions, remap_followup_artifacts
 from .research_runs import ResearchRunRequest
+from .research_requirements import combined_requirements, unresolved_requirement_indexes, unresolved_original_requirement, followup_retrieval_hints, evidence_need_details
 from .research_sources import ResearchSource
 from .research_workflow import ResearchWorkflow
+
+
+def _merge_followup_evidence(analysis: AnalysisResult, extra: AnalysisResult) -> tuple[list[dict], list[dict]]:
+    observations = [*analysis.absence_observations, *extra.absence_observations]
+    segments = list(analysis.segments)
+    for segment in extra.segments:
+        if segment not in segments:
+            segments.append(segment)
+    return observations, segments
+
+
+def _merge_followup_needs(analysis: AnalysisResult, extra: AnalysisResult, questions: list[dict]) -> list[dict]:
+    needs = list(analysis.evidence_needs)
+    for item in extra.evidence_needs:
+        if not isinstance(item, dict):
+            continue
+        index = item.get('question_index')
+        target = None
+        if type(index) is int and 0 <= index < len(extra.research_questions):
+            question = extra.research_questions[index].get('question')
+            matches = [i for i, row in enumerate(questions) if isinstance(row, dict) and row.get('question') == question]
+            if len(matches) == 1:
+                target = matches[0]
+        needs.append({**item, 'question_index': target,
+                      **({'question_origin': 'unlinked_followup'} if target is None else {})})
+    return needs[:50]
 
 
 @dataclass
@@ -45,72 +74,115 @@ def execute_gap_followup(*, request: ResearchRunRequest, analysis: AnalysisResul
                          provider: Any, generate: Any, evidence_provider: Any, search_provider_name: str,
                          convert_candidate: Callable[[object, str], Any], discovered: list[dict[str, Any]],
                          search_receipts: list[dict[str, Any]], context: ResearchExecutionContext,
-                         workflow: ResearchWorkflow, checkpoint: Callable[[GapStageResult], None]) -> GapStageResult:
+                         planning_requirements: tuple[dict, ...] = (), retrieval_hints: tuple[str, ...] = (),
+                         workflow: ResearchWorkflow, checkpoint: Callable[[GapStageResult], None],
+                         retrieve_candidates: Callable[[list[dict[str, Any]]], list[ResearchSource]] | None = None,
+                         round_id: str = "", search_already_attempted: bool = False,
+                         query_override: str | None = None,
+                         selected_range: dict[str, Any] | None = None,
+                         preferred_question: str | None = None) -> GapStageResult:
     """Search for leads only with consent; analyze only the existing authorized sources."""
     result = GapStageResult(analysis, claims, search_status='not_started' if request.gap_search else 'not_requested')
     if not request.gap_followup:
         return result
     result.status = 'not_needed' if context.calls and analysis.claims else 'unavailable'
-    target = build_gap_focus(question, claims, analysis.research_questions) if context.calls and sources else None
+    requirement_gaps = unresolved_requirement_indexes(analysis, planning_requirements)
+    target = build_gap_focus(question, claims, analysis.research_questions, requirement_gaps=requirement_gaps,
+                             original_gap=unresolved_original_requirement(analysis) or selected_range is not None,
+                             need_details=evidence_need_details(analysis), preferred_question=preferred_question) if context.calls and sources else None
     if target is None:
         if request.gap_search and result.status == 'not_needed':
             result.search_status = 'no_gaps'
         return result
+    if query_override:
+        target = replace(target, search_query=query_override)
     result.targets = list(target.claim_indexes)
     result.input_targets = list(target.claim_indexes)
     result.question_targets = list(target.question_indexes)
     policy = getattr(provider, 'policy', None)
     input_limit, output_limit = getattr(policy, 'max_input_tokens', None), getattr(policy, 'max_output_tokens', None)
     timeout = getattr(policy, 'timeout_seconds', None)
-    if not isinstance(input_limit, int) or not isinstance(output_limit, int) or not isinstance(timeout, (int, float)):
+    if not isinstance(timeout, (int, float)):
         result.status = 'unavailable'
         return result
-    per_call = input_limit + output_limit
-    reason = context.model_exhaustion(per_call)
+    try:
+        parameters = inspect.signature(generate).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    selected_contract = ANALYSIS_CONTRACT if 'contract' in parameters else None
+    overhead_fn = getattr(provider, 'contract_overhead_bytes', None)
+    try:
+        contract_overhead = overhead_fn(selected_contract) if selected_contract is not None and callable(overhead_fn) else 0
+        if type(contract_overhead) is not int or contract_overhead < 0:
+            raise ProviderFailure('provider_configuration_invalid', 'Provider contract configuration is invalid.', retryable=False)
+    except ProviderFailure:
+        result.status = 'unavailable'
+        return result
+    capacity_fits = getattr(provider, 'research_prompt_fits', None)
+    legacy_limit = None if callable(capacity_fits) else input_limit
+    page_budget = research_prompt_budget(legacy_limit - contract_overhead if type(legacy_limit) is int else None, SYSTEM_PROMPT)
+    max_prompt_chars = min(max_prompt_chars, page_budget) if max_prompt_chars is not None and page_budget is not None else (max_prompt_chars if page_budget is None else page_budget)
+    per_call = input_limit + output_limit if type(input_limit) is int and type(output_limit) is int else None
+    reason = context.model_exhaustion(per_call) if context.budget.max_total_tokens is None else None
     if reason:
         result.status = 'unavailable' if reason == 'provider_limit' else 'budget_exhausted'
         return result
     attempted = False
 
-    def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
-        nonlocal attempted
-        context.ensure_running()
-        if request.gap_search:
+    def discover_and_retrieve() -> None:
+        if request.gap_search and not search_already_attempted:
             result.search_status = 'pending'
         checkpoint(result)
-        if request.gap_search:
+        if request.gap_search and not search_already_attempted:
             existing_urls = {item.get('url') for item in discovered}
             for source in sources:
                 if source.url:
                     parts = urlsplit(str(source.url))
-                    existing_urls.add(urlunsplit((parts.scheme, parts.netloc, parts.path, '', '')))
+                    existing_urls.add(urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, '')))
             discovery = workflow.run('gap_search', lambda: execute_source_search(provider=evidence_provider,
                 provider_name=search_provider_name, query=target.search_query, convert=convert_candidate,
                 as_of=as_of, context=context, existing_urls=existing_urls,
-                capacity=max(0, 10 - len(discovered)), stage='gap'), lambda item: item.status)
+                capacity=10, stage='gap'), lambda item: item.status)
             result.search_status = discovery.status
             search_receipts.append({'stage': 'gap', 'status': discovery.status, 'attempted': discovery.attempted,
-                                    'reason': discovery.reason, 'retryable': discovery.retryable, 'omitted': discovery.omitted})
+                                    'reason': discovery.reason, 'retryable': discovery.retryable, 'omitted': discovery.omitted,
+                                    'returned_count': getattr(discovery, 'returned_count', None),
+                                    'provider_limit': getattr(discovery, 'provider_limit', None),
+                                    'has_more': getattr(discovery, 'has_more', None)})
             if discovery.attempted:
                 result.search_hash = sha256(target.search_query.encode('utf-8')).hexdigest()
             discovered.extend(discovery.candidates)
             if discovery.status in {'completed', 'partial'}:
-                result.notes.append('Additional gap-search results are unverified leads; they are not evidence or model input.')
+                result.notes.append('Additional gap-search results are unverified leads until retrieved and authorized.')
             if discovery.omitted:
                 result.notes.append('Some gap-search candidates were invalid or exceeded the display limit and were omitted.')
             if discovery.status == 'failed':
                 result.notes.append('Additional gap-focused source search failed or was rate limited.')
+            if retrieve_candidates and discovery.candidates:
+                additions = retrieve_candidates(discovery.candidates)
+                if additions:
+                    sources[:0] = additions
+                    result.notes.append('Newly retrieved authorized sources are included in this follow-up; their contents remain unverified.')
             checkpoint(result)
+
+    def generate_gap(prompt: str) -> tuple[dict[str, Any], int | None]:
+        nonlocal attempted
+        context.ensure_running()
         remaining = context.budget.deadline - context.now()
         if remaining <= 0:
             raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-        call_id = f'{operation_id}:gap-followup'
-        before = context.start_model(call_id, per_call)
+        if legacy_limit is not None and not research_prompt_fits(prompt, SYSTEM_PROMPT, legacy_limit - contract_overhead):
+            raise ProviderFailure('provider_budget_exhausted', 'Research input budget is exhausted.', retryable=False)
+        call_id = f'{operation_id}:gap-followup{round_id}'
+        reservation, output_cap = context.prepare_model_call(provider, prompt, SYSTEM_PROMPT, selected_contract)
+        output_kwargs = context.output_kwargs(generate, provider, output_cap)
+        before = context.start_model(call_id, reservation)
         attempted = True
         result.prompt_sha256 = sha256(prompt.encode('utf-8')).hexdigest()
         try:
-            raw, reported = generate(prompt, cancel_event=context.cancel_event(), system=SYSTEM_PROMPT,
-                                     timeout_seconds=min(float(timeout), remaining))
+            contract_kwargs = {'contract': selected_contract} if selected_contract is not None else {}
+            raw, reported = context.invoke_model(call_id, generate, prompt, cancel_event=context.cancel_event(), system=SYSTEM_PROMPT,
+                                     timeout_seconds=min(float(timeout), remaining), **contract_kwargs, **output_kwargs)
             result.tokens = reported if type(reported) is int and reported >= 0 else None
             return raw, result.tokens
         except ProviderFailure as error:
@@ -120,27 +192,65 @@ def execute_gap_followup(*, request: ResearchRunRequest, analysis: AnalysisResul
             context.finish_model(call_id, result.tokens, before)
 
     try:
+        discover_and_retrieve()
+        targeted_questions = [analysis.research_questions[index]['question'] for index in target.question_indexes]
+        targeted_requirements = tuple(item for item in planning_requirements if isinstance(item, dict) and
+                                      item.get('question') in targeted_questions)
+        targeted_hints = followup_retrieval_hints(retrieval_hints, targeted_requirements)
+        needs = evidence_need_details(analysis)
+        focus_hints = [*needs.get(None, ()), *(detail for index in target.question_indexes for detail in needs.get(index, ()))]
         extra = analyze(target.question, sources, as_of, generate_gap, max_prompt_chars=max_prompt_chars,
                         should_stop=lambda: context.now() >= context.budget.deadline, scope=scope,
-                        require_counterarguments=request.require_counterarguments or request.counterpoint_followup)
+                        planning_steps=targeted_questions, planning_requirements=targeted_requirements,
+                        retrieval_hints=targeted_hints,
+                        prior_segments=analysis.segments, context_refs=[*([selected_range] if selected_range else []), *gap_context_refs(target, analysis, claims)],
+                        incremental_focus=tuple([*focus_hints[:2], *targeted_questions]),
+                        require_counterarguments=request.require_counterarguments or request.counterpoint_followup,
+                        output_contract=selected_contract,
+                        prompt_fits=(lambda prompt: capacity_fits(prompt, SYSTEM_PROMPT, selected_contract)) if callable(capacity_fits) else None)
         if not attempted:
-            result.status = 'input_unavailable'
+            no_new = 'No new eligible evidence unit was available for the gap follow-up.'
+            result.status = 'no_evidence' if no_new in extra.limitations else 'input_unavailable'
+            result.notes.extend(note for note in extra.limitations if note == no_new)
             return result
         old_count = len(analysis.claims)
+        fact_id_map: dict[str, str] = {}
+        calculation_index_map: dict[int, int] = {}
         facts, calculations, omissions = remap_followup_artifacts(extra.facts, extra.calculations,
             operation_id=operation_id, existing_fact_ids={fact['fact_id'] for fact in analysis.facts if isinstance(fact.get('fact_id'), str)},
             existing_facts=analysis.facts, max_facts=max(0, 2000 - len(analysis.facts)),
-            max_calculations=max(0, 2000 - len(analysis.calculations)))
+            max_calculations=max(0, 2000 - len(analysis.calculations)), fact_id_map=fact_id_map,
+            calculation_index_map=calculation_index_map)
         for calculation in calculations:
             calculation['input_status'] = calculation_input_status(calculation, [*analysis.facts, *facts])
         support_room = max(0, 30 - old_count)
-        extra_claims = extra.claims[:support_room]
+        def remap_assertions(claim: dict) -> list[dict]:
+            result = []
+            for item in claim.get('assertion_suggestions', []):
+                if not isinstance(item, dict):
+                    continue
+                indexes = item.get('calculation_indexes', [])
+                valid = [len(analysis.calculations) + calculation_index_map[index]
+                         for index in indexes if type(index) is int and index in calculation_index_map]
+                result.append({**item, 'calculation_indexes': valid,
+                               'unresolved_reference': bool(item.get('unresolved_reference')) or len(valid) != len(indexes)})
+            return result
+        extra_claims = [{**claim, 'assertion_suggestions': remap_assertions(claim), 'suggested_calculations': [
+            {'calculation_index': len(analysis.calculations) + calculation_index_map[item['calculation_index']]}
+            for item in claim.get('suggested_calculations', []) if isinstance(item, dict) and
+            type(item.get('calculation_index')) is int and item['calculation_index'] in calculation_index_map]}
+            for claim in extra.claims[:support_room]]
         result.targets = [i if i < old_count else i + len(extra_claims) for i in result.input_targets]
         index_map = {i: old_count + i for i in range(len(extra_claims))}
         counter_room = max(0, 20 - len(analysis.counterarguments))
         extra_counterpoints = []
         for original in extra.counterarguments[:counter_room]:
             item = dict(original)
+            item['assertion_suggestions'] = remap_assertions(item)
+            item['suggested_calculations'] = [
+                {'calculation_index': len(analysis.calculations) + calculation_index_map[ref['calculation_index']]}
+                for ref in item.get('suggested_calculations', []) if isinstance(ref, dict) and
+                type(ref.get('calculation_index')) is int and ref['calculation_index'] in calculation_index_map]
             targets = item.get('suggested_responds_to_claim_indexes', [])
             if isinstance(targets, list):
                 mapped = [index_map[i] for i in targets if type(i) is int and i in index_map]
@@ -152,15 +262,77 @@ def execute_gap_followup(*, request: ResearchRunRequest, analysis: AnalysisResul
         result.segments = list(extra.segments)
         result.input_fact_ids = list(extra.available_fact_ids)
         result.status = 'completed' if extra_claims or extra_counterpoints or facts or calculations else 'no_evidence'
-        if len(extra.claims) > support_room or len(extra.counterarguments) > counter_room or omissions:
+        if extra.structured_output_status == 'partial' or len(extra.claims) > support_room or len(extra.counterarguments) > counter_room or omissions:
             result.status = 'partial'
-        result.analysis = replace(analysis, claims=[*analysis.claims, *extra_claims],
+        # Observation references were assigned to the follow-up's own
+        # retained claims before this merge. Preserve those opaque references;
+        # never interpret their original model indexes against earlier claims.
+        # Both lists contain actual model-input ranges, not retrieved leads.
+        # Preserve the original source/offset metadata and deduplicate only
+        # identical records; distinct context groups must remain distinct.
+        combined_absences, combined_segments = _merge_followup_evidence(analysis, extra)
+        merged_questions = merge_research_questions(analysis.research_questions, extra.research_questions, index_map)
+        merged_links = list(analysis.requirement_links)
+        for link in extra.requirement_links:
+            if not isinstance(link, dict) or not isinstance(link.get('question'), str):
+                continue
+            matches = [i for i, row in enumerate(merged_questions) if isinstance(row, dict) and
+                       row.get('question') == link['question']]
+            if len(matches) != 1:
+                continue
+            merged_links.append({**link, 'question_index': matches[0],
+                'fact_ids': [fact_id_map[item] for item in link.get('fact_ids', []) if item in fact_id_map],
+                'calculation_indexes': [len(analysis.calculations) + calculation_index_map[item]
+                                        for item in link.get('calculation_indexes', []) if item in calculation_index_map]})
+        # IDs are scoped to each model call. Offset only retained objects;
+        # never overwrite another draft's identical identifiers.
+        scoped_ids = dict(analysis.structured_output_ids)
+        followups = dict(scoped_ids.get('followups', {}))
+        ids = extra.structured_output_ids
+        mapped_ids = {
+            'claims': {key: old_count + index for key, index in ids.get('claims', {}).items() if type(index) is int and 0 <= index < len(extra_claims)},
+            'counterarguments': {key: len(analysis.counterarguments) + index for key, index in ids.get('counterarguments', {}).items() if type(index) is int and 0 <= index < len(extra_counterpoints)},
+            'calculations': {key: len(analysis.calculations) + calculation_index_map[index] for key, index in ids.get('calculations', {}).items() if index in calculation_index_map},
+            'research_questions': {}, 'evidence': {},
+        }
+        for key, index in ids.get('research_questions', {}).items():
+            if type(index) is int and 0 <= index < len(extra.research_questions):
+                question = extra.research_questions[index].get('question')
+                matches = [i for i, item in enumerate(merged_questions) if item.get('question') == question]
+                if len(matches) == 1:
+                    mapped_ids['research_questions'][key] = matches[0]
+        for key, references in ids.get('evidence', {}).items():
+            remapped = []
+            for ref in references:
+                collection, index = ref.get('collection'), ref.get('finding_index')
+                limit = len(extra_claims) if collection == 'claims' else len(extra_counterpoints) if collection == 'counterarguments' else 0
+                if type(index) is int and 0 <= index < limit:
+                    remapped.append({**ref, 'finding_index': index + (old_count if collection == 'claims' else len(analysis.counterarguments))})
+            if remapped: mapped_ids['evidence'][key] = remapped
+        if ids:
+            followups[f'{operation_id}:gap-followup{round_id}'] = mapped_ids
+            scoped_ids['followups'] = followups
+        result.analysis = replace(analysis, segments=combined_segments, claims=[*analysis.claims, *extra_claims],
+            structured_output_status=('failed' if 'failed' in (analysis.structured_output_status, extra.structured_output_status) else
+                'not_validated' if 'not_validated' in (analysis.structured_output_status, extra.structured_output_status) else
+                'partial' if 'partial' in (analysis.structured_output_status, extra.structured_output_status) else 'complete'),
+            structured_output_errors=list(dict.fromkeys([*analysis.structured_output_errors, *extra.structured_output_errors])),
+            structured_output_ids=scoped_ids,
             counterarguments=[*analysis.counterarguments, *extra_counterpoints], facts=[*analysis.facts, *facts],
             calculations=[*analysis.calculations, *calculations],
-            research_questions=merge_research_questions(analysis.research_questions, extra.research_questions, index_map),
+            absence_observations=combined_absences[:50],
+            evidence_needs=_merge_followup_needs(analysis, extra, merged_questions),
+            requirement_links=merged_links[:50],
+            discovered_requirements=list(combined_requirements(analysis.discovered_requirements, extra)),
+            selection_diagnostics=[*analysis.selection_diagnostics,
+                *[{**entry, 'stage': 'gap_followup'} for entry in extra.selection_diagnostics]][:100],
+            pdf_structure_diagnostics=[*analysis.pdf_structure_diagnostics,
+                *[{**entry, 'stage': 'gap_followup'} for entry in extra.pdf_structure_diagnostics]][:100],
+            research_questions=merged_questions,
             source_ids=list(dict.fromkeys([*analysis.source_ids, *extra.source_ids])),
             limitations=list(dict.fromkeys([*analysis.limitations, *extra.limitations,
                 'The evidence-gap follow-up is model generated and is not independent verification.',
+                *(['Some absence observations were omitted because the observation limit was reached.'] if len(combined_absences) > 50 else []),
                 *(['Some follow-up facts or calculations were omitted because their identifiers or limits could not be reconciled.'] if omissions else [])])))
         result.claims = prepare_run_claims(result.analysis, sources, as_of, leads)
         new_indexes = [*range(old_count, old_count + len(extra_claims)),
@@ -170,6 +342,8 @@ def execute_gap_followup(*, request: ResearchRunRequest, analysis: AnalysisResul
             result.claims[index] = flag_partial_source_absence([result.claims[index]], sources, result.segments)[0]
     except (ProviderFailure, InvalidAnalysis, AnalysisInterrupted, ApiProblem) as error:
         context.ensure_running()
+        if isinstance(error, InvalidAnalysis):
+            context.mark_model_processing_error(f'{operation_id}:gap-followup{round_id}', 'contract_validation')
         result.status = 'failed'
         result.error = error.code if isinstance(error, ProviderFailure) else 'gap_followup_unavailable'
     return result

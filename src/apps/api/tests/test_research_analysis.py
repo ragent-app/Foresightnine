@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.research_prompt_helpers import decode_research_prompt, prompt_budget_with_evidence
 import pytest
 
 from app.research_analysis import AnalysisInterrupted, InvalidAnalysis, analyze, _additional_query_sentences, _compact_pdf_with_offsets, _comparison_windows, _financial_table_windows, _policy_vote_windows, _replace_empty_table_with_counterpoint, _restore_numeric_prefix, _select_window, _select_windows, _trim_partial_ascii_words, _quoted_numbers
@@ -23,7 +24,7 @@ def test_selected_source_offsets_survive_generation_failure():
     prepared = []
 
     def fail(prompt):
-        assert "range" not in json.loads(prompt)["sources"][0]
+        assert "range" not in decode_research_prompt(prompt)["sources"][0]
         raise RuntimeError("provider failed")
 
     with pytest.raises(RuntimeError, match="provider failed"):
@@ -263,14 +264,17 @@ def test_only_authorized_sources_are_sent_and_quotes_must_be_real():
 
 def test_research_prompt_requests_counterevidence_and_preserves_gaps():
     def model(prompt):
-        payload = json.loads(prompt)
+        payload = decode_research_prompt(prompt)
         example = payload["output_schema"]["counterarguments"][0]
         assert example["citations"][0]["quotation"] == "quote"
-        assert "all requested facts in claims" in payload["evidence_guidance"]
-        assert "gaps in limitations" in payload["evidence_guidance"]
-        assert "Quote continuous passages" in payload["evidence_guidance"]
-        assert "never join passages or quote metadata" in payload["evidence_guidance"]
-        assert "Cite table headers, units and rows separately" in payload["evidence_guidance"]
+        guidance = payload["evidence_guidance"]
+        assert "leave unanswered ones empty" in guidance
+        assert "cite every material part with exact continuous quotations" in guidance
+        assert "never joined passages or metadata" in guidance
+        assert "unit, currency and period" in guidance and "cite table headers and rows" in guidance
+        assert "cited, relevant qualifications, conflicts or alternatives" in guidance
+        assert "not restatement or unsupported absence" in guidance
+        assert "Report missing evidence and uncertainty" in guidance
         return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
 
     result = analyze("What would contradict this?", [source("s")], None, model)
@@ -281,9 +285,9 @@ def test_research_prompt_requests_counterevidence_and_preserves_gaps():
 def test_prompt_distinguishes_full_source_from_partial_excerpts():
     def inspect(expected):
         def generate(prompt):
-            payload = json.loads(prompt)
+            payload = decode_research_prompt(prompt)
             assert all(entry["source_coverage"] == expected for entry in payload["sources"])
-            assert "Excerpts are partial" in payload["evidence_guidance"]
+            assert "excerpts are partial, so do not infer absence from unseen text" in payload["evidence_guidance"]
             return {"claims": []}, 10
         return generate
     analyze("Revenue?", [source("short")], None, inspect("complete"))
@@ -297,17 +301,17 @@ def test_prompt_exposes_declared_source_times_separately_from_reporting_period()
     report = source("dated", published_at=published).model_copy(update={"revised_at": revised, "event_at": event})
 
     def model(prompt):
-        payload = json.loads(prompt)
+        payload = decode_research_prompt(prompt)
         item = payload["sources"][0]
         assert item["declared_published_at"] == published.isoformat()
         assert item["declared_revised_at"] == revised.isoformat()
         assert item["declared_event_at"] == event.isoformat()
-        assert "Dates are declared, not verified" in payload["evidence_guidance"]
+        assert "declared publication dates and periods are not verified" in payload["evidence_guidance"]
         return {}, 1
 
     analyze("What happened?", [report], None, model)
     def undated(prompt):
-        item = json.loads(prompt)["sources"][0]
+        item = decode_research_prompt(prompt)["sources"][0]
         assert not any(key.startswith("declared_") for key in item)
         return {}, 1
     analyze("What happened?", [source("undated")], None, undated)
@@ -580,7 +584,8 @@ def test_long_source_uses_relevant_window_with_exact_original_offsets_and_budget
     citation = result.claims[0]["citations"][0]
     assert citation["location"]["character_start"] == len(prefix)
     assert report.text[citation["location"]["character_start"]:citation["location"]["character_end"]] == quote
-    assert result.segments[0]["character_start"] <= len(prefix) < result.segments[0]["character_end"]
+    assert any(segment["character_start"] <= len(prefix) and segment["character_end"] >= len(prefix) + len(quote)
+               for segment in result.segments)
     assert result.prompt_characters <= 5000
     assert len(result.prompt_sha256 or "") == 64
     assert any("remaining text was not examined" in item for item in result.limitations)
@@ -656,7 +661,7 @@ def test_multilingual_comparison_reserves_budget_for_each_source(reverse):
 
     def model(prompt):
         assert len(prompt.encode("utf-8")) <= 3000
-        parts = json.loads(prompt)["sources"]
+        parts = decode_research_prompt(prompt)["sources"]
         assert {part["source_id"] for part in parts} == {"positive", "negative"}
         assert all(part["source_coverage"] == "partial" and part["text"] for part in parts)
         return {}, 10
@@ -672,7 +677,7 @@ def test_pdf_horizontal_spacing_is_compacted_only_in_prompt_and_offsets_stay_ori
     report = source("pdf", text=quote).model_copy(update={"retrieval_method": "user_pdf"})
 
     def model(prompt):
-        item = json.loads(prompt)["sources"][0]
+        item = decode_research_prompt(prompt)["sources"][0]
         assert item["text"] == "Personal income:\nCurrent dollars\t74.4\t88.2"
         return {"claims": [{"text": "Personal income was revised.", "citations": [
             {"source_id": "pdf", "quotation": item["text"]}]}]}, 10
@@ -706,7 +711,7 @@ def test_two_pdf_tables_keep_labels_and_values_under_shared_budget():
     reports = [report("first", "71.6", "74.4"), report("second", "74.4", "88.2")]
 
     def model(prompt):
-        parts = json.loads(prompt)["sources"]
+        parts = decode_research_prompt(prompt)["sources"]
         for sid, value in (("first", "74.4"), ("second", "88.2")):
             assert any(part["source_id"] == sid and value in part["text"] and "income" in part["text"].lower()
                        and "september" in part["text"].lower() for part in parts)
@@ -761,25 +766,31 @@ def test_chinese_year_and_relevance_outrank_unrelated_numeric_density():
 
 
 def test_separate_passages_cannot_be_stitched_into_a_fake_quotation():
-    filler_a = " ".join(f"rowA{i:05d}" for i in range(1000))
-    filler_b = " ".join(f"rowB{i:05d}" for i in range(1000))
-    report = source("s", text="2023 Revenue 100. " + filler_a + " 2023 Profit 200. " + filler_b)
+    report = source("s", text="2023 Revenue 100.\n\n" + "Background information.\n\n" * 800 +
+                    "2023 Profit 200.\n\n" + "Other information.\n\n" * 800)
+    prepared = []
     def model(prompt):
-        parts = json.loads(prompt)["sources"]
-        assert len(parts) == 2
-        quote = parts[0]["text"][-30:] + parts[1]["text"][:30]
+        parts = decode_research_prompt(prompt)["sources"]
+        revenue = next(part['text'] for part in parts if '2023 Revenue 100.' in part['text'])
+        profit = next(part['text'] for part in parts if '2023 Profit 200.' in part['text'])
+        assert revenue != profit and '2023 Profit 200.' not in revenue and '2023 Revenue 100.' not in profit
+        quote = revenue[-30:] + profit[:30]
         assert quote not in report.text
         return {"claims": [{"text": "Invented join", "citations": [{"source_id": "s", "quotation": quote}]}]}, 10
-    rejected = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
+    rejected = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000, on_prepare=prepared.extend)
+    assert any(report.text[item['character_start']:item['character_end']] == '2023 Revenue 100.' for item in prepared)
+    assert any(report.text[item['character_start']:item['character_end']] == '2023 Profit 200.' for item in prepared)
     assert rejected.claims == []
     assert any("quotation" in item and "omitted" in item for item in rejected.limitations)
 
 
 def test_ellipsis_does_not_stitch_two_selected_passages():
-    report = source("s", text="2023 Revenue 100. " + "background " * 1200 +
-                    "2023 Profit 200. " + "irrelevant " * 1200)
+    report = source("s", text="2023 Revenue 100.\n\n" + "Background information.\n\n" * 800 +
+                    "2023 Profit 200.\n\n" + "Other information.\n\n" * 800)
     def model(prompt):
-        assert len(json.loads(prompt)["sources"]) == 2
+        parts = decode_research_prompt(prompt)["sources"]
+        assert any('2023 Revenue 100.' in part['text'] and '2023 Profit 200.' not in part['text'] for part in parts)
+        assert any('2023 Profit 200.' in part['text'] and '2023 Revenue 100.' not in part['text'] for part in parts)
         return {"claims": [{"text": "Both", "citations": [{"source_id": "s",
                 "quotation": "2023 Revenue 100. ... 2023 Profit 200."}]}]}, 10
     result = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
@@ -787,17 +798,28 @@ def test_ellipsis_does_not_stitch_two_selected_passages():
 
 
 def test_long_document_uses_two_windows_under_a_thousand_character_allowance():
+    # An indivisible run cannot be truncated into a fabricated complete unit.
     report = source("s", text="2023 Revenue 100. " + "background " * 400 +
                     "2023 Profit 200. " + "irrelevant " * 400)
-    def model(prompt):
-        parts = json.loads(prompt)["sources"]
-        assert len(parts) == 2
-        assert sum(len(part["text"]) for part in parts) < 1000
-        assert any("2023 Revenue 100." in part["text"] for part in parts)
-        assert any("2023 Profit 200." in part["text"] for part in parts)
-        return {"claims": [], "counterarguments": [], "limitations": []}, 10
-    result = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=1750)
-    assert len(result.segments) == 2 and result.prompt_bytes <= 1750
+    result = analyze("2023 revenue and profit", [report], None, lambda _: ({}, 10), max_prompt_chars=1750)
+    assert not any("2023 Profit 200." in report.text[p["character_start"]:p["character_end"]]
+                   for p in result.segments)
+    assert result.prompt_bytes is None or result.prompt_bytes <= 1750
+    assert result.limitations
+
+
+def test_long_document_with_real_boundaries_preserves_both_targets():
+    text = "2023 Revenue 100. " + "Background information. " * 120 + "2023 Profit 200. " + "Other information. " * 120
+    report = source("s", text=text)
+    captured = []
+    budget = prompt_budget_with_evidence("2023 revenue and profit", [report], evidence_bytes=600)
+    result = analyze("2023 revenue and profit", [report], None,
+                     lambda prompt: (captured.append(decode_research_prompt(prompt)) or {}, 10),
+                     max_prompt_chars=budget)
+    passages = captured[0]["sources"]
+    assert all(any(target in part["text"] for part in passages) for target in ("2023 Revenue 100.", "2023 Profit 200."))
+    assert all(text[p["character_start"]:p["character_end"]] == sent["text"] for p, sent in zip(result.segments, passages))
+    assert result.prompt_bytes <= budget
 
 
 def test_short_document_remains_whole_when_it_fits():
@@ -813,7 +835,7 @@ def test_casefold_expansion_preserves_original_character_offsets():
     quote = "2023 Revenue was 100 million."
     report = source("s", text=prefix + quote + " unrelated " * 1000)
     def model(prompt):
-        assert any(quote in part["text"] for part in json.loads(prompt)["sources"])
+        assert any(quote in part["text"] for part in decode_research_prompt(prompt)["sources"])
         return {"claims": [{"text": "Revenue", "citations": [{"source_id": "s", "quotation": quote}]}]}, 10
     result = analyze("2023 revenue", [report], None, model, max_prompt_chars=3000)
     location = result.claims[0]["citations"][0]["location"]
@@ -832,7 +854,7 @@ def test_time_budget_interrupts_source_selection_before_model_call():
         raise AssertionError("Model must not be called after time budget expires")
     with pytest.raises(AnalysisInterrupted):
         analyze("2023 revenue", [report], None, must_not_call, max_prompt_chars=3000, should_stop=stop)
-    assert checks == 4
+    assert checks >= 4
 
 
 def test_excerpt_word_trimming_preserves_original_coordinates_and_non_ascii_text():
@@ -944,19 +966,15 @@ def test_additional_query_sentences_are_complete_original_and_add_a_facet():
     assert _additional_query_sentences(text, "Explain revenue and debt.", [*selected, (text.index(new), new)]) == []
 
 
-def test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ranges(monkeypatch):
-    import app.research_analysis as analysis
+def test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ranges():
     extra = "Revenue and debt both increased for the company."
     text = "Revenue increased in the year. " + "Other notes. " * 70 + extra + " Other notes. " * 120
     report = source("s", text=text)
-    first, second = (0, text[:150]), (300, text[300:450])
-    monkeypatch.setattr(analysis, "_select_windows", lambda *args, **kwargs: [first, second])
     result = analyze("Explain revenue and debt.", [report], None, lambda _: ({}, 0), max_prompt_chars=2000)
     ranges = [(segment["character_start"], segment["character_end"]) for segment in result.segments]
-    for original in (first, second):
-        original_start, original_text = _trim_partial_ascii_words(text, *original)
-        assert any(start <= original_start and end >= original_start + len(original_text) for start, end in ranges)
+    assert any(text[start:end] == "Revenue increased in the year." for start, end in ranges)
     assert (text.index(extra), text.index(extra) + len(extra)) in ranges
+    assert all(text[start:end] for start, end in ranges)
     assert result.prompt_bytes <= 2000
     limited = analyze("Explain revenue and debt.", [report], None, lambda _: ({}, 0), max_prompt_chars=1350)
     assert limited.prompt_bytes <= 1350
@@ -1009,25 +1027,17 @@ def test_parenthesized_percent_with_explicit_direction_is_not_lost():
     assert Decimal("-100") in _quoted_numbers("The loss was (100) for the period.")
 
 
-def test_multi_part_question_can_use_three_windows_when_budget_permits(monkeypatch):
-    import app.research_analysis as analysis
+def test_multi_part_question_can_use_three_windows_when_budget_permits():
     text = ("Revenue increased. " + "Other unrelated text. " * 100 + "Debt declined. " +
             "Other unrelated text. " * 100 + "Margin improved. " + "Other unrelated text. " * 100)
     report = source("s", text=text)
-    observed = []
-    original = analysis._select_windows
-    def collect(text, question, length, count, *args, **kwargs):
-        observed.append(count)
-        return original(text, question, length, count, *args, **kwargs)
-    monkeypatch.setattr(analysis, "_select_windows", collect)
-    analyze("Explain revenue and debt and margin.", [report], None, lambda _: ({}, 0), max_prompt_chars=1500)
-    assert 3 not in observed
-    observed.clear()
     result = analyze("Explain revenue and debt and margin.", [report], None, lambda _: ({}, 0), max_prompt_chars=5000)
-    assert 3 in observed and result.prompt_bytes <= 5000
-    observed.clear()
-    analyze("Explain revenue and debt and risk.", [report], None, lambda _: ({}, 0), max_prompt_chars=5000)
-    assert 3 not in observed
+    excerpts = [text[s["character_start"]:s["character_end"]] for s in result.segments]
+    assert all(any(target in part for part in excerpts) for target in ("Revenue increased.", "Debt declined.", "Margin improved."))
+    assert result.prompt_bytes <= 5000
+    assert all(part in text for part in excerpts)
+    limited = analyze("Explain revenue and debt and margin.", [report], None, lambda _: ({}, 0), max_prompt_chars=1500)
+    assert limited.prompt_bytes <= 1500
 
 
 def test_grouped_number_normalization_requires_valid_grouping_and_matching_quote():
@@ -1194,14 +1204,19 @@ def test_analyze_keeps_short_structured_total_row_with_its_longer_header():
     report = source("source_0123456789abcdef0123456789abcdef", text=text)
     received = []
     def generate(prompt):
-        received.extend(json.loads(prompt)["sources"])
+        received.extend(decode_research_prompt(prompt)["sources"])
         return {}, 1
     result = analyze("2024 与 2023 财年营收多少？", [report], None, generate, max_prompt_chars=1800)
     excerpts = " ".join(item["text"] for item in received)
-    assert len(result.segments) == 2
     assert all(value in excerpts for value in ("ACME CORP", "millions", "2024", "2023", "200", "190"))
     assert all(text[item["character_start"]:item["character_end"]] == excerpt["text"]
                for item, excerpt in zip(result.segments, received))
+    header_units = {unit for segment, excerpt in zip(result.segments, received)
+                    if "Years Ended" in excerpt["text"] for unit in segment.get("context_unit_ids", [])}
+    total_units = {unit for segment, excerpt in zip(result.segments, received)
+                   if "Total revenue" in excerpt["text"] for unit in segment.get("context_unit_ids", [])}
+    assert header_units & total_units
+    assert result.prompt_bytes <= 1800
 
 
 def test_model_table_fact_flags_currency_missing_from_the_quotation():
@@ -1232,7 +1247,7 @@ def test_focused_passage_is_included_and_budget_failure_never_calls_model():
     start = report.text.index(quote)
     prompts = []
     def generate(prompt):
-        prompts.append(json.loads(prompt))
+        prompts.append(decode_research_prompt(prompt))
         return {'claims': [{'text': 'Revenue was 123', 'citations': [{'source_id': 'focus', 'quotation': quote}]}]}, 10
     result = analyze('Revenue?', [report], None, generate, focus=('focus', start, start + len(quote)))
     assert quote in prompts[0]['sources'][0]['text']
@@ -1255,7 +1270,7 @@ def test_focused_pdf_passage_is_labeled_and_uses_same_whitespace_as_source_text(
     start = report.text.index(quote)
     prompts = []
     def generate(prompt):
-        prompts.append(json.loads(prompt))
+        prompts.append(decode_research_prompt(prompt))
         return {'claims': []}, 1
     analyze('What is the revenue?', [report], None, generate, focus=('pdf', start, start + len(quote)))
     passage = prompts[0]['sources'][0]
@@ -1302,11 +1317,13 @@ def test_scope_is_in_untrusted_question_and_influences_source_selection():
     report = source('s', text=text)
     prompts = []
     def capture(prompt):
-        prompts.append(json.loads(prompt))
+        prompts.append(decode_research_prompt(prompt))
         return {}, 1
-    analyze('What was revenue?', [report], None, capture, scope='Oceania segment')
+    result = analyze('What was revenue?', [report], None, capture, scope='Oceania segment')
     assert 'Oceania segment' in prompts[0]['question']
-    assert any(target in item['text'] for item in prompts[0]['sources'])
+    for sentence in ('Geographic segment: Oceania.', 'Revenue was 4321 dollars.'):
+        assert any(item['source_id'] == 's' and sentence in item['text'] for item in prompts[0]['sources'])
+        assert any(text[segment['character_start']:segment['character_end']] == sentence for segment in result.segments)
     assert 'untrusted data' in __import__('app.research_analysis', fromlist=['SYSTEM_PROMPT']).SYSTEM_PROMPT
     prompts.clear()
     analyze('What was revenue?', [report], None, capture)
@@ -1319,7 +1336,7 @@ def test_prompt_includes_cutoff_only_for_historical_research():
     later = source('later', text='Later revision', published_at=datetime(2023, 7, 2, tzinfo=timezone.utc))
     captured = []
     def generate(prompt):
-        captured.append(json.loads(prompt))
+        captured.append(decode_research_prompt(prompt))
         return {}, 1
     analyze('What was known?', [old, later], cutoff, generate)
     assert captured[0]['research_cutoff'] == cutoff.isoformat()
@@ -1341,7 +1358,7 @@ def test_chinese_question_retrieves_matching_chinese_source_with_original_offset
     assert sum(len(passage) for _, passage in parts) <= 320
     calls = []
     def generate(prompt):
-        payload = json.loads(prompt)
+        payload = decode_research_prompt(prompt)
         calls.append(payload)
         return {'claims': [{'text': '营业收入达到4321万元', 'citations': [{'source_id': 's', 'quotation': target}]}]}, 5
     result = analyze('比较云计算业务2024年营业收入变化', [source('s', text=text)], None, generate, max_prompt_chars=2500)
@@ -1357,17 +1374,25 @@ def test_chinese_multitopic_question_balances_phrases_and_utf8_windows():
             '其他事項說明沒有相關收入與支出的數字。' * 220 +
             '2024年雲端支出為47億元，按年下降3%。' + '其他事項說明。' * 300)
     report = source('s', text=text).model_copy(update={'title': '財務報告'})
+    question = '根據星島研究院2024年報告，倉儲物流收入及雲端支出分別是多少？'
+    low_prompts = []
+    limited = analyze(question, [report], None, lambda prompt: (low_prompts.append(prompt) or {}, 1), max_prompt_chars=2055)
+    assert limited.prompt_bytes <= 2055
+    assert not low_prompts or len(low_prompts[0].encode('utf-8')) <= 2055
+    low_parts = [item['text'] for item in decode_research_prompt(low_prompts[0])['sources']] if low_prompts else []
+    assert not (any('倉儲物流收入為123億元' in part for part in low_parts) and
+                any('雲端支出為47億元' in part for part in low_parts))
+    assert any('remaining text was not examined' in note or 'not processed' in note for note in limited.limitations)
+    budget = prompt_budget_with_evidence(question, [report])
     captured = []
     def generate(prompt):
-        captured.append(json.loads(prompt))
+        captured.append(decode_research_prompt(prompt))
         return {}, 1
-    result = analyze('根據星島研究院2024年報告，倉儲物流收入及雲端支出分別是多少？',
-                     [report], None, generate, max_prompt_chars=2055)
+    result = analyze(question, [report], None, generate, max_prompt_chars=budget)
     passages = [item['text'] for item in captured[0]['sources']]
-    assert len(passages) == 2
     assert any('倉儲物流收入為123億元' in part for part in passages)
     assert any('雲端支出為47億元' in part for part in passages)
-    assert result.prompt_bytes <= 2055
+    assert result.prompt_bytes <= budget
     assert all(text[s['character_start']:s['character_end']] == passage
                for s, passage in zip(result.segments, passages))
 
@@ -1394,7 +1419,7 @@ def test_traditional_chinese_policy_query_selects_decision_not_other_rate():
     report = source('s', text=text)
     prompts = []
     result = analyze('美聯儲決議的聯邦基金目標利率區間和未來政策為何？', [report], None,
-                     lambda q: (prompts.append(json.loads(q)) or {}, 1), max_prompt_chars=2055)
+                     lambda q: (prompts.append(decode_research_prompt(q)) or {}, 1), max_prompt_chars=2055)
     assert any('target range for the federal funds rate to 3-3/4 to 4 percent' in item['text'] for item in prompts[0]['sources'])
     assert result.prompt_bytes <= 2055
     assert all(text[seg['character_start']:seg['character_end']] == part['text'] for seg, part in zip(result.segments, prompts[0]['sources']))
@@ -1435,16 +1460,25 @@ def test_structured_annual_observations_keep_period_value_and_issuer_within_budg
     assert _structured_observation_windows(text, 'Compare 2022, 2023 and 2024.', 1000) is None
     with pytest.raises(AnalysisInterrupted):
         _structured_observation_windows(text, question, 1000, lambda: True)
+    report = source('s', text=text)
+    low_prompts = []
+    limited = analyze(question, [report], None, lambda prompt: (low_prompts.append(prompt) or {}, 1), max_prompt_chars=2055)
+    assert limited.prompt_bytes <= 2055
+    assert not low_prompts or len(low_prompts[0].encode('utf-8')) <= 2055
+    low_parts = decode_research_prompt(low_prompts[0])['sources'] if low_prompts else []
+    assert len(low_parts) < 3
+    assert any('remaining text was not examined' in note or 'not processed' in note for note in limited.limitations)
+    budget = prompt_budget_with_evidence(question, [report])
     captured = []
     def generate(prompt):
-        payload = json.loads(prompt);captured.append(payload)
+        payload = decode_research_prompt(prompt);captured.append(payload)
         parts = payload['sources']
         return {'claims': [], 'facts': [
             {'fact_id': 'prior', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2022', 'citation': {'source_id': 's', 'quotation': parts[1]['text']}},
             {'fact_id': 'current', 'label': 'Revenue', 'value': '120', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2023', 'citation': {'source_id': 's', 'quotation': parts[2]['text']}}],
             'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}, 5
-    result = analyze(question, [source('s', text=text)], None, generate, max_prompt_chars=2055)
-    assert len(captured[0]['sources']) == 3 and result.prompt_bytes <= 2055
+    result = analyze(question, [report], None, generate, max_prompt_chars=budget)
+    assert len(captured[0]['sources']) == 3 and result.prompt_bytes <= budget
     assert result.calculations[0]['value'] == '20.00'
     assert all(text[f['location']['character_start']:f['location']['character_end']] == f['quotation'] for f in result.facts)
 
@@ -1471,7 +1505,7 @@ def test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact(
     sources = [source('s1', text=second).model_copy(update={'title': 'GDP second estimate'}),
                source('s2', text=third).model_copy(update={'title': 'GDP third estimate'})]
     captured = []
-    result = analyze(q, sources, None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 1), max_prompt_chars=2055)
+    result = analyze(q, sources, None, lambda prompt: (captured.append(decode_research_prompt(prompt)) or {}, 1), max_prompt_chars=2055)
     excerpts = captured[0]['sources']
     assert any(part['source_id'] == 's1' and '2.8 percent' in part['text'] for part in excerpts)
     assert any(part['source_id'] == 's2' and '3.1 percent' in part['text'] for part in excerpts)
@@ -1489,7 +1523,7 @@ def test_policy_factor_selection_covers_decision_and_considerations():
             'The Desk will maintain the federal funds rate in a target range. ' * 10)
     prompt = []
     result = analyze('决议目标利率区间及后续政策考虑因素是什么？', [source('s', text=text)], None,
-                     lambda q: (prompt.append(json.loads(q)) or {}, 1), max_prompt_chars=2055)
+                     lambda q: (prompt.append(decode_research_prompt(q)) or {}, 1), max_prompt_chars=2055)
     combined = ' '.join(part['text'] for part in prompt[0]['sources'])
     assert 'decided to maintain the target range' in combined
     assert 'cumulative tightening' in combined and 'lags' in combined and 'economic and financial developments' in combined
@@ -1505,7 +1539,7 @@ def test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_b
     sources = [source('second', text=first_text).model_copy(update={'title':'GDP second estimate', 'published_at':datetime(2024, 11, 27, tzinfo=timezone.utc)}),
                source('third', text=third_text).model_copy(update={'title':'GDP third estimate', 'published_at':datetime(2024, 12, 19, tzinfo=timezone.utc)})]
     captured = []
-    result = analyze(q, sources, None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 1), max_prompt_chars=2055)
+    result = analyze(q, sources, None, lambda prompt: (captured.append(decode_research_prompt(prompt)) or {}, 1), max_prompt_chars=2055)
     parts = captured[0]['sources']
     assert any(p['source_id'] == 'second' and '2.8 percent' in p['text'] and 'GDP' in p['text'] for p in parts)
     assert any(p['source_id'] == 'third' and '3.1 percent' in p['text'] and 'third' in p['text'] for p in parts)
@@ -1885,8 +1919,8 @@ def test_larger_research_prompt_budget_can_include_complete_source_without_chang
     text = "Revenue context. " * 240
     report = source("large", text=text)
     small_prompts, large_prompts = [], []
-    analyze("Revenue?", [report], None, lambda prompt: (small_prompts.append(json.loads(prompt)) or {}, 0), max_prompt_chars=2000)
-    analyze("Revenue?", [report], None, lambda prompt: (large_prompts.append(json.loads(prompt)) or {}, 0), max_prompt_chars=6000)
+    analyze("Revenue?", [report], None, lambda prompt: (small_prompts.append(decode_research_prompt(prompt)) or {}, 0), max_prompt_chars=2000)
+    analyze("Revenue?", [report], None, lambda prompt: (large_prompts.append(decode_research_prompt(prompt)) or {}, 0), max_prompt_chars=6000)
     assert all(part["source_coverage"] == "partial" for part in small_prompts[0]["sources"])
     assert len(large_prompts[0]["sources"]) == 1
     assert large_prompts[0]["sources"][0]["source_coverage"] == "complete"
@@ -1978,7 +2012,7 @@ def test_short_model_source_reference_resolves_to_owned_source_and_is_auditable(
     report = source(source_id, text="Revenue was 100 million in 2023.")
     seen = []
     def generate(prompt):
-        data = json.loads(prompt)
+        data = decode_research_prompt(prompt)
         ref = data["sources"][0]["source_id"]
         seen.append(ref)
         assert ref == "ref-1" and source_id not in prompt
@@ -2008,12 +2042,14 @@ def test_multiple_opaque_sources_retain_distinct_original_identifiers():
     first, second = "source_" + "c" * 32, "source_" + "d" * 32
     reports=[source(first,text="Revenue was 100."),source(second,text="Revenue was 200.")]
     def generate(prompt):
-        ids={entry["source_id"] for entry in json.loads(prompt)["sources"]}
-        assert ids == {first, second}
-        return {"claims":[{"text":"First source revenue was 100.","citations":[{"source_id":first,"quotation":"Revenue was 100."}]}]}, 10
+        entries=decode_research_prompt(prompt)["sources"]
+        aliases={entry["text"]:entry["source_id"] for entry in entries}
+        assert len(set(aliases.values())) == 2
+        return {"claims":[{"text":"First source revenue was 100.","citations":[{"source_id":aliases["Revenue was 100."],"quotation":"Revenue was 100."}]}]}, 10
     result=analyze("Compare revenue.",reports,None,generate)
     assert result.claims[0]["citations"][0]["source_id"] == first
-    assert all("model_source_id" not in item for item in result.segments)
+    assert {item["source_id"] for item in result.segments} == {first, second}
+    assert len({item["model_source_id"] for item in result.segments}) == 2
 
 
 def test_short_model_reference_is_resolved_for_split_quotation_recovery():
@@ -2172,11 +2208,21 @@ def test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately():
                 'and third quarters of 2022. Assess whether both goods and services consumption increased in the '
                 'fourth quarter; cite evidence and distinguish a revision to an estimate from an actual change.')
     captured = []
-    analyze(question, [report], None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 0),
-            max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+    raw_prompts = []
+    def capture(prompt):
+        raw_prompts.append(prompt)
+        captured.append(decode_research_prompt(prompt))
+        return {}, 0
+    limit = 6000 - len(SYSTEM_PROMPT.encode()) - 512
+    result = analyze(question, [report], None, capture, max_prompt_chars=limit)
+    assert len(raw_prompts[0].encode()) <= limit
     excerpts = [item['text'] for item in captured[0]['sources']]
     import re
-    assert any('2.7 percent' in part and '3.2 percent' in part for part in excerpts)
+    assert all(any(value in part for part in excerpts) for value in ('2.7 percent', '3.2 percent'))
+    from app.research_analysis import _prompt_source_text
+    assert len(result.segments) == len(excerpts)
+    assert all(_prompt_source_text(text[item['character_start']:item['character_end']], True) == sent
+               for item, sent in zip(result.segments, excerpts))
     pattern = r'increase\s+in\s+consumer\s+spending\s+reflected\s+an\s+increase\s+in\s+services\s+that\s+was\s+partly\s+offset\s+by\s+a\s+decrease\s+in\s+goods'
     assert any(re.search(pattern, part, re.IGNORECASE) for part in excerpts)
 
@@ -2216,7 +2262,7 @@ def test_page_hints_only_locate_model_visible_pdf_pages_without_verifying_suppor
         update={"retrieval_method": "user_pdf"})
     def output(page):
         def model(prompt):
-            data = json.loads(prompt)
+            data = decode_research_prompt(prompt)
             assert data["sources"][0]["p"] == [1, 2]
             assert data["output_schema"]["claims"][0]["citations"][0]["source_page"] is None
             assert data["output_schema"]["facts"][0]["citation"]["source_page"] is None

@@ -37,10 +37,12 @@ def valid_payload() -> dict[str, Any]:
 
 def configure_secret(monkeypatch: pytest.MonkeyPatch, value: str | None = TEST_SECRET) -> None:
     if value is None:
-        monkeypatch.delenv("FORESIGHTNINE_GLM_CODING_API_KEY", raising=False)
+        monkeypatch.delenv("FORESIGHTNINE_LLM_API_KEY", raising=False)
     else:
-        monkeypatch.setenv("FORESIGHTNINE_GLM_CODING_API_KEY", value)
-    monkeypatch.delenv("FORESIGHTNINE_GLM_CODING_MODEL", raising=False)
+        monkeypatch.setenv("FORESIGHTNINE_LLM_API_KEY", value)
+    monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deployment/model")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_BASE_URL", "https://models.example.test/v1")
+    monkeypatch.setenv("FORESIGHTNINE_LLM_ALLOWED_HOSTS", "models.example.test")
 
 
 def test_missing_secret_is_blocked_without_transport(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -52,14 +54,14 @@ def test_missing_secret_is_blocked_without_transport(monkeypatch: pytest.MonkeyP
     assert main((), transport=no_transport) != 0  # type: ignore[arg-type]
     output = json.loads(capsys.readouterr().out)
     assert output == {
-        "model": "glm-5.3-flash",
+        "model": "deployment/model",
         "no_network_attempted": True,
         "status": "blocked",
         "validation_summary": {"challenge_draft": False, "result": "secret_missing"},
     }
 
 
-def test_success_fake_transport_is_redacted_and_uses_fixed_profile(
+def test_success_fake_transport_is_redacted_and_uses_configured_model(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     configure_secret(monkeypatch)
@@ -74,7 +76,7 @@ def test_success_fake_transport_is_redacted_and_uses_fixed_profile(
     output_text = capsys.readouterr().out
     output = json.loads(output_text)
     assert output == {
-        "model": "glm-5.3-flash",
+        "model": "deployment/model",
         "request_id": "req-smoke-123",
         "status": "passed",
         "validation_summary": {
@@ -89,9 +91,9 @@ def test_success_fake_transport_is_redacted_and_uses_fixed_profile(
     assert "PRIVATE_REASONING" not in output_text
     assert "Synthetic result." not in output_text
     assert len(calls) == 1
-    assert calls[0][0:2] == ("POST", "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions")
+    assert calls[0][0:2] == ("POST", "https://models.example.test/v1/chat/completions")
     request_body = json.loads(calls[0][3])
-    assert request_body["model"] == "glm-5.3-flash"
+    assert request_body["model"] == "deployment/model"
     assert "temperature" not in request_body
     assert "top_p" not in request_body
 

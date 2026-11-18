@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
+import logging
 from threading import Event, RLock, Thread
 from time import sleep
 from typing import Any, Callable
@@ -14,7 +15,7 @@ from .models import (
     ErrorDetail, ErrorResponse, HeartbeatEvent, Operation, OperationCompleteEvent,
     OperationErrorEvent, OperationProgressEvent, OperationResponse, OperationStartedEvent, SourceRef,
 )
-from .operation_store import InMemoryOperationStore, OperationStore, OperationStoreConflict, OperationStorePassThrough, StoredClaim
+from .operation_store import InMemoryOperationStore, OperationStore, OperationStoreBusy, OperationStoreConflict, OperationStorePassThrough, StoredClaim
 from .phase3 import ProviderFailure
 from .providers import FixedClock
 from .services import canonical_json, content_hash, deterministic_id, validate_payload
@@ -236,6 +237,8 @@ class OperationManager:
                                       operation=self._stored_operation(operation, owner_subject), events=[_dump(event) for event in events], mode=mode,
                                       response=_dump(response) if response is not None else None, response_type=response_type, session_id=session_id,
                                       lease_owner=self.lease_owner, lease_expires_at=self.clock.now() + timedelta(seconds=self.lease_seconds), admission=admission)
+        except OperationStoreBusy as error:
+            raise ApiProblem(409, 'lifecycle_conflict', str(error)) from error
         except OperationStoreConflict as error:
             raise ApiProblem(409, "idempotency_conflict", str(error)) from error
         if result.owner: self._cache_operation(operation_id, self._stored_operation(operation, owner_subject), [_dump(event) for event in events])
@@ -354,6 +357,12 @@ class OperationManager:
                      build_result: Callable[[str], tuple[BaseModel, str]], before_accept: Callable[[str], None] | None = None,
                      session_id: str | None = None, commit_result: Callable[[str, BaseModel], None] | None = None,
                      rollback_result: Callable[[str, BaseModel], None] | None = None) -> tuple[OperationResponse, bool]:
+        guard = getattr(self.store, 'assert_async_outside_transaction', None)
+        if guard is not None:
+            try:
+                guard()
+            except OperationStoreBusy as error:
+                raise ApiProblem(409, 'lifecycle_conflict', str(error)) from error
         request_hash = content_hash(request_payload); key_hash = self._scoped_key_hash(owner_subject, idempotency_key); operation_id = self._operation_id(endpoint, key_hash)
         operation = self._operation(operation_id=operation_id, endpoint=endpoint, idempotency_key_hash=key_hash, status="running", last_sequence=3)
         receipt = OperationResponse(operation=operation)
@@ -370,6 +379,21 @@ class OperationManager:
         self._pending_provider_executions[operation_id] = PendingProviderExecution(endpoint, key_hash, request_hash); self._cache_operation(operation_id)
 
         def worker() -> None:
+            heartbeat_stop = Event()
+            def renew_worker_lease() -> None:
+                while not heartbeat_stop.wait(max(0.1, self.lease_seconds / 3)):
+                    try:
+                        now = self.clock.now()
+                        if not self.store.renew_lease(operation_id, lease_owner=self.lease_owner, now=now,
+                                                      lease_expires_at=now + timedelta(seconds=self.lease_seconds)):
+                            self.cancel_event(operation_id).set()
+                            return
+                    except Exception:
+                        # A transient store failure cannot establish lease ownership.
+                        # The next renewal must still satisfy the unexpired-owner check.
+                        continue
+            heartbeat = Thread(target=renew_worker_lease, name=f'lease-{operation_id}', daemon=True)
+            heartbeat.start()
             try:
                 try:
                     result, result_ref = build_result(operation_id)
@@ -377,6 +401,11 @@ class OperationManager:
                     with self._transition_lock(operation_id):
                         current = self._cache_operation(operation_id)
                         if self.cancel_event(operation_id).is_set() or current.status == "cancelled": return
+                        now = self.clock.now()
+                        if not self.store.renew_lease(operation_id, lease_owner=self.lease_owner, now=now,
+                                                      lease_expires_at=now + timedelta(seconds=self.lease_seconds)):
+                            self.cancel_event(operation_id).set()
+                            return
                         sequence = len(self.store.get_events(operation_id)) + 1
                         event = OperationCompleteEvent(**self._base_event(operation_id, sequence), event="operation.complete", result_ref=result_ref, result_hash=getattr(result, "content_hash", content_hash(result)))
                         updated = self._operation(operation_id=operation_id, endpoint=current.endpoint, idempotency_key_hash=current.idempotency_key_hash,
@@ -399,6 +428,10 @@ class OperationManager:
                         if not won and committed and rollback_result is not None:
                             rollback_result(operation_id, result)
                 except Exception as failure:
+                    from .research_diagnostics import safe_diagnostic_context, safe_exception_diagnostic
+                    logging.getLogger(__name__).error('operation_failure metadata=%s', {
+                        **safe_diagnostic_context(operation_id=operation_id), **safe_exception_diagnostic(failure)
+                    })
                     current = self._cache_operation(operation_id)
                     if current.status in {"cancelled", "completed", "failed"}: return
                     if isinstance(failure, ProviderFailure):
@@ -419,7 +452,9 @@ class OperationManager:
                         error = ApiProblem(500, "internal_error", "Provider request could not produce an accepted result.", retryable=True)
                     record_provider_failure(endpoint=endpoint)
                     self._finish_failure(operation_id=operation_id, endpoint=endpoint, key_hash=key_hash, error=error, async_mode=True)
-            finally: self._pending_provider_executions.pop(operation_id, None)
+            finally:
+                heartbeat_stop.set()
+                self._pending_provider_executions.pop(operation_id, None)
         Thread(target=worker, name=f"provider-{operation_id}", daemon=True).start(); return receipt, False
 
     def _control_replay(self, endpoint: str, idempotency_key: str, owner_subject: str, payload: dict[str, Any]) -> BaseModel | None:

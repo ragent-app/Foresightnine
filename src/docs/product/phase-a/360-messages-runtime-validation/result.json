@@ -1,0 +1,398 @@
+{
+  "diagnostic_http_status": 200,
+  "diagnostics": {
+    "calls": [
+      {
+        "request_id": "operation:807fb5efc815ee55f88bf19a",
+        "operation_id": "operation:807fb5efc815ee55f88bf19a",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:33464be5ad9045328e64c7606d4da723",
+        "model": "glm-5.3-flash",
+        "contract": "none",
+        "provider": "anthropic_messages",
+        "output_mode": "tool",
+        "parameters": {
+          "max_tokens": 4096
+        },
+        "transport": {
+          "submission_state": "response_received",
+          "stages": [
+            {
+              "stage": "dns",
+              "result": "ok",
+              "elapsed_ms": 5283
+            },
+            {
+              "stage": "tcp",
+              "result": "ok",
+              "elapsed_ms": 2
+            },
+            {
+              "stage": "tls",
+              "result": "ok",
+              "elapsed_ms": 1552
+            },
+            {
+              "stage": "request_write",
+              "result": "ok",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 8459
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 0,
+              "status_code": 200
+            },
+            {
+              "stage": "response_body",
+              "result": "ok",
+              "elapsed_ms": 0
+            }
+          ]
+        },
+        "provider_response": {
+          "status_code": 200,
+          "request_id": "d912e378-f8bf-4531-82c6-5d34825efc52"
+        }
+      },
+      {
+        "request_id": "operation:807fb5efc815ee55f88bf19a",
+        "operation_id": "operation:807fb5efc815ee55f88bf19a",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:6b8dce0ace374e91b162f6b3146b51ee",
+        "model": "glm-5.3-flash",
+        "contract": "none",
+        "provider": "anthropic_messages",
+        "output_mode": "tool",
+        "parameters": {
+          "max_tokens": 4096
+        },
+        "transport": {
+          "submission_state": "response_received",
+          "stages": [
+            {
+              "stage": "dns",
+              "result": "ok",
+              "elapsed_ms": 2799
+            },
+            {
+              "stage": "tcp",
+              "result": "ok",
+              "elapsed_ms": 1
+            },
+            {
+              "stage": "tls",
+              "result": "ok",
+              "elapsed_ms": 1350
+            },
+            {
+              "stage": "request_write",
+              "result": "ok",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 35752
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 0,
+              "status_code": 200
+            },
+            {
+              "stage": "response_body",
+              "result": "ok",
+              "elapsed_ms": 0
+            }
+          ]
+        },
+        "provider_response": {
+          "status_code": 200,
+          "request_id": "0194263d-d32a-4576-b6e1-313c173c6fbe"
+        }
+      },
+      {
+        "request_id": "operation:807fb5efc815ee55f88bf19a",
+        "operation_id": "operation:807fb5efc815ee55f88bf19a",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:d53ae863999949d496b5ae0caee82bc4",
+        "model": "glm-5.3-flash",
+        "contract": "none",
+        "provider": "anthropic_messages",
+        "output_mode": "tool",
+        "parameters": {
+          "max_tokens": 4096
+        },
+        "transport": {
+          "submission_state": "response_received",
+          "stages": [
+            {
+              "stage": "dns",
+              "result": "ok",
+              "elapsed_ms": 8209
+            },
+            {
+              "stage": "tcp",
+              "result": "ok",
+              "elapsed_ms": 3
+            },
+            {
+              "stage": "tls",
+              "result": "ok",
+              "elapsed_ms": 4421
+            },
+            {
+              "stage": "request_write",
+              "result": "ok",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 10190
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 0,
+              "status_code": 200
+            },
+            {
+              "stage": "response_body",
+              "result": "ok",
+              "elapsed_ms": 1816
+            }
+          ]
+        },
+        "provider_response": {
+          "status_code": 200,
+          "request_id": "5934a6a6-b71d-4fda-8e7f-9738e8e6303f"
+        }
+      },
+      {
+        "request_id": "operation:807fb5efc815ee55f88bf19a",
+        "operation_id": "operation:807fb5efc815ee55f88bf19a",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:262f4c8a3c8d4c90a06448a8ab8c327a",
+        "model": "glm-5.3-flash",
+        "contract": "none",
+        "provider": "anthropic_messages",
+        "output_mode": "tool",
+        "parameters": {
+          "max_tokens": 4096
+        },
+        "transport": {
+          "submission_state": "response_received",
+          "stages": [
+            {
+              "stage": "dns",
+              "result": "ok",
+              "elapsed_ms": 6322
+            },
+            {
+              "stage": "tcp",
+              "result": "ok",
+              "elapsed_ms": 1
+            },
+            {
+              "stage": "tls",
+              "result": "ok",
+              "elapsed_ms": 2214
+            },
+            {
+              "stage": "request_write",
+              "result": "ok",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 9844
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 0,
+              "status_code": 200
+            },
+            {
+              "stage": "response_body",
+              "result": "ok",
+              "elapsed_ms": 0
+            }
+          ]
+        },
+        "provider_response": {
+          "status_code": 200,
+          "request_id": "3cc7ac9d-b5ad-41c2-b359-6cc4494c1664"
+        }
+      },
+      {
+        "request_id": "operation:807fb5efc815ee55f88bf19a",
+        "operation_id": "operation:807fb5efc815ee55f88bf19a",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:540e209d03ef4473ba412b85214405d9",
+        "model": "glm-5.3-flash",
+        "contract": "none",
+        "provider": "anthropic_messages",
+        "output_mode": "tool",
+        "parameters": {
+          "max_tokens": 4096
+        },
+        "transport": {
+          "submission_state": "response_received",
+          "stages": [
+            {
+              "stage": "dns",
+              "result": "ok",
+              "elapsed_ms": 2777
+            },
+            {
+              "stage": "tcp",
+              "result": "ok",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "tls",
+              "result": "ok",
+              "elapsed_ms": 2424
+            },
+            {
+              "stage": "request_write",
+              "result": "ok",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 31972
+            },
+            {
+              "stage": "response_headers",
+              "result": "ok",
+              "elapsed_ms": 0,
+              "status_code": 200
+            },
+            {
+              "stage": "response_body",
+              "result": "ok",
+              "elapsed_ms": 31196
+            }
+          ]
+        },
+        "provider_response": {
+          "status_code": 200,
+          "request_id": "91187712-962d-46ea-92b6-e18264a4a5d9"
+        }
+      },
+      {
+        "request_id": "operation:807fb5efc815ee55f88bf19a",
+        "operation_id": "operation:807fb5efc815ee55f88bf19a",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:8a3df9d4238d4ae78a0894838cad7c68",
+        "model": "glm-5.3-flash",
+        "contract": "none",
+        "provider": "anthropic_messages",
+        "output_mode": "tool",
+        "parameters": {
+          "max_tokens": 4096
+        },
+        "transport": {
+          "submission_state": "not_started",
+          "stages": [
+            {
+              "stage": "dns",
+              "result": "error",
+              "elapsed_ms": 5010
+            }
+          ]
+        },
+        "provider_response": {}
+      }
+    ],
+    "events": [
+      {
+        "kind": "model",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:33464be5ad9045328e64c7606d4da723"
+      },
+      {
+        "kind": "tool",
+        "name": "read_sources",
+        "status": "completed",
+        "call_id": "call_e8b62bf9d8b9468eb533ecfe"
+      },
+      {
+        "kind": "model",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:6b8dce0ace374e91b162f6b3146b51ee"
+      },
+      {
+        "kind": "tool",
+        "name": "record_facts",
+        "call_id": "call_7f1302c0369f4fc789554fb3"
+      },
+      {
+        "kind": "model",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:d53ae863999949d496b5ae0caee82bc4"
+      },
+      {
+        "kind": "tool",
+        "name": "record_facts",
+        "status": "completed",
+        "call_id": "call_11033f8568404604b8a6c41e"
+      },
+      {
+        "kind": "model",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:262f4c8a3c8d4c90a06448a8ab8c327a"
+      },
+      {
+        "kind": "tool",
+        "name": "calculate_financials",
+        "status": "completed",
+        "call_id": "call_8f3d7cacdb1f443fb8d3d61f"
+      },
+      {
+        "kind": "model",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:540e209d03ef4473ba412b85214405d9"
+      },
+      {
+        "kind": "tool",
+        "name": "calculate_financials",
+        "status": "completed",
+        "call_id": "call_c0b255aac68d43bd85c1ed92"
+      },
+      {
+        "kind": "model_failure",
+        "call_id": "operation:807fb5efc815ee55f88bf19a:research-agent:8a3df9d4238d4ae78a0894838cad7c68"
+      }
+    ],
+    "pending": false,
+    "receipts_settled": true
+  },
+  "state": "completed",
+  "settlement_http_status": 200,
+  "progress_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_4fca290da34f4e17bfc3c3d13c428396",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 6,
+      "released_calls": 0,
+      "accounted_tokens": 21159
+    },
+    "unresolved_stage_count": 0,
+    "reported_tokens": 21159,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  },
+  "progress": {
+    "version_id": "version_4fca290da34f4e17bfc3c3d13c428396",
+    "checkpoint": null,
+    "result_status": "partial",
+    "created_at": "2026-11-18T05:25:28.125915Z"
+  },
+  "quality": "not_reviewed",
+  "export_http_status": 200
+}

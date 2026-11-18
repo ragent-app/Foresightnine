@@ -89,8 +89,8 @@ def test_live_bundle_current_clock_canonical_and_idempotent(monkeypatch):
     assert repeated.status_code==201 and repeated.json()==result.json()
     assert repeated.headers['Idempotency-Replayed']=='true'
     assert len(calls)==1
-    body=json.loads(calls[0][3]); assert body['model']=='test-model' and body['max_tokens']==4000
-    assert live.policy.max_output_tokens==1500  # Request scoped, no global policy mutation.
+    body=json.loads(calls[0][3]); assert body['model']=='test-model' and 'max_tokens' not in body
+    assert live.policy.max_output_tokens is None  # Request scoped, no global policy mutation.
     assert 'synthetic-not-a-real-key' not in result.text
 
 
@@ -121,7 +121,7 @@ def auth(monkeypatch):
     return {'Authorization':f"Bearer {response.json()['access_token']}"}
 
 
-@pytest.mark.parametrize('usage,expected',[(1234,1234),(None,7000),(0,0)])
+@pytest.mark.parametrize('usage,expected',[(1234,1234),(None,0),(0,0)])
 def test_live_platform_account_metering(monkeypatch,usage,expected):
     headers=auth(monkeypatch)
     cid,calls,_=setup_live(monkeypatch,usage=usage,headers=headers)
@@ -131,20 +131,26 @@ def test_live_platform_account_metering(monkeypatch,usage,expected):
     snapshot=CLIENT.get('/v1/account',headers=headers)
     assert snapshot.status_code==200,snapshot.text
     assert snapshot.json()['quota_consumed']==before+expected
-    assert snapshot.json()['quota_reserved']==0
+    if usage is None:
+        assert snapshot.json()['quota_reserved'] > 0
+        operation_id=result.json()['operation']['operation_id']
+        entry=main.billing_ledger.usage.get('model:'+operation_id)
+        assert entry.status == 'reserved' and entry.actual_tokens is None
+    else:
+        assert snapshot.json()['quota_reserved']==0
     assert submit(cid,headers=headers).status_code==201
     assert CLIENT.get('/v1/account',headers=headers).json()['quota_consumed']==before+expected
     assert len(calls)==1
 
 
-def test_provider_failure_releases_reservation_and_does_not_retry_post(monkeypatch):
+def test_provider_failure_retains_unknown_reservation_and_does_not_retry_post(monkeypatch):
     headers=auth(monkeypatch)
     cid,calls,live=setup_live(monkeypatch,headers=headers)
     before=CLIENT.get('/v1/account',headers=headers).json()['quota_consumed']
     live.transport=lambda *args:(calls.append(args),HttpResponse(503,'{}'))[1]
     assert submit(cid,headers=headers).status_code==503
     state=CLIENT.get('/v1/account',headers=headers).json()
-    assert state['quota_consumed']==before and state['quota_reserved']==0
+    assert state['quota_consumed']==before and state['quota_reserved']>0
     assert len(calls)==1 and not main.WORLDLINES
 
 

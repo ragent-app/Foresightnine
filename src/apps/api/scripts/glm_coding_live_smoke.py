@@ -1,9 +1,4 @@
-"""Server-only, fail-closed GLM Coding Plan live smoke.
-
-The command intentionally has no provider, endpoint, model, or generation
-parameter flags.  The existing GLM adapter owns those values and reads its
-credential only from the server process environment.
-"""
+"""Server-only, fail-closed explicitly configured chat completion smoke."""
 from __future__ import annotations
 
 import json
@@ -36,8 +31,10 @@ from app.phase3 import (  # noqa: E402
 )
 
 
-API_KEY_ENV = "FORESIGHTNINE_GLM_CODING_API_KEY"
-MODEL = "glm-5.3-flash"
+API_KEY_ENV = "FORESIGHTNINE_LLM_API_KEY"
+
+def _model() -> str:
+    return os.environ.get("FORESIGHTNINE_LLM_MODEL", "").strip() or "unknown"
 EXIT_OK = 0
 EXIT_PROVIDER_FAILURE = 1
 EXIT_BLOCKED = 2
@@ -121,7 +118,7 @@ def _validation_summary(draft: ChallengeDraft) -> dict[str, Any]:
 def _failure_result(code: str, request_id: str | None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "status": "failed",
-        "model": MODEL,
+        "model": _model(),
         "validation_summary": {
             "result": "provider_failure",
             "failure_code": code,
@@ -137,7 +134,7 @@ def run_smoke(*, transport: OpenAICompatibleTransport | None = None) -> tuple[in
     if not os.environ.get(API_KEY_ENV, "").strip():
         return EXIT_BLOCKED, {
             "status": "blocked",
-            "model": MODEL,
+            "model": _model(),
             "validation_summary": {
                 "result": "secret_missing",
                 "challenge_draft": False,
@@ -146,7 +143,7 @@ def run_smoke(*, transport: OpenAICompatibleTransport | None = None) -> tuple[in
         }
 
     recorder = _RecordingTransport(transport or _default_transport)
-    provider = OpenAICompatibleLlmProvider.from_glm_coding_environment(
+    provider = OpenAICompatibleLlmProvider.from_environment(
         policy=ProviderPolicy(max_attempts=1, max_output_tokens=4_000),
         transport=recorder,
     )
@@ -154,7 +151,7 @@ def run_smoke(*, transport: OpenAICompatibleTransport | None = None) -> tuple[in
         draft = provider.generate_challenge(_challenge_request())
         result = {
             "status": "passed",
-            "model": MODEL,
+            "model": _model(),
             "validation_summary": _validation_summary(draft),
         }
         if recorder.request_id is not None:
@@ -180,7 +177,7 @@ def main(argv: Sequence[str] | None = None, *, transport: OpenAICompatibleTransp
             format_result(
                 {
                     "status": "blocked",
-                    "model": MODEL,
+                    "model": _model(),
                     "validation_summary": {"result": "cli_overrides_not_supported"},
                     "no_network_attempted": True,
                 }

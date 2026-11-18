@@ -13,6 +13,7 @@ from .research_calculations import (calculation_input_status, calculation_result
                                     claim_calculation_differences)
 from .research_evidence import claim_amount_differences, evidence_differences
 from .research_quality import CLAIM_EVIDENCE_WARNINGS, incomplete_requested_stages, model_review_outcomes
+from .research_coverage import derive_absence_assessment, derive_evidence_needs, derive_scope_assessment, has_unresolved_task_gap
 from .research_runs import ResearchRunRequest
 
 
@@ -38,15 +39,20 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
                                   for calculation in analysis.calculations)
     unverified_calculation_results = any(calculation_result_status(calculation) != "matched"
                                          for calculation in analysis.calculations)
+    calculation_fact_ids = {item.get('fact_id') for calculation in analysis.calculations
+                            if isinstance(calculation, dict) for item in calculation.get('inputs', [])
+                            if isinstance(item, dict) and isinstance(item.get('fact_id'), str)}
+    missing_fact_dimensions = any(isinstance(fact, dict) and fact.get('fact_id') in calculation_fact_ids and any(
+        not isinstance(fact.get(field), str) or not fact[field].strip()
+        for field in ('unit', 'period')) for fact in analysis.facts)
     processing_incomplete = any(marker in note for note in analysis.limitations for marker in (
-        "not processed", "remaining text was not examined", "was omitted", "were omitted",
-        "permission is not granted", "not established", "not authorized", "quotation location is ambiguous",
+        "annotations were omitted", "A model-generated quotation", "A model-generated claim",
+        "A requested calculation was omitted", "Period comparability is not established",
+        "quotation location is ambiguous",
         "currency identifier is absent from its quotation", "unit scale is absent from its quotation",
-        "simulated material is excluded", "percentage fact included a model-declared currency",
-        "excluded from automatic calculations", "PDF text may have missing word spacing"))
-    processing_incomplete = processing_incomplete or any(
-        item['eligibility'] != 'eligible' or item['initial_selection'] != 'complete'
-        for item in source_states)
+        "percentage fact included a model-declared currency", "excluded from automatic calculations"))
+    # Selection may omit material unrelated to this question. Its relevance is
+    # unknown; it cannot by itself prove task failure or task completion.
     review_outcomes = model_review_outcomes(claims)
     review_supports_all = (review_status == "complete" and not any(
         review_outcomes[name] for name in ('does_not_support', 'contradicts', 'uncertain', 'not_reviewed')) and all(
@@ -59,13 +65,31 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
         'gap_followup_requested': request.gap_followup, 'gap_followup_status': gap_status,
         'support_review_requested': request.support_review, 'support_review_status': review_status,
     })
-    complete = bool(analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
-                    and not processing_incomplete and not unverified_calculations and not unverified_calculation_results and not differences and not calculation_differences and not amount_differences and
+    scope_run = {'operation_id': 'current', 'source_processing': source_states,
+                 'research_questions': analysis.research_questions,
+                 'model_evidence_needs': analysis.evidence_needs,
+                 'model_absence_observations': analysis.absence_observations}
+    scope = derive_scope_assessment(run=scope_run, claims=claims, limitations=analysis.limitations)
+    needs = derive_evidence_needs(run=scope_run, scope=scope)
+    absences = derive_absence_assessment(run=scope_run, scope=scope)
+    unresolved_task_gap = has_unresolved_task_gap(needs=needs, absences=absences, claims=claims)
+    complete = bool(analysis.structured_output_status == 'complete' and analysis.claims and (analysis.counterarguments or not request.require_counterarguments) and all(c["citations"] and c.get("support_status") != "incomplete" for c in claims)
+                    and not processing_incomplete and not unresolved_task_gap and not missing_fact_dimensions and not unverified_calculations and not unverified_calculation_results and not differences and not calculation_differences and not amount_differences and
                     not any(c.get(warning) for c in claims for warning in CLAIM_EVIDENCE_WARNINGS) and
                     (not request.support_review or review_supports_all) and
                     not incomplete_stages and
                     not any(not item.get('claim_indexes') for item in analysis.research_questions))
     limitations = [*discovery_notes, *analysis.limitations]
+    if analysis.structured_output_status == 'failed':
+        limitations.append('The structured model response did not pass validation; no valid research result was produced.')
+    elif analysis.structured_output_status == 'not_validated':
+        limitations.append('No complete model output was available for structured validation.')
+    elif analysis.structured_output_status == 'partial':
+        limitations.append('Some structured model output was excluded after validation; retained findings require review.')
+        if not (analysis.claims or analysis.counterarguments or analysis.facts or analysis.calculations):
+            limitations.append('No valid research results survived structured output validation.')
+    if unresolved_task_gap:
+        limitations.append('A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.')
     if request.plan_research:
         limitations.append('The model-generated research plan is an unverified guide and may omit relevant questions.')
         if planning_status != 'completed':
@@ -88,6 +112,8 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
         limitations.append("A claim says a source lacks information, but only excerpts were analyzed; the full-source absence is not established.")
     if unverified_calculations:
         limitations.append("A calculation has inputs that cannot be verified against the saved facts; the result is provisional.")
+    if missing_fact_dimensions:
+        limitations.append("A recorded numeric fact has no unit or period; its use and comparisons require review.")
     if unverified_calculation_results:
         limitations.append("A calculation result could not be reproduced from its saved formula and inputs.")
     if not analysis.counterarguments:
@@ -146,7 +172,7 @@ def assess_research_outcome(*, request: ResearchRunRequest, analysis: AnalysisRe
     if monotonic() > deadline:
         complete = False
         limitations.append("Research exceeded its time budget; the retained result is partial.")
-    if usage is not None and usage > request.max_total_tokens:
+    if request.max_total_tokens is not None and usage is not None and usage > request.max_total_tokens:
         complete = False
         limitations.append("Provider-reported token use exceeded the requested budget; the result is partial.")
     if not complete:

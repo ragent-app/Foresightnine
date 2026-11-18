@@ -8,7 +8,7 @@ from .operations import ApiProblem
 from .phase3 import ProviderFailure
 from .research_analysis import AnalysisInterrupted, AnalysisResult
 from .research_calculations import claim_calculation_differences
-from .research_coordinator import ResearchExecutionContext
+from .research_coordinator import ResearchExecutionContext, research_prompt_budget, research_prompt_fits
 from .research_evidence import claim_amount_differences
 from .research_runs import ResearchRunRequest
 from .research_sources import ResearchSource
@@ -41,17 +41,18 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
     if not request.support_review:
         return result
     result.status = 'not_reviewable'
-    if context.calls and claims and context.calls >= request.max_model_calls:
+    if context.calls and claims and request.max_model_calls is not None and context.calls >= request.max_model_calls:
         result.status = 'budget_exhausted'
         result.omissions = [{'claim_index': i, 'reason': 'call_budget'} for i in range(len(claims))]
         return result
     policy = getattr(provider, 'policy', None)
     input_limit, output_limit = getattr(policy, 'max_input_tokens', None), getattr(policy, 'max_output_tokens', None)
     timeout = getattr(policy, 'timeout_seconds', None)
-    if not context.calls or not claims or not isinstance(input_limit, int) or not isinstance(output_limit, int) or not isinstance(timeout, (int, float)):
+    if not context.calls or not claims or not isinstance(timeout, (int, float)):
         return result
-    per_call = input_limit + output_limit
-    budget = max(1, min(48000, input_limit - len(REVIEW_SYSTEM_PROMPT.encode('utf-8')) - 512))
+    per_call = input_limit + output_limit if type(input_limit) is int and type(output_limit) is int else None
+    legacy_limit = None if callable(getattr(provider, 'research_prompt_fits', None)) else input_limit
+    budget = research_prompt_budget(legacy_limit, REVIEW_SYSTEM_PROMPT)
     differences = [*claim_calculation_differences(claims, analysis.calculations, analysis.facts),
                    *claim_amount_differences(claims, analysis.facts)]
     indexes = {item['claim_index'] for item in differences}
@@ -84,7 +85,7 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
         for position, batch in enumerate(plan.batches):
             index = batch.indexes[0]
             context.ensure_running()
-            reason = context.model_exhaustion(per_call)
+            reason = context.model_exhaustion(per_call) if context.budget.max_total_tokens is None else None
             if reason:
                 for pending in plan.batches[position:]:
                     omission(pending.indexes[0], reason)
@@ -94,7 +95,11 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
             call_id = f'{operation_id}:support-review:{index}'
             reported: int | None = None
             try:
-                before = context.start_model(call_id, per_call)
+                if not research_prompt_fits(batch.prompt, REVIEW_SYSTEM_PROMPT, legacy_limit):
+                    raise ProviderFailure('provider_budget_exhausted', 'Research input budget is exhausted.', retryable=False)
+                reservation, output_cap = context.prepare_model_call(provider, batch.prompt, REVIEW_SYSTEM_PROMPT)
+                output_kwargs = context.output_kwargs(generate, provider, output_cap)
+                before = context.start_model(call_id, reservation)
                 remaining = context.budget.deadline - context.now()
                 if remaining <= 0:
                     context.abort_model_before_call(call_id, before)
@@ -125,8 +130,8 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
                         result.status = 'budget_exhausted'
                     break
                 try:
-                    raw, reported_raw = generate(batch.prompt, cancel_event=context.cancel_event(),
-                        system=REVIEW_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining))
+                    raw, reported_raw = context.invoke_model(call_id, generate, batch.prompt, cancel_event=context.cancel_event(),
+                        system=REVIEW_SYSTEM_PROMPT, timeout_seconds=min(float(timeout), remaining), **output_kwargs)
                     reported = reported_raw if type(reported_raw) is int and reported_raw >= 0 else None
                 except ProviderFailure as error:
                     reported = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
@@ -138,16 +143,21 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
                 context.ensure_running()
                 mapped, verdict = parse_isolated_support_review_details(batch, raw)
                 result.claims[mapped] = {**result.claims[mapped], 'support_review':
-                    review_record(batch, mapped, verdict.verdict, ISOLATED_REVIEW_METHOD, relevance=verdict.relevance)}
+                    review_record(batch, mapped, verdict.verdict, ISOLATED_REVIEW_METHOD, relevance=verdict.relevance,
+                                  scope_declaration=verdict.scope_declaration, claimed_scope=verdict.claimed_scope)}
                 result.isolated_records[position].update(status='completed', reported_tokens=reported)
                 omission(index, None)
                 checkpoint(result, 'isolated_review')
             except (ProviderFailure, InvalidReview, ApiProblem) as error:
                 context.ensure_running()
+                if isinstance(error, InvalidReview):
+                    context.mark_model_processing_error(call_id, 'contract_validation')
+                    context.record_validation_diagnostic(call_id, error.diagnostic)
                 if isinstance(error, ApiProblem) and error.error_code == 'lifecycle_conflict':
                     raise
                 result.status = 'failed'
-                result.error = error.code if isinstance(error, ProviderFailure) else 'review_unavailable'
+                result.error = (error.code if isinstance(error, ProviderFailure) else
+                                'review_invalid_output' if isinstance(error, InvalidReview) else 'review_unavailable')
                 result.failed_indexes.append(index)
                 result.isolated_records[position].update(status='failed', reported_tokens=reported)
                 omission(index, 'review_failed')
@@ -158,7 +168,7 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
             result.status = 'partial' if result.omissions else 'complete'
         return result
 
-    reason = context.model_exhaustion(per_call)
+    reason = context.model_exhaustion(per_call) if context.budget.max_total_tokens is None else None
     if reason:
         result.status = 'budget_exhausted'
         result.omissions = [{'claim_index': i, 'reason': reason} for i in range(len(claims))]
@@ -175,10 +185,14 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
         remaining = context.budget.deadline - context.now()
         if remaining <= 0:
             raise ProviderFailure('provider_budget_exhausted', 'Research time budget is exhausted.', retryable=False)
-        before = context.start_model(call_id, per_call)
+        if not research_prompt_fits(batch.prompt, REVIEW_SYSTEM_PROMPT, legacy_limit):
+            raise ProviderFailure('provider_budget_exhausted', 'Research input budget is exhausted.', retryable=False)
+        reservation, output_cap = context.prepare_model_call(provider, batch.prompt, REVIEW_SYSTEM_PROMPT)
+        output_kwargs = context.output_kwargs(generate, provider, output_cap)
+        before = context.start_model(call_id, reservation)
         try:
-            raw, reported = generate(batch.prompt, cancel_event=context.cancel_event(), system=REVIEW_SYSTEM_PROMPT,
-                                     timeout_seconds=min(float(timeout), remaining))
+            raw, reported = context.invoke_model(call_id, generate, batch.prompt, cancel_event=context.cancel_event(), system=REVIEW_SYSTEM_PROMPT,
+                                     timeout_seconds=min(float(timeout), remaining), **output_kwargs)
             result.tokens = reported if type(reported) is int and reported >= 0 else None
         except ProviderFailure as error:
             result.tokens = error.reported_tokens if type(error.reported_tokens) is int and error.reported_tokens >= 0 else None
@@ -189,7 +203,11 @@ def execute_support_review(*, request: ResearchRunRequest, analysis: AnalysisRes
         result.omissions.extend({'claim_index': index, 'reason': 'model_omitted'} for index in missing)
         result.status = 'partial' if batch.omitted or missing else 'complete'
     except (ProviderFailure, InvalidReview, ApiProblem) as error:
+        if isinstance(error, InvalidReview):
+            context.mark_model_processing_error(call_id, 'contract_validation')
+            context.record_validation_diagnostic(call_id, error.diagnostic)
         result.status = 'failed'
         result.failed_indexes = batch.indexes
-        result.error = error.code if isinstance(error, ProviderFailure) else 'review_unavailable'
+        result.error = (error.code if isinstance(error, ProviderFailure) else
+                        'review_invalid_output' if isinstance(error, InvalidReview) else 'review_unavailable')
     return result

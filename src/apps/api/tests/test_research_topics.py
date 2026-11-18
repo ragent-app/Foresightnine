@@ -379,12 +379,12 @@ def test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation(monke
     account=client.post("/v1/auth/local/register",json={"email":f"retarget-{uuid4().hex}@example.test",
         "password":"correct horse battery staple!"}).json()
     headers={"Authorization":"Bearer "+account["access_token"]}
-    source=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue 100. Revenue 200. Base 50.",
+    source=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue USD 100. Revenue USD 200. Base 50.",
         "permissions":{"store":True,"display":True,"model_input":True}}).json()
     topic=client.post("/v2/research/topics",headers=headers,json={"question":"Difference?","source_ids":[source["source_id"]]}).json()
     path="/v2/research/topics/"+topic["topic_id"]
     facts=[{"fact_id":"revenue","label":"Revenue","value":"200","unit":"USD","currency":"USD","period":"2024",
-            "source_id":source["source_id"],"quotation":"Revenue 100","location":{"character_start":0,"character_end":11}},
+            "source_id":source["source_id"],"quotation":"Revenue USD 100","location":{"character_start":0,"character_end":15}},
            {"fact_id":"base","label":"Base","value":"50","unit":"USD","currency":"USD","period":"2024"}]
     saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":topic["versions"][0]["version_id"],"content":{"facts":facts}})
     assert saved.status_code==201
@@ -392,11 +392,11 @@ def test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation(monke
     assert old["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
     request={"parent_version_id":old["version_id"],"formula":"difference","first_fact_id":"revenue","second_fact_id":"base"}
     assert client.post(path+"/calculations",headers=headers,json=request).status_code==422
-    corrected=deepcopy(old["content"]);corrected["facts"][0]["quotation"]="Revenue 200";corrected["facts"][0].pop("location")
+    corrected=deepcopy(old["content"]);corrected["facts"][0]["quotation"]="Revenue USD 200";corrected["facts"][0].pop("location")
     updated=client.post(path+"/versions",headers=headers,json={"parent_version_id":old["version_id"],"content":corrected})
     assert updated.status_code==201,updated.text
     current=updated.json()["versions"][-1];fact=current["content"]["facts"][0]
-    assert fact["location"]=={"character_start":13,"character_end":24}
+    assert fact["location"]=={"character_start":17,"character_end":32}
     assert fact["quotation_match"]=="exact" and not fact.get("source_value_warnings")
     request["parent_version_id"]=current["version_id"]
     calculation=client.post(path+"/calculations",headers=headers,json=request)

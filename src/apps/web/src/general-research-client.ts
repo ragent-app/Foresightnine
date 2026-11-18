@@ -18,12 +18,14 @@ export interface ResearchClaim {
   authorship?: string;
   role?: string;
   support_status?: string;
+  absence_scope_status?: "not_established";
+  scope_declaration?: "absence" | "other" | "unknown";
   causal_attribution_unverified?: boolean;
   counterpoint_relevance_unverified?: boolean;
   prior_findings_truncated?: boolean;
   prior_findings_scope_unverified?: boolean;
   source_scope_absence_unverified?: boolean;
-  support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false; diagnostic_only?: boolean; reported_verdict?: string; guard_reasons?: string[]; relevance?: "relevant" | "not_relevant" | "uncertain" | "not_assessed"; reported_relevance?: string; relevance_context_complete?: boolean };
+  support_review?: { verdict: "supports" | "does_not_support" | "contradicts" | "uncertain"; method: string; independently_verified: false; diagnostic_only?: boolean; reported_verdict?: string; guard_reasons?: string[]; relevance?: "relevant" | "not_relevant" | "uncertain" | "not_assessed"; reported_relevance?: string; relevance_context_complete?: boolean; scope_declaration?: "absence" | "other" | "unknown"; claimed_scope?: "selected_excerpt" | "full_source" | "unknown"; scope_evidence?: "cited_excerpt_only"; scope_independently_verified?: false };
   citations?: { source_id: string; quotation?: string; quotation_match?: string; partial_token?: boolean; support_status?: string; location?: SourceLocation }[];
   suggested_fact_evidence?: { fact_id: string; source_id: string; value: string; unit: string; period: string; quotation: string; location: SourceLocation; status: string }[];
   suggested_related_quotations?: { source_id: string; quotation: string; location: SourceLocation; matched_amounts: string[]; from_claim_index: number; status: string }[];
@@ -45,7 +47,7 @@ export interface ResearchClaim {
   uncited_exact_dates?: string[];
   publication_date_warnings?: { claimed_text: string; source_id: string; declared_published_at: string; status: string }[];
 }
-export interface ResearchFact { extraction_method?: string; structured_metadata?: Record<string, unknown>; numeric_normalization?: string; currency_context_unverified?: boolean; currency_quote_missing?: boolean; scale_quote_missing?: boolean; table_alignment_unverified?: boolean; table_period_conflict?: { declared_year: string; column_year: string }; table_structure_alignment?: { status: "matched" | "conflict"; column_date: string; declared_date: string; value_column_start: number; value_column_end: number }; xbrl_source_consistency?: { method: string; concept: string; currency: string; scale: number; entity_cik: string; period_start: string; period_end: string; source_sha256: string }; table_confirmation?: { confirmed_by: "user"; fact_sha256: string; confirmed_at: string }; currency_conflict_unverified?: boolean; currency_unspecified?: boolean; direction_context_unverified?: boolean; direction_confirmation?: { confirmed_by: "user"; fact_sha256: string; confirmed_at: string }; source_value_warnings?: string[]; fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
+export interface ResearchFact { extraction_method?: string; structured_metadata?: Record<string, unknown>; numeric_normalization?: string; currency_context_unverified?: boolean; currency_quote_missing?: boolean; scale_quote_missing?: boolean; table_alignment_unverified?: boolean; table_period_conflict?: { declared_year: string; column_year: string }; table_structure_alignment?: { status: "matched" | "conflict"; column_date: string; declared_date: string; value_column_start: number; value_column_end: number }; xbrl_source_consistency?: { method: string; concept: string; currency: string; scale: number; entity_cik: string; period_start: string; period_end: string; source_sha256: string }; table_confirmation?: { confirmed_by: "user"; fact_sha256: string; confirmed_at: string }; currency_conflict_unverified?: boolean; currency_unspecified?: boolean; direction_context_unverified?: boolean; direction_derivation?: { method: string; source_id: string; direction: string; subject: string; verification: string }; direction_confirmation?: { confirmed_by: "user"; fact_sha256: string; confirmed_at: string }; source_value_warnings?: string[]; fact_id: string; label: string; value: string; unit: string; currency?: string | null; period: string; source_id?: string | null; quotation?: string | null; quotation_match?: string; verification: string; authorship?: string; location?: SourceLocation }
 export interface ResearchContent {
   summary: string;
   sources: { source_id: string; title?: string; url?: string | null; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; initial_prompt_coverage?: { method: string; status: string; text_characters: number; selected_characters: number | null } }[];
@@ -79,10 +81,21 @@ export interface ResearchOperation {
   status: string;
   cancel_token: string;
 }
+export interface ResearchRecoveryStatus {
+  can_continue: boolean;
+  can_deliver: boolean;
+  reason: "running" | "no_checkpoint" | "changed" | "unknown_external" | "already_used" | "budget_exhausted" | "unavailable" | null;
+  checkpoint: string | null;
+  version_id: string | null;
+}
+export function shouldCheckResearchRecovery(status: string, operationId: string, run?: Record<string, unknown>): boolean {
+  return status === "failed" || status === "cancelled" ||
+    (status === "completed" && run?.operation_id === operationId && run?.status === "partial");
+}
 export interface SourceMetadata { original_pdf_available?: boolean; original_html_available?: boolean; derived_from_source_id?: string | null; pdf_text_spacing_warning?: boolean; source_id: string; title?: string; url?: string; status: string; is_simulated?: boolean; event_at?: string | null; published_at?: string | null; obtained_at?: string | null; revised_at?: string | null; retrieval_method?: string; pdf_text_order?: "layout" | "reading" | null; permissions?: { display: boolean; export: boolean; model_input?: boolean } }
 export interface DiscoveryCandidate { title: string; url: string; excerpt: string; published_at?: string | null }
 export interface IssuerCandidate { cik: string; ticker: string; name: string; exchange: string | null }
-export interface RunBudget { selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; counterpointFollowup?: boolean; gapFollowup?: boolean; gapSearch?: boolean; planResearch?: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds: number; maxTotalTokens: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean; autoFetchOfficial?: boolean }
+export interface RunBudget { automatic?: boolean; selectedSourceIds?: string[]; questionOverride?: string; search: boolean; supportReview: boolean; counterpointFollowup?: boolean; gapFollowup?: boolean; gapSearch?: boolean; planResearch?: boolean; supportReviewMode?: "batch" | "isolated"; maxModelCalls?: number; maxSearchCalls?: number; requireCounterarguments: boolean; maxElapsedSeconds?: number; maxTotalTokens?: number; maxInputTokensPerCall?: number; maxCostUsd?: string; focusCitation?: { claim_index: number; citation_index: number }; includeScopeInSearch?: boolean; autoFetchOfficial?: boolean }
 
 export function sourceDiscoveryQuery(question: string, scope: string, includeScope: boolean): string {
   const q = Array.from(question.trim()), s = Array.from(scope.trim());
@@ -108,9 +121,9 @@ export interface RunInputSnapshot {
   as_of: string | null;
   planned_official_source_id?: string;
   budget: ResearchV2.ResearchRunRequest;
-  sources: { source_id: string; content_sha256: string; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; permissions: ResearchV2.SourcePermissions }[];
-  model: string | null;
-  provider: string | null;
+  sources?: { source_id: string; content_sha256: string; is_simulated?: boolean; pdf_text_order?: "layout" | "reading" | null; permissions: ResearchV2.SourcePermissions }[];
+  model?: string | null;
+  provider?: string | null;
   provider_limits?: { max_input_tokens?: number | null; max_output_tokens?: number | null };
 }
 
@@ -206,25 +219,34 @@ export function researchClient(baseUrl: string) {
       `/v2/research/topics/${encodeURIComponent(topicId)}/calculations/recalculate`, { parent_version_id: parent, calculation_index: index }),
     run: (topicId: string, parent: string, key: string, budget: RunBudget) => request<{ operation: ResearchOperation }>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs`, { parent_version_id: parent,
-        max_search_calls: budget.search ? (budget.gapSearch ? 2 : 1) : 0, max_elapsed_seconds: budget.maxElapsedSeconds,
-        max_total_tokens: budget.maxTotalTokens, max_model_calls: budget.supportReview && budget.supportReviewMode === "isolated" ? budget.maxModelCalls ?? 2 : 1 + Number(budget.supportReview) + Number(budget.counterpointFollowup ?? false) + Number(budget.gapFollowup ?? false) + Number(budget.planResearch ?? false), support_review: budget.supportReview,
-        ...(budget.counterpointFollowup ? { counterpoint_followup: true } : {}),
-        ...(budget.gapFollowup ? { gap_followup: true } : {}),
-        ...(budget.gapSearch ? { gap_search: true } : {}),
-        ...(budget.planResearch ? { plan_research: true } : {}),
+        ...(!budget.automatic ? { ...(budget.search ? (budget.maxSearchCalls !== undefined ? { max_search_calls: budget.maxSearchCalls } : {}) : { max_search_calls: 0 }),
+        ...(budget.maxElapsedSeconds !== undefined ? { max_elapsed_seconds: budget.maxElapsedSeconds } : {}),
+        ...(budget.maxTotalTokens !== undefined ? { max_total_tokens: budget.maxTotalTokens } : {}),
+        ...(budget.maxModelCalls !== undefined ? { max_model_calls: budget.maxModelCalls } : {}), support_review: budget.supportReview,
+        counterpoint_followup: Boolean(budget.counterpointFollowup),
+        gap_followup: Boolean(budget.gapFollowup),
+        gap_search: Boolean(budget.gapSearch),
+        plan_research: Boolean(budget.planResearch),
         ...(budget.supportReview && budget.supportReviewMode === "isolated" ? { support_review_mode: "isolated" } : {}),
         require_counterarguments: budget.requireCounterarguments,
+        auto_fetch_official: Boolean(budget.autoFetchOfficial),
+        include_scope_in_search: Boolean(budget.includeScopeInSearch),
+        } : {}),
         ...(budget.maxInputTokensPerCall !== undefined ? { max_input_tokens_per_call: budget.maxInputTokensPerCall } : {}),
         ...(budget.selectedSourceIds !== undefined ? { selected_source_ids: budget.selectedSourceIds } : {}),
         ...(budget.questionOverride ? { question_override: budget.questionOverride } : {}),
-        ...(budget.includeScopeInSearch ? { include_scope_in_search: true } : {}),
-        ...(budget.autoFetchOfficial ? { auto_fetch_official: true } : {}),
         ...(budget.focusCitation ? { focus_citation: budget.focusCitation } : {}),
-        ...(budget.maxCostUsd ? { max_cost_usd: budget.maxCostUsd } : {}) } satisfies ResearchV2.ResearchRunRequest, key),
+        ...(budget.maxCostUsd !== undefined ? { max_cost_usd: budget.maxCostUsd } : {}) } satisfies ResearchV2.ResearchRunRequest, key),
     operation: (topicId: string, operationId: string) => request<{ operation: ResearchOperation }>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}`),
     progress: (topicId: string, operationId: string) => request<{ version_id: string | null; checkpoint: string | null; result_status: string | null; created_at: string | null }>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}/progress`),
+    recoveryStatus: (topicId: string, operationId: string) => request<ResearchRecoveryStatus>(
+      `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}/recovery-status`),
+    recover: (topicId: string, operationId: string, key: string) => request<{ operation: ResearchOperation }>(
+      `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}/recover`, {}, key),
+    continueRun: (topicId: string, operationId: string, key: string) => request<{ operation: ResearchOperation }>(
+      `/v2/research/topics/${encodeURIComponent(topicId)}/runs/${encodeURIComponent(operationId)}/continue`, {}, key),
     runs: (topicId: string) => request<{ operation: ResearchOperation }[]>(
       `/v2/research/topics/${encodeURIComponent(topicId)}/runs`),
     runInputs: (topicId: string, operationId: string) => request<RunInputSnapshot>(

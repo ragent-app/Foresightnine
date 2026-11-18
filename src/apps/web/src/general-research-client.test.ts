@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { researchClient, researchPollingDelay, ResearchRequestError } from "./general-research-client";
+import { researchClient, researchPollingDelay, ResearchRequestError, shouldCheckResearchRecovery } from "./general-research-client";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -73,7 +73,7 @@ describe("research operation polling", () => {
     const budget = { search: true, supportReview: false, requireCounterarguments: false, maxElapsedSeconds: 60, maxTotalTokens: 10000 };
     await api.run("topic", "version", "without", budget);
     await api.run("topic", "version", "with", {...budget, autoFetchOfficial: true});
-    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty("auto_fetch_official");
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)).auto_fetch_official).toBe(false);
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)).auto_fetch_official).toBe(true);
   });
 
@@ -89,13 +89,14 @@ describe("research operation polling", () => {
     await api.run("topic", "version", "batch", {search:false,supportReview:true,
       requireCounterarguments:true,maxElapsedSeconds:60,maxTotalTokens:10000});
     const batch = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
-    expect(batch.max_model_calls).toBe(2);
+    expect(batch).not.toHaveProperty("max_model_calls");
     expect(batch).not.toHaveProperty("support_review_mode");
-    expect(batch).not.toHaveProperty("counterpoint_followup");
+    expect(batch.counterpoint_followup).toBe(false);
     await api.run("topic", "version", "followup", {search:false,supportReview:true,counterpointFollowup:true,
       requireCounterarguments:true,maxElapsedSeconds:60,maxTotalTokens:20000});
     const followup = JSON.parse(String(fetcher.mock.calls[2]?.[1]?.body));
-    expect(followup).toMatchObject({counterpoint_followup:true,support_review:true,max_model_calls:3});
+    expect(followup).toMatchObject({counterpoint_followup:true,support_review:true});
+    expect(followup).not.toHaveProperty("max_model_calls");
   });
   it("honors a server retry delay and retains the status for read-only retries", async () => {
     vi.stubGlobal("sessionStorage", { getItem: () => null });
@@ -185,4 +186,12 @@ describe("search date precision", () => {
     expect(searchCandidateDate("2023-01-30", "invalid")).toEqual({date: "2023-01-30", relation: "unknown"});
     expect(searchCandidateDate("2023-01-30", null)).toEqual({date: "2023-01-30", relation: "unrestricted"});
   });
+});
+
+
+it("offers recovery for the current partial run and failed runs", () => {
+  expect(shouldCheckResearchRecovery("completed", "r1", {operation_id:"r1", status:"partial"})).toBe(true);
+  expect(shouldCheckResearchRecovery("completed", "r2", {operation_id:"r1", status:"partial"})).toBe(false);
+  expect(shouldCheckResearchRecovery("completed", "r1", {operation_id:"r1", status:"completed"})).toBe(false);
+  expect(shouldCheckResearchRecovery("failed", "r1")).toBe(true);
 });

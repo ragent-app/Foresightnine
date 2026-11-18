@@ -68,13 +68,13 @@ def filter_counterpoint_rows(raw: object) -> tuple[list[dict[str, Any]], int] | 
     return valid, omitted
 
 
-def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]], max_bytes: int) -> CounterpointPrompt | None:
+def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]], max_bytes: int | None) -> CounterpointPrompt | None:
     """Retain the original question and source excerpts within the byte budget.
 
     Previous findings are data, not instructions or verified facts. No source
     is added, changed, shortened or silently removed to accommodate them.
     """
-    if not isinstance(base_prompt, str) or type(max_bytes) is not int or max_bytes <= 0 or not isinstance(findings, list):
+    if not isinstance(base_prompt, str) or (max_bytes is not None and (type(max_bytes) is not int or max_bytes <= 0)) or not isinstance(findings, list):
         return None
     try:
         original = json.loads(base_prompt)
@@ -98,6 +98,9 @@ def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]]
                              'limitations':['text']}
     data['evidence_guidance'] = ('Quote continuous passages from supplied sources. Never invent evidence or infer a person’s motive. '
                                  'Excerpts may be partial; do not generalize absence to a whole source.')
+    if original.get('source_input_version') == '2':
+        data['evidence_guidance'] += (' Sources contain separate passages; shared context_unit_ids link passages. '
+                                      'Cite each exact passage separately; never join passages.')
     # Prefer covering all findings when the budget permits.  A fixed two-item
     # prefix can hide a finding that already answers a supposed omission. If
     # space is tight, shorten each item before dropping entire findings; in
@@ -113,6 +116,6 @@ def prepare_counterpoint_prompt(base_prompt: str, findings: list[dict[str, Any]]
             else:
                 data['counterpoint_request'] = data['counterpoint_request'].removesuffix(' Prior findings may be truncated.')
             prompt = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-            if len(prompt.encode('utf-8')) <= max_bytes:
+            if max_bytes is None or len(prompt.encode('utf-8')) <= max_bytes:
                 return CounterpointPrompt(prompt=prompt, prior_findings_included=count, truncated_findings=truncated)
     return None

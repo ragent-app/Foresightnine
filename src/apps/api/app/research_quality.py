@@ -53,7 +53,7 @@ def model_review_outcomes(claims: list[dict]) -> dict[str, list[int]]:
 
 def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list[dict],
                   calculation_differences: list[dict], amount_differences: list[dict],
-                  run: dict[str, Any]) -> dict[str, Any]:
+                  run: dict[str, Any], facts: list[dict] | None = None) -> dict[str, Any]:
     """Build a bounded checklist, without interpreting sources or model prose."""
     items: list[dict[str, Any]] = []
     def add(code: str, indexes: list[int] | None = None, *, kind: str | None = None) -> None:
@@ -65,16 +65,40 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
         items.append(entry)
 
     attempted = bool(run.get('operation_id'))
+    coverage = run.get('requirement_coverage')
+    if isinstance(coverage, dict) and isinstance(coverage.get('requirements'), list):
+        requirements = coverage['requirements']
+        for gap, code in (('suggested_requirement_without_evidence_link', 'suggested_requirement_unlinked'),
+                          ('suggested_calculation_not_linked', 'suggested_calculation_unlinked')):
+            indexes = [i for i, item in enumerate(requirements) if isinstance(item, dict)
+                       and isinstance(item.get('gaps'), list) and gap in item['gaps']]
+            if indexes:
+                add(code, indexes, kind='requirement')
     if attempted and not sources:
         add('no_analyzed_sources')
     source_states = run.get('source_processing')
     if isinstance(source_states, list) and any(isinstance(item, dict) and
             (item.get('eligibility') != 'eligible' or item.get('initial_selection') != 'complete') for item in source_states):
         add('source_processing_incomplete')
+    scope = run.get('scope_assessment')
+    if attempted and isinstance(scope, dict) and scope.get('scope') != 'complete_input_selected':
+        add('source_scope_review_required')
+    absence = run.get('absence_assessment')
+    if isinstance(absence, dict) and absence.get('observations'):
+        add('absence_observation_unestablished')
+    needs = run.get('evidence_needs')
+    if isinstance(needs, dict) and any(isinstance(item, dict) and item.get('evidence_type') == 'model_suggested_material'
+                                       for item in needs.get('items', [])):
+        add('model_suggested_evidence_need')
     support = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and claim.get('role') != 'counterargument']
     counter = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and claim.get('role') == 'counterargument']
     if attempted and not support:
         add('no_findings')
+    missing_dimensions = [i for i, fact in enumerate(facts or []) if isinstance(fact, dict)
+                          and any(not isinstance(fact.get(field), str) or not fact[field].strip()
+                                  for field in ('unit', 'period'))]
+    if missing_dimensions:
+        add('fact_unit_or_period_missing', missing_dimensions, kind='fact')
     questions = run.get('research_questions')
     if isinstance(questions, list):
         unlinked_questions = [i for i, item in enumerate(questions) if isinstance(item, dict) and not item.get('claim_ids')]
@@ -84,6 +108,11 @@ def research_gaps(*, claims: list[dict], calculations: list[dict], sources: list
                (not isinstance(claim.get('citations'), list) or not claim['citations'] or claim.get('support_status') in {'unsupported', 'incomplete'})]
     if uncited:
         add('citations_missing_or_incomplete', uncited, kind='claim')
+    # A location or a model opinion does not establish semantic support.
+    # Preserve the review item even when a model reports support.
+    if claims:
+        add('semantic_support_not_independently_verified',
+            [i for i, claim in enumerate(claims) if isinstance(claim, dict)], kind='claim')
     warned = [i for i, claim in enumerate(claims) if isinstance(claim, dict) and
               any(claim.get(name) for name in CLAIM_EVIDENCE_WARNINGS)]
     if warned:

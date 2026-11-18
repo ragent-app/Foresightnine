@@ -970,7 +970,6 @@
           "max_input_tokens_per_call": {
             "anyOf": [
               {
-                "maximum": 12000.0,
                 "minimum": 1.0,
                 "type": "integer"
               },

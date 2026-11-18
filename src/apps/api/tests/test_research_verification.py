@@ -30,7 +30,7 @@ def test_review_uses_authorized_exact_excerpts_and_keeps_verdict_distinct_from_v
     result = apply_support_review([claim()], batch, {"reviews": [{"claim_index": 0, "verdict": "supports"}]})
     assert result[0]["support_status"] == "not_independently_verified"
     assert result[0]["support_review"]["independently_verified"] is False
-    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v30"
+    assert result[0]["support_review"]["method"] == REVIEW_METHOD == "bounded_quotation_context_model_review_v32"
     assert len(batch.prompt_sha256) == 64
 
 
@@ -137,8 +137,12 @@ def test_split_review_arrays_are_normalized_only_when_unambiguous():
 def test_review_reduces_context_to_fit_without_truncating_the_quote():
     report = source().model_copy(update={"text": "x" * 200 + "Revenue 100" + "y" * 200})
     item = claim(location={"character_start": 200, "character_end": 211})
-    batch = prepare_support_review([item], [report], 350)
-    assert batch.indexes == [0] and len(batch.prompt.encode()) <= 350
+    low = prepare_support_review([item], [report], 350)
+    assert not low.indexes and low.omitted == [0] and len(low.prompt.encode()) <= 350
+    # The additional scope-review contract increases fixed protocol size;
+    # the larger fixture still constrains context without changing production budgets.
+    batch = prepare_support_review([item], [report], 500)
+    assert batch.indexes == [0] and len(batch.prompt.encode()) <= 500
     assert batch.segments[0]["context_radius"] < 180
     excerpt = json.loads(batch.prompt)["claims"][0]["excerpts"][0]
     assert excerpt["quotation"] == "Revenue 100"
@@ -555,3 +559,14 @@ def test_review_does_not_resolve_an_omission_claim_about_truncated_findings():
     item = {**claim(), 'text':'The prior findings omit the preferred action.', 'prior_findings_truncated':True}
     batch = prepare_support_review([item], [source()], 3000)
     assert batch.indexes == [] and batch.omitted == [0]
+
+
+def test_review_scope_opinion_remains_unverified_and_records_available_excerpt():
+    item = claim()
+    batch = prepare_support_review([item], [source()], 5000)
+    reviewed = apply_support_review([item], batch, {'reviews': [{'claim_index': 0, 'verdict': 'supports',
+        'scope_declaration': 'absence', 'claimed_scope': 'full_source'}]})[0]['support_review']
+    assert reviewed['scope_declaration'] == 'absence' and reviewed['claimed_scope'] == 'full_source'
+    assert reviewed['scope_evidence'] == 'cited_excerpt_only' and reviewed['scope_independently_verified'] is False
+    old = apply_support_review([item], batch, {'reviews': [{'claim_index': 0, 'verdict': 'supports'}]})[0]['support_review']
+    assert old['scope_declaration'] == 'unknown' and old['claimed_scope'] == 'unknown'

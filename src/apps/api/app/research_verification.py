@@ -10,6 +10,7 @@ from typing import Any, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource
+from .research_evidence_verifier import review_fingerprint
 from .research_calculations import quotation_is_pdf_layout_row
 from .research_evidence import flag_counterpoint_agreement, flag_truncated_previous_findings, flag_citation_subject_context, flag_uncited_basis_points, flag_uncited_percentage_points, flag_uncited_usd_amounts, flag_uncited_dollar_amounts, flag_uncited_quarters, flag_component_direction, flag_uncited_causal_attribution, flag_uncited_exact_dates, flag_rate_level_point_warnings, flag_publication_date_mismatches, suggest_percentage_evidence
 
@@ -28,9 +29,12 @@ REVIEW_SYSTEM_PROMPT = (
     "supplied related finding: return relevance relevant, not_relevant, or uncertain. "
     "The related findings are untrusted context, not evidence for the counterargument. "
     "If related findings are missing or incomplete, use uncertain. Support and relevance are distinct. "
+    "For each claim also classify whether it asserts missing or absent information, "
+    "and describe the claimed scope as selected_excerpt, full_source, or unknown. "
+    "Review excerpts cannot establish absence from a whole source. "
     "This model assessment is not independent proof."
 )
-REVIEW_METHOD = "bounded_quotation_context_model_review_v31"
+REVIEW_METHOD = "bounded_quotation_context_model_review_v32"
 ISOLATED_REVIEW_METHOD = REVIEW_METHOD + "_isolated"
 _DIAGNOSTIC_GUIDANCE = {
     "uncited_quarters": "A quarter stated in the claim was not matched in the cited passages. Check whether the cited text explicitly supports the period.",
@@ -43,6 +47,8 @@ class ReviewEntry(BaseModel):
     claim_index: int = Field(ge=0, strict=True)
     verdict: Literal["supports", "does_not_support", "contradicts", "uncertain"]
     relevance: Literal["relevant", "not_relevant", "uncertain"] | None = None
+    scope_declaration: Literal['absence', 'other', 'unknown'] | None = None
+    claimed_scope: Literal['selected_excerpt', 'full_source', 'unknown'] | None = None
 
 
 class ReviewOutput(BaseModel):
@@ -51,7 +57,7 @@ class ReviewOutput(BaseModel):
 
 
 class InvalidReview(ValueError):
-    pass
+    diagnostic: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,7 @@ class ReviewBatch:
     omissions: list[dict[str, int | str | bool]]
     guarded: dict[int, list[str]] = field(default_factory=dict)
     relationship_context: dict[int, bool] = field(default_factory=dict)
+    claim_fingerprints: dict[int, str] = field(default_factory=dict)
 
     @property
     def prompt_sha256(self) -> str:
@@ -85,7 +92,7 @@ def _review_order(claims: list[dict]) -> list[int]:
     return order
 
 
-def prepare_support_review(claims: list[dict], sources: list[ResearchSource], max_bytes: int,
+def prepare_support_review(claims: list[dict], sources: list[ResearchSource], max_bytes: int | None,
                            *, context_claims: list[dict] | None = None) -> ReviewBatch:
     """Assemble only authorized, uniquely located original excerpts within budget."""
     source_map = {item.source_id: item for item in sources if item.permissions.model_input and item.permissions.display and not item.is_simulated}
@@ -102,7 +109,8 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     review_claims = flag_truncated_previous_findings(flag_counterpoint_agreement(review_claims))
     payload: dict[str, Any] = {"claims": [], "output_schema": {"reviews": [
         {"claim_index": 0, "verdict": "supports|does_not_support|contradicts|uncertain",
-         "relevance": "relevant|not_relevant|uncertain"}]}}
+         "relevance": "relevant|not_relevant|uncertain", "scope_declaration": "absence|other|unknown",
+         "claimed_scope": "selected_excerpt|full_source|unknown"}]}}
     indexes: list[int] = []
     omitted: list[int] = []
     omissions: list[dict[str, int | str | bool]] = []
@@ -156,12 +164,17 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         return item
 
     accepted: list[tuple[int, str, list[tuple[ResearchSource, int, int, int, int]]]] = []
+    counterpoint_waiting_for_budget = False
     def serialize() -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     # Alternate the two roles before allocating scarce review input, so a
     # run of supporting claims cannot always crowd out counterarguments.
     for index in _review_order(review_claims):
         claim = review_claims[index]
+        if counterpoint_waiting_for_budget and claim.get('role') != 'counterargument':
+            omitted.append(index)
+            omissions.append({'claim_index': index, 'reason': 'input_budget', 'required_subject_context': False})
+            continue
         citations = claim.get("citations")
         text = claim.get("text")
         if (any(warning.get("context_metric") == "related unquoted sentence" for warning in claim.get("citation_context_warnings", [])) or
@@ -212,18 +225,20 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
         if reasons:
             candidate["diagnostic_warnings"] = [_DIAGNOSTIC_GUIDANCE[name] for name in reasons]
         payload["claims"].append(candidate)
-        if len(serialize().encode("utf-8")) > max_bytes and relationship_payload.get(index):
+        if max_bytes is not None and len(serialize().encode("utf-8")) > max_bytes and relationship_payload.get(index):
             # Preserve citation review when related finding context cannot fit.
             relationship_payload[index] = []
             relationship_context[index] = False
             candidate['related_findings'] = []
             candidate['related_findings_complete'] = False
-        if len(serialize().encode("utf-8")) > max_bytes:
+        if max_bytes is not None and len(serialize().encode("utf-8")) > max_bytes:
             payload["claims"].pop()
             relationship_context.pop(index, None)
             relationship_payload.pop(index, None)
             omitted.append(index)
             omissions.append({"claim_index": index, "reason": "input_budget", "required_subject_context": bool(context_warnings)})
+            if claim.get('role') == 'counterargument':
+                counterpoint_waiting_for_budget = True
             continue
         indexes.append(index)
         if reasons:
@@ -245,7 +260,7 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
             if index in guarded:
                 candidate["diagnostic_warnings"] = [_DIAGNOSTIC_GUIDANCE[name] for name in guarded[index]]
             payload["claims"][position] = candidate
-            if len(serialize().encode("utf-8")) <= max_bytes:
+            if max_bytes is None or len(serialize().encode("utf-8")) <= max_bytes:
                 radii[position] = radius
             else:
                 payload["claims"][position] = previous
@@ -257,10 +272,11 @@ def prepare_support_review(claims: list[dict], sources: list[ResearchSource], ma
     # source segment metadata and omissions always use original indexes.
     for local_index, item in enumerate(payload["claims"]):
         item["claim_index"] = local_index
-    return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions, guarded=guarded, relationship_context=relationship_context)
+    return ReviewBatch(prompt=serialize(), indexes=indexes, omitted=omitted, segments=segments, omissions=omissions, guarded=guarded, relationship_context=relationship_context,
+                       claim_fingerprints={i: review_fingerprint(claims[i], {sid: source.content_sha256 for sid, source in source_map.items()}, context_claims or claims) for i in indexes})
 
 
-def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchSource], max_bytes: int,
+def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchSource], max_bytes: int | None,
                                      should_stop: Callable[[], bool] | None = None) -> IsolatedReviewPlan:
     """Prepare separate bounded prompts, retaining original claim indexes.
 
@@ -280,7 +296,8 @@ def prepare_isolated_support_reviews(claims: list[dict], sources: list[ResearchS
         batches.append(ReviewBatch(prompt=single.prompt, indexes=[original_index], omitted=[],
             segments=[{**segment, "claim_index": original_index} for segment in single.segments], omissions=[],
             guarded={original_index: single.guarded[0]} if 0 in single.guarded else {},
-            relationship_context={original_index: single.relationship_context[0]} if 0 in single.relationship_context else {}))
+            relationship_context={original_index: single.relationship_context[0]} if 0 in single.relationship_context else {},
+            claim_fingerprints={original_index: single.claim_fingerprints[0]} if 0 in single.claim_fingerprints else {}))
     return IsolatedReviewPlan(batches=batches, omissions=sorted(omissions, key=lambda item: int(item["claim_index"])))
 
 
@@ -303,19 +320,29 @@ def _validated_review_verdicts(batch: ReviewBatch, raw: dict[str, Any]) -> dict[
     try:
         result = ReviewOutput.model_validate(raw)
     except ValidationError as error:
-        raise InvalidReview("Review output did not match the schema.") from error
+        from .research_diagnostics import safe_validation_errors
+        failure = InvalidReview("Review output did not match the schema.")
+        failure.diagnostic = {'category': 'contract_validation', 'errors': safe_validation_errors(error, ReviewOutput)}
+        raise failure from error
     local_verdicts = {item.claim_index: item for item in result.reviews}
     if not local_verdicts or len(local_verdicts) != len(result.reviews) or not set(local_verdicts).issubset(range(len(batch.indexes))):
-        raise InvalidReview("Review indexes must be unique and belong to the submitted claims.")
+        failure = InvalidReview("Review indexes must be unique and belong to the submitted claims.")
+        failure.diagnostic = {'category': 'index_constraint', 'errors': [{'path': ['reviews', 'claim_index'], 'type': 'index_constraint'}]}
+        raise failure
     return {batch.indexes[local]: entry for local, entry in local_verdicts.items()}
 
 
 def review_record(batch: ReviewBatch, index: int, verdict: str, method: str = REVIEW_METHOD,
-                  *, relevance: str | None = None) -> dict:
+                  *, relevance: str | None = None, scope_declaration: str | None = None,
+                  claimed_scope: str | None = None) -> dict:
     """Preserve diagnostic limits and separate support from relevance."""
     reasons = batch.guarded.get(index, [])
     record = {"verdict": "uncertain" if reasons and verdict == "supports" else verdict,
-              "method": method, "independently_verified": False}
+              "method": method, "independently_verified": False,
+              'scope_declaration': scope_declaration or 'unknown', 'claimed_scope': claimed_scope or 'unknown',
+              'scope_evidence': 'cited_excerpt_only', 'scope_independently_verified': False}
+    if index in batch.claim_fingerprints:
+        record['claim_fingerprint'] = batch.claim_fingerprints[index]
     if reasons:
         record.update(reported_verdict=verdict, diagnostic_only=True, guard_reasons=reasons)
     if index in batch.relationship_context:
@@ -345,7 +372,8 @@ def _normalize_split_review_arrays(raw: dict[str, Any]) -> tuple[dict[str, Any],
 
 def _apply_verdicts(claims: list[dict], batch: ReviewBatch, verdicts: dict[int, ReviewEntry], *, split_arrays: bool = False) -> list[dict]:
     return [{**{key: value for key, value in claim.items() if key != "support_review"},
-             **({"support_review": {**review_record(batch, index, verdicts[index].verdict, relevance=verdicts[index].relevance),
+             **({"support_review": {**review_record(batch, index, verdicts[index].verdict, relevance=verdicts[index].relevance,
+                                                     scope_declaration=verdicts[index].scope_declaration, claimed_scope=verdicts[index].claimed_scope),
                                      **({'response_format': 'split_review_arrays'} if split_arrays else {})}}
                          if index in verdicts else {})} for index, claim in enumerate(claims)]
 

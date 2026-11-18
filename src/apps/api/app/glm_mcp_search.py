@@ -30,7 +30,7 @@ _MCP_CLIENT_VERSION = "1.0"
 # camelCase spelling as a strict compatibility alias for recorded fixtures,
 # but always call the exact name returned by tools/list.
 _MCP_TOOL_NAMES = frozenset({"web_search_prime", "webSearchPrime"})
-_MAX_QUERY_LENGTH = 70
+_MAX_QUERY_LENGTH = 10000
 _MAX_RESULTS = 10
 _MAX_RESPONSE_CHARS = 256 * 1024
 _MAX_CONTENT_BLOCKS = 32
@@ -55,6 +55,8 @@ class SearchCandidate:
 
 class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
     """Fixed-host, session-aware adapter for GLM Coding Plan web-search MCP."""
+
+    max_query_length = _MAX_QUERY_LENGTH
 
     name = "glm-coding-mcp-search"
 
@@ -342,8 +344,12 @@ class GlmCodingMcpSearchEvidenceProvider(ClientSearchEvidenceProvider):
             **budget,
         )
         schema, query_field, tool_name = self._tool_schema(tools)
-        arguments: dict[str, Any] = {query_field: query.strip()}
         properties = schema["properties"]
+        query_schema = properties.get(query_field, {})
+        provider_limit = query_schema.get("maxLength") if isinstance(query_schema, dict) else None
+        if isinstance(provider_limit, int) and len(query.strip()) > provider_limit:
+            raise ProviderFailure("search_query_provider_limit", "Query exceeds the provider-declared limit.", retryable=False)
+        arguments: dict[str, Any] = {query_field: query.strip()}
         if "count" in properties:
             arguments["count"] = limit
         result, _ = self._post(

@@ -11,6 +11,8 @@ import json
 from typing import Any
 from uuid import uuid4
 
+from .research_calculations import calculation_input_status, calculation_result_status
+
 
 MAX_ENTRIES = 2000
 MAX_CITATIONS = 10
@@ -132,6 +134,7 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
     counts = Counter(fact.get('fact_id') for fact in facts
                      if isinstance(fact, dict) and isinstance(fact.get('fact_id'), str) and fact.get('fact_id'))
     by_location: dict[tuple[str, int, int], list[str]] = {}
+    fact_links: list[dict[str, Any]] = []
     for fact in facts:
         if not isinstance(fact, dict):
             continue
@@ -139,6 +142,22 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
         key = _location_key(fact.get('source_id'), fact.get('location'))
         if key is not None and isinstance(fact_id, str) and counts[fact_id] == 1:
             by_location.setdefault(key, []).append(fact_id)
+        metadata = fact.get('structured_metadata') if isinstance(fact.get('structured_metadata'), dict) else {}
+        structured = fact.get('extraction_method') == 'sec_company_concept_row_v1'
+        record_locator = ({name: metadata.get(name) for name in ('entity_id', 'metric_id', 'period_start', 'period_end', 'filing_date', 'accn', 'form', 'frame')
+                           if isinstance(metadata.get(name), (str, int)) and not isinstance(metadata.get(name), bool)} if structured else None)
+        fact_links.append({'fact_id': fact_id if isinstance(fact_id, str) else None,
+                           'source_id': fact.get('source_id') if isinstance(fact.get('source_id'), str) else None,
+                           'identity_status': 'unique' if isinstance(fact_id, str) and counts[fact_id] == 1 else 'missing_or_ambiguous',
+                           'citation_location_status': 'recorded' if key is not None else 'unknown_or_unlocated',
+                           'attribution': 'user' if fact.get('authorship') == 'user' else 'source_or_model_extraction',
+                           'semantic_status': 'not_independently_verified',
+                           'reference_kind': 'structured_query_record' if structured else 'stored_text_span' if key is not None else 'unknown',
+                           **({'record_locator': record_locator, 'snapshot_offsets_only': True} if structured else {}),
+                           'dimensions_recorded': {name: bool(value) for name, value in {
+                               'entity': metadata.get('entity_id'), 'metric': metadata.get('metric_id') or fact.get('label'),
+                               'period': fact.get('period'), 'unit': fact.get('unit'),
+                               'currency': fact.get('currency'), 'accounting_basis': metadata.get('accounting_basis')}.items()}})
 
     claim_links = []
     truncated = facts_truncated or len(claims) > MAX_ENTRIES or len(calculations) > MAX_ENTRIES
@@ -160,13 +179,63 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
                           'source_id': source_id if isinstance(source_id, str) else None,
                           'location_recorded': key is not None,
                           'same_passage_fact_ids': same_passage[:MAX_FACT_MATCHES]})
+        located = sum(1 for item in links if item['location_recorded'])
+        location_status = ('not_provided' if not citations else 'all_recorded' if located == len(citations) else
+                           'partially_recorded' if located else 'unknown_or_unlocated')
+        review = claim.get('support_review') if isinstance(claim.get('support_review'), dict) else {}
+        verdict = review.get('verdict')
+        relevance = review.get('relevance')
+        suggested = claim.get('suggested_calculations') if isinstance(claim.get('suggested_calculations'), list) else []
+        candidate_calculations = list(dict.fromkeys(item['calculation_index'] for item in suggested[:MAX_INPUTS]
+            if isinstance(item, dict) and type(item.get('calculation_index')) is int
+            and 0 <= item['calculation_index'] < min(len(calculations), MAX_ENTRIES)
+            and isinstance(calculations[item['calculation_index']], dict)
+            and calculation_input_status(calculations[item['calculation_index']], facts) == 'matched'
+            and calculation_result_status(calculations[item['calculation_index']]) == 'matched'))
+        assertions = claim.get('assertion_suggestions') if isinstance(claim.get('assertion_suggestions'), list) else []
+        checked_assertions = []
+        truncated = truncated or len(assertions) > MAX_INPUTS
+        for assertion in assertions[:MAX_INPUTS]:
+            if not isinstance(assertion, dict) or not isinstance(assertion.get('text'), str):
+                continue
+            raw_refs = assertion.get('citation_indexes')
+            raw_calcs = assertion.get('calculation_indexes')
+            citations_valid = isinstance(raw_refs, list) and all(type(i) is int and 0 <= i < len(links)
+                              and links[i]['location_recorded'] for i in raw_refs) and len(raw_refs) <= MAX_CITATIONS
+            calculations_valid = isinstance(raw_calcs, list) and len(raw_calcs) <= MAX_INPUTS and all(
+                type(i) is int and 0 <= i < min(len(calculations), MAX_ENTRIES)
+                and isinstance(calculations[i], dict)
+                and calculation_input_status(calculations[i], facts) == 'matched'
+                and calculation_result_status(calculations[i]) == 'matched' for i in raw_calcs)
+            refs = list(dict.fromkeys(raw_refs)) if citations_valid else []
+            calcs = list(dict.fromkeys(raw_calcs)) if calculations_valid else []
+            checked_assertions.append({'text': assertion['text'][:1000],
+                'citation_indexes': refs, 'calculation_indexes': calcs,
+                'link_status': ('invalid_or_unlocated' if assertion.get('unresolved_reference') is True or not citations_valid or not calculations_valid else
+                                'linked_suggestion' if refs or calcs else 'unlinked'),
+                'origin': 'model_suggested', 'semantic_status': 'not_independently_verified'})
+        truncated = truncated or len(suggested) > MAX_INPUTS
         claim_links.append({'claim_index': index, 'claim_id': claim.get('claim_id'),
+                            'citation_location_status': location_status,
+                            'semantic_support_status': 'not_independently_verified',
+                            'model_review_opinion': verdict if isinstance(verdict, str) and verdict in {'supports', 'does_not_support', 'contradicts', 'uncertain'} else None,
+                            'counterpoint_relevance_opinion': relevance if isinstance(relevance, str) and relevance in {'relevant', 'not_relevant', 'uncertain'} else None,
+                            'counterpoint_link_status': ('not_applicable' if claim.get('role') != 'counterargument' else
+                                'user_recorded' if claim.get('responds_to_claim_ids') else
+                                'model_suggested' if claim.get('suggested_responds_to_claim_ids') else 'unlinked'),
+                            'candidate_calculation_indexes': candidate_calculations,
+                            'calculation_link_status': 'linked_suggestion' if candidate_calculations else 'unlinked',
+                            'assertions': checked_assertions,
+                            'assertion_coverage': 'model_suggested_not_verified' if checked_assertions else 'unknown',
                             'responds_to_claim_ids': claim.get('responds_to_claim_ids', []),
                             'suggested_responds_to_claim_ids': claim.get('suggested_responds_to_claim_ids', []),
                             'user_fact_links': claim.get('user_fact_links', []),
                             'role': 'counterargument' if claim.get('role') == 'counterargument' else 'support',
                             'citations': links})
 
+    unique_facts = {fact['fact_id']: fact for fact in facts
+                    if isinstance(fact, dict) and isinstance(fact.get('fact_id'), str)
+                    and counts[fact['fact_id']] == 1}
     calculation_links = []
     for index, calculation in enumerate(calculations[:MAX_ENTRIES]):
         if not isinstance(calculation, dict):
@@ -175,14 +244,23 @@ def derive_evidence_links(claims: list[dict], facts: list[dict], calculations: l
         inputs = inputs if isinstance(inputs, list) else []
         truncated = truncated or len(inputs) > MAX_INPUTS
         refs = []
+        input_status = 'unverifiable' if facts_truncated else calculation_input_status(calculation, facts)
         for item in inputs[:MAX_INPUTS]:
             fact_id = item.get('fact_id') if isinstance(item, dict) else None
+            fact = unique_facts.get(fact_id) if isinstance(fact_id, str) and input_status == 'matched' else None
+            location = _location_key(fact.get('source_id'), fact.get('location')) if fact else None
             refs.append({'fact_id': fact_id if isinstance(fact_id, str) else None,
-                         'fact_reference': 'unique' if isinstance(fact_id, str) and counts[fact_id] == 1 else 'missing_or_ambiguous'})
-        calculation_links.append({'calculation_index': index, 'inputs': refs})
+                         'fact_reference': 'unique' if isinstance(fact_id, str) and counts[fact_id] == 1 else 'missing_or_ambiguous',
+                         'source_id': location[0] if location else None,
+                         'location': {'character_start': location[1], 'character_end': location[2]} if location else None,
+                         'source_context_status': 'not_independently_verified'})
+        calculation_links.append({'calculation_index': index, 'inputs': refs,
+            'input_status': input_status,
+            'result_status': calculation_result_status(calculation),
+            'semantic_status': 'not_independently_verified'})
     return {'schema_version': '1', 'index_scope': 'research_version',
             'meaning': 'recorded_links_not_semantic_verification', 'truncated': truncated,
-            'claims': claim_links, 'calculations': calculation_links}
+            'facts': fact_links, 'claims': claim_links, 'calculations': calculation_links}
 
 
 def derive_question_links(questions: object, claims: list[dict]) -> dict[str, Any]:

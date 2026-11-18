@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .storage import JsonDocumentRepository, StorageConflictError
 from .research_provenance import derive_evidence_links, derive_question_links, normalize_claim_links, normalize_research_questions, normalize_user_fact_links
 from .research_quality import research_gaps
+from .research_coverage import (derive_absence_assessment, derive_completion_assessment, derive_evidence_needs, derive_requirement_coverage, derive_run_source_processing,
+                                derive_scope_assessment, has_unresolved_task_gap)
 from .research_stage_summary import summarize_research_stages
 from .research_calculations import calculation_result_status
 
@@ -23,7 +25,7 @@ from .research_calculations import calculation_result_status
 class ResearchInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     question: str = Field(default="", max_length=10000)
-    source_ids: list[str] = Field(default_factory=list, max_length=100)
+    source_ids: list[str] = Field(default_factory=list)
     scope: str = Field(default="", max_length=10000)
     as_of: datetime | None = None
 
@@ -43,14 +45,14 @@ class ResearchContent(BaseModel):
     summary: str = Field(default="", max_length=100000)
     # The structured entries preserve separate categories; further processing
     # and source authorization are implemented at the tool boundary.
-    sources: list[dict] = Field(default_factory=list, max_length=200)
+    sources: list[dict] = Field(default_factory=list)
     source_candidates: list[dict] = Field(default_factory=list, max_length=10)
-    facts: list[dict] = Field(default_factory=list, max_length=2000)
+    facts: list[dict] = Field(default_factory=list)
     evidence_differences: list[dict] = Field(default_factory=list, max_length=50)
-    calculations: list[dict] = Field(default_factory=list, max_length=2000)
+    calculations: list[dict] = Field(default_factory=list)
     calculation_differences: list[dict] = Field(default_factory=list, max_length=50)
     amount_differences: list[dict] = Field(default_factory=list, max_length=50)
-    claims: list[dict] = Field(default_factory=list, max_length=2000)
+    claims: list[dict] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list, max_length=500)
     run: dict = Field(default_factory=dict)
 
@@ -66,7 +68,7 @@ class VersionInput(BaseModel):
 class AttachSourcesInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     parent_version_id: str = Field(min_length=1, max_length=100)
-    source_ids: list[str] = Field(min_length=1, max_length=100)
+    source_ids: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_sources(self) -> AttachSourcesInput:
@@ -179,9 +181,26 @@ class ResearchTopics:
         now = datetime.now(timezone.utc)
         updated = topic.model_copy(deep=True)
         combined_source_ids = list(dict.fromkeys([*topic.versions[-1].source_ids, *(source_ids or [])]))
-        if len(combined_source_ids) > 100:
-            raise ValueError("A research version can include at most 100 sources.")
         content = deepcopy(request.content)
+        # Suggestions describe the previous model output. Once a user edits
+        # the substantive record, retain the original version as history but
+        # do not present its absence/need suggestions as current conclusions.
+        if created_by == 'user':
+            previous_content = topic.versions[-1].content
+            if any(getattr(content, field) != getattr(previous_content, field)
+                   for field in ('claims', 'facts', 'calculations', 'limitations')):
+                if 'model_evidence_needs' in content.run:
+                    content.run['model_evidence_needs'] = []
+                if 'model_absence_observations' in content.run:
+                    content.run['model_absence_observations'] = []
+                if 'model_requirement_links' in content.run:
+                    content.run['model_requirement_links'] = []
+                for claim in content.claims:
+                    if isinstance(claim, dict):
+                        claim.pop('model_absence_refs', None)
+                        claim.pop('absence_scope_status', None)
+                        claim.pop('scope_declaration', None)
+                        claim.pop('assertion_suggestions', None)
         # Never trust a client-supplied result status. Recompute against the
         # saved formula and input snapshot for every newly created version.
         for calculation in content.calculations:
@@ -196,12 +215,43 @@ class ResearchTopics:
             model_generated=created_by == 'agent')
         # Compute from the server-accepted snapshot on every version, including
         # user edits and checkpoints; do not trust a client-supplied link map.
+        content.run['run_source_processing'] = derive_run_source_processing(content.run)
+        content.run['scope_assessment'] = derive_scope_assessment(
+            run=content.run, claims=content.claims, limitations=content.limitations)
+        content.run['evidence_needs'] = derive_evidence_needs(run=content.run, scope=content.run['scope_assessment'])
+        content.run['absence_assessment'] = derive_absence_assessment(run=content.run, scope=content.run['scope_assessment'], claims=content.claims)
+        absence_claim_ids = {claim_id for row in content.run['absence_assessment']['observations']
+                             for claim_id in row['claim_ids']}
+        for review in content.run['scope_assessment']['claim_scope_declarations']:
+            review['observation_linked'] = review['claim_id'] in absence_claim_ids
+            if review['observation_linked']:
+                review['assessment'] = 'not_established'
+        for claim in content.claims:
+            if isinstance(claim, dict) and (claim.get('claim_id') in absence_claim_ids or claim.get('scope_declaration') == 'absence' or
+                    (isinstance(claim.get('support_review'), dict) and claim['support_review'].get('scope_declaration') == 'absence')):
+                claim['absence_scope_status'] = 'not_established'
+                claim['support_status'] = 'incomplete'
+        if has_unresolved_task_gap(needs=content.run['evidence_needs'], absences=content.run['absence_assessment'], claims=content.claims):
+            if content.run.get('status') == 'completed':
+                content.run['status'] = 'partial'
         content.run['evidence_links'] = derive_evidence_links(content.claims, content.facts, content.calculations)
         content.run['question_links'] = derive_question_links(content.run['research_questions'], content.claims)
+        content.run['requirement_coverage'] = derive_requirement_coverage(
+            run=content.run, has_user_question=bool(content.run.get('question_override') or topic.request.question),
+            facts=content.facts, calculations=content.calculations)
+        content.run['completion_assessment'] = derive_completion_assessment(run=content.run, claims=content.claims)
+        if (content.run['completion_assessment'].get('suggested_requirement_gaps') or content.run['completion_assessment'].get('assertion_link_gaps')) and content.run.get('status') == 'completed':
+            content.run['status'] = 'partial'
+        if content.run['scope_assessment']['attempted']:
+            warning = ('Source selection is partial or unknown; absence from unseen material is not established. '
+                       'Review the selected ranges and obtain relevant additional material.')
+            if content.run['scope_assessment']['scope'] != 'complete_input_selected':
+                if warning not in content.limitations and len(content.limitations) < 500:
+                    content.limitations.append(warning)
         content.run['research_gaps'] = research_gaps(
             claims=content.claims, calculations=content.calculations, sources=content.sources,
             calculation_differences=content.calculation_differences,
-            amount_differences=content.amount_differences, run=content.run)
+            amount_differences=content.amount_differences, run=content.run, facts=content.facts)
         content.run['stage_summary'] = summarize_research_stages(content.run)
         updated.versions.append(ResearchVersion(version_id=f"version_{uuid4().hex}",
             parent_version_id=request.parent_version_id, created_at=now,

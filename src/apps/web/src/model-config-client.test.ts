@@ -28,6 +28,7 @@ const personalConfig = {
   schema_version: "v1" as const,
   mode: "personal" as const,
   configured: true,
+  protocol: "openai_chat_completions" as const,
   base_url: "https://models.example.test/v1",
   model: "test-model",
   key_hint: "••••1234",
@@ -60,6 +61,12 @@ describe("model configuration response parser", () => {
   it("accepts complete v1 contracts and rejects incomplete personal responses", () => {
     expect(parseModelConfig({ ...platformConfig, updated_at: null })).toEqual(platformConfig);
     expect(parseModelConfig(personalConfig)).toEqual(personalConfig);
+    const { protocol: _protocol, ...legacy } = personalConfig;
+    expect(parseModelConfig(legacy)).toEqual(personalConfig);
+    expect(parseModelConfig({ ...personalConfig, protocol: "anthropic_messages" }).protocol).toBe("anthropic_messages");
+    expect(() => parseModelConfig({ ...personalConfig, protocol: "unknown" })).toThrow();
+    expect(() => parseModelConfig({ ...platformConfig, protocol: "anthropic_messages" })).toThrow();
+    expect(parseModelConfig({ ...platformConfig, protocol: null })).toEqual(platformConfig);
     expect(() => parseModelConfig({ ...personalConfig, base_url: null, model: null, key_hint: null, updated_at: null })).toThrow("personal model");
     expect(() => parseModelConfig({ ...platformConfig, base_url: "https://models.example.test/v1" })).toThrow("platform model");
   });
@@ -113,6 +120,20 @@ describe("model configuration URL and API client", () => {
       expect(JSON.parse(String(requests[1]?.init.body))).toEqual({ mode: "personal", base_url: "https://models.example.test/v1", model: "test-model", api_key: replacementKey });
       expect(new Headers(requests[3]?.init.headers).get("Content-Type")).toBe("application/json");
       expect(requests[3]?.init.body).toBe("{}");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("sends a validated personal protocol and rejects it for platform mode", async () => {
+    const originalFetch = globalThis.fetch;
+    const mock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ...personalConfig, protocol: "anthropic_messages" }), { status: 200 }));
+    globalThis.fetch = mock as typeof fetch;
+    try {
+      await saveModelConfig("https://app.foresightnine.test", session, { mode: "personal", protocol: "anthropic_messages" });
+      expect(JSON.parse(String(mock.mock.calls[0]?.[1]?.body)).protocol).toBe("anthropic_messages");
+      await expect(saveModelConfig("https://app.foresightnine.test", session, { mode: "platform", protocol: "anthropic_messages" })).rejects.toThrow();
+      expect(mock).toHaveBeenCalledOnce();
     } finally {
       globalThis.fetch = originalFetch;
     }

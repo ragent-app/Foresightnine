@@ -15,18 +15,21 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
-from itertools import islice, product
+from itertools import combinations, islice, product, zip_longest
 from typing import Any, Callable, Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .research_sources import ResearchSource, partial_ascii_token, pdf_text_spacing_suspect
-from .research_calculations import CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_calculations import derive_direction_proof, verified_direction_proof, CalculationError, CalculationRequest, NumericFact, calculate, calculation_input_status, direction_confirmation_fingerprint, is_percent_unit, monetary_currency_not_in_quotation, monetary_currency_unspecified, monetary_scale_not_in_quotation, table_currency_quote_missing, currency_value_conflict, quotation_is_inside_table_row, quotation_is_table_row, quotation_is_pdf_layout_row, table_period_conflict
+from .research_planning import RequirementDimensions
 from .research_table_provenance import annual_table_value_alignment, bounded_table_trace
 from .research_xbrl import match_inline_fact
-from .research_retrieval import build_passage_index
+from .research_retrieval import build_passage_index, tokenize_query
 from .research_structured_data import extract_structured_observations
 from .research_source_policy import MAX_SOURCES, prepare_sources, source_eligibility
+from .research_output_contract import ANALYSIS_CONTRACT, DraftContractError, convert_draft
 
 
 SYSTEM_PROMPT = (
@@ -37,9 +40,14 @@ SYSTEM_PROMPT = (
     "need cited opposing evidence; otherwise record the gap. Never treat a gap "
     "as proof. Return only JSON matching the requested structure."
 )
-MAX_SOURCE_CHARS = 8_000
-MAX_TOTAL_CHARS = 10_000
-SELECTION_METHOD = "multilingual_lexical_with_legacy_fallback_v53"
+MAX_SELECTION_CANDIDATES = 512
+MAX_SELECTION_GROUPS = 32
+MAX_REPLACEMENT_CANDIDATES = 64
+MAX_REPLACEMENT_ROUNDS = 4
+MAX_REPLACEMENT_GROUPS = 3
+MAX_REMOVAL_SHORTLIST = 8
+MAX_REMOVAL_CONSIDERED = 32
+SELECTION_METHOD = "global_idf_evidence_v60_incremental_gap"
 MODEL_LIMITATION_PREFIX = "Model-reported limitation (not independently verified): "
 
 _QUERY_VARIANTS = str.maketrans({"聯": "联", "標": "标", "區": "区", "間": "间", "決": "决", "議": "议",
@@ -63,10 +71,20 @@ class Citation(BaseModel):
     source_page: int | None = Field(default=None, ge=1, le=100000, strict=True)
 
 
+class ClaimAssertion(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    text: str = Field(min_length=1, max_length=1000)
+    citation_indexes: list[Any] = Field(default_factory=list, max_length=10)
+    calculation_indexes: list[Any] = Field(default_factory=list, max_length=20)
+
+
 class Claim(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     text: str = Field(min_length=1, max_length=3000)
     citations: list[Citation] = Field(default_factory=list, max_length=10)
+    scope_declaration: Literal['absence', 'other', 'unknown'] = 'unknown'
+    calculation_indexes: list[Any] = Field(default_factory=list, max_length=20)
+    assertions: list[ClaimAssertion] = Field(default_factory=list, max_length=20)
 
 
 class Counterargument(Claim):
@@ -124,6 +142,34 @@ class ResearchQuestion(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     question: str = Field(min_length=1, max_length=500)
     claim_indexes: list[Any] = Field(default_factory=list, max_length=20)
+    dimensions: RequirementDimensions | None = None
+    calculation_requested: bool | None = Field(default=None, strict=True)
+    retrieval_hints: list[str] = Field(default_factory=list, max_length=6)
+
+
+class ModelEvidenceNeed(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    question_index: int | None = Field(default=None, ge=0, le=9, strict=True)
+    requested_fact: str = Field(min_length=1, max_length=300)
+    reason: str = Field(min_length=1, max_length=300)
+    source_kind: str = Field(min_length=1, max_length=160)
+    action: str = Field(min_length=1, max_length=160)
+
+
+class ModelAbsenceObservation(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    text: str = Field(min_length=1, max_length=500)
+    source_ids: list[str] = Field(default_factory=list, max_length=20)
+    scope: Literal['selected_excerpt', 'full_source', 'unknown'] = 'unknown'
+    claim_indexes: list[Any] = Field(default_factory=list, max_length=20)
+
+
+class ModelRequirementLink(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    question_index: int | None = Field(default=None, ge=0, le=9, strict=True)
+    fact_ids: list[str] = Field(default_factory=list, max_length=30)
+    calculation_indexes: list[Any] = Field(default_factory=list, max_length=20)
+    source_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
 class AnalysisOutput(BaseModel):
@@ -134,6 +180,9 @@ class AnalysisOutput(BaseModel):
     limitations: list[str] = Field(default_factory=list, max_length=30)
     facts: list[ModelFact] = Field(default_factory=list, max_length=100)
     calculations: list[CalculationPlan] = Field(default_factory=list, max_length=50)
+    evidence_needs: list[ModelEvidenceNeed] = Field(default_factory=list, max_length=20)
+    absence_observations: list[ModelAbsenceObservation] = Field(default_factory=list, max_length=20)
+    requirement_links: list[ModelRequirementLink] = Field(default_factory=list, max_length=20)
 
 
 @dataclass(frozen=True)
@@ -151,10 +200,24 @@ class AnalysisResult:
     segments: list[dict[str, Any]] = field(default_factory=list)
     research_questions: list[dict[str, Any]] = field(default_factory=list)
     available_fact_ids: list[str] = field(default_factory=list)
+    evidence_needs: list[dict[str, Any]] = field(default_factory=list)
+    absence_observations: list[dict[str, Any]] = field(default_factory=list)
+    requirement_links: list[dict[str, Any]] = field(default_factory=list)
+    discovered_requirements: list[dict[str, Any]] = field(default_factory=list)
+    selection_diagnostics: list[dict[str, Any]] = field(default_factory=list)
+    pdf_structure_diagnostics: list[dict[str, Any]] = field(default_factory=list)
+    structured_output_status: Literal['not_validated', 'complete', 'partial', 'failed'] = 'not_validated'
+    structured_output_errors: list[str] = field(default_factory=list)
+    structured_output_ids: dict[str, Any] = field(default_factory=dict)
+    output_contract_version: str | None = None
+    analyzed_source_hashes: dict[str, str] = field(default_factory=dict)
+    work_page: dict[str, Any] = field(default_factory=dict)
+    unprocessed_ranges: list[dict[str, Any]] = field(default_factory=list)
+    repair_private: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
 class InvalidAnalysis(ValueError):
-    pass
+    diagnostic: dict[str, Any] | None = None
 
 
 class AnalysisInterrupted(Exception):
@@ -1673,12 +1736,20 @@ def _select_windows(text: str, question: str, length: int, count: int,
 
 def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None,
             generate: Callable[[str], tuple[dict[str, Any], int | None]], *,
-            max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
+            max_prompt_chars: int | None = None, should_stop: Callable[[], bool] | None = None,
             on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
             focus: tuple[str, int, int] | None = None, scope: str = "",
             counterargument_reference_count: int | None = None,
             planning_steps: list[str] | None = None,
-            require_counterarguments: bool = True) -> AnalysisResult:
+            require_counterarguments: bool = True, retrieval_hints: tuple[str, ...] = (),
+            planning_requirements: tuple[dict, ...] = (), prior_segments: list[dict] | None = None,
+            context_refs: list[dict] | None = None, incremental_focus: tuple[str, ...] = (),
+            output_contract=ANALYSIS_CONTRACT, legacy_payload: bool = False,
+            prompt_fits: Callable[[str], bool | None] | None = None,
+            candidate_cursor: int = 0, expected_page_binding: str | None = None,
+            capacity_key: str | None = None,
+            on_page_prepare: Callable[[dict, list], None] | None = None,
+            allowed_units: list[dict] | None = None) -> AnalysisResult:
     # Scope belongs to the user's untrusted request. Including it in the
     # question also lets source selection account for the intended coverage.
     if scope:
@@ -1695,7 +1766,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     used_refs = set(original_ids)
     prompt_refs: dict[str, str] = {}
     for source_index, source in enumerate(eligible, 1):
-        if len(eligible) != 1 or not re.fullmatch(r"source_[0-9a-f]{32}", source.source_id):
+        if not re.fullmatch(r"source_[0-9a-f]{32}", source.source_id):
             prompt_refs[source.source_id] = source.source_id
             continue
         ref = f"ref-{source_index}"
@@ -1704,29 +1775,29 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         used_refs.add(ref)
         prompt_refs[source.source_id] = ref
     data = {"question": question, "sources": [],
-            "output_schema": {"research_questions": [{"question": "subquestion", "claim_indexes": [0]}],
-                "claims": [{"text": "claim", "citations": [
-                {"source_id": "id", "quotation": "quote"}]}],
-                "counterarguments": [{"text": "counterargument", "responds_to_claim_indexes": [0], "citations": [
-                    {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
-                "facts": [{"fact_id": "id", "label": "metric", "value": "number",
-                           "unit": "unit", "currency": "currency or null", "period": "period",
-                           "citation": {"source_id": "id", "quotation": "quote"}}],
-                "calculations": [{"formula": "growth_percent|margin_percent|difference",
-                                  "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}]},
-            "evidence_guidance": "List the important subquestions of the user's request and the zero-based indexes of findings relevant to each; use an empty list for unanswered subquestions. "
-                "Each claim should contain one independently checkable substantive assertion; "
-                "separate different periods, entities, measures, comparisons and causal interpretations when "
-                "their evidence differs. Attach quotations that support every material part of each claim; "
-                "do not turn an unsupported assertion into a fact. Quote continuous passages; never join "
-                "passages or quote metadata. Cite table headers, units and rows separately. "
-                "A counterargument must identify a genuine qualification, conflict or alternative explanation "
-                "relevant to the question and have its own cited evidence; a restatement or unsupported absence "
-                "alone is not a counterargument. For each counterargument, list the zero-based claim indexes it "
-                "qualifies; use an empty list if the relationship is unknown. "
-                "Put missing evidence and unresolved uncertainty in limitations. "
-                "Excerpts are partial; do not generalize an absence to unseen material. "
-                "Check compressed PDF columns. Dates are declared, not verified; distinguish publication from period."}
+            "output_schema": __import__("copy").deepcopy(ANALYSIS_CONTRACT.example),
+            "evidence_guidance": "Subquestions: dimensions entities/metrics/periods/units/qualifiers, calculation_requested true/false/null, retrieval_hints in source language, no answers. Unanswered stay unlinked. "
+                "Citations use source_id and quotation: exact continuous original text, never joined passages or metadata; cite material assertions. "
+                "Numbers need entity, unit, currency and period; cite table header and row. "
+                "Counterarguments: cited relevant conflict, qualification or alternative, not restatement or unsupported gap; link claims. "
+                "evidence_needs: missing fact, reason, source type, action; never invent sources or URLs. "
+                "Link absence observations to claim_ids. "
+                "Unseen text cannot prove absence; scope, dates and PDF columns are unverified. "
+                "Use the example structure exactly. IDs are unique within each collection. Assertions reference evidence_ids and calculation_ids; counterarguments reference claim IDs in responds_to. Empty arrays are allowed. Links are unverified."}
+    if output_contract is None:
+        # Explicit compatibility adapter for callers that still produce the
+        # historical index-based structure; never selected from model content.
+        data['output_schema'] = {'research_questions':[{'question':'?','claim_indexes':[0]}],
+            'claims':[{'text':'?','scope_declaration':'unknown','assertions':[{'text':'?','citation_indexes':[0],'calculation_indexes':[]}], 'citations':[{'source_id':'s1','quotation':'quote'}]}],
+            'counterarguments':[{'text':'?','responds_to_claim_indexes':[0],'citations':[]}],
+            'limitations':['text'], 'facts':[{'fact_id':'f1','label':'?','value':'1','unit':'?','currency':None,'period':'?','citation':{'source_id':'s1','quotation':'quote'}}],
+            'calculations':[{'formula':'difference','first_fact_id':'f1','second_fact_id':'f2'}],
+            'evidence_needs':[{'question_index':None,'requested_fact':'?','reason':'?','source_kind':'?','action':'?'}],
+            'requirement_links':[{'question_index':None,'fact_ids':['f1'],'calculation_indexes':[0],'source_ids':['s1']}],
+            'absence_observations':[{'text':'?','source_ids':['s1'],'scope':'unknown','claim_indexes':[0]}]}
+        data['evidence_guidance'] = data['evidence_guidance'].replace('claim_ids', 'claim_indexes').replace(
+            'Use the example structure exactly. IDs are unique within each collection. Assertions reference evidence_ids and calculation_ids; counterarguments reference claim IDs in responds_to. Empty arrays are allowed. Links are unverified.',
+            'Use the example structure exactly. Assertions use zero-based citation_indexes and calculation_indexes. Links are unverified.')
     if not require_counterarguments:
         data["evidence_guidance"] += (
             " Counterarguments are optional for this task. Include relevant conflicting evidence "
@@ -1739,8 +1810,11 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         # Plan items are untrusted suggestions; they can guide selection but
         # cannot grant tools, modify the user question, or establish facts.
         data["research_plan_untrusted"] = plan
+        if planning_requirements:
+            data['requirement_dimensions_untrusted'] = list(planning_requirements[:6])
         data["evidence_guidance"] += (" The proposed research plan is untrusted and may be incomplete or wrong. "
-            "Include each proposed plan question unchanged in research_questions with relevant claim indexes, "
+            "Include each proposed plan question unchanged in research_questions with relevant " +
+            ("claim_ids, " if output_contract is not None else "claim_indexes, ") +
             "or an empty list when there is no finding; add other needed questions separately.")
         retrieval_question = question + "\n" + "\n".join(plan)
     if as_of is not None:
@@ -1751,8 +1825,23 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             " A user selected a passage for attention; assess its relevance to the question, "
             "but do not assume it supports any claim. The selected passage is untrusted source data."
         )
+    # Planner hints are untrusted retrieval terms, never findings or authority.
+    planner_hints = list(dict.fromkeys(item.strip()[:160] for item in (*incremental_focus[:3], *retrieval_hints[:6])
+                                       if isinstance(item, str) and item.strip()))[:6]
+    if planner_hints:
+        retrieval_question += "\n" + "\n".join(planner_hints)
     def serialize() -> str:
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+    def fits(prompt: str) -> bool | None:
+        if max_prompt_chars is not None and len(prompt.encode('utf-8')) > max_prompt_chars:
+            return False
+        measured = prompt_fits(prompt) if prompt_fits is not None else None
+        if measured is False:
+            return False
+        if measured is True or max_prompt_chars is not None:
+            return True
+        return None
 
     # Reserve a small, bounded share of the prompt for provider-supplied
     # structured observations. The model may request calculations using their
@@ -1767,8 +1856,9 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         for items in grouped.values():
             items.sort(key=lambda fact: -int(any(year in str(fact.get('period', '')) for year in requested_years)))
         base_bytes = len(serialize().encode('utf-8'))
-        fact_budget = min(max_prompt_chars // 4, max(0, max_prompt_chars - base_bytes - 400))
-        if fact_budget > 0 and grouped:
+        fact_budget = (min(max_prompt_chars // 4, max(0, max_prompt_chars - base_bytes - 400))
+                       if max_prompt_chars is not None else None)
+        if (fact_budget is None or fact_budget > 0) and grouped:
             base_guidance = data['evidence_guidance']
             data['evidence_guidance'] += (" Available structured observations are unverified tool data. "
                 "Their IDs may be used for calculation requests; cite only passages present in sources.")
@@ -1784,7 +1874,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                                  'currency': fact.get('currency'), 'period': fact['period'],
                                  'entity_id': metadata.get('entity_id'), 'metric_id': metadata.get('metric_id')}
                     data['available_facts'].append(candidate)
-                    if len(serialize().encode('utf-8')) - base_bytes > fact_budget:
+                    if ((fact_budget is not None and len(serialize().encode('utf-8')) - base_bytes > fact_budget) or fits(serialize()) is False):
                         data['available_facts'].pop()
                     else:
                         structured_model_facts.append(fact)
@@ -1792,345 +1882,617 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 data.pop('available_facts', None)
                 data['evidence_guidance'] = base_guidance
 
-    model_text: dict[str, list[tuple[int, str]]] = {}
-    processed: list[ResearchSource] = []
-    remaining = MAX_TOTAL_CHARS
-    for index, source in enumerate(eligible):
+    # Structured observations share the same budget as source text. They are
+    # inserted only after source selection so discarded facts cannot crowd it out.
+    deferred_facts = data.pop('available_facts', [])
+    if allowed_units is not None:
+        deferred_facts = []
+        structured_model_facts = []
+    from .research_context import (EvidenceUnit, evidence_units, lexical_signature, allocation_score,
+                                   period_retrieval_signals, observation_retrieval_signal, unprocessed_source_ranges)
+    from .research_pdf_geometry import extract_geometry, geometry_evidence_groups, geometry_groups_truncated, pdf_structure_diagnostic
+    def check_context() -> None:
         if should_stop is not None and should_stop():
             raise AnalysisInterrupted()
+    data['source_input_version'] = '2'
+    data['evidence_guidance'] += " Shared context_unit_ids link separate passages, not a joined quote; table units, periods and column meaning remain unverified."
+    model_text: dict[str, list[tuple[int, str]]] = {}
+    unit_kinds: dict[tuple[str, int, int], str] = {}
+    unit_groups: dict[tuple[str, int, int], list[str]] = {}
+    unit_facets: dict[tuple[str, int, int], set[int]] = {}
+    processed: list[ResearchSource] = []
+    candidates: dict[str, list[EvidenceUnit]] = {}
+    geometry_metadata: dict[tuple[str, int, int], dict[str, Any]] = {}
+    source_weights: dict[str, dict[str, float]] = {}
+    selection_diagnostics: list[dict[str, Any]] = []
+    pdf_structure_diagnostics: list[dict[str, Any]] = []
+    rejection_reason = 'unknown'
+    # Plan questions and source-language hints get alternating bounded slots.
+    from .research_requirements import requirement_retrieval_facets
+    requirement_facets = requirement_retrieval_facets(planning_requirements)
+    task_facets = requirement_facets or plan
+    search_facets = list(dict.fromkeys(item for pair in zip_longest(task_facets[:12], planner_hints[:6])
+                                       for item in pair if item))[:12]
+    for source in eligible:
+        if should_stop is not None and should_stop():
+            raise AnalysisInterrupted()
+        if source.retrieval_method == 'user_pdf':
+            limitations.append(f"Source {source.source_id}: PDF extraction reading order is not independently verified against the original.")
         if pdf_text_spacing_suspect(source):
             limitations.append(f"Source {source.source_id}: PDF text may have missing word spacing; check the original and consider another extraction order.")
-        # Share the source-character allowance so an early long filing does
-        # not crowd every later comparison source out of the prompt.
-        share = remaining // (len(eligible) - index)
-        if source.retrieval_method == "user_pdf":
-            horizontal_text, horizontal_offset = _compact_pdf_with_offsets(source.text, should_stop)
-        else:
-            horizontal_text, horizontal_offset = source.text, lambda value: value
-        selection_text, blank_offset = _compact_blank_lines_with_offsets(horizontal_text, should_stop)
-        def original_offset(position: int) -> int:
-            return horizontal_offset(blank_offset(position))
-        max_size = min(len(selection_text), MAX_SOURCE_CHARS, share)
-        # A general lexical index supplements domain-specific structural
-        # extraction. It never asserts semantic relevance or source support.
-        general_index = build_passage_index(selection_text, question if plan else retrieval_question, should_stop,
-                                            facets=plan if plan else None)
+        index = build_passage_index(source.text, retrieval_question, should_stop, facets=search_facets if search_facets else None)
         if should_stop is not None and should_stop():
             raise AnalysisInterrupted()
-        if general_index is not None and general_index.truncated:
+        if index is not None and index.truncated:
             limitations.append(f"Source {source.source_id}: the general retrieval index did not cover the full document; unseen text was not examined.")
-        # Character quotas alone do not partition the provider's byte budget:
-        # Chinese text and JSON escaping can consume several bytes per character.
-        # Reserve an equal share of the remaining serialized bytes for each
-        # remaining source; unused shares roll forward to later sources.
-        current_bytes = len(serialize().encode("utf-8"))
-        available_bytes = max(0, max_prompt_chars - current_bytes)
-        # For a two-source revision, reserve somewhat more room for the later
-        # declared release, which may contain both the result and its drivers.
-        # Dates are unverified retrieval hints, not proof of chronology.
-        revision_compare = (len(eligible) == 2 and index == 0 and source.published_at is not None and
-                            eligible[1].published_at is not None and source.published_at < eligible[1].published_at and
-                            any(term in _query_intent(retrieval_question) for term in ("修订", "revision", "revised")) and
-                            any(term in _query_intent(retrieval_question) for term in ("原因", "因素", "抵消", "drivers", "factors", "offset")))
-        source_budget_limit = current_bytes + (available_bytes * 37 // 100 if revision_compare else
-                                               available_bytes // (len(eligible) - index))
-        intent = _query_intent(retrieval_question)
-        # Reserve at least two useful windows at smaller budgets. With more
-        # room, a multi-part question can instead sample three places. Keep
-        # two for explicit counterpoint requests, whose separate balancing
-        # logic currently expects two windows. This is a retrieval heuristic,
-        # not proof that any requested facet was covered.
-        multi_part = bool(re.search(r"\b(?:and|including|compare|both)\b|,|以及|同时|同時|分别|分別", intent))
-        asks_counterpoint = bool(re.search(r"\b(?:counterarguments?|counterpoints?|counterevidence|risks?)\b|反方|反证|反證|风险|風險", intent))
-        generic_window_count = 3 if (source_budget_limit - current_bytes >= 2600 and max_size >= 1200 and
-                                     (bool(plan) or multi_part and not asks_counterpoint)) else 2
-        early_total = _early_total_summary(selection_text, retrieval_question, should_stop)
-        structured_parts = (_structured_observation_windows(selection_text, retrieval_question, max_size, should_stop)
-                            if source.retrieval_method != "user_pdf" else None)
-        revision_parts = _revision_summary_windows(selection_text, retrieval_question, max_size, should_stop)
-        revision_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
-                              for start, part in revision_parts] if revision_parts else None)
-        policy_parts = _policy_rate_purchase_risk_windows(selection_text, retrieval_question, max_size, should_stop)
-        policy_original = ([(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
-                            for start, part in policy_parts] if policy_parts else None)
-        def portions(size: int, split: bool) -> list[tuple[int, str]]:
-            generic_selection = False
-            windows = (structured_parts if structured_parts and
-                       sum(len(part) for _, part in structured_parts) <= size else None)
-            if windows is None and split and size >= generic_window_count and general_index is not None:
-                windows = general_index.select(size, generic_window_count) or None
-                generic_selection = windows is not None
-            if windows is None:
-                if split and size >= generic_window_count:
-                    windows = _policy_vote_windows(selection_text, retrieval_question, size, should_stop)
-                    if windows is None:
-                        windows = _policy_rate_purchase_risk_windows(selection_text, retrieval_question, size, should_stop)
-                    if windows is None:
-                        windows = _asset_purchase_window(selection_text, retrieval_question, size, should_stop)
-                    if windows is None:
-                        windows = _financial_table_and_context_windows(selection_text, retrieval_question, size, should_stop)
-                    if windows is None:
-                        windows = _financial_table_windows(selection_text, retrieval_question, size, should_stop)
-                    if windows is None:
-                        windows = _comparison_windows(selection_text, retrieval_question, size, should_stop)
-                    if windows is None:
-                        windows = (general_index.select(size, generic_window_count) if general_index is not None else [])
-                        if not windows:
-                            windows = _select_windows(selection_text, retrieval_question, size // generic_window_count, generic_window_count, should_stop, source_title=source.title)
-                        if generic_window_count == 2:
-                            windows = _replace_empty_table_with_counterpoint(selection_text, retrieval_question, windows, should_stop)
-                        windows = sorted(windows, key=lambda item: item[0])
-                        generic_selection = True
-                        if not plan and early_total and size - len(early_total[1]) >= 600 and not any(
-                                early_total[0] < start + len(part) and start < early_total[0] + len(early_total[1])
-                                for start, part in windows):
-                            remainder = _select_windows(selection_text, retrieval_question, (size - len(early_total[1])) // generic_window_count,
-                                                        generic_window_count, should_stop, source_title=source.title)
-                            if remainder and not any(early_total[0] < start + len(part) and start < early_total[0] + len(early_total[1])
-                                                     for start, part in remainder):
-                                windows = sorted([early_total, *remainder], key=lambda item: item[0])
-                else:
-                    windows = general_index.select(size, 1) if general_index is not None else []
-                    if windows:
-                        generic_selection = True
-                        start, passage = windows[0]
-                        # The index ranks bounded chunks; use the remaining
-                        # single-window allowance for surrounding context.
-                        start = max(0, min(start - max(0, size - len(passage)) // 3,
-                                           max(0, len(selection_text) - size)))
-                        windows = [(start, selection_text[start:start + size])]
-                    else:
-                        windows = [_select_window(selection_text, retrieval_question, size, should_stop, source_title=source.title)]
-            windows = [_trim_partial_ascii_words(selection_text, start, part) for start, part in windows]
-            if generic_selection:
-                restored = _restore_numeric_prefix(selection_text, windows)
-                if sum(len(part) for _, part in restored) <= max_size:
-                    windows = restored
-                windows = _preserve_numeric_units(selection_text, windows, retrieval_question)
-            return [(original_offset(start), source.text[original_offset(start):original_offset(start + len(part))])
-                    for start, part in windows]
-
-        def source_payload(parts: list[tuple[int, str]], *, compact_metadata: bool = False,
-                           short_refs: bool = False) -> list[dict[str, Any]]:
-            coverage = "complete" if len(parts) == 1 and parts[0][0] == 0 and len(parts[0][1]) == len(source.text) else "partial"
-            structured = (structured_parts is not None and parts == structured_parts or
-                          revision_original is not None and parts == revision_original or
-                          policy_original is not None and parts == policy_original)
-            return [{"source_id": prompt_refs[source.source_id] if short_refs else source.source_id,
-                     **({"title": source.title} if (not structured and not compact_metadata) or position == 0 else {}),
-                     "source_coverage": coverage,
-                     **({"user_selected_passage": _prompt_source_text(source.text[focus[1]:focus[2]], source.retrieval_method == "user_pdf")}
-                        if focus is not None and source.source_id == focus[0] and
-                        start <= focus[1] and start + len(passage) >= focus[2] else {}),
-                     **({"declared_published_at": source.published_at.isoformat()} if source.published_at and (not structured or position == 0) else {}),
-                     **({"declared_revised_at": source.revised_at.isoformat()} if source.revised_at and (not structured or position == 0) else {}),
-                     **({"declared_event_at": source.event_at.isoformat()} if source.event_at and (not structured or position == 0) else {}),
-                     "text": _prompt_source_text(passage, source.retrieval_method == "user_pdf")}
-                    for position, (start, passage) in enumerate(parts)]
-
-        def fits(candidate: list[tuple[int, str]], *, compact_metadata: bool = False, short_refs: bool = False) -> bool:
-            data["sources"].extend(source_payload(candidate, compact_metadata=compact_metadata, short_refs=short_refs))
-            within_budget = len(serialize().encode("utf-8")) <= source_budget_limit
-            del data["sources"][-len(candidate):]
-            return within_budget
-
-        # Prefer the entire document when it fits. Otherwise choose the
-        # number of windows before searching the byte budget, avoiding a
-        # discontinuity when the available size happens to be below 1000.
+        source_weights[source.source_id] = dict(index.term_weights) if index else {}
+        if index is None or index.truncated:
+            # A bounded prefix index cannot prove that later units have no
+            # lexical signal. Score each work page against the query itself.
+            for term in tokenize_query(retrieval_question):
+                source_weights[source.source_id].setdefault(term, 1.0)
+        units = evidence_units(source.text, check_context, layout=source.retrieval_method == "user_pdf")
+        geometry = None
+        if source.retrieval_method == 'user_pdf':
+            geometry = extract_geometry(source, should_stop)
+            check_context()
+            if geometry is None:
+                pdf_structure_diagnostics.append({**pdf_structure_diagnostic(source.source_id, None, []), 'stage': 'analysis'})
+                limitations.append(f"Source {source.source_id}: PDF geometry could not be aligned; reading order remains unknown.")
+            else:
+                if geometry_groups_truncated(geometry):
+                    limitations.append(f"Source {source.source_id}: PDF geometry grouping reached its limit; unexamined structure is unknown.")
+                # Geometry groups preserve separate original ranges; shared
+                # table headers and rows are never reconstructed into a quote.
+                geometry_groups = geometry_evidence_groups(source.text, geometry)
+                pdf_structure_diagnostics.append({**pdf_structure_diagnostic(source.source_id, geometry, geometry_groups), 'stage': 'analysis'})
+                for group in geometry_groups:
+                    parts = tuple((start, source.text[start:end]) for start, end in group.parts)
+                    if not parts or any(not 0 <= start < end <= len(source.text) for start, end in group.parts):
+                        continue
+                    units.append(EvidenceUnit('table' if group.kind == 'table' else 'pdf_geometry_sentence', parts))
+                    for start, end in group.parts:
+                        geometry_metadata[(source.source_id, start, end)] = {
+                            'method': geometry.method, 'pdf_sha256': geometry.pdf_sha256,
+                            'text_sha256': geometry.text_sha256, 'page': group.page,
+                            'bounds': list(group.bounds), 'alignment': 'exact_unique',
+                            **({'table_dimensions_status': 'not_independently_verified'} if group.kind == 'table' else {}),
+                            'reading_order': 'not_independently_verified'}
+                if geometry.unmatched_lines:
+                    limitations.append(f"Source {source.source_id}: some PDF geometry could not be uniquely aligned to stored text.")
+        table_starts = {start for unit in units if unit.kind == 'table' for start, _ in unit.parts}
+        geometry_ranges = {(line.start, line.end) for line in geometry.lines} if geometry else set()
+        def uncertain_layout(offset: int, line: str) -> bool:
+            if source.retrieval_method != 'user_pdf' or not re.search(r'\S(?: {3,}|\t+)\S', line):
+                return False
+            stripped = line.strip()
+            start = offset + len(line) - len(line.lstrip())
+            # No large word gap was detected; local layout and visual reading
+            # order remain independently unverified for all PDFs.
+            return (start, start + len(stripped)) not in geometry_ranges
+        offset = 0
+        unrecognized_table = False
+        for line in source.text.splitlines(keepends=True):
+            pipe_row = line.count('|') >= 2 and not re.fullmatch(r'[\s|:\-]+', line)
+            layout_row = uncertain_layout(offset, line)
+            if (pipe_row or layout_row) and offset not in table_starts:
+                unrecognized_table = True
+            offset += len(line)
+        # Full source is preferred where it fits; otherwise only complete
+        # units are considered and unrecognised tables remain unexamined.
+        full = [EvidenceUnit('document', ((0, source.text),))] if source.text and not unrecognized_table and fits(serialize()) is True else []
+        ranked = units
+        if source.retrieval_method == 'user_pdf':
+            def unresolved_layout(unit: EvidenceUnit) -> bool:
+                if unit.kind in {'table', 'pdf_geometry_sentence'}:
+                    return False
+                for start, part in unit.parts:
+                    offset = start
+                    for line in part.splitlines(keepends=True):
+                        if uncertain_layout(offset, line):
+                            return True
+                        offset += len(line)
+                return False
+            if any(unresolved_layout(unit) for unit in ranked):
+                unrecognized_table = True
+            ranked = [unit for unit in ranked if not unresolved_layout(unit)]
+        if unrecognized_table:
+            full = []
         if focus is not None and source.source_id == focus[0]:
-            start, end = focus[1], focus[2]
-            def focused(radius: int) -> list[tuple[int, str]]:
-                left = max(0, start - radius)
-                right = min(len(source.text), end + radius)
-                return [(left, source.text[left:right])]
-            def focused_fits(radius: int) -> bool:
-                passage = focused(radius)[0][1]
-                size = len(_prompt_source_text(passage, source.retrieval_method == "user_pdf"))
-                return size <= max_size and fits(focused(radius))
-            if not focused_fits(0):
-                return AnalysisResult([], [], limitations + ["The requested focus exceeds the input budget; no model call was made."], [], None)
-            lo, hi = 0, 300
-            while lo < hi:
-                middle = (lo + hi + 1) // 2
-                if focused_fits(middle):
-                    lo = middle
-                else:
-                    hi = middle - 1
-            selected = focused(lo)
-        elif max_size == len(selection_text) and fits([(0, source.text)]):
-            selected = [(0, source.text)]
-        elif not plan and revision_original and fits(revision_original):
-            selected = revision_original
-        elif not plan and policy_original and fits(policy_original):
-            selected = policy_original
-        else:
-            split = len(selection_text) > 2000
-            def budget_for(split_windows: bool) -> int:
-                lo, hi = 0, max_size
-                while lo < hi:
-                    middle = (lo + hi + 1) // 2
-                    if fits(portions(middle, split_windows)):
-                        lo = middle
-                    else:
-                        hi = middle - 1
-                return lo
-            lo = budget_for(split)
-            # Tiny fragments rarely provide enough context. Structured table
-            # or vote retrieval may intentionally use unequal spans, however:
-            # a short total row must not discard its longer identifying header.
-            sample = selection_text[:4096]
-            # CJK text consumes more serialized bytes per character; retain
-            # two useful short windows when a 400-character threshold would
-            # otherwise collapse them solely due to UTF-8 encoding.
-            split_minimum = max(160, 400 * len(sample) // max(1, len(sample.encode("utf-8"))))
-            if split and lo < split_minimum:
-                split = False
-                lo = budget_for(False)
-            selected = portions(lo, split) if lo else []
-        # The same source metadata is redundant on later excerpts. Keep the
-        # baseline selected ranges intact, then spend any saved bytes only on
-        # adjacent original context, so no previously selected text is lost.
-        compact_metadata = len(selected) > 1
-        ordered_disjoint = all(selected[i][0] + len(selected[i][1]) <= selected[i + 1][0]
-                               for i in range(len(selected) - 1))
-        if compact_metadata and ordered_disjoint and fits(selected, compact_metadata=True):
-            def expand_selected(selected: list[tuple[int, str]], *, short_refs: bool) -> list[tuple[int, str]]:
-                def can_expand(parts: list[tuple[int, str]]) -> bool:
-                    normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in parts)
-                    return normalized <= max_size and fits(parts, compact_metadata=True, short_refs=short_refs)
+            ranked = [unit for unit in ranked if any(start <= focus[1] and start + len(part) >= focus[2]
+                                                       for start, part in unit.parts)]
+        structured = []
+        if source.retrieval_method != 'user_pdf':
+            structured_parts = _structured_observation_windows(source.text, retrieval_question, len(source.text), should_stop)
+            if structured_parts:
+                structured = [EvidenceUnit('structured', tuple(structured_parts))]
+        # Identical complete groups have identical retrieval signals; keep the
+        # first original occurrence before applying the global candidate cap.
+        unique_units = []
+        seen_text: set[tuple[tuple[int, str], ...]] = set()
+        for unit in [*full, *structured, *ranked]:
+            text_key = unit.parts
+            if text_key not in seen_text:
+                seen_text.add(text_key)
+                unique_units.append(unit)
+        candidates[source.source_id] = unique_units
+        if unrecognized_table:
+            limitations.append(f"Source {source.source_id}: some PDF column or table structure is uncertain; affected excerpts are omitted.")
 
-                # A selected window can begin midway through a sentence and
-                # omit its subject. Restore a nearby sentence opening only
-                # when the entire extra original text fits the same budget.
-                # A line or sentence boundary limits the expansion; charts,
-                # pages and already selected neighboring windows stay intact.
-                for part_index, (start, passage) in enumerate(selected):
-                    if not start or not re.match(r"^\s*[a-z]", passage):
-                        continue
-                    left = max(0, start - 180)
-                    prefix = source.text[left:start]
-                    boundaries = list(re.finditer(r"[.!?。！？](?=\s)|[\n\f]", prefix))
-                    candidate = left + (boundaries[-1].end() if boundaries else 0)
-                    while candidate < start and source.text[candidate].isspace():
-                        candidate += 1
-                    opening = source.text[candidate:start]
-                    if not re.match(r"[A-Z][A-Za-z0-9]", opening) or "\f" in opening:
-                        continue
-                    if part_index and candidate < selected[part_index - 1][0] + len(selected[part_index - 1][1]):
-                        continue
-                    trial = list(selected)
-                    trial[part_index] = (candidate, source.text[candidate:start + len(passage)])
-                    if can_expand(trial):
-                        selected = trial
+    # Eligibility remains a hard boundary; ordering here is stable provenance,
+    # not a claim that any source or requirement is semantically covered.
+    ordered = list(eligible)
+    def payload() -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        for source in ordered:
+            parts = model_text.get(source.source_id, [])
+            if not parts:
+                continue
+            complete = len(parts) == 1 and parts[0] == (0, source.text)
+            item: dict[str, Any] = {'source_id': prompt_refs[source.source_id],
+                                    'source_coverage': 'complete' if complete else 'partial',
+                                    'title': source.title, 'passages': []}
+            for field, value in (('declared_published_at', source.published_at),
+                                 ('declared_revised_at', source.revised_at),
+                                 ('declared_event_at', source.event_at)):
+                if value is not None:
+                    item[field] = value.isoformat()
+            # Only multi-passage units need an explicit association in the
+            # model prompt. Aliases never replace persisted group identities.
+            keys = [(source.source_id, start, start + len(part)) for start, part in parts]
+            counts: dict[str, int] = {}
+            for key in keys:
+                for group in unit_groups.get(key, []):
+                    counts[group] = counts.get(group, 0) + 1
+            shared = {group: f'g{index}' for index, group in enumerate(
+                (group for group, count in counts.items() if count > 1), 1)}
+            for (start, passage), key in zip(parts, keys):
+                excerpt: dict[str, Any] = {'text': _prompt_source_text(passage, source.retrieval_method == 'user_pdf')}
+                groups = [shared[group] for group in unit_groups.get(key, []) if group in shared]
+                if groups:
+                    excerpt['context_unit_ids'] = groups
+                if focus is not None and source.source_id == focus[0] and start <= focus[1] and start + len(passage) >= focus[2]:
+                    excerpt['user_selected_passage'] = _prompt_source_text(source.text[focus[1]:focus[2]], source.retrieval_method == 'user_pdf')
+                item['passages'].append(excerpt)
+            result.append(item)
+        return result
 
-                # A window that starts "of America" can omit "Bank" even
-                # though its boundary is not inside a word. Preserve the
-                # adjacent name component only when spare budget permits.
-                for part_index, (start, passage) in enumerate(selected):
-                    if not start or not re.match(r"\s*(?:of|and)\s+[A-Z][A-Za-z0-9&.'-]{2,}\b", passage):
-                        continue
-                    if not (passage[0].isspace() or source.text[start - 1].isspace()):
-                        continue
-                    left = max(0, start - 120)
-                    prefix = source.text[left:start]
-                    name = re.search(r"\b[A-Z][A-Za-z0-9&.'-]{2,}\s*$", prefix)
-                    if name is None or "\f" in prefix[name.start():]:
-                        continue
-                    new_start = left + name.start()
-                    if part_index and new_start < selected[part_index - 1][0] + len(selected[part_index - 1][1]):
-                        continue
-                    trial = list(selected)
-                    trial[part_index] = (new_start, source.text[new_start:start + len(passage)])
-                    if can_expand(trial):
-                        selected = trial
-                for part_index, (start, passage) in enumerate(selected):
-                    if start == 0 or not re.match(r"^\s*(?:in|on|at|for|from|to|during|as|by)\s+", passage, re.IGNORECASE):
-                        continue
-                    left = max(0, start - 80)
-                    prefix = source.text[left:start]
-                    previous = re.search(r"(?<![\w.])(?:[$€£¥]\s*)?[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:trillion|billion|million|thousand|percent|%|％)\s*$", prefix, re.IGNORECASE)
-                    if previous is None or "\f" in prefix[previous.start():]:
-                        continue
-                    new_start = left + previous.start()
-                    if part_index and new_start < selected[part_index - 1][0] + len(selected[part_index - 1][1]):
-                        continue
-                    trial = list(selected)
-                    trial[part_index] = (new_start, source.text[new_start:start + len(passage)])
-                    if can_expand(trial):
-                        selected = trial
-                # Expand a numeric-ended fragment toward the next sentence end.
-                # Exact limits and offsets remain validated on the serialized data.
-                for part_index, (start, passage) in enumerate(selected):
-                    end = start + len(passage)
-                    if end >= len(source.text):
-                        continue
-                    numeric_end = re.search(r"\d(?:[\d.,]*)(?:\s*(?:percent|billion|million|thousand|%|％))?\s*$", passage, re.IGNORECASE)
-                    next_quantity = re.match(r"[ \t\n]{0,8}(?:[$€£¥]\s*)?[-−]?\d+(?:,\d{3})*(?:\.\d+)?\s*(?:(?:percent|billion|million|thousand)\b|%|％)", source.text[end:end + 80], re.IGNORECASE)
-                    if not numeric_end and not next_quantity:
-                        continue
-                    limit = min(len(source.text), end + 160)
-                    if part_index + 1 < len(selected):
-                        limit = min(limit, selected[part_index + 1][0])
-                    if "\f" in source.text[end:limit]:
-                        limit = end + source.text[end:limit].index("\f")
-                    tail = source.text[end:limit]
-                    boundary = re.search(r"[.!?。！？](?=\s|$)", tail)
-                    if boundary:
-                        limit = end + boundary.end()
-                    lo, hi = end, limit
-                    while lo < hi:
-                        middle = (lo + hi + 1) // 2
-                        trial = list(selected)
-                        trial[part_index] = (start, source.text[start:middle])
-                        if can_expand(trial):
-                            lo = middle
-                        else:
-                            hi = middle - 1
-                    while lo > end and partial_ascii_token(source.text, start, lo):
-                        lo -= 1
-                    numeric_tail = _NUMERIC_WINDOW_TAIL.search(source.text[start:lo])
-                    following_unit = _NUMERIC_UNIT_PREFIX.match(source.text[lo:lo + 64]) if numeric_tail else None
-                    if following_unit:
-                        trial = list(selected)
-                        candidate_end = lo + following_unit.end()
-                        trial[part_index] = (start, source.text[start:candidate_end])
-                        if candidate_end <= limit and can_expand(trial):
-                            lo = candidate_end
-                        else:
-                            # Never introduce a new number while truncating its
-                            # immediately following recognized unit.
-                            lo = max(end, start + numeric_tail.start())
-                    if lo > end:
-                        selected[part_index] = (start, source.text[start:lo])
-                return selected
-            # First preserve the complete long-ID selection, then spend only
-            # the additional short-reference savings on adjacent context.
-            selected = expand_selected(selected, short_refs=False)
-            if prompt_refs[source.source_id] != source.source_id:
-                selected = expand_selected(selected, short_refs=True)
-        if focus is None and selected and sum(len(part) for _, part in selected) < len(source.text):
-            # Keep both the baseline excerpts and their expanded context;
-            # additional evidence can use only budget left after expansion.
-            candidates = _additional_query_sentences(source.text, question, selected, should_stop)
-            for candidate in candidates:
-                trial = sorted([*selected, candidate], key=lambda item: item[0])
-                normalized = sum(len(_prompt_source_text(part, source.retrieval_method == "user_pdf")) for _, part in trial)
-                if normalized <= max_size and fits(trial, compact_metadata=True, short_refs=True):
-                    selected = trial
-                    compact_metadata = True
+    # One objective is shared by first selection and replacement. Within a
+    # source each query term contributes its IDF at most once across all
+    # facets; a term shared by several facets is fractionally apportioned.
+    objective_facets = list(dict.fromkeys([question, *search_facets]))
+    facet_tokens = [set(tokenize_query(facet)) for facet in objective_facets]
+    # These are retrieval signals, not validated period, entity or metric matches.
+    requested_periods, period_parse_status = period_retrieval_signals(question)
+    explicit_period_values = []
+    explicit_dimension_values = []
+    for requirement in planning_requirements[:6]:
+        dims = requirement.get('dimensions') if isinstance(requirement, dict) else None
+        if isinstance(dims, dict):
+            if isinstance(dims.get('periods'), list):
+                explicit_period_values.extend(v for v in dims['periods'][:3] if isinstance(v, str))
+            for field in ('entities', 'metrics'):
+                if isinstance(dims.get(field), list):
+                    explicit_dimension_values.extend((field, v.strip()) for v in dims[field][:3]
+                                                     if isinstance(v, str) and v.strip())
+    for value in explicit_period_values:
+        periods, status = period_retrieval_signals(value)
+        requested_periods.update(periods)
+        if status in {'unsupported', 'ambiguous', 'none'}:
+            period_parse_status = 'unsupported' if status == 'none' else status
+    structural_terms = {'quarter', 'quarters', 'first', 'second', 'third', 'fourth',
+                        'year', 'years', '季度', '第一', '第二', '第三', '第四',
+                        'report', 'calculate', 'difference', 'percentage', 'points', 'limitations'}
+    relevant_terms = {term for term in tokenize_query(question) if term not in structural_terms
+                      and not re.fullmatch(r'(?:19|20)\d{2}|q[1-4]|\d+', term)}
+    # Cache unit-local retrieval cues; replacement explores many combinations.
+    cue_cache: dict[tuple[str, EvidenceUnit], tuple[set[tuple[int, int]], set[tuple[str, str]], object]] = {}
+    dimension_terms = [(field, value, tokenize_query(value)) for field, value in explicit_dimension_values]
+    def unit_cues(source: ResearchSource, unit: EvidenceUnit):
+        key = (source.source_id, unit)
+        if key not in cue_cache:
+            body = ' '.join(part for _, part in unit.parts).casefold()
+            periods, _ = period_retrieval_signals(body)
+            values = observation_retrieval_signal(unit, relevant_terms)
+            dimensions = {(field, value) for field, value, terms in dimension_terms
+                          if terms and all(term in body for term in terms)}
+            matched = tuple(sorted(term for term in relevant_terms if term in body))
+            numeric = (matched, tuple(sorted(periods)), values) if values else None
+            cue_cache[key] = (periods.intersection(requested_periods) if values else set(), dimensions, numeric)
+        return cue_cache[key]
+    def period_signals(source: ResearchSource, unit: EvidenceUnit) -> set[tuple[int, int]]:
+        return unit_cues(source, unit)[0]
+    def covered_periods(selection: list[tuple[ResearchSource, EvidenceUnit]]) -> set[tuple[int, int]]:
+        return set().union(*(period_signals(source, unit) for source, unit in selection)) if selection else set()
+    def dimension_signals(selection: list[tuple[ResearchSource, EvidenceUnit]]) -> set[tuple[str, str]]:
+        return set().union(*(unit_cues(source, unit)[1] for source, unit in selection)) if selection else set()
+    def period_dimension_signals(selection: list[tuple[ResearchSource, EvidenceUnit]]) -> set[tuple[int, int, str, str]]:
+        return {(year, quarter, field, value) for source, unit in selection
+                for year, quarter in unit_cues(source, unit)[0]
+                for field, value in unit_cues(source, unit)[1]}
+    def numeric_signals(selection: list[tuple[ResearchSource, EvidenceUnit]]) -> set:
+        return {signal for source, unit in selection if (signal := unit_cues(source, unit)[2]) is not None}
+    signature_cache: dict[tuple[str, EvidenceUnit], frozenset[str]] = {}
+    def signature(source: ResearchSource, unit: EvidenceUnit) -> frozenset[str]:
+        key = (source.source_id, unit)
+        if key not in signature_cache:
+            signature_cache[key] = lexical_signature(unit, retrieval_question, source_weights[source.source_id])
+        return signature_cache[key]
+
+    def objective(selection: list[tuple[ResearchSource, EvidenceUnit]]) -> float:
+        by_source: dict[str, set[str]] = {}
+        for source, unit in selection:
+            by_source.setdefault(source.source_id, set()).update(signature(source, unit))
+        # Dominant dimensional signals are lexical retrieval hints only.
+        return (1000.0 * (len(covered_periods(selection)) + len(dimension_signals(selection)) + len(period_dimension_signals(selection))) +
+                allocation_score(by_source, source_weights, facet_tokens, len(eligible)) +
+                (0.01 * min(8, len(numeric_signals(selection))) if not requested_periods else 0.0))
+
+    def install(selection: list[tuple[ResearchSource, EvidenceUnit]]) -> bool:
+        by_source: dict[str, list[EvidenceUnit]] = {}
+        for source, unit in selection:
+            by_source.setdefault(source.source_id, []).append(unit)
+        prepared: dict[str, list[tuple[int, str]]] = {}
+        for sid, units in by_source.items():
+            parts = sorted(set(part for unit in units for part in unit.parts), key=lambda item: item[0])
+            if (not parts or len({part for _, part in parts}) != len(parts)
+                    or any(parts[i][0] + len(parts[i][1]) > parts[i + 1][0] for i in range(len(parts) - 1))):
+                return False
+            prepared[sid] = parts
+        model_text.clear(); model_text.update(prepared)
+        unit_groups.clear(); unit_kinds.clear(); unit_facets.clear()
+        for source, unit in selection:
+            sid = source.source_id
+            group = f'u{unit.parts[-1][0]}'
+            matched = signature(source, unit)
+            for start, part in unit.parts:
+                key = (sid, start, start + len(part))
+                unit_groups.setdefault(key, []).append(group)
+                unit_kinds[key] = unit.kind
+                unit_facets.setdefault(key, set()).update(
+                    i for i, facet in enumerate(plan) if matched.intersection(tokenize_query(facet)))
+        return True
+
+    def trial(selection: list[tuple[ResearchSource, EvidenceUnit]]) -> int | None:
+        nonlocal rejection_reason
+        check_context()
+        if not install(selection):
+            rejection_reason = 'overlap_or_unit_limit'
+            return None
+        data['sources'] = payload()
+        serialized = serialize()
+        size = len(serialized.encode('utf-8'))
+        decision = fits(serialized)
+        rejection_reason = 'input_budget' if decision is False else ''
+        return None if decision is False else size
+
+    # Construct all safe candidates first; cap in round-robin source order and
+    # disclose truncation rather than claiming exhaustive search.
+    pool: list[tuple[ResearchSource, EvidenceUnit]] = []
+    processed_counts = {source.source_id: 0 for source in ordered}
+    position = 0
+    candidate_offset = 0
+    cursor = candidate_cursor if type(candidate_cursor) is int and candidate_cursor >= 0 else 0
+    while len(pool) < MAX_SELECTION_CANDIDATES:
+        added = False
+        for source in ordered:
+            queue = candidates[source.source_id]
+            if position < len(queue):
+                added = True
+                if candidate_offset >= cursor:
+                    pool.append((source, queue[position]))
+                candidate_offset += 1
+                processed_counts[source.source_id] += 1
+                if len(pool) == MAX_SELECTION_CANDIDATES:
                     break
+        if not added:
+            break
+        position += 1
+    total_candidates = sum(len(candidates[source.source_id]) for source in ordered)
+    page_next = min(candidate_offset, total_candidates)
+    source_hashes = {source.source_id: sha256(source.text.encode('utf-8')).hexdigest() for source in ordered}
+    binding_data = {'sources': [{'id': source.source_id, 'sha256': source_hashes[source.source_id],
+                                 'permissions': source.permissions.model_dump(mode='json')} for source in ordered],
+                    'query': retrieval_question, 'planning_requirements': planning_requirements,
+                    'as_of': as_of.isoformat() if as_of else None, 'focus': focus,
+                    'byte_limit': max_prompt_chars, 'capacity_key': capacity_key,
+                    'contract': output_contract.version if output_contract is not None else 'legacy',
+                    'candidate_page_size': MAX_SELECTION_CANDIDATES}
+    binding = sha256(json.dumps(binding_data, ensure_ascii=False, sort_keys=True, separators=(',', ':'),
+                                default=str).encode('utf-8')).hexdigest()
+    work_page = {'start': cursor, 'next': page_next, 'has_more': page_next < total_candidates,
+                 'source_hashes': source_hashes, 'binding': binding}
+    if expected_page_binding is not None and expected_page_binding != binding:
+        work_page['binding_mismatch'] = True
+        return AnalysisResult([], [], limitations + ['The evidence work page could not resume because its source or selection context changed.'], [], None,
+                              selection_diagnostics=selection_diagnostics, pdf_structure_diagnostics=pdf_structure_diagnostics,
+                              work_page=work_page, unprocessed_ranges=unprocessed_source_ranges(
+                                  {s.source_id: len(s.text) for s in ordered}, [], {s.source_id: s.text for s in ordered}))
+    if work_page['has_more']:
+        limitations.append('This evidence work page is incomplete; later candidates remain for subsequent pages.')
+
+    if allowed_units is not None:
+        allowed_ranges = {(item.get('source_id'), item.get('character_start'), item.get('character_end'))
+                          for item in allowed_units if isinstance(item, dict)}
+        pool = [(source, unit) for source, unit in pool if unit.parts and all(
+            (source.source_id, start, start + len(text)) in allowed_ranges for start, text in unit.parts)]
+        if not pool:
+            return AnalysisResult([], [], limitations + ['No complete allowed evidence unit could be selected.'], [], None,
+                                  work_page=work_page, unprocessed_ranges=unprocessed_source_ranges(
+                                      {s.source_id: len(s.text) for s in ordered}, prior_segments or [],
+                                      {s.source_id: s.text for s in ordered}))
+    chosen: list[tuple[ResearchSource, EvidenceUnit]] = []
+    locked_context: list[tuple[ResearchSource, EvidenceUnit]] = []
+    incremental = prior_segments is not None
+    prior: dict[str, list[tuple[int, int]]] = {}
+    def wholly_new(choice: tuple[ResearchSource, EvidenceUnit]) -> bool:
+        return not any(start < right and left < start + len(text)
+                       for start, text in choice[1].parts for left, right in prior.get(choice[0].source_id, []))
+    if incremental:
+        # Only server-supplied ranges from authorized sources influence
+        # novelty. An atomic group may share an old header with a new row.
+        eligible_by_id = {source.source_id: source for source in ordered}
+        for entry in (prior_segments or []):
+            if not isinstance(entry, dict):
+                continue
+            sid, start, end = entry.get('source_id'), entry.get('character_start'), entry.get('character_end')
+            if isinstance(sid, str) and sid in eligible_by_id and type(start) is int and type(end) is int and 0 <= start < end <= len(eligible_by_id[sid].text):
+                prior.setdefault(sid, []).append((start, end))
+        def fully_seen(sid: str, start: int, end: int) -> bool:
+            cursor = start
+            for left, right in sorted(prior.get(sid, [])):
+                if left > cursor:
+                    break
+                if right > cursor:
+                    cursor = right
+                if cursor >= end:
+                    return True
+            return False
+        def novel(choice: tuple[ResearchSource, EvidenceUnit]) -> bool:
+            return any(not fully_seen(choice[0].source_id, start, start + len(text)) for start, text in choice[1].parts)
+        all_pool = pool
+        pool = [choice for choice in all_pool if novel(choice)]
+        if not pool:
+            return AnalysisResult([], [], limitations + ['No new eligible evidence unit was available for the gap follow-up.', 'This work page has no remaining selectable candidate.'], [], None,
+                                  selection_diagnostics=selection_diagnostics, pdf_structure_diagnostics=pdf_structure_diagnostics,
+                                  work_page=work_page, unprocessed_ranges=unprocessed_source_ranges(
+                                      {s.source_id: len(s.text) for s in ordered}, prior_segments or [], {s.source_id: s.text for s in ordered}))
+        # A targeted prior citation or fact may be necessary for comparison.
+        # Reserve at most one quarter of available prompt bytes for that
+        # context, and only when a relevant new unit can still fit alongside.
+        allowed_refs = []
+        for ref in (context_refs or [])[:50]:
+            if not isinstance(ref, dict):
+                continue
+            sid, start, end = ref.get('source_id'), ref.get('character_start'), ref.get('character_end')
+            if isinstance(sid, str) and sid in eligible_by_id and type(start) is int and type(end) is int and 0 <= start < end and fully_seen(sid, start, end):
+                allowed_refs.append((sid, start, end))
+        install([]); data['sources'] = []
+        empty_size = len(serialize().encode('utf-8'))
+        context_limit = (empty_size + max(0, max_prompt_chars - empty_size) // 4
+                         if max_prompt_chars is not None else None)
+        # A target from an earlier work page must remain available as context;
+        # limiting this search to the current candidate page loses comparisons.
+        options = []
+        for source in ordered:
+            for unit_index, unit in enumerate(candidates[source.source_id]):
+                if unit_index % 64 == 0:
+                    check_context()
+                choice = (source, unit)
+                if not novel(choice) and any(
+                        source.source_id == sid and any(start <= left < right <= start + len(text) for start, text in unit.parts)
+                        for sid, left, right in allowed_refs):
+                    options.append(choice)
+
+        options.sort(key=lambda item: sum(len(text.encode('utf-8')) for _, text in item[1].parts))
+        for choice in options[:32]:
+            size = trial([choice])
+            if size is None or (context_limit is not None and size > context_limit):
+                continue
+            if any(signature(*candidate) and trial([choice, candidate]) is not None for candidate in pool):
+                chosen = [choice]
+                locked_context = [choice]
+                break
+        install(chosen); data['sources'] = payload()
+        selection_diagnostics.append({'phase': 'incremental_context', 'budget_bytes': max_prompt_chars,
+            'prompt_bytes': len(serialize().encode('utf-8')), 'prior_range_count': sum(map(len, prior.values())),
+            'new_candidate_count': len(pool), 'context_selected': bool(locked_context)})
+        if not locked_context and allowed_refs:
+            limitations.append('A prior evidence context could not be retained alongside new evidence within the input budget.')
+    # Preserve entire short supplied documents when all can fit together.
+    full = [(source, next((unit for unit in candidates[source.source_id] if unit.kind == 'document'), None))
+            for source in ordered]
+    if allowed_units is None and not incremental and cursor == 0 and fits(serialize()) is True and full and all(unit is not None for _, unit in full):
+        complete = [(source, unit) for source, unit in full if unit is not None]
+        full_size = trial(complete)
+        if full_size is not None:
+            chosen = complete
+        selection_diagnostics.append({'phase': 'full_source', 'round': 0, 'budget_bytes': max_prompt_chars,
+            'prompt_bytes': full_size, 'candidate_count': len(complete), 'rejections': [],
+            'rejections_truncated': False, 'decision': 'selected' if full_size is not None else rejection_reason})
+    if not chosen or incremental:
+        install([]); data['sources'] = []
+        if focus is not None:
+            choices = [(source, unit) for source, unit in pool if source.source_id == focus[0] and
+                       any(start <= focus[1] and start + len(part) >= focus[2] for start, part in unit.parts)]
+            feasible = [(size, choice) for choice in choices if (size := trial([choice])) is not None]
+            if not feasible:
+                return AnalysisResult([], [], limitations + ['The requested focus has no complete evidence unit within the input budget; no model call was made.'], [], None, selection_diagnostics=selection_diagnostics, pdf_structure_diagnostics=pdf_structure_diagnostics, work_page=work_page, unprocessed_ranges=unprocessed_source_ranges({s.source_id: len(s.text) for s in ordered}, prior_segments or [], {s.source_id: s.text for s in ordered}))
+            chosen = [min(feasible, key=lambda item: item[0])[1]]
+        install(chosen); data['sources'] = payload()
+        for round_index in range(max(0, MAX_SELECTION_GROUPS - len(chosen))):
+            check_context()
+            before = objective(chosen)
+            current_bytes = len(serialize().encode('utf-8'))
+            options: list[tuple[int, float, float, int, int, tuple[ResearchSource, EvidenceUnit]]] = []
+            rejected: list[dict[str, Any]] = []
+            def note(choice: tuple[ResearchSource, EvidenceUnit], reason: str) -> None:
+                if len(rejected) < 64:
+                    rejected.append({'source_id': choice[0].source_id,
+                        'ranges': [[start, start + len(text)] for start, text in choice[1].parts], 'reason': reason})
+            for position, choice in enumerate(pool):
+                if choice in chosen:
+                    continue
+                gain = objective([*chosen, choice]) - before
+                if gain <= 0:
+                    note(choice, 'no_new_lexical_terms')
+                    continue
+                size = trial([*chosen, choice])
+                if size is not None:
+                    dimensional_gain = len(covered_periods([*chosen, choice]) - covered_periods(chosen))
+                    options.append((int(wholly_new(choice)), dimensional_gain, gain / max(1, size - current_bytes), gain, -size, -position, choice))
+                else:
+                    note(choice, rejection_reason)
+            install(chosen); data['sources'] = payload()
+            best = max(options, key=lambda item: item[:6])[-1] if options else None
+            selection_diagnostics.append({'phase': 'lexical', 'round': round_index, 'prompt_bytes': current_bytes,
+                'budget_bytes': max_prompt_chars, 'candidate_count': len(pool), 'rejections': rejected,
+                'rejections_truncated': len(rejected) == 64,
+                'selected': ({'source_id': best[0].source_id,
+                    'ranges': [[start, start + len(text)] for start, text in best[1].parts]} if best else None)})
+            if not options:
+                break
+            chosen.append(best)
+            install(chosen); data['sources'] = payload()
+        else:
+            limitations.append('Evidence selection reached its bounded group limit; further candidates were not examined.')
+        # A short supplied document remains usable when indexing found no
+        # lexical terms; do not infer why there was no match.
+        for source in ordered:
+            if any(item[0].source_id == source.source_id for item in chosen) or source_weights[source.source_id]:
+                continue
+            doc = next((unit for unit in candidates[source.source_id] if unit.kind == 'document'), None)
+            if doc is not None and (allowed_units is None or (source, doc) in pool) and trial([*chosen, (source, doc)]) is not None:
+                chosen.append((source, doc))
+            install(chosen); data['sources'] = payload()
+
+        # Replacement uses the same global objective, may exchange groups
+        # across sources, and never removes the explicit focus.
+        if len(pool) > MAX_REPLACEMENT_CANDIDATES:
+            limitations.append('Replacement search considered a bounded prefix of evidence candidates.')
+        for round_index in range(0 if incremental else MAX_REPLACEMENT_ROUNDS):
+            check_context()
+            before = objective(chosen)
+            removable = [i for i, (source, unit) in enumerate(chosen[:MAX_REMOVAL_CONSIDERED]) if (source, unit) not in locked_context and not (
+                focus is not None and source.source_id == focus[0] and any(
+                    start <= focus[1] and start + len(part) >= focus[2] for start, part in unit.parts))]
+            removable.sort(key=lambda i: (objective(chosen) - objective(chosen[:i] + chosen[i+1:]), i))
+            removable = removable[:MAX_REMOVAL_SHORTLIST]
+            improvements = []
+            rejections = []
+            replacement_pool = sorted(enumerate(pool), key=lambda item: (
+                -len(period_signals(*item[1]) - covered_periods(chosen)), item[0]))[:MAX_REPLACEMENT_CANDIDATES]
+            for position, choice in replacement_pool:
+                if choice in chosen:
+                    continue
+                for count in range(1, min(MAX_REPLACEMENT_GROUPS, len(removable)) + 1):
+                    for indexes in combinations(removable, count):
+                        check_context()
+                        removed = set(indexes)
+                        proposal = [item for i, item in enumerate(chosen) if i not in removed] + [choice]
+                        score = objective(proposal)
+                        if (covered_periods(chosen).issubset(covered_periods(proposal)) and
+                                dimension_signals(chosen).issubset(dimension_signals(proposal)) and
+                                period_dimension_signals(chosen).issubset(period_dimension_signals(proposal)) and score > before + 1e-12):
+                            improvements.append((score, -position, proposal))
+                        elif len(rejections) < 64:
+                            rejections.append({'source_id': choice[0].source_id,
+                                'ranges': [[start, start + len(text)] for start, text in choice[1].parts],
+                                'reason': 'no_lexical_objective_improvement'})
+            improvements.sort(key=lambda item: (item[0], item[1]), reverse=True)
+            accepted = False
+            for _, _, proposal in improvements:
+                if trial(proposal) is not None:
+                    chosen = proposal; accepted = True; break
+                if len(rejections) < 64:
+                    candidate = proposal[-1]
+                    rejections.append({'source_id': candidate[0].source_id,
+                        'ranges': [[start, start + len(text)] for start, text in candidate[1].parts],
+                        'reason': rejection_reason})
+            install(chosen); data['sources'] = payload()
+            selection_diagnostics.append({'phase': 'replacement', 'round': round_index,
+                'prompt_bytes': len(serialize().encode('utf-8')), 'budget_bytes': max_prompt_chars,
+                'candidate_count': min(len(pool), MAX_REPLACEMENT_CANDIDATES), 'rejections': rejections,
+                'rejections_truncated': len(rejections) == 64, 'decision': 'selected' if accepted else 'no_improvement'})
+            if not accepted:
+                break
+        # Once distinct lexical signals are exhausted, use remaining budget for
+        # additional relevant, non-overlapping complete units. A repeated query
+        # term is a retrieval hint, not proof of an answer or facet coverage.
+        for round_index in range(MAX_SELECTION_GROUPS - len(chosen)):
+            check_context()
+            current_bytes = len(serialize().encode('utf-8'))
+            options = []
+            rejected = []
+            for position, choice in enumerate(pool):
+                if choice in chosen:
+                    continue
+                matched = signature(*choice)
+                if not matched:
+                    reason = 'no_lexical_signal'
+                else:
+                    size = trial([*chosen, choice])
+                    if size is not None:
+                        # Supplemental units may repeat the query vocabulary;
+                        # evaluate the same objective on the unit itself so
+                        # qualitative and multilingual context is not lost.
+                        relevance = objective([choice])
+                        dimensional_gain = len(covered_periods([*chosen, choice]) - covered_periods(chosen))
+                        options.append((int(wholly_new(choice)), dimensional_gain, relevance / max(1, size - current_bytes), relevance, -position, choice, size))
+                        continue
+                    reason = rejection_reason
+                if len(rejected) < 64:
+                    rejected.append({'source_id': choice[0].source_id,
+                        'ranges': [[start, start + len(text)] for start, text in choice[1].parts], 'reason': reason})
+            install(chosen); data['sources'] = payload()
+            selected = max(options, key=lambda item: item[:5]) if options else None
+            selection_diagnostics.append({'phase': 'additional_relevant_unit', 'round': round_index,
+                'prompt_bytes': current_bytes, 'budget_bytes': max_prompt_chars, 'candidate_count': len(pool),
+                'rejections': rejected, 'rejections_truncated': len(rejected) == 64,
+                'selected': ({'source_id': selected[5][0].source_id,
+                    'ranges': [[start, start + len(text)] for start, text in selected[5][1].parts],
+                    'prompt_bytes': selected[6]} if selected else None)})
+            if selected is None:
+                break
+            chosen.append(selected[5]); install(chosen); data['sources'] = payload()
+    # Split work is an explicitly selected, previously authorized scope.
+    # A lexical score of zero must not make that complete unit disappear.
+    if not chosen and focus is None and (allowed_units is not None or fits(serialize()) is None):
+        for choice in pool:
+            if len(chosen) >= MAX_SELECTION_GROUPS:
+                break
+            if trial([*chosen, choice]) is not None:
+                chosen.append(choice)
+                install(chosen); data['sources'] = payload()
+    missing_periods = requested_periods - covered_periods(chosen)
+    if missing_periods:
+        labels = ', '.join(f'{year} Q{quarter}' if quarter else str(year) for year, quarter in sorted(missing_periods))
+        limitations.append(f'Retrieval signals for requested periods {labels} were not selected; this does not establish absence or semantic support.')
+    missing_dimensions = set(explicit_dimension_values) - dimension_signals(chosen)
+    if missing_dimensions:
+        limitations.append('Some planned entity or metric retrieval signals were not selected; this does not establish absence or semantic support.')
+    expected_pairs = {(year, quarter, field, value) for year, quarter in requested_periods
+                      for field, value in explicit_dimension_values}
+    if expected_pairs - period_dimension_signals(chosen):
+        limitations.append('Some planned period and entity or metric combinations lack selected retrieval signals; relevance and comparability remain unverified.')
+    if period_parse_status in {'ambiguous', 'unsupported'}:
+        limitations.append('Some requested period expressions could not be reliably represented as retrieval signals; period coverage is unknown.')
+    if focus is not None and focus[0] not in model_text:
+        return AnalysisResult([], [], limitations + ['The requested focus has no complete evidence unit within the input budget; no model call was made.'], [], None, selection_diagnostics=selection_diagnostics, pdf_structure_diagnostics=pdf_structure_diagnostics, work_page=work_page, unprocessed_ranges=unprocessed_source_ranges({s.source_id: len(s.text) for s in ordered}, prior_segments or [], {s.source_id: s.text for s in ordered}))
+    for source in ordered:
+        selected = model_text.get(source.source_id, [])
         if not selected:
-            limitations.append(f"Source {source.source_id}: exceeds the current input budget; not processed.")
+            limitations.append(f"Source {source.source_id}: no relevant complete evidence unit was selected within the input budget; lexical retrieval may miss other languages; not processed.")
             continue
-        model_text[source.source_id] = selected
-        remaining -= sum(len(_prompt_source_text(passage, source.retrieval_method == "user_pdf")) for _, passage in selected)
         processed.append(source)
-        data["sources"].extend(source_payload(selected, compact_metadata=compact_metadata, short_refs=True))
-        if sum(len(passage) for _, passage in selected) < len(source.text):
-            ranges = ", ".join(f"{start}–{start + len(passage)}" for start, passage in selected)
+        if sum(len(part) for _, part in selected) < len(source.text):
+            ranges = ', '.join(f'{start}–{start + len(part)}' for start, part in selected)
             limitations.append(f"Source {source.source_id}: only character ranges {ranges} were analyzed; remaining text was not examined.")
+    data['sources'] = payload()
     if not processed:
-        return AnalysisResult([], [], limitations + ["No source could fit the model input budget."], [], None)
+        return AnalysisResult([], [], limitations + ["No eligible source evidence unit was selected; source language, structure or input budget may limit selection."], [], None, selection_diagnostics=selection_diagnostics, pdf_structure_diagnostics=pdf_structure_diagnostics,
+                              work_page=work_page, unprocessed_ranges=unprocessed_source_ranges(
+                                  {s.source_id: len(s.text) for s in ordered}, prior_segments or [], {s.source_id: s.text for s in ordered}))
     if should_stop is not None and should_stop():
         raise AnalysisInterrupted()
     # Select exactly the baseline excerpts first. Optional PDF page labels may
@@ -2140,40 +2502,44 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     shown_pages: dict[str, set[int]] = {}
     guidance = " PDF p=[first,last] pages; form feed breaks pages. Cite integer source_page only for a labeled PDF."
     baseline_guidance = data["evidence_guidance"]
-    citation_examples = [data["output_schema"]["claims"][0]["citations"][0],
-                         data["output_schema"]["counterarguments"][0]["citations"][0],
-                         data["output_schema"]["facts"][0]["citation"]]
+    # The single citation example defines the shared form for claims,
+    # counterarguments and facts; avoid repeating it in the prompt budget.
+    citation_examples = [data["output_schema"]["evidence"][0] if output_contract is not None else data["output_schema"]["claims"][0]["citations"][0]]
     for example in citation_examples:
         example["source_page"] = None
-    baseline_sources = [dict(item) for item in data["sources"]]
-    excerpt_map = [(source, start, passage) for source in processed for start, passage in model_text[source.source_id]]
-    # Later entries repeat metadata for the same source. Removing only those
-    # repetitions after selection can make space for page labels without
-    # removing the source's title, coverage, or any excerpt text.
-    seen_sources: set[str] = set()
-    for index, (source, _, _) in enumerate(excerpt_map):
-        if source.retrieval_method == "user_pdf" and source.source_id in seen_sources:
-            data["sources"][index].pop("title", None)
-            data["sources"][index].pop("source_coverage", None)
-        seen_sources.add(source.source_id)
-    for index, (source, start, passage) in enumerate(excerpt_map):
-        if source.retrieval_method != "user_pdf" or passage.count("\f") > 20:
-            continue
-        first_page = source.text.count("\f", 0, start) + 1
-        last_page = first_page + passage.count("\f")
-        data["sources"][index]["p"] = [first_page, last_page]
-        data["evidence_guidance"] = baseline_guidance + guidance
-        if len(serialize().encode("utf-8")) <= max_prompt_chars:
-            shown_pages.setdefault(source.source_id, set()).update(range(first_page, last_page + 1))
-        else:
-            del data["sources"][index]["p"]
-            if not shown_pages:
-                data["evidence_guidance"] = baseline_guidance
+    from copy import deepcopy
+    baseline_sources = deepcopy(data['sources'])
+    for source_index, source in enumerate(processed):
+        for passage_index, (start, passage) in enumerate(model_text[source.source_id]):
+            if source.retrieval_method != 'user_pdf' or passage.count('\f') > 20:
+                continue
+            first_page = source.text.count('\f', 0, start) + 1
+            last_page = first_page + passage.count('\f')
+            excerpt = data['sources'][source_index]['passages'][passage_index]
+            excerpt['p'] = [first_page, last_page]
+            data['evidence_guidance'] = baseline_guidance + guidance
+            if fits(serialize()) is not False:
+                shown_pages.setdefault(source.source_id, set()).update(range(first_page, last_page + 1))
+            else:
+                del excerpt['p']
+                if not shown_pages:
+                    data['evidence_guidance'] = baseline_guidance
     if not shown_pages:
-        data["sources"] = baseline_sources
+        data['sources'] = baseline_sources
         for example in citation_examples:
-            del example["source_page"]
+            del example['source_page']
     if structured_model_facts:
+        data['available_facts'] = []
+        selected_ids = {source.source_id for source in processed}
+        eligible_fact_ids = {fact['fact_id'] for fact in structured_model_facts if fact['source_id'] in selected_ids}
+        for item in deferred_facts:
+            if item['fact_id'] not in eligible_fact_ids:
+                continue
+            data['available_facts'].append(item)
+            if fits(serialize()) is False:
+                data['available_facts'].pop()
+        sent_fact_ids = {item['fact_id'] for item in data['available_facts']}
+        structured_model_facts = [fact for fact in structured_model_facts if fact['fact_id'] in sent_fact_ids]
         processed_ids = {source.source_id for source in processed}
         included_ids = {fact['fact_id'] for fact in structured_model_facts if fact['source_id'] in processed_ids}
         structured_model_facts = [fact for fact in structured_model_facts if fact['fact_id'] in included_ids]
@@ -2182,38 +2548,39 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             data.pop('available_facts', None)
     prompt = serialize()
     segments = [{"source_id": s.source_id, "character_start": start, "character_end": start + len(passage),
+                 "context_unit_kind": unit_kinds[(s.source_id, start, start + len(passage))], "complete_context": True,
+                 **({"reading_order_status": "not_independently_verified"} if s.retrieval_method == "user_pdf" else {}),
+                 **({'pdf_geometry': geometry_metadata[(s.source_id, start, start + len(passage))]}
+                    if (s.source_id, start, start + len(passage)) in geometry_metadata else {}),
+                 "context_unit_ids": unit_groups[(s.source_id, start, start + len(passage))],
+                 "retrieval_facet_indexes": sorted(unit_facets.get((s.source_id, start, start + len(passage)),
+                     {i for i, facet in enumerate(plan) if set(source_weights[s.source_id]).intersection(tokenize_query(facet)).intersection(lexical_signature(EvidenceUnit('document', ((start, passage),)), retrieval_question, source_weights[s.source_id]))})),
                  **({"model_source_id": prompt_refs[s.source_id]} if prompt_refs[s.source_id] != s.source_id else {})}
                 for s in processed for start, passage in model_text[s.source_id]]
     if on_prepare is not None:
         on_prepare(segments)
+    if on_page_prepare is not None:
+        on_page_prepare(work_page, unprocessed_source_ranges(
+            {s.source_id: len(s.text) for s in ordered}, prior_segments or [],
+            {s.source_id: s.text for s in ordered}))
     raw, tokens = generate(prompt)
+    raw_draft_for_slots = raw
+    structured_output_errors: list[str] = []
+    draft_ids: dict[str, Any] = {}
+    is_versioned_draft = output_contract is not None and not legacy_payload
+    if is_versioned_draft:
+        try:
+            raw, draft_problems, draft_ids = convert_draft(raw, {f['fact_id'] for f in structured_model_facts})
+        except DraftContractError as error:
+            failure = InvalidAnalysis("Model output did not match the research schema.")
+            failure.diagnostic = {'category': 'contract_validation', 'errors': error.errors}
+            raise failure from error
+        if draft_problems:
+            structured_output_errors.append('shape_or_reference')
+            limitations.append("Partial model output: invalid objects or dependencies were omitted (" + "; ".join(sorted(set(draft_problems))) + ").")
     # Common, non-contractual annotations can be discarded without using
     # their content. Do not broadly ignore extra fields: unknown structure and
     # non-string or oversized annotations still fail schema validation.
-    discarded_annotations = 0
-    if isinstance(raw, dict):
-        cleaned = dict(raw)
-        explanation = raw.get("explanation")
-        if isinstance(explanation, str) and len(explanation) <= 3000:
-            cleaned.pop("explanation")
-            discarded_annotations += 1
-        for field, extra, limit, max_rows in (("claims", "status", 100, 30), ("counterarguments", "status", 100, 20),
-                                              ("research_questions", "status", 100, 10),
-                                              ("calculations", "note", 1000, 50)):
-            rows = raw.get(field)
-            if not isinstance(rows, list) or len(rows) > max_rows:
-                continue
-            result_rows = []
-            for row in rows:
-                value = row.get(extra) if isinstance(row, dict) else None
-                if isinstance(value, str) and len(value) <= limit:
-                    row = {key: value for key, value in row.items() if key != extra}
-                    discarded_annotations += 1
-                result_rows.append(row)
-            cleaned[field] = result_rows
-        raw = cleaned
-    if discarded_annotations:
-        limitations.append("Non-schema model annotations were omitted and were not used; retained results still require source review.")
     # A nonnumeric or incomplete fact cannot be used by the deterministic
     # calculator. Drop only those facts, disclose the omission, and continue
     # validating all remaining claims and citations against the source.
@@ -2286,11 +2653,16 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if omitted_facts or text_observations or normalized_grouped_ids or normalized_fraction_ids or normalized_equivalent_ids or normalized_range_ids or stripped_unit_ids:
             raw = {**raw, "facts": valid_facts}
         if omitted_facts:
+            if is_versioned_draft:
+                structured_output_errors.append('fact_validation')
             limitations.append(f"{omitted_facts} model-generated numeric fact(s) were omitted because their format was invalid.")
     try:
         result = AnalysisOutput.model_validate(raw)
     except ValidationError as error:
-        raise InvalidAnalysis("Model output did not match the research schema.") from error
+        from .research_diagnostics import safe_validation_errors
+        failure = InvalidAnalysis("Model output did not match the research schema.")
+        failure.diagnostic = {'category': 'contract_validation', 'errors': safe_validation_errors(error, AnalysisOutput)}
+        raise failure from error
     if text_observations:
         room = max(0, 30 - len(result.claims))
         if len(text_observations) > room:
@@ -2668,9 +3040,6 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         if scale_quote_missing and not scale_quote_noted:
             limitations.append('A monetary fact unit scale is absent from its quotation; check the original scale and context before relying on the calculation.')
             scale_quote_noted = True
-        if direction_context and not directional_context_noted:
-            limitations.append("A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
-            directional_context_noted = True
         if ambiguous_fact and not ambiguous_fact_noted:
             limitations.append("A numeric fact has an ambiguous quotation location and was excluded from automatic calculations.")
             ambiguous_fact_noted = True
@@ -2695,6 +3064,25 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                if item.fact_id in normalized_range_ids else {}),
             "location": location,
             "verification": "model_extraction_not_independently_verified"}
+        if direction_context and not ambiguous_fact:
+            quote_end = location.get('character_end')
+            contexts = [(item['character_start'], item['character_end']) for item in segments
+                        if item.get('source_id') == source.source_id and item.get('complete_context') is True
+                        and item.get('context_unit_kind') in {'sentence', 'paragraph', 'document'}
+                        and type(quote_start) is int and type(quote_end) is int
+                        and item['character_start'] <= quote_start < quote_end <= item['character_end']]
+            if len(contexts) == 1:
+                proof = derive_direction_proof(checked_fact, source.text, source.content_sha256, *contexts[0])
+                if proof is not None:
+                    checked_fact['direction_derivation'] = proof
+            if (verified_direction_proof(checked_fact) and not currency_context and not currency_conflict
+                    and not currency_unspecified and not period_conflict
+                    and matching not in {'pdf_line_hyphen_restored', 'table_markup_expanded'}):
+                numeric_facts[item.fact_id] = numeric
+            if not directional_context_noted:
+                limitations.append("A negative value was inferred from an explicit decrease; the source and economic meaning remain unverified." if verified_direction_proof(checked_fact) else
+                                   "A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.")
+                directional_context_noted = True
         if inline_match:
             checked_fact['xbrl_source_consistency'] = {**inline_match, 'method': 'inline_xbrl_source_consistency_v1',
                                                         'fact_sha256': direction_confirmation_fingerprint(checked_fact)}
@@ -2704,7 +3092,8 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
         checked_facts.append(checked_fact)
 
     checked_calculations: list[dict[str, Any]] = []
-    for plan in result.calculations:
+    calculation_indexes: dict[int, int] = {}
+    for proposed_index, plan in enumerate(result.calculations):
         first, second = numeric_facts.get(plan.first_fact_id), numeric_facts.get(plan.second_fact_id)
         if first is None or second is None:
             limitations.append("A requested calculation was omitted because its input facts were unavailable.")
@@ -2715,6 +3104,7 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
             # semantic meaning. Never present the result as verified or let it
             # support a claim until its inputs have been independently reviewed.
             calculated["input_status"] = calculation_input_status(calculated, checked_facts)
+            calculation_indexes[proposed_index] = len(checked_calculations)
             checked_calculations.append(calculated)
             if calculated.get("period_granularity_check") == "different_labels_verify_stock_or_flow":
                 note = "Period comparability is not established: different year, quarter or month labels may refer to stock or flow figures."
@@ -2727,9 +3117,15 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
     # Follow-ups use only the subset actually shown in their separate prompt.
     support_index_map: dict[int, int] = ({i: i for i in range(max(0, min(counterargument_reference_count, 20)))}
                                          if counterargument_reference_count is not None else {})
+    retained_support_index_map: dict[int, int] = {}
+    retained_counter_index_map: dict[int, int] = {}
     def check_claims(items: list[Claim], *, counterargument: bool = False) -> list[dict[str, Any]]:
         checked = []
         for original_index, item in enumerate(items):
+            if is_versioned_draft and counterargument and isinstance(item, Counterargument) and any(
+                    type(target) is not int or target not in support_index_map for target in item.responds_to_claim_indexes):
+                limitations.append("Partial model output: a counterargument with an invalid finding dependency was omitted.")
+                continue
             if counterargument and (_counterargument_absence_only(item.text) or _counterargument_evidence_gap_only(item.text)):
                 note = ("A model-reported absence of counterarguments is an unverified limitation, not counterevidence."
                         if _counterargument_absence_only(item.text) else
@@ -2853,8 +3249,6 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                     limitations.append("A model-generated claim without a valid quotation was omitted.")
                     continue
             _suggest_same_page_candidates(citations, source_map)
-            if not counterargument:
-                support_index_map[original_index] = len(checked)
             proposed = []
             if counterargument and isinstance(item, Counterargument):
                 for target in item.responds_to_claim_indexes:
@@ -2864,7 +3258,50 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                         note = "A proposed counterargument relationship was invalid or referred to an omitted finding; it was not retained."
                         if note not in limitations:
                             limitations.append(note)
+            assertion_suggestions = []
+            for assertion in item.assertions:
+                citation_refs = []
+                unresolved = False
+                for index in assertion.citation_indexes:
+                    if type(index) is not int or not 0 <= index < len(item.citations):
+                        unresolved = True
+                        continue
+                    original = item.citations[index]
+                    original_source = source_map.get(original.source_id)
+                    matches = [position for position, saved in enumerate(citations)
+                               if original_source is not None and saved.get('source_id') == original_source.source_id
+                               and saved.get('quotation') == original.quotation
+                               and saved.get('location', {}).get('status') != 'ambiguous'
+                               and saved.get('quotation_match') == 'exact']
+                    if len(matches) != 1:
+                        unresolved = True
+                    elif matches[0] not in citation_refs:
+                        citation_refs.append(matches[0])
+                calculation_refs = []
+                for index in assertion.calculation_indexes:
+                    if type(index) is int and index in calculation_indexes:
+                        if calculation_indexes[index] not in calculation_refs:
+                            calculation_refs.append(calculation_indexes[index])
+                    else:
+                        unresolved = True
+                assertion_suggestions.append({'text': assertion.text, 'citation_indexes': citation_refs,
+                    'calculation_indexes': calculation_refs, 'unresolved_reference': unresolved,
+                    'origin': 'model_suggested', 'semantic_status': 'not_independently_verified'})
+            if is_versioned_draft and (omitted or incomplete_boundary or not citations or any(a['unresolved_reference'] for a in assertion_suggestions)):
+                limitations.append("Partial model output: a finding with an invalid or unresolved dependency was omitted.")
+                continue
+            if not counterargument:
+                support_index_map[original_index] = len(checked)
+                retained_support_index_map[original_index] = len(checked)
+            else:
+                retained_counter_index_map[original_index] = len(checked)
             checked.append({"text": item.text, "kind": "model_interpretation", "citations": citations,
+                            "scope_declaration": item.scope_declaration,
+                            **({'assertion_suggestions': assertion_suggestions} if assertion_suggestions else {}),
+                            "suggested_calculations": [{'calculation_index': index} for index in dict.fromkeys([
+                                *[calculation_indexes[index] for index in item.calculation_indexes
+                                  if type(index) is int and index in calculation_indexes],
+                                *[index for assertion in assertion_suggestions for index in assertion['calculation_indexes']]])],
                             **({'suggested_responds_to_claim_indexes': proposed} if proposed else {}),
                             "support_status": "incomplete" if (omitted or incomplete_boundary) and citations else
                                 "not_independently_verified" if citations else "unsupported"})
@@ -2872,8 +3309,40 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
 
     checked_support = check_claims(result.claims)
     checked_counter = check_claims(result.counterarguments, counterargument=True)
+    absence_observations = []
+    absence_index_map: dict[int, int] = {}
+    for absence_index, observation in enumerate(result.absence_observations):
+        if is_versioned_draft and (any(type(index) is not int or index not in retained_support_index_map for index in observation.claim_indexes)
+                or any(sid not in source_map or source_map[sid].source_id not in model_text for sid in observation.source_ids)):
+            limitations.append("Partial model output: an absence observation with an invalid finding dependency was omitted.")
+            continue
+        absence_index_map[absence_index] = len(absence_observations)
+        reference = 'absence_' + uuid4().hex
+        for index in observation.claim_indexes:
+            # Only map findings retained from this response. Invalid, boolean,
+            # omitted, or out-of-range indexes never bind another finding.
+            if type(index) is int and index in retained_support_index_map:
+                target = retained_support_index_map[index]
+                if 0 <= target < len(checked_support):
+                    refs = checked_support[target].setdefault('model_absence_refs', [])
+                    if reference not in refs:
+                        refs.append(reference)
+            else:
+                note = 'An absence observation referenced an invalid or omitted finding; that link was not retained.'
+                if note not in limitations:
+                    limitations.append(note)
+        absence_observations.append({**observation.model_dump(exclude={'source_ids', 'claim_indexes'}),
+            'source_ids': list(dict.fromkeys(source_map[sid].source_id for sid in observation.source_ids
+                                             if sid in source_map and source_map[sid].source_id in model_text)),
+            'observation_ref': reference, 'origin': 'model_suggested', 'assessment': 'not_established'})
     research_questions = []
-    for question_item in result.research_questions:
+    discovered_requirements = []
+    question_index_map: dict[int, int] = {}
+    for original_question_index, question_item in enumerate(result.research_questions):
+        if is_versioned_draft and any(type(index) is not int or index not in support_index_map for index in question_item.claim_indexes):
+            limitations.append("Partial model output: a research question with an invalid finding dependency was omitted.")
+            continue
+        question_index_map[original_question_index] = len(research_questions)
         refs: list[int] = []
         for index in question_item.claim_indexes:
             if type(index) is int and index in support_index_map and support_index_map[index] not in refs:
@@ -2883,9 +3352,111 @@ def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None
                 if note not in limitations:
                     limitations.append(note)
         research_questions.append({'question': question_item.question, 'claim_indexes': refs})
+        if question_item.dimensions is not None or question_item.calculation_requested is not None or question_item.retrieval_hints:
+            discovered_requirements.append({'question': question_item.question,
+                'dimensions': question_item.dimensions.model_dump() if question_item.dimensions is not None else {},
+                'calculation_requested': question_item.calculation_requested,
+                'retrieval_hints': list(dict.fromkeys(value.strip()[:160] for value in question_item.retrieval_hints if value.strip())),
+                'origin': 'model_suggested'})
+    from .research_requirements import validate_requirement_links
+    link_inputs = []
+    link_index_map: dict[int, int] = {}
+    for link_index, item in enumerate(result.requirement_links):
+        if is_versioned_draft and ((item.question_index is not None and item.question_index not in question_index_map)
+                or any(type(index) is not int or index not in calculation_indexes for index in item.calculation_indexes)
+                or any(fact_id not in numeric_facts for fact_id in item.fact_ids)
+                or any(sid not in source_map or source_map[sid].source_id not in model_text for sid in item.source_ids)):
+            limitations.append("Partial model output: a requirement link with an invalid dependency was omitted.")
+            continue
+        value = item.model_dump()
+        if is_versioned_draft and item.question_index is not None:
+            value['question_index'] = question_index_map[item.question_index]
+        link_index_map[link_index] = len(link_inputs)
+        link_inputs.append(value)
+    requirement_links = validate_requirement_links(
+        link_inputs, research_questions,
+        checked_facts, checked_calculations, segments,
+        {ref: source.source_id for ref, source in source_map.items()}, calculation_indexes)
+    if is_versioned_draft:
+        if any(f.fact_id not in {checked.get('fact_id') for checked in checked_facts} for f in result.facts):
+            structured_output_errors.append('fact_validation')
+        if len(checked_calculations) < len(result.calculations):
+            structured_output_errors.append('calculation_validation')
+        if len(checked_support) < len(result.claims) or len(checked_counter) < len(result.counterarguments):
+            structured_output_errors.append('finding_validation')
+        if len(research_questions) < len(result.research_questions) or len(absence_observations) < len(result.absence_observations) or len(link_inputs) < len(result.requirement_links):
+            structured_output_errors.append('dependent_validation')
+        if any(need.question_index is not None and need.question_index not in question_index_map for need in result.evidence_needs):
+            structured_output_errors.append('dependent_validation')
+    stable_ids = {
+        'claims': {draft_ids['claims'][old]: new for old, new in retained_support_index_map.items() if old < len(draft_ids.get('claims', []))},
+        'counterarguments': {draft_ids['counterarguments'][old]: new for old, new in retained_counter_index_map.items() if old < len(draft_ids.get('counterarguments', []))},
+        'calculations': {draft_ids['calculations'][old]: new for old, new in calculation_indexes.items() if old < len(draft_ids.get('calculations', []))},
+        'research_questions': {draft_ids['research_questions'][old]: new for old, new in question_index_map.items() if old < len(draft_ids.get('research_questions', []))},
+        'facts': {fact_id: fact_id for fact_id in draft_ids.get('facts', []) if any(f.get('fact_id') == fact_id for f in checked_facts)},
+        'absence_observations': {draft_ids['absence_observations'][old]: new for old, new in absence_index_map.items() if old < len(draft_ids.get('absence_observations', []))},
+        'requirement_links': {draft_ids['requirement_links'][old]: new for old, new in link_index_map.items() if old < len(draft_ids.get('requirement_links', [])) and new < len(requirement_links)},
+        'evidence_needs': {draft_ids['evidence_needs'][old]: new for new, old in enumerate(i for i, n in enumerate(result.evidence_needs) if n.question_index is None or n.question_index in question_index_map) if old < len(draft_ids.get('evidence_needs', []))},
+    } if is_versioned_draft else {}
+    output_needs = [{**need.model_dump(), 'question_index': (question_index_map[need.question_index] if need.question_index is not None else None),
+                     'question': (research_questions[question_index_map[need.question_index]]['question']
+                                  if need.question_index is not None and need.question_index in question_index_map else None),
+                     'origin': 'model_suggested'} for need in result.evidence_needs
+                    if need.question_index is None or need.question_index in question_index_map]
+    if is_versioned_draft:
+        evidence_ids: dict[str, list[dict[str, Any]]] = {}
+        for evidence_id, original in draft_ids.get('evidence', {}).items():
+            source = source_map.get(original['source_id'])
+            if source is None:
+                continue
+            try:
+                original_location, _, match_kind = quotation_location(source, original['quotation'], original.get('source_page'))
+            except InvalidAnalysis:
+                continue
+            if match_kind != 'exact' or original_location.get('status') == 'ambiguous':
+                continue
+            span = (original_location.get('character_start'), original_location.get('character_end'))
+            matches = []
+            references = draft_ids.get('evidence_refs', {}).get(evidence_id, {})
+            for collection, findings in (('claims', checked_support), ('counterarguments', checked_counter)):
+                allowed_indexes = {stable_ids[collection][id] for id in references.get(collection, []) if id in stable_ids[collection]}
+                for finding_index, finding in enumerate(findings):
+                    if finding_index not in allowed_indexes:
+                        continue
+                    for citation_index, citation in enumerate(finding.get('citations', [])):
+                        location = citation.get('location', {})
+                        if (citation.get('source_id') == source.source_id and citation.get('quotation_match') == 'exact'
+                                and location.get('status') != 'ambiguous'
+                                and (location.get('character_start'), location.get('character_end')) == span):
+                            matches.append({'collection': collection, 'finding_index': finding_index, 'citation_index': citation_index})
+            for fact in checked_facts:
+                location = fact.get('location', {})
+                if (fact.get('fact_id') in references.get('facts', []) and fact.get('source_id') == source.source_id and fact.get('quotation_match') == 'exact'
+                        and location.get('status') != 'ambiguous'
+                        and (location.get('character_start'), location.get('character_end')) == span):
+                    matches.append({'collection': 'facts', 'fact_id': fact['fact_id']})
+            if matches:
+                evidence_ids[evidence_id] = matches
+        stable_ids['evidence'] = evidence_ids
+        from .research_output_contract import draft_slot_report, validated_slot_snapshots
+        stable_ids['slot_report'] = draft_slot_report(raw_draft_for_slots, stable_ids)
+        repair_private = validated_slot_snapshots(raw_draft_for_slots, stable_ids['slot_report'], stable_ids,
+            {'facts': checked_facts, 'calculations': checked_calculations, 'claims': checked_support,
+             'counterarguments': checked_counter, 'research_questions': research_questions,
+             'evidence_needs': output_needs,
+             'absence_observations': absence_observations, 'requirement_links': requirement_links})
+    else:
+        repair_private = {}
     return AnalysisResult(checked_support, checked_counter,
                           limitations + ["Matching a quotation does not independently establish that it supports a claim."]
                           + [MODEL_LIMITATION_PREFIX + value for value in result.limitations], [s.source_id for s in processed], tokens,
                           checked_facts, checked_calculations, sha256(prompt.encode("utf-8")).hexdigest(),
                           len(prompt), len(prompt.encode("utf-8")), segments, research_questions,
-                          [fact['fact_id'] for fact in structured_model_facts])
+                          [fact['fact_id'] for fact in structured_model_facts],
+                          output_needs,
+                          absence_observations, requirement_links, discovered_requirements, selection_diagnostics,
+                          pdf_structure_diagnostics,
+                          'partial' if structured_output_errors else 'complete', list(dict.fromkeys(structured_output_errors)), stable_ids,
+                          output_contract.version if output_contract is not None else None,
+                          {s.source_id: sha256(s.text.encode('utf-8')).hexdigest() for s in processed},
+                          work_page, unprocessed_source_ranges({s.source_id: len(s.text) for s in ordered}, [*(prior_segments or []), *segments], {s.source_id: s.text for s in ordered}), repair_private)

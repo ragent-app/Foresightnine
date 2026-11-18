@@ -128,7 +128,7 @@ def test_cleanup_reconciles_terminal_reservation_left_by_prior_process() -> None
 def test_entitlement_model_uses_server_override_and_glm_is_fallback(monkeypatch) -> None:
     monkeypatch.setenv("FORESIGHTNINE_LLM_PROVIDER", "openai_compatible")
     monkeypatch.delenv("FORESIGHTNINE_LLM_MODEL", raising=False)
-    assert configured_provider_model({}) == "glm-5.3-flash"
+    assert configured_provider_model({}) == "unknown"
     monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deepseek/deepseek-v4-flash")
     assert configured_provider_model() == "deepseek/deepseek-v4-flash"
 
@@ -215,7 +215,7 @@ def test_account_endpoint_exposes_server_authoritative_free_grant(monkeypatch) -
     body = response.json()
     assert body["plan"] == "free"
     assert body["quota_limit"] == 200_000
-    assert body["provider_model"] == "glm-5.3-flash"
+    assert body["provider_model"] == "unknown"
     reset_state()
 
 
@@ -672,14 +672,13 @@ def test_google_play_verify_route_grants_only_verified_active_purchase(monkeypat
         reset_state()
 
 
-@pytest.mark.parametrize("provider", ["glm_coding", "zhipu_glm_coding", " GLM_CODING "])
-def test_fixed_glm_account_model_ignores_stale_generic_override(provider: str) -> None:
+def test_account_model_uses_explicit_deployment_model() -> None:
     assert configured_provider_model({
-        "FORESIGHTNINE_LLM_PROVIDER": provider,
-        "FORESIGHTNINE_LLM_MODEL": "deepseek/deepseek-v4-flash",
-    }) == "glm-5.3-flash"
+        "FORESIGHTNINE_LLM_PROVIDER": "openai_chat_completions",
+        "FORESIGHTNINE_LLM_MODEL": "deployment/model",
+    }) == "deployment/model"
 
 
 def test_explicit_empty_provider_environment_does_not_inherit_process_model(monkeypatch) -> None:
     monkeypatch.setenv("FORESIGHTNINE_LLM_MODEL", "deployment/model")
-    assert configured_provider_model({}) == "glm-5.3-flash"
+    assert configured_provider_model({}) == "unknown"
