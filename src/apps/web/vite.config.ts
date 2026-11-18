@@ -60,7 +60,15 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), assetLinksPlugin(environment)],
     build: { target: "es2022" },
-    server: { host: "127.0.0.1" },
+    server: {
+      host: "127.0.0.1",
+      proxy: {
+        "^/(v1|v2|oauth|api/auth|health)(/|$)": {
+          target: process.env.FORESIGHTNINE_DEV_API_TARGET || "http://127.0.0.1:8000",
+          changeOrigin: false,
+        },
+      },
+    },
     // The staging preview is reached through the explicit Cloudflare hostname;
     // keep Vite's host allowlist closed to arbitrary forwarded Host headers.
     preview: {

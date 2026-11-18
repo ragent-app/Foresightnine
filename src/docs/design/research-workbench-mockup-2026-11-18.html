@@ -1,0 +1,664 @@
+<title>ForesightNine 研究工作台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<style>
+/* v4 · Ragent palette + Apple-style deference. Level 1: collapsible sidebar + content with large title that collapses into a
+   glass toolbar on scroll + floating glass composer. Level 2: inspector-style glass panel that pushes content on wide screens
+   (non-modal) and overlays as a sheet on narrow screens. Tokens: docs/design/research-workbench-ui-2026-11-18.md §2. */
+:root {
+  --primary: #000000; --on-primary: #ffffff;
+  --surface: #ffffff; --s-low: #f5f6f8; --s-mid: #eef0f3;
+  --on-surface: #1d1f24; --on-variant: #5d636e; --on-tertiary: #8d929c;
+  --fill: rgba(118, 124, 140, 0.12); --fill-2: rgba(118, 124, 140, 0.08); --fill-3: rgba(118, 124, 140, 0.05);
+  --separator: rgba(60, 66, 80, 0.13); --hairline: rgba(0, 0, 0, 0.07);
+  --glass: rgba(255, 255, 255, 0.72); --glass-strong: rgba(250, 250, 252, 0.84); --glass-edge: rgba(255, 255, 255, 0.65);
+  --group: rgba(255, 255, 255, 0.8);
+  --blur: saturate(180%) blur(24px);
+  --float: 0 12px 40px rgba(20, 24, 33, 0.08), 0 2px 6px rgba(20, 24, 33, 0.04);
+  --float-sm: 0 6px 20px rgba(20, 24, 33, 0.06), 0 1px 2px rgba(20, 24, 33, 0.04);
+  --success: #2f7a42; --counter: #2b5aa8; --warning: #9a6200; --warning-t: rgba(217, 119, 6, 0.09); --mark: rgba(255, 196, 0, 0.32);
+  --error: #c0262d; --error-t: rgba(192, 38, 45, 0.09);
+  --running: #2563eb; --done: #16a34a; --failed: #dc2626; --waiting: #d97706;
+  --hover: rgba(0, 0, 0, 0.04); --scrim: rgba(15, 18, 25, 0.10);
+  --font: Inter, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0, 0, 1); --spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --side-w: 264px; --panel-w: 420px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --primary: #ffffff; --on-primary: #000000; --surface: #000000; --s-low: #0c0c0d; --s-mid: #151517;
+  --on-surface: #f5f5f7; --on-variant: #b3b5bb; --on-tertiary: #8a8c92;
+  --fill: rgba(120, 120, 128, 0.30); --fill-2: rgba(120, 120, 128, 0.22); --fill-3: rgba(120, 120, 128, 0.14);
+  --separator: rgba(255, 255, 255, 0.11); --hairline: rgba(255, 255, 255, 0.10);
+  --glass: rgba(28, 28, 30, 0.66); --glass-strong: rgba(30, 30, 32, 0.82); --glass-edge: rgba(255, 255, 255, 0.07); --group: rgba(255, 255, 255, 0.06);
+  --float: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4); --float-sm: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --success: #8fd19a; --counter: #9dbdf5; --warning: #f5bd4f; --warning-t: rgba(245, 189, 79, 0.12); --mark: rgba(245, 189, 79, 0.30);
+  --error: #ffb4ab; --error-t: rgba(255, 180, 171, 0.13);
+  --running: #60a5fa; --done: #34d399; --failed: #f87171; --waiting: #fbbf24; --hover: rgba(255, 255, 255, 0.06); --scrim: rgba(0, 0, 0, 0.35);
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --primary: #ffffff; --on-primary: #000000; --surface: #000000; --s-low: #0c0c0d; --s-mid: #151517;
+  --on-surface: #f5f5f7; --on-variant: #b3b5bb; --on-tertiary: #8a8c92;
+  --fill: rgba(120, 120, 128, 0.30); --fill-2: rgba(120, 120, 128, 0.22); --fill-3: rgba(120, 120, 128, 0.14);
+  --separator: rgba(255, 255, 255, 0.11); --hairline: rgba(255, 255, 255, 0.10);
+  --glass: rgba(28, 28, 30, 0.66); --glass-strong: rgba(30, 30, 32, 0.82); --glass-edge: rgba(255, 255, 255, 0.07); --group: rgba(255, 255, 255, 0.06);
+  --float: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4); --float-sm: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --success: #8fd19a; --counter: #9dbdf5; --warning: #f5bd4f; --warning-t: rgba(245, 189, 79, 0.12); --mark: rgba(245, 189, 79, 0.30);
+  --error: #ffb4ab; --error-t: rgba(255, 180, 171, 0.13);
+  --running: #60a5fa; --done: #34d399; --failed: #f87171; --waiting: #fbbf24; --hover: rgba(255, 255, 255, 0.06); --scrim: rgba(0, 0, 0, 0.35);
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+@supports (height: 100dvh) { html, body { height: 100dvh; } }
+body { margin: 0; background: var(--surface); color: var(--on-surface); font-family: var(--font); font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.meta { font-size: 12px; color: var(--on-tertiary); line-height: 1.5; }
+.mono { font-family: var(--mono); font-size: 12px; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.glass { background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: inset 0 0 0 1px var(--glass-edge), 0 0 0 0.5px var(--hairline), var(--float-sm); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .glass, .panel, .pop, .menu, .toolbar.scrolled { background: var(--surface) !important; } }
+@media (prefers-reduced-transparency: reduce) { .glass, .panel, .pop, .menu, .toolbar.scrolled { background: var(--surface) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; } }
+
+/* controls */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 0 16px; border-radius: 17px; border: 0; cursor: pointer;
+  font-size: 14px; font-weight: 500; background: var(--fill-2); color: var(--on-surface); white-space: nowrap; text-decoration: none; transition: background 120ms var(--ease), transform 120ms var(--ease), opacity 120ms; }
+.btn:hover { background: var(--fill); } .btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--primary); color: var(--on-primary); } .btn.primary:hover { opacity: 0.86; }
+.btn.plain { background: transparent; color: var(--on-variant); padding: 0 10px; } .btn.plain:hover { background: var(--hover); color: var(--on-surface); }
+.btn.lg { min-height: 40px; border-radius: 20px; }
+.btn[disabled] { opacity: .4; cursor: not-allowed; }
+.icon-btn { width: 34px; height: 34px; border-radius: 50%; border: 0; background: transparent; color: var(--on-variant); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; transition: background 120ms var(--ease), color 120ms; }
+.icon-btn:hover { background: var(--hover); color: var(--on-surface); }
+.icon-btn[aria-pressed="true"] { background: var(--fill-2); color: var(--on-surface); }
+.icon-btn.send { width: 30px; height: 30px; margin: 2px; background: var(--fill); color: var(--on-tertiary); }
+.icon-btn.send.ready { background: var(--primary); color: var(--on-primary); }
+.icon-btn.close { width: 28px; height: 28px; background: var(--fill-2); }
+.link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--on-variant); font-size: 13px; text-decoration: none; }
+.link:hover { color: var(--on-surface); }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; }
+.dot.running { background: var(--running); animation: pulse 1.6s var(--ease) infinite; }
+.dot.done { background: var(--done); } .dot.partial { background: var(--waiting); } .dot.failed { background: var(--failed); }
+@keyframes pulse { 50% { opacity: .35; } }
+.role { font-size: 12px; font-weight: 600; white-space: nowrap; letter-spacing: 0.01em; }
+.role.support { color: var(--success); } .role.counter { color: var(--counter); } .role.review { color: var(--warning); } .role.error { color: var(--error); } .role.neutral { color: var(--on-tertiary); }
+
+/* scaffold */
+.app { display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); height: 100%; transition: grid-template-columns 320ms var(--spring); }
+.app.side-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+.side { background: var(--s-low); display: flex; flex-direction: column; gap: 2px; padding: calc(10px + env(safe-area-inset-top, 0px)) 10px calc(12px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); overflow: hidden auto; min-width: 0; }
+.app.side-collapsed .side { visibility: hidden; }
+.side-head { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 2px 6px; }
+.side-head .grow { flex: 1; }
+.brand-mark { width: 24px; height: 24px; border-radius: 7px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-size: 11px; font-weight: 700; margin-left: 6px; }
+.search { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0 2px 10px; padding: 0 10px; border-radius: 10px; background: var(--fill-2); color: var(--on-tertiary); font-size: 13px; }
+.search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 13px; color: var(--on-surface); }
+.side .group { font-size: 11.5px; font-weight: 600; color: var(--on-tertiary); padding: 12px 12px 4px; }
+.row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px; text-decoration: none; color: var(--on-surface); min-height: 36px; font-size: 13.5px; line-height: 1.4; transition: background 120ms var(--ease); }
+.row:hover { background: var(--hover); }
+.row[aria-current="page"] { background: var(--fill-2); font-weight: 500; }
+.row .q { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side .foot { margin-top: auto; display: flex; flex-direction: column; gap: 1px; padding-top: 10px; }
+.side .foot a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; color: var(--on-variant); text-decoration: none; font-size: 13.5px; }
+.side .foot a:hover { background: var(--hover); color: var(--on-surface); }
+.main { min-width: 0; position: relative; overflow: hidden; display: flex; flex-direction: column; transition: padding-right 320ms var(--spring); }
+.app.with-panel .main { padding-right: calc(var(--panel-w) + 12px); }
+.toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 2px; padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px; min-height: calc(52px + env(safe-area-inset-top, 0px));
+  transition: background 180ms var(--ease), box-shadow 180ms var(--ease); }
+.app.with-panel .toolbar, .app.with-panel .dock { right: calc(var(--panel-w) + 12px); }
+.toolbar.scrolled { background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: 0 0.5px 0 var(--hairline); }
+.toolbar .tb-title { flex: 1; min-width: 0; text-align: center; font-size: 13.5px; font-weight: 600; opacity: 0; transform: translateY(4px); transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
+.toolbar.scrolled .tb-title { opacity: 1; transform: none; }
+.toolbar .when-collapsed { display: none; }
+.app.side-collapsed .toolbar .when-collapsed { display: inline-flex; }
+.scroll { flex: 1; overflow: auto; }
+.col { max-width: 720px; margin: 0 auto; padding: calc(64px + env(safe-area-inset-top, 0px)) 28px 200px; }
+
+/* large title */
+.large-title h1 { margin: 0; font-size: 28px; font-weight: 600; line-height: 1.3; letter-spacing: -0.02em; text-wrap: pretty; max-width: 30em; }
+.large-title .meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 13px; }
+
+/* conversation */
+.turn { display: flex; flex-direction: column; gap: 14px; padding-top: 36px; }
+.stamp { align-self: center; font-size: 11.5px; color: var(--on-tertiary); }
+.ask { align-self: flex-end; max-width: 80%; background: var(--fill-3); border-radius: 20px; padding: 9px 16px; font-size: 16px; line-height: 1.55; }
+.answer { display: flex; flex-direction: column; gap: 14px; }
+.status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.answer p { margin: 0; }
+.cite-n { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin: 0 1px; border-radius: 8px; border: 0;
+  background: var(--fill-2); color: var(--on-variant); font-size: 10px; font-weight: 600; vertical-align: 2px; cursor: pointer; line-height: 1; transition: background 120ms var(--ease); }
+.cite-n:hover, .cite-n[aria-expanded="true"] { background: var(--primary); color: var(--on-primary); }
+.claims { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.claims li { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 15px; line-height: 1.6; border-radius: 8px; transition: background 240ms var(--ease); }
+.claims li.flash { background: var(--fill-3); }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 32px; }
+.stat { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; display: flex; flex-direction: column; color: inherit; }
+.stat b { font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--on-tertiary); }
+.stat:hover b { text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; }
+.summary { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 13px; color: var(--on-tertiary); }
+.summary .link { font-size: 13px; color: var(--on-variant); }
+.summary .sep { opacity: .5; }
+.note { font-size: 12px; color: var(--on-tertiary); margin: 0; }
+.callout { background: var(--warning-t); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.callout .h { font-weight: 600; color: var(--warning); }
+.callout ul { margin: 0; padding-left: 18px; line-height: 1.6; }
+.callout .why { font-size: 12.5px; color: var(--on-variant); }
+.callout .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+/* composer */
+.dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 56px 24px calc(16px + env(safe-area-inset-bottom, 0px)); pointer-events: none; transition: right 320ms var(--spring);
+  background: linear-gradient(to bottom, transparent, var(--surface) 32px); }
+.dock-inner { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
+.suggest { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 14px; min-height: 22px; }
+.suggest .link { font-size: 12.5px; }
+.livebar { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 3px 4px 3px 14px; border-radius: 18px; border: 0; cursor: pointer; text-align: left; font-size: 13px; color: var(--on-surface); }
+.livebar .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer { border-radius: 22px; padding: 5px; display: flex; align-items: flex-end; gap: 2px; }
+.composer textarea { flex: 1; border: 0; background: transparent; resize: none; outline: none; min-height: 34px; max-height: 200px; padding: 6px 6px; font-size: 15.5px; line-height: 1.45; }
+.composer textarea::placeholder { color: var(--on-tertiary); }
+.token { display: inline-flex; align-items: center; gap: 2px; min-height: 24px; padding: 0 2px 0 9px; border-radius: 12px; background: var(--fill-2); color: var(--on-variant); font-size: 12px; max-width: 100%; }
+.token span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.token button { width: 20px; height: 20px; border-radius: 50%; border: 0; background: none; cursor: pointer; color: var(--on-tertiary); }
+.tokens { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px; }
+
+/* popover, menu */
+.pop, .menu { position: fixed; z-index: 40; background: var(--glass-strong); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 0 0 0.5px var(--hairline), var(--float); animation: pop-in 180ms var(--spring); }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.97); } }
+.pop { width: min(330px, calc(100vw - 32px)); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.pop q { quotes: "“" "”"; line-height: 1.6; }
+.pop .actions { display: flex; gap: 6px; margin-top: 4px; }
+.menu { min-width: 210px; border-radius: 12px; padding: 5px; display: flex; flex-direction: column; }
+.menu button { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0 10px; border-radius: 7px; border: 0; background: none; cursor: pointer; text-align: left; font-size: 13.5px; color: var(--on-surface); }
+.menu button svg { color: var(--on-variant); width: 16px; height: 16px; }
+.menu button:hover { background: var(--fill-2); }
+.menu hr { border: 0; height: 0.5px; background: var(--separator); margin: 4px 10px; }
+
+/* level-2 panel (inspector on wide screens, sheet on narrow) */
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 30; }
+.panel { position: fixed; z-index: 31; top: 12px; right: 12px; bottom: 12px; width: var(--panel-w); border-radius: 22px; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--glass-strong); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 0 0 0.5px var(--hairline), var(--float); animation: panel-in 320ms var(--spring); }
+@keyframes panel-in { from { transform: translateX(24px); opacity: 0; } }
+.panel header { display: flex; align-items: center; gap: 8px; padding: 14px 12px 6px 18px; }
+.panel header h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.panel .body { flex: 1; overflow: auto; padding: 6px 14px 28px; display: flex; flex-direction: column; gap: 18px; }
+.panel .foot { padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; justify-content: flex-end; box-shadow: 0 -0.5px 0 var(--separator); }
+.seg { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--fill-2); }
+.panel > .seg { margin: 0 14px 6px; }
+.seg button { flex: 1; min-height: 28px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; cursor: pointer; font-size: 13px; white-space: nowrap; color: var(--on-surface); transition: background 180ms var(--ease); }
+.seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--surface); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.10), 0 0 0 0.5px var(--hairline); }
+.seg.inline { display: inline-flex; } .seg.inline button { flex: none; }
+.gtitle { font-size: 12px; font-weight: 500; color: var(--on-tertiary); margin: 0 6px 6px; display: flex; gap: 6px; align-items: baseline; }
+.list { display: flex; flex-direction: column; background: var(--group); border-radius: 12px; overflow: hidden; }
+.item { background: var(--group); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--on-surface); }
+.list > .item { background: transparent; border-radius: 0; position: relative; }
+.list > .item + .item::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: 0.5px; background: var(--separator); }
+button.item { border: 0; text-align: left; cursor: pointer; width: 100%; font: inherit; transition: background 120ms var(--ease); }
+button.item:hover { background: var(--hover); }
+.line { display: flex; align-items: baseline; gap: 10px; } .line .grow { flex: 1; min-width: 0; }
+.value { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.01em; }
+.flag { font-size: 12px; color: var(--warning); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 12px; color: var(--on-tertiary); }
+.fact-ref { border: 0; background: var(--fill-2); border-radius: 6px; padding: 0 6px; min-height: 20px; font-size: 11.5px; font-weight: 600; cursor: pointer; color: var(--on-variant); }
+.leads { background: transparent; box-shadow: inset 0 0 0 1px var(--separator); }
+.lead { padding: 9px 14px; font-size: 13px; color: var(--on-variant); display: flex; flex-direction: column; gap: 1px; position: relative; }
+.lead + .lead::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; border-top: 0.5px dashed var(--separator); }
+.cov { height: 3px; background: var(--fill); border-radius: 2px; position: relative; overflow: hidden; margin-top: 4px; }
+.cov i { position: absolute; top: 0; bottom: 0; background: var(--primary); border-radius: 2px; }
+.perms { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--on-variant); }
+.perms .no { text-decoration: line-through; color: var(--on-tertiary); }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; background: var(--group); border-radius: 12px; overflow: hidden; }
+.step { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 1px 10px; padding: 9px 14px; font-size: 13.5px; align-items: start; position: relative; }
+.step + .step::before { content: ""; position: absolute; top: 0; left: 44px; right: 0; height: 0.5px; background: var(--separator); }
+.step .ic { color: var(--on-tertiary); padding-top: 2px; } .step .ic svg { width: 16px; height: 16px; }
+.step .why { grid-column: 2 / 3; font-size: 12px; color: var(--on-variant); }
+.step.model { padding: 5px 14px; font-size: 11.5px; color: var(--on-tertiary); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label, .field > .lt { font-size: 13px; font-weight: 500; color: var(--on-variant); }
+.field input, .field select, .field textarea { border: 0; background: var(--group); box-shadow: inset 0 0 0 0.5px var(--separator); border-radius: 9px; min-height: 36px; padding: 8px 11px; width: 100%; font-size: 14.5px; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--primary); }
+.field textarea { min-height: 80px; resize: vertical; line-height: 1.6; }
+.field .help { font-size: 12px; color: var(--on-tertiary); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+details.more > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; min-height: 36px; font-size: 13.5px; font-weight: 500; color: var(--on-variant); }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary svg { width: 14px; height: 14px; transition: transform 180ms var(--ease); }
+details.more[open] > summary svg { transform: rotate(90deg); }
+.reader-text { font-size: 16px; line-height: 1.8; padding: 0 4px; }
+.reader-text p { margin: 0 0 14px; }
+mark.on { background: var(--mark); color: inherit; border-radius: 4px; padding: 1px; }
+mark.cited { background: none; color: inherit; text-decoration: underline; text-decoration-color: var(--on-tertiary); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+
+/* home, login, prefs */
+.home { max-width: 680px; margin: 0 auto; padding: 16vh 24px 64px; display: flex; flex-direction: column; gap: 16px; }
+.home h1 { margin: 0 0 8px; font-size: 30px; font-weight: 600; letter-spacing: -0.025em; text-align: center; }
+.home .composer { border-radius: 24px; padding: 8px; }
+.home .composer textarea { min-height: 80px; }
+.examples { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.examples .link { font-size: 13.5px; padding: 5px 8px; border-radius: 8px; }
+.examples .link:hover { background: var(--hover); }
+.login-wrap { min-height: 100%; display: grid; place-items: center; padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: radial-gradient(1000px 520px at 50% -8%, var(--s-mid), var(--s-low)); }
+.login { width: min(360px, 100%); border-radius: 22px; padding: 28px 24px 22px; display: flex; flex-direction: column; gap: 10px; }
+.banner { border-radius: 9px; padding: 8px 12px; font-size: 13px; background: var(--error-t); color: var(--error); }
+.prefs { max-width: 760px; margin: 0 auto; padding: 64px 28px 64px; display: flex; flex-direction: column; gap: 18px; }
+.prefs h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.025em; }
+.group-box { background: var(--s-low); border-radius: 12px; padding: 0 14px; }
+.prow { display: flex; align-items: center; gap: 14px; padding: 12px 0; position: relative; }
+.prow + .prow::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 0.5px; background: var(--separator); }
+.prow .grow { flex: 1; min-width: 0; }
+.prow b { font-weight: 500; font-size: 14.5px; }
+
+@media (max-width: 1279px) {
+  .app.with-panel .main { padding-right: 0; } .app.with-panel .toolbar, .app.with-panel .dock { right: 0; }
+}
+@media (max-width: 899px) {
+  .app, .app.side-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .side.open { display: flex; visibility: visible; position: fixed; inset: 0 auto 0 0; width: min(320px, 86vw); z-index: 35; box-shadow: var(--float); animation: drawer-in 320ms var(--spring); }
+  .toolbar .when-collapsed { display: inline-flex; }
+  .col, .prefs { padding: 56px max(16px, env(safe-area-inset-right, 0px)) 200px max(16px, env(safe-area-inset-left, 0px)); }
+  .large-title h1 { font-size: 24px; }
+  .dock { padding: 40px max(10px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); background: linear-gradient(to bottom, transparent, var(--surface) 30px); }
+  .panel { top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 88%; border-radius: 20px 20px 0 0; animation-name: sheet-up; }
+  .panel header { padding-top: 20px; position: relative; }
+  .ask { max-width: 90%; }
+  .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .hide-narrow { display: none; }
+}
+@keyframes drawer-in { from { transform: translateX(-24px); opacity: 0; } }
+@keyframes sheet-up { from { transform: translateY(28px); opacity: 0; } }
+.side-scrim { position: fixed; inset: 0; z-index: 34; background: var(--scrim); }
+.grabber { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 72px; height: 22px; border: 0; background: none; cursor: pointer; padding: 0; }
+.grabber::before { content: ""; position: absolute; top: 7px; left: 18px; width: 36px; height: 5px; border-radius: 3px; background: var(--fill); }
+.action-sheet { position: fixed; z-index: 41; left: max(8px, env(safe-area-inset-left, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 8px; animation: sheet-up 320ms var(--spring); }
+.action-sheet .group { border-radius: 14px; overflow: hidden; background: var(--glass-strong); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: 0 0 0 0.5px var(--hairline); }
+.action-sheet button { display: block; width: 100%; min-height: 56px; border: 0; background: none; font-size: 17px; color: var(--on-surface); cursor: pointer; position: relative; }
+.action-sheet button + button::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 0.5px; background: var(--separator); }
+.action-sheet .cancel { font-weight: 600; }
+.home-dock { display: contents; }
+.sample-note { text-align: center; font-size: 11.5px; color: var(--on-tertiary); margin: 8px 0 0; }
+
+/* touch devices: Apple HIG 44pt targets, 16px inputs (prevents iOS focus zoom) */
+@media (pointer: coarse) {
+  .icon-btn { width: 40px; height: 40px; } .icon-btn.send { width: 34px; height: 34px; } .icon-btn.close { width: 30px; height: 30px; }
+  .btn { min-height: 40px; border-radius: 20px; } .row { min-height: 44px; } .menu button { min-height: 44px; }
+  .seg button { min-height: 34px; } .link { min-height: 32px; display: inline-flex; align-items: center; }
+  .composer textarea, .field input, .field select, .field textarea, .search input { font-size: 16px; }
+  .cite-n { min-width: 20px; height: 20px; font-size: 11px; border-radius: 10px; }
+}
+/* phones */
+@media (max-width: 599px) {
+  .large-title h1 { font-size: 22px; } .large-title .meta { font-size: 12px; }
+  .stat b { font-size: 22px; } .stats { gap: 6px 24px; }
+  .claims li { grid-template-columns: 30px minmax(0, 1fr); font-size: 15px; }
+  .suggest { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 0 8px; }
+  .suggest::-webkit-scrollbar { display: none; }
+  .suggest .link { white-space: nowrap; }
+  .turn { padding-top: 28px; }
+  .callout { padding: 12px; }
+  .prow { flex-wrap: wrap; } .prow .grow { flex-basis: 60%; }
+  .home { padding: calc(12vh + env(safe-area-inset-top, 0px)) 16px 220px; }
+  .home h1 { font-size: 26px; }
+  .home-dock { display: block; position: fixed; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 6; }
+  .home .composer textarea { min-height: 48px; }
+  .login { padding: 24px 20px 18px; }
+}
+/* very small phones (320–359) */
+@media (max-width: 359px) {
+  .large-title h1 { font-size: 20px; } .ask { font-size: 15px; padding: 8px 14px; } .stat b { font-size: 20px; }
+  .claims li { grid-template-columns: minmax(0, 1fr); gap: 0; } .claims li .role { display: block; }
+  .toolbar { padding-left: 6px; padding-right: 6px; }
+}
+/* landscape phones: short viewport */
+@media (max-height: 500px) and (orientation: landscape) {
+  .col { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } .large-title h1 { font-size: 20px; }
+  .dock { padding-top: 28px; } .suggest { display: none; }
+  .panel, .panel.medium { max-height: 94%; height: auto; }
+  .home { padding-top: 48px; }
+}
+/* bottom-sheet detents on narrow screens */
+@media (max-width: 899px) {
+  .panel.medium { height: 58%; } .panel.large { height: 92%; max-height: 92%; }
+  .panel { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+
+@media (prefers-reduced-motion: reduce) { .dot.running, .panel, .pop, .menu, .action-sheet, .side.open { animation: none; } .app, .main, .claims li, .btn, .toolbar, .tb-title, .seg button { transition: none; } }
+</style>
+
+<div id="root" style="height:100%"></div>
+<div id="layer"></div>
+<script>
+const SOURCE = { title: "Northwind 示例公司 2026 财年年报摘录", kind: "用户提供", method: "上传 PDF", published: "2026-08-01 08:00", obtained: "2026-11-18 13:22", sha: "f28b9449 1dea9709",
+  perms: [["保存", true], ["供模型读取", true], ["展示原文", true], ["导出", false]],
+  text: "Northwind Holdings Annual Report FY2026 (illustrative excerpt). Amounts are presented in millions of U.S. dollars unless otherwise noted.\n\nYear ended June 30, 2026: total revenue 48,612. Year ended June 30, 2025: total revenue 41,270. Revenue growth was driven primarily by cloud services and recurring subscriptions.\n\nYear ended June 30, 2026: operating income 15,104. Year ended June 30, 2025: operating income 12,980. Operating expenses increased as the company expanded data-center capacity.\n\nManagement expects capacity investment to remain elevated in the next fiscal year." };
+const Q = { rev26: "Year ended June 30, 2026: total revenue 48,612.", rev25: "Year ended June 30, 2025: total revenue 41,270.", driver: "Revenue growth was driven primarily by cloud services and recurring subscriptions.",
+  oi26: "Year ended June 30, 2026: operating income 15,104.", oi25: "Year ended June 30, 2025: operating income 12,980.", opex: "Operating expenses increased as the company expanded data-center capacity.",
+  capex: "Management expects capacity investment to remain elevated in the next fiscal year." };
+const span = (q) => { const s = SOURCE.text.indexOf(q); return [s, s + q.length]; };
+const CITES = [Q.rev26, Q.driver, Q.oi26, Q.opex];
+const cite = (q) => { const n = CITES.indexOf(q) + 1; return `<button class="cite-n" data-cite="${n}" aria-label="引用 ${n}">${n}</button>`; };
+const FACTS = [
+  ["F1", "总收入 FY2026", "48,612", "百万 · USD", "截至 2026-06-30", Q.rev26, 1, ""], ["F2", "总收入 FY2025", "41,270", "百万 · USD", "截至 2025-06-30", Q.rev25, 1, ""],
+  ["F3", "营业利润 FY2026", "15,104", "百万 · USD", "截至 2026-06-30", Q.oi26, 2, "引文中没有出现币种"], ["F4", "营业利润 FY2025", "12,980", "百万 · USD", "截至 2025-06-30", Q.oi25, 2, "引文中没有出现币种"]];
+const CALCS = [["收入同比增长率", "17.79%", "(48,612 ÷ 41,270 − 1) × 100", ["F1", "F2"], 1, [["结果一致", "support"], ["输入不可核验", "review"]]],
+  ["营业利润率 FY2026", "31.07%", "15,104 ÷ 48,612 × 100", ["F3", "F1"], 2, [["结果一致", "support"], ["同期间", "neutral"]]],
+  ["营业利润率 FY2025", "31.45%", "12,980 ÷ 41,270 × 100", ["F4", "F2"], 2, [["结果一致", "support"], ["同期间", "neutral"]]]];
+const CLAIMS = [["C1", "support", "2026 财年总收入为 48,612 百万美元，比上一财年增长 17.79%。", Q.rev26], ["C2", "support", "年报把收入增长主要归因于云服务和订阅收入。", Q.driver],
+  ["C3", "counter", "营业利润率从 31.45% 小幅降到 31.07%，收入增长没有带来利润率提升。", Q.oi26], ["C4", "counter", "营业费用因扩建数据中心而上升，可能继续压制利润率。", Q.opex]];
+const ROLE = { support: ["支持", "support"], counter: ["反方", "counter"], review: ["待复核", "review"] };
+const STEPS = {
+  1: [["model", "模型调用 · 1,980 输入 / 215 输出 Token"], ["read", "阅读资料", "需要读取年报摘录中两期总收入的原文", "已读", "support"], ["model", "模型调用 · 2,428 输入 / 1,336 输出 Token"],
+      ["pen", "记录数字", "记录 FY2026 与 FY2025 总收入", "参数被拒", "review"], ["pen", "记录数字", "修正引文位置后重新记录", "完成", "support"], ["sum", "计算", "收入同比增长率", "完成", "support"], ["model", "模型调用 · 请求没有返回可用结果"]],
+  2: [["model", "模型调用 · 3,112 输入 / 402 输出 Token"], ["read", "阅读资料", "读取营业利润和费用说明", "已读", "support"], ["pen", "记录数字", "记录两期营业利润", "完成", "support"],
+      ["sum", "计算", "两期营业利润率，复用第 1 轮的 F1、F2", "完成", "support"], ["check", "提交结论", "回答利润率问题并列出反方证据", "完成", "support"]],
+  3: [["search", "搜索线索", "查找管理层关于下一财年资本开支的表述", "完成", "support"], ["read", "阅读资料", "重新阅读年报中关于产能投资的段落", "已读", "support"], ["fetch", "获取原文", "获取业绩电话会文字记录", "进行中", "neutral"]]
+};
+const ICON = {
+  sidebar: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>', compose: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', send: '<path stroke-width="2.1" d="M12 19V5M5 12l7-7 7 7"/>', close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  more: '<circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="19" cy="12" r="1.2" fill="currentColor"/>',
+  tune: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  inspector: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>', read: '<path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2zM22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/>',
+  fetch: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', sum: '<path d="M17 5H7l6 7-6 7h10"/>', check: '<path d="m5 12 5 5 9-10"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>', review: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+  download: '<path d="M12 4v12M7 11l5 5 5-5M5 20h14"/>', menu: '<path d="M4 7h16M4 12h16M4 17h16"/>'
+};
+const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+ICON.read2 = ICON.read;
+const STEP_ICON = { read: "read", search: "search", fetch: "fetch", pen: "pen", sum: "sum", check: "check" };
+
+let S = { view: "topic", panel: null, tab: "claims", stepTurn: 2, focus: null, sideCollapsed: false, sideOpen: false, prefsTab: "model" };
+try { S.sideCollapsed = localStorage.getItem("f9.side") === "collapsed"; } catch (e) {}
+const wide = () => matchMedia("(min-width: 900px)").matches;
+
+function side(active) {
+  const today = [["Northwind 示例公司最近两个财年的收入增长有多快？", active === "running" ? "running" : "partial", true]];
+  const week = [["核对一条新闻中的季度出货量是否与公告一致", "done"], ["总结一份行业报告的主要结论与未解决的问题", "done"]];
+  const row = ([q, d, cur]) => `<a class="row" href="${cur ? (active === "running" ? "#running" : "#topic") : "#topic"}" ${cur && (active === "topic" || active === "running") ? 'aria-current="page"' : ""}><span class="dot ${d}"></span><span class="q">${esc(q)}</span></a>`;
+    return `${S.sideOpen ? '<div class="side-scrim" data-close-side></div>' : ""}<aside class="side ${S.sideOpen ? "open" : ""}" aria-label="侧栏">
+    <div class="side-head"><span class="brand-mark">F9</span><span class="grow"></span>
+      <button class="icon-btn" data-new aria-label="新研究" title="新研究">${ic("compose")}</button>
+      <button class="icon-btn" data-toggle-side aria-label="收起侧栏" title="收起侧栏">${ic("sidebar")}</button></div>
+    <label class="search">${ic("search")}<input aria-label="搜索研究" placeholder="搜索"></label>
+    <div class="group">今天</div>${today.map(row).join("")}
+    <div class="group">本周</div>${week.map(row).join("")}
+    <div class="foot"><a href="#prefs">${ic("settings")}设置</a><a href="#login">${ic("logout")}退出登录</a>
+</div></aside>`;
+}
+function toolbar(title, extra) {
+  return `<div class="toolbar" id="toolbar">
+    <button class="icon-btn when-collapsed" data-toggle-side aria-label="展开侧栏" title="展开侧栏">${ic("sidebar")}</button>
+    <button class="icon-btn when-collapsed" data-new aria-label="新研究" title="新研究">${ic("compose")}</button>
+    <div class="tb-title">${title ? esc(title) : ""}</div>${extra || ""}</div>`;
+}
+const TITLE = "Northwind 示例公司最近两个财年的收入增长有多快？";
+function topicTools() {
+  return `<button class="icon-btn" data-panel="record" aria-label="研究记录" title="研究记录" aria-pressed="${S.panel === "record"}">${ic("inspector")}</button>
+    <button class="icon-btn" data-menu aria-label="更多操作" aria-haspopup="menu" title="更多">${ic("more")}</button>`;
+}
+const summary = (parts) => `<div class="summary">${parts.map(([t, tab, turn]) => `<button class="link" data-panel="record" data-tab="${tab}" ${turn ? `data-turn="${turn}"` : ""}>${t}</button>`).join('<span class="sep">·</span>')}<span>›</span></div>`;
+const citeBtn = (q) => { const n = CITES.indexOf(q) + 1; return `<button class="cite-n" data-cite="${n}" aria-label="引用 ${n}">${n}</button>`; };
+
+function turn1() {
+  return `<section class="turn" aria-label="第 1 轮"><div class="stamp">第 1 轮 · 今天 13:22</div>
+    <div class="ask">${TITLE}</div>
+    <div class="answer"><div class="status"><span class="role review">部分完成</span><span class="meta">5 次模型调用 · 9,940 Token · 2 分 41 秒</span></div>
+      <p>已记录 2 个数字，完成 1 项计算，还没有形成可引用的结论。</p>
+      <div class="stats"><button class="stat" data-panel="record" data-tab="numbers"><b>17.79%</b><span>收入同比增长率 · FY2026 对 FY2025</span></button></div>
+      <div class="callout" role="note"><span class="h">未完成的部分</span>
+        <ul><li>还没有引文位置已核实的结论。请添加或读取相关资料后继续研究。</li><li>部分资料还没有读完，未读部分中是否有相关内容尚不确定。</li></ul>
+        <span class="why">停止原因：模型请求没有返回可用结果</span>
+        <div class="actions"><button class="btn primary">继续研究</button><button class="btn" data-menu="partial" aria-haspopup="menu">更多</button></div></div>
+      ${summary([["2 个数字 · 1 项计算", "numbers"], ["1 份资料", "sources"], ["过程 4 步", "steps", 1]])}</div></section>`;
+}
+function turn2() {
+  return `<section class="turn" aria-label="第 2 轮"><div class="stamp">第 2 轮 · 今天 13:41</div>
+    <div class="ask">营业利润率有没有随收入一起提高？请同时列出不支持“增长强劲”的证据。</div>
+    <div class="answer"><div class="status"><span class="role support">完成</span><span class="meta">4 次模型调用 · 12,480 Token · 3 分 02 秒</span></div>
+      <p>按年报摘录，Northwind 2026 财年总收入为 48,612 百万美元，比 2025 财年增长 17.79%${citeBtn(Q.rev26)}，增长主要来自云服务和订阅收入${citeBtn(Q.driver)}。</p>
+      <p>营业利润率没有同步提高：2026 财年为 31.07%，2025 财年为 31.45%，下降约 0.38 个百分点${citeBtn(Q.oi26)}。年报同时提到营业费用因扩建数据中心而上升${citeBtn(Q.opex)}。</p>
+      <div class="stats"><button class="stat" data-panel="record" data-tab="numbers"><b>31.07%</b><span>营业利润率 FY2026</span></button><button class="stat" data-panel="record" data-tab="numbers"><b>31.45%</b><span>营业利润率 FY2025</span></button></div>
+      <ul class="claims">${CLAIMS.map(([id, role, text, q]) => `<li id="claim-${id}"><span class="role ${ROLE[role][1]}">${ROLE[role][0]}</span><span>${esc(text)}${citeBtn(q)}</span></li>`).join("")}</ul>
+      <p class="note">系统已核对引文位置和数字；结论是否被引文充分支持，需要你判断。</p>
+      ${summary([["4 条结论", "claims"], ["2 个数字 · 2 项计算", "numbers"], ["过程 5 步", "steps", 2]])}</div></section>`;
+}
+const turn3 = () => `<section class="turn" aria-label="第 3 轮"><div class="stamp">第 3 轮 · 今天 14:05</div><div class="ask">管理层对下一财年的资本开支有什么说法？会不会继续拖累利润率？</div></section>`;
+function dock(running) {
+  if (running) return `<div class="dock"><div class="dock-inner">
+    <button class="livebar glass" data-panel="record" data-tab="steps" data-turn="3" aria-live="polite"><span class="dot running"></span><span class="what"><b style="font-weight:500">研究中</b> · 获取原文：业绩电话会文字记录</span><span class="meta hide-narrow">3 次调用 · 1 次搜索 · 2:14</span><span class="btn plain" role="button" data-cancel>取消</span></button>
+    <div class="composer glass"><button class="icon-btn" disabled aria-label="添加资料">${ic("plus")}</button><textarea rows="1" disabled aria-label="追问" placeholder="本轮研究进行中"></textarea><button class="icon-btn send" disabled aria-label="发送">${ic("send")}</button></div></div></div>`;
+  return `<div class="dock"><div class="dock-inner">
+    <div class="suggest"><button class="link" data-prefill="gap">补充上一轮的缺口</button><button class="link" data-prefill="counter">寻找反方证据</button></div>
+    <div class="composer glass" style="flex-direction:column;align-items:stretch">
+      ${S.focus ? `<div class="tokens"><span class="token"><span>深挖引用 ${S.focus}</span><button data-unfocus aria-label="移除深挖">×</button></span></div>` : ""}
+      <div style="display:flex;align-items:flex-end;gap:2px"><button class="icon-btn" aria-label="添加资料" title="添加资料">${ic("plus")}</button>
+        <textarea id="ask" rows="1" aria-label="追问" placeholder="继续追问…"></textarea>
+        <button class="icon-btn" data-panel="settings" aria-label="研究设置" title="研究设置">${ic("tune")}</button>
+        <button class="icon-btn send" id="send" data-start aria-label="发送">${ic("send")}</button></div></div></div></div>`;
+}
+function topicView(running) {
+  return `<div class="app ${S.sideCollapsed ? "side-collapsed" : ""} ${S.panel && wide() ? "with-panel" : ""}">${side(running ? "running" : "topic")}
+    <main class="main">${toolbar(TITLE, topicTools())}<div class="scroll" id="scroll"><div class="col">
+      <header class="large-title"><h1>${TITLE}</h1><div class="meta"><span>截止 2026-11-18 23:59 (UTC+8)</span><span>·</span><span>v3 草稿</span><span>·</span><span>${running ? 3 : 2} 轮</span></div></header>
+      ${turn1()}${turn2()}${running ? turn3() : ""}</div></div>${dock(running)}</main></div>`;
+}
+function homeView() {
+  return `<div class="app ${S.sideCollapsed ? "side-collapsed" : ""}">${side("home")}<main class="main">${toolbar("", "")}<div class="scroll"><div class="home">
+    <h1>你想研究什么？</h1>
+    <div class="home-dock"><div class="composer glass" style="flex-direction:column;align-items:stretch">
+      <div class="tokens"><span class="token"><span>年报摘录.pdf</span><button aria-label="移除资料">×</button></span><span class="token"><span>截止 2026-11-18 23:59</span><button aria-label="移除截止时间">×</button></span></div>
+      <textarea id="home-q" aria-label="研究问题" placeholder="例如：比较一家公司最近两个财年的总收入，并说明主要变化来源"></textarea>
+      <div style="display:flex;align-items:center;gap:2px"><button class="icon-btn" aria-label="添加资料" title="添加资料">${ic("plus")}</button><span style="flex:1"></span>
+        <button class="icon-btn" data-panel="settings" aria-label="研究设置" title="研究设置">${ic("tune")}</button><button class="icon-btn send" id="send" data-start aria-label="开始研究">${ic("send")}</button></div></div></div>
+    <div class="examples">${["比较一家公司最近两个财年的总收入和营业利润率", "核对一条新闻里的数字是否与公司公告一致", "总结一份报告的主要结论、关键数字和未解决的问题"].map((t) => `<button class="link" data-example>${t}</button>`).join("")}</div>
+    <p class="sample-note">设计稿 · 公司、资料与数字均为虚构示例</p>
+  </div></div></main></div>`;
+}
+function loginView() {
+  return `<div class="login-wrap"><div class="login glass">
+    <span class="brand-mark" style="margin:0 0 6px;width:32px;height:32px;border-radius:9px;font-size:13px">F9</span>
+    <div style="font-size:20px;font-weight:600;letter-spacing:-0.02em">登录 ForesightNine</div>
+    <p style="margin:0 0 6px;color:var(--on-variant);font-size:14px">把问题变成可回查的研究记录。</p>
+    <div class="banner" role="alert">登录没有完成，请重试。</div>
+    <a class="btn primary lg" href="#topic" style="width:100%">使用 Google 继续</a><a class="btn lg" href="#topic" style="width:100%">使用 GitHub 继续</a>
+    <details class="more"><summary>${ic("chev")}开发环境本地账户</summary><div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
+      <div class="field"><label for="l-mail">邮箱</label><input id="l-mail" type="email" value="dev@example.com"></div>
+      <div class="field"><label for="l-pw">密码</label><input id="l-pw" type="password" value="example-password"><span class="help">至少 12 位</span></div>
+      <div style="display:flex;gap:6px"><button class="btn primary">登录</button><button class="btn">注册</button></div></div></details>
+    <p class="meta" style="margin:6px 0 0;text-align:center">隐私政策 · 删除账户说明</p></div></div>`;
+}
+function prefsView() {
+  const t = S.prefsTab;
+  const rows = t === "account" ? `<div class="prow"><div class="grow"><b>dev@example.com</b><div class="meta">Google 登录</div></div><button class="btn">退出登录</button></div>
+      <div class="prow"><div class="grow"><b>删除账户</b><div class="meta">研究、资料和版本会一并删除。</div></div><button class="btn" disabled>删除…</button></div>`
+    : t === "data" ? `<div class="prow"><span class="meta">1</span><div class="grow"><b>提供方 A</b><div class="meta">已保存 Key</div></div><button class="btn">测试</button></div>
+      <div class="prow"><span class="meta">2</span><div class="grow"><b>提供方 B</b><div class="meta">未设置 Key</div></div><button class="btn primary">设置</button></div>`
+    : `<div class="prow"><div class="grow"><b>模型来源</b><div class="meta">平台模型按账户额度计费；我的模型使用你自己的服务和密钥。</div></div><div class="seg inline" role="group"><button aria-pressed="false">平台</button><button aria-pressed="true">我的模型</button></div></div>
+      <div class="prow"><div class="grow"><b>Anthropic Messages · example-model</b><div class="meta">https://api.example.com · 密钥已保存</div></div><span class="role support">可用</span><button class="btn" data-panel="model">编辑</button></div>`;
+  const head = { account: "账户", model: "模型", data: "数据源" };
+  return `<div class="app ${S.sideCollapsed ? "side-collapsed" : ""} ${S.panel && wide() ? "with-panel" : ""}">${side("prefs")}<main class="main">${toolbar("", "")}<div class="scroll"><div class="prefs">
+    <h1>设置</h1><div class="seg inline" role="tablist" style="align-self:flex-start">${[["account", "账户"], ["model", "模型"], ["data", "数据源"]].map(([k, l]) => `<button role="tab" aria-selected="${k === t}" data-prefs="${k}">${l}</button>`).join("")}</div>
+    <div><div class="gtitle">${head[t]}</div><div class="group-box">${rows}</div>${t === "model" ? `<p class="note" style="margin:8px 6px 0">密钥只用于调用你配置的模型服务，不会出现在研究记录或导出中。</p>` : ""}</div>
+  </div></div></main></div>`;
+}
+
+/* level-2 panels */
+const head = (title) => `<header>${wide() ? "" : '<button class="grabber" data-detent aria-label="展开或收起面板"></button>'}<h2>${title}</h2><button class="icon-btn close" data-close aria-label="关闭">${ic("close")}</button></header>`;
+function panelRecord() {
+  const t = S.tab; let body = "";
+  if (t === "claims") {
+    body = ["support", "counter", "review"].map((r) => { const list = CLAIMS.filter((c) => c[1] === r);
+      return `<div><div class="gtitle"><span class="role ${ROLE[r][1]}">${ROLE[r][0]}</span>${list.length}</div>${list.length ? `<div class="list">${list.map(([id, , text, q]) =>
+        `<button class="item" data-goto="${id}"><span>${esc(text)}</span><span class="meta">第 2 轮 · 引用 ${CITES.indexOf(q) + 1}</span></button>`).join("")}</div>` : `<p class="note" style="margin:0 6px">没有与已有结论冲突的新证据。</p>`}</div>`; }).join("");
+  } else if (t === "sources") {
+    const total = SOURCE.text.length, reads = [[span(Q.rev26)[0], span(Q.driver)[1]], [span(Q.oi26)[0], span(Q.opex)[1]]];
+    body = `<div><div class="gtitle">资料 · 1</div><div class="list"><div class="item"><span style="font-weight:500">${SOURCE.title}</span>
+        <span class="meta">${SOURCE.kind} · ${SOURCE.method} · 公开 ${SOURCE.published} · 获取 ${SOURCE.obtained}</span>
+        <div class="perms">${SOURCE.perms.map(([k, v]) => `<span class="${v ? "" : "no"}">${v ? "✓" : "✕"} ${k}</span>`).join("")}</div>
+        <div class="cov" aria-label="已读范围">${reads.map(([a, b]) => `<i style="left:${(a / total * 100).toFixed(1)}%;width:${((b - a) / total * 100).toFixed(1)}%"></i>`).join("")}</div>
+        <span class="meta">已读 ${reads.reduce((n, [a, b]) => n + b - a, 0)} / ${total} 字符 · 来源信息由用户声明，未核验</span></div>
+        <button class="item" data-open="${esc(Q.rev26)}" style="color:var(--on-surface)"><span class="line"><span class="grow">打开原文</span><span class="meta">›</span></span></button></div></div>
+      <div><div class="gtitle">候选线索 · 未核验</div><div class="list leads">
+        <div class="lead"><span>Northwind FY2026 earnings call transcript</span><span class="meta">investor.example.com · 2026-07-29 · 未获取</span></div>
+        <div class="lead"><span>Analyst note: Northwind margin outlook</span><span class="meta">research.example.org · 2026-08-04 · 未获取</span></div></div>
+        <p class="note" style="margin:8px 6px 0">搜索结果只是线索，获取并阅读原文后才能作为证据。</p></div>`;
+  } else if (t === "numbers") {
+    body = `<div><div class="gtitle">计算 · ${CALCS.length}</div><div class="list">${CALCS.map(([n, v, e, ins, turn, checks]) => `<div class="item"><div class="line"><div class="grow">${n}<div class="meta">${e}</div></div><span class="value" style="font-size:19px">${v}</span></div>
+        <div class="chips">${ins.map((i) => `<button class="fact-ref" data-open="${esc(FACTS.find((f) => f[0] === i)[5])}">${i}</button>`).join("")}${checks.map(([c, k]) => `<span class="role ${k}" style="font-weight:500">${c}</span>`).join("")}<span>第 ${turn} 轮</span></div></div>`).join("")}</div></div>
+      <div><div class="gtitle">数字 · ${FACTS.length}</div><div class="list">${FACTS.map(([id, l, v, u, p, q, turn, flag]) => `<button class="item" data-open="${esc(q)}"><div class="line"><div class="grow">${l}<div class="meta">${id} · ${p} · 第 ${turn} 轮</div>${flag ? `<div class="flag">${flag}</div>` : ""}</div><div style="text-align:right"><div class="value">${v}</div><div class="meta">${u}</div></div></div></button>`).join("")}</div>
+        <p class="note" style="margin:8px 6px 0">计算使用已记录的输入；原始数据的精度和口径未核验。</p></div>
+      <details class="more"><summary>${ic("chev")}新建计算</summary><div style="display:flex;flex-direction:column;gap:10px">
+        <div class="field"><label for="c-f">公式</label><select id="c-f"><option>增长率</option><option>利润率</option><option>差额</option></select></div>
+        <div class="grid2"><div class="field"><label for="c-a">第一个数字</label><select id="c-a">${FACTS.map((f) => `<option>${f[0]} · ${f[1]}</option>`).join("")}</select></div>
+        <div class="field"><label for="c-b">第二个数字</label><select id="c-b">${FACTS.map((f, i) => `<option ${i === 1 ? "selected" : ""}>${f[0]} · ${f[1]}</option>`).join("")}</select></div></div>
+        <div><button class="btn">计算</button></div></div></details>`;
+  } else {
+    const turn = S.stepTurn;
+    body = `<div class="seg" role="group" aria-label="选择轮次">${[1, 2, 3].filter((n) => n < 3 || S.view === "running").map((n) => `<button aria-pressed="${n === turn}" data-stepturn="${n}">第 ${n} 轮</button>`).join("")}</div>
+      <ol class="steps">${STEPS[turn].map((s) => s[0] === "model" ? `<li class="step model"><span></span><span>${s[1]}</span><span></span></li>`
+        : `<li class="step"><span class="ic">${ic(STEP_ICON[s[0]] || "check")}</span><span>${s[1]}</span><span class="role ${s[4]}" style="font-weight:500">${s[3]}</span><span class="why">${esc(s[2])}</span></li>`).join("")}</ol>
+      ${turn === 1 ? `<p class="note" style="margin:0 6px">“参数被拒”表示模型提交的参数没有通过校验，已退回给模型修正。</p>` : ""}`;
+  }
+  return `${head("研究记录")}<div class="seg" role="tablist">${[["claims", "结论"], ["sources", "资料"], ["numbers", "数字"], ["steps", "过程"]].map(([k, l]) => `<button role="tab" aria-selected="${k === t}" data-tab="${k}">${l}</button>`).join("")}</div><div class="body">${body}</div>`;
+}
+function panelReader(q) {
+  const [a, b] = span(q); const cited = Object.values(Q).map(span).sort((x, y) => x[0] - y[0]);
+  let html = "", pos = 0; for (const [s, e] of cited) { if (s < pos) continue; html += esc(SOURCE.text.slice(pos, s)) + `<mark class="${s === a ? "on" : "cited"}">${esc(SOURCE.text.slice(s, e))}</mark>`; pos = e; }
+  html += esc(SOURCE.text.slice(pos));
+  return `${head(SOURCE.title)}<div class="body"><div class="list"><div class="item"><span class="meta">${SOURCE.kind} · ${SOURCE.method} · 公开 ${SOURCE.published} · 获取 ${SOURCE.obtained}</span>
+      <div class="perms">${SOURCE.perms.map(([k, v]) => `<span class="${v ? "" : "no"}">${v ? "✓" : "✕"} ${k}</span>`).join("")}</div>
+      <span class="meta">当前引文：字符 ${a}–${b} · 位置与数字已核对，语义未核验 · <span class="mono">sha256 ${SOURCE.sha}…</span></span></div></div>
+      <div class="reader-text">${html.split("\n\n").map((p) => `<p>${p}</p>`).join("")}</div></div>
+    <div class="foot" style="justify-content:space-between"><div style="display:flex;gap:6px"><button class="btn">上一处</button><button class="btn">下一处</button></div><button class="btn plain">打开原始 PDF</button></div>`;
+}
+function panelSettings() {
+  return `${head("研究设置")}<div class="body"><p class="note" style="margin:0 6px">默认设置适合大多数问题。这里的修改只对下一轮生效。</p>
+    <div class="field"><label for="s-asof">截止时间</label><input id="s-asof" type="datetime-local" value="2026-11-18T23:59"><span class="help">只使用此时间之前公开的资料。主题创建后不能修改。</span></div>
+    <div class="field"><label for="s-scope">研究范围与期望成果</label><textarea id="s-scope" placeholder="例如：只看最近两个财年，输出一张对比表"></textarea></div>
+    <div class="list"><div class="item"><div class="line"><span class="grow">联网搜索</span><div class="seg inline"><button aria-pressed="true">自动</button><button aria-pressed="false">关闭</button></div></div></div>
+      <div class="item"><div class="line"><span class="grow">自动获取官方资料</span><div class="seg inline"><button aria-pressed="true">自动</button><button aria-pressed="false">关闭</button></div></div></div></div>
+    <details class="more"><summary>${ic("chev")}预算（可选）</summary><div style="display:flex;flex-direction:column;gap:12px">
+      <div class="grid2"><div class="field"><label for="b1">模型调用上限</label><input id="b1" inputmode="numeric" placeholder="不设上限"></div><div class="field"><label for="b2">搜索次数上限</label><input id="b2" inputmode="numeric" placeholder="不设上限"></div>
+      <div class="field"><label for="b3">Token 上限</label><input id="b3" inputmode="numeric" placeholder="不设上限"></div><div class="field"><label for="b4">运行时长上限（分钟）</label><input id="b4" inputmode="numeric" placeholder="不设上限"></div>
+      <div class="field"><label for="b5">费用上限（美元）</label><input id="b5" inputmode="decimal" placeholder="不设上限"></div><div class="field"><label for="b6">单次输入 Token 上限</label><input id="b6" inputmode="numeric" placeholder="自动"></div></div>
+      <p class="note">留空表示不设上限；0 表示该项额度为零。单次请求超时和供应商限制仍然有效。</p></div></details></div>
+    <div class="foot"><button class="btn plain" data-close>取消</button><button class="btn primary" data-close>应用</button></div>`;
+}
+function panelReview() {
+  return `${head("复核与版本")}<div class="body">
+    <div class="field"><span class="lt">v3 的复核状态</span><div class="seg" role="group"><button aria-pressed="true">草稿</button><button aria-pressed="false">已确认</button><button aria-pressed="false">保留意见</button></div></div>
+    <div class="field"><label for="r1">你的研究总结</label><textarea id="r1">收入增长明确，利润率小幅下降。下一步核对管理层对资本开支的说法。</textarea><span class="help">研究 Agent 不会改写这段内容。</span></div>
+    <div class="field"><label for="r2">复核备注</label><textarea id="r2" placeholder="例如：利润率口径待与完整年报核对"></textarea></div>
+    <div><div class="gtitle">版本历史</div><div class="list">${[["v3", "13:44", "研究 Agent", "完成"], ["v2", "13:25", "研究 Agent", "部分完成"], ["v1", "13:22", "你", "新建"]].map(([v, t, by, st]) =>
+      `<div class="item"><div class="line"><span class="grow"><span style="font-weight:600">${v}</span> <span class="meta">· ${t} · ${by} · ${st}</span></span><button class="btn plain">对比</button></div></div>`).join("")}</div></div></div>
+    <div class="foot"><button class="btn primary">保存为新版本</button></div>`;
+}
+function panelModel() {
+  return `${head("我的模型")}<div class="body">
+    <div class="field"><label for="m1">协议</label><select id="m1"><option>Anthropic Messages</option><option>OpenAI Chat Completions</option></select></div>
+    <div class="field"><label for="m2">服务地址</label><input id="m2" value="https://api.example.com"></div>
+    <div class="field"><label for="m3">模型名称</label><input id="m3" value="example-model"></div>
+    <div class="field"><label for="m4">API Key</label><input id="m4" type="password" placeholder="已保存 · 输入新值即可替换"></div>
+    <div style="display:flex;gap:8px;align-items:center"><button class="btn">测试连接</button><span class="role support">可用</span><span style="flex:1"></span><button class="btn plain">清除密钥</button></div></div>
+    <div class="foot"><button class="btn plain" data-close>取消</button><button class="btn primary" data-close>保存</button></div>`;
+}
+function panelCite(n) {
+  const q = CITES[n - 1], [a, b] = span(q);
+  return `${head("引用 " + n)}<div class="body" style="gap:12px"><span class="meta">${SOURCE.title} · 字符 ${a}–${b}</span><q style="quotes:'“' '”';font-size:16px;line-height:1.7">${esc(q)}</q>
+    <span class="meta">位置与数字已核对，语义未核验</span></div><div class="foot" style="justify-content:stretch"><button class="btn lg" style="flex:1" data-focus="${n}">深挖这条引用</button><button class="btn primary lg" style="flex:1" data-open="${esc(q)}">查看原文</button></div>`;
+}
+const PANELS = { cite: panelCite, record: panelRecord, reader: panelReader, settings: panelSettings, review: panelReview, model: panelModel };
+
+function openPanel(kind, arg) {
+  S.panel = kind; S.panelArg = arg ?? S.panelArg; render(true);
+  const layer = document.getElementById("layer");
+  const detent = !wide() && (kind === "record" || kind === "reader" || kind === "cite") ? (kind === "cite" ? "" : "medium") : "";
+  layer.innerHTML = `${wide() && matchMedia("(min-width: 1280px)").matches ? "" : '<div class="scrim" data-close></div>'}<section class="panel ${detent}" role="${wide() && matchMedia("(min-width: 1280px)").matches ? "complementary" : "dialog"}" aria-label="${kind}">${PANELS[kind](S.panelArg)}</section>`;
+}
+function closeAll() { const had = S.panel; S.panel = null; document.getElementById("layer").innerHTML = ""; if (had) render(true); }
+function closeFloating() { document.querySelectorAll(".pop, .menu, .menu-sheet, .floating-scrim").forEach((e) => e.remove()); document.querySelectorAll('[aria-expanded="true"]').forEach((e) => e.setAttribute("aria-expanded", "false")); }
+function floating(html, anchor, alignRight) {
+  closeFloating(); const wrap = document.createElement("div"); wrap.innerHTML = `<div class="floating-scrim" style="position:fixed;inset:0;z-index:39"></div>${html}`;
+  document.body.append(...wrap.children); const el = document.querySelector(".pop, .menu"); const r = anchor.getBoundingClientRect();
+  let left = alignRight ? r.right - el.offsetWidth : r.left - 8; left = Math.max(16, Math.min(left, innerWidth - el.offsetWidth - 16));
+  let top = r.bottom + 6; if (top + el.offsetHeight > innerHeight - 16) top = Math.max(16, r.top - el.offsetHeight - 6);
+  el.style.left = left + "px"; el.style.top = top + "px";
+}
+function openCite(btn) {
+  const n = +btn.dataset.cite, q = CITES[n - 1], [a, b] = span(q);
+  if (!matchMedia("(min-width: 600px)").matches) return openPanel("cite", n);
+  btn.setAttribute("aria-expanded", "true");
+  floating(`<div class="pop" role="dialog" aria-label="引用 ${n}"><span class="meta">引用 ${n} · ${SOURCE.title}</span><q>${esc(q)}</q><span class="meta">字符 ${a}–${b} · 位置与数字已核对，语义未核验</span>
+    <div class="actions"><button class="btn primary" data-open="${esc(q)}">查看原文</button><button class="btn" data-focus="${n}">深挖这条引用</button></div></div>`, btn, false);
+}
+function openMenu(btn, which) {
+  const items = which === "partial" ? [["review", "交付已有成果"], ["chev", "补充缺口", 'data-prefill="gap"'], ["plus", "添加资料"]]
+    : [["review", "复核与版本", 'data-panel="review"'], ["tune", "研究设置", 'data-panel="settings"'], null, ["download", "导出完整记录（JSON）"], ["download", "仅导出元数据"]];
+  if (!matchMedia("(min-width: 600px)").matches) {
+    closeFloating(); const wrap = document.createElement("div");
+    wrap.innerHTML = `<div class="floating-scrim" style="position:fixed;inset:0;z-index:39;background:var(--scrim)"></div><div class="action-sheet menu-sheet" role="menu"><div class="group">${items.filter(Boolean).map((it) => `<button role="menuitem" ${it[2] || ""}>${it[1]}</button>`).join("")}</div><div class="group"><button class="cancel" data-dismiss>取消</button></div></div>`;
+    document.body.append(...wrap.children); return;
+  }
+  floating(`<div class="menu" role="menu">${items.map((it) => it === null ? "<hr>" : `<button role="menuitem" ${it[2] || ""}>${ic(it[0])}${it[1]}</button>`).join("")}</div>`, btn, true);
+}
+
+const VIEWS = { topic: () => topicView(false), running: () => topicView(true), home: homeView, login: loginView, prefs: prefsView };
+function render(keepScroll) {
+  const prev = document.getElementById("scroll")?.scrollTop || 0;
+  const h = location.hash.slice(1); S.view = VIEWS[h] ? h : "topic";
+  document.getElementById("root").innerHTML = VIEWS[S.view]();
+  const sc = document.getElementById("scroll"), tb = document.getElementById("toolbar");
+  if (sc && keepScroll) sc.scrollTop = prev;
+  if (sc && tb) { const upd = () => tb.classList.toggle("scrolled", sc.scrollTop > 56); sc.addEventListener("scroll", upd, { passive: true }); upd(); }
+  const ask = document.getElementById("ask") || document.getElementById("home-q"), send = document.getElementById("send");
+  if (ask && send) ask.addEventListener("input", () => send.classList.toggle("ready", ask.value.trim().length > 0));
+}
+document.addEventListener("click", (e) => {
+  if (e.target.classList?.contains("floating-scrim")) return closeFloating();
+  const t = e.target.closest("button, [data-close], [data-cancel], a"); if (!t) return;
+  if (t.dataset.cancel !== undefined) { e.stopPropagation(); t.textContent = "正在取消…"; setTimeout(() => { location.hash = "topic"; }, 900); return; }
+  if (t.hasAttribute("data-dismiss")) return closeFloating();
+  if (t.hasAttribute("data-close-side")) { S.sideOpen = false; return render(true); }
+  if (t.hasAttribute("data-detent")) { const pn = document.querySelector(".panel"); if (pn) { const big = pn.classList.toggle("large"); pn.classList.toggle("medium", !big); } return; }
+  if (t.hasAttribute("data-start")) { location.hash = "running"; return; }
+  if (t.dataset.cite) return openCite(t);
+  if (t.dataset.open) { closeFloating(); return openPanel("reader", t.dataset.open); }
+  if (t.closest(".menu-sheet")) closeFloating();
+  if (t.hasAttribute("data-close")) return closeAll();
+  if (t.dataset.menu !== undefined) return openMenu(t, t.dataset.menu);
+  if (t.dataset.panel) { closeFloating(); if (t.dataset.tab) S.tab = t.dataset.tab; if (t.dataset.turn) S.stepTurn = +t.dataset.turn;
+    if (S.panel === t.dataset.panel && t.closest(".toolbar")) return closeAll(); return openPanel(t.dataset.panel); }
+  if (t.dataset.tab) { S.tab = t.dataset.tab; return openPanel("record"); }
+  if (t.dataset.stepturn) { S.stepTurn = +t.dataset.stepturn; return openPanel("record"); }
+  if (t.dataset.prefs) { S.prefsTab = t.dataset.prefs; return render(); }
+  if (t.hasAttribute("data-toggle-side")) { if (wide()) { S.sideCollapsed = !S.sideCollapsed; try { localStorage.setItem("f9.side", S.sideCollapsed ? "collapsed" : "open"); } catch (er) {} } else S.sideOpen = !S.sideOpen; return render(true); }
+  if (t.hasAttribute("data-new")) { location.hash = "home"; return; }
+  if (t.dataset.focus) { S.focus = t.dataset.focus; closeFloating(); S.panel = null; document.getElementById("layer").innerHTML = ""; render(true); return document.getElementById("ask")?.focus(); }
+  if (t.hasAttribute("data-unfocus")) { S.focus = null; return render(true); }
+  if (t.dataset.prefill) { closeFloating(); const ask = document.getElementById("ask"); if (ask) { ask.value = t.dataset.prefill === "gap" ? "请继续补充上一轮的缺口：还没有引文位置已核实的结论。" : "请寻找与当前主要结论相反的证据，并说明它们的强度。"; ask.dispatchEvent(new Event("input")); ask.focus(); } return; }
+  if (t.hasAttribute("data-example")) { const q = document.getElementById("home-q"); if (q) { q.value = t.textContent; q.dispatchEvent(new Event("input")); q.focus(); } return; }
+  if (t.dataset.goto) { if (!matchMedia("(min-width: 1280px)").matches) closeAll(); const el = document.getElementById("claim-" + t.dataset.goto);
+    if (el) { el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900); } return; }
+  if (t.matches(".seg button[aria-pressed]")) t.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (document.querySelector(".pop, .menu")) closeFloating(); else closeAll(); } });
+window.addEventListener("hashchange", () => { closeFloating(); S.panel = null; document.getElementById("layer").innerHTML = ""; S.sideOpen = false; render(); });
+window.addEventListener("resize", () => closeFloating());
+render();
+/* local review hook: ?panel=record&tab=numbers or ?cite=3 (query strings are ignored in the published viewer) */
+try { const qp = new URLSearchParams(location.search); if (qp.get("collapsed")) { S.sideCollapsed = true; render(); }
+  if (qp.get("panel")) { if (qp.get("tab")) S.tab = qp.get("tab"); openPanel(qp.get("panel"), qp.get("panel") === "cite" ? 3 : Q.rev26); }
+  if (qp.get("cite")) openCite(document.querySelector(`[data-cite="${qp.get("cite")}"]`)); } catch (e) {}
+</script>
