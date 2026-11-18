@@ -1,0 +1,12 @@
+{
+  "version": "pilot-v0.1-not-frozen",
+  "status": "draft-human-review-pending",
+  "tasks": [
+    {"id":"D01","question":"给出 Microsoft 2022 和 2023 财年收入、单位和财年末，并引用资料。","as_of":"2023-08-01T00:00:00Z","sources":["msft-fy2023.json"]},
+    {"id":"D02","question":"计算 Microsoft 2023 财年收入同比，展示输入、公式、单位和引用。","as_of":"2023-08-01T00:00:00Z","sources":["msft-fy2023.json"]},
+    {"id":"D03","question":"计算 Microsoft 2023 财年营业利润率，展示输入、公式和引用。","as_of":"2023-08-01T00:00:00Z","sources":["msft-fy2023.json"]},
+    {"id":"D06","question":"截至指定时间，Microsoft 2024 财年收入是多少？只能使用给定资料。","as_of":"2023-08-01T00:00:00Z","sources":["msft-fy2023.json"]},
+    {"id":"D07","question":"比较旧资料与新资料中 2023 财年收入，说明新披露的 2024 财年收入和同比变化。","as_of":"2024-08-01T00:00:00Z","sources":["msft-fy2023.json","msft-fy2024.json"]},
+    {"id":"D08","question":"比较 Microsoft 2023 和 2024 财年营业利润率，报告差异的单位。","as_of":"2024-08-01T00:00:00Z","sources":["msft-fy2023.json","msft-fy2024.json"]}
+  ]
+}

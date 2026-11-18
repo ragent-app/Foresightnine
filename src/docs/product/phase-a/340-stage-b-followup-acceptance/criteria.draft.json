@@ -1,0 +1,24 @@
+{
+  "scope": "predeclared strict task-specific engineering checks; all material numbers require exact traceable authorized evidence; model self-assessment is not evidence",
+  "MACRO_CALC": [
+    "2022 Q2 -0.6%, Q3 +2.6%, +3.2 percentage points; annualized; advance estimate",
+    "correct exact source citations and estimate limits"
+  ],
+  "MISSING_BOUNDARY": [
+    "2022 Q3 +2.6% annualized",
+    "unemployment not established by supplied GDP release; identify relevant BLS employment/unemployment source without inventing rate"
+  ],
+  "COMPANY_REVENUE_ZH": [
+    "2022 FY 2021-07-01 through 2022-06-30 USD 198270000000; 2023 FY 2022-07-01 through 2023-06-30 USD 211915000000",
+    "independent computation (211915000000-198270000000)=13645000000 USD; 13645000000/198270000000*100 = 6.882029555656428...%, approximately 6.88%",
+    "explicitly identify derived SEC facts rather than full filing and historical availability/restatement limitations"
+  ],
+  "PDF_TABLE_EN": [
+    "Table 1 2023 Q3/Q4 real GDP 4.9%/3.3%, change -1.6 percentage points; real PCE 3.1%/2.8%, change -0.3 percentage points",
+    "seasonally adjusted annual rates, advance estimate, source table header/row and original offsets, no prose substitution for table proof"
+  ],
+  "POLICY_COMPARE_ZH": [
+    "2020-06-10 and 2020-07-29 both target range 0–0.25%, both endpoints 0 percentage-point change",
+    "two snapshots do not establish all intervening decisions; cite both original statements"
+  ]
+}

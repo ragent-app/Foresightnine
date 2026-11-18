@@ -1,0 +1,11 @@
+{
+  "state": "failed",
+  "reserved_tokens": 10000,
+  "attempts": 1,
+  "provider_response": "unknown",
+  "settlement": "unknown",
+  "actual_tokens": null,
+  "cost": "unknown",
+  "error_code": "provider_timeout",
+  "elapsed_ms": 10011
+}

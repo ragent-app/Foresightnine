@@ -1,0 +1,9 @@
+{
+  "id": "G22",
+  "published_at": "2023-01-26T13:30:00Z",
+  "question": "According to the BEA advance estimate for 2022, report the full-year 2022 real GDP growth and the fourth-quarter annualized real GDP growth; distinguish their periods and note relevant limitations.",
+  "source_file": "../source-snapshots/bea-gdp-2022-q4-advance.pdf",
+  "source_kind": "original_pdf",
+  "source_sha256": "d6645087ee212f87f53b0015cfdb78c81d51e4e47077b45424168630d03557c3",
+  "source_title": "BEA GDP 2022 advance estimate"
+}

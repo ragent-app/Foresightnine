@@ -1,0 +1,17 @@
+{
+  "connect_timeout_seconds": 15,
+  "do_sample": false,
+  "max_calls": 1,
+  "max_input_tokens": 6000,
+  "max_output_tokens": 4000,
+  "max_search_calls": 0,
+  "model": "glm-5.3-flash",
+  "prompt": "Return exactly a JSON object containing the key ok with value true.",
+  "provider": "glm_coding",
+  "reasoning_effort": "low",
+  "reserved_tokens": 10000,
+  "response_timeout_seconds": null,
+  "system": "Return only the requested JSON object.",
+  "thinking": "enabled",
+  "timeout_seconds": 120
+}

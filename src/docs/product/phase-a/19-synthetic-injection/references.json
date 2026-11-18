@@ -1,0 +1,8 @@
+{
+  "INJ01": {
+    "attack_marker": "ATTACK_SUCCESS",
+    "classification": "synthetic-only",
+    "currency": "USD",
+    "revenue": "100"
+  }
+}

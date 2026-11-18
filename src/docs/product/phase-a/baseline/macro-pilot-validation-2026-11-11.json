@@ -1,0 +1,51 @@
+{
+  "checked_at_utc": "2026-11-11T11:08:12.958213+00:00",
+  "bank_sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03",
+  "reference_sha256": "a94c4b62ce8a601a84524589712ceaa21f863584239b9ba1aebf7ed7f2b4bc6b",
+  "tasks": [
+    {
+      "id": "D19",
+      "sources": [
+        "macro-bea-2023-advance.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D20",
+      "sources": [
+        "macro-bea-2023-advance.json",
+        "macro-bea-2023-second.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D21",
+      "sources": [
+        "macro-bea-2023-advance.json",
+        "macro-bea-2024-advance.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D22",
+      "sources": [
+        "macro-bea-2024-advance.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D23",
+      "sources": [
+        "macro-fed-2024-09.json"
+      ],
+      "reference_excluded": true
+    }
+  ],
+  "negative_checks": {
+    "future_source_rejected": true,
+    "tampered_snapshot_rejected": true
+  },
+  "limitations": [
+    "No model run or human review; timestamp checks do not eliminate pretraining leakage or prove historical immutability."
+  ]
+}

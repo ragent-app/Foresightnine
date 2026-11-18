@@ -1,0 +1,73 @@
+{
+  "provider_payload": {
+    "claims": [
+      {
+        "text": "2024年9月18日的FOMC会议决定将联邦基金利率目标区间下调0.5个百分点（1/2 percentage point），至4.75%至5%。",
+        "citations": [
+          {
+            "source_id": "source_7faeff1279bc4855a465434913afaabf",
+            "quotation": "the Committee decided to lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent"
+          }
+        ]
+      },
+      {
+        "text": "Michelle W. Bowman投了反对票，她倾向下调0.25个百分点（1/4 percentage point）。",
+        "citations": [
+          {
+            "source_id": "source_7faeff1279bc4855a465434913afaabf",
+            "quotation": "Voting against this action was Michelle W. Bowman, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "有委员（Bowman）持不同意见，认为应仅下调25个基点，即行动幅度存在内部分歧。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "来源未说明调整前后的具体日期以外的背景，也未提供此前目标区间的原始值，故无法从文本中直接计算此前区间（需引用先前事实）。"
+    ],
+    "facts": [
+      {
+        "fact_id": "rate_cut_sept2024",
+        "label": "federal funds rate cut magnitude",
+        "value": "1/2",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "September 18, 2024",
+        "citation": {
+          "source_id": "source_7faeff1279bc4855a465434913afaabf",
+          "quotation": "the Committee decided to lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent"
+        }
+      },
+      {
+        "fact_id": "target_range_sept2024",
+        "label": "federal funds target range",
+        "value": "4-3/4 to 5 percent",
+        "unit": "percent",
+        "currency": null,
+        "period": "September 18, 2024",
+        "citation": {
+          "source_id": "source_7faeff1279bc4855a465434913afaabf",
+          "quotation": "lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent"
+        }
+      },
+      {
+        "fact_id": "bowman_preference",
+        "label": "dissenting preferred cut",
+        "value": "1/4",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "September 18, 2024",
+        "citation": {
+          "source_id": "source_7faeff1279bc4855a465434913afaabf",
+          "quotation": "preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1166
+}

@@ -1,0 +1,8 @@
+{
+  "id": "C24",
+  "question": "使用提供的 Costco 2023 和 2024 财年总收入，列示金额、单位和期间，计算收入增长率，并解释两期可比性的限制。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"Costco Wholesale Corporation\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2023\":\"2023-09-03\",\"2024\":\"2024-09-01\"},\"fiscal_year_weeks\":{\"2023\":53,\"2024\":52},\"total_revenue\":{\"2023\":242290,\"2024\":254453}}",
+  "source_title": "Costco 2024 SEC 10-K: derived total revenue and fiscal weeks",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983224000049/cost-20240901.htm"
+}

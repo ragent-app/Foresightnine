@@ -1,0 +1,1369 @@
+{
+  "schema_version": "1",
+  "format": "research_json",
+  "topic_id": "topic_0539550b154f4708885d33b2b5f93c9b",
+  "generated_at": "2026-11-14T09:26:53.624311Z",
+  "request": {
+    "question": "Compare the federal funds target ranges in the two supplied FOMC statements. Give both dates and the change in the endpoints, and identify what the documents cannot establish about intervening decisions.",
+    "source_ids": [
+      "source_753f67e545164e19a4a3fa9407a0f731",
+      "source_88a8451a4cef418dbc5ee5984678460b"
+    ],
+    "scope": "",
+    "as_of": null
+  },
+  "version": {
+    "version_id": "version_ab52da6e54a84681a20b99b306e29cc8",
+    "parent_version_id": "version_daa191f746c14da388bd38a56aef713e",
+    "created_at": "2026-11-14T09:26:50.466285Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200610a1.pdf",
+          "title": "fed-2020-june",
+          "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+          "obtained_at": "2026-11-14T09:26:20.367383+00:00",
+          "is_simulated": false,
+          "verification": "user_declared_not_verified",
+          "content_sha256": "fec9898ca7650e7ed9a8271704c57ea4c7157d34174546273a1169c150f415ed",
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "status": "partial",
+            "text_characters": 6704,
+            "selected_characters": 604
+          }
+        },
+        {
+          "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200729a1.pdf",
+          "title": "fed-2020-july",
+          "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+          "obtained_at": "2026-11-14T09:26:20.958348+00:00",
+          "is_simulated": false,
+          "verification": "user_declared_not_verified",
+          "content_sha256": "ef2d9218bd4e8ebd1ba2c5c34444dad2a6ca49b7c02407a155ccc058ca29bc06",
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "status": "partial",
+            "text_characters": 6781,
+            "selected_characters": 604
+          }
+        }
+      ],
+      "source_candidates": [],
+      "facts": [
+        {
+          "unit": "percent",
+          "label": "Federal funds target range lower bound, June 2020 statement",
+          "value": "0",
+          "period": "June 2020 statement",
+          "fact_id": "ffr-june-lower",
+          "currency": "USD",
+          "location": {
+            "character_end": 1131,
+            "character_start": 1059
+          },
+          "quotation": "maintain the target range for the federal funds rate at 0 to 1/4 percent",
+          "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "exact",
+          "currency_context_unverified": true
+        },
+        {
+          "unit": "percent",
+          "label": "Federal funds target range upper bound, June 2020 statement",
+          "value": "0.25",
+          "period": "June 2020 statement",
+          "fact_id": "ffr-june-upper",
+          "currency": "USD",
+          "location": {
+            "character_end": 1131,
+            "character_start": 1059
+          },
+          "quotation": "maintain the target range for the federal funds rate at 0 to 1/4 percent",
+          "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "exact",
+          "numeric_normalization": "exact_fraction",
+          "currency_context_unverified": true
+        },
+        {
+          "unit": "percent",
+          "label": "Federal funds target range lower bound, July 2020 statement",
+          "value": "0",
+          "period": "July 2020 statement",
+          "fact_id": "ffr-july-lower",
+          "currency": "USD",
+          "location": {
+            "character_end": 1262,
+            "character_start": 1190
+          },
+          "quotation": "maintain the\ntarget range for the federal funds rate at 0 to 1/4 percent",
+          "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "whitespace_normalized",
+          "currency_context_unverified": true
+        },
+        {
+          "unit": "percent",
+          "label": "Federal funds target range upper bound, July 2020 statement",
+          "value": "0.25",
+          "period": "July 2020 statement",
+          "fact_id": "ffr-july-upper",
+          "currency": "USD",
+          "location": {
+            "character_end": 1262,
+            "character_start": 1190
+          },
+          "quotation": "maintain the\ntarget range for the federal funds rate at 0 to 1/4 percent",
+          "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "whitespace_normalized",
+          "numeric_normalization": "exact_fraction",
+          "currency_context_unverified": true
+        }
+      ],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "Both statements report that the FOMC decided to maintain the target range for the federal funds rate at 0 to 1/4 percent; thus the endpoints (0 percent and 1/4 percent) are unchanged between the two statements, and the change in each endpoint is zero.",
+          "claim_id": "claim_6f4520923bf7419d99a37b28b1a74768",
+          "citations": [
+            {
+              "location": {
+                "character_end": 1132,
+                "character_start": 1002
+              },
+              "quotation": "In light of these developments, the Committee decided to\nmaintain the target range for the federal funds rate at 0 to 1/4 percent.",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            },
+            {
+              "location": {
+                "character_end": 1263,
+                "character_start": 1133
+              },
+              "quotation": "In light of these developments, the Committee decided to maintain the\ntarget range for the federal funds rate at 0 to 1/4 percent.",
+              "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "reused_percentages": [
+            "1/4 percent"
+          ],
+          "percentage_unit_unverified": [
+            "0 percent"
+          ]
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "The source titles label the two statements as June 2020 and July 2020 ('fed-2020-june' and 'fed-2020-july'), but the quoted passage text itself contains no explicit meeting dates; the dates are asserted by document metadata only and are not verified within the quoted text.",
+          "claim_id": "claim_76a539440528410ca062b421896a3516",
+          "citations": [
+            {
+              "location": {
+                "character_end": 1132,
+                "character_start": 1002
+              },
+              "quotation": "In light of these developments, the Committee decided to\nmaintain the target range for the federal funds rate at 0 to 1/4 percent.",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            },
+            {
+              "location": {
+                "character_end": 1263,
+                "character_start": 1133
+              },
+              "quotation": "In light of these developments, the Committee decided to maintain the\ntarget range for the federal funds rate at 0 to 1/4 percent.",
+              "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_review": {
+            "method": "bounded_quotation_context_model_review_v31",
+            "verdict": "uncertain",
+            "independently_verified": false
+          },
+          "support_status": "not_independently_verified"
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "The supplied passages cannot establish what decisions, if any, occurred between the two statements; they only show the target range was the same (0 to 1/4 percent) at both documented points, which does not prove no intervening changes occurred.",
+          "claim_id": "claim_f2749d43d2ff473d846c769c8e9e8601",
+          "citations": [
+            {
+              "location": {
+                "character_end": 6522,
+                "character_start": 6282
+              },
+              "quotation": "This information will be updated as appropriate to reflect decisions of the Federal Open\nMarket Committee or the Board of Governors regarding details of the Federal Reserve’s\noperational tools and approach used to implement monetary policy.",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "uncited_fact_values": [
+            "0.25 percent"
+          ],
+          "uncited_percentages": [
+            "1/4 percent"
+          ],
+          "suggested_fact_evidence": [
+            {
+              "unit": "percent",
+              "value": "0.25",
+              "period": "June 2020 statement",
+              "status": "requires_semantic_review",
+              "fact_id": "ffr-june-upper",
+              "location": {
+                "character_end": 1131,
+                "character_start": 1059
+              },
+              "quotation": "maintain the target range for the federal funds rate at 0 to 1/4 percent",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731"
+            }
+          ],
+          "suggested_related_quotations": [
+            {
+              "status": "requires_semantic_review",
+              "location": {
+                "character_end": 1132,
+                "character_start": 1002
+              },
+              "quotation": "In light of these developments, the Committee decided to\nmaintain the target range for the federal funds rate at 0 to 1/4 percent.",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "matched_amounts": [
+                "1/4 percent"
+              ],
+              "from_claim_index": 0
+            }
+          ]
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "counterargument",
+          "text": "One might infer that because both statements show the same 0 to 1/4 percent range, the rate was unchanged throughout the interval; however, the sources contain no statements covering the intervening period, so this continuity cannot be verified from the supplied text.",
+          "claim_id": "claim_a719b4cd33994a968790fffff3585008",
+          "citations": [
+            {
+              "location": {
+                "character_end": 6522,
+                "character_start": 6282
+              },
+              "quotation": "This information will be updated as appropriate to reflect decisions of the Federal Open\nMarket Committee or the Board of Governors regarding details of the Federal Reserve’s\noperational tools and approach used to implement monetary policy.",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "uncited_fact_values": [
+            "0 percent",
+            "0.25 percent"
+          ],
+          "uncited_percentages": [
+            "1/4 percent"
+          ],
+          "suggested_fact_evidence": [
+            {
+              "unit": "percent",
+              "value": "0",
+              "period": "June 2020 statement",
+              "status": "requires_semantic_review",
+              "fact_id": "ffr-june-lower",
+              "location": {
+                "character_end": 1131,
+                "character_start": 1059
+              },
+              "quotation": "maintain the target range for the federal funds rate at 0 to 1/4 percent",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731"
+            },
+            {
+              "unit": "percent",
+              "value": "0.25",
+              "period": "June 2020 statement",
+              "status": "requires_semantic_review",
+              "fact_id": "ffr-june-upper",
+              "location": {
+                "character_end": 1131,
+                "character_start": 1059
+              },
+              "quotation": "maintain the target range for the federal funds rate at 0 to 1/4 percent",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731"
+            }
+          ],
+          "suggested_related_quotations": [
+            {
+              "status": "requires_semantic_review",
+              "location": {
+                "character_end": 1132,
+                "character_start": 1002
+              },
+              "quotation": "In light of these developments, the Committee decided to\nmaintain the target range for the federal funds rate at 0 to 1/4 percent.",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "matched_amounts": [
+                "1/4 percent"
+              ],
+              "from_claim_index": 0
+            }
+          ],
+          "causal_attribution_unverified": true,
+          "suggested_responds_to_claim_ids": [
+            "claim_f2749d43d2ff473d846c769c8e9e8601"
+          ]
+        }
+      ],
+      "limitations": [
+        "Replacement search considered a bounded prefix of evidence candidates.",
+        "Source source_753f67e545164e19a4a3fa9407a0f731: only character ranges 1002–1132, 3023–3056, 5940–6141, 6282–6522 were analyzed; remaining text was not examined.",
+        "Source source_88a8451a4cef418dbc5ee5984678460b: only character ranges 1133–1263, 3153–3186, 6064–6265, 6407–6647 were analyzed; remaining text was not examined.",
+        "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): The meeting dates come only from source titles/metadata, not from any quoted passage, so dates are declared rather than verified in text.",
+        "Model-reported limitation (not independently verified): Sources are marked as partial coverage; intervening FOMC statements or decisions between June and July 2020 are not included in the supplied material.",
+        "Model-reported limitation (not independently verified): No numeric calculations beyond endpoint identity are needed; both endpoints are identical, so no difference computation is required.",
+        "A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.",
+        "A percentage matches a quoted number without an explicit percent unit; check the original unit and table context.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+        "Counterpoint relevance was not supported by a complete model review; the relationship remains unverified.",
+        "The requested model support review did not cover all claims.",
+        "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+        "A percentage repeats within a claim; check that each measure has its own supporting evidence.",
+        "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+        "A causal explanation has no corresponding causal wording in its located quotations; check the original evidence.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations.",
+        "Source selection is partial or unknown; absence from unseen material is not established. Review the selected ranges and obtain relevant additional material."
+      ],
+      "run": {
+        "model": "glm-5.3-flash",
+        "status": "partial",
+        "provider": "openai-compatible",
+        "cost_status": "unknown",
+        "model_calls": 2,
+        "operation_id": "operation:f41e4407d36150da08ccba73",
+        "prompt_bytes": 3481,
+        "search_calls": 0,
+        "total_tokens": 2889,
+        "prompt_sha256": "a2ef0ad24ca38860bf35ccfe3955a78d17eb8e751842d8814dffa53d9e3fac13",
+        "research_gaps": {
+          "items": [
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "source_scope_review_required"
+            },
+            {
+              "code": "absence_observation_unestablished"
+            },
+            {
+              "code": "model_suggested_evidence_need"
+            },
+            {
+              "code": "semantic_support_not_independently_verified",
+              "count": 4,
+              "indexes": [
+                0,
+                1,
+                2,
+                3
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "evidence_warnings",
+              "count": 3,
+              "indexes": [
+                0,
+                2,
+                3
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "model_review_incomplete"
+            },
+            {
+              "code": "model_review_uncertain",
+              "count": 1,
+              "indexes": [
+                1
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "model_review_missing",
+              "count": 3,
+              "indexes": [
+                0,
+                2,
+                3
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "counterpoint_relevance_unverified",
+              "count": 1,
+              "indexes": [
+                3
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ],
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "search_status": "not_requested",
+        "source_hashes": {
+          "source_753f67e545164e19a4a3fa9407a0f731": "fec9898ca7650e7ed9a8271704c57ea4c7157d34174546273a1169c150f415ed",
+          "source_88a8451a4cef418dbc5ee5984678460b": "ef2d9218bd4e8ebd1ba2c5c34444dad2a6ca49b7c02407a155ccc058ca29bc06"
+        },
+        "stage_summary": {
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "completed"
+            },
+            {
+              "stage": "review",
+              "status": "attention"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ],
+          "meaning": "saved_execution_not_quality_verdict",
+          "schema_version": "1"
+        },
+        "evidence_links": {
+          "facts": [
+            {
+              "fact_id": "ffr-june-lower",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            },
+            {
+              "fact_id": "ffr-june-upper",
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            },
+            {
+              "fact_id": "ffr-july-lower",
+              "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            },
+            {
+              "fact_id": "ffr-july-upper",
+              "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            }
+          ],
+          "claims": [
+            {
+              "role": "support",
+              "claim_id": "claim_6f4520923bf7419d99a37b28b1a74768",
+              "citations": [
+                {
+                  "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                },
+                {
+                  "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+                  "citation_index": 1,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 0,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_76a539440528410ca062b421896a3516",
+              "citations": [
+                {
+                  "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                },
+                {
+                  "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+                  "citation_index": 1,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 1,
+              "user_fact_links": [],
+              "model_review_opinion": "uncertain",
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_f2749d43d2ff473d846c769c8e9e8601",
+              "citations": [
+                {
+                  "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 2,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "counterargument",
+              "claim_id": "claim_a719b4cd33994a968790fffff3585008",
+              "citations": [
+                {
+                  "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 3,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "model_suggested",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": [
+                "claim_f2749d43d2ff473d846c769c8e9e8601"
+              ]
+            }
+          ],
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "index_scope": "research_version",
+          "calculations": [],
+          "schema_version": "1"
+        },
+        "evidence_needs": {
+          "items": [
+            {
+              "action": "inspect_or_supply_relevant_material",
+              "reason": "source_selection_partial_or_unknown",
+              "status": "not_obtained_or_not_verified",
+              "evidence_type": "unexamined_or_unselected_source_material"
+            },
+            {
+              "action": "retrieve full source documents to confirm meeting dates",
+              "origin": "model_suggested",
+              "reason": "Dates appear only in source titles (fed-2020-june, fed-2020-july) and cannot be verified from quoted passages",
+              "status": "not_obtained_or_not_verified",
+              "source_kind": "Full FOMC statement text including header/date line",
+              "evidence_type": "model_suggested_material",
+              "requested_fact": "Exact dates of the two FOMC statements as stated within the document text",
+              "question_relation_status": "not_verified"
+            },
+            {
+              "action": "retrieve any intervening statements to verify continuity",
+              "origin": "model_suggested",
+              "reason": "Cannot establish whether the target range remained unchanged throughout the interval between the two statements",
+              "status": "not_obtained_or_not_verified",
+              "source_kind": "Complete archive of FOMC statements for the intervening period",
+              "evidence_type": "model_suggested_material",
+              "requested_fact": "Any FOMC decisions or statements issued between the two documented statements",
+              "question_relation_status": "not_verified"
+            }
+          ],
+          "meaning": "review_actions_not_new_evidence",
+          "schema_version": "1"
+        },
+        "planning_steps": [],
+        "question_links": {
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "questions": [
+            {
+              "source_ids": [
+                "source_753f67e545164e19a4a3fa9407a0f731",
+                "source_88a8451a4cef418dbc5ee5984678460b"
+              ],
+              "finding_ids": [
+                "claim_6f4520923bf7419d99a37b28b1a74768",
+                "claim_76a539440528410ca062b421896a3516",
+                "claim_f2749d43d2ff473d846c769c8e9e8601"
+              ],
+              "counterpoints": [
+                {
+                  "claim_id": "claim_a719b4cd33994a968790fffff3585008",
+                  "source_ids": [
+                    "source_753f67e545164e19a4a3fa9407a0f731"
+                  ],
+                  "attribution": "model_suggested",
+                  "finding_ids": [
+                    "claim_f2749d43d2ff473d846c769c8e9e8601"
+                  ]
+                }
+              ],
+              "question_index": 0
+            }
+          ],
+          "truncated": false,
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "elapsed_seconds": 28.009,
+        "max_model_calls": 3,
+        "planning_status": "not_requested",
+        "question_origin": "user",
+        "max_search_calls": 0,
+        "max_total_tokens": 20000,
+        "scope_assessment": {
+          "scope": "partial_or_unknown",
+          "meaning": "input_selection_not_exhaustive_review",
+          "sources": [
+            {
+              "provided": true,
+              "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+              "analysis_status": "produced",
+              "selection_status": "partial"
+            },
+            {
+              "provided": true,
+              "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+              "analysis_status": "produced",
+              "selection_status": "partial"
+            }
+          ],
+          "attempted": true,
+          "truncated": false,
+          "schema_version": "1",
+          "indexes_truncated": false,
+          "absence_conclusions": "not_independently_verified",
+          "claim_indexes_requiring_scope_review": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "limitation_indexes_requiring_scope_review": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        },
+        "selection_method": "global_idf_evidence_v55",
+        "gap_search_status": "not_requested",
+        "generation_status": "completed",
+        "generation_tokens": 2074,
+        "prompt_characters": 3471,
+        "selected_segments": [
+          {
+            "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+            "character_end": 1132,
+            "character_start": 1002,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u1002"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+            "character_end": 3056,
+            "character_start": 3023,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u3023"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+            "character_end": 6141,
+            "character_start": 5940,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u5940"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+            "character_end": 6522,
+            "character_start": 6282,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u6282"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+            "character_end": 1263,
+            "character_start": 1133,
+            "model_source_id": "ref-2",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u1133"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+            "character_end": 3186,
+            "character_start": 3153,
+            "model_source_id": "ref-2",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u3153"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+            "character_end": 6265,
+            "character_start": 6064,
+            "model_source_id": "ref-2",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u6064"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+            "character_end": 6647,
+            "character_start": 6407,
+            "model_source_id": "ref-2",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u6407"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          }
+        ],
+        "source_processing": [
+          {
+            "provided": true,
+            "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+            "eligibility": "eligible",
+            "analysis_status": "produced",
+            "text_characters": 6704,
+            "selection_status": "partial",
+            "initial_selection": "partial",
+            "selection_details": {
+              "selected_unit_count": 4,
+              "matched_facet_indexes": []
+            },
+            "selected_characters": 604
+          },
+          {
+            "provided": true,
+            "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+            "eligibility": "eligible",
+            "analysis_status": "produced",
+            "text_characters": 6781,
+            "selection_status": "partial",
+            "initial_selection": "partial",
+            "selection_details": {
+              "selected_unit_count": 4,
+              "matched_facet_indexes": []
+            },
+            "selected_characters": 604
+          }
+        ],
+        "workflow_receipts": [
+          {
+            "gaps": [],
+            "stage": "planning",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "planning",
+            "status": "not_requested",
+            "elapsed_ms": 3,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_discovery",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_retrieval",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "analysis",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Replacement search considered a bounded prefix of evidence candidates.",
+              "Source source_753f67e545164e19a4a3fa9407a0f731: only character ranges 1002–1132, 3023–3056, 5940–6141, 6282–6522 were analyzed; remaining text was not examined.",
+              "Source source_88a8451a4cef418dbc5ee5984678460b: only character ranges 1133–1263, 3153–3186, 6064–6265, 6407–6647 were analyzed; remaining text was not examined.",
+              "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): The meeting dates come only from source titles/metadata, not from any quoted passage, so dates are declared rather than verified in text.",
+              "Model-reported limitation (not independently verified): Sources are marked as partial coverage; intervening FOMC statements or decisions between June and July 2020 are not included in the supplied material.",
+              "Model-reported limitation (not independently verified): No numeric calculations beyond endpoint identity are needed; both endpoints are identical, so no difference computation is required."
+            ],
+            "stage": "analysis",
+            "usage": 2074,
+            "status": "completed",
+            "elapsed_ms": 20001,
+            "source_ids": [
+              "source_753f67e545164e19a4a3fa9407a0f731",
+              "source_88a8451a4cef418dbc5ee5984678460b"
+            ],
+            "schema_version": "1",
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_753f67e545164e19a4a3fa9407a0f731"
+              },
+              {
+                "kind": "stored_source",
+                "source_id": "source_88a8451a4cef418dbc5ee5984678460b"
+              }
+            ],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "counterpoint",
+            "reason": "The task did not authorize this optional action.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "gap_followup",
+            "reason": "The task did not authorize this optional action.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "support_review",
+            "reason": "Address an outstanding, authorized research need.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "support_review",
+            "usage": 815,
+            "status": "partial",
+            "elapsed_ms": 7293,
+            "source_ids": [
+              "source_753f67e545164e19a4a3fa9407a0f731",
+              "source_88a8451a4cef418dbc5ee5984678460b"
+            ],
+            "schema_version": "1",
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_753f67e545164e19a4a3fa9407a0f731"
+              },
+              {
+                "kind": "stored_source",
+                "source_id": "source_88a8451a4cef418dbc5ee5984678460b"
+              }
+            ],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "coordination",
+            "reason": "remaining_gaps",
+            "status": "stopped",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Replacement search considered a bounded prefix of evidence candidates.",
+              "Source source_753f67e545164e19a4a3fa9407a0f731: only character ranges 1002–1132, 3023–3056, 5940–6141, 6282–6522 were analyzed; remaining text was not examined.",
+              "Source source_88a8451a4cef418dbc5ee5984678460b: only character ranges 1133–1263, 3153–3186, 6064–6265, 6407–6647 were analyzed; remaining text was not examined.",
+              "During generation, a percentage fact included a model-declared currency; it was excluded from automatic calculations pending review.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): The meeting dates come only from source titles/metadata, not from any quoted passage, so dates are declared rather than verified in text.",
+              "Model-reported limitation (not independently verified): Sources are marked as partial coverage; intervening FOMC statements or decisions between June and July 2020 are not included in the supplied material.",
+              "Model-reported limitation (not independently verified): No numeric calculations beyond endpoint identity are needed; both endpoints are identical, so no difference computation is required.",
+              "A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.",
+              "A percentage matches a quoted number without an explicit percent unit; check the original unit and table context.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+              "Counterpoint relevance was not supported by a complete model review; the relationship remains unverified.",
+              "The requested model support review did not cover all claims.",
+              "A cited source contains a matching fact outside the attached quotations; review the candidate and its meaning.",
+              "A percentage repeats within a claim; check that each measure has its own supporting evidence.",
+              "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+              "A causal explanation has no corresponding causal wording in its located quotations; check the original evidence.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "elapsed_ms": 1,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          }
+        ],
+        "absence_assessment": {
+          "meaning": "model_suggestions_not_verified_absence",
+          "truncated": false,
+          "observations": [
+            {
+              "text": "No quoted passage in either source contains an explicit meeting date; dates are only in source titles.",
+              "origin": "model_suggested",
+              "assessment": "not_established",
+              "source_ids": [
+                "source_753f67e545164e19a4a3fa9407a0f731",
+                "source_88a8451a4cef418dbc5ee5984678460b"
+              ],
+              "input_scope": "partial_or_unknown",
+              "declared_scope": "unknown"
+            },
+            {
+              "text": "The supplied sources contain no statements covering the period between the June and July 2020 documents, so intervening rate decisions cannot be confirmed or denied from this evidence.",
+              "origin": "model_suggested",
+              "assessment": "not_established",
+              "source_ids": [
+                "source_753f67e545164e19a4a3fa9407a0f731",
+                "source_88a8451a4cef418dbc5ee5984678460b"
+              ],
+              "input_scope": "partial_or_unknown",
+              "declared_scope": "unknown"
+            }
+          ],
+          "schema_version": "1"
+        },
+        "available_fact_ids": [],
+        "planning_requested": false,
+        "research_questions": [
+          {
+            "origin": "model_suggestion",
+            "status": "linked_not_verified",
+            "question": "Compare the federal funds target ranges in the two supplied FOMC statements, give the change in endpoints, and identify what the documents cannot establish about intervening decisions.",
+            "claim_ids": [
+              "claim_6f4520923bf7419d99a37b28b1a74768",
+              "claim_76a539440528410ca062b421896a3516",
+              "claim_f2749d43d2ff473d846c769c8e9e8601"
+            ]
+          }
+        ],
+        "counterpoint_status": "not_requested",
+        "gap_followup_status": "not_requested",
+        "max_elapsed_seconds": 180,
+        "support_review_mode": "batch",
+        "gap_followup_targets": [],
+        "gap_search_requested": false,
+        "model_evidence_needs": [
+          {
+            "action": "retrieve full source documents to confirm meeting dates",
+            "origin": "model_suggested",
+            "reason": "Dates appear only in source titles (fed-2020-june, fed-2020-july) and cannot be verified from quoted passages",
+            "source_kind": "Full FOMC statement text including header/date line",
+            "requested_fact": "Exact dates of the two FOMC statements as stated within the document text"
+          },
+          {
+            "action": "retrieve any intervening statements to verify continuity",
+            "origin": "model_suggested",
+            "reason": "Cannot establish whether the target range remained unchanged throughout the interval between the two statements",
+            "source_kind": "Complete archive of FOMC statements for the intervening period",
+            "requested_fact": "Any FOMC decisions or statements issued between the two documented statements"
+          }
+        ],
+        "official_fetch_calls": 0,
+        "requirement_coverage": {
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "requirements": [
+            {
+              "gaps": [
+                "request_decomposition_not_verified"
+              ],
+              "origin": "user",
+              "source_ids": [],
+              "finding_ids": [],
+              "counterpoints": [],
+              "requirement_id": "user_request",
+              "relation_status": "not_assessed",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": []
+            },
+            {
+              "gaps": [],
+              "origin": "model_suggested",
+              "source_ids": [
+                "source_753f67e545164e19a4a3fa9407a0f731",
+                "source_88a8451a4cef418dbc5ee5984678460b"
+              ],
+              "finding_ids": [
+                "claim_6f4520923bf7419d99a37b28b1a74768",
+                "claim_76a539440528410ca062b421896a3516",
+                "claim_f2749d43d2ff473d846c769c8e9e8601"
+              ],
+              "counterpoints": [
+                {
+                  "claim_id": "claim_a719b4cd33994a968790fffff3585008",
+                  "source_ids": [
+                    "source_753f67e545164e19a4a3fa9407a0f731"
+                  ],
+                  "attribution": "model_suggested",
+                  "finding_ids": [
+                    "claim_f2749d43d2ff473d846c769c8e9e8601"
+                  ]
+                }
+              ],
+              "question_index": 0,
+              "requirement_id": "question:0",
+              "relation_status": "linked_suggestion",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": []
+            }
+          ],
+          "schema_version": "1",
+          "requested_actions": [
+            {
+              "action": "support_review",
+              "execution_status": "partial",
+              "requirement_status": "unmet"
+            }
+          ]
+        },
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "completion_assessment": {
+          "meaning": "execution_record_not_task_quality_verdict",
+          "task_coverage": "not_independently_verified",
+          "schema_version": "1",
+          "execution_status": "known_gap",
+          "source_semantics": "not_independently_verified",
+          "model_reported_task_gap": true,
+          "unmet_requested_actions": [
+            "support_review"
+          ]
+        },
+        "gap_followup_segments": [],
+        "official_fetch_status": "not_requested",
+        "support_review_method": "bounded_quotation_context_model_review_v31",
+        "support_review_status": "partial",
+        "support_review_tokens": 815,
+        "counterpoint_requested": false,
+        "gap_followup_requested": false,
+        "source_search_receipts": [],
+        "support_review_indexes": [
+          1
+        ],
+        "support_review_segments": [
+          {
+            "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+            "claim_index": 1,
+            "character_end": 1312,
+            "context_radius": 180,
+            "character_start": 822
+          },
+          {
+            "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+            "claim_index": 1,
+            "character_end": 1443,
+            "context_radius": 180,
+            "character_start": 953
+          }
+        ],
+        "provider_timeout_seconds": 120.0,
+        "require_counterarguments": true,
+        "support_review_omissions": [
+          {
+            "reason": "not_reviewable",
+            "claim_index": 0
+          },
+          {
+            "reason": "not_reviewable",
+            "claim_index": 2
+          },
+          {
+            "reason": "not_reviewable",
+            "claim_index": 3
+          }
+        ],
+        "support_review_requested": true,
+        "counterpoint_omitted_rows": 0,
+        "gap_followup_input_targets": [],
+        "model_absence_observations": [
+          {
+            "text": "No quoted passage in either source contains an explicit meeting date; dates are only in source titles.",
+            "scope": "unknown",
+            "origin": "model_suggested",
+            "assessment": "not_established",
+            "source_ids": [
+              "source_753f67e545164e19a4a3fa9407a0f731",
+              "source_88a8451a4cef418dbc5ee5984678460b"
+            ]
+          },
+          {
+            "text": "The supplied sources contain no statements covering the period between the June and July 2020 documents, so intervening rate decisions cannot be confirmed or denied from this evidence.",
+            "scope": "unknown",
+            "origin": "model_suggested",
+            "assessment": "not_established",
+            "source_ids": [
+              "source_753f67e545164e19a4a3fa9407a0f731",
+              "source_88a8451a4cef418dbc5ee5984678460b"
+            ]
+          }
+        ],
+        "provider_input_token_limit": 6000,
+        "gap_followup_input_fact_ids": [],
+        "provider_output_token_limit": 4000,
+        "support_review_prompt_sha256": "3cbe92dc07596b6371bde07038ef822e033010f0b0f61f6f98dc636c62da47ab",
+        "support_review_system_sha256": "6e64d6378fbdfe43968fd894214937847c09d4b2f6a9ea0835515205a40745c6",
+        "counterpoint_discarded_fields": 0,
+        "gap_followup_question_targets": [],
+        "support_review_failed_indexes": [],
+        "settled_model_budget_accounted_tokens": 2889
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_753f67e545164e19a4a3fa9407a0f731",
+      "source_88a8451a4cef418dbc5ee5984678460b"
+    ],
+    "created_by": "agent"
+  },
+  "source_provenance": [
+    {
+      "schema_version": "1",
+      "source_id": "source_753f67e545164e19a4a3fa9407a0f731",
+      "title": "fed-2020-june",
+      "kind": "official",
+      "is_simulated": false,
+      "published_at": null,
+      "event_at": null,
+      "revised_at": null,
+      "obtained_at": "2026-11-14T09:26:20.367383Z",
+      "content_sha256": "fec9898ca7650e7ed9a8271704c57ea4c7157d34174546273a1169c150f415ed",
+      "retrieval_method": "user_supplied",
+      "pdf_text_order": null,
+      "derived_from_source_id": null,
+      "response_sha256": null,
+      "response_content_type": null,
+      "permissions": {
+        "store": true,
+        "model_input": true,
+        "display": true,
+        "export": true
+      },
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200610a1.pdf",
+      "verification": "user_declared_not_verified"
+    },
+    {
+      "schema_version": "1",
+      "source_id": "source_88a8451a4cef418dbc5ee5984678460b",
+      "title": "fed-2020-july",
+      "kind": "official",
+      "is_simulated": false,
+      "published_at": null,
+      "event_at": null,
+      "revised_at": null,
+      "obtained_at": "2026-11-14T09:26:20.958348Z",
+      "content_sha256": "ef2d9218bd4e8ebd1ba2c5c34444dad2a6ca49b7c02407a155ccc058ca29bc06",
+      "retrieval_method": "user_supplied",
+      "pdf_text_order": null,
+      "derived_from_source_id": null,
+      "response_sha256": null,
+      "response_content_type": null,
+      "permissions": {
+        "store": true,
+        "model_input": true,
+        "display": true,
+        "export": true
+      },
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200729a1.pdf",
+      "verification": "user_declared_not_verified"
+    }
+  ],
+  "disclosure": "Model interpretations and declared source permissions are not independently verified.",
+  "calculation_disclosure": "Calculations use the recorded inputs; their source precision and prior rounding are not established."
+}

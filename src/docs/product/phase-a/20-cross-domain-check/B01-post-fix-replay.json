@@ -1,0 +1,17 @@
+{
+  "experiment": "offline replay of previously captured model output, not a new run or re-score",
+  "facts": [
+    [
+      "0.3",
+      "January 2024 monthly"
+    ],
+    [
+      "3.1",
+      "12 months ending January 2024"
+    ]
+  ],
+  "retained_support_claims": 2,
+  "counterarguments": 1,
+  "omission_reported": true,
+  "all_retained_claim_quotes_locatable": true
+}

@@ -1,0 +1,37 @@
+..F                                                                      [100%]
+=================================== FAILURES ===================================
+___ test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately ____
+
+    def test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately():
+        from app.research_analysis import SYSTEM_PROMPT
+        from app.research_uploads import _extract_text
+        pdf = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/263-holdout-candidates/bea-gdp4q22.pdf'
+        text = _extract_text(pdf.read_bytes(), text_order='layout')
+        report = source('s', text=text).model_copy(update={'retrieval_method':'user_pdf', 'pdf_text_order':'layout'})
+        question = ('According to the attached BEA second estimate, compare annualized real GDP growth in the fourth '
+                    'and third quarters of 2022. Assess whether both goods and services consumption increased in the '
+                    'fourth quarter; cite evidence and distinguish a revision to an estimate from an actual change.')
+        captured = []
+        raw_prompts = []
+        def capture(prompt):
+            raw_prompts.append(prompt)
+            captured.append(decode_research_prompt(prompt))
+            return {}, 0
+        limit = 6000 - len(SYSTEM_PROMPT.encode()) - 512
+        result = analyze(question, [report], None, capture, max_prompt_chars=limit)
+        assert len(raw_prompts[0].encode()) <= limit
+        excerpts = [item['text'] for item in captured[0]['sources']]
+        import re
+        assert all(any(value in part for part in excerpts) for value in ('2.7 percent', '3.2 percent'))
+        from app.research_analysis import _prompt_source_text
+        assert len(result.segments) == len(excerpts)
+        assert all(_prompt_source_text(text[item['character_start']:item['character_end']], True) == sent
+                   for item, sent in zip(result.segments, excerpts))
+        pattern = r'increase\s+in\s+consumer\s+spending\s+reflected\s+an\s+increase\s+in\s+services\s+that\s+was\s+partly\s+offset\s+by\s+a\s+decrease\s+in\s+goods'
+>       assert any(re.search(pattern, part, re.IGNORECASE) for part in excerpts)
+E       assert False
+E        +  where False = any(<generator object test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately.<locals>.<genexpr> at 0x75a08e10d7b0>)
+
+tests/test_research_analysis.py:2227: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_analysis.py::test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately

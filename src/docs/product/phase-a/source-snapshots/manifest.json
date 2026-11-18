@@ -1,0 +1,36 @@
+{
+  "method": "single GET per file; 20 second timeout; no retry",
+  "permission_basis": "BEA and Federal Reserve website materials ordinarily public domain unless otherwise stated; check item-specific third-party material",
+  "sources": [
+    {
+      "file": "bea-gdp-2023-q4-advance.pdf",
+      "url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+      "retrieved_at_utc": "2026-11-11T11:02:50.131446+00:00",
+      "status": 200,
+      "bytes": 1383186,
+      "sha256": "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d",
+      "content_type": "application/pdf",
+      "elapsed_seconds": 1.579
+    },
+    {
+      "file": "bea-gdp-2023-q4-second.pdf",
+      "url": "https://www.bea.gov/sites/default/files/2024-02/gdp4q23-2nd.pdf",
+      "retrieved_at_utc": "2026-11-11T11:02:51.710910+00:00",
+      "status": 200,
+      "bytes": 1473626,
+      "sha256": "f9588ee32147acde028b38c278840142b50b0884b254b98c6c8c1edfa37db4e8",
+      "content_type": "application/pdf",
+      "elapsed_seconds": 1.336
+    },
+    {
+      "file": "fed-fomc-2024-09-18.pdf",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20240918a1.pdf",
+      "retrieved_at_utc": "2026-11-11T11:02:53.047104+00:00",
+      "status": 200,
+      "bytes": 115977,
+      "sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932",
+      "content_type": "application/pdf",
+      "elapsed_seconds": 0.962
+    }
+  ]
+}

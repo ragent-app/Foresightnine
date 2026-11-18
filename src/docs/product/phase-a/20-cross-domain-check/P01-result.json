@@ -1,0 +1,197 @@
+{
+  "id": "P01",
+  "operation_status": "completed",
+  "manifest_sha256": "1f0844e4448adf617fa44e193a006171050a75cd685af1ca4b732785127caff3",
+  "input_sha256": "a0cbf58e75ae9e0d81368bb67ad2b177afd481bb2373c1adc47dca79da5a1d0e",
+  "elapsed_seconds_observed": 16.104,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+        "title": "Pfizer 2024 SEC filing: derived revenue facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/78003/000007800325000054/pfe-20241231.htm",
+        "published_at": null,
+        "obtained_at": "2026-11-12T02:13:39.835134+00:00",
+        "revised_at": null,
+        "content_sha256": "84477e968007fb5e444a4987f593a5ed8c6209e6ab7c40d9328feefc1c78f067",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_fy2023_revenue",
+        "value": "59553",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2023 (ended December 31)",
+        "label": "total_revenues_2023",
+        "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+        "quotation": "{\"issuer\":\"Pfizer Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":59553,\"2024\":63627}}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 0,
+          "character_end": 123
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_fy2024_revenue",
+        "value": "63627",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (ended December 31)",
+        "label": "total_revenues_2024",
+        "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+        "quotation": "{\"issuer\":\"Pfizer Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":59553,\"2024\":63627}}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 0,
+          "character_end": 123
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fact_fy2024_revenue",
+            "value": "63627",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024 (ended December 31)"
+          },
+          {
+            "fact_id": "fact_fy2023_revenue",
+            "value": "59553",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2023 (ended December 31)"
+          }
+        ],
+        "value": "6.84",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "claims": [
+      {
+        "text": "辉瑞总收入从2023年的59,553百万美元增至2024年的63,627百万美元（12月31日财年截止，单位：百万美元）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+            "location": {
+              "character_start": 0,
+              "character_end": 123
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "{\"issuer\":\"Pfizer Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":59553,\"2024\":63627}}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "基于两个财年收入数据，2024年相对2023年的收入增长率约为6.8%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+            "location": {
+              "character_start": 95,
+              "character_end": 122
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "{\"2023\":59553,\"2024\":63627}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "该增长率仅基于单一汇总收入指标，未考虑业务分部、汇率影响或一次性项目，可能无法反映底层经营趋势。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      },
+      {
+        "text": "数据来源标注为'derived revenue facts'，为源自SEC文件的衍生数据而非原文，可能存在提取误差。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "数据未注明具体SEC文件（如10-K）及提交日期。",
+      "仅有两年总收入数据，无分部、季度或经审计的原始报表文本。",
+      "增长率计算为简单同比，未提供剔除汇率、并购或产品线变化影响的信息。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:84d58d7417622916da4148b5",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 968,
+      "cost_usd": null,
+      "generation_tokens": 968,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 14.121,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "ada02f76a0c56c68728799e67dd78a55cb5e688fdc92351a4ef03a7e47f98d28",
+      "prompt_characters": 978,
+      "prompt_bytes": 1066,
+      "selection_method": "ranked_nonoverlapping_windows_v5",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+          "character_start": 0,
+          "character_end": 123
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_7ee2fdae00bb42fd8322fce2a75e95cb": "84477e968007fb5e444a4987f593a5ed8c6209e6ab7c40d9328feefc1c78f067"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

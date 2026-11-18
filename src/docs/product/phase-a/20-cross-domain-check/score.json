@@ -1,0 +1,56 @@
+{
+  "manifest_sha256": "1f0844e4448adf617fa44e193a006171050a75cd685af1ca4b732785127caff3",
+  "sample": "public, non-blind candidate; derived facts only",
+  "semantic_support": "unverifiable",
+  "historical_availability": "unverified",
+  "tasks": {
+    "P01": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "59553",
+          "valid": true
+        },
+        {
+          "value": "63627",
+          "valid": true
+        }
+      ],
+      "support_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unrecognized_claim_percentages_requiring_review": [],
+      "program_detected_calculation_differences": [],
+      "budget_ok": true,
+      "reported_tokens": 968,
+      "mechanical_pass": true,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "B01": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "0.3",
+          "valid": false
+        },
+        {
+          "value": "3.1",
+          "valid": false
+        }
+      ],
+      "support_claims_have_locations": false,
+      "required_calculation_ok": true,
+      "unrecognized_claim_percentages_requiring_review": [],
+      "program_detected_calculation_differences": [],
+      "budget_ok": true,
+      "reported_tokens": 1048,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    }
+  },
+  "mechanical_tasks_passed": 1,
+  "mechanical_task_count": 2
+}

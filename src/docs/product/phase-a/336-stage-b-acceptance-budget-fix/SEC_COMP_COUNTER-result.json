@@ -1,0 +1,569 @@
+{
+  "task_id": "SEC_COMP_COUNTER",
+  "operation": {
+    "schema_version": "v1",
+    "created_at": "2026-11-13T14:24:00.021073Z",
+    "source_refs": [
+      {
+        "ref_id": "mock:operation",
+        "source_type": "model_inference",
+        "label": "Deterministic operation controller"
+      }
+    ],
+    "content_hash": "c3bdb82168e32972087a5d8b7622d1e646d4ea9f72aacdd3f8635c1e40a916a5",
+    "operation_id": "operation:c4494baea86a7daa580a9f9e",
+    "endpoint": "/v1/research/topics/topic_7d63a30f2a7543529084aa2973bb02e4/runs",
+    "status": "completed",
+    "updated_at": "2026-11-13T14:24:14.158002Z",
+    "idempotency_key_hash": "a03873bdeadf4fb1846f38e7878a595705350e4729fac0fe9215bf0bd0977542",
+    "last_event_id": "operation:c4494baea86a7daa580a9f9e:4"
+  },
+  "version": {
+    "version_id": "version_743b718a97e84a6f8c563c4a6360d217",
+    "parent_version_id": "version_de58406cc9064807a7f1ae5dcad63223",
+    "created_at": "2026-11-13T14:24:14.162425Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+          "title": "Cisco FY2024 Form 10-K, filed 2024-09-05, SEC HTML text extraction; table separators generated",
+          "url": "https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm",
+          "event_at": null,
+          "published_at": null,
+          "obtained_at": "2026-11-13T14:23:59.991627+00:00",
+          "revised_at": null,
+          "content_sha256": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0",
+          "is_simulated": false,
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "text_characters": 590015,
+            "selected_characters": 103,
+            "status": "partial"
+          },
+          "pdf_text_order": null,
+          "derived_from_source_id": null,
+          "verification": "user_declared_not_verified"
+        }
+      ],
+      "source_candidates": [],
+      "facts": [],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [
+        {
+          "text": "The supplied Cisco FY2024 Form 10-K excerpt covers the year ended July 27, 2024, but does not contain any revenue figures or year-over-year revenue data, so no revenue comparison between Microsoft and Cisco can be supported.",
+          "kind": "model_interpretation",
+          "citations": [
+            {
+              "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+              "location": {
+                "character_start": 323572,
+                "character_end": 323601
+              },
+              "quotation_match": "exact",
+              "support_status": "not_independently_verified",
+              "quotation": "the year ended July 27, 2024."
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "role": "support",
+          "support_review": {
+            "verdict": "supports",
+            "method": "bounded_quotation_context_model_review_v31",
+            "independently_verified": false
+          },
+          "claim_id": "claim_a95cbfdd8ec44d079af9e5a86dd71be8"
+        }
+      ],
+      "limitations": [
+        "Source source_bfff2f8c03a847c699eeee0b98afd88f: exceeds the current input budget; not processed.",
+        "Source source_13f828803fd74cb89650bec82be3d7c6: only character ranges 323571–323674 were analyzed; remaining text was not examined.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): No Microsoft source document was supplied; Microsoft's annual revenues and year-over-year changes cannot be assessed.",
+        "Model-reported limitation (not independently verified): The supplied Cisco excerpt is marked partial and contains only internal control language and the fiscal year-end date; no revenue figures, prior-year comparatives, or fiscal-period definitions (e.g., 52/53-week year) are present.",
+        "Model-reported limitation (not independently verified): Cisco's fiscal year (ended July 27, 2024) differs from Microsoft's June fiscal year-end; even if figures were supplied, period misalignment would limit direct comparison.",
+        "Model-reported limitation (not independently verified): The absence of revenue data in the excerpt is not evidence of its absence from the full 10-K; no revenue conclusion can be drawn.",
+        "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+      ],
+      "run": {
+        "operation_id": "operation:c4494baea86a7daa580a9f9e",
+        "status": "partial",
+        "question_origin": "user",
+        "research_questions": [
+          {
+            "question": "What were Microsoft's reported annual revenues and year-over-year changes per the supplied materials?",
+            "claim_ids": [],
+            "origin": "model_suggestion",
+            "status": "no_linked_finding"
+          },
+          {
+            "question": "What were Cisco's reported annual revenues and year-over-year changes per the supplied materials?",
+            "claim_ids": [],
+            "origin": "model_suggestion",
+            "status": "no_linked_finding"
+          },
+          {
+            "question": "What fiscal period and source limitations apply to the comparison?",
+            "claim_ids": [
+              "claim_a95cbfdd8ec44d079af9e5a86dd71be8"
+            ],
+            "origin": "model_suggestion",
+            "status": "linked_not_verified"
+          }
+        ],
+        "source_processing": [
+          {
+            "source_id": "source_bfff2f8c03a847c699eeee0b98afd88f",
+            "eligibility": "eligible",
+            "initial_selection": "not_selected",
+            "selected_characters": null,
+            "text_characters": 700
+          },
+          {
+            "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+            "eligibility": "eligible",
+            "initial_selection": "partial",
+            "selected_characters": 103,
+            "text_characters": 590015
+          }
+        ],
+        "available_fact_ids": [],
+        "settled_model_budget_accounted_tokens": 1549,
+        "source_search_receipts": [],
+        "workflow_receipts": [
+          {
+            "stage": "planning",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "planning",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_discovery",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_retrieval",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "completed",
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 8234,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [
+              "source_13f828803fd74cb89650bec82be3d7c6"
+            ],
+            "gaps": [
+              "Source source_bfff2f8c03a847c699eeee0b98afd88f: exceeds the current input budget; not processed.",
+              "Source source_13f828803fd74cb89650bec82be3d7c6: only character ranges 323571–323674 were analyzed; remaining text was not examined.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): No Microsoft source document was supplied; Microsoft's annual revenues and year-over-year changes cannot be assessed.",
+              "Model-reported limitation (not independently verified): The supplied Cisco excerpt is marked partial and contains only internal control language and the fiscal year-end date; no revenue figures, prior-year comparatives, or fiscal-period definitions (e.g., 52/53-week year) are present.",
+              "Model-reported limitation (not independently verified): Cisco's fiscal year (ended July 27, 2024) differs from Microsoft's June fiscal year-end; even if figures were supplied, period misalignment would limit direct comparison.",
+              "Model-reported limitation (not independently verified): The absence of revenue data in the excerpt is not evidence of its absence from the full 10-K; no revenue conclusion can be drawn."
+            ],
+            "usage": 961,
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+                "url": null
+              }
+            ],
+            "retryable": null
+          },
+          {
+            "stage": "counterpoint",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "gap_followup",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "support_review",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Address an outstanding, authorized research need.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "support_review",
+            "status": "complete",
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 5882,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [
+              "source_13f828803fd74cb89650bec82be3d7c6"
+            ],
+            "gaps": [],
+            "usage": 588,
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+                "url": null
+              }
+            ],
+            "retryable": null
+          },
+          {
+            "stage": "coordination",
+            "status": "stopped",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "remaining_gaps",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [
+              "Source source_bfff2f8c03a847c699eeee0b98afd88f: exceeds the current input budget; not processed.",
+              "Source source_13f828803fd74cb89650bec82be3d7c6: only character ranges 323571–323674 were analyzed; remaining text was not examined.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): No Microsoft source document was supplied; Microsoft's annual revenues and year-over-year changes cannot be assessed.",
+              "Model-reported limitation (not independently verified): The supplied Cisco excerpt is marked partial and contains only internal control language and the fiscal year-end date; no revenue figures, prior-year comparatives, or fiscal-period definitions (e.g., 52/53-week year) are present.",
+              "Model-reported limitation (not independently verified): Cisco's fiscal year (ended July 27, 2024) differs from Microsoft's June fiscal year-end; even if figures were supplied, period misalignment would limit direct comparison.",
+              "Model-reported limitation (not independently verified): The absence of revenue data in the excerpt is not evidence of its absence from the full 10-K; no revenue conclusion can be drawn.",
+              "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          }
+        ],
+        "generation_status": "completed",
+        "planning_requested": false,
+        "planning_status": "not_requested",
+        "planning_steps": [],
+        "planning_tokens": null,
+        "planning_prompt_sha256": null,
+        "planning_error": null,
+        "planning_system_sha256": null,
+        "counterpoint_requested": false,
+        "counterpoint_status": "not_requested",
+        "gap_search_requested": false,
+        "gap_search_status": "not_requested",
+        "gap_followup_requested": false,
+        "gap_followup_status": "not_requested",
+        "support_review_requested": true,
+        "support_review_status": "complete",
+        "require_counterarguments": true,
+        "model_calls": 2,
+        "total_tokens": 1549,
+        "cost_usd": null,
+        "generation_tokens": 961,
+        "support_review_tokens": 588,
+        "counterpoint_tokens": null,
+        "counterpoint_prompt_sha256": null,
+        "gap_followup_tokens": null,
+        "gap_followup_prompt_sha256": null,
+        "gap_followup_targets": [],
+        "gap_followup_input_targets": [],
+        "gap_followup_question_targets": [],
+        "gap_search_query_sha256": null,
+        "gap_followup_error": null,
+        "gap_followup_segments": [],
+        "gap_followup_input_fact_ids": [],
+        "counterpoint_discarded_fields": 0,
+        "counterpoint_omitted_rows": 0,
+        "counterpoint_error": null,
+        "support_review_error": null,
+        "support_review_mode": "batch",
+        "support_review_method": "bounded_quotation_context_model_review_v31",
+        "analysis_error_detail": null,
+        "support_review_prompt_sha256": "4a8bee42663d7e9118a66f3cd77007226774b4e4531a2a464b008a7969982506",
+        "support_review_indexes": [
+          0
+        ],
+        "support_review_omissions": [],
+        "support_review_failed_indexes": [],
+        "support_review_segments": [
+          {
+            "claim_index": 0,
+            "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+            "character_start": 323392,
+            "character_end": 323781,
+            "context_radius": 180
+          }
+        ],
+        "support_review_system_sha256": "6e64d6378fbdfe43968fd894214937847c09d4b2f6a9ea0835515205a40745c6",
+        "search_calls": 0,
+        "search_status": "not_requested",
+        "official_fetch_calls": 0,
+        "official_fetch_status": "not_requested",
+        "elapsed_seconds": 14.134,
+        "cost_status": "unknown",
+        "model": "glm-5.3-flash",
+        "provider": "openai-compatible",
+        "prompt_sha256": "f8dfb9af68e2da2fdab2daa30dc7e03daa158781c8753e64e76a39905df7b099",
+        "prompt_characters": 2373,
+        "prompt_bytes": 2373,
+        "selection_method": "multilingual_lexical_with_legacy_fallback_v53",
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "selected_segments": [
+          {
+            "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+            "character_start": 323571,
+            "character_end": 323674
+          }
+        ],
+        "provider_timeout_seconds": 120.0,
+        "provider_input_token_limit": 3000,
+        "provider_output_token_limit": 4000,
+        "source_hashes": {
+          "source_bfff2f8c03a847c699eeee0b98afd88f": "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c",
+          "source_13f828803fd74cb89650bec82be3d7c6": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0"
+        },
+        "max_model_calls": 2,
+        "max_search_calls": 0,
+        "max_elapsed_seconds": 180,
+        "max_total_tokens": 20000,
+        "max_cost_usd": null,
+        "error": null,
+        "evidence_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "facts": [],
+          "claims": [
+            {
+              "claim_index": 0,
+              "claim_id": "claim_a95cbfdd8ec44d079af9e5a86dd71be8",
+              "citation_location_status": "all_recorded",
+              "semantic_support_status": "not_independently_verified",
+              "model_review_opinion": "supports",
+              "counterpoint_relevance_opinion": null,
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "responds_to_claim_ids": [],
+              "suggested_responds_to_claim_ids": [],
+              "user_fact_links": [],
+              "role": "support",
+              "citations": [
+                {
+                  "citation_index": 0,
+                  "source_id": "source_13f828803fd74cb89650bec82be3d7c6",
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ]
+            }
+          ],
+          "calculations": []
+        },
+        "question_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "truncated": false,
+          "questions": [
+            {
+              "question_index": 0,
+              "finding_ids": [],
+              "source_ids": [],
+              "counterpoints": []
+            },
+            {
+              "question_index": 1,
+              "finding_ids": [],
+              "source_ids": [],
+              "counterpoints": []
+            },
+            {
+              "question_index": 2,
+              "finding_ids": [
+                "claim_a95cbfdd8ec44d079af9e5a86dd71be8"
+              ],
+              "source_ids": [
+                "source_13f828803fd74cb89650bec82be3d7c6"
+              ],
+              "counterpoints": []
+            }
+          ]
+        },
+        "research_gaps": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "items": [
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "subquestions_unlinked",
+              "indexes": [
+                0,
+                1
+              ],
+              "count": 2,
+              "truncated": false,
+              "index_kind": "question"
+            },
+            {
+              "code": "semantic_support_not_independently_verified",
+              "indexes": [
+                0
+              ],
+              "count": 1,
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "no_counterpoint"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ]
+        },
+        "stage_summary": {
+          "schema_version": "1",
+          "meaning": "saved_execution_not_quality_verdict",
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "completed"
+            },
+            {
+              "stage": "review",
+              "status": "completed"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ]
+        }
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_bfff2f8c03a847c699eeee0b98afd88f",
+      "source_13f828803fd74cb89650bec82be3d7c6"
+    ],
+    "created_by": "agent"
+  },
+  "cost_usd": "unknown",
+  "model_calls_cumulative": 4
+}

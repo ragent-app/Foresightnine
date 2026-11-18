@@ -1,0 +1,46 @@
+{
+  "classification": "non-blind development-set diagnostic; no independent heldout quality claim",
+  "model": "glm-5.3-flash",
+  "budget": {
+    "max_calls": 8,
+    "max_tokens": 80000,
+    "per_task_timeout_seconds": 180,
+    "search_calls": 0,
+    "automatic_fetch": false,
+    "retries": 0,
+    "known_calls": 5,
+    "known_reported_tokens": 4141,
+    "fourth_task_calls": "unknown: 0 to 2",
+    "fourth_task_tokens": "unknown",
+    "conservative_maximum_calls": 7,
+    "conservative_maximum_tokens": 70000,
+    "cost_usd": "unknown"
+  },
+  "outcomes": [
+    {
+      "task": "SEC_FACT_CALC",
+      "state": "failed_task_requirements",
+      "reason": "No required values or calculation. The four-character excerpt .sec does not support a claim that the supplied record contains no financial data. Partial status and an uncertainty note exist but do not make the unsupported assertion accurate.",
+      "result_file": "SEC_FACT_CALC-result.json"
+    },
+    {
+      "task": "SEC_COMP_COUNTER",
+      "state": "failed_task_requirements",
+      "reason": "Microsoft source was not selected, Cisco excerpt lacks revenue values, no comparison or cited relevant counterpoint was delivered. A limitation says no Microsoft source was supplied although one was attached; the source-processing record correctly shows it was not selected. Model review marked the remaining claim supports, not independent proof.",
+      "result_file": "SEC_COMP_COUNTER-result.json"
+    },
+    {
+      "task": "BEA_REVISION",
+      "state": "failed_task_requirements",
+      "reason": "Neither required estimate nor a supported release comparison was delivered. Cited partial fragments do not support claims about the release estimates or declared dates. Output correctly reports excerpts are incomplete, but that does not establish the requested facts.",
+      "result_file": "BEA_REVISION-result.json"
+    },
+    {
+      "task": "FED_EVENT_MISSING",
+      "state": "not_completed_unknown_external_outcome",
+      "reason": "Operation accepted, then polling returned a response without an operation object and the in-memory TestClient process exited. The operation ID and final state were not saved; no run remains to query. There is no basis to infer whether zero, one or two external calls occurred."
+    }
+  ],
+  "script_remediation": "Frozen pre-fix runner retained as live_acceptance.frozen.py. Runner now saves admission ID and safe polling errors before waiting; two local fake-response tests passed. No live task was retried.",
+  "interpretation": "Three completed task results are non-passes for the preregistered content requirements; fourth is unknown. Results do not establish a generalized failure rate or independent threshold."
+}

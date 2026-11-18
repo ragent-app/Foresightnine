@@ -1,0 +1,114 @@
+{
+  "id": "P02",
+  "operation_status": "completed",
+  "manifest_sha256": "6ab3d653ee986bc8442e5fd29e08568eb0b00a9c2cf3dd94b6a82c3cc113b875",
+  "input_sha256": "f37d2049825b511d6ecb9e89ceb6076d4dcc44c1ad26bf0af7e2d47329c0720a",
+  "elapsed_seconds_observed": 14.095,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_71f53a8d28c74a90ae7b82a003c93e17",
+        "title": "PepsiCo 2024 SEC filing: derived net revenue facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/77476/000007747625000007/pep-20241228.htm",
+        "published_at": null,
+        "obtained_at": "2026-11-12T02:19:59.841221+00:00",
+        "revised_at": null,
+        "content_sha256": "67b54f6b1b93f1c7949c68f73ba318980533fb2171d761a9d7b5fb6ae88a9feb",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "claims": [
+      {
+        "text": "PepsiCo 净收入从 FY2023 的 91,471 百万美元增至 FY2024 的 91,854 百万美元；增长率需通过 supported 计算得出，约为 0.42%（计算见 calculations）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_71f53a8d28c74a90ae7b82a003c93e17",
+            "location": {
+              "character_start": 0,
+              "character_end": 155
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "{\"issuer\":\"PepsiCo Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2023\":\"2023-12-30\",\"2024\":\"2024-12-28\"},\"net_revenue\":{\"2023\":91471,\"2024\":91854}}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "增长率仅为基于两年总额的简单比较，可能掩盖业务板块、地域或汇率驱动的结构差异；单点来源无法交叉验证。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "A model-generated fact had an unlocatable quotation and was omitted.",
+      "A model-generated fact had an unlocatable quotation and was omitted.",
+      "A requested calculation was omitted because its input facts were unavailable.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "仅提供两年合并净收入总额，缺少分部、季度、汇率或有机增长口径数据，无法解释增长构成",
+      "未提供审计状态或与 SEC 原始申报的核对信息",
+      "fiscal_year_end_dates 表明为 52/53 周财年，两年期末日期不同，期间长度可比性未确认",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:c089b5b5c1975705571209b8",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 899,
+      "cost_usd": null,
+      "generation_tokens": 899,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 12.707,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "4350eaf9412b35a1cfd73f009dab12e2b20dbaa6c7b296cb8592b192c9d5287a",
+      "prompt_characters": 1028,
+      "prompt_bytes": 1114,
+      "selection_method": "ranked_nonoverlapping_windows_v5",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_71f53a8d28c74a90ae7b82a003c93e17",
+          "character_start": 0,
+          "character_end": 155
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_71f53a8d28c74a90ae7b82a003c93e17": "67b54f6b1b93f1c7949c68f73ba318980533fb2171d761a9d7b5fb6ae88a9feb"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

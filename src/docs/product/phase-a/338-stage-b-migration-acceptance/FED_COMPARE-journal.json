@@ -1,0 +1,95 @@
+{
+  "task_id": "FED_COMPARE",
+  "status": "completed",
+  "events": [
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "completed"
+    }
+  ],
+  "cost_status": "unknown",
+  "topic_id": "topic_0539550b154f4708885d33b2b5f93c9b",
+  "idempotency_key": "independent-c01edc83740c4ef8905592a493fd327f",
+  "operation_id": "operation:f41e4407d36150da08ccba73",
+  "admission_http_status": 202,
+  "settlement_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_ab52da6e54a84681a20b99b306e29cc8",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 2,
+      "released_calls": 0,
+      "accounted_tokens": 2889
+    },
+    "unresolved_stage_count": 0,
+    "reported_tokens": 2889,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  }
+}

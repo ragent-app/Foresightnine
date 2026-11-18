@@ -1,0 +1,127 @@
+...................F.FFF.s.............................................. [ 51%]
+.....................................................................    [100%]
+=================================== FAILURES ===================================
+____ test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732b2f7e5f50>
+
+    def test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation(monkeypatch):
+        from uuid import uuid4
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        client=TestClient(app)
+        account=client.post("/v1/auth/local/register",json={"email":f"retarget-{uuid4().hex}@example.test",
+            "password":"correct horse battery staple!"}).json()
+        headers={"Authorization":"Bearer "+account["access_token"]}
+        source=client.post("/v2/research/sources",headers=headers,json={"title":"Report","text":"Revenue 100. Revenue 200. Base 50.",
+            "permissions":{"store":True,"display":True,"model_input":True}}).json()
+        topic=client.post("/v2/research/topics",headers=headers,json={"question":"Difference?","source_ids":[source["source_id"]]}).json()
+        path="/v2/research/topics/"+topic["topic_id"]
+        facts=[{"fact_id":"revenue","label":"Revenue","value":"200","unit":"USD","currency":"USD","period":"2024",
+                "source_id":source["source_id"],"quotation":"Revenue 100","location":{"character_start":0,"character_end":11}},
+               {"fact_id":"base","label":"Base","value":"50","unit":"USD","currency":"USD","period":"2024"}]
+        saved=client.post(path+"/versions",headers=headers,json={"parent_version_id":topic["versions"][0]["version_id"],"content":{"facts":facts}})
+        assert saved.status_code==201
+        old=saved.json()["versions"][-1]
+        assert old["content"]["facts"][0]["source_value_warnings"]==["value_missing"]
+        request={"parent_version_id":old["version_id"],"formula":"difference","first_fact_id":"revenue","second_fact_id":"base"}
+        assert client.post(path+"/calculations",headers=headers,json=request).status_code==422
+        corrected=deepcopy(old["content"]);corrected["facts"][0]["quotation"]="Revenue 200";corrected["facts"][0].pop("location")
+        updated=client.post(path+"/versions",headers=headers,json={"parent_version_id":old["version_id"],"content":corrected})
+        assert updated.status_code==201,updated.text
+        current=updated.json()["versions"][-1];fact=current["content"]["facts"][0]
+        assert fact["location"]=={"character_start":13,"character_end":24}
+        assert fact["quotation_match"]=="exact" and not fact.get("source_value_warnings")
+        request["parent_version_id"]=current["version_id"]
+        calculation=client.post(path+"/calculations",headers=headers,json=request)
+>       assert calculation.status_code==201,calculation.text
+E       AssertionError: {"schema_version":"v1","error_code":"invalid_request","message":"The monetary fact's currency is not identified in its quotation; review it before calculation.","request_id":"request:7b75be4bcbf932ae1deded69","retryable":false,"details":[]}
+E       assert 422 == 201
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+
+tests/test_research_topics.py:403: AssertionError
+__ test_repeated_continuation_preserves_committed_stages_and_original_budget ___
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732b2ed43e70>
+
+    def test_repeated_continuation_preserves_committed_stages_and_original_budget(monkeypatch):
+>       client, headers, source_id, path, parent = _setup(monkeypatch)
+                                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732b2ed43e70>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:38: AssertionError
+__ test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732b2ee4b7e0>
+
+    def test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery(monkeypatch):
+>       client, headers, source_id, path, parent = _setup(monkeypatch)
+                                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:143: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732b2ee4b7e0>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:38: AssertionError
+___ test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732b2ee42350>
+
+    def test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation(monkeypatch):
+>       client, headers, source_id, path, parent = _setup(monkeypatch)
+                                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:187: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732b2ee42350>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:38: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_topics.py::test_fact_source_retarget_rejects_bad_evidence_and_enables_calculation
+FAILED tests/test_research_recovery_acceptance.py::test_repeated_continuation_preserves_committed_stages_and_original_budget
+FAILED tests/test_research_recovery_acceptance.py::test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery
+FAILED tests/test_research_recovery_acceptance.py::test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation

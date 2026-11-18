@@ -1,0 +1,98 @@
+.............FFF                                                         [100%]
+=================================== FAILURES ===================================
+_ test_structured_annual_observations_keep_period_value_and_issuer_within_budget _
+
+    def test_structured_annual_observations_keep_period_value_and_issuer_within_budget():
+        from app.research_analysis import _structured_observation_windows
+        data = {'issuer': 'Example Corp', 'concept': 'Revenue', 'unit': 'USD', 'notes': 'unrelated ' * 180,
+                'records': [{'start': '2021-07-01', 'end': '2022-06-30', 'val': 100, 'fy': 2023},
+                            {'start': '2022-07-01', 'end': '2023-06-30', 'val': 120, 'fy': 2023}]}
+        text = json.dumps(data, indent=2)
+        question = 'Compare revenue for 2022 and 2023.'
+        windows = _structured_observation_windows(text, question, 1000)
+        assert windows and len(windows) == 3
+        assert 'Example Corp' in windows[0][1] and 'USD' in windows[0][1]
+        assert '2022-06-30' in windows[1][1] and '100' in windows[1][1] and '"fy": 2023' in windows[1][1]
+        assert '2023-06-30' in windows[2][1] and '120' in windows[2][1]
+        assert all(text[start:start + len(part)] == part for start, part in windows)
+        assert _structured_observation_windows(text, question, 20) is None
+        duplicate = {**data, 'records': [*data['records'], data['records'][0]]}
+        assert _structured_observation_windows(json.dumps(duplicate), question, 1000) is None
+        mismatch = {**data, 'records': [data['records'][0], {**data['records'][1], 'unit': 'EUR'}]}
+        assert _structured_observation_windows(json.dumps(mismatch), question, 1000) is None
+        quarter = {**data, 'records': [data['records'][0], {**data['records'][1], 'start': '2023-04-01'}]}
+        assert _structured_observation_windows(json.dumps(quarter), question, 1000) is None
+        # Root metadata must not be attributed to nested records whose parent
+        # can override it, even when the individual leaf repeats no unit.
+        grouped = {k: v for k, v in data.items() if k != 'records'} | {
+            'groups': [{'unit': 'EUR', 'records': data['records']}]}
+        assert _structured_observation_windows(json.dumps(grouped), question, 1000) is None
+        mixed = {**data, 'nested': {'unit': 'EUR', 'records': data['records']}}
+        assert _structured_observation_windows(json.dumps(mixed), question, 1000) is None
+        root_records_with_nested = {**data, 'records': [{**data['records'][0], 'dimensions': {'unit': 'EUR'}}, data['records'][1]]}
+        assert _structured_observation_windows(json.dumps(root_records_with_nested), question, 1000) is None
+        duplicate_key = text.replace('"issuer": "Example Corp"', '"issuer": "Example Corp", "issuer": "Other"')
+        assert _structured_observation_windows(duplicate_key, question, 1000) is None
+        assert _structured_observation_windows(text[:-2], question, 1000) is None
+        assert _structured_observation_windows(text, 'Compare 2022, 2023 and 2024.', 1000) is None
+        with pytest.raises(AnalysisInterrupted):
+            _structured_observation_windows(text, question, 1000, lambda: True)
+        captured = []
+        def generate(prompt):
+            payload = json.loads(prompt);captured.append(payload)
+            parts = payload['sources']
+            return {'claims': [], 'facts': [
+                {'fact_id': 'prior', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2022', 'citation': {'source_id': 's', 'quotation': parts[1]['text']}},
+                {'fact_id': 'current', 'label': 'Revenue', 'value': '120', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2023', 'citation': {'source_id': 's', 'quotation': parts[2]['text']}}],
+                'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}, 5
+        result = analyze(question, [source('s', text=text)], None, generate, max_prompt_chars=2055)
+>       assert len(captured[0]['sources']) == 3 and result.prompt_bytes <= 2055
+                   ^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:1451: IndexError
+_____ test_analyze_keeps_short_structured_total_row_with_its_longer_header _____
+
+    def test_analyze_keeps_short_structured_total_row_with_its_longer_header():
+        header = ("ACME CORP\nConsolidated Statements of Operations\n(in millions)\n"
+                  "| Years Ended | July 31, 2024 | July 31, 2023 |\n")
+        middle = "| Product | 150 | 140 |\n" + "| Other item | 5 | 4 |\n" * 28
+        text = "other " * 600 + header + middle + "| Total revenue | 200 | 190 |\n" + "other " * 600
+        report = source("source_0123456789abcdef0123456789abcdef", text=text)
+        received = []
+        def generate(prompt):
+            received.extend(json.loads(prompt)["sources"])
+            return {}, 1
+        result = analyze("2024 与 2023 财年营收多少？", [report], None, generate, max_prompt_chars=1800)
+        excerpts = " ".join(item["text"] for item in received)
+>       assert all(value in excerpts for value in ("ACME CORP", "millions", "2024", "2023", "200", "190"))
+E       assert False
+E        +  where False = all(<generator object test_analyze_keeps_short_structured_total_row_with_its_longer_header.<locals>.<genexpr> at 0x7d6122f47b90>)
+
+tests/test_research_analysis.py:1199: AssertionError
+______ test_chinese_multitopic_question_balances_phrases_and_utf8_windows ______
+
+    def test_chinese_multitopic_question_balances_phrases_and_utf8_windows():
+        text = ('資料來源：星島研究院，星島研究院發布的財務報告。\n' +
+                '其他事項說明沒有相關收入與支出的數字。' * 60 +
+                '2024年倉儲物流收入為123億元，按年上升5%。' +
+                '其他事項說明沒有相關收入與支出的數字。' * 220 +
+                '2024年雲端支出為47億元，按年下降3%。' + '其他事項說明。' * 300)
+        report = source('s', text=text).model_copy(update={'title': '財務報告'})
+        captured = []
+        def generate(prompt):
+            captured.append(json.loads(prompt))
+            return {}, 1
+        result = analyze('根據星島研究院2024年報告，倉儲物流收入及雲端支出分別是多少？',
+                         [report], None, generate, max_prompt_chars=2055)
+        passages = [item['text'] for item in captured[0]['sources']]
+        assert any('倉儲物流收入為123億元' in part for part in passages)
+>       assert any('雲端支出為47億元' in part for part in passages)
+E       assert False
+E        +  where False = any(<generator object test_chinese_multitopic_question_balances_phrases_and_utf8_windows.<locals>.<genexpr> at 0x7d6122d56a80>)
+
+tests/test_research_analysis.py:1373: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_analysis.py::test_structured_annual_observations_keep_period_value_and_issuer_within_budget
+FAILED tests/test_research_analysis.py::test_analyze_keeps_short_structured_total_row_with_its_longer_header
+FAILED tests/test_research_analysis.py::test_chinese_multitopic_question_balances_phrases_and_utf8_windows

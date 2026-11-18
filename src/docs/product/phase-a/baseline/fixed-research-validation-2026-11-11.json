@@ -1,0 +1,14 @@
+{
+  "checked_at_utc": "2026-11-11T11:19:46.808389+00:00",
+  "checks": [
+    "script and previous result hashes match",
+    "initial and update numeric outputs match",
+    "cutoff order and zero calls",
+    "conflicting prior-year values stop update"
+  ],
+  "initial_sha256": "12cb86727eaefbef743a6ab7ef4f3666185ad49dcf320c180764ea19affb27a3",
+  "update_sha256": "99bfff77a6de77f1112710d3570c980c5fbaf1dca8759764bd2676d94e96864d",
+  "limitations": [
+    "No human grading, live fetch, licensing check, or general-purpose research capability."
+  ]
+}

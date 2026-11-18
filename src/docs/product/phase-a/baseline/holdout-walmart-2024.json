@@ -1,0 +1,11 @@
+{
+  "snapshot_id":"holdout-walmart-fy2024-derived-v0.1",
+  "kind":"derived_facts_not_original_document",
+  "as_of":"2024-03-20T00:00:00Z",
+  "source":"https://www.sec.gov/Archives/edgar/data/104169/000010416924000056/wmt-20240131.htm",
+  "source_location":"Consolidated Statements of Income",
+  "unit":"USD millions",
+  "fiscal_year_end":"January 31",
+  "facts":{"total_revenues":{"2023":611289,"2024":648125},"net_sales":{"2024":642637},"membership_and_other_income":{"2024":5488},"operating_income":{"2024":27012}},
+  "verification":"draft facts; exact public availability and source permissions require review"
+}

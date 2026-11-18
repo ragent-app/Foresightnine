@@ -1,0 +1,101 @@
+{
+  "provider_payload": {
+    "claims": [
+      {
+        "text": "2023 annual real GDP growth was 2.5 percent, which is a year-over-year increase from the 2022 annual level to the 2023 annual level, whereas quarterly figures like the 3.3 percent Q4 2023 rate are annualized quarter-over-quarter rates rather than full-year growth.",
+        "citations": [
+          {
+            "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+            "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared with an increase of 1.9 percent in 2022 (table 1)."
+          },
+          {
+            "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.3 percent in the fourth quarter of 2023"
+          }
+        ]
+      },
+      {
+        "text": "The annual (2.5%) and quarterly annualized (3.3% in Q4, 4.9% in Q3) figures measure different things: annual growth compares full calendar-year levels, while quarterly annualized rates extrapolate a single quarter's change to a full-year pace, so they can differ substantially.",
+        "citations": [
+          {
+            "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+            "quotation": "In the third quarter, real GDP increased 4.9 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The 2.5 percent figure comes from the advance estimate, which is based on incomplete data and subject to revision, so the final annual growth rate could differ.",
+        "citations": [
+          {
+            "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+            "quotation": "The GDP estimate released today is based on source data that are incomplete or subject to further revision by the source agency"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "No explanation of the quarterly annualization methodology is provided in the sources; the distinction between annual and annualized quarterly rates is inferred from standard conventions.",
+      "The figures are advance estimates and may be revised."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_2023_annual_growth",
+        "label": "2023 annual real GDP growth",
+        "value": "2.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023 (annual)",
+        "citation": {
+          "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+          "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level)"
+        }
+      },
+      {
+        "fact_id": "fact_2022_annual_growth",
+        "label": "2022 annual real GDP growth",
+        "value": "1.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2022 (annual)",
+        "citation": {
+          "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+          "quotation": "compared with an increase of 1.9 percent in 2022"
+        }
+      },
+      {
+        "fact_id": "fact_q4_2023_quarterly",
+        "label": "Q4 2023 real GDP growth (annualized)",
+        "value": "3.3",
+        "unit": "percent",
+        "currency": null,
+        "period": "Q4 2023",
+        "citation": {
+          "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.3 percent in the fourth quarter of 2023"
+        }
+      },
+      {
+        "fact_id": "fact_q3_2023_quarterly",
+        "label": "Q3 2023 real GDP growth (annualized)",
+        "value": "4.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "Q3 2023",
+        "citation": {
+          "source_id": "source_2334b08a37904da89b06a6c3a0182ed8",
+          "quotation": "In the third quarter, real GDP increased 4.9 percent."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact_q4_2023_quarterly",
+        "second_fact_id": "fact_2023_annual_growth"
+      }
+    ]
+  },
+  "reported_tokens": 1757
+}

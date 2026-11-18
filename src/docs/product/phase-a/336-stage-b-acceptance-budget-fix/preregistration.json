@@ -1,0 +1,95 @@
+{
+  "version": "1",
+  "kind": "non_blind_development_acceptance",
+  "independent_holdout": false,
+  "fixed_tasks": [
+    {
+      "id": "SEC_FACT_CALC",
+      "question": "Using the supplied SEC-derived record, what are Microsoft total revenues for fiscal 2023 and 2022, and their change? State units and limits of the evidence.",
+      "sources": [
+        "msft"
+      ],
+      "require_counterarguments": false
+    },
+    {
+      "id": "SEC_COMP_COUNTER",
+      "question": "Compare the reported annual revenues and year-over-year changes for Microsoft and Cisco in the supplied materials. Explain any fiscal period and source limitations and provide a cited counterargument or limitation.",
+      "sources": [
+        "msft",
+        "cisco"
+      ],
+      "require_counterarguments": true
+    },
+    {
+      "id": "BEA_REVISION",
+      "question": "Compare the two releases' estimates for annual real GDP growth in 2023. Identify release dates and explain the difference between the estimates and any unresolved uncertainty.",
+      "sources": [
+        "bea_a",
+        "bea_b"
+      ],
+      "require_counterarguments": true
+    },
+    {
+      "id": "FED_EVENT_MISSING",
+      "question": "What target range and change did the September 2024 Federal Reserve decision state? Identify any reasons and missing evidence that prevent inferring subsequent policy decisions.",
+      "sources": [
+        "fed"
+      ],
+      "require_counterarguments": true
+    }
+  ],
+  "sources": {
+    "msft": {
+      "artifact": "src/docs/product/phase-a/baseline/msft-2023-details.json",
+      "file_sha256": "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c",
+      "text_sha256": "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c",
+      "title": "Microsoft SEC FY2023 derived facts; not the original filing",
+      "url": "https://www.sec.gov/Archives/edgar/data/789019/000095017023035122/msft-20230630.htm"
+    },
+    "cisco": {
+      "artifact": "src/docs/product/phase-a/64-cisco-retrieval-diagnostic/CISCO_REV-input.json",
+      "file_sha256": "d9f6eefae1640021ff1a00c149a4cd73e03b6188eacbb225da853b9ccd1a8f9c",
+      "text_sha256": "4782119f2686ccc90c70a07ad39da648bf3dd232b666ac0316ec9e917e5852e0",
+      "title": "Cisco FY2024 Form 10-K, filed 2024-09-05, SEC HTML text extraction; table separators generated",
+      "url": "https://www.sec.gov/Archives/edgar/data/858877/000085887724000017/csco-20240727.htm"
+    },
+    "bea_a": {
+      "artifact": "src/docs/product/phase-a/original-source-candidate-v01/D21/bea-gdp-2023-q4-advance.pdf",
+      "file_sha256": "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d",
+      "text_sha256": "257ab63c40972440a9ffca79fb1d4b17db123cb84959768908645b1680b34c48",
+      "title": "BEA GDP 2023 Q4 advance, January 2024",
+      "url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf"
+    },
+    "bea_b": {
+      "artifact": "src/docs/product/phase-a/original-source-candidate-v01/D21/bea-gdp-2024-q4-advance.pdf",
+      "file_sha256": "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1",
+      "text_sha256": "d3e55c6896985f8f867da1e876db78df5f0415e89613503632c37c0d1e4f1cb5",
+      "title": "BEA GDP 2024 Q4 advance, January 2025",
+      "url": "https://www.bea.gov/sites/default/files/2025-01/gdp4q24-adv.pdf"
+    },
+    "fed": {
+      "artifact": "src/docs/product/phase-a/original-source-candidate-v01/D23/fed-fomc-2024-09-18.pdf",
+      "file_sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932",
+      "text_sha256": "dc18c2f3877ce4e971472fba6177c3ea315fcb580d98d5bd30fee434ef78d88f",
+      "title": "Federal Reserve September 18 2024 FOMC statement",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20240918a1.pdf"
+    }
+  },
+  "permissions": "existing saved SEC/BEA/Federal Reserve material, model input and display for local acceptance only",
+  "provider": "existing configured GLM Coding, glm-5.3-flash",
+  "generation_parameters": "existing configured profile; no added temperature or sampling override",
+  "budget": {
+    "tasks": 4,
+    "max_model_calls_per_task": 2,
+    "max_model_calls_total": 8,
+    "max_tokens_per_task": 20000,
+    "max_tokens_total": 80000,
+    "max_elapsed_seconds_per_task": 180,
+    "search_calls": 0,
+    "automatic_source_fetch": false,
+    "provider_post_retries": 0,
+    "actual_cost_usd": "unknown"
+  },
+  "stop": "Stop on provider authorization, quota, transport or service failure; no retries or provider substitution.",
+  "assessment": "Report task completion, citations, evidence gaps, usage and failure; these development materials and model review are not independent quality proof."
+}

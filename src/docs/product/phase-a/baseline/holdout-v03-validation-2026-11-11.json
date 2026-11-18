@@ -1,0 +1,69 @@
+{
+  "checked_at_utc": "2026-11-11T11:26:20.623564+00:00",
+  "bank_sha256": "d67d74b300f88ad172c0d6c80394abc67f52db69de020c99c7d81631f4aaf2c6",
+  "reference_sha256": "e33c8e76d59aee10e8178b998fc91722ffa0e87b07f4573c4af3d48eebaa7ea7",
+  "prior_v02_hashes_unchanged": true,
+  "tasks": [
+    {
+      "id": "H01",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H02",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H03",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H04",
+      "sources": [
+        "holdout-coca-cola-2024.json"
+      ]
+    },
+    {
+      "id": "H05",
+      "sources": [
+        "holdout-walmart-2024.json",
+        "holdout-coca-cola-2024.json"
+      ]
+    },
+    {
+      "id": "H06",
+      "sources": [
+        "macro-bea-2023-advance.json",
+        "macro-fed-2024-09.json"
+      ]
+    },
+    {
+      "id": "H07",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H08",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H09",
+      "sources": []
+    }
+  ],
+  "h02_calculations": {
+    "total_revenue_denominator_percent": "4.17",
+    "net_sales_denominator_percent": "4.20"
+  },
+  "limitations": [
+    "Source permissions and independent human review pending; not frozen or model-tested."
+  ]
+}

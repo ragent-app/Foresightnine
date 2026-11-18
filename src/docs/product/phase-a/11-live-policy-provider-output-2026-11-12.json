@@ -1,0 +1,25 @@
+{
+  "provider_payload": {
+    "claims": [],
+    "counterarguments": [],
+    "limitations": [
+      "提供的 FOMC 声明摘录未包含 2024 年 9 月联邦基金目标区间的具体数值或变化幅度（如降息 25 或 50 个基点），仅提及通胀仍略高于 2% 目标等背景信息，因此无法基于现有来源回答该问题。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_inflation_progress",
+        "label": "inflation_progress",
+        "value": null,
+        "unit": null,
+        "currency": null,
+        "period": "September 18, 2024",
+        "citation": {
+          "source_id": "source_7c8895e1a18f4152903b4d1068ff6b7c",
+          "quotation": "Inflation has made further progress toward the Committee’s 2 percent objective but remains somewhat elevated."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 741
+}

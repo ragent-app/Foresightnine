@@ -1,0 +1,42 @@
+{
+  "type": "derived_sec_facts_not_full_filing",
+  "issuer": "Microsoft Corporation",
+  "cik": "0000789019",
+  "concept": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+  "unit": "USD",
+  "filing": "10-K",
+  "accession": "0000950170-23-035122",
+  "filing_date": "2023-07-27",
+  "source_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+  "retrieved_at_utc": "2026-11-11T10:59:04.595392+00:00",
+  "response_sha256": "8c1903c041f5c27e86ed15f37debb1f41882b7904bba129ef9edc76478b1e8ea",
+  "derived_from_probe_sha256": "51534f32e749bfa38154553e131acfb28c8027293900eb1b14926aa2e0d00518",
+  "records": [
+    {
+      "start": "2021-07-01",
+      "end": "2022-06-30",
+      "val": 198270000000,
+      "accn": "0000950170-23-035122",
+      "fy": 2023,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2023-07-27",
+      "frame": null
+    },
+    {
+      "start": "2022-07-01",
+      "end": "2023-06-30",
+      "val": 211915000000,
+      "accn": "0000950170-23-035122",
+      "fy": 2023,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2023-07-27",
+      "frame": null
+    }
+  ],
+  "limitations": [
+    "Rows were extracted from the SEC API response, not copied as a full original filing.",
+    "The 2026 snapshot and filing date do not independently prove exact historical availability or absence of restatements."
+  ]
+}

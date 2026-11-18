@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "scope": "Snapshots not used in recorded local tuning; non-blind assessor; macro only, no population inference. Novel files alone do not prove broad independence or absence from pretraining.",
+  "limits": {
+    "calls_per_task": 3,
+    "tokens_per_task": 30000,
+    "seconds_per_task": 180,
+    "search_calls": 0
+  },
+  "budget": "Maximum 3 tasks, 9 calls and 90000 tokens. Stop on unknown admission, terminal state or settlement; no model retries. Cost unknown; no purchase.",
+  "provider": "Existing authorized GLM Coding profile; supported parameters and code hashes fixed before execution.",
+  "source_permissions": "BEA GDP release and Federal Reserve FOMC statements: government-authored text under the existing source matrix copy/distribution guidance, isolated evaluation and authorized export; third-party materials excluded. See 03-source-inventory. Current files do not prove historical immutability.",
+  "sources": {
+    "bea": {
+      "title": "bea-2022-q3",
+      "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/bea-2022-q3.txt",
+      "sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/bea-2022-q3.pdf",
+      "pdf_sha256": "ab3b58ba736229158593e7c64098fe7a7c1cca40213ee77f767aec8d092824b4",
+      "retrieved_at_utc": "2026-11-14T07:32:33.522826+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true
+    },
+    "fed_march": {
+      "title": "fed-2022-march",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20220316a1.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2022-march.txt",
+      "sha256": "02b0db2d39a15f8dc2759e219e8914f273506f4f5e72d3ded3b8b40fa8784466",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2022-march.pdf",
+      "pdf_sha256": "f856240971b770727711519a87082a3e623f14102edd26cdc3a0fe2ea143556d",
+      "retrieved_at_utc": "2026-11-14T07:33:06.471623+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true
+    },
+    "fed_may": {
+      "title": "fed-2022-may",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20220504a1.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2022-may.txt",
+      "sha256": "e1005a8ecab1b13c8d47271be03b1350c5c84adeb0f0aa8e0bd7d76e6d215c45",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2022-may.pdf",
+      "pdf_sha256": "a4ade0244cf268ccacdc46614d055620089ec9a411b24f47cea073d15e9f4b3d",
+      "retrieved_at_utc": "2026-11-14T07:33:07.528619+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true
+    }
+  },
+  "tasks": [
+    {
+      "id": "MACRO_CALC",
+      "question": "Using the supplied BEA release, report the real GDP growth rates for the second and third quarters of 2022 and calculate the difference in percentage points. Explain the estimate and period limitations.",
+      "sources": [
+        "bea"
+      ],
+      "require_counterarguments": true
+    },
+    {
+      "id": "FED_COMPARE",
+      "question": "Compare the federal funds target ranges in the two supplied FOMC statements. Give both dates and the change in the endpoints, and identify what the documents cannot establish about intervening decisions.",
+      "sources": [
+        "fed_march",
+        "fed_may"
+      ],
+      "require_counterarguments": true
+    },
+    {
+      "id": "MISSING_BOUNDARY",
+      "question": "Using the supplied release, what were third-quarter 2022 real GDP growth and the September 2022 unemployment rate? Explain any information not established by this source.",
+      "sources": [
+        "bea"
+      ],
+      "require_counterarguments": false
+    }
+  ],
+  "runner_sha256": "b9df4c46a181c3f3d74601ec3ec0d634038767e05103bb04f32a42697e1a3d34",
+  "criteria_sha256": "f81be86a0830150c03fd145141246e9a7fb3f9b80e28ed273fbad3fec647dc78",
+  "pre_run_change": "Before execution, runner was amended to request service-authorized full export instead of persisting a direct workspace read; export enabled only for these government-authored texts. Tasks, snapshots and criteria unchanged. Prior runner SHA-256: 38a7cce53dcfd721f3070d122b7fffccc76cfcfaafade0911d92d9f30180bab1 Added stop on missing result or provider failure before any execution; previous runner SHA-256: 6461c95153d043dac4eeeac491921eebdd891c5ac894c74c481ddeb345140b8a"
+}

@@ -1,0 +1,47 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据提供的BEA公告摘录，2024年12月总体PCE价格指数较上年同期（同比）上升2.6%；该摘录未提供较上月（环比）的具体数值。",
+        "citations": [
+          {
+            "source_id": "source_c083250e25554a24bf9fff09eb35ef17",
+            "quotation": "ago, the PCE price index for\nDecember increased 2.6 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "同比2.6%的表述语境为“same month one year ago”，明确为同比口径；摘录中提及环比的部分文本残缺，无法据此推断环比数字，因此不应将2.6%误读为环比。",
+        "citations": [
+          {
+            "source_id": "source_c083250e25554a24bf9fff09eb35ef17",
+            "quotation": "same month one year                     Percent   2.0"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的摘录为部分文本且存在截断（如首段仅见“the PCE price index for December increas”），未包含总体PCE指数较上月（环比）变化的完整句子与数值。",
+      "摘录未包含排除食品和能源的核心PCE环比数值（仅见“increased 2.8 perc”被截断，缺少单位“percent”后的完整数字确认）。",
+      "无法从所提供摘录中获取完整公告的其余内容以核实环比数据。"
+    ],
+    "facts": [
+      {
+        "fact_id": "pce_yoy_dec2024",
+        "label": "总体PCE价格指数同比变化",
+        "value": "2.6",
+        "unit": "percent",
+        "currency": null,
+        "period": "2024年12月（同比）",
+        "citation": {
+          "source_id": "source_c083250e25554a24bf9fff09eb35ef17",
+          "quotation": "ago, the PCE price index for\nDecember increased 2.6 percent."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 950
+}

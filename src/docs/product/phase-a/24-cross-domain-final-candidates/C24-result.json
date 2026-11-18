@@ -1,0 +1,194 @@
+{
+  "id": "C24",
+  "operation_status": "completed",
+  "manifest_sha256": "f77f64ab2a1bc8f556a07bba26659f0ee2f96749e79748d05e1090a884ceb7f2",
+  "input_sha256": "084a7c2fd430de74e7a1edfeee7b91f48a56c43d0f4fe46c97fe9d380aa1cf43",
+  "elapsed_seconds_observed": 18.115,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+        "title": "Costco 2024 SEC 10-K: derived total revenue and fiscal weeks",
+        "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983224000049/cost-20240901.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T02:50:47.232914+00:00",
+        "revised_at": null,
+        "content_sha256": "455191f20ab8c1aa6adf7cbae73aec6674ec4ce1172de3fb90bbd6ad816652c0",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_costco_total_revenue_fy2023",
+        "value": "242290",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year 2023 (ended 2023-09-03, 53 weeks)",
+        "label": "total_revenue",
+        "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+        "quotation": "\"total_revenue\":{\"2023\":242290,\"2024\":254453}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 171,
+          "character_end": 216
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_costco_total_revenue_fy2024",
+        "value": "254453",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year 2024 (ended 2024-09-01, 52 weeks)",
+        "label": "total_revenue",
+        "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+        "quotation": "\"total_revenue\":{\"2023\":242290,\"2024\":254453}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 171,
+          "character_end": 216
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fact_costco_total_revenue_fy2024",
+            "value": "254453",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "fiscal year 2024 (ended 2024-09-01, 52 weeks)"
+          },
+          {
+            "fact_id": "fact_costco_total_revenue_fy2023",
+            "value": "242290",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "fiscal year 2023 (ended 2023-09-03, 53 weeks)"
+          }
+        ],
+        "value": "5.02",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [
+      {
+        "claim_index": 0,
+        "calculation_index": 0,
+        "claimed_value": "100",
+        "calculated_value": "5",
+        "unit": "percent",
+        "status": "requires_review"
+      }
+    ],
+    "claims": [
+      {
+        "text": "Costco 2023 财年（截至 2023-09-03，53 周）总收入为 242,290 百万美元；2024 财年（截至 2024-09-01，52 周）总收入为 254,453 百万美元，单位均为 USD millions。基于这两个事实，收入增长率可通过公式 (254,453 − 242,290) ÷ 242,290 × 100% 计算（增长率数值需基于引用的原始数据执行该公式得出，本文不自行计算具体数值）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+            "location": {
+              "character_start": 171,
+              "character_end": 216
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"total_revenue\":{\"2023\":242290,\"2024\":254453}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "两期总收入并非严格可比：2023 财年含 53 周，2024 财年含 52 周，多出的一周会抬高 2023 基数，从而使直接计算的同比增长率低估可比口径下的增长。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+            "location": {
+              "character_start": 129,
+              "character_end": 170
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"fiscal_year_weeks\":{\"2023\":53,\"2024\":52}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源仅提供总收入数据，未提供同店销售、每周平均收入或剔除第 53 周影响后的调整口径，无法量化 53 周与 52 周差异对增长率的具体影响。",
+      "来源未包含分部或收入构成（如会员费 vs. 商品销售），无法进一步解释收入增长驱动因素。",
+      "本回复不自行执行算术；具体增长率数值需以引用的原始数字按公式计算确认。",
+      "A claim percentage may differ from a deterministic calculation; review the wording and calculation.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:586d4f01256be69fa96e362a",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1232,
+      "cost_usd": null,
+      "generation_tokens": 1232,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 17.083,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "7398f97ac03c594cbd0e1aad1b32dcab975196abc2c3254261c7b0f8ef0237ac",
+      "prompt_characters": 1342,
+      "prompt_bytes": 1428,
+      "selection_method": "ranked_nonoverlapping_windows_v5",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+          "character_start": 0,
+          "character_end": 217
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_1e98f17029f64bc78676110ff84252fc": "455191f20ab8c1aa6adf7cbae73aec6674ec4ce1172de3fb90bbd6ad816652c0"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

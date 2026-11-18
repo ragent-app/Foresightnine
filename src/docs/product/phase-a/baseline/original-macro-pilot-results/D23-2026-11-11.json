@@ -1,0 +1,49 @@
+{
+  "status": "exploratory-task-specific-no-human-grading",
+  "id": "D23",
+  "run_at_utc": "2026-11-11T11:35:58.494509+00:00",
+  "script_sha256": "21030cfe298ad7bef87f5084f799b686429801033eaaca8518f21fd61557488f",
+  "task_sha256": "0981ba9de69cd82b4f7175a3f2c31d05637412c78088b4899eec836729c80f0b",
+  "as_of": "2024-09-19T00:00:00Z",
+  "sources": [
+    {
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20240918a1.pdf",
+      "sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932"
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool": "pdftotext -layout",
+      "source": "fed-fomc-2024-09-18.pdf",
+      "exit_code": 0,
+      "elapsed_seconds": 0.027772
+    }
+  ],
+  "model_calls": 0,
+  "network_calls": 0,
+  "retries": 0,
+  "findings": {
+    "decrease_percentage_points": "0.5",
+    "lower_percent": "4.75",
+    "upper_percent": "5.00",
+    "page": 1,
+    "measure": "target range, not an observed single market rate",
+    "text_pattern_groups": [
+      "1/2",
+      "4-3/4",
+      "5"
+    ]
+  },
+  "elapsed_seconds": 0.029606,
+  "cost": {
+    "model_provider_usd": 0,
+    "network_provider_usd": 0,
+    "human_compute_storage": "not measured"
+  },
+  "limitations": [
+    "Patterns were written after inspection of these same documents.",
+    "Candidate input and reference answers are not human-reviewed or frozen.",
+    "No retrieval, independent citation verification, user confirmation, or real-time monitoring.",
+    "Publication cutoff is not proof of historical byte-identical availability."
+  ]
+}

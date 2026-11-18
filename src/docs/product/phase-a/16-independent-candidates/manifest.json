@@ -1,0 +1,26 @@
+{
+  "assessment": "known, non-blind candidates not previously used for model development; human acceptance skipped; semantic support and historical availability remain unverified",
+  "created_at_utc": "2026-11-12",
+  "implementation_commit": "ad32eafbe2f9b48f45050ad68b65a3dde1a391e5",
+  "inputs": [
+    {
+      "id": "H04",
+      "sha256": "e9658e8485549df4fe44331e8b284c55274630673ccf3717e647934d36e2e7a1"
+    },
+    {
+      "id": "M01",
+      "sha256": "bc4a26fe67d056800e5ede3e6669c3f76caa5940635ef8705f6663ee3504218a"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "pass_rule": "For each task all expected facts, units, periods and source locations; all supporting claims locatable; required deterministic calculation correct; no detected calculation difference; within budgets. Mechanical checks are not an overall quality claim.",
+  "references_sha256": "7cfe6b7435a2a1fcdf80b7a2ca3ba5e91e2c7e65d4a7c9fa8afb61c7c892c4a7",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "e242f44fb4dff6fd3ff25d495306655d7853c7a888746476c68acad97a9437eb",
+  "scorer_sha256": "f9359e6074a952d9bd8783ea533dace81f78d90f7c57b52f6ed7193c4369faa9",
+  "search_calls": 0
+}

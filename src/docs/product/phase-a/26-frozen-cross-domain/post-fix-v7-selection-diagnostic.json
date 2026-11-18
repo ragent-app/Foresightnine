@@ -1,0 +1,40 @@
+{
+  "kind": "offline selection diagnostic; no provider calls and no rescoring",
+  "selection_method": "ranked_nonoverlapping_windows_v7",
+  "pce": {
+    "monthly_selected": true,
+    "annual_selected": true,
+    "coverage": [
+      "partial",
+      "partial"
+    ],
+    "segments": [
+      {
+        "source_id": "source_da6451a500cd40c88d8382bb12989232",
+        "character_start": 5583,
+        "character_end": 5832
+      },
+      {
+        "source_id": "source_da6451a500cd40c88d8382bb12989232",
+        "character_start": 5888,
+        "character_end": 6137
+      }
+    ]
+  },
+  "gdp_regression": {
+    "quarter_selected": true,
+    "annual_selected": true,
+    "segments": [
+      {
+        "source_id": "bea-dev",
+        "character_start": 344,
+        "character_end": 611
+      },
+      {
+        "source_id": "bea-dev",
+        "character_start": 5324,
+        "character_end": 5591
+      }
+    ]
+  }
+}

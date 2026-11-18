@@ -1,0 +1,84 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Booking Holdings 2023 财年（截至2023-12-31）总收入为 21,365 百万美元。",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "quotation": "\"2023\":21365"
+          }
+        ]
+      },
+      {
+        "text": "Booking Holdings 2024 财年（截至2024-12-31）总收入为 23,739 百万美元。",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "quotation": "\"2024\":23739"
+          }
+        ]
+      },
+      {
+        "text": "以 2023 财年为基期，2024 财年总收入的同比增长率约为 (23,739 − 21,365) / 21,365 × 100% ≈ 11.1%。",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "quotation": "\"total_revenues\":{\"2023\":21365,\"2024\":23739}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该增长率基于两期均使用一致的货币单位（USD millions）和财政年度口径，未发现资料内不一致之处；但增长率本身是由两个数值推导，原始摘录未直接给出该百分比。",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "quotation": "\"unit\":\"USD millions\""
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "提供的摘录仅包含两个年度总收入数值，未包含分部收入、汇率影响、会计政策变更或其他背景信息。",
+      "原始摘录未直接提供同比增长率数字；上述约 11.1% 为基于所列两个数值的推导计算。",
+      "资料仅覆盖 2023 和 2024 财年；无法从所给摘录判断更长期趋势或数据是否经审计。",
+      "摘录未说明这些数值是直接摘自 10-K 原文还是衍生（derived）数据，标题中“derived total revenue facts”提示可能为加工后的数据。"
+    ],
+    "facts": [
+      {
+        "fact_id": "rev_2023",
+        "label": "total revenues FY2023",
+        "value": "21365",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2023-12-31",
+        "citation": {
+          "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+          "quotation": "\"total_revenues\":{\"2023\":21365,\"2024\":23739}"
+        }
+      },
+      {
+        "fact_id": "rev_2024",
+        "label": "total revenues FY2024",
+        "value": "23739",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2024-12-31",
+        "citation": {
+          "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+          "quotation": "\"total_revenues\":{\"2023\":21365,\"2024\":23739}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "rev_2024",
+        "second_fact_id": "rev_2023"
+      }
+    ]
+  },
+  "reported_tokens": 1148
+}

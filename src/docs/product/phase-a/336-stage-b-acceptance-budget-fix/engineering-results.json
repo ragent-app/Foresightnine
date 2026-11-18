@@ -1,0 +1,27 @@
+{
+  "workdir": "src/apps/api",
+  "results": [
+    {
+      "command": ".venv/bin/pytest tests/test_research_analysis.py tests/test_research_evidence.py tests/test_research_calculations.py tests/test_research_counterpoint.py tests/test_research_verification.py tests/test_research_input_budget.py tests/test_acceptance_polling.py --tb=line -q",
+      "passed": 325,
+      "failed": 21,
+      "skipped": 0,
+      "notes": "The output was returned by the tool and was not independently saved as a raw log. Failures include source selection and constrained prompts, counterpoint prompt budget, and review ordering/version expectations. No assertion was removed to manufacture success."
+    },
+    {
+      "command": ".venv/bin/pytest tests/test_research_topics.py --tb=short -q",
+      "passed": 18,
+      "failed": 1,
+      "skipped": 0,
+      "notes": "The failing legacy test expects a calculation whose currency is absent from its quotation; the API refuses the unverified currency."
+    },
+    {
+      "command": ".venv/bin/pytest tests/test_research_input_budget.py tests/test_research_runs.py::test_research_does_not_complete_when_percentage_only_matches_a_currency_amount tests/test_research_runs.py::test_review_of_flagged_claim_is_diagnostic_only_even_if_model_says_supports --tb=short -q",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "notes": "Targeted mock admission and Unicode budget boundary checks."
+    }
+  ],
+  "quality": "mock/isolated engineering evidence; not evidence of live model research quality"
+}

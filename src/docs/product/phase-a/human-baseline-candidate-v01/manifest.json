@@ -1,0 +1,275 @@
+{
+  "version": "human-baseline-candidate-v01",
+  "status": "draft-not-frozen-not-reviewed",
+  "created_at_utc": "2026-11-11T11:24:26.580662+00:00",
+  "tasks": [
+    {
+      "id": "D01",
+      "file": "D01.md",
+      "sha256": "e001dd4a2da3309a4c3d77048c1280833d48a4074b8da72c2429ff978dafe2ed",
+      "task_bank_sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+      ]
+    },
+    {
+      "id": "D02",
+      "file": "D02.md",
+      "sha256": "3d3c22f8ee0e4f826915a556ae9e7a311e89d95a8c0a5d200b4db3d3f6074e78",
+      "task_bank_sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+      ]
+    },
+    {
+      "id": "D03",
+      "file": "D03.md",
+      "sha256": "ad5cc2963408d343a6cb155c17531d2759b7c6f4939bc0c8732f58e649f4d670",
+      "task_bank_sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+      ]
+    },
+    {
+      "id": "D04",
+      "file": "D04.md",
+      "sha256": "f9499daa43899cfabe01ad0ed0ea8f9ae285b26c659cada8089475d5159e8492",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c"
+      ]
+    },
+    {
+      "id": "D05",
+      "file": "D05.md",
+      "sha256": "6be0f0c09956a6b0f2102aa9d02632cffebb5c89b45b3c1198bd34fadb71d608",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c"
+      ]
+    },
+    {
+      "id": "D06",
+      "file": "D06.md",
+      "sha256": "a2b7759da75dbfea51a1764efdba29e15d2bb5b181ba31c6563d4ee07ac02df2",
+      "task_bank_sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+      ]
+    },
+    {
+      "id": "D07",
+      "file": "D07.md",
+      "sha256": "903ff7404d5fecb3d40fe5e41f5e7707f36dc87f6a10270832401bff22dfadf7",
+      "task_bank_sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd",
+        "d7d1ffdd9abe0a509a246d0620809eab182dc7d5abb681a4a9e0cf581aefe2d5"
+      ]
+    },
+    {
+      "id": "D08",
+      "file": "D08.md",
+      "sha256": "0695ff4c06cbb533b2f4c3c49aa799c76e846a65393eb0e270bd06d51d1923fd",
+      "task_bank_sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd",
+        "d7d1ffdd9abe0a509a246d0620809eab182dc7d5abb681a4a9e0cf581aefe2d5"
+      ]
+    },
+    {
+      "id": "D09",
+      "file": "D09.md",
+      "sha256": "d7fbc0d112c4d9425d0fb6233c32bb64ffeb27cc3485cc7858da2395bdc7aba7",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "ba409bcc55f6f99cd34bc92871c3d2a1aeec29aeb02c47730917a36e2ea5dc7b",
+        "e03597e965d533c0a49e0e0a4929353b4545d1f15aefe5c65024b1576020ede6"
+      ]
+    },
+    {
+      "id": "D10",
+      "file": "D10.md",
+      "sha256": "05fd67f7e5fe434ce06fae2c23587e8355703d9684ac7bde92b4787d25603604",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "e03597e965d533c0a49e0e0a4929353b4545d1f15aefe5c65024b1576020ede6"
+      ]
+    },
+    {
+      "id": "D11",
+      "file": "D11.md",
+      "sha256": "f38d919222f2a42e20e86bdb7b50e556443b891c718a0515c424a1981419e13d",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": []
+    },
+    {
+      "id": "D12",
+      "file": "D12.md",
+      "sha256": "1e7fc8a1425cea323f56c56afe8edea4b9facbcb5a65b65945e00774b82f99ad",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": []
+    },
+    {
+      "id": "D13",
+      "file": "D13.md",
+      "sha256": "881b89e4f3761b4219574d7e62c23f32d848aaea572668b6d2f7a35d4955dc51",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c"
+      ]
+    },
+    {
+      "id": "D14",
+      "file": "D14.md",
+      "sha256": "5ffe6efbbb691d9cab3490b58cb4ef16962437f4c03434950a439ea5c7a5072e",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "ba409bcc55f6f99cd34bc92871c3d2a1aeec29aeb02c47730917a36e2ea5dc7b"
+      ]
+    },
+    {
+      "id": "D15",
+      "file": "D15.md",
+      "sha256": "efc6149de8e1b2bee990f36148af85b709840c07170d180850f46946e9f2767d",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "ba409bcc55f6f99cd34bc92871c3d2a1aeec29aeb02c47730917a36e2ea5dc7b"
+      ]
+    },
+    {
+      "id": "D16",
+      "file": "D16.md",
+      "sha256": "8d7f28bf456aecabaf142a699e68db10e7ee836601b315dfe0f47a2d06601563",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "e03597e965d533c0a49e0e0a4929353b4545d1f15aefe5c65024b1576020ede6"
+      ]
+    },
+    {
+      "id": "D17",
+      "file": "D17.md",
+      "sha256": "9bb04c48e009f30841a32b36279d2be348f60d2628967fd9b8ffc305a93289ae",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "e03597e965d533c0a49e0e0a4929353b4545d1f15aefe5c65024b1576020ede6"
+      ]
+    },
+    {
+      "id": "D18",
+      "file": "D18.md",
+      "sha256": "a669f466cd162f993772b4541ebb1bd1b8ee6cb5d0594b7d3c31dcfcc515d00e",
+      "task_bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+      "source_hashes": [
+        "e03597e965d533c0a49e0e0a4929353b4545d1f15aefe5c65024b1576020ede6"
+      ]
+    },
+    {
+      "id": "D19",
+      "file": "D19.md",
+      "sha256": "ea52fe2e1b3c36b293db19891a7118bce89e8cef0e7909ed6bee5d68350c167c",
+      "task_bank_sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03",
+      "source_hashes": [
+        "fd773359d4a9dd0ba1a5abd73345df30ce971ed906bec7c4d1111427f010d652"
+      ]
+    },
+    {
+      "id": "D20",
+      "file": "D20.md",
+      "sha256": "9d92e49f1ea3bd2c49668e6f05f47793c626a4b39ba412fd91af874d633aee37",
+      "task_bank_sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03",
+      "source_hashes": [
+        "fd773359d4a9dd0ba1a5abd73345df30ce971ed906bec7c4d1111427f010d652",
+        "4ac01cf2a1820a3ca6acd8ab878674f47c2a0249df2a24d71753ebe8749db12a"
+      ]
+    },
+    {
+      "id": "D21",
+      "file": "D21.md",
+      "sha256": "ebdba2859b2f685c8fedefd40acf122845a6394b56445a9969415c7c0b2c92f8",
+      "task_bank_sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03",
+      "source_hashes": [
+        "fd773359d4a9dd0ba1a5abd73345df30ce971ed906bec7c4d1111427f010d652",
+        "c6e8eb4706e048f9f131ed97c5313f00fcc8bfcddce3ecf4cf459fc58a84ff4a"
+      ]
+    },
+    {
+      "id": "D22",
+      "file": "D22.md",
+      "sha256": "e2d72878de891174ef07f683779815b92b57ec3c3e11c4b83fda64bd2c5eaaac",
+      "task_bank_sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03",
+      "source_hashes": [
+        "c6e8eb4706e048f9f131ed97c5313f00fcc8bfcddce3ecf4cf459fc58a84ff4a"
+      ]
+    },
+    {
+      "id": "D23",
+      "file": "D23.md",
+      "sha256": "cf00dc11518ba77afcb3224f62b58f8868e21313ce0d12d5333ab96b06032446",
+      "task_bank_sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03",
+      "source_hashes": [
+        "8bee435da583e64f87775ba5fd29351fa20d6fede97f3d0a9a879c165f5c0d28"
+      ]
+    },
+    {
+      "id": "D24",
+      "file": "D24.md",
+      "sha256": "8106fbc798edd46e94fcbe87a7a485b6f7dd086db797dabed4f4decdcead3eeb",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": []
+    },
+    {
+      "id": "D25",
+      "file": "D25.md",
+      "sha256": "3c43c587e4e3872afdb5d5851f3aab311fc5804d9d87960a2a9a6df29e1ee43a",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+      ]
+    },
+    {
+      "id": "D26",
+      "file": "D26.md",
+      "sha256": "cc97643886713c6925f1ff26704b9074c3a31250c3cfdd9134cbf7b66b81c7ae",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+      ]
+    },
+    {
+      "id": "D27",
+      "file": "D27.md",
+      "sha256": "af61ea7eac0494c41d9f0efced7a1fe279563531b23dbb685f61afcd97da8483",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": []
+    },
+    {
+      "id": "D28",
+      "file": "D28.md",
+      "sha256": "b79f264e7620fdb4cde9066c2d2eff2bc6b126c0cde306c7372601601464cd4f",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": [
+        "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+      ]
+    },
+    {
+      "id": "D29",
+      "file": "D29.md",
+      "sha256": "091c8ba02633d0124edfde8d21a3477ea58fcf5d0f0b41015f26c035ff2f0865",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": []
+    },
+    {
+      "id": "D30",
+      "file": "D30.md",
+      "sha256": "2666378288eae0a32197a715e618696315373ab961aa4d3f22776a3334fcc324",
+      "task_bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+      "source_hashes": []
+    }
+  ],
+  "limitations": [
+    "Separate sheets alone do not establish blindness or independent human review.",
+    "Prior knowledge and previous exposure to later material may affect historical tasks.",
+    "Extracted facts are not original documents; permissions and release timing remain pending."
+  ]
+}

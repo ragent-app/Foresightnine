@@ -1,0 +1,26 @@
+{
+  "task": "G23",
+  "status": "completed",
+  "research_status": "partial",
+  "facts": [
+    {
+      "expected_value": "2.5",
+      "period_kind": "annual",
+      "valid": true
+    },
+    {
+      "expected_value": "3.2",
+      "period_kind": "quarter",
+      "valid": true
+    }
+  ],
+  "support_claims_have_locations": true,
+  "two_nonoverlapping_windows": true,
+  "budget_ok": true,
+  "reported_tokens": 1531,
+  "cost_usd": "unknown",
+  "semantic_support": "unverifiable",
+  "historical_availability": "unverified",
+  "sample": "related-source development verification, not independent",
+  "mechanical_pass": true
+}

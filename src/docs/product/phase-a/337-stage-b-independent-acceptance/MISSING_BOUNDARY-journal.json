@@ -1,0 +1,55 @@
+{
+  "task_id": "MISSING_BOUNDARY",
+  "status": "completed",
+  "events": [
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "completed"
+    }
+  ],
+  "cost_status": "unknown",
+  "topic_id": "topic_c58d31f5752e4c6fae6b55373cd3dc4c",
+  "idempotency_key": "independent-d9df2c5e4c9340f8bdbd586f43bae4bb",
+  "operation_id": "operation:257f741b5639a26aac44f460",
+  "admission_http_status": 202,
+  "settlement_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_c18b73ed47d14c4eab1cceae32effe7c",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 2,
+      "released_calls": 0,
+      "accounted_tokens": 2333
+    },
+    "unresolved_stage_count": 0,
+    "reported_tokens": 2333,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  }
+}

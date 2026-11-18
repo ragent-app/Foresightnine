@@ -1,0 +1,7 @@
+{
+  "id": "H03",
+  "operation_status": "local_failure",
+  "error_type": "KeyError",
+  "manifest_sha256": "df6c79b385c354aa5a6d9cfad09d8857ea585230f74520d54f41a5037476fcf9",
+  "cost_usd": "unknown"
+}

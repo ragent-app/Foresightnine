@@ -1,0 +1,16 @@
+{
+  "recorded_at_utc": "2026-11-11T11:39:48.850939+00:00",
+  "status": "exploratory-integrity-probe-not-formal-evaluation",
+  "output_file": "D19-v03-2026-11-11.json",
+  "output_sha256": "b0a2f0021dbc71bc4f8416abca5ffe0d35f51fdcd6231c39e466a9b33023e1f0",
+  "extractor_sha256": "2404bebde35f41fc86aeedd305ecac2e2b41a2fa9923057dbc46cac8c096e018",
+  "verifier_sha256_at_recording": "28d663c2659526f08614491fac67424d633d5bafa6f2dac070426dac63e9bc9a",
+  "manifest_sha256": "3529f433662f3819be74fcdcf43ad165ff3e3f862636c0ebb87b97f615763b60",
+  "probe_file": "candidate-integrity-probe-2026-11-11.json",
+  "probe_sha256": "0cc8971a8ceeefc3bc71c859acc107e0ae20a85fef58536116425a643df25d55",
+  "limitations": [
+    "Verifier hash was recorded immediately after the run, not attested by a trusted execution environment.",
+    "External trust in manifest pin, OS isolation, provenance, permissions and human evaluation are not established.",
+    "Exploratory extraction v0.3 changes input validation and PDF transport; timing not directly comparable to prior version."
+  ]
+}

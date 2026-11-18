@@ -1,0 +1,68 @@
+{
+  "version": "holdout-candidate-reference-v0.3-not-frozen",
+  "status": "draft-not-independent-until-review-and-freeze",
+  "instructions": "Evaluator-only; exclude from system input. Candidate values require independent human verification.",
+  "tasks": {
+    "H01": {
+      "checks": [
+        "648125 and 611289 USD millions",
+        "(648125/611289 - 1) * 100 = 6.03%",
+        "full fiscal years ending January 31"
+      ]
+    },
+    "H02": {
+      "checks": [
+        "27012/648125 * 100 = 4.17% using total revenue as denominator",
+        "Walmart also reports operating income as percentage of net sales; 27012/642637 * 100 rounds to 4.20%",
+        "name both denominators and do not treat their difference as an error"
+      ]
+    },
+    "H03": {
+      "checks": [
+        "net sales 642637 plus membership and other income 5488 = total revenue 648125",
+        "answer no"
+      ]
+    },
+    "H04": {
+      "checks": [
+        "(47061/45754 - 1) * 100 = 2.86%",
+        "net operating revenues, USD millions"
+      ]
+    },
+    "H05": {
+      "checks": [
+        "Walmart fiscal year ends January 31, Coca-Cola December 31",
+        "not the same calendar period",
+        "do not infer a direct cause from the comparison"
+      ]
+    },
+    "H06": {
+      "checks": [
+        "2023 annual real GDP growth advance estimate 2.5%",
+        "2024 September federal funds target range 4.75%-5.00%",
+        "different measures and time periods",
+        "do not infer causality from these two observations"
+      ]
+    },
+    "H07": {
+      "checks": [
+        "report monitoring timeout as unknown, not no change",
+        "the earlier document remains historical evidence only"
+      ]
+    },
+    "H08": {
+      "checks": [
+        "642637 is net sales; total revenue is 648125 USD millions",
+        "mark simulated excerpt inconsistent rather than averaging"
+      ]
+    },
+    "H09": {
+      "checks": [
+        "new synthetic value 95 falls below the old threshold 100",
+        "mark that assumption for review",
+        "leave the unrelated note unchanged",
+        "label all values synthetic"
+      ]
+    }
+  }
+}

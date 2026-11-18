@@ -1,0 +1,66 @@
+{
+  "state": "finished",
+  "attempts": 1,
+  "reserved_tokens": 10000,
+  "provider_response": "returned",
+  "actual_tokens": 2232,
+  "cost": "unknown",
+  "error_code": null,
+  "accounted_tokens": 2232,
+  "local_receipt": {
+    "provider": "returned",
+    "settlement": "settled",
+    "processing_error": null
+  },
+  "observation": {
+    "prompt_sha256": "81ff606ef2d9f2faaa1bbd79a696abedc3ffdbb960b46e9f7edb2ca4353842d0",
+    "prompt_bytes": 5255,
+    "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+    "system_bytes": 433,
+    "timeout_seconds": 120.0
+  },
+  "diagnostics": {
+    "transport": {
+      "submission_state": "response_received",
+      "stages": [
+        {
+          "stage": "dns",
+          "result": "ok",
+          "elapsed_ms": 2
+        },
+        {
+          "stage": "tcp",
+          "result": "ok",
+          "elapsed_ms": 0
+        },
+        {
+          "stage": "tls",
+          "result": "ok",
+          "elapsed_ms": 7464
+        },
+        {
+          "stage": "request_write",
+          "result": "ok",
+          "elapsed_ms": 0
+        },
+        {
+          "stage": "response_headers",
+          "result": "ok",
+          "elapsed_ms": 19253
+        },
+        {
+          "stage": "response_headers",
+          "result": "ok",
+          "elapsed_ms": 0,
+          "status_code": 200
+        },
+        {
+          "stage": "response_body",
+          "result": "ok",
+          "elapsed_ms": 995
+        }
+      ]
+    }
+  },
+  "elapsed_ms": 28850
+}

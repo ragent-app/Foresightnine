@@ -1,0 +1,87 @@
+{
+  "task_id": "FED_COMPARE",
+  "status": "completed",
+  "events": [
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "completed"
+    }
+  ],
+  "cost_status": "unknown",
+  "topic_id": "topic_3d88323443e54062beb68f3e6ee96753",
+  "idempotency_key": "independent-6176342058374a2dbb27aaa15514657c",
+  "operation_id": "operation:75fac420dbb3f6b94649ef9c",
+  "admission_http_status": 202,
+  "settlement_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_76e3e166749a46c6844f35a66ee78218",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 2,
+      "released_calls": 0,
+      "accounted_tokens": 3374
+    },
+    "unresolved_stage_count": 0,
+    "reported_tokens": 3374,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  }
+}

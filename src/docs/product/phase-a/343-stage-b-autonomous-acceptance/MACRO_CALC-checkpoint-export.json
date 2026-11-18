@@ -1,0 +1,1056 @@
+{
+  "schema_version": "1",
+  "format": "research_json",
+  "topic_id": "topic_06ce30a23ef0400cb946f24c4f01c7a6",
+  "generated_at": "2026-11-15T06:00:06.404810Z",
+  "request": {
+    "question": "Using the supplied BEA release, report the real GDP growth rates for the second and third quarters of 2022 and calculate the difference in percentage points. Explain the estimate and period limitations.",
+    "source_ids": [
+      "source_bac940e99c9b4ce5a90c3b9cba94b5bd"
+    ],
+    "scope": "",
+    "as_of": null
+  },
+  "version": {
+    "version_id": "version_5dfd47676c224b6daeddae48fa6cf24c",
+    "parent_version_id": "version_dea20f630e7b4a6ebfe7a5787dc5f136",
+    "created_at": "2026-11-15T05:57:35.503114Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+          "title": "bea-2022-q3",
+          "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+          "obtained_at": "2026-11-15T05:57:17.280392+00:00",
+          "is_simulated": false,
+          "verification": "user_declared_not_verified",
+          "content_sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "status": "partial",
+            "text_characters": 116493,
+            "selected_characters": 2569
+          }
+        }
+      ],
+      "source_candidates": [],
+      "facts": [],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [],
+      "limitations": [
+        "Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.",
+        "Research analysis could not be completed: provider_transport_error",
+        "The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "The requested model support review did not cover all claims.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations.",
+        "Source selection is partial or unknown; absence from unseen material is not established. Review the selected ranges and obtain relevant additional material."
+      ],
+      "run": {
+        "error": "provider_transport_error",
+        "model": "glm-5.3-flash",
+        "status": "partial",
+        "provider": "openai-compatible",
+        "cost_status": "unknown",
+        "model_calls": 1,
+        "operation_id": "operation:2d70ca40b3df2e3645c883ed",
+        "prompt_bytes": 5255,
+        "search_calls": 0,
+        "prompt_sha256": "81ff606ef2d9f2faaa1bbd79a696abedc3ffdbb960b46e9f7edb2ca4353842d0",
+        "research_gaps": {
+          "items": [
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "source_scope_review_required"
+            },
+            {
+              "code": "no_findings"
+            },
+            {
+              "code": "gap_followup_incomplete"
+            },
+            {
+              "code": "model_review_incomplete"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ],
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "search_status": "not_requested",
+        "source_hashes": {
+          "source_bac940e99c9b4ce5a90c3b9cba94b5bd": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef"
+        },
+        "stage_summary": {
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "attention"
+            },
+            {
+              "stage": "review",
+              "status": "attention"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ],
+          "meaning": "saved_execution_not_quality_verdict",
+          "schema_version": "1"
+        },
+        "evidence_links": {
+          "facts": [],
+          "claims": [],
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "index_scope": "research_version",
+          "calculations": [],
+          "schema_version": "1"
+        },
+        "evidence_needs": {
+          "items": [
+            {
+              "action": "inspect_or_supply_relevant_material",
+              "reason": "source_selection_partial_or_unknown",
+              "status": "not_obtained_or_not_verified",
+              "evidence_type": "unexamined_or_unselected_source_material"
+            }
+          ],
+          "meaning": "review_actions_not_new_evidence",
+          "schema_version": "1"
+        },
+        "planning_steps": [],
+        "question_links": {
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "questions": [],
+          "truncated": false,
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "source_quality": {
+          "scope": "recorded_analyzed_sources_only",
+          "meaning": "same_hash_is_not_independence_or_semantic_support",
+          "sources": [
+            {
+              "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+              "content_match": "no_same_hash_recorded",
+              "same_hash_source_ids": [],
+              "time_fields_recorded": {
+                "event_at": false,
+                "revised_at": false,
+                "obtained_at": true,
+                "published_at": false
+              },
+              "republication_independence": "not_established",
+              "identity_and_time_verification": "not_independently_verified"
+            }
+          ],
+          "truncated": false,
+          "schema_version": "1"
+        },
+        "elapsed_seconds": 16.798,
+        "evidence_rounds": [],
+        "max_model_calls": 6,
+        "planning_status": "not_requested",
+        "question_origin": "user",
+        "max_search_calls": 0,
+        "max_total_tokens": 40000,
+        "scope_assessment": {
+          "scope": "partial_or_unknown",
+          "meaning": "input_selection_not_exhaustive_review",
+          "sources": [
+            {
+              "provided": true,
+              "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+              "analysis_status": "not_completed",
+              "selection_status": "partial"
+            }
+          ],
+          "attempted": true,
+          "truncated": false,
+          "schema_version": "1",
+          "indexes_truncated": false,
+          "absence_conclusions": "not_independently_verified",
+          "claim_scope_coverage": "not_applicable",
+          "review_scope_coverage": "not_applicable",
+          "claim_scope_declarations": [],
+          "claim_indexes_requiring_scope_review": [],
+          "limitation_indexes_requiring_scope_review": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        "selection_method": "global_idf_evidence_v60_incremental_gap",
+        "gap_search_status": "not_requested",
+        "generation_status": "failed",
+        "prompt_characters": 5245,
+        "selected_segments": [
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 692,
+            "character_start": 638,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u638"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 995,
+            "character_start": 883,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u883"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 1873,
+            "character_start": 1793,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u1793"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 3888,
+            "character_start": 3803,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u3803"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 4274,
+            "character_start": 4259,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u4259"
+            ],
+            "context_unit_kind": "paragraph",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 5222,
+            "character_start": 5181,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u5181"
+            ],
+            "context_unit_kind": "paragraph",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 5473,
+            "character_start": 5391,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u5391"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 7806,
+            "character_start": 7725,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u7725"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 7865,
+            "character_start": 7819,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u7819"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 8054,
+            "character_start": 8014,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u8014"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 8539,
+            "character_start": 8530,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u8530"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 9556,
+            "character_start": 9485,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u9485"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 10469,
+            "character_start": 10386,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u10386"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 10855,
+            "character_start": 10621,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u10621"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 10903,
+            "character_start": 10875,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u10875"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 11219,
+            "character_start": 11173,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u11173"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 11530,
+            "character_start": 11522,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u11522"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 12080,
+            "character_start": 12054,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u12054"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 12317,
+            "character_start": 12269,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u12269"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 13964,
+            "character_start": 13528,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u13528"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 14229,
+            "character_start": 14159,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u14159"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 16421,
+            "character_start": 16371,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u16371"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 16608,
+            "character_start": 16528,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u16528"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 16820,
+            "character_start": 16609,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u16609"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 16891,
+            "character_start": 16821,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u16821"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 16990,
+            "character_start": 16962,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u16962"
+            ],
+            "context_unit_kind": "paragraph",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 17096,
+            "character_start": 17001,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u17001"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 17168,
+            "character_start": 17097,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u17097"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 17240,
+            "character_start": 17169,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u17169"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 17409,
+            "character_start": 17350,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u17350"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 29969,
+            "character_start": 29929,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u29929"
+            ],
+            "context_unit_kind": "paragraph",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "character_end": 89464,
+            "character_start": 89365,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u89365"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          }
+        ],
+        "source_processing": [
+          {
+            "provided": true,
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "eligibility": "eligible",
+            "analysis_status": "not_completed",
+            "text_characters": 116493,
+            "selection_status": "partial",
+            "initial_selection": "partial",
+            "selection_details": {
+              "selected_unit_count": 32,
+              "matched_facet_indexes": []
+            },
+            "selected_characters": 2569
+          }
+        ],
+        "workflow_receipts": [
+          {
+            "gaps": [],
+            "stage": "planning",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "planning",
+            "status": "not_requested",
+            "elapsed_ms": 1,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_discovery",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_retrieval",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "analysis",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.",
+              "Research analysis could not be completed: provider_transport_error"
+            ],
+            "stage": "analysis",
+            "reason": "provider_transport_error",
+            "status": "failed",
+            "elapsed_ms": 16422,
+            "source_ids": [
+              "source_bac940e99c9b4ce5a90c3b9cba94b5bd"
+            ],
+            "schema_version": "1",
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd"
+              }
+            ],
+            "model_call_receipts": [
+              {
+                "call_id": "operation:2d70ca40b3df2e3645c883ed",
+                "provider": "unknown",
+                "settlement": "unknown"
+              }
+            ],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "counterpoint",
+            "reason": "The task did not authorize this optional action.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "gap_followup",
+            "reason": "The preceding analysis did not produce usable claims.",
+            "status": "unavailable",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "support_review",
+            "reason": "The preceding analysis did not produce usable claims.",
+            "status": "unavailable",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "coordination",
+            "reason": "analysis_unavailable",
+            "status": "stopped",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.",
+              "Research analysis could not be completed: provider_transport_error",
+              "The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "The requested model support review did not cover all claims.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_call_receipts": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          }
+        ],
+        "absence_assessment": {
+          "meaning": "model_suggestions_not_verified_absence",
+          "truncated": false,
+          "observations": [],
+          "schema_version": "1"
+        },
+        "available_fact_ids": [],
+        "planning_requested": false,
+        "research_questions": [],
+        "counterpoint_status": "not_requested",
+        "gap_followup_status": "unavailable",
+        "max_elapsed_seconds": 360,
+        "support_review_mode": "batch",
+        "gap_followup_targets": [],
+        "gap_search_requested": false,
+        "model_evidence_needs": [],
+        "official_fetch_calls": 0,
+        "requirement_coverage": {
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "requirements": [
+            {
+              "gaps": [
+                "request_decomposition_not_verified"
+              ],
+              "origin": "user",
+              "source_ids": [],
+              "finding_ids": [],
+              "counterpoints": [],
+              "requirement_id": "user_request",
+              "relation_status": "not_assessed",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": []
+            }
+          ],
+          "schema_version": "1",
+          "requested_actions": [
+            {
+              "action": "gap_followup",
+              "execution_status": "unavailable",
+              "requirement_status": "unmet"
+            },
+            {
+              "action": "support_review",
+              "execution_status": "unavailable",
+              "requirement_status": "unmet"
+            }
+          ]
+        },
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "analysis_requirements": [],
+        "completion_assessment": {
+          "meaning": "execution_record_not_task_quality_verdict",
+          "task_coverage": "not_independently_verified",
+          "schema_version": "1",
+          "execution_status": "known_gap",
+          "source_semantics": "not_independently_verified",
+          "assertion_link_gaps": [],
+          "model_reported_task_gap": false,
+          "unmet_requested_actions": [
+            "gap_followup",
+            "support_review"
+          ],
+          "suggested_requirement_gaps": []
+        },
+        "gap_followup_segments": [],
+        "official_fetch_status": "not_requested",
+        "planning_requirements": [],
+        "run_source_processing": [
+          {
+            "meaning": "analysis_and_gap_ranges_not_exhaustive_review",
+            "coverage": "unknown",
+            "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+            "stage_ranges": [
+              {
+                "stage": "analysis",
+                "ranges": [
+                  {
+                    "end": 692,
+                    "start": 638
+                  },
+                  {
+                    "end": 995,
+                    "start": 883
+                  },
+                  {
+                    "end": 1873,
+                    "start": 1793
+                  },
+                  {
+                    "end": 3888,
+                    "start": 3803
+                  },
+                  {
+                    "end": 4274,
+                    "start": 4259
+                  },
+                  {
+                    "end": 5222,
+                    "start": 5181
+                  },
+                  {
+                    "end": 5473,
+                    "start": 5391
+                  },
+                  {
+                    "end": 7806,
+                    "start": 7725
+                  },
+                  {
+                    "end": 7865,
+                    "start": 7819
+                  },
+                  {
+                    "end": 8054,
+                    "start": 8014
+                  },
+                  {
+                    "end": 8539,
+                    "start": 8530
+                  },
+                  {
+                    "end": 9556,
+                    "start": 9485
+                  },
+                  {
+                    "end": 10469,
+                    "start": 10386
+                  },
+                  {
+                    "end": 10855,
+                    "start": 10621
+                  },
+                  {
+                    "end": 10903,
+                    "start": 10875
+                  },
+                  {
+                    "end": 11219,
+                    "start": 11173
+                  },
+                  {
+                    "end": 11530,
+                    "start": 11522
+                  },
+                  {
+                    "end": 12080,
+                    "start": 12054
+                  },
+                  {
+                    "end": 12317,
+                    "start": 12269
+                  },
+                  {
+                    "end": 13964,
+                    "start": 13528
+                  },
+                  {
+                    "end": 14229,
+                    "start": 14159
+                  },
+                  {
+                    "end": 16421,
+                    "start": 16371
+                  },
+                  {
+                    "end": 16608,
+                    "start": 16528
+                  },
+                  {
+                    "end": 16820,
+                    "start": 16609
+                  },
+                  {
+                    "end": 16891,
+                    "start": 16821
+                  },
+                  {
+                    "end": 16990,
+                    "start": 16962
+                  },
+                  {
+                    "end": 17096,
+                    "start": 17001
+                  },
+                  {
+                    "end": 17168,
+                    "start": 17097
+                  },
+                  {
+                    "end": 17240,
+                    "start": 17169
+                  },
+                  {
+                    "end": 17409,
+                    "start": 17350
+                  },
+                  {
+                    "end": 29969,
+                    "start": 29929
+                  },
+                  {
+                    "end": 89464,
+                    "start": 89365
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "selection_diagnostics": [],
+        "support_review_method": "bounded_quotation_context_model_review_v32",
+        "support_review_status": "unavailable",
+        "counterpoint_requested": false,
+        "gap_followup_requested": true,
+        "source_search_receipts": [],
+        "support_review_indexes": [],
+        "model_requirement_links": [],
+        "support_review_segments": [],
+        "provider_timeout_seconds": 120.0,
+        "require_counterarguments": true,
+        "support_review_omissions": [],
+        "support_review_requested": true,
+        "counterpoint_omitted_rows": 0,
+        "pdf_structure_diagnostics": [],
+        "gap_followup_input_targets": [],
+        "model_absence_observations": [],
+        "provider_input_token_limit": 6000,
+        "structured_source_receipts": [],
+        "gap_followup_input_fact_ids": [],
+        "provider_output_token_limit": 4000,
+        "support_review_system_sha256": "0a684f0bbf1938f4160e3bd35e03b55b44cf846ebc09cb81e4cb5692c244ccf8",
+        "counterpoint_discarded_fields": 0,
+        "gap_followup_question_targets": [],
+        "support_review_failed_indexes": [],
+        "settled_model_budget_accounted_tokens": 10000
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_bac940e99c9b4ce5a90c3b9cba94b5bd"
+    ],
+    "created_by": "agent"
+  },
+  "source_provenance": [
+    {
+      "schema_version": "1",
+      "source_id": "source_bac940e99c9b4ce5a90c3b9cba94b5bd",
+      "title": "bea-2022-q3",
+      "kind": "official",
+      "is_simulated": false,
+      "published_at": null,
+      "event_at": null,
+      "revised_at": null,
+      "obtained_at": "2026-11-15T05:57:17.280392Z",
+      "content_sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+      "retrieval_method": "user_supplied",
+      "pdf_text_order": null,
+      "derived_from_source_id": null,
+      "response_sha256": null,
+      "response_content_type": null,
+      "permissions": {
+        "store": true,
+        "model_input": true,
+        "display": true,
+        "export": true
+      },
+      "provenance": {},
+      "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+      "verification": "user_declared_not_verified"
+    }
+  ],
+  "disclosure": "Model interpretations and declared source permissions are not independently verified.",
+  "calculation_disclosure": "Calculations use the recorded inputs; their source precision and prior rounding are not established."
+}

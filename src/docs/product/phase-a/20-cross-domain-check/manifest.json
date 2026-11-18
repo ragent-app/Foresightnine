@@ -1,0 +1,26 @@
+{
+  "assessment": "fresh company and macro tasks on known derived facts; not blind or independently human verified",
+  "created_at_utc": "2026-11-12",
+  "implementation_commit": "4b8a23f7cf154927e0125ddb6e11f1422e3e9530",
+  "inputs": [
+    {
+      "id": "P01",
+      "sha256": "a0cbf58e75ae9e0d81368bb67ad2b177afd481bb2373c1adc47dca79da5a1d0e"
+    },
+    {
+      "id": "B01",
+      "sha256": "74d014f2f5dafa4f3e5e5ef743f24beddcba3ac8232509600d4e54dd9a3434e2"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "pass_rule": "All expected facts, period and unit plus source locations, cited supporting claims, required deterministic calculation, no flagged claim percentages, and call/token budgets. Any unsupported semantics remain unverified.",
+  "references_sha256": "6c434ede599ab1f4f50cfb2ae0e1a2e4199d22ec45d545788bda4ad7350981c2",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "e242f44fb4dff6fd3ff25d495306655d7853c7a888746476c68acad97a9437eb",
+  "scorer_sha256": "ef07db4f8c3dfd0b4dd51cc42b8cfedfcb578ecd9040cda9367d9710e5989b3a",
+  "search_calls": 0
+}

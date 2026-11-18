@@ -1,0 +1,571 @@
+{
+  "task_id": "SEC_FACT_CALC",
+  "operation": {
+    "schema_version": "v1",
+    "created_at": "2026-11-13T14:23:46.230277Z",
+    "source_refs": [
+      {
+        "ref_id": "mock:operation",
+        "source_type": "model_inference",
+        "label": "Deterministic operation controller"
+      }
+    ],
+    "content_hash": "fd950c1212efd3f0777ca56a3961a5e40eee78954063601c99e04a1e18196b31",
+    "operation_id": "operation:e7e2a4deaf325a9dc9902456",
+    "endpoint": "/v1/research/topics/topic_edd8a8b896274e14b8d8fdb5dd6db578/runs",
+    "status": "completed",
+    "updated_at": "2026-11-13T14:23:59.569383Z",
+    "idempotency_key_hash": "1cf0f7e080295cd4284a6bf9db650586ced1adcbb8448b97501d801d6a718c37",
+    "last_event_id": "operation:e7e2a4deaf325a9dc9902456:4"
+  },
+  "version": {
+    "version_id": "version_6e08f32ea3ca4e14b2c4013f5b9f5e93",
+    "parent_version_id": "version_effd8bb320904ac19f0b77da75fa9f75",
+    "created_at": "2026-11-13T14:23:59.574803Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+          "title": "Microsoft SEC FY2023 derived facts; not the original filing",
+          "url": "https://www.sec.gov/Archives/edgar/data/789019/000095017023035122/msft-20230630.htm",
+          "event_at": null,
+          "published_at": null,
+          "obtained_at": "2026-11-13T14:23:46.200576+00:00",
+          "revised_at": null,
+          "content_sha256": "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c",
+          "is_simulated": false,
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "text_characters": 700,
+            "selected_characters": 4,
+            "status": "partial"
+          },
+          "pdf_text_order": null,
+          "derived_from_source_id": null,
+          "verification": "user_declared_not_verified"
+        }
+      ],
+      "source_candidates": [],
+      "facts": [],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [
+        {
+          "text": "The supplied source record contains no substantive financial data from which Microsoft total revenues for fiscal 2023 or 2022 can be determined.",
+          "kind": "model_interpretation",
+          "citations": [
+            {
+              "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+              "location": {
+                "character_start": 161,
+                "character_end": 165
+              },
+              "quotation_match": "exact",
+              "support_status": "not_independently_verified",
+              "quotation": ".sec"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "role": "support",
+          "support_review": {
+            "verdict": "uncertain",
+            "method": "bounded_quotation_context_model_review_v31",
+            "independently_verified": false
+          },
+          "claim_id": "claim_339959c2f14843dfbedcf9cc235beff1"
+        }
+      ],
+      "limitations": [
+        "Source source_9b5a3efa93c24ad8be61d2707290b930: only character ranges 161–165 were analyzed; remaining text was not examined.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): The only provided source text is the fragment '.sec' with no numbers, units, or periods; no revenue figures can be extracted or calculated.",
+        "Model-reported limitation (not independently verified): The source is described as a derived record, 'not the original filing', and coverage is 'partial', so even complete data from it would not substitute for the SEC filing itself.",
+        "Model-reported limitation (not independently verified): No calculation of the year-over-year change was performed because no numeric facts were available to support it.",
+        "Model-reported limitation (not independently verified): Claims about revenue values elsewhere in other Microsoft filings cannot be inferred from this record; absence of data here is not evidence about the underlying filing.",
+        "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+      ],
+      "run": {
+        "operation_id": "operation:e7e2a4deaf325a9dc9902456",
+        "status": "partial",
+        "question_origin": "user",
+        "research_questions": [
+          {
+            "question": "What were Microsoft total revenues for fiscal 2023 per the supplied record?",
+            "claim_ids": [
+              "claim_339959c2f14843dfbedcf9cc235beff1"
+            ],
+            "origin": "model_suggestion",
+            "status": "linked_not_verified"
+          },
+          {
+            "question": "What were Microsoft total revenues for fiscal 2022 per the supplied record?",
+            "claim_ids": [
+              "claim_339959c2f14843dfbedcf9cc235beff1"
+            ],
+            "origin": "model_suggestion",
+            "status": "linked_not_verified"
+          },
+          {
+            "question": "What was the change between the two years?",
+            "claim_ids": [],
+            "origin": "model_suggestion",
+            "status": "no_linked_finding"
+          }
+        ],
+        "source_processing": [
+          {
+            "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+            "eligibility": "eligible",
+            "initial_selection": "partial",
+            "selected_characters": 4,
+            "text_characters": 700
+          }
+        ],
+        "available_fact_ids": [],
+        "settled_model_budget_accounted_tokens": 1446,
+        "source_search_receipts": [],
+        "workflow_receipts": [
+          {
+            "stage": "planning",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "planning",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_discovery",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_retrieval",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "completed",
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 8513,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [
+              "source_9b5a3efa93c24ad8be61d2707290b930"
+            ],
+            "gaps": [
+              "Source source_9b5a3efa93c24ad8be61d2707290b930: only character ranges 161–165 were analyzed; remaining text was not examined.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): The only provided source text is the fragment '.sec' with no numbers, units, or periods; no revenue figures can be extracted or calculated.",
+              "Model-reported limitation (not independently verified): The source is described as a derived record, 'not the original filing', and coverage is 'partial', so even complete data from it would not substitute for the SEC filing itself.",
+              "Model-reported limitation (not independently verified): No calculation of the year-over-year change was performed because no numeric facts were available to support it.",
+              "Model-reported limitation (not independently verified): Claims about revenue values elsewhere in other Microsoft filings cannot be inferred from this record; absence of data here is not evidence about the underlying filing."
+            ],
+            "usage": 860,
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+                "url": null
+              }
+            ],
+            "retryable": null
+          },
+          {
+            "stage": "counterpoint",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "gap_followup",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "support_review",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Address an outstanding, authorized research need.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "support_review",
+            "status": "complete",
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 4805,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [
+              "source_9b5a3efa93c24ad8be61d2707290b930"
+            ],
+            "gaps": [],
+            "usage": 586,
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+                "url": null
+              }
+            ],
+            "retryable": null
+          },
+          {
+            "stage": "coordination",
+            "status": "stopped",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "remaining_gaps",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [
+              "Source source_9b5a3efa93c24ad8be61d2707290b930: only character ranges 161–165 were analyzed; remaining text was not examined.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): The only provided source text is the fragment '.sec' with no numbers, units, or periods; no revenue figures can be extracted or calculated.",
+              "Model-reported limitation (not independently verified): The source is described as a derived record, 'not the original filing', and coverage is 'partial', so even complete data from it would not substitute for the SEC filing itself.",
+              "Model-reported limitation (not independently verified): No calculation of the year-over-year change was performed because no numeric facts were available to support it.",
+              "Model-reported limitation (not independently verified): Claims about revenue values elsewhere in other Microsoft filings cannot be inferred from this record; absence of data here is not evidence about the underlying filing.",
+              "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          }
+        ],
+        "generation_status": "completed",
+        "planning_requested": false,
+        "planning_status": "not_requested",
+        "planning_steps": [],
+        "planning_tokens": null,
+        "planning_prompt_sha256": null,
+        "planning_error": null,
+        "planning_system_sha256": null,
+        "counterpoint_requested": false,
+        "counterpoint_status": "not_requested",
+        "gap_search_requested": false,
+        "gap_search_status": "not_requested",
+        "gap_followup_requested": false,
+        "gap_followup_status": "not_requested",
+        "support_review_requested": true,
+        "support_review_status": "complete",
+        "require_counterarguments": false,
+        "model_calls": 2,
+        "total_tokens": 1446,
+        "cost_usd": null,
+        "generation_tokens": 860,
+        "support_review_tokens": 586,
+        "counterpoint_tokens": null,
+        "counterpoint_prompt_sha256": null,
+        "gap_followup_tokens": null,
+        "gap_followup_prompt_sha256": null,
+        "gap_followup_targets": [],
+        "gap_followup_input_targets": [],
+        "gap_followup_question_targets": [],
+        "gap_search_query_sha256": null,
+        "gap_followup_error": null,
+        "gap_followup_segments": [],
+        "gap_followup_input_fact_ids": [],
+        "counterpoint_discarded_fields": 0,
+        "counterpoint_omitted_rows": 0,
+        "counterpoint_error": null,
+        "support_review_error": null,
+        "support_review_mode": "batch",
+        "support_review_method": "bounded_quotation_context_model_review_v31",
+        "analysis_error_detail": null,
+        "support_review_prompt_sha256": "6ef87b29456699df535801f844f5cc61d2b40d55d33056c4201a1aeb7d0ab74b",
+        "support_review_indexes": [
+          0
+        ],
+        "support_review_omissions": [],
+        "support_review_failed_indexes": [],
+        "support_review_segments": [
+          {
+            "claim_index": 0,
+            "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+            "character_start": 0,
+            "character_end": 345,
+            "context_radius": 180
+          }
+        ],
+        "support_review_system_sha256": "6e64d6378fbdfe43968fd894214937847c09d4b2f6a9ea0835515205a40745c6",
+        "search_calls": 0,
+        "search_status": "not_requested",
+        "official_fetch_calls": 0,
+        "official_fetch_status": "not_requested",
+        "elapsed_seconds": 13.336,
+        "cost_status": "unknown",
+        "model": "glm-5.3-flash",
+        "provider": "openai-compatible",
+        "prompt_sha256": "f300c7aa448752a23f598860fcfa88ba1d6009a49016eeab8136a634f396dd48",
+        "prompt_characters": 2375,
+        "prompt_bytes": 2375,
+        "selection_method": "multilingual_lexical_with_legacy_fallback_v53",
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "selected_segments": [
+          {
+            "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+            "character_start": 161,
+            "character_end": 165,
+            "model_source_id": "ref-1"
+          }
+        ],
+        "provider_timeout_seconds": 120.0,
+        "provider_input_token_limit": 3000,
+        "provider_output_token_limit": 4000,
+        "source_hashes": {
+          "source_9b5a3efa93c24ad8be61d2707290b930": "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c"
+        },
+        "max_model_calls": 2,
+        "max_search_calls": 0,
+        "max_elapsed_seconds": 180,
+        "max_total_tokens": 20000,
+        "max_cost_usd": null,
+        "error": null,
+        "evidence_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "facts": [],
+          "claims": [
+            {
+              "claim_index": 0,
+              "claim_id": "claim_339959c2f14843dfbedcf9cc235beff1",
+              "citation_location_status": "all_recorded",
+              "semantic_support_status": "not_independently_verified",
+              "model_review_opinion": "uncertain",
+              "counterpoint_relevance_opinion": null,
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "responds_to_claim_ids": [],
+              "suggested_responds_to_claim_ids": [],
+              "user_fact_links": [],
+              "role": "support",
+              "citations": [
+                {
+                  "citation_index": 0,
+                  "source_id": "source_9b5a3efa93c24ad8be61d2707290b930",
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ]
+            }
+          ],
+          "calculations": []
+        },
+        "question_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "truncated": false,
+          "questions": [
+            {
+              "question_index": 0,
+              "finding_ids": [
+                "claim_339959c2f14843dfbedcf9cc235beff1"
+              ],
+              "source_ids": [
+                "source_9b5a3efa93c24ad8be61d2707290b930"
+              ],
+              "counterpoints": []
+            },
+            {
+              "question_index": 1,
+              "finding_ids": [
+                "claim_339959c2f14843dfbedcf9cc235beff1"
+              ],
+              "source_ids": [
+                "source_9b5a3efa93c24ad8be61d2707290b930"
+              ],
+              "counterpoints": []
+            },
+            {
+              "question_index": 2,
+              "finding_ids": [],
+              "source_ids": [],
+              "counterpoints": []
+            }
+          ]
+        },
+        "research_gaps": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "items": [
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "subquestions_unlinked",
+              "indexes": [
+                2
+              ],
+              "count": 1,
+              "truncated": false,
+              "index_kind": "question"
+            },
+            {
+              "code": "semantic_support_not_independently_verified",
+              "indexes": [
+                0
+              ],
+              "count": 1,
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "model_review_uncertain",
+              "indexes": [
+                0
+              ],
+              "count": 1,
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ]
+        },
+        "stage_summary": {
+          "schema_version": "1",
+          "meaning": "saved_execution_not_quality_verdict",
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "completed"
+            },
+            {
+              "stage": "review",
+              "status": "completed"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ]
+        }
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_9b5a3efa93c24ad8be61d2707290b930"
+    ],
+    "created_by": "agent"
+  },
+  "cost_usd": "unknown",
+  "model_calls_cumulative": 2
+}

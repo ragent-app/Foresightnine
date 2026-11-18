@@ -1,0 +1,54 @@
+{
+  "H01": {
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "input_values": [
+          "648125",
+          "611289"
+        ],
+        "unit": "percent",
+        "value": "6.03"
+      }
+    ],
+    "facts": [
+      "611289",
+      "648125"
+    ]
+  },
+  "H02": {
+    "calculations": [
+      {
+        "formula_id": "margin_percent",
+        "input_values": [
+          "27012",
+          "648125"
+        ],
+        "unit": "percent",
+        "value": "4.17"
+      },
+      {
+        "formula_id": "margin_percent",
+        "input_values": [
+          "27012",
+          "642637"
+        ],
+        "unit": "percent",
+        "value": "4.20"
+      }
+    ],
+    "facts": [
+      "27012",
+      "648125",
+      "642637"
+    ]
+  },
+  "H03": {
+    "claim_semantics": "unverified_by_mechanical_scoring",
+    "facts": [
+      "648125",
+      "642637",
+      "5488"
+    ]
+  }
+}

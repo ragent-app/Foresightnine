@@ -1,0 +1,42 @@
+{
+  "method": "ranked_nonoverlapping_windows_v8",
+  "kind": "offline selection only; no rescoring or model calls",
+  "results": [
+    {
+      "task": "P24",
+      "monthly": true,
+      "yearly": true,
+      "segments": [
+        {
+          "source_id": "source_c083250e25554a24bf9fff09eb35ef17",
+          "character_start": 5735,
+          "character_end": 6049
+        },
+        {
+          "source_id": "source_c083250e25554a24bf9fff09eb35ef17",
+          "character_start": 6137,
+          "character_end": 6308
+        }
+      ],
+      "prompt_bytes": 2055
+    },
+    {
+      "task": "P25",
+      "monthly": true,
+      "yearly": true,
+      "segments": [
+        {
+          "source_id": "source_da6451a500cd40c88d8382bb12989232",
+          "character_start": 5539,
+          "character_end": 5858
+        },
+        {
+          "source_id": "source_da6451a500cd40c88d8382bb12989232",
+          "character_start": 5925,
+          "character_end": 6105
+        }
+      ],
+      "prompt_bytes": 2055
+    }
+  ]
+}

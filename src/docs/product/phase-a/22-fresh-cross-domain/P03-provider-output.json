@@ -1,0 +1,66 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据来源，AMD 2023 财年净收入为 22680 百万美元（截至 2023-12-30），2024 财年净收入为 25785 百万美元（截至 2024-12-28），收入同比增长约 13.7%（由提供的计算请求得出：(25785 − 22680) ÷ 22680 ≈ 13.70%）。",
+        "citations": [
+          {
+            "source_id": "source_d290f865b27b469d97d7a0b115713c04",
+            "quotation": "\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2023\":\"2023-12-30\",\"2024\":\"2024-12-28\"},\"net_revenue\":{\"2023\":22680,\"2024\":25785}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "来源标题标注为 \"derived net revenue facts\"（推导出的净收入事实），表明这些数字可能是从 SEC 文件中提取/推导而非原始披露文本，正式引用时应核对原始申报文件。",
+        "citations": []
+      },
+      {
+        "text": "两个财年结束日期不同（2023-12-30 与 2024-12-28），均为 52 周左右的财年，但若某财年包含 53 周，增长率可能受额外一周影响；来源未说明各财年周数。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "来源未说明数据是否为 AMD 原始 SEC 申报的直接摘录，还是第三方推导数据。",
+      "来源未提供各财年的周数（52 周或 53 周），无法确认期间可比性。",
+      "来源未说明净收入是否经过重述或会计政策变更调整。",
+      "缺少 GAAP 净收入与经营分部口径的进一步说明，无法核实口径一致性。",
+      "增长率百分比数值未在来源中直接给出，需基于两个事实数值计算得出。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_amd_net_revenue_2023",
+        "label": "net_revenue_fy2023",
+        "value": "22680",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2023 (fiscal year ended 2023-12-30)",
+        "citation": {
+          "source_id": "source_d290f865b27b469d97d7a0b115713c04",
+          "quotation": "\"net_revenue\":{\"2023\":22680,\"2024\":25785}"
+        }
+      },
+      {
+        "fact_id": "fact_amd_net_revenue_2024",
+        "label": "net_revenue_fy2024",
+        "value": "25785",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ended 2024-12-28)",
+        "citation": {
+          "source_id": "source_d290f865b27b469d97d7a0b115713c04",
+          "quotation": "\"net_revenue\":{\"2023\":22680,\"2024\":25785}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_amd_net_revenue_2024",
+        "second_fact_id": "fact_amd_net_revenue_2023"
+      }
+    ]
+  },
+  "reported_tokens": 1202
+}

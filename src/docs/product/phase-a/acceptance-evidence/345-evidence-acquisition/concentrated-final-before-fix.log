@@ -1,0 +1,30 @@
+........................................sF.FF..................          [100%]
+=================================== FAILURES ===================================
+_ test_settlement_is_account_scoped_and_separates_ledger_from_provider_report __
+apps/api/tests/test_research_recovery_acceptance.py:329: in test_settlement_is_account_scoped_and_separates_ledger_from_provider_report
+    assert body['reported_tokens'] == 25 and body['cost_status'] == 'unknown'
+E   assert (50 == 25)
+__ test_review_settlement_is_separate_from_result_validation[invalid_schema] ___
+apps/api/tests/test_research_recovery_acceptance.py:422: in test_review_settlement_is_separate_from_result_validation
+    assert _terminal(client, path, headers, operation) == ('failed' if review_outcome == 'invalid_schema' else 'completed')
+E   AssertionError: assert 'completed' == 'failed'
+E     
+E     - failed
+E     + completed
+______ test_review_settlement_is_separate_from_result_validation[timeout] ______
+apps/api/tests/test_research_recovery_acceptance.py:424: in test_review_settlement_is_separate_from_result_validation
+    assert calls == ['analysis', 'review']
+E   AssertionError: assert ['analysis', 'analysis'] == ['analysis', 'review']
+E     
+E     At index 1 diff: 'analysis' != 'review'
+E     Use -v to get more diff
+=============================== warnings summary ===============================
+apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_research_recovery_acceptance.py::test_settlement_is_account_scoped_and_separates_ledger_from_provider_report
+FAILED apps/api/tests/test_research_recovery_acceptance.py::test_review_settlement_is_separate_from_result_validation[invalid_schema]
+FAILED apps/api/tests/test_research_recovery_acceptance.py::test_review_settlement_is_separate_from_result_validation[timeout]

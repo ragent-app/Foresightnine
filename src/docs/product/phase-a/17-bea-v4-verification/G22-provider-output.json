@@ -1,0 +1,43 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "The supplied text supports only the fourth-quarter annualized figure; the full-year 2022 real GDP growth figure is not stated in the provided excerpts.",
+        "citations": [
+          {
+            "source_id": "source_0cad34bf95f54b79bd471ead10d51dfe",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.9 percent in the fourth quarter of 2022 (table 1)"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One might assume the annual figure can be derived from quarterly figures, but annual growth is computed differently and the release text provided does not contain it.",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "The provided excerpts do not include the full-year 2022 annual growth rate, so it cannot be reported from these sources.",
+      "The 2.9 percent figure is an 'advance' estimate, subject to revision in later BEA releases.",
+      "The 2.9 percent is a quarter-over-quarter annualized rate for Q4 2022, distinct from a full-year-over-year growth measure.",
+      "No supporting numeric facts exist in the text from which a supported calculation of annual growth could be requested."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_q4_2022_annualized",
+        "label": "Q4 2022 real GDP growth (annualized)",
+        "value": "2.9",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "fourth quarter of 2022",
+        "citation": {
+          "source_id": "source_0cad34bf95f54b79bd471ead10d51dfe",
+          "quotation": "Real gross domestic product (GDP) increased at an annual rate of 2.9 percent in the fourth quarter of 2022 (table 1), according to the \"advance\" estimate released by the Bureau of Economic Analysis."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 978
+}

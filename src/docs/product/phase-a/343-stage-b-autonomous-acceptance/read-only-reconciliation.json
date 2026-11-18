@@ -1,0 +1,27 @@
+{
+  "task": "MACRO_CALC",
+  "operation_status": "completed",
+  "research_status": "partial",
+  "generation_status": "failed",
+  "error": "provider_transport_error",
+  "analysis_duration_ms": 16422,
+  "run_elapsed_seconds": 16.798,
+  "pending_stage": "analysis",
+  "unresolved_stage_count": 1,
+  "model_ledger": {
+    "settled_calls": 1,
+    "accounted_tokens": 10000,
+    "interpretation": "conservative reservation, not actual token usage"
+  },
+  "reported_tokens": null,
+  "provider_result": "unknown",
+  "settlement": "unknown",
+  "http_submission": "not_established",
+  "http_response": "not_established",
+  "http_status": null,
+  "private_diagnostic": "no more specific retained diagnostic",
+  "cost": "unknown",
+  "subsequent_tasks": "not_run",
+  "quality": "not_scorable_no_generated_findings",
+  "verification": "read-only checkpoint, journal, isolated PG and API log; no extra external requests"
+}

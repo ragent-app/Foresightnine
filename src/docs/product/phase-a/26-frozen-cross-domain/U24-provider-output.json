@@ -1,0 +1,75 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "United Airlines Holdings Inc. 报告的 2023 年总营业收入为 53,717 百万美元，2024 年为 57,070.63 亿美元口径下为 57,063 百万美元，两者均来自其 2024 年 SEC 10-K 衍生数据，单位为百万美元（USD millions），年度截止日为 12 月 31 日。",
+        "citations": [
+          {
+            "source_id": "source_9bd4052e4d8b4f7b94c72896abc88289",
+            "quotation": "{\"issuer\":\"United Airlines Holdings Inc.\",\"unit\":\"USD millions\",\"year_end\":\"December 31\",\"total_operating_revenue\":{\"2023\":53717,\"2024\":57063}}"
+          }
+        ]
+      },
+      {
+        "text": "2024 年相对 2023 年的总营业收入同比增长率约为 6.23%（(57063-53717)/53717），该数值由系统依据下方计算请求得出，本回答不自行执行算术。",
+        "citations": [
+          {
+            "source_id": "source_9bd4052e4d8b4f7b94c72896abc88289",
+            "quotation": "\"total_operating_revenue\":{\"2023\":53717,\"2024\":57063}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "同比增速可能受一次性或非经常项目影响；数据仅为衍生事实（derived facts），未包含原始报表上下文，无法判断收入构成变化或会计口径调整。",
+        "citations": [
+          {
+            "source_id": "source_9bd4052e4d8b4f7b94c72896abc88289",
+            "quotation": "\"United Airlines 2024 SEC 10-K: derived operating revenue facts\""
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源仅提供 2023 与 2024 两个年度的总营业收入，缺少分季度或分部收入数据，无法分析增长驱动因素。",
+      "数据为“derived operating revenue facts”（衍生数据），未直接呈现 10-K 原文报表行项目，无法核验原始披露。",
+      "未提供汇率或会计准则变化说明；若存在重述，数据可能不代表原始披露值。",
+      "增长率数值由计算模块生成，本文未独立执行算术验证。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_ual_rev_2023",
+        "label": "total_operating_revenue_2023",
+        "value": "53717",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended December 31, 2023",
+        "citation": {
+          "source_id": "source_9bd4052e4d8b4f7b94c72896abc88289",
+          "quotation": "\"total_operating_revenue\":{\"2023\":53717,\"2024\":57063}"
+        }
+      },
+      {
+        "fact_id": "fact_ual_rev_2024",
+        "label": "total_operating_revenue_2024",
+        "value": "57063",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended December 31, 2024",
+        "citation": {
+          "source_id": "source_9bd4052e4d8b4f7b94c72896abc88289",
+          "quotation": "\"total_operating_revenue\":{\"2023\":53717,\"2024\":57063}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_ual_rev_2024",
+        "second_fact_id": "fact_ual_rev_2023"
+      }
+    ]
+  },
+  "reported_tokens": 1145
+}

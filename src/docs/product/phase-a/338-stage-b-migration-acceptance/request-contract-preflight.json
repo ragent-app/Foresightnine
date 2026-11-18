@@ -1,0 +1,30 @@
+{
+  "context": "Offline Pydantic contract only; no operation or model call",
+  "tasks": [
+    {
+      "task_id": "MACRO_CALC",
+      "contract_valid": true,
+      "plan_research": false
+    },
+    {
+      "task_id": "FED_COMPARE",
+      "contract_valid": true,
+      "plan_research": false
+    },
+    {
+      "task_id": "MISSING_BOUNDARY",
+      "contract_valid": true,
+      "plan_research": false
+    },
+    {
+      "task_id": "TRANSFER_BALANCE_ZH",
+      "contract_valid": true,
+      "plan_research": true
+    },
+    {
+      "task_id": "TRANSFER_PRODUCTION_EN",
+      "contract_valid": true,
+      "plan_research": true
+    }
+  ]
+}

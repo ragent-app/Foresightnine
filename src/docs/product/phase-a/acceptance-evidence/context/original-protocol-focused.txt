@@ -1,0 +1,289 @@
+FFF.FFFFF                                                                [100%]
+=================================== FAILURES ===================================
+___ test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately ____
+
+    def test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately():
+        from app.research_analysis import SYSTEM_PROMPT
+        from app.research_uploads import _extract_text
+        pdf = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/263-holdout-candidates/bea-gdp4q22.pdf'
+        text = _extract_text(pdf.read_bytes(), text_order='layout')
+        report = source('s', text=text).model_copy(update={'retrieval_method':'user_pdf', 'pdf_text_order':'layout'})
+        question = ('According to the attached BEA second estimate, compare annualized real GDP growth in the fourth '
+                    'and third quarters of 2022. Assess whether both goods and services consumption increased in the '
+                    'fourth quarter; cite evidence and distinguish a revision to an estimate from an actual change.')
+        captured = []
+        raw_prompts = []
+        def capture(prompt):
+            raw_prompts.append(prompt)
+            captured.append(decode_research_prompt(prompt))
+            return {}, 0
+        limit = 6000 - len(SYSTEM_PROMPT.encode()) - 512
+        result = analyze(question, [report], None, capture, max_prompt_chars=limit)
+        assert len(raw_prompts[0].encode()) <= limit
+        excerpts = [item['text'] for item in captured[0]['sources']]
+        import re
+        assert all(any(value in part for part in excerpts) for value in ('2.7 percent', '3.2 percent'))
+>       assert all(text[item['character_start']:item['character_end']] == item['text'] for item in result.segments)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_analysis.py:2211: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <list_iterator object at 0x7418f611c1c0>
+
+>   assert all(text[item['character_start']:item['character_end']] == item['text'] for item in result.segments)
+                                                                      ^^^^^^^^^^^^
+E   KeyError: 'text'
+
+tests/test_research_analysis.py:2211: KeyError
+__ test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf ___
+
+    @pytest.mark.skipif(not FED_PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    def test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf():
+        text = _extract_text(FED_PDF.read_bytes())
+        report = ResearchSource(source_id="fed", owner_id="test", title="Federal Reserve 2024 September decision", text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc), content_sha256="test", retrieval_method="user_pdf",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        quotation = "1/2 percentage point to 4-3/4 to 5 percent"
+        def model(prompt):
+            assert any(quotation in part["text"] for part in decode_research_prompt(prompt)["sources"])
+            return {"claims": [{"text": "The target range was lowered.", "citations": [
+                {"source_id": "fed", "quotation": quotation}]}]}, 1
+        question = "2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？"
+>       result = analyze(question, [report], None, model, retrieval_hints=PLANNED_MACRO_HINTS,
+                         max_prompt_chars=prompt_budget_with_evidence(question, [report], evidence_bytes=1400))
+
+tests/test_research_original_document.py:49: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2182: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？","sources":[{"source_id":"fed","source_coverage":"partial","title":"Fe...xt_unit_ids link passages. Cite source_id and an exact continuous quote from one passage.","source_input_version":"2"}'
+
+    def model(prompt):
+>       assert any(quotation in part["text"] for part in decode_research_prompt(prompt)["sources"])
+E       assert False
+E        +  where False = any(<generator object test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf.<locals>.model.<locals>.<genexpr> at 0x7418f4438040>)
+
+tests/test_research_original_document.py:45: AssertionError
+______ test_annual_and_quarterly_question_selects_both_distinct_passages _______
+
+    @pytest.mark.skipif(not BEA_2022_PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    def test_annual_and_quarterly_question_selects_both_distinct_passages():
+        text = _extract_text(BEA_2022_PDF.read_bytes())
+        question = ("According to the BEA advance estimate for 2022, report the full-year 2022 real GDP growth "
+                    "and the fourth-quarter annualized real GDP growth; distinguish their periods and note relevant limitations.")
+        windows = _select_windows(text, question, 468, 2)
+        assert len(windows) == 2
+        assert any("2.9 percent in the fourth quarter" in passage for _, passage in windows)
+        assert any("Real GDP increased 2.1 percent in 2022" in passage for _, passage in windows)
+        report = ResearchSource(source_id="bea-dev", owner_id="test", title="BEA GDP 2022 advance estimate", text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc), content_sha256="test",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        def fixed_model(prompt):
+            parts = decode_research_prompt(prompt)["sources"]
+            assert any("2.9 percent in the fourth quarter" in part["text"] for part in parts)
+            assert any("Real GDP increased 2.1 percent in 2022" in part["text"] for part in parts)
+            return {}, 10
+>       result = analyze(question, [report], None, fixed_model,
+                         max_prompt_chars=prompt_budget_with_evidence(question, [report], evidence_bytes=1400))
+
+tests/test_research_original_document.py:73: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2182: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"According to the BEA advance estimate for 2022, report the full-year 2022 real GDP growth and the fourth...xt_unit_ids link passages. Cite source_id and an exact continuous quote from one passage.","source_input_version":"2"}'
+
+    def fixed_model(prompt):
+        parts = decode_research_prompt(prompt)["sources"]
+        assert any("2.9 percent in the fourth quarter" in part["text"] for part in parts)
+>       assert any("Real GDP increased 2.1 percent in 2022" in part["text"] for part in parts)
+E       assert False
+E        +  where False = any(<generator object test_annual_and_quarterly_question_selects_both_distinct_passages.<locals>.fixed_model.<locals>.<genexpr> at 0x7418f442c2b0>)
+
+tests/test_research_original_document.py:71: AssertionError
+___ test_relevant_original_pdf_passages_fit_bounded_prompt[GDP_REV-needles1] ___
+
+case = 'GDP_REV'
+needles = ('0.7 percent in the fourth quarter', 'Real GDP was revised down 0.7 percentage point')
+
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+        ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+        ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+        ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+    ])
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+        assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+        report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model, retrieval_hints=PLANNED_MACRO_HINTS,
+                         max_prompt_chars=prompt_budget_with_evidence(task["question"], [report], evidence_bytes=1400))
+        normalized = [" ".join(part.split()) for part in captured]
+>       assert all(any(needle in part for part in normalized) for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_relevant_original_pdf_passages_fit_bounded_prompt.<locals>.<genexpr> at 0x7418f4435620>)
+
+tests/test_research_original_document.py:164: AssertionError
+__ test_relevant_original_pdf_passages_fit_bounded_prompt[FED_RATE-needles2] ___
+
+case = 'FED_RATE'
+needles = ('lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent',)
+
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+        ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+        ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+        ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+    ])
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+        assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+        report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model, retrieval_hints=PLANNED_MACRO_HINTS,
+                         max_prompt_chars=prompt_budget_with_evidence(task["question"], [report], evidence_bytes=1400))
+        normalized = [" ".join(part.split()) for part in captured]
+>       assert all(any(needle in part for part in normalized) for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_relevant_original_pdf_passages_fit_bounded_prompt.<locals>.<genexpr> at 0x7418f4437d80>)
+
+tests/test_research_original_document.py:164: AssertionError
+__ test_relevant_original_pdf_passages_fit_bounded_prompt[FED_DISS-needles3] ___
+
+case = 'FED_DISS'
+needles = ('Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point',)
+
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+        ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+        ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+        ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+    ])
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+        assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+        report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model, retrieval_hints=PLANNED_MACRO_HINTS,
+                         max_prompt_chars=prompt_budget_with_evidence(task["question"], [report], evidence_bytes=1400))
+        normalized = [" ".join(part.split()) for part in captured]
+>       assert all(any(needle in part for part in normalized) for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_relevant_original_pdf_passages_fit_bounded_prompt.<locals>.<genexpr> at 0x7418f4434f20>)
+
+tests/test_research_original_document.py:164: AssertionError
+_ test_retrieval_keeps_requested_estimates_and_purchase_plans[GDP_ESTIMATE-needles0] _
+
+case = 'GDP_ESTIMATE'
+needles = ('2.9 percent', '2.6 percent', 'advance estimate')
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_ESTIMATE", ("2.9 percent", "2.6 percent", "advance estimate")),
+        ("FED_PURCHASES", ("$20 billion for treasury", "$10 billion for agency", "$40 billion per month", "$20 billion per month")),
+    ])
+    def test_retrieval_keeps_requested_estimates_and_purchase_plans(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/70-multitask-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        item = task["sources"][0]
+        text = _extract_text((folder / item["file"]).read_bytes(), text_order="reading")
+        assert sha256(text.encode()).hexdigest() == item["text_sha256"]
+        report = ResearchSource(source_id=item["source_id"], owner_id="test", title=item["title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(item["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model, retrieval_hints=PLANNED_MACRO_HINTS,
+                         max_prompt_chars=prompt_budget_with_evidence(task["question"], [report], evidence_bytes=1400))
+        content = " ".join(" ".join(part.lower().split()) for part in captured)
+>       assert all(needle in content for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_retrieval_keeps_requested_estimates_and_purchase_plans.<locals>.<genexpr> at 0x7418f5d44e10>)
+
+tests/test_research_original_document.py:260: AssertionError
+_ test_retrieval_keeps_requested_estimates_and_purchase_plans[FED_PURCHASES-needles1] _
+
+case = 'FED_PURCHASES'
+needles = ('$20 billion for treasury', '$10 billion for agency', '$40 billion per month', '$20 billion per month')
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_ESTIMATE", ("2.9 percent", "2.6 percent", "advance estimate")),
+        ("FED_PURCHASES", ("$20 billion for treasury", "$10 billion for agency", "$40 billion per month", "$20 billion per month")),
+    ])
+    def test_retrieval_keeps_requested_estimates_and_purchase_plans(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/70-multitask-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        item = task["sources"][0]
+        text = _extract_text((folder / item["file"]).read_bytes(), text_order="reading")
+        assert sha256(text.encode()).hexdigest() == item["text_sha256"]
+        report = ResearchSource(source_id=item["source_id"], owner_id="test", title=item["title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(item["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model, retrieval_hints=PLANNED_MACRO_HINTS,
+                         max_prompt_chars=prompt_budget_with_evidence(task["question"], [report], evidence_bytes=1400))
+        content = " ".join(" ".join(part.lower().split()) for part in captured)
+>       assert all(needle in content for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_retrieval_keeps_requested_estimates_and_purchase_plans.<locals>.<genexpr> at 0x7418f8493920>)
+
+tests/test_research_original_document.py:260: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_analysis.py::test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately
+FAILED tests/test_research_original_document.py::test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf
+FAILED tests/test_research_original_document.py::test_annual_and_quarterly_question_selects_both_distinct_passages
+FAILED tests/test_research_original_document.py::test_relevant_original_pdf_passages_fit_bounded_prompt[GDP_REV-needles1]
+FAILED tests/test_research_original_document.py::test_relevant_original_pdf_passages_fit_bounded_prompt[FED_RATE-needles2]
+FAILED tests/test_research_original_document.py::test_relevant_original_pdf_passages_fit_bounded_prompt[FED_DISS-needles3]
+FAILED tests/test_research_original_document.py::test_retrieval_keeps_requested_estimates_and_purchase_plans[GDP_ESTIMATE-needles0]
+FAILED tests/test_research_original_document.py::test_retrieval_keeps_requested_estimates_and_purchase_plans[FED_PURCHASES-needles1]

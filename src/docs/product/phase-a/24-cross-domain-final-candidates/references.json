@@ -1,0 +1,49 @@
+{
+  "C24": {
+    "allowed_percentages": [
+      "5.02"
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "254453",
+        "242290"
+      ],
+      "unit": "percent",
+      "value": "5.02"
+    },
+    "facts": [
+      {
+        "period": "2023",
+        "value": "242290"
+      },
+      {
+        "period": "2024",
+        "value": "254453"
+      }
+    ],
+    "unit": "USD millions"
+  },
+  "G24": {
+    "allowed_percentages": [
+      "2.8",
+      "2.3",
+      "2.9",
+      "3.1"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "period": "2024",
+        "qualifier": "annual",
+        "value": "2.8"
+      },
+      {
+        "period": "2024",
+        "qualifier": "quarter",
+        "value": "2.3"
+      }
+    ],
+    "unit": "percent"
+  }
+}

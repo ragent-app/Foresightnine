@@ -1,0 +1,183 @@
+{
+  "task_id": "MACRO_CALC",
+  "status": "completed",
+  "events": [
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "completed"
+    }
+  ],
+  "cost_status": "unknown",
+  "topic_id": "topic_4ce3ff81162c4b3d81d15b39d9f17f09",
+  "idempotency_key": "independent-20fab1a068a243f290b6dbc243b91a70",
+  "operation_id": "operation:cb545ddf875a391528cf814c",
+  "admission_http_status": 202,
+  "settlement_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_16c4b21e694648ffa3b36ae0f0af5dba",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 3,
+      "released_calls": 0,
+      "accounted_tokens": 7589
+    },
+    "unresolved_stage_count": 0,
+    "reported_tokens": 7589,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  }
+}

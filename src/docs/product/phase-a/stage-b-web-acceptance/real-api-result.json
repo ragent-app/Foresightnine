@@ -1,0 +1,26 @@
+{
+  "mode": "real local FastAPI and in-memory store; synthetic provider",
+  "checks": [
+    {
+      "name": "local UI and account connect",
+      "status": "passed"
+    },
+    {
+      "name": "create source and topic through API",
+      "status": "passed"
+    },
+    {
+      "name": "run and save through API",
+      "status": "passed"
+    },
+    {
+      "name": "save edited version",
+      "status": "passed"
+    },
+    {
+      "name": "export saved version",
+      "status": "passed"
+    }
+  ],
+  "errors": []
+}

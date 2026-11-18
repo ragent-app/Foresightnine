@@ -1,0 +1,31 @@
+{
+  "variant": "bounded_quote",
+  "status": "returned",
+  "prompt_sha256": "625f4081ed29206bd05eb92555de14da1c07e650f0ed4e8f020ecf00f2c7e951",
+  "system_sha256": "6cfeeb7386c0dfe763a547d5933872bd10caafbdc2987428ef079b889a3f5edb",
+  "model": "glm-5.3-flash",
+  "elapsed_seconds": 9.478,
+  "reported_tokens": 732,
+  "verdicts": {
+    "0": "does_not_support",
+    "1": "supports",
+    "2": "contradicts"
+  },
+  "raw_response": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "does_not_support"
+      },
+      {
+        "claim_index": 1,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 2,
+        "verdict": "contradicts"
+      }
+    ]
+  },
+  "cost_usd": null
+}

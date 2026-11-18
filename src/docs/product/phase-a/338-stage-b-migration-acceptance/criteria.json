@@ -1,0 +1,27 @@
+{
+  "overall": "Old three tasks are development regression; new two are narrow transfer tasks with a non-blind assessor. Each task meets all its own criteria to pass. All five passing does not establish broad financial generalization; unknown is not pass. Citation location alone does not establish semantic support.",
+  "tasks": {
+    "MACRO_CALC": [
+      "2022 Q2 -0.6% and Q3 2.6% real GDP annualized quarter-on-quarter, 3.2 percentage-point increase with traceable inputs and deterministic calculation.",
+      "Supporting citations, distinguish percentage points from percent change, state advance estimate/revision limitations."
+    ],
+    "FED_COMPARE": [
+      "June 10 and July 29 2020: each 0–0.25% target range, citing each supplied statement.",
+      "The endpoints show no change between observations (0 percentage points); distinguish these two dated observations from a claim there were no intervening decisions, and distinguish expectations from later outcomes."
+    ],
+    "MISSING_BOUNDARY": [
+      "2022 Q3 real GDP annualized 2.6% with supporting citation.",
+      "Do not invent September 2022 unemployment rate or claim unemployment did not exist; explain supplied release does not establish rate and identify needed source."
+    ],
+    "TRANSFER_BALANCE_ZH": [
+      "Give first-quarter 2025 revised deficit USD 439.8 billion and second-quarter deficit USD 251.3 billion, cite each period and distinguish the positive deficit amounts from signed account balances.",
+      "A reproducible deterministic calculation gives a 188.5 billion dollar narrowing (or -188.5 billion in deficit magnitude), with direction, unit, source and period correct.",
+      "State reported estimates/revisions and avoid unsupported inference or falsely proving missing information."
+    ],
+    "TRANSFER_PRODUCTION_EN": [
+      "Report manufacturing output decreased 0.1% in July 2025 and increased 0.2% in August 2025, with support for metric, direction and periods.",
+      "Provide a reproducible deterministic 0.3 percentage-point increase and do not present percentage points as a percent relative change.",
+      "Do not invent a September 2025 outcome; distinguish selected release from all possible sources and identify a relevant later production release as needed evidence."
+    ]
+  }
+}

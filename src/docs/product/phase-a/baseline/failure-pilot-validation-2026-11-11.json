@@ -1,0 +1,62 @@
+{
+  "checked_at_utc": "2026-11-11T11:11:21.405709+00:00",
+  "bank_sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3",
+  "reference_sha256": "836ba9ffc72cae5da4f9ecbeb7a23cbfe29cde05db60f1ae02d0f8911c097956",
+  "tasks": [
+    {
+      "id": "D11",
+      "synthetic": true,
+      "sources": []
+    },
+    {
+      "id": "D12",
+      "synthetic": true,
+      "sources": []
+    },
+    {
+      "id": "D24",
+      "synthetic": true,
+      "sources": []
+    },
+    {
+      "id": "D25",
+      "synthetic": true,
+      "sources": [
+        "msft-fy2023.json"
+      ]
+    },
+    {
+      "id": "D26",
+      "synthetic": true,
+      "sources": [
+        "msft-fy2023.json"
+      ]
+    },
+    {
+      "id": "D27",
+      "synthetic": true,
+      "sources": []
+    },
+    {
+      "id": "D28",
+      "synthetic": true,
+      "sources": [
+        "msft-fy2023.json"
+      ]
+    },
+    {
+      "id": "D29",
+      "synthetic": true,
+      "sources": []
+    },
+    {
+      "id": "D30",
+      "synthetic": true,
+      "sources": []
+    }
+  ],
+  "all_four_banks_cover_unique_ids_D01_D30": true,
+  "limitations": [
+    "Synthetic scenarios are not real runtime evidence. Inputs and references remain unreviewed and not frozen."
+  ]
+}

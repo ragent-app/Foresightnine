@@ -1,0 +1,11 @@
+{
+  "api": "isolated loopback",
+  "storage": "fresh isolated postgres, migrations 001/002",
+  "preflight_run_list_http": 200,
+  "preflight_operation_admitted": false,
+  "task_request_schemas_validated": 5,
+  "source_files_hash_checked": 5,
+  "model_calls": 0,
+  "initial_preflight_note": "first read incorrectly expected an object; no run request was made",
+  "profile": "glm-5.3-flash; thinking enabled/low; do_sample false; input 6000, output 4000, timeout 120s; no search or retries"
+}

@@ -1,0 +1,151 @@
+{
+  "id": "F24",
+  "operation_status": "completed",
+  "manifest_sha256": "ab1dede80cc44865ee7da33fceb6f73a8ed4289931c12e365bcd576da9aa17cd",
+  "input_sha256": "dc5d97f143c453b1ef89dfe2fd4ca802a9bee97470e1864edbfd59ec8acd5744",
+  "elapsed_seconds_observed": 10.128,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+        "title": "Federal Reserve FOMC statement December 18, 2024",
+        "url": null,
+        "event_at": null,
+        "published_at": "2024-12-18T19:00:00+00:00",
+        "obtained_at": "2026-11-12T03:24:07.265995+00:00",
+        "revised_at": null,
+        "content_sha256": "82a91e921f5a7a34af76b05b14b99f7460fa8fc013d0092c46dfdcdedbd5432d",
+        "is_simulated": false,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_cut_size",
+        "value": "0.25",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "December 18, 2024 decision",
+        "label": "本次下调幅度",
+        "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+        "quotation": "lower the target range for the federal\n\nfunds rate by 1/4 percentage point",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_fraction",
+        "location": {
+          "character_start": 830,
+          "character_end": 904,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "claims": [
+      {
+        "text": "根据2024年12月18日FOMC声明，联邦基金利率目标区间下调1/4个百分点至4-1/4至4-1/2%（4.25%–4.5%）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+            "location": {
+              "character_start": 805,
+              "character_end": 930,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to lower the target range for the federal\n\nfunds rate by 1/4 percentage point to 4-1/4 to 4-1/2 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "第二个来源的操作指令确认了同一目标区间，与降息表述一致，无明显反驳；但声明未直接说明降息前的区间（可推断为4-1/2至4-3/4%），该推断未在文本中明示。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+            "location": {
+              "character_start": 3618,
+              "character_end": 3707,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "maintain the federal funds rate\n              in a target range of 4-1/4 to 4-1/2 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_448093ee56c94850b31fa30fe432f3f1: only character ranges 773–1143, 3338–3708 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源文本未明确列出降息前的前一目标区间",
+      "未来是否进一步调整取决于数据评估，文本仅表示将仔细评估，未给出指引数值",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:0155150eb0c47904db424814",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1060,
+      "cost_usd": null,
+      "generation_tokens": 1060,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 9.368,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "2de797fd221af2a34d5566b92968358bad3ad7ec36266234f6c49b06e4f9cb9a",
+      "prompt_characters": 1976,
+      "prompt_bytes": 2054,
+      "selection_method": "ranked_nonoverlapping_windows_v5",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+          "character_start": 773,
+          "character_end": 1143
+        },
+        {
+          "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+          "character_start": 3338,
+          "character_end": 3708
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_448093ee56c94850b31fa30fe432f3f1": "82a91e921f5a7a34af76b05b14b99f7460fa8fc013d0092c46dfdcdedbd5432d"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

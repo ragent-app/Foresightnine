@@ -1,0 +1,18 @@
+{
+  "id": "D22",
+  "question": "2024 年实际 GDP 全年增长初步估计是多少？何时公布？",
+  "as_of": "2025-01-31T00:00:00Z",
+  "sources": [
+    {
+      "filename": "bea-gdp-2024-q4-advance.pdf",
+      "sha256": "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1",
+      "source_url": "https://www.bea.gov/sites/default/files/2025-01/gdp4q24-adv.pdf",
+      "publication_utc": "2025-01-30T13:30:00Z"
+    }
+  ],
+  "status": "candidate-not-reviewed-not-frozen",
+  "notes": [
+    "Read the allowed PDFs as source documents; extracted answers are not supplied.",
+    "Present-day copies do not prove past byte-for-byte availability or absence of subsequent amendments."
+  ]
+}

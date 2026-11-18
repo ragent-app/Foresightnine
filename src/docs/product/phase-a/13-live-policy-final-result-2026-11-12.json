@@ -1,0 +1,170 @@
+{
+  "operation_status": "completed",
+  "input_pdf_sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_7faeff1279bc4855a465434913afaabf",
+        "title": "Federal Reserve September 2024 FOMC statement",
+        "url": null,
+        "published_at": "2024-09-18T18:00:00+00:00",
+        "obtained_at": "2026-11-12T01:34:48.382478+00:00",
+        "revised_at": null,
+        "content_sha256": "dc18c2f3877ce4e971472fba6177c3ea315fcb580d98d5bd30fee434ef78d88f",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "rate_cut_sept2024",
+        "value": "0.5",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "September 18, 2024",
+        "label": "federal funds rate cut magnitude",
+        "source_id": "source_7faeff1279bc4855a465434913afaabf",
+        "quotation": "the Committee decided to\n\nlower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_fraction",
+        "location": {
+          "character_start": 894,
+          "character_end": 1015,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "bowman_preference",
+        "value": "0.25",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "September 18, 2024",
+        "label": "dissenting preferred cut",
+        "source_id": "source_7faeff1279bc4855a465434913afaabf",
+        "quotation": "preferred to lower the target range for\n\nthe federal funds rate by 1/4 percentage point at this meeting",
+        "quotation_match": "whitespace_normalized",
+        "numeric_normalization": "exact_fraction",
+        "location": {
+          "character_start": 2455,
+          "character_end": 2558,
+          "page": 2
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "claims": [
+      {
+        "text": "2024年9月18日的FOMC会议决定将联邦基金利率目标区间下调0.5个百分点（1/2 percentage point），至4.75%至5%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_7faeff1279bc4855a465434913afaabf",
+            "location": {
+              "character_start": 894,
+              "character_end": 1015,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "the Committee decided to\n\nlower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Michelle W. Bowman投了反对票，她倾向下调0.25个百分点（1/4 percentage point）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_7faeff1279bc4855a465434913afaabf",
+            "location": {
+              "character_start": 2400,
+              "character_end": 2559,
+              "page": 2
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Voting against this action was Michelle W. Bowman, who preferred to lower the target range for\n\nthe federal funds rate by 1/4 percentage point at this meeting."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "有委员（Bowman）持不同意见，认为应仅下调25个基点，即行动幅度存在内部分歧。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_7faeff1279bc4855a465434913afaabf: publication and revision history are user-declared and not independently verified.",
+      "Source source_7faeff1279bc4855a465434913afaabf: only character ranges 825–1333, 2304–2812 were analyzed; remaining text was not examined.",
+      "1 model-generated numeric fact(s) were omitted because their format was invalid.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源未说明调整前后的具体日期以外的背景，也未提供此前目标区间的原始值，故无法从文本中直接计算此前区间（需引用先前事实）。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:9e4b2ef4e5a10c2497be7bca",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1166,
+      "cost_usd": null,
+      "generation_tokens": 1166,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 11.819,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "f35e7dba5e8e273bdc8a97fd989d3ff26c54e8970f9e9fb7fbeabd1a88d0c77a",
+      "prompt_characters": 2003,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v3",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_7faeff1279bc4855a465434913afaabf",
+          "character_start": 825,
+          "character_end": 1333
+        },
+        {
+          "source_id": "source_7faeff1279bc4855a465434913afaabf",
+          "character_start": 2304,
+          "character_end": 2812
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_7faeff1279bc4855a465434913afaabf": "dc18c2f3877ce4e971472fba6177c3ea315fcb580d98d5bd30fee434ef78d88f"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "elapsed_seconds_observed": 12.183,
+  "cost_note": "unknown; not assumed zero"
+}

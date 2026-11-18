@@ -1,0 +1,13 @@
+{
+  "version": "pilot-reference-v0.1-not-frozen",
+  "status": "draft-human-review-pending",
+  "instructions": "Evaluator-only reference: do not supply this file to the system under test. Values are derived from provisional disclosed facts and are not an independent human baseline.",
+  "tasks": {
+    "D01": {"checks": ["FY2022 revenue 198270 USD millions", "FY2023 revenue 211915 USD millions", "fiscal year ends June 30", "cite the 2023 source"]},
+    "D02": {"checks": ["(211915 - 198270) / 198270 * 100 = 6.88%", "cite the 2023 source", "show input values and denominator"]},
+    "D03": {"checks": ["88523 / 211915 * 100 = 41.77%", "cite the 2023 source", "distinguish operating income from net income"]},
+    "D06": {"checks": ["do not report 2024 revenue as known at the cutoff", "state that allowed 2023 materials do not contain it"]},
+    "D07": {"checks": ["2023 revenue remains 211915 USD millions", "2024 revenue is 245122 USD millions", "2024 year-on-year growth 15.67%", "cite old and new sources", "do not call an unchanged 2023 figure a revision"]},
+    "D08": {"checks": ["2023 margin 41.77%", "2024 margin 44.64%", "difference 2.87 percentage points", "cite the sources and formula"]}
+  }
+}

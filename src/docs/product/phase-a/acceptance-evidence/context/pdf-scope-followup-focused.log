@@ -1,0 +1,18 @@
+.............................................F.......................... [ 87%]
+..........                                                               [100%]
+=================================== FAILURES ===================================
+_______ test_review_reduces_context_to_fit_without_truncating_the_quote ________
+
+    def test_review_reduces_context_to_fit_without_truncating_the_quote():
+        report = source().model_copy(update={"text": "x" * 200 + "Revenue 100" + "y" * 200})
+        item = claim(location={"character_start": 200, "character_end": 211})
+        batch = prepare_support_review([item], [report], 350)
+>       assert batch.indexes == [0] and len(batch.prompt.encode()) <= 350
+E       assert ([] == [0]
+E         
+E         Right contains one more item: 0
+E         Use -v to get more diff)
+
+tests/test_research_verification.py:141: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_verification.py::test_review_reduces_context_to_fit_without_truncating_the_quote

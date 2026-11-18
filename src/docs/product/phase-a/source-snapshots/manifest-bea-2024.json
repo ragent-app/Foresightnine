@@ -1,0 +1,11 @@
+{
+  "url": "https://www.bea.gov/sites/default/files/2025-01/gdp4q24-adv.pdf",
+  "retrieved_at_utc": "2026-11-11T11:07:44.736093+00:00",
+  "method": "one GET, 20s timeout, no retry",
+  "status": 200,
+  "file": "bea-gdp-2024-q4-advance.pdf",
+  "bytes": 1320917,
+  "sha256": "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1",
+  "content_type": "application/pdf",
+  "elapsed_seconds": 1.806
+}

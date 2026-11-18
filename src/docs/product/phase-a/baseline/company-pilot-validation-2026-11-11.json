@@ -1,0 +1,84 @@
+{
+  "checked_at_utc": "2026-11-11T11:09:51.054615+00:00",
+  "bank_sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9",
+  "reference_sha256": "5651209e7a8dde489faabafe65a04e34f36c20d4a9d97f61a5a2e04efff454b6",
+  "tasks": [
+    {
+      "id": "D04",
+      "sources": [
+        "msft-2023-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D05",
+      "sources": [
+        "msft-2023-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D09",
+      "sources": [
+        "msft-2024-details.json",
+        "apple-2024-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D10",
+      "sources": [
+        "apple-2024-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D13",
+      "sources": [
+        "msft-2023-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D14",
+      "sources": [
+        "msft-2024-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D15",
+      "sources": [
+        "msft-2024-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D16",
+      "sources": [
+        "apple-2024-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D17",
+      "sources": [
+        "apple-2024-details.json"
+      ],
+      "reference_excluded": true
+    },
+    {
+      "id": "D18",
+      "sources": [
+        "apple-2024-details.json"
+      ],
+      "reference_excluded": true
+    }
+  ],
+  "negative_checks": {
+    "future_source_rejected": true
+  },
+  "limitations": [
+    "Derived snapshot dates are assigned, not proof of publication or historical immutability. Human review and source permissions pending."
+  ]
+}

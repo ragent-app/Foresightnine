@@ -1,0 +1,50 @@
+{
+  "version": "original-source-candidate-v01",
+  "status": "draft-not-frozen-not-reviewed",
+  "created_at_utc": "2026-11-11T11:33:29.625260+00:00",
+  "task_bank_sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03",
+  "tasks": [
+    {
+      "id": "D19",
+      "task_sha256": "aa9a1721d829af64ea92d86a071db07fcf31edc77348472145c7ca0b9fa4382d",
+      "source_sha256": [
+        "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d"
+      ]
+    },
+    {
+      "id": "D20",
+      "task_sha256": "28f7daa625972aba68267821ad62a3a5c3651f2a54318b653013d0ebd4296dc3",
+      "source_sha256": [
+        "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d",
+        "f9588ee32147acde028b38c278840142b50b0884b254b98c6c8c1edfa37db4e8"
+      ]
+    },
+    {
+      "id": "D21",
+      "task_sha256": "d1893895578b06933c0cf6114cc3d5b4180c86b5b18e5706eafd60d54661bb90",
+      "source_sha256": [
+        "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d",
+        "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1"
+      ]
+    },
+    {
+      "id": "D22",
+      "task_sha256": "58a4770bcfe05074e3700e03b537c8f95a92b8fa5c9c47a2593b03d3a6f82d60",
+      "source_sha256": [
+        "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1"
+      ]
+    },
+    {
+      "id": "D23",
+      "task_sha256": "0981ba9de69cd82b4f7175a3f2c31d05637412c78088b4899eec836729c80f0b",
+      "source_sha256": [
+        "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932"
+      ]
+    }
+  ],
+  "limitations": [
+    "PDFs were retrieved in 2026; historical byte identity and specific rights remain to be verified.",
+    "Separate directories are not a security or privacy boundary.",
+    "Public candidate questions are not a confidential or independent blind test."
+  ]
+}

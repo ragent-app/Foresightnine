@@ -1,0 +1,64 @@
+{
+  "recorded_at_utc": "2026-11-11T11:36:47.426052+00:00",
+  "status": "exploratory-in-sample-not-formal-evaluation",
+  "model_calls": 0,
+  "network_calls": 0,
+  "pdftotext_version": "26.01.0",
+  "runs": [
+    {
+      "id": "D19",
+      "file": "D19-2026-11-11.json",
+      "sha256": "4235c7152bfc74f17084f1d3223a4659f1e3eda6ef6b234839e051de062a9281",
+      "script_sha256": "21030cfe298ad7bef87f5084f799b686429801033eaaca8518f21fd61557488f",
+      "pdf_calls": 1,
+      "elapsed_seconds": 0.190525
+    },
+    {
+      "id": "D20",
+      "file": "D20-2026-11-11.json",
+      "sha256": "c9c4df6581e182454566c68afda7f7c5822d21feb41b44bab54efb4dc8c18463",
+      "script_sha256": "21030cfe298ad7bef87f5084f799b686429801033eaaca8518f21fd61557488f",
+      "pdf_calls": 2,
+      "elapsed_seconds": 0.374343
+    },
+    {
+      "id": "D21",
+      "file": "D21-v02-2026-11-11.json",
+      "sha256": "5043d98c91ff167c12f385b891498c96fb13426822f8a043a94a2d2b1e42e516",
+      "script_sha256": "de9aa2d6a361e4890c6744338770cd9519e993cdef7cf43188c4ec5550337ad9",
+      "pdf_calls": 2,
+      "elapsed_seconds": 0.360773
+    },
+    {
+      "id": "D22",
+      "file": "D22-2026-11-11.json",
+      "sha256": "1b21c4b850dbec4be8ef4d58174f77adb2fb7b509836e5b5888abcbb91e8395a",
+      "script_sha256": "21030cfe298ad7bef87f5084f799b686429801033eaaca8518f21fd61557488f",
+      "pdf_calls": 1,
+      "elapsed_seconds": 0.188963
+    },
+    {
+      "id": "D23",
+      "file": "D23-2026-11-11.json",
+      "sha256": "c047f33133c3d17c3774736d588349e4127161a9c17fe8c7edb411b75b949c3d",
+      "script_sha256": "21030cfe298ad7bef87f5084f799b686429801033eaaca8518f21fd61557488f",
+      "pdf_calls": 1,
+      "elapsed_seconds": 0.029606
+    }
+  ],
+  "initial_failed_attempt": {
+    "id": "D21",
+    "script": "fixed_original_macro.py",
+    "script_sha256": "21030cfe298ad7bef87f5084f799b686429801033eaaca8518f21fd61557488f",
+    "exit_code": 1,
+    "reason": "pattern matched twice; no answer emitted",
+    "exact_elapsed_not_recorded": true,
+    "pdf_calls_before_failure": 2
+  },
+  "iteration": "v0.2 narrows the D21 regex using the surrounding GDP annual sentence; output filename also changed to preserve v0.1 results",
+  "limits": [
+    "Candidate materials and patterns were inspected before this exploratory run.",
+    "Numeric checks against draft references do not constitute independent human review or a benchmark threshold.",
+    "No end-to-end retrieval, model comparison, human time, total infrastructure costs, or legal decision."
+  ]
+}

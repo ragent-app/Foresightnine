@@ -1,0 +1,32 @@
+{
+  "manifest_sha256": "0ad2d65f5d93f218a99284d07c28c8afeb6f7075a68171d700521fe9f89a0e92",
+  "blind": false,
+  "semantic_support": "not independently verified",
+  "variants": {
+    "baseline": {
+      "status": "returned",
+      "located_counterarguments": [],
+      "one_counterargument_cites_both_gross_profit_values": false,
+      "research_has_limitations": true,
+      "mechanical_pass": false,
+      "reported_tokens": 1195,
+      "cost_usd": null
+    },
+    "counterevidence_guidance": {
+      "status": "returned",
+      "located_counterarguments": [
+        {
+          "text": "反方观点：收入增长是规模扩张的信号，若增长主要来自降价换量，则不可持续；毛利润绝对值下降且收入几乎持平，暗示2024年毛利率被压缩。但仅凭总收入与毛利润无法判断降价、产品结构变化或一次性因素，需要价格与销量数据支持。",
+          "quotations": [
+            "\"total_revenues\":{\"2023\":96773,\"2024\":97690},\"gross_profit\":{\"2023\":17660,\"2024\":17450}"
+          ]
+        }
+      ],
+      "one_counterargument_cites_both_gross_profit_values": true,
+      "research_has_limitations": true,
+      "mechanical_pass": true,
+      "reported_tokens": 1493,
+      "cost_usd": null
+    }
+  }
+}

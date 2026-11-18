@@ -1,0 +1,63 @@
+{
+  "method": "ranked_nonoverlapping_windows_v10",
+  "kind": "offline fragment diagnostics; no provider call, rescoring or semantic review",
+  "two_source_prompt_bytes": 2055,
+  "results": [
+    {
+      "task": "revision",
+      "source_index": 0,
+      "value_visible": true,
+      "metric_visible": true,
+      "month_visible": true,
+      "segments": [
+        [
+          5376,
+          6033
+        ]
+      ]
+    },
+    {
+      "task": "revision",
+      "source_index": 1,
+      "value_visible": true,
+      "metric_visible": true,
+      "month_visible": true,
+      "segments": [
+        [
+          5632,
+          6245
+        ]
+      ]
+    },
+    {
+      "task": "P24",
+      "monthly": true,
+      "yearly": true,
+      "segments": [
+        [
+          5495,
+          6172
+        ],
+        [
+          6172,
+          6961
+        ]
+      ]
+    },
+    {
+      "task": "P25",
+      "monthly": true,
+      "yearly": true,
+      "segments": [
+        [
+          5286,
+          5969
+        ],
+        [
+          5969,
+          6819
+        ]
+      ]
+    }
+  ]
+}

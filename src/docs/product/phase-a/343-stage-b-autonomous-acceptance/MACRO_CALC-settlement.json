@@ -1,0 +1,15 @@
+{
+  "operation_status": "completed",
+  "checkpoint_version_id": "version_5dfd47676c224b6daeddae48fa6cf24c",
+  "model_ledger": {
+    "reserved_calls": 0,
+    "settled_calls": 1,
+    "released_calls": 0,
+    "accounted_tokens": 10000
+  },
+  "unresolved_stage_count": 1,
+  "reported_tokens": null,
+  "reported_tokens_scope": "run_chain_including_prior_continuations",
+  "cost_status": "unknown",
+  "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+}

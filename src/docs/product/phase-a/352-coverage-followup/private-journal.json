@@ -1,0 +1,79 @@
+{
+  "owner_id": "352-isolated",
+  "recovery_pending": [
+    {
+      "call_id": "352-analysis",
+      "kind": "model",
+      "stage": "analysis"
+    }
+  ],
+  "private_validation_diagnostics": {
+    "352-analysis": {
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 2
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 4537
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 20481
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 200
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 0
+          }
+        ]
+      },
+      "category": "contract_validation",
+      "errors": [
+        {
+          "path": [
+            "claims",
+            0,
+            "assertions",
+            0,
+            "citations"
+          ],
+          "type": "extra_forbidden"
+        },
+        {
+          "path": [
+            "claims",
+            0,
+            "assertions",
+            1,
+            "citations"
+          ],
+          "type": "extra_forbidden"
+        }
+      ],
+      "finish": "provider_stop"
+    }
+  }
+}

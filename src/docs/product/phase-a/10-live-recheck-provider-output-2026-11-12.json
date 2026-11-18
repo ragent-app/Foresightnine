@@ -1,0 +1,128 @@
+[
+  {
+    "provider_payload": {
+      "claims": [
+        {
+          "text": "2023 annual real GDP growth was 2.5 percent, measured from the 2022 annual level to the 2023 annual level, up from 1.9 percent in 2022.",
+          "citations": [
+            {
+              "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+              "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared with an increase of 1.9 percent in 2022"
+            }
+          ]
+        },
+        {
+          "text": "Quarterly figures are reported as annualized quarter-over-quarter rates: Q4 2023 grew at 3.3 percent and Q3 2023 at 4.9 percent. These quarterly annualized rates measure the pace within each quarter, whereas the 2.5 percent annual figure is a full-year (annual-level to annual-level) growth rate, so they are not directly comparable and quarterly rates can differ substantially from the annual rate.",
+          "citations": [
+            {
+              "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+              "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.3 percent in the fourth quarter of 2023"
+            },
+            {
+              "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+              "quotation": "In the third quarter, real GDP increased 4.9 percent."
+            },
+            {
+              "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+              "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level)"
+            }
+          ]
+        }
+      ],
+      "counterarguments": [
+        {
+          "text": "The source is the advance estimate, explicitly based on incomplete data subject to revision, so both the 2.5 percent annual and 3.3 percent quarterly figures could be revised.",
+          "citations": []
+        },
+        {
+          "text": "The text does not fully explain the methodology linking quarterly annualized rates to the annual figure, so any explanation of their relationship beyond quoting the two measures is inference.",
+          "citations": []
+        }
+      ],
+      "limitations": [
+        "Supplied text does not include the full-year-to-year methodology definition beyond 'from the 2022 annual level to the 2023 annual level'.",
+        "No later revised estimates are provided; only the advance estimate is available.",
+        "The 4.2 percent vs 4.0 percent saving rate and 1.9 percent 2022 figure are contextual and not needed to answer the core question."
+      ],
+      "facts": [
+        {
+          "fact_id": "fact_annual_2023_gdp_growth",
+          "label": "2023 annual real GDP growth",
+          "value": "2.5",
+          "unit": "percent",
+          "currency": null,
+          "period": "2023 (annual)",
+          "citation": {
+            "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+            "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared with an increase of 1.9 percent in 2022"
+          }
+        },
+        {
+          "fact_id": "fact_q4_2023_gdp_growth",
+          "label": "Q4 2023 real GDP growth (annualized)",
+          "value": "3.3",
+          "unit": "percent",
+          "currency": null,
+          "period": "Q4 2023",
+          "citation": {
+            "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.3 percent in the fourth quarter of 2023"
+          }
+        },
+        {
+          "fact_id": "fact_q3_2023_gdp_growth",
+          "label": "Q3 2023 real GDP growth (annualized)",
+          "value": "4.9",
+          "unit": "percent",
+          "currency": null,
+          "period": "Q3 2023",
+          "citation": {
+            "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+            "quotation": "In the third quarter, real GDP increased 4.9 percent."
+          }
+        },
+        {
+          "fact_id": "fact_2022_annual_gdp_growth",
+          "label": "2022 annual real GDP growth",
+          "value": "1.9",
+          "unit": "percent",
+          "currency": null,
+          "period": "2022 (annual)",
+          "citation": {
+            "source_id": "source_41d31743ae9f472482ea4fc1478df3d7",
+            "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared with an increase of 1.9 percent in 2022"
+          }
+        }
+      ],
+      "calculations": [
+        {
+          "formula": "difference",
+          "first_fact_id": "fact_q4_2023_gdp_growth",
+          "second_fact_id": "fact_annual_2023_gdp_growth"
+        },
+        {
+          "formula": "difference",
+          "first_fact_id": "fact_q3_2023_gdp_growth",
+          "second_fact_id": "fact_annual_2023_gdp_growth"
+        },
+        {
+          "formula": "difference",
+          "first_fact_id": "fact_annual_2023_gdp_growth",
+          "second_fact_id": "fact_2022_annual_gdp_growth"
+        }
+      ]
+    },
+    "reported_tokens": 1702
+  },
+  {
+    "provider_payload": {
+      "reviews": [
+        {
+          "claim_index": 0,
+          "verdict": "supports"
+        }
+      ]
+    },
+    "reported_tokens": 361
+  }
+]

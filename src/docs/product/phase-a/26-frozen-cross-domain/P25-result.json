@@ -1,0 +1,170 @@
+{
+  "id": "P25",
+  "operation_status": "completed",
+  "manifest_sha256": "ab1dede80cc44865ee7da33fceb6f73a8ed4289931c12e365bcd576da9aa17cd",
+  "input_sha256": "196294635c7a9d29cca7d4ab89b7b24241eb75eb1b871d42006b9917acf11045",
+  "elapsed_seconds_observed": 18.263,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_da6451a500cd40c88d8382bb12989232",
+        "title": "BEA Personal Income and Outlays April 2025",
+        "url": null,
+        "event_at": null,
+        "published_at": "2025-05-30T12:30:00+00:00",
+        "obtained_at": "2026-11-12T03:23:49.079573+00:00",
+        "revised_at": null,
+        "content_sha256": "2136d9a1810a4e4c31c896dfedeedf19e785f34df84e8582d9ba4b603aadd969",
+        "is_simulated": false,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_core_pce_01a",
+        "value": "0.1",
+        "unit": "百分比（推测）",
+        "currency": null,
+        "period": "2025年4月（具体口径未标注）",
+        "label": "核心PCE价格指数变化（口径未标注）",
+        "source_id": "source_da6451a500cd40c88d8382bb12989232",
+        "quotation": "0.1\n           PCE price index, excluding food and energy                       0.1",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 7426,
+          "character_end": 7509,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [],
+    "calculation_differences": [],
+    "claims": [
+      {
+        "text": "来源文本仅显示核心PCE价格指数（剔除食品和能源）的一个数值0.1，但未标明其为环比还是同比口径，也未提供整体PCE价格指数的月度或年度变化数据。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_da6451a500cd40c88d8382bb12989232",
+            "location": {
+              "character_start": 7426,
+              "character_end": 7509,
+              "page": 3
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "0.1\n           PCE price index, excluding food and energy                       0.1"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "无法从提供的来源中区分2025年4月PCE价格指数的环比（较上月）与同比（较上年同期）变化，因为两处0.1均未附带口径标签或上下文说明。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_da6451a500cd40c88d8382bb12989232",
+            "location": {
+              "character_start": 7441,
+              "character_end": 7483,
+              "page": 3
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "PCE price index, excluding food and energy"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "有观点可能推断两个0.1分别对应环比与同比数值，但来源文本缺乏表头或标注支持这一推断，因此该解读属于无证据支持。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_da6451a500cd40c88d8382bb12989232",
+            "location": {
+              "character_start": 7426,
+              "character_end": 7509,
+              "page": 3
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "0.1\n           PCE price index, excluding food and energy                       0.1"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_da6451a500cd40c88d8382bb12989232: only character ranges 0–362, 7424–7786 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "提供的来源片段不含整体PCE价格指数的环比或同比变化数据。",
+      "片段中的0.1仅与核心PCE（剔除食品和能源）相关，且未标明是月度还是年度百分比变化。",
+      "缺少BEA公告正文（如关键数据段落）以回答完整问题，需要补充公告中包含PCE价格指数环比和同比变化的文本。",
+      "如需计算，不能由我自行计算数值，只能基于已引用的数值事实进行结构化计算请求，但目前缺少所需数值。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:a2ae159c255ddbb0cdd8e07e",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1225,
+      "cost_usd": null,
+      "generation_tokens": 1225,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 16.56,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "d06ee230f72216a8ed463b45dcd031aaf6da9c17a3ca9a8eae6816d6a3969738",
+      "prompt_characters": 1961,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v5",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_da6451a500cd40c88d8382bb12989232",
+          "character_start": 0,
+          "character_end": 362
+        },
+        {
+          "source_id": "source_da6451a500cd40c88d8382bb12989232",
+          "character_start": 7424,
+          "character_end": 7786
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_da6451a500cd40c88d8382bb12989232": "2136d9a1810a4e4c31c896dfedeedf19e785f34df84e8582d9ba4b603aadd969"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

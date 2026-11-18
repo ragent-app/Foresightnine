@@ -1,0 +1,32 @@
+{
+  "scope": "Read-only isolated PostgreSQL, settlement endpoint and frozen source. Historical pending and ledger unchanged. No credentials or capabilities recorded.",
+  "task": "MACRO_CALC",
+  "operation_status": "completed",
+  "pending_stages": [
+    "analysis"
+  ],
+  "analysis_receipt": {
+    "status": "failed",
+    "reason": "provider_configuration_invalid",
+    "elapsed_ms": 327,
+    "model_calls_admitted": 1,
+    "provider_receipt": "unknown",
+    "settlement_receipt": "unknown",
+    "reported_tokens": null
+  },
+  "persisted_provider": {
+    "name": "openai-compatible",
+    "model": null,
+    "max_input_tokens": 3000,
+    "max_output_tokens": 1500,
+    "timeout_seconds": 20
+  },
+  "ledger": {
+    "settled_records": 1,
+    "accounted_tokens": 4500,
+    "interpretation": "Conservative reservation based on fallback 3000+1500; not reported actual usage or vendor fee."
+  },
+  "transport_inference": "The recorded provider is the OpenAI-compatible implementation with no configured model. Its frozen generate_structured checks configuration_error and settings before constructing/sending transport; provider_configuration_invalid is raised before transport. No specific configuration error message was persisted. This is a code-path inference from recorded state, not a vendor-side receipt.",
+  "quality": "No valid model result. Task unscorable, not a research-semantic failure; remaining four tasks unstarted.",
+  "limits": "The intended GLM profile was preregistered but actual provider metadata did not match. No external model POST can be established from an execution trace; the stated pre-transport conclusion depends on the recorded provider and frozen implementation."
+}

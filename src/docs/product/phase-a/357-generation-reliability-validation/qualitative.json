@@ -1,0 +1,93 @@
+{
+  "task": "qualitative",
+  "source_sha256": "fec9898ca7650e7ed9a8271704c57ea4c7157d34174546273a1169c150f415ed",
+  "question_sha256": "2173d95e8164d7be87f6915395028f53ce2fb95c6ee0d8989cf6b791f6bd6e29",
+  "state": "completed",
+  "provider_usage": "unknown",
+  "topic_id": "topic_90e3c93f53354698b0654d96c785e92d",
+  "payload_sha256": "2aadc594b392f21db5578cd3c2cf0879476ca1ebb01d4e1ff81907d432efefcd",
+  "operation_id": "operation:df4b2adaeceb2922a5682848",
+  "settlement_http_status": 200,
+  "diagnostic_http_status": 200,
+  "progress_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_88ccce86abf44bd1a2dcc6756260a6d9",
+    "model_ledger": {
+      "reserved_calls": 1,
+      "settled_calls": 0,
+      "released_calls": 0,
+      "accounted_tokens": 0
+    },
+    "unresolved_stage_count": 1,
+    "reported_tokens": null,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown"
+  },
+  "diagnostics": [
+    {
+      "request_id": "operation:df4b2adaeceb2922a5682848",
+      "operation_id": "operation:df4b2adaeceb2922a5682848",
+      "call_id": "operation:df4b2adaeceb2922a5682848:acquisition:1",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "input_hash": "93d9297b2e05ac2411e8d0f181c5a423b1bca44db2c4a48021cf2a1ad2bb6017",
+      "system_hash": "3f203f7edec1f82ff2f767888141c30efed8e6956df6bf4eb4b3c12657819bfc",
+      "finish": "unknown",
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 2
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 11933
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 3105
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 400
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 491
+          }
+        ]
+      },
+      "exception": {
+        "exception_class": "ProviderFailure",
+        "location": {
+          "file": "openai_compatible.py",
+          "line": 1198
+        }
+      }
+    }
+  ],
+  "diagnostic_failures": [],
+  "progress": {
+    "version_id": "version_88ccce86abf44bd1a2dcc6756260a6d9",
+    "checkpoint": null,
+    "result_status": "partial"
+  }
+}

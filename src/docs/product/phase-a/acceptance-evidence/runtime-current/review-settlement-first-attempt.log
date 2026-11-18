@@ -1,0 +1,64 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+______ test_review_settlement_is_separate_from_result_validation[timeout] ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b4a05fd1cd0>
+review_outcome = 'timeout'
+
+    @pytest.mark.parametrize('review_outcome', ['invalid_schema', 'timeout'])
+    def test_review_settlement_is_separate_from_result_validation(monkeypatch, review_outcome):
+        from app.phase3 import ProviderFailure
+        client, headers, source_id, path, parent = _setup(monkeypatch)
+        calls, settlements = [], []
+        monkeypatch.setattr(api, '_settle_model_call', lambda request, call_id, usage: settlements.append((call_id, usage)))
+    
+        class Provider:
+            name = 'local-review-settlement'
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                if system == REVIEW_SYSTEM_PROMPT:
+                    calls.append('review')
+                    if review_outcome == 'timeout':
+                        raise ProviderFailure('provider_timeout', 'Local simulated timeout.', retryable=True)
+                    return {'reviews': 'invalid schema'}, 18
+                calls.append('analysis')
+                return {'claims': [{'text': 'Revenue increased.', 'citations': [
+                    {'source_id': source_id, 'quotation': 'Revenue increased.'}]}]}, 20
+    
+        monkeypatch.setattr(api, 'challenge_provider', Provider())
+        started = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': 'review-settlement'},
+            json={'parent_version_id': parent, 'support_review': True, 'max_model_calls': 2,
+                  'max_total_tokens': 12000, 'max_search_calls': 0})
+        assert started.status_code == 202, started.text
+        operation = started.json()['operation']['operation_id']
+        assert _terminal(client, path, headers, operation) == 'completed'
+        record = api.RESEARCH_RUN_INPUTS.get(operation)
+        result = client.get(path, headers=headers).json()['versions'][-1]['content']['run']
+        assert calls == ['analysis', 'review']
+        assert result['support_review_status'] == 'failed' and result['status'] == 'partial'
+        assert result['support_review_error'] == ('review_invalid_output' if review_outcome == 'invalid_schema' else 'provider_timeout')
+        assert settlements[-1][1] == (18 if review_outcome == 'invalid_schema' else None)
+        if review_outcome == 'invalid_schema':
+            assert record['recovery_pending'] == []
+            snapshot = record['recovery_snapshot']
+            assert 'support_review' in snapshot['completed_stages']
+            assert snapshot['plan']['stage_results']['support_review']['error'] == 'review_invalid_output'
+            assert snapshot['budget']['model_calls'] == 2
+        else:
+            assert [item['stage'] for item in record['recovery_pending']] == ['support_review']
+            status = client.get(f'{path}/runs/{operation}/recovery-status', headers=headers)
+>           assert status.json()['reason'] == 'unknown_external' and not status.json()['can_continue']
+E           AssertionError: assert ('unavailable' == 'unknown_external'
+E             
+E             - unknown_external
+E             + unavailable)
+
+tests/test_research_recovery_acceptance.py:428: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_recovery_acceptance.py::test_review_settlement_is_separate_from_result_validation[timeout]

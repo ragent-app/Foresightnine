@@ -1,0 +1,12 @@
+{
+  "snapshot_id": "bea-2024-advance-derived-v0.1",
+  "kind": "derived_facts_not_original_document",
+  "as_of": "2025-01-31T00:00:00Z",
+  "source": "https://www.bea.gov/sites/default/files/2025-01/gdp4q24-adv.pdf",
+  "source_snapshot": "../source-snapshots/bea-gdp-2024-q4-advance.pdf",
+  "source_sha256": "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1",
+  "source_publication": "2025-01-30T13:30:00Z",
+  "facts": {"real_gdp_2023_annual_growth_percent": 2.9, "real_gdp_2024_annual_growth_percent": 2.8},
+  "scope": "annual growth as reported on 2025-01-30; earlier estimate for 2023 is a different vintage",
+  "verification": "official document retrieved in 2026; independent human review and historical immutability pending"
+}

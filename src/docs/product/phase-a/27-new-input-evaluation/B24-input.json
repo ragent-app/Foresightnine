@@ -1,0 +1,8 @@
+{
+  "id": "B24",
+  "question": "使用提供的 Booking Holdings 2023 和 2024 财年总收入，列示金额、期间和单位，计算同比增长率并说明资料限制。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"Booking Holdings Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2023\":\"2023-12-31\",\"2024\":\"2024-12-31\"},\"total_revenues\":{\"2023\":21365,\"2024\":23739}}",
+  "source_title": "Booking Holdings 2024 SEC 10-K: derived total revenue facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/1075531/000107553125000010/bkng-20241231.htm"
+}

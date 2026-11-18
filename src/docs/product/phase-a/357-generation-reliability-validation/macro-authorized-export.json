@@ -1,0 +1,521 @@
+{
+  "schema_version": "1",
+  "format": "research_json",
+  "topic_id": "topic_fa09c2d3932441919ac8522bdf253bf9",
+  "generated_at": "2026-11-16T12:32:20.546955Z",
+  "request": {
+    "question": "Using the supplied BEA release, report the real GDP growth rates for the second and third quarters of 2022 and calculate the difference in percentage points. Explain the estimate and period limitations.",
+    "source_ids": [
+      "source_923ab2147d5140e798a51e47c77d07d3"
+    ],
+    "scope": "",
+    "as_of": null
+  },
+  "version": {
+    "version_id": "version_13b3365545994ec1be6c70e82f5eea7f",
+    "parent_version_id": "version_e4a7b83bdfd64804bede57a431c36d4f",
+    "created_at": "2026-11-16T12:32:19.185514Z",
+    "content": {
+      "summary": "",
+      "sources": [],
+      "source_candidates": [],
+      "facts": [],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [],
+      "limitations": [
+        "Evidence acquisition could not safely execute the proposed action; outstanding needs remain unknown.",
+        "No research analysis was completed; evidence requirements remain unresolved.",
+        "No complete model output was available for structured validation.",
+        "The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.",
+        "The requested counterpoint follow-up did not complete; existing findings and gaps remain available.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "The requested model support review did not cover all claims.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations.",
+        "Evidence acquisition stopped with semantic support or coverage not independently established.",
+        "Source selection is partial or unknown; absence from unseen material is not established. Review the selected ranges and obtain relevant additional material."
+      ],
+      "run": {
+        "operation_id": "operation:c1002713b5297673591a7839",
+        "status": "partial",
+        "question_origin": "user",
+        "research_questions": [],
+        "planning_requirements": [],
+        "analysis_requirements": [],
+        "selection_diagnostics": [],
+        "pdf_structure_diagnostics": [],
+        "model_requirement_links": [],
+        "model_evidence_needs": [],
+        "model_absence_observations": [],
+        "source_processing": [
+          {
+            "source_id": "source_923ab2147d5140e798a51e47c77d07d3",
+            "eligibility": "eligible",
+            "provided": true,
+            "initial_selection": "not_selected",
+            "selected_characters": null,
+            "text_characters": 116493,
+            "selection_status": "not_selected",
+            "selection_gap": "not_started",
+            "analysis_status": "not_started"
+          }
+        ],
+        "available_fact_ids": [],
+        "settled_model_budget_accounted_tokens": 36300,
+        "source_search_receipts": [],
+        "workflow_receipts": [
+          {
+            "stage": "planning",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null,
+            "model_call_receipts": []
+          },
+          {
+            "stage": "planning",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 1,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null,
+            "model_call_receipts": []
+          },
+          {
+            "stage": "acquisition_decision",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Choose the next evidence action from the current state.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null,
+            "model_call_receipts": []
+          },
+          {
+            "stage": "acquisition_decision",
+            "status": "failed",
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 18723,
+            "schema_version": "1",
+            "reason": "invalid_decision",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null,
+            "model_call_receipts": [
+              {
+                "call_id": "operation:c1002713b5297673591a7839:acquisition:1",
+                "provider": "returned",
+                "settlement": "settled",
+                "processing_error": "contract_validation"
+              }
+            ]
+          },
+          {
+            "stage": "coordination",
+            "status": "stopped",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "goal_or_available_steps_complete",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null,
+            "model_call_receipts": []
+          },
+          {
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [
+              "Evidence acquisition could not safely execute the proposed action; outstanding needs remain unknown.",
+              "No research analysis was completed; evidence requirements remain unresolved.",
+              "No complete model output was available for structured validation.",
+              "The requested evidence-gap follow-up did not complete; existing findings and gaps remain available.",
+              "The requested counterpoint follow-up did not complete; existing findings and gaps remain available.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "The requested model support review did not cover all claims.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "usage": null,
+            "source_references": [],
+            "retryable": null,
+            "model_call_receipts": []
+          }
+        ],
+        "generation_status": "not_started",
+        "planning_requested": false,
+        "planning_status": "not_requested",
+        "planning_steps": [],
+        "planning_tokens": null,
+        "planning_prompt_sha256": null,
+        "planning_error": null,
+        "planning_system_sha256": null,
+        "counterpoint_requested": true,
+        "counterpoint_status": "unavailable",
+        "gap_search_requested": false,
+        "gap_search_status": "not_requested",
+        "gap_followup_requested": true,
+        "gap_followup_status": "unavailable",
+        "support_review_requested": true,
+        "support_review_status": "unavailable",
+        "require_counterarguments": true,
+        "generation_outcome": {
+          "transport": "not_sent",
+          "structure": "not_checked",
+          "evidence": "not_checked",
+          "completion": "partial"
+        },
+        "work_page": {},
+        "unprocessed_ranges": [],
+        "output_contract_version": null,
+        "structured_output_ids": {},
+        "structured_output_id_scope": "per_model_call",
+        "structured_output_status": "not_validated",
+        "structured_output_errors": [],
+        "evidence_rounds": [],
+        "structured_source_receipts": [],
+        "acquisition_decisions": [
+          {
+            "round": 1,
+            "requirement_id": null,
+            "action": "deliver_partial",
+            "tool": null,
+            "reason_code": "unavailable",
+            "result_status": "stopped",
+            "source_ids": [],
+            "selected_ranges": [],
+            "remaining_gap_codes": [
+              "unresolved"
+            ],
+            "stop_reason": "partial_delivery",
+            "query_sha256": null,
+            "context_omitted": {
+              "feedback": 0,
+              "requirements": 0,
+              "candidates": 0,
+              "ranges": 0
+            },
+            "context_page": 0
+          }
+        ],
+        "model_calls": 1,
+        "total_tokens": 36300,
+        "cost_usd": null,
+        "generation_tokens": null,
+        "support_review_tokens": null,
+        "counterpoint_tokens": null,
+        "counterpoint_prompt_sha256": null,
+        "gap_followup_tokens": null,
+        "gap_followup_prompt_sha256": null,
+        "gap_followup_targets": [],
+        "gap_followup_input_targets": [],
+        "gap_followup_question_targets": [],
+        "gap_search_query_sha256": null,
+        "gap_followup_error": null,
+        "gap_followup_segments": [],
+        "gap_followup_input_fact_ids": [],
+        "counterpoint_discarded_fields": 0,
+        "counterpoint_omitted_rows": 0,
+        "counterpoint_error": null,
+        "support_review_error": null,
+        "support_review_mode": "batch",
+        "support_review_method": "bounded_quotation_context_model_review_v32",
+        "analysis_error_detail": null,
+        "support_review_prompt_sha256": null,
+        "support_review_indexes": [],
+        "support_review_omissions": [],
+        "support_review_failed_indexes": [],
+        "support_review_segments": [],
+        "support_review_system_sha256": "0a684f0bbf1938f4160e3bd35e03b55b44cf846ebc09cb81e4cb5692c244ccf8",
+        "search_calls": 0,
+        "search_status": "not_requested",
+        "official_fetch_calls": 0,
+        "official_fetch_status": "not_requested",
+        "elapsed_seconds": 18.771,
+        "cost_status": "unknown",
+        "model": "glm-5.3-flash",
+        "provider": "openai-compatible",
+        "prompt_sha256": null,
+        "prompt_characters": 0,
+        "prompt_bytes": 0,
+        "selection_method": "global_idf_evidence_v60_incremental_gap",
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "selected_segments": [],
+        "provider_timeout_seconds": 120.0,
+        "provider_input_token_limit": null,
+        "provider_output_token_limit": null,
+        "source_hashes": {
+          "source_923ab2147d5140e798a51e47c77d07d3": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef"
+        },
+        "max_model_calls": null,
+        "max_search_calls": 0,
+        "max_elapsed_seconds": null,
+        "max_total_tokens": null,
+        "max_cost_usd": null,
+        "error": null,
+        "source_quality": {
+          "schema_version": "1",
+          "scope": "recorded_analyzed_sources_only",
+          "sources": [],
+          "truncated": false,
+          "meaning": "same_hash_is_not_independence_or_semantic_support"
+        },
+        "run_source_processing": [
+          {
+            "source_id": "source_923ab2147d5140e798a51e47c77d07d3",
+            "stage_ranges": [],
+            "coverage": "unknown",
+            "meaning": "analysis_and_gap_ranges_not_exhaustive_review"
+          }
+        ],
+        "scope_assessment": {
+          "schema_version": "1",
+          "meaning": "input_selection_not_exhaustive_review",
+          "scope": "partial_or_unknown",
+          "attempted": true,
+          "sources": [
+            {
+              "source_id": "source_923ab2147d5140e798a51e47c77d07d3",
+              "provided": true,
+              "selection_status": "not_selected",
+              "analysis_status": "not_started"
+            }
+          ],
+          "truncated": false,
+          "claim_scope_declarations": [],
+          "claim_scope_coverage": "not_applicable",
+          "review_scope_coverage": "not_applicable",
+          "absence_conclusions": "not_independently_verified",
+          "claim_indexes_requiring_scope_review": [],
+          "limitation_indexes_requiring_scope_review": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "indexes_truncated": false
+        },
+        "evidence_needs": {
+          "schema_version": "1",
+          "meaning": "review_actions_not_new_evidence",
+          "items": [
+            {
+              "evidence_type": "unexamined_or_unselected_source_material",
+              "reason": "source_selection_partial_or_unknown",
+              "action": "inspect_or_supply_relevant_material",
+              "status": "not_obtained_or_not_verified"
+            }
+          ]
+        },
+        "absence_assessment": {
+          "schema_version": "1",
+          "meaning": "model_suggestions_not_verified_absence",
+          "observations": [],
+          "truncated": false
+        },
+        "evidence_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "facts": [],
+          "claims": [],
+          "calculations": []
+        },
+        "question_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "truncated": false,
+          "questions": []
+        },
+        "requirement_coverage": {
+          "schema_version": "1",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "requirements": [
+            {
+              "requirement_id": "user_request",
+              "origin": "user",
+              "question_index": null,
+              "finding_ids": [],
+              "source_ids": [],
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": [],
+              "counterpoints": [],
+              "relation_status": "not_assessed",
+              "semantic_status": "not_independently_verified",
+              "gaps": [
+                "request_decomposition_not_verified"
+              ]
+            }
+          ],
+          "requested_actions": [
+            {
+              "action": "counterpoint",
+              "execution_status": "unavailable",
+              "requirement_status": "unmet"
+            },
+            {
+              "action": "gap_followup",
+              "execution_status": "unavailable",
+              "requirement_status": "unmet"
+            },
+            {
+              "action": "support_review",
+              "execution_status": "unavailable",
+              "requirement_status": "unmet"
+            }
+          ]
+        },
+        "completion_assessment": {
+          "schema_version": "1",
+          "execution_status": "known_gap",
+          "assertion_link_gaps": [],
+          "unmet_requested_actions": [
+            "counterpoint",
+            "gap_followup",
+            "support_review"
+          ],
+          "suggested_requirement_gaps": [],
+          "model_reported_task_gap": false,
+          "task_coverage": "not_independently_verified",
+          "source_semantics": "not_independently_verified",
+          "meaning": "execution_record_not_task_quality_verdict"
+        },
+        "research_gaps": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "items": [
+            {
+              "code": "no_analyzed_sources"
+            },
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "source_scope_review_required"
+            },
+            {
+              "code": "no_findings"
+            },
+            {
+              "code": "gap_followup_incomplete"
+            },
+            {
+              "code": "model_review_incomplete"
+            },
+            {
+              "code": "counterpoint_followup_incomplete"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ]
+        },
+        "stage_summary": {
+          "schema_version": "1",
+          "meaning": "saved_execution_not_quality_verdict",
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "pending"
+            },
+            {
+              "stage": "review",
+              "status": "attention"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ]
+        }
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_923ab2147d5140e798a51e47c77d07d3"
+    ],
+    "created_by": "agent"
+  },
+  "source_provenance": [
+    {
+      "schema_version": "1",
+      "source_id": "source_923ab2147d5140e798a51e47c77d07d3",
+      "title": "bea-2022-q3.txt",
+      "kind": "official",
+      "is_simulated": false,
+      "published_at": null,
+      "event_at": null,
+      "revised_at": null,
+      "obtained_at": "2026-11-16T12:32:00.343250Z",
+      "content_sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+      "retrieval_method": "user_supplied",
+      "pdf_text_order": null,
+      "derived_from_source_id": null,
+      "response_sha256": null,
+      "response_content_type": null,
+      "permissions": {
+        "store": true,
+        "model_input": true,
+        "display": true,
+        "export": true
+      },
+      "provenance": {},
+      "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+      "verification": "user_declared_not_verified"
+    }
+  ],
+  "disclosure": "Model interpretations and declared source permissions are not independently verified.",
+  "calculation_disclosure": "Calculations use the recorded inputs; their source precision and prior rounding are not established."
+}

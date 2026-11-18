@@ -1,0 +1,66 @@
+{
+  "manifest_sha256": "c8834c706812ba94d270e455efe6711a6f1073ec552eb66b6c5e6b18269c5379",
+  "independence": "new task inputs not previously sent to model; nonblind authors; not independent human evaluation",
+  "semantic_support": "unverifiable",
+  "historical_availability": "unverified",
+  "tasks": {
+    "B24": {
+      "input_kind": "derived_text",
+      "operation_status": "completed",
+      "research_status": "completed",
+      "facts": [
+        {
+          "value": "21365",
+          "located_fact_with_period_and_unit": true,
+          "cited_supporting_claim_mentions_reference": true
+        },
+        {
+          "value": "23739",
+          "located_fact_with_period_and_unit": true,
+          "cited_supporting_claim_mentions_reference": true
+        }
+      ],
+      "all_supporting_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unknown_percentages_requiring_review": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "citation_omission_requires_review": false,
+      "budget_ok": true,
+      "reported_tokens": 1148,
+      "mechanical_pass": true,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "P24": {
+      "input_kind": "original_pdf",
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "0.3",
+          "located_fact_with_period_and_unit": false,
+          "cited_supporting_claim_mentions_reference": false
+        },
+        {
+          "value": "2.6",
+          "located_fact_with_period_and_unit": false,
+          "cited_supporting_claim_mentions_reference": false
+        }
+      ],
+      "all_supporting_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unknown_percentages_requiring_review": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "citation_omission_requires_review": false,
+      "budget_ok": true,
+      "reported_tokens": 950,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    }
+  },
+  "passed": 1,
+  "total": 2
+}

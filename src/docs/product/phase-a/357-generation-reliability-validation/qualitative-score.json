@@ -1,0 +1,27 @@
+{
+  "task": "qualitative",
+  "reference_calculation": null,
+  "automated_checks": {
+    "citation_count": 0,
+    "citations": [],
+    "citation_integrity": false
+  },
+  "criteria": {
+    "maintain_federal_funds_target_0_to_0_25_percent": "missing",
+    "public_health_near_term_weight_and_medium_term_risks": "missing",
+    "conditional_hold_until_economic_conditions_met": "missing",
+    "qualification_limits_conclusion_or_explicitly_explains_relation": "missing",
+    "citations_support_each_claim": "missing"
+  },
+  "quality_result": "failed",
+  "note": "Exact source quotation matching is not semantic support; inspect the authorized export and score each criterion.",
+  "review_evidence": {
+    "generation_status": "not_started",
+    "research_status": "partial",
+    "claims": 0,
+    "facts": 0,
+    "calculations": 0,
+    "citations": 0,
+    "reason": "No research analysis was generated, so none of the required task answers or supporting citations was delivered."
+  }
+}

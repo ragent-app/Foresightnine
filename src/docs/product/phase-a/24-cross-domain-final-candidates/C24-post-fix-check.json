@@ -1,0 +1,15 @@
+{
+  "kind": "offline replay of retained result; not a new model run or revised test score",
+  "original_differences": [
+    {
+      "claim_index": 0,
+      "calculation_index": 0,
+      "claimed_value": "100",
+      "calculated_value": "5",
+      "unit": "percent",
+      "status": "requires_review"
+    }
+  ],
+  "post_fix_differences": [],
+  "semantic_support": "not independently verified"
+}

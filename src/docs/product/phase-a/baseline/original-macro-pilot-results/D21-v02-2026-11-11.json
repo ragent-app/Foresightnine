@@ -1,0 +1,55 @@
+{
+  "status": "exploratory-task-specific-no-human-grading",
+  "id": "D21",
+  "run_at_utc": "2026-11-11T11:36:15.656009+00:00",
+  "script_sha256": "de9aa2d6a361e4890c6744338770cd9519e993cdef7cf43188c4ec5550337ad9",
+  "task_sha256": "d1893895578b06933c0cf6114cc3d5b4180c86b5b18e5706eafd60d54661bb90",
+  "as_of": "2025-01-31T00:00:00Z",
+  "sources": [
+    {
+      "source_url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+      "sha256": "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d"
+    },
+    {
+      "source_url": "https://www.bea.gov/sites/default/files/2025-01/gdp4q24-adv.pdf",
+      "sha256": "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1"
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool": "pdftotext -layout",
+      "source": "bea-gdp-2023-q4-advance.pdf",
+      "exit_code": 0,
+      "elapsed_seconds": 0.190137
+    },
+    {
+      "tool": "pdftotext -layout",
+      "source": "bea-gdp-2024-q4-advance.pdf",
+      "exit_code": 0,
+      "elapsed_seconds": 0.145745
+    }
+  ],
+  "model_calls": 0,
+  "network_calls": 0,
+  "retries": 0,
+  "findings": {
+    "initial_2023_percent": "2.5",
+    "initial_page": 2,
+    "later_2023_percent": "2.9",
+    "later_page": 3,
+    "revision_percentage_points": "0.4",
+    "distinction": "separate publication vintages, not an estimate available at the earlier date"
+  },
+  "elapsed_seconds": 0.360773,
+  "cost": {
+    "model_provider_usd": 0,
+    "network_provider_usd": 0,
+    "human_compute_storage": "not measured"
+  },
+  "limitations": [
+    "Patterns were written after inspection of these same documents.",
+    "Candidate input and reference answers are not human-reviewed or frozen.",
+    "No retrieval, independent citation verification, user confirmation, or real-time monitoring.",
+    "Publication cutoff is not proof of historical byte-identical availability."
+  ]
+}

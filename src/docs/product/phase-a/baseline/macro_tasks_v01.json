@@ -1,0 +1,11 @@
+{
+  "version": "macro-pilot-v0.1-not-frozen",
+  "status": "draft-human-review-pending",
+  "tasks": [
+    {"id":"D19","question":"依据允许资料，2023 年全年实际 GDP 增长初值是多少？说明与季度折年率的区别。","as_of":"2024-01-26T00:00:00Z","sources":["macro-bea-2023-advance.json"]},
+    {"id":"D20","question":"比较 2023 年四季度实际 GDP 增长的初值与第二次估计，报告修订幅度与口径。","as_of":"2024-02-29T00:00:00Z","sources":["macro-bea-2023-advance.json","macro-bea-2023-second.json"]},
+    {"id":"D21","question":"比较两次发布中对 2023 年全年实际 GDP 增长的估计，并说明版本与发布时点。","as_of":"2025-01-31T00:00:00Z","sources":["macro-bea-2023-advance.json","macro-bea-2024-advance.json"]},
+    {"id":"D22","question":"2024 年实际 GDP 全年增长初步估计是多少？何时公布？","as_of":"2025-01-31T00:00:00Z","sources":["macro-bea-2024-advance.json"]},
+    {"id":"D23","question":"2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？","as_of":"2024-09-19T00:00:00Z","sources":["macro-fed-2024-09.json"]}
+  ]
+}

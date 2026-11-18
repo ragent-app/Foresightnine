@@ -1,0 +1,56 @@
+{
+  "as_of": "2023-08-01T00:00:00Z",
+  "stage": "initial",
+  "unit": "USD millions",
+  "sources": [
+    {
+      "url": "https://microsoft.gcs-web.com/static-files/e2931fdb-9823-4130-b2a8-f6b8db0b15a9",
+      "location": "Income Statements",
+      "snapshot_sha256": "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/789019/000095017023035122/msft-20230630.htm",
+      "location": "Segment Results of Operations",
+      "snapshot_sha256": "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c"
+    }
+  ],
+  "facts": {
+    "revenue_2022": 198270,
+    "revenue_2023": 211915,
+    "operating_income_2023": 88523,
+    "segment_revenue_2022": 59941,
+    "segment_revenue_2023": 54734
+  },
+  "calculations": {
+    "revenue_growth": {
+      "formula": "(2023 revenue - 2022 revenue) / 2022 revenue * 100",
+      "percent": "6.88"
+    },
+    "operating_margin": {
+      "formula": "2023 operating income / 2023 revenue * 100",
+      "percent": "41.77"
+    },
+    "segment_revenue_change": {
+      "formula": "2023 segment revenue - 2022 segment revenue",
+      "value": -5207
+    }
+  },
+  "claims": [
+    "FY2023 total revenue increased relative to FY2022."
+  ],
+  "counter_evidence": [
+    "More Personal Computing revenue decreased over the same fiscal years; total growth does not imply every segment grew."
+  ],
+  "unknowns": [
+    "No forecast, valuation, share-price conclusion, or complete assessment of drivers is supported by these inputs.",
+    "Source permissions, original-document history and independent human review remain unresolved."
+  ],
+  "status": "provisional; source extraction and human review pending",
+  "script_sha256": "6b3ec0a5bf668c48b0f50904c302fc04ef2f7b410b9142459d9339ee1801ab33",
+  "run_at_utc": "2026-11-11T11:19:27.402389+00:00",
+  "elapsed_seconds": 0.000225,
+  "model_calls": 0,
+  "network_calls": 0,
+  "provider_charge_usd": 0,
+  "human_and_infrastructure_cost": "not measured"
+}

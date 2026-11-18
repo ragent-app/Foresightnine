@@ -1,0 +1,8 @@
+{
+  "id": "H04",
+  "question": "计算可口可乐 2024 年净营业收入相对 2023 年的增长率，并列明数值、单位、期间和来源。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"The Coca-Cola Company\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}}",
+  "source_title": "Coca-Cola 2024 SEC filing: derived revenue facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/21344/000002134425000011/ko-20241231.htm"
+}

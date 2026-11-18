@@ -1,0 +1,24 @@
+{
+  "checked_at_utc": "2026-11-11T11:29:08.668519+00:00",
+  "source": "/home/lxx/Openclaw-stock/openclaw/skills/backtesting/enhanced_backtest.py",
+  "source_sha256": "49f2c462339228e24e047604b8a22e156937319157ee1253f17b4c8cc21f9100",
+  "method": "AST extraction of unchanged method; synthetic records; one local call",
+  "query_timestamp": "2024-01-01T10:00:30",
+  "synthetic_candles": [
+    {
+      "timestamp": "2024-01-01T10:00:00",
+      "close": 100.0
+    },
+    {
+      "timestamp": "2024-01-01T10:01:00",
+      "close": 200.0
+    }
+  ],
+  "returned_close": 200.0,
+  "later_candle_selected": true,
+  "limitations": [
+    "This is an isolated helper check, not an end-to-end strategy backtest.",
+    "Candle timestamp semantics and bar availability depend on source data.",
+    "No investment performance or real market conclusion follows."
+  ]
+}

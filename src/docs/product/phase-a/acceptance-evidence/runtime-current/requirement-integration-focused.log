@@ -1,0 +1,33 @@
+...........F                                                             [100%]
+=================================== FAILURES ===================================
+_ test_requirement_links_rebind_unique_question_and_validate_selected_facts_and_calculation _
+
+    def test_requirement_links_rebind_unique_question_and_validate_selected_facts_and_calculation():
+        from app.research_coverage import derive_requirement_coverage, derive_completion_assessment
+        from app.research_calculations import CalculationRequest, calculate
+        facts = [dict(fact_id='f1', value='10', unit='percent', currency=None, period='2022', source_id='s',
+                      location={'character_start': 0, 'character_end': 5}),
+                 dict(fact_id='f2', value='12', unit='percent', currency=None, period='2023', source_id='s',
+                      location={'character_start': 6, 'character_end': 10})]
+        calc = calculate(CalculationRequest.model_validate({'formula': 'difference', 'first': {k: facts[0][k] for k in ('fact_id','value','unit','currency','period')},
+                                                            'second': {k: facts[1][k] for k in ('fact_id','value','unit','currency','period')}, 'decimal_places': 2}))
+        calc['result_status'] = 'matched'
+        run = {'research_questions': [{'question': 'Other'}, {'question': 'Metric change'}],
+               'question_links': {'questions': [{'question_index': 0, 'finding_ids': [], 'source_ids': [], 'counterpoints': []},
+                                                 {'question_index': 1, 'finding_ids': [], 'source_ids': [], 'counterpoints': []}]},
+               'evidence_links': {'claims': []},
+               'planning_requirements': [{'question': 'Metric change', 'dimensions': {'metrics': ['rate']}, 'calculation_requested': True}],
+               'run_source_processing': [{'source_id': 's', 'stage_ranges': [{'stage': 'analysis', 'ranges': [{'start': 0, 'end': 10}]}]}],
+               'model_requirement_links': [{'question_index': 0, 'question': 'Metric change', 'fact_ids': ['f1','f2','invented'],
+                                            'calculation_indexes': [0, 7], 'source_ids': ['s','other']}]}
+        coverage = derive_requirement_coverage(run=run, has_user_question=True, facts=facts, calculations=[calc])
+        row = coverage['requirements'][2]
+>       assert row['candidate_fact_ids'] == ['f1','f2'] and row['candidate_calculation_indexes'] == [0] and row['source_ids'] == ['s']
+E       AssertionError: assert ([] == ['f1', 'f2']
+E         
+E         Right contains 2 more items, first extra item: 'f1'
+E         Use -v to get more diff)
+
+tests/test_research_coverage.py:232: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_coverage.py::test_requirement_links_rebind_unique_question_and_validate_selected_facts_and_calculation

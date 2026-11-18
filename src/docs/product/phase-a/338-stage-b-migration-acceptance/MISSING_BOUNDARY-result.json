@@ -1,0 +1,1002 @@
+{
+  "schema_version": "1",
+  "format": "research_json",
+  "topic_id": "topic_167cba907f274611b3e672a13efb6103",
+  "generated_at": "2026-11-14T09:27:15.733016Z",
+  "request": {
+    "question": "Using the supplied release, what were third-quarter 2022 real GDP growth and the September 2022 unemployment rate? Explain any information not established by this source.",
+    "source_ids": [
+      "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+    ],
+    "scope": "",
+    "as_of": null
+  },
+  "version": {
+    "version_id": "version_da4d9184120d4f46bf1c24c3b5ac631f",
+    "parent_version_id": "version_251be2e1f9194f81a042767b4e5e89f3",
+    "created_at": "2026-11-14T09:27:12.689475Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+          "title": "bea-2022-q3",
+          "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+          "obtained_at": "2026-11-14T09:26:54.265226+00:00",
+          "is_simulated": false,
+          "verification": "user_declared_not_verified",
+          "content_sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "status": "partial",
+            "text_characters": 116493,
+            "selected_characters": 1000
+          }
+        }
+      ],
+      "source_candidates": [],
+      "facts": [
+        {
+          "unit": "percent",
+          "label": "Real GDP change, second quarter",
+          "value": "-0.6",
+          "period": "Q2 2022",
+          "fact_id": "f1",
+          "location": {
+            "character_end": 692,
+            "character_start": 638
+          },
+          "quotation": "In the\nsecond quarter, real GDP decreased 0.6 percent.",
+          "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "exact",
+          "direction_context_unverified": true
+        }
+      ],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "The supplied BEA Q3 2022 release passages do not state the third-quarter 2022 real GDP growth figure; they only note that the second estimate for the third quarter would be released on November 30, 2022, and that second-quarter real GDP decreased 0.6 percent.",
+          "claim_id": "claim_b9e6bc3c58be42cca72eda74eaca1be4",
+          "citations": [
+            {
+              "location": {
+                "character_end": 995,
+                "character_start": 883
+              },
+              "quotation": "The \"second\"\nestimate for the third quarter, based on more complete data, will be released on November 30, 2022.",
+              "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            },
+            {
+              "location": {
+                "character_end": 692,
+                "character_start": 638
+              },
+              "quotation": "In the\nsecond quarter, real GDP decreased 0.6 percent.",
+              "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_review": {
+            "method": "bounded_quotation_context_model_review_v31",
+            "verdict": "uncertain",
+            "guard_reasons": [
+              "uncited_quarters"
+            ],
+            "diagnostic_only": true,
+            "reported_verdict": "supports",
+            "independently_verified": false
+          },
+          "support_status": "not_independently_verified",
+          "uncited_quarters": [
+            "Q3 2022"
+          ]
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "Scheduled release date of second estimate for Q3 2022: November 30, 2022",
+          "claim_id": "claim_ccf1eb78f44f49ac9ff66930857d8b9d",
+          "citations": [
+            {
+              "location": {
+                "character_end": 995,
+                "character_start": 883
+              },
+              "quotation": "The \"second\"\nestimate for the third quarter, based on more complete data, will be released on November 30, 2022.",
+              "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_review": {
+            "method": "bounded_quotation_context_model_review_v31",
+            "verdict": "uncertain",
+            "guard_reasons": [
+              "uncited_quarters"
+            ],
+            "diagnostic_only": true,
+            "reported_verdict": "supports",
+            "independently_verified": false
+          },
+          "support_status": "not_independently_verified",
+          "uncited_quarters": [
+            "Q3 2022"
+          ]
+        }
+      ],
+      "limitations": [
+        "Replacement search considered a bounded prefix of evidence candidates.",
+        "Source source_8a0bcf6a9dc74f67b9ead6b6ef474f06: only character ranges 638–692, 883–995, 5474–5568, 12054–12080, 12605–12684, 14920–14930, 16063–16370, 16962–16990, 56423–56713 were analyzed; remaining text was not examined.",
+        "Model-generated date or unit observations were retained as unverified claims, not numeric facts.",
+        "A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): The source passages are fragmentary and marked partial; they do not contain the Q3 2022 real GDP growth rate or any unemployment rate data. The second-quarter figure should not be confused with Q3.",
+        "A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.",
+        "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+        "An explicit quarter and year could not be matched in the attached quotations; check the period and source context.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations.",
+        "Source selection is partial or unknown; absence from unseen material is not established. Review the selected ranges and obtain relevant additional material."
+      ],
+      "run": {
+        "model": "glm-5.3-flash",
+        "status": "partial",
+        "provider": "openai-compatible",
+        "cost_status": "unknown",
+        "model_calls": 2,
+        "operation_id": "operation:e588b921d0fd051fabb3d417",
+        "prompt_bytes": 3387,
+        "search_calls": 0,
+        "total_tokens": 2462,
+        "prompt_sha256": "664c9a9429c7f1cd6929bf6e0d076cbe7fe7ed943538881809ba7b769ae3c384",
+        "research_gaps": {
+          "items": [
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "source_scope_review_required"
+            },
+            {
+              "code": "absence_observation_unestablished"
+            },
+            {
+              "code": "model_suggested_evidence_need"
+            },
+            {
+              "code": "subquestions_unlinked",
+              "count": 1,
+              "indexes": [
+                1
+              ],
+              "truncated": false,
+              "index_kind": "question"
+            },
+            {
+              "code": "semantic_support_not_independently_verified",
+              "count": 2,
+              "indexes": [
+                0,
+                1
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "evidence_warnings",
+              "count": 2,
+              "indexes": [
+                0,
+                1
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "model_review_uncertain",
+              "count": 2,
+              "indexes": [
+                0,
+                1
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ],
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "search_status": "not_requested",
+        "source_hashes": {
+          "source_8a0bcf6a9dc74f67b9ead6b6ef474f06": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef"
+        },
+        "stage_summary": {
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "completed"
+            },
+            {
+              "stage": "review",
+              "status": "completed"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ],
+          "meaning": "saved_execution_not_quality_verdict",
+          "schema_version": "1"
+        },
+        "evidence_links": {
+          "facts": [
+            {
+              "fact_id": "f1",
+              "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": false,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            }
+          ],
+          "claims": [
+            {
+              "role": "support",
+              "claim_id": "claim_b9e6bc3c58be42cca72eda74eaca1be4",
+              "citations": [
+                {
+                  "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                },
+                {
+                  "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+                  "citation_index": 1,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": [
+                    "f1"
+                  ]
+                }
+              ],
+              "claim_index": 0,
+              "user_fact_links": [],
+              "model_review_opinion": "uncertain",
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_ccf1eb78f44f49ac9ff66930857d8b9d",
+              "citations": [
+                {
+                  "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 1,
+              "user_fact_links": [],
+              "model_review_opinion": "uncertain",
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            }
+          ],
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "index_scope": "research_version",
+          "calculations": [],
+          "schema_version": "1"
+        },
+        "evidence_needs": {
+          "items": [
+            {
+              "action": "inspect_or_supply_relevant_material",
+              "reason": "source_selection_partial_or_unknown",
+              "status": "not_obtained_or_not_verified",
+              "evidence_type": "unexamined_or_unselected_source_material"
+            },
+            {
+              "action": "identify_and_supply_relevant_evidence",
+              "reason": "no_recorded_finding_for_suggested_question",
+              "status": "not_obtained_or_not_verified",
+              "truncated": false,
+              "evidence_type": "material_for_unanswered_question",
+              "question_indexes": [
+                1
+              ]
+            },
+            {
+              "action": "Obtain the Q3 2022 GDP growth number from the release's summary/table text before answering.",
+              "origin": "model_suggested",
+              "reason": "The supplied passages do not include the Q3 2022 headline growth figure; only the second-quarter figure and a future release date appear.",
+              "status": "not_obtained_or_not_verified",
+              "source_kind": "BEA 'Gross Domestic Product, Third Quarter 2022 (Advance Estimate)' release tables or equivalent official publication",
+              "evidence_type": "model_suggested_material",
+              "requested_fact": "Third-quarter 2022 real GDP growth rate (advance/second estimate)",
+              "model_question_index": 0,
+              "question_relation_status": "not_verified"
+            },
+            {
+              "action": "Consult the BLS Employment Situation: September 2022 release to obtain the unemployment rate.",
+              "origin": "model_suggested",
+              "reason": "The supplied passages contain no unemployment rate figure; one passage contains only the word 'September.' without a value.",
+              "status": "not_obtained_or_not_verified",
+              "source_kind": "BLS Employment Situation release for September 2022 (GDP release does not report unemployment)",
+              "evidence_type": "model_suggested_material",
+              "requested_fact": "September 2022 unemployment rate",
+              "model_question_index": 1,
+              "question_relation_status": "not_verified"
+            }
+          ],
+          "meaning": "review_actions_not_new_evidence",
+          "schema_version": "1"
+        },
+        "planning_steps": [],
+        "question_links": {
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "questions": [
+            {
+              "source_ids": [
+                "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+              ],
+              "finding_ids": [
+                "claim_b9e6bc3c58be42cca72eda74eaca1be4"
+              ],
+              "counterpoints": [],
+              "question_index": 0
+            },
+            {
+              "source_ids": [],
+              "finding_ids": [],
+              "counterpoints": [],
+              "question_index": 1
+            }
+          ],
+          "truncated": false,
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "elapsed_seconds": 16.778,
+        "max_model_calls": 3,
+        "planning_status": "not_requested",
+        "question_origin": "user",
+        "max_search_calls": 0,
+        "max_total_tokens": 20000,
+        "scope_assessment": {
+          "scope": "partial_or_unknown",
+          "meaning": "input_selection_not_exhaustive_review",
+          "sources": [
+            {
+              "provided": true,
+              "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+              "analysis_status": "produced",
+              "selection_status": "partial"
+            }
+          ],
+          "attempted": true,
+          "truncated": false,
+          "schema_version": "1",
+          "indexes_truncated": false,
+          "absence_conclusions": "not_independently_verified",
+          "claim_indexes_requiring_scope_review": [
+            0,
+            1
+          ],
+          "limitation_indexes_requiring_scope_review": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ]
+        },
+        "selection_method": "global_idf_evidence_v55",
+        "gap_search_status": "not_requested",
+        "generation_status": "completed",
+        "generation_tokens": 1470,
+        "prompt_characters": 3385,
+        "selected_segments": [
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 692,
+            "character_start": 638,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u638"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 995,
+            "character_start": 883,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u883"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 5568,
+            "character_start": 5474,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u5474"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 12080,
+            "character_start": 12054,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u12054"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 12684,
+            "character_start": 12605,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u12605"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 14930,
+            "character_start": 14920,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u14920"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 16370,
+            "character_start": 16063,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u16063"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 16990,
+            "character_start": 16962,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u16962"
+            ],
+            "context_unit_kind": "paragraph",
+            "retrieval_facet_indexes": []
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "character_end": 56713,
+            "character_start": 56423,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u56423"
+            ],
+            "context_unit_kind": "sentence",
+            "retrieval_facet_indexes": []
+          }
+        ],
+        "source_processing": [
+          {
+            "provided": true,
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "eligibility": "eligible",
+            "analysis_status": "produced",
+            "text_characters": 116493,
+            "selection_status": "partial",
+            "initial_selection": "partial",
+            "selection_details": {
+              "selected_unit_count": 9,
+              "matched_facet_indexes": []
+            },
+            "selected_characters": 1000
+          }
+        ],
+        "workflow_receipts": [
+          {
+            "gaps": [],
+            "stage": "planning",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "planning",
+            "status": "not_requested",
+            "elapsed_ms": 2,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_discovery",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_retrieval",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "analysis",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Replacement search considered a bounded prefix of evidence candidates.",
+              "Source source_8a0bcf6a9dc74f67b9ead6b6ef474f06: only character ranges 638–692, 883–995, 5474–5568, 12054–12080, 12605–12684, 14920–14930, 16063–16370, 16962–16990, 56423–56713 were analyzed; remaining text was not examined.",
+              "Model-generated date or unit observations were retained as unverified claims, not numeric facts.",
+              "A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): The source passages are fragmentary and marked partial; they do not contain the Q3 2022 real GDP growth rate or any unemployment rate data. The second-quarter figure should not be confused with Q3."
+            ],
+            "stage": "analysis",
+            "usage": 1470,
+            "status": "completed",
+            "elapsed_ms": 12210,
+            "source_ids": [
+              "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+            ],
+            "schema_version": "1",
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+              }
+            ],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "counterpoint",
+            "reason": "The task did not authorize this optional action.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "gap_followup",
+            "reason": "The task did not authorize this optional action.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "support_review",
+            "reason": "Address an outstanding, authorized research need.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "support_review",
+            "usage": 992,
+            "status": "complete",
+            "elapsed_ms": 3881,
+            "source_ids": [
+              "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+            ],
+            "schema_version": "1",
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+              }
+            ],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "coordination",
+            "reason": "remaining_gaps",
+            "status": "stopped",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Replacement search considered a bounded prefix of evidence candidates.",
+              "Source source_8a0bcf6a9dc74f67b9ead6b6ef474f06: only character ranges 638–692, 883–995, 5474–5568, 12054–12080, 12605–12684, 14920–14930, 16063–16370, 16962–16990, 56423–56713 were analyzed; remaining text was not examined.",
+              "Model-generated date or unit observations were retained as unverified claims, not numeric facts.",
+              "A negative value was inferred from an explicit decrease; its subject and meaning require review, and it was excluded from automatic calculations.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): The source passages are fragmentary and marked partial; they do not contain the Q3 2022 real GDP growth rate or any unemployment rate data. The second-quarter figure should not be confused with Q3.",
+              "A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.",
+              "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+              "An explicit quarter and year could not be matched in the attached quotations; check the period and source context.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "elapsed_ms": 1,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          }
+        ],
+        "absence_assessment": {
+          "meaning": "model_suggestions_not_verified_absence",
+          "truncated": false,
+          "observations": [
+            {
+              "text": "No third-quarter 2022 real GDP growth rate is established in the supplied passages; the release mentions the third-quarter second estimate's scheduled release date but not its value.",
+              "origin": "model_suggested",
+              "assessment": "not_established",
+              "source_ids": [
+                "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+              ],
+              "input_scope": "partial_or_unknown",
+              "declared_scope": "unknown"
+            },
+            {
+              "text": "No unemployment rate value for September 2022 is established in the supplied passages; this release appears to be a BEA GDP release, which typically does not report unemployment statistics.",
+              "origin": "model_suggested",
+              "assessment": "not_established",
+              "source_ids": [
+                "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+              ],
+              "input_scope": "partial_or_unknown",
+              "declared_scope": "unknown"
+            }
+          ],
+          "schema_version": "1"
+        },
+        "available_fact_ids": [],
+        "planning_requested": false,
+        "research_questions": [
+          {
+            "origin": "model_suggestion",
+            "status": "linked_not_verified",
+            "question": "What was third-quarter 2022 real GDP growth?",
+            "claim_ids": [
+              "claim_b9e6bc3c58be42cca72eda74eaca1be4"
+            ]
+          },
+          {
+            "origin": "model_suggestion",
+            "status": "no_linked_finding",
+            "question": "What was the September 2022 unemployment rate?",
+            "claim_ids": []
+          }
+        ],
+        "counterpoint_status": "not_requested",
+        "gap_followup_status": "not_requested",
+        "max_elapsed_seconds": 180,
+        "support_review_mode": "batch",
+        "gap_followup_targets": [],
+        "gap_search_requested": false,
+        "model_evidence_needs": [
+          {
+            "action": "Obtain the Q3 2022 GDP growth number from the release's summary/table text before answering.",
+            "origin": "model_suggested",
+            "reason": "The supplied passages do not include the Q3 2022 headline growth figure; only the second-quarter figure and a future release date appear.",
+            "source_kind": "BEA 'Gross Domestic Product, Third Quarter 2022 (Advance Estimate)' release tables or equivalent official publication",
+            "question_index": 0,
+            "requested_fact": "Third-quarter 2022 real GDP growth rate (advance/second estimate)"
+          },
+          {
+            "action": "Consult the BLS Employment Situation: September 2022 release to obtain the unemployment rate.",
+            "origin": "model_suggested",
+            "reason": "The supplied passages contain no unemployment rate figure; one passage contains only the word 'September.' without a value.",
+            "source_kind": "BLS Employment Situation release for September 2022 (GDP release does not report unemployment)",
+            "question_index": 1,
+            "requested_fact": "September 2022 unemployment rate"
+          }
+        ],
+        "official_fetch_calls": 0,
+        "requirement_coverage": {
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "requirements": [
+            {
+              "gaps": [
+                "request_decomposition_not_verified"
+              ],
+              "origin": "user",
+              "source_ids": [],
+              "finding_ids": [],
+              "counterpoints": [],
+              "requirement_id": "user_request",
+              "relation_status": "not_assessed",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": []
+            },
+            {
+              "gaps": [],
+              "origin": "model_suggested",
+              "source_ids": [
+                "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+              ],
+              "finding_ids": [
+                "claim_b9e6bc3c58be42cca72eda74eaca1be4"
+              ],
+              "counterpoints": [],
+              "question_index": 0,
+              "requirement_id": "question:0",
+              "relation_status": "linked_suggestion",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [
+                "f1"
+              ],
+              "candidate_calculation_indexes": []
+            },
+            {
+              "gaps": [
+                "no_recorded_finding"
+              ],
+              "origin": "model_suggested",
+              "source_ids": [],
+              "finding_ids": [],
+              "counterpoints": [],
+              "question_index": 1,
+              "requirement_id": "question:1",
+              "relation_status": "unlinked",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": []
+            }
+          ],
+          "schema_version": "1",
+          "requested_actions": [
+            {
+              "action": "support_review",
+              "execution_status": "complete",
+              "requirement_status": "executed"
+            }
+          ]
+        },
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "completion_assessment": {
+          "meaning": "execution_record_not_task_quality_verdict",
+          "task_coverage": "not_independently_verified",
+          "schema_version": "1",
+          "execution_status": "known_gap",
+          "source_semantics": "not_independently_verified",
+          "model_reported_task_gap": true,
+          "unmet_requested_actions": []
+        },
+        "gap_followup_segments": [],
+        "official_fetch_status": "not_requested",
+        "support_review_method": "bounded_quotation_context_model_review_v31",
+        "support_review_status": "complete",
+        "support_review_tokens": 992,
+        "counterpoint_requested": false,
+        "gap_followup_requested": false,
+        "source_search_receipts": [],
+        "support_review_indexes": [
+          0,
+          1
+        ],
+        "support_review_segments": [
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "claim_index": 0,
+            "character_end": 1175,
+            "context_radius": 180,
+            "character_start": 703
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "claim_index": 0,
+            "character_end": 872,
+            "context_radius": 180,
+            "character_start": 458
+          },
+          {
+            "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+            "claim_index": 1,
+            "character_end": 1175,
+            "context_radius": 180,
+            "character_start": 703
+          }
+        ],
+        "provider_timeout_seconds": 120.0,
+        "require_counterarguments": false,
+        "support_review_omissions": [],
+        "support_review_requested": true,
+        "counterpoint_omitted_rows": 0,
+        "gap_followup_input_targets": [],
+        "model_absence_observations": [
+          {
+            "text": "No third-quarter 2022 real GDP growth rate is established in the supplied passages; the release mentions the third-quarter second estimate's scheduled release date but not its value.",
+            "scope": "unknown",
+            "origin": "model_suggested",
+            "assessment": "not_established",
+            "source_ids": [
+              "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+            ]
+          },
+          {
+            "text": "No unemployment rate value for September 2022 is established in the supplied passages; this release appears to be a BEA GDP release, which typically does not report unemployment statistics.",
+            "scope": "unknown",
+            "origin": "model_suggested",
+            "assessment": "not_established",
+            "source_ids": [
+              "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+            ]
+          }
+        ],
+        "provider_input_token_limit": 6000,
+        "gap_followup_input_fact_ids": [],
+        "provider_output_token_limit": 4000,
+        "support_review_prompt_sha256": "0e21b0c84560e9f7ee1f746e9862e550a8a33e180243b39eac020974cd596bc2",
+        "support_review_system_sha256": "6e64d6378fbdfe43968fd894214937847c09d4b2f6a9ea0835515205a40745c6",
+        "counterpoint_discarded_fields": 0,
+        "gap_followup_question_targets": [],
+        "support_review_failed_indexes": [],
+        "settled_model_budget_accounted_tokens": 2462
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_8a0bcf6a9dc74f67b9ead6b6ef474f06"
+    ],
+    "created_by": "agent"
+  },
+  "source_provenance": [
+    {
+      "schema_version": "1",
+      "source_id": "source_8a0bcf6a9dc74f67b9ead6b6ef474f06",
+      "title": "bea-2022-q3",
+      "kind": "official",
+      "is_simulated": false,
+      "published_at": null,
+      "event_at": null,
+      "revised_at": null,
+      "obtained_at": "2026-11-14T09:26:54.265226Z",
+      "content_sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+      "retrieval_method": "user_supplied",
+      "pdf_text_order": null,
+      "derived_from_source_id": null,
+      "response_sha256": null,
+      "response_content_type": null,
+      "permissions": {
+        "store": true,
+        "model_input": true,
+        "display": true,
+        "export": true
+      },
+      "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+      "verification": "user_declared_not_verified"
+    }
+  ],
+  "disclosure": "Model interpretations and declared source permissions are not independently verified.",
+  "calculation_disclosure": "Calculations use the recorded inputs; their source precision and prior rounding are not established."
+}

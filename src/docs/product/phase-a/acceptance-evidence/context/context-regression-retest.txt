@@ -1,0 +1,724 @@
+FFFF...FFFFFFFF.FFFFFF.FFFFFFF............FF.F.                          [100%]
+=================================== FAILURES ===================================
+________ test_selected_sentence_opening_is_restored_only_within_budget _________
+
+    def test_selected_sentence_opening_is_restored_only_within_budget():
+        text = ("Header.\nRevenue increased at an annual rate of 3 percent. " + "filler " * 800 +
+                "Profit was 10 percent. " + "filler " * 800)
+        report = source("s", text=text)
+        start = text.index("annual rate")
+        second = text.index("Profit was")
+        def windows(value, question, length, count, should_stop=None, **kwargs):
+            length = min(length, 400)
+            return [(start, value[start:start + length]), (second, value[second:second + length])]
+        prepared = []
+        with patch("app.research_analysis._select_windows", windows):
+            result = analyze("Revenue and profit?", [report], None, lambda _: ({}, 1),
+                             max_prompt_chars=4000, on_prepare=prepared.extend)
+        first = min(prepared, key=lambda segment: segment["character_start"])
+>       assert text[first["character_start"]:].startswith("Revenue increased at an annual rate")
+E       AssertionError: assert False
+E        +  where False = <built-in method startswith of str object at 0x11627360>('Revenue increased at an annual rate')
+E        +    where <built-in method startswith of str object at 0x11627360> = 'Header.\nRevenue increased at an annual rate of 3 percent. filler filler filler filler filler filler filler filler fi...iller filler filler filler filler filler filler filler filler filler filler filler filler filler filler filler filler '.startswith
+
+tests/test_research_analysis.py:93: AssertionError
+_______ test_research_prompt_requests_counterevidence_and_preserves_gaps _______
+
+    def test_research_prompt_requests_counterevidence_and_preserves_gaps():
+        def model(prompt):
+            payload = json.loads(prompt)
+            example = payload["output_schema"]["counterarguments"][0]
+            assert example["citations"][0]["quotation"] == "quote"
+            assert "all requested facts in claims" in payload["evidence_guidance"]
+            assert "gaps in limitations" in payload["evidence_guidance"]
+            assert "Quote continuous passages" in payload["evidence_guidance"]
+            assert "never join passages or quote metadata" in payload["evidence_guidance"]
+            assert "Cite table headers, units and rows separately" in payload["evidence_guidance"]
+            return {"claims": [], "counterarguments": [], "limitations": ["No opposing evidence supplied."]}, 10
+    
+>       result = analyze("What would contradict this?", [source("s")], None, model)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_analysis.py:276: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"What would contradict this?","sources":[{"source_id":"s","title":"Report","source_coverage":"complete","...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def model(prompt):
+        payload = json.loads(prompt)
+        example = payload["output_schema"]["counterarguments"][0]
+        assert example["citations"][0]["quotation"] == "quote"
+>       assert "all requested facts in claims" in payload["evidence_guidance"]
+E       AssertionError: assert 'all requested facts in claims' in 'List subquestions and relevant zero-based claim indexes; leave unanswered ones empty. Separate independently checkabl...o not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified.'
+
+tests/test_research_analysis.py:269: AssertionError
+_________ test_prompt_distinguishes_full_source_from_partial_excerpts __________
+
+    def test_prompt_distinguishes_full_source_from_partial_excerpts():
+        def inspect(expected):
+            def generate(prompt):
+                payload = json.loads(prompt)
+                assert all(entry["source_coverage"] == expected for entry in payload["sources"])
+                assert "Excerpts are partial" in payload["evidence_guidance"]
+                return {"claims": []}, 10
+            return generate
+>       analyze("Revenue?", [source("short")], None, inspect("complete"))
+
+tests/test_research_analysis.py:289: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"Revenue?","sources":[{"source_id":"short","title":"Report","source_coverage":"complete","text":"Revenue ...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def generate(prompt):
+        payload = json.loads(prompt)
+        assert all(entry["source_coverage"] == expected for entry in payload["sources"])
+>       assert "Excerpts are partial" in payload["evidence_guidance"]
+E       AssertionError: assert 'Excerpts are partial' in 'List subquestions and relevant zero-based claim indexes; leave unanswered ones empty. Separate independently checkabl...o not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified.'
+
+tests/test_research_analysis.py:286: AssertionError
+__ test_prompt_exposes_declared_source_times_separately_from_reporting_period __
+
+    def test_prompt_exposes_declared_source_times_separately_from_reporting_period():
+        published = datetime(2023, 10, 27, 12, 30, tzinfo=timezone.utc)
+        revised = datetime(2023, 11, 1, tzinfo=timezone.utc)
+        event = datetime(2023, 9, 30, tzinfo=timezone.utc)
+        report = source("dated", published_at=published).model_copy(update={"revised_at": revised, "event_at": event})
+    
+        def model(prompt):
+            payload = json.loads(prompt)
+            item = payload["sources"][0]
+            assert item["declared_published_at"] == published.isoformat()
+            assert item["declared_revised_at"] == revised.isoformat()
+            assert item["declared_event_at"] == event.isoformat()
+            assert "Dates are declared, not verified" in payload["evidence_guidance"]
+            return {}, 1
+    
+>       analyze("What happened?", [report], None, model)
+
+tests/test_research_analysis.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"What happened?","sources":[{"source_id":"dated","title":"Report","source_coverage":"complete","declared_...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def model(prompt):
+        payload = json.loads(prompt)
+        item = payload["sources"][0]
+        assert item["declared_published_at"] == published.isoformat()
+        assert item["declared_revised_at"] == revised.isoformat()
+        assert item["declared_event_at"] == event.isoformat()
+>       assert "Dates are declared, not verified" in payload["evidence_guidance"]
+E       AssertionError: assert 'Dates are declared, not verified' in 'List subquestions and relevant zero-based claim indexes; leave unanswered ones empty. Separate independently checkabl...o not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified.'
+
+tests/test_research_analysis.py:305: AssertionError
+_ test_long_source_uses_relevant_window_with_exact_original_offsets_and_budget _
+
+    def test_long_source_uses_relevant_window_with_exact_original_offsets_and_budget():
+        prefix = "Unrelated material. " * 1400
+        quote = "Revenue for 2023 was 211,915 million."
+        report = source("long", text=prefix + quote + " Other details. " * 300)
+        def model(prompt):
+            assert len(prompt) <= 5000
+            assert quote in prompt
+            return {"claims": [{"text": "Revenue was reported", "citations": [
+                {"source_id": "long", "quotation": quote}]}]}, 20
+        result = analyze("2023 revenue?", [report], None, model, max_prompt_chars=5000)
+        citation = result.claims[0]["citations"][0]
+        assert citation["location"]["character_start"] == len(prefix)
+        assert report.text[citation["location"]["character_start"]:citation["location"]["character_end"]] == quote
+>       assert result.segments[0]["character_start"] <= len(prefix) < result.segments[0]["character_end"]
+E       AssertionError: assert 28000 < 27619
+E        +  where 28000 = len('Unrelated material. Unrelated material. Unrelated material. Unrelated material. Unrelated material. Unrelated materia...related material. Unrelated material. Unrelated material. Unrelated material. Unrelated material. Unrelated material. ')
+
+tests/test_research_analysis.py:583: AssertionError
+________________ test_multilingual_source_respects_byte_budget _________________
+
+    def test_multilingual_source_respects_byte_budget():
+        report = source("chinese", text="营业收入增长。" * 1000)
+        def model(prompt):
+            assert len(prompt.encode("utf-8")) <= 2000
+            return {"claims": [], "counterarguments": [], "limitations": []}, 10
+        result = analyze("营业收入增长情况", [report], None, model, max_prompt_chars=2000)
+>       assert result.source_ids == ["chinese"]
+E       AssertionError: assert [] == ['chinese']
+E         
+E         Right contains one more item: 'chinese'
+E         Use -v to get more diff
+
+tests/test_research_analysis.py:647: AssertionError
+_____ test_multilingual_comparison_reserves_budget_for_each_source[False] ______
+
+reverse = False
+
+    @pytest.mark.parametrize("reverse", [False, True])
+    def test_multilingual_comparison_reserves_budget_for_each_source(reverse):
+        positive = source("positive", text="营业收入增长证据。" * 1000)
+        negative = source("negative", text="相反证据收入下降。" * 1000)
+        reports = [negative, positive] if reverse else [positive, negative]
+    
+        def model(prompt):
+            assert len(prompt.encode("utf-8")) <= 3000
+            parts = json.loads(prompt)["sources"]
+            assert {part["source_id"] for part in parts} == {"positive", "negative"}
+            assert all(part["source_coverage"] == "partial" and part["text"] for part in parts)
+            return {}, 10
+    
+        result = analyze("收入变化", reports, None, model, max_prompt_chars=3000)
+>       assert set(result.source_ids) == {"positive", "negative"}
+E       AssertionError: assert set() == {'negative', 'positive'}
+E         
+E         Extra items in the right set:
+E         'positive'
+E         'negative'
+E         Use -v to get more diff
+
+tests/test_research_analysis.py:665: AssertionError
+______ test_multilingual_comparison_reserves_budget_for_each_source[True] ______
+
+reverse = True
+
+    @pytest.mark.parametrize("reverse", [False, True])
+    def test_multilingual_comparison_reserves_budget_for_each_source(reverse):
+        positive = source("positive", text="营业收入增长证据。" * 1000)
+        negative = source("negative", text="相反证据收入下降。" * 1000)
+        reports = [negative, positive] if reverse else [positive, negative]
+    
+        def model(prompt):
+            assert len(prompt.encode("utf-8")) <= 3000
+            parts = json.loads(prompt)["sources"]
+            assert {part["source_id"] for part in parts} == {"positive", "negative"}
+            assert all(part["source_coverage"] == "partial" and part["text"] for part in parts)
+            return {}, 10
+    
+        result = analyze("收入变化", reports, None, model, max_prompt_chars=3000)
+>       assert set(result.source_ids) == {"positive", "negative"}
+E       AssertionError: assert set() == {'negative', 'positive'}
+E         
+E         Extra items in the right set:
+E         'positive'
+E         'negative'
+E         Use -v to get more diff
+
+tests/test_research_analysis.py:665: AssertionError
+________ test_two_pdf_tables_keep_labels_and_values_under_shared_budget ________
+
+    def test_two_pdf_tables_keep_labels_and_values_under_shared_budget():
+        def report(sid, earlier, revised):
+            table = ("Change from preceding month\n" + " " * 40 + "August" + " " * 30 + "September\n" +
+                     "Previous  Revised  Previous  Revised\n(Billions of dollars)  (Percent)\nPersonal income:\n" +
+                     "Current dollars" + " " * 45 + f"{earlier}     {revised}\n")
+            text = "Unrelated introduction. " * 500 + table + "Unrelated appendix. " * 500
+            return source(sid, text=text).model_copy(update={"retrieval_method": "user_pdf"})
+        reports = [report("first", "71.6", "74.4"), report("second", "74.4", "88.2")]
+    
+        def model(prompt):
+            parts = json.loads(prompt)["sources"]
+            for sid, value in (("first", "74.4"), ("second", "88.2")):
+                assert any(part["source_id"] == sid and value in part["text"] and "income" in part["text"].lower()
+                           and "september" in part["text"].lower() for part in parts)
+            assert len(prompt.encode()) <= 2055
+            return {}, 10
+    
+>       result = analyze("比较2024年9月个人收入较前月的当期美元变化。", reports, None, model, max_prompt_chars=2055)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_analysis.py:716: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"比较2024年9月个人收入较前月的当期美元变化。","sources":[{"source_id":"first","title":"Report","source_coverage":"partial","...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def model(prompt):
+        parts = json.loads(prompt)["sources"]
+        for sid, value in (("first", "74.4"), ("second", "88.2")):
+>           assert any(part["source_id"] == sid and value in part["text"] and "income" in part["text"].lower()
+                       and "september" in part["text"].lower() for part in parts)
+E           assert False
+E            +  where False = any(<generator object test_two_pdf_tables_keep_labels_and_values_under_shared_budget.<locals>.model.<locals>.<genexpr> at 0x70a5b39e9fc0>)
+
+tests/test_research_analysis.py:711: AssertionError
+_______ test_separate_passages_cannot_be_stitched_into_a_fake_quotation ________
+
+    def test_separate_passages_cannot_be_stitched_into_a_fake_quotation():
+        filler_a = " ".join(f"rowA{i:05d}" for i in range(1000))
+        filler_b = " ".join(f"rowB{i:05d}" for i in range(1000))
+        report = source("s", text="2023 Revenue 100. " + filler_a + " 2023 Profit 200. " + filler_b)
+        def model(prompt):
+            parts = json.loads(prompt)["sources"]
+            assert len(parts) == 2
+            quote = parts[0]["text"][-30:] + parts[1]["text"][:30]
+            assert quote not in report.text
+            return {"claims": [{"text": "Invented join", "citations": [{"source_id": "s", "quotation": quote}]}]}, 10
+>       rejected = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_analysis.py:773: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"2023 revenue and profit","sources":[{"source_id":"s","title":"Report","source_coverage":"partial","text"...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def model(prompt):
+        parts = json.loads(prompt)["sources"]
+>       assert len(parts) == 2
+E       AssertionError: assert 1 == 2
+E        +  where 1 = len([{'source_id': 's', 'title': 'Report', 'source_coverage': 'partial', 'text': '2023 Revenue 100.'}])
+
+tests/test_research_analysis.py:769: AssertionError
+_____________ test_ellipsis_does_not_stitch_two_selected_passages ______________
+
+    def test_ellipsis_does_not_stitch_two_selected_passages():
+        report = source("s", text="2023 Revenue 100. " + "background " * 1200 +
+                        "2023 Profit 200. " + "irrelevant " * 1200)
+        def model(prompt):
+            assert len(json.loads(prompt)["sources"]) == 2
+            return {"claims": [{"text": "Both", "citations": [{"source_id": "s",
+                    "quotation": "2023 Revenue 100. ... 2023 Profit 200."}]}]}, 10
+>       result = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=5000)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_analysis.py:785: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"2023 revenue and profit","sources":[{"source_id":"s","title":"Report","source_coverage":"partial","text"...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def model(prompt):
+>       assert len(json.loads(prompt)["sources"]) == 2
+E       AssertionError: assert 1 == 2
+E        +  where 1 = len([{'source_id': 's', 'title': 'Report', 'source_coverage': 'partial', 'text': '2023 Revenue 100.'}])
+
+tests/test_research_analysis.py:782: AssertionError
+___ test_long_document_uses_two_windows_under_a_thousand_character_allowance ___
+
+    def test_long_document_uses_two_windows_under_a_thousand_character_allowance():
+        report = source("s", text="2023 Revenue 100. " + "background " * 400 +
+                        "2023 Profit 200. " + "irrelevant " * 400)
+        def model(prompt):
+            parts = json.loads(prompt)["sources"]
+            assert len(parts) == 2
+            assert sum(len(part["text"]) for part in parts) < 1000
+            assert any("2023 Revenue 100." in part["text"] for part in parts)
+            assert any("2023 Profit 200." in part["text"] for part in parts)
+            return {"claims": [], "counterarguments": [], "limitations": []}, 10
+>       result = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=1750)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_analysis.py:799: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"2023 revenue and profit","sources":[{"source_id":"s","title":"Report","source_coverage":"partial","text"...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def model(prompt):
+        parts = json.loads(prompt)["sources"]
+>       assert len(parts) == 2
+E       AssertionError: assert 1 == 2
+E        +  where 1 = len([{'source_id': 's', 'title': 'Report', 'source_coverage': 'partial', 'text': '2023 Revenue 100.'}])
+
+tests/test_research_analysis.py:794: AssertionError
+_________ test_casefold_expansion_preserves_original_character_offsets _________
+
+    def test_casefold_expansion_preserves_original_character_offsets():
+        prefix = "ß " * 1000
+        quote = "2023 Revenue was 100 million."
+        report = source("s", text=prefix + quote + " unrelated " * 1000)
+        def model(prompt):
+            assert any(quote in part["text"] for part in json.loads(prompt)["sources"])
+            return {"claims": [{"text": "Revenue", "citations": [{"source_id": "s", "quotation": quote}]}]}, 10
+        result = analyze("2023 revenue", [report], None, model, max_prompt_chars=3000)
+>       location = result.claims[0]["citations"][0]["location"]
+                   ^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:819: IndexError
+________ test_time_budget_interrupts_source_selection_before_model_call ________
+
+    def test_time_budget_interrupts_source_selection_before_model_call():
+        report = source("s", text="2023 revenue material. " * 10000)
+        checks = 0
+        def stop():
+            nonlocal checks
+            checks += 1
+            return checks >= 4
+        def must_not_call(_prompt):
+            raise AssertionError("Model must not be called after time budget expires")
+        with pytest.raises(AnalysisInterrupted):
+            analyze("2023 revenue", [report], None, must_not_call, max_prompt_chars=3000, should_stop=stop)
+>       assert checks == 4
+E       assert 5 == 4
+
+tests/test_research_analysis.py:835: AssertionError
+_ test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ranges _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70a5b3999760>
+
+    def test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ranges(monkeypatch):
+        import app.research_analysis as analysis
+        extra = "Revenue and debt both increased for the company."
+        text = "Revenue increased in the year. " + "Other notes. " * 70 + extra + " Other notes. " * 120
+        report = source("s", text=text)
+        first, second = (0, text[:150]), (300, text[300:450])
+        monkeypatch.setattr(analysis, "_select_windows", lambda *args, **kwargs: [first, second])
+        result = analyze("Explain revenue and debt.", [report], None, lambda _: ({}, 0), max_prompt_chars=2000)
+        ranges = [(segment["character_start"], segment["character_end"]) for segment in result.segments]
+        for original in (first, second):
+            original_start, original_text = _trim_partial_ascii_words(text, *original)
+>           assert any(start <= original_start and end >= original_start + len(original_text) for start, end in ranges)
+E           assert False
+E            +  where False = any(<generator object test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ranges.<locals>.<genexpr> at 0x70a5b446b240>)
+
+tests/test_research_analysis.py:958: AssertionError
+____ test_additional_sentence_never_shrinks_expanded_baseline_source_ranges ____
+
+    def test_additional_sentence_never_shrinks_expanded_baseline_source_ranges():
+        from app.research_analysis import SYSTEM_PROMPT
+        directory = Path(__file__).resolve().parents[3] / "docs/product/phase-a/140-trade-bank-fresh"
+        task = json.loads((directory / "STRESS_2023-input.json").read_text())
+        report = source(task["source"]["source_id"], text=(directory / task["source"]["text_file"]).read_text()).model_copy(
+            update={"title": task["source"]["title"], "retrieval_method": "user_pdf", "pdf_text_order": "reading"})
+        budget = 3000 - len(SYSTEM_PROMPT.encode()) - 512
+        with patch("app.research_analysis._additional_query_sentences", return_value=[]):
+            baseline = analyze(task["question"], [report], None, lambda _: ({}, 0), max_prompt_chars=budget)
+        result = analyze(task["question"], [report], None, lambda _: ({}, 0), max_prompt_chars=budget)
+        actual = [(segment["character_start"], segment["character_end"]) for segment in result.segments]
+        for segment in baseline.segments:
+            assert any(start <= segment["character_start"] and end >= segment["character_end"] for start, end in actual)
+>       assert any("12.4" in report.text[start:end] and "9.9" in report.text[start:end] for start, end in actual)
+E       assert False
+E        +  where False = any(<generator object test_additional_sentence_never_shrinks_expanded_baseline_source_ranges.<locals>.<genexpr> at 0x70a5b434a4d0>)
+
+tests/test_research_analysis.py:978: AssertionError
+______ test_multi_part_question_can_use_three_windows_when_budget_permits ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70a5b34376d0>
+
+    def test_multi_part_question_can_use_three_windows_when_budget_permits(monkeypatch):
+        import app.research_analysis as analysis
+        text = ("Revenue increased. " + "Other unrelated text. " * 100 + "Debt declined. " +
+                "Other unrelated text. " * 100 + "Margin improved. " + "Other unrelated text. " * 100)
+        report = source("s", text=text)
+        observed = []
+        original = analysis._select_windows
+        def collect(text, question, length, count, *args, **kwargs):
+            observed.append(count)
+            return original(text, question, length, count, *args, **kwargs)
+        monkeypatch.setattr(analysis, "_select_windows", collect)
+        analyze("Explain revenue and debt and margin.", [report], None, lambda _: ({}, 0), max_prompt_chars=1500)
+        assert 3 not in observed
+        observed.clear()
+        result = analyze("Explain revenue and debt and margin.", [report], None, lambda _: ({}, 0), max_prompt_chars=5000)
+>       assert 3 in observed and result.prompt_bytes <= 5000
+E       assert (3 in [])
+
+tests/test_research_analysis.py:1027: AssertionError
+_____ test_analyze_keeps_short_structured_total_row_with_its_longer_header _____
+
+    def test_analyze_keeps_short_structured_total_row_with_its_longer_header():
+        header = ("ACME CORP\nConsolidated Statements of Operations\n(in millions)\n"
+                  "| Years Ended | July 31, 2024 | July 31, 2023 |\n")
+        middle = "| Product | 150 | 140 |\n" + "| Other item | 5 | 4 |\n" * 28
+        text = "other " * 600 + header + middle + "| Total revenue | 200 | 190 |\n" + "other " * 600
+        report = source("source_0123456789abcdef0123456789abcdef", text=text)
+        received = []
+        def generate(prompt):
+            received.extend(json.loads(prompt)["sources"])
+            return {}, 1
+        result = analyze("2024 与 2023 财年营收多少？", [report], None, generate, max_prompt_chars=1800)
+        excerpts = " ".join(item["text"] for item in received)
+>       assert len(result.segments) == 2
+E       AssertionError: assert 4 == 2
+E        +  where 4 = len([{'source_id': 'source_0123456789abcdef0123456789abcdef', 'character_start': 3662, 'character_end': 3709, 'context_uni..._0123456789abcdef0123456789abcdef', 'character_start': 3757, 'character_end': 3779, 'context_unit_kind': 'table', ...}])
+E        +    where [{'source_id': 'source_0123456789abcdef0123456789abcdef', 'character_start': 3662, 'character_end': 3709, 'context_uni..._0123456789abcdef0123456789abcdef', 'character_start': 3757, 'character_end': 3779, 'context_unit_kind': 'table', ...}] = AnalysisResult(claims=[], counterarguments=[], limitations=['Source source_0123456789abcdef0123456789abcdef: only char...t_kind': 'table', 'complete_context': True, 'model_source_id': 'ref-1'}], research_questions=[], available_fact_ids=[]).segments
+
+tests/test_research_analysis.py:1201: AssertionError
+_____ test_scope_is_in_untrusted_question_and_influences_source_selection ______
+
+    def test_scope_is_in_untrusted_question_and_influences_source_selection():
+        target = 'Geographic segment: Oceania. Revenue was 4321 dollars.'
+        text = 'Unrelated operations and commentary. ' * 180 + target + ' Other financial notes. ' * 200
+        report = source('s', text=text)
+        prompts = []
+        def capture(prompt):
+            prompts.append(json.loads(prompt))
+            return {}, 1
+        analyze('What was revenue?', [report], None, capture, scope='Oceania segment')
+        assert 'Oceania segment' in prompts[0]['question']
+>       assert any(target in item['text'] for item in prompts[0]['sources'])
+E       assert False
+E        +  where False = any(<generator object test_scope_is_in_untrusted_question_and_influences_source_selection.<locals>.<genexpr> at 0x70a5b39e8580>)
+
+tests/test_research_analysis.py:1309: AssertionError
+_ test_chinese_question_retrieves_matching_chinese_source_with_original_offsets _
+
+    def test_chinese_question_retrieves_matching_chinese_source_with_original_offsets():
+        from app.research_analysis import _select_windows
+        target = '云计算业务2024年营业收入达到4321万元，较上年增长百分之十。'
+        text = '无关地区的库存、税务和采购讨论。' * 350 + target + '其他业务说明。' * 350
+        parts = _select_windows(text, '比较云计算业务2024年营业收入变化', 160, 2)
+        assert any(target in passage for _, passage in parts)
+        assert all(text[start:start + len(passage)] == passage for start, passage in parts)
+        assert sum(len(passage) for _, passage in parts) <= 320
+        calls = []
+        def generate(prompt):
+            payload = json.loads(prompt)
+            calls.append(payload)
+            return {'claims': [{'text': '营业收入达到4321万元', 'citations': [{'source_id': 's', 'quotation': target}]}]}, 5
+        result = analyze('比较云计算业务2024年营业收入变化', [source('s', text=text)], None, generate, max_prompt_chars=2500)
+>       assert any(target in item['text'] for item in calls[0]['sources'])
+                                                      ^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:1348: IndexError
+______ test_chinese_multitopic_question_balances_phrases_and_utf8_windows ______
+
+    def test_chinese_multitopic_question_balances_phrases_and_utf8_windows():
+        text = ('資料來源：星島研究院，星島研究院發布的財務報告。\n' +
+                '其他事項說明沒有相關收入與支出的數字。' * 60 +
+                '2024年倉儲物流收入為123億元，按年上升5%。' +
+                '其他事項說明沒有相關收入與支出的數字。' * 220 +
+                '2024年雲端支出為47億元，按年下降3%。' + '其他事項說明。' * 300)
+        report = source('s', text=text).model_copy(update={'title': '財務報告'})
+        captured = []
+        def generate(prompt):
+            captured.append(json.loads(prompt))
+            return {}, 1
+        result = analyze('根據星島研究院2024年報告，倉儲物流收入及雲端支出分別是多少？',
+                         [report], None, generate, max_prompt_chars=2055)
+        passages = [item['text'] for item in captured[0]['sources']]
+>       assert len(passages) == 2
+E       AssertionError: assert 1 == 2
+E        +  where 1 = len(['資料來源：星島研究院，星島研究院發布的財務報告。'])
+
+tests/test_research_analysis.py:1367: AssertionError
+_ test_structured_annual_observations_keep_period_value_and_issuer_within_budget _
+
+    def test_structured_annual_observations_keep_period_value_and_issuer_within_budget():
+        from app.research_analysis import _structured_observation_windows
+        data = {'issuer': 'Example Corp', 'concept': 'Revenue', 'unit': 'USD', 'notes': 'unrelated ' * 180,
+                'records': [{'start': '2021-07-01', 'end': '2022-06-30', 'val': 100, 'fy': 2023},
+                            {'start': '2022-07-01', 'end': '2023-06-30', 'val': 120, 'fy': 2023}]}
+        text = json.dumps(data, indent=2)
+        question = 'Compare revenue for 2022 and 2023.'
+        windows = _structured_observation_windows(text, question, 1000)
+        assert windows and len(windows) == 3
+        assert 'Example Corp' in windows[0][1] and 'USD' in windows[0][1]
+        assert '2022-06-30' in windows[1][1] and '100' in windows[1][1] and '"fy": 2023' in windows[1][1]
+        assert '2023-06-30' in windows[2][1] and '120' in windows[2][1]
+        assert all(text[start:start + len(part)] == part for start, part in windows)
+        assert _structured_observation_windows(text, question, 20) is None
+        duplicate = {**data, 'records': [*data['records'], data['records'][0]]}
+        assert _structured_observation_windows(json.dumps(duplicate), question, 1000) is None
+        mismatch = {**data, 'records': [data['records'][0], {**data['records'][1], 'unit': 'EUR'}]}
+        assert _structured_observation_windows(json.dumps(mismatch), question, 1000) is None
+        quarter = {**data, 'records': [data['records'][0], {**data['records'][1], 'start': '2023-04-01'}]}
+        assert _structured_observation_windows(json.dumps(quarter), question, 1000) is None
+        # Root metadata must not be attributed to nested records whose parent
+        # can override it, even when the individual leaf repeats no unit.
+        grouped = {k: v for k, v in data.items() if k != 'records'} | {
+            'groups': [{'unit': 'EUR', 'records': data['records']}]}
+        assert _structured_observation_windows(json.dumps(grouped), question, 1000) is None
+        mixed = {**data, 'nested': {'unit': 'EUR', 'records': data['records']}}
+        assert _structured_observation_windows(json.dumps(mixed), question, 1000) is None
+        root_records_with_nested = {**data, 'records': [{**data['records'][0], 'dimensions': {'unit': 'EUR'}}, data['records'][1]]}
+        assert _structured_observation_windows(json.dumps(root_records_with_nested), question, 1000) is None
+        duplicate_key = text.replace('"issuer": "Example Corp"', '"issuer": "Example Corp", "issuer": "Other"')
+        assert _structured_observation_windows(duplicate_key, question, 1000) is None
+        assert _structured_observation_windows(text[:-2], question, 1000) is None
+        assert _structured_observation_windows(text, 'Compare 2022, 2023 and 2024.', 1000) is None
+        with pytest.raises(AnalysisInterrupted):
+            _structured_observation_windows(text, question, 1000, lambda: True)
+        captured = []
+        def generate(prompt):
+            payload = json.loads(prompt);captured.append(payload)
+            parts = payload['sources']
+            return {'claims': [], 'facts': [
+                {'fact_id': 'prior', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2022', 'citation': {'source_id': 's', 'quotation': parts[1]['text']}},
+                {'fact_id': 'current', 'label': 'Revenue', 'value': '120', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2023', 'citation': {'source_id': 's', 'quotation': parts[2]['text']}}],
+                'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}, 5
+        result = analyze(question, [source('s', text=text)], None, generate, max_prompt_chars=2055)
+>       assert len(captured[0]['sources']) == 3 and result.prompt_bytes <= 2055
+                   ^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:1447: IndexError
+_ test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact __
+
+    def test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact():
+        q = '比较第二次估计与第三次估计的实际GDP及修订方向。'
+        second = ('Other information. ' * 20 + 'Real GDP increased at an annual rate of 2.8 percent in the third quarter, according to the "second" estimate. ' +
+                  'Other material. ' * 30 + 'In the third estimate, the prior 2.9 percent was revised. ' + 'Other material. ' * 200)
+        third = ('Other information. ' * 20 + 'Real GDP increased at an annual rate of 3.1 percent in the third quarter, according to the "third" estimate. ' +
+                 'Other material. ' * 30 + 'In the second estimate, the increase in real GDP was 2.8 percent. ' * 5 + 'Other material. ' * 200)
+        sources = [source('s1', text=second).model_copy(update={'title': 'GDP second estimate'}),
+                   source('s2', text=third).model_copy(update={'title': 'GDP third estimate'})]
+        captured = []
+        result = analyze(q, sources, None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 1), max_prompt_chars=2055)
+        excerpts = captured[0]['sources']
+>       assert any(part['source_id'] == 's1' and '2.8 percent' in part['text'] for part in excerpts)
+E       assert False
+E        +  where False = any(<generator object test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact.<locals>.<genexpr> at 0x70a5b4467b90>)
+
+tests/test_research_analysis.py:1476: AssertionError
+_______ test_policy_factor_selection_covers_decision_and_considerations ________
+
+    def test_policy_factor_selection_covers_decision_and_considerations():
+        text = ('Other policy material. ' * 60 +
+                'The Committee decided to maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent. ' +
+                'Other policy details. ' * 15 +
+                'The Committee will take into account the cumulative tightening of monetary policy, the lags with which policy affects the economy, and economic and financial developments. ' +
+                'Other text. ' * 140 +
+                'The Desk will maintain the federal funds rate in a target range. ' * 10)
+        prompt = []
+        result = analyze('决议目标利率区间及后续政策考虑因素是什么？', [source('s', text=text)], None,
+                         lambda q: (prompt.append(json.loads(q)) or {}, 1), max_prompt_chars=2055)
+        combined = ' '.join(part['text'] for part in prompt[0]['sources'])
+        assert 'decided to maintain the target range' in combined
+>       assert 'cumulative tightening' in combined and 'lags' in combined and 'economic and financial developments' in combined
+E       AssertionError: assert ('cumulative tightening' in 'Other policy material. Other policy material. Other policy material. Other policy material. Other policy material. The Committee decided to maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent. Other text.')
+
+tests/test_research_analysis.py:1495: AssertionError
+_ test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget _
+
+    def test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget():
+        from datetime import datetime, timezone
+        q = '比较第二次估计与第三次估计的GDP，说明修订原因和抵消因素。'
+        first_text = ('Other context. ' * 20 + 'Real gross domestic product (GDP) increased at an annual rate of 2.8 percent in the third quarter of 2024, according to the "second" estimate released by the U.S. Bureau of Economic Analysis. ' + 'Other information. ' * 200)
+        third_text = ('Other context. ' * 20 + 'Real gross domestic product (GDP) increased at an annual rate of 3.1 percent in the third quarter of 2024, according to the "third" estimate released by the U.S. Bureau of Economic Analysis. ' +
+            'Other preliminary information. ' * 15 + 'The update primarily reflected upward revisions to exports and consumer spending that were partly offset by a downward revision to private inventory investment. ' + 'Other information. ' * 200)
+        sources = [source('second', text=first_text).model_copy(update={'title':'GDP second estimate', 'published_at':datetime(2024, 11, 27, tzinfo=timezone.utc)}),
+                   source('third', text=third_text).model_copy(update={'title':'GDP third estimate', 'published_at':datetime(2024, 12, 19, tzinfo=timezone.utc)})]
+        captured = []
+        result = analyze(q, sources, None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 1), max_prompt_chars=2055)
+        parts = captured[0]['sources']
+>       assert any(p['source_id'] == 'second' and '2.8 percent' in p['text'] and 'GDP' in p['text'] for p in parts)
+E       assert False
+E        +  where False = any(<generator object test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget.<locals>.<genexpr> at 0x70a5b3c80fb0>)
+
+tests/test_research_analysis.py:1510: AssertionError
+____ test_multiple_windows_share_metadata_and_stay_within_serialized_budget ____
+
+    def test_multiple_windows_share_metadata_and_stay_within_serialized_budget():
+        from datetime import datetime, timezone
+        text = ("Revenue analysis showed 100 million in the previous year. " + " unrelated filler " * 140 +
+                "Profit analysis showed 50 million for the current year. " + " other filler " * 140)
+        report = source("s", text=text).model_copy(update={"title":"Financial annual report",
+            "published_at":datetime(2024,1,1,tzinfo=timezone.utc)})
+        prompts=[]
+        result=analyze("Compare revenue and profit amounts.",[report],None,lambda p:(prompts.append(p) or {},0),max_prompt_chars=2200)
+        assert len(prompts[0].encode()) <= 2200
+        items=json.loads(prompts[0])["sources"]
+>       assert len(items)==2 and all(item["source_id"]=="s" for item in items)
+E       AssertionError: assert (1 == 2)
+E        +  where 1 = len([{'source_id': 's', 'title': 'Financial annual report', 'source_coverage': 'partial', 'declared_published_at': '2024-01-01T00:00:00+00:00', ...}])
+
+tests/test_research_analysis.py:1967: AssertionError
+______ test_multiple_opaque_sources_retain_distinct_original_identifiers _______
+
+    def test_multiple_opaque_sources_retain_distinct_original_identifiers():
+        import json
+        first, second = "source_" + "c" * 32, "source_" + "d" * 32
+        reports=[source(first,text="Revenue was 100."),source(second,text="Revenue was 200.")]
+        def generate(prompt):
+            ids={entry["source_id"] for entry in json.loads(prompt)["sources"]}
+            assert ids == {first, second}
+            return {"claims":[{"text":"First source revenue was 100.","citations":[{"source_id":first,"quotation":"Revenue was 100."}]}]}, 10
+>       result=analyze("Compare revenue.",reports,None,generate)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_analysis.py:2014: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2212: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"Compare revenue.","sources":[{"source_id":"ref-1","title":"Report","source_coverage":"complete","text":"...not infer absence from unseen text. Check PDF column order; declared publication dates and periods are not verified."}'
+
+    def generate(prompt):
+        ids={entry["source_id"] for entry in json.loads(prompt)["sources"]}
+>       assert ids == {first, second}
+E       AssertionError: assert {'ref-1', 'ref-2'} == {'source_cccc...dddddddddddd'}
+E         
+E         Extra items in the left set:
+E         'ref-2'
+E         'ref-1'
+E         Extra items in the right set:
+E         'source_cccccccccccccccccccccccccccccccc'
+E         'source_dddddddddddddddddddddddddddddddd'
+E         Use -v to get more diff
+
+tests/test_research_analysis.py:2012: AssertionError
+___ test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately ____
+
+    def test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately():
+        from app.research_analysis import SYSTEM_PROMPT
+        from app.research_uploads import _extract_text
+        pdf = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/263-holdout-candidates/bea-gdp4q22.pdf'
+        text = _extract_text(pdf.read_bytes(), text_order='layout')
+        report = source('s', text=text).model_copy(update={'retrieval_method':'user_pdf', 'pdf_text_order':'layout'})
+        question = ('According to the attached BEA second estimate, compare annualized real GDP growth in the fourth '
+                    'and third quarters of 2022. Assess whether both goods and services consumption increased in the '
+                    'fourth quarter; cite evidence and distinguish a revision to an estimate from an actual change.')
+        captured = []
+        analyze(question, [report], None, lambda prompt: (captured.append(json.loads(prompt)) or {}, 0),
+                max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+        excerpts = [item['text'] for item in captured[0]['sources']]
+        import re
+>       assert any('2.7 percent' in part and '3.2 percent' in part for part in excerpts)
+E       assert False
+E        +  where False = any(<generator object test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately.<locals>.<genexpr> at 0x70a5b437a670>)
+
+tests/test_research_analysis.py:2179: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_analysis.py::test_selected_sentence_opening_is_restored_only_within_budget
+FAILED tests/test_research_analysis.py::test_research_prompt_requests_counterevidence_and_preserves_gaps
+FAILED tests/test_research_analysis.py::test_prompt_distinguishes_full_source_from_partial_excerpts
+FAILED tests/test_research_analysis.py::test_prompt_exposes_declared_source_times_separately_from_reporting_period
+FAILED tests/test_research_analysis.py::test_long_source_uses_relevant_window_with_exact_original_offsets_and_budget
+FAILED tests/test_research_analysis.py::test_multilingual_source_respects_byte_budget
+FAILED tests/test_research_analysis.py::test_multilingual_comparison_reserves_budget_for_each_source[False]
+FAILED tests/test_research_analysis.py::test_multilingual_comparison_reserves_budget_for_each_source[True]
+FAILED tests/test_research_analysis.py::test_two_pdf_tables_keep_labels_and_values_under_shared_budget
+FAILED tests/test_research_analysis.py::test_separate_passages_cannot_be_stitched_into_a_fake_quotation
+FAILED tests/test_research_analysis.py::test_ellipsis_does_not_stitch_two_selected_passages
+FAILED tests/test_research_analysis.py::test_long_document_uses_two_windows_under_a_thousand_character_allowance
+FAILED tests/test_research_analysis.py::test_casefold_expansion_preserves_original_character_offsets
+FAILED tests/test_research_analysis.py::test_time_budget_interrupts_source_selection_before_model_call
+FAILED tests/test_research_analysis.py::test_additional_sentence_uses_only_remaining_budget_and_retains_selected_ranges
+FAILED tests/test_research_analysis.py::test_additional_sentence_never_shrinks_expanded_baseline_source_ranges
+FAILED tests/test_research_analysis.py::test_multi_part_question_can_use_three_windows_when_budget_permits
+FAILED tests/test_research_analysis.py::test_analyze_keeps_short_structured_total_row_with_its_longer_header
+FAILED tests/test_research_analysis.py::test_scope_is_in_untrusted_question_and_influences_source_selection
+FAILED tests/test_research_analysis.py::test_chinese_question_retrieves_matching_chinese_source_with_original_offsets
+FAILED tests/test_research_analysis.py::test_chinese_multitopic_question_balances_phrases_and_utf8_windows
+FAILED tests/test_research_analysis.py::test_structured_annual_observations_keep_period_value_and_issuer_within_budget
+FAILED tests/test_research_analysis.py::test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact
+FAILED tests/test_research_analysis.py::test_policy_factor_selection_covers_decision_and_considerations
+FAILED tests/test_research_analysis.py::test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget
+FAILED tests/test_research_analysis.py::test_multiple_windows_share_metadata_and_stay_within_serialized_budget
+FAILED tests/test_research_analysis.py::test_multiple_opaque_sources_retain_distinct_original_identifiers
+FAILED tests/test_research_analysis.py::test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately

@@ -1,0 +1,6 @@
+structured prompt_limit 2055 minimal_group_json_bytes 2289 required_source_bytes 233 fits False
+candidate_ranges [[[4, 65], [1913, 84], [2017, 84]]]
+no_model_call ['Source s: no relevant complete evidence unit was selected within the input budget; lexical retrieval may miss other languages; not processed.', 'No eligible source evidence unit was selected; source language, structure or input budget may limit selection.']
+multi_requirement prompt_limit 2055 minimal_group_json_bytes 2088 required_source_bytes 107 fits False
+candidate_ranges [[[1165, 25]], [[5370, 22]]]
+sent_prompt_bytes 1953 selected [('s', '2024年倉儲物流收入為123億元，按年上升5%。')]

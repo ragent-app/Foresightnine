@@ -1,0 +1,56 @@
+{
+  "checked_at_utc": "2026-11-11T11:14:25.179505+00:00",
+  "bank_sha256": "047a660625e5e574296b4f51af127d95a16a7544a0d8cd8dffda73ac56ef2e6d",
+  "reference_sha256": "bf3b1b6b37656d7405e658e7546bf06328177d11f6bb6ca3b75bd47c6c876f3a",
+  "prior_v01_hashes_unchanged": true,
+  "tasks": [
+    {
+      "id": "H01",
+      "source_count": 1,
+      "synthetic": false
+    },
+    {
+      "id": "H02",
+      "source_count": 1,
+      "synthetic": false
+    },
+    {
+      "id": "H03",
+      "source_count": 1,
+      "synthetic": false
+    },
+    {
+      "id": "H04",
+      "source_count": 1,
+      "synthetic": false
+    },
+    {
+      "id": "H05",
+      "source_count": 2,
+      "synthetic": false
+    },
+    {
+      "id": "H06",
+      "source_count": 2,
+      "synthetic": false
+    },
+    {
+      "id": "H07",
+      "source_count": 1,
+      "synthetic": true
+    },
+    {
+      "id": "H08",
+      "source_count": 1,
+      "synthetic": true
+    },
+    {
+      "id": "H09",
+      "source_count": 0,
+      "synthetic": true
+    }
+  ],
+  "limitations": [
+    "Unreviewed public candidates; not a frozen blind test. No model runs."
+  ]
+}

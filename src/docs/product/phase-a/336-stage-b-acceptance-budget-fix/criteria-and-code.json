@@ -1,0 +1,39 @@
+{
+  "comparison_to_prior": "Same four development tasks, sources, prompt instructions, model profile, permissions and budgets. Intervention: shared UTF-8/system/framing admission and selection using the source reference actually sent. A parallel PostgreSQL-only recovery correction does not run in this isolated in-memory diagnostic. The prior batch made zero external model calls.",
+  "classification": "non-blind development-set diagnostic; no independent heldout or generalized-quality claim",
+  "per_task": {
+    "SEC_FACT_CALC": [
+      "Correctly report Microsoft FY2023 211915 and FY2022 198270 USD million, change 13645 million or approximately 6.88%; identify the supplied file as a derived record, not original filing.",
+      "Every material reported fact must cite a locatable passage that supports the value, period and unit; calculation must be reproducible. Unsupported or missing evidence must remain explicit."
+    ],
+    "SEC_COMP_COUNTER": [
+      "Correctly attribute Microsoft FY2023/FY2022 211915/198270 and Cisco FY2024/FY2023 53803/56998 in USD million if reported, with appropriate cited source passages.",
+      "Different fiscal end dates and reporting years are not like-for-like. A counterpoint or limitation must be relevant and supported; no claim should imply unsupported comparability. Omitted facts or counterpoint must be flagged as gaps."
+    ],
+    "BEA_REVISION": [
+      "Distinguish the 2024 and 2025 releases and their respective estimates for 2023 annual real GDP growth (2.5% and 2.9%) with each supported by its own located source.",
+      "Identify changes as a revision/estimate difference rather than two observed events; unsupported causes or assertions that no revision exists fail."
+    ],
+    "FED_EVENT_MISSING": [
+      "Identify the September 2024 target range 4.75%–5% and reduction of 0.5 percentage point with supporting citation.",
+      "The supplied single statement cannot establish subsequent decisions. Flag missing evidence instead of inventing later policy or unsupported motives."
+    ]
+  },
+  "grading": "For each task separately assess completeness, source passage support, numerical/period/unit correctness, counterpoint relevance and honest missing/conflicting evidence. A safely disclosed partial is a safety success but not a completed-answer pass. Model self-review is not independent verification.",
+  "hashes": {
+    "src/apps/api/app/research_analysis.py": "08d913fe3474b0e9451603ed2cfea73d942a2fcbeaa5ea64782690444d093297",
+    "src/apps/api/app/research_planning.py": "c66266f17a8bfa85feed695190c1f24df4030a867d4907ccf386062cb6d896a9",
+    "src/apps/api/app/research_coordinator.py": "b967b1313652b1b4a8ec61ffdc05e8e17124f43ddd14675aba63f495b90eb554",
+    "src/apps/api/app/research_counterpoint_stage.py": "43941f87baeab1d1fc16f4273b3df8037028680569ff2409459413d70425ee23",
+    "src/apps/api/app/research_gap_stage.py": "ca5a11fad76c56431b02b5df923de8ae156f170a471f6a50f34a90b945872ab1",
+    "src/apps/api/app/research_review_stage.py": "793f485e974465f4569e8c90ef4c5fc0021b59e64f80312703724afbc112dd31",
+    "src/apps/api/app/research_orchestrator.py": "f735fbd6c78c0558a1eca8194b422de5cce61f710cdbaa6ba0f6f89d77b711bc",
+    "src/apps/api/app/research_workflow.py": "5e19d002de019d2ce13ed2df8c5f5d0b3ab2ac2e6e610f82c9b0c0303c2ee354",
+    "src/apps/api/app/research_verification.py": "eff195b20e80f44ac53fd23c35befe14c3de4a98fdb0a16cef5602e13e094e19",
+    "src/apps/api/app/research_tools.py": "c531225a4f53c81551a2bae57344c42cc861ba66aef8dfdb2ea6a1d97eec7fbf",
+    "src/apps/api/app/research_recovery.py": "dd43ee150bd253b0322a61b7182169c2af8807f522bf3b3fb40eee61463b843d",
+    "src/apps/api/app/main.py": "6c19c6dbdf3aa4f0c7cd9eeedf0e4f924319fee408795c32caec7ddac1306a98",
+    "src/apps/api/app/openai_compatible.py": "0f07509dbf2feb861cea9fa6ca271d52e6c2878d0b1003f64e3cda87b93297db"
+  },
+  "preregistration_sha256": "4258ac6d973748368a092f6c9b0cfe64f5f769b299dc7b14d11703e3cb393efc"
+}

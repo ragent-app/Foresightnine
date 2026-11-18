@@ -1,0 +1,18 @@
+{
+  "id": "D23",
+  "question": "2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？",
+  "as_of": "2024-09-19T00:00:00Z",
+  "sources": [
+    {
+      "filename": "fed-fomc-2024-09-18.pdf",
+      "sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20240918a1.pdf",
+      "publication_utc": "2024-09-18T18:00:00Z"
+    }
+  ],
+  "status": "candidate-not-reviewed-not-frozen",
+  "notes": [
+    "Read the allowed PDFs as source documents; extracted answers are not supplied.",
+    "Present-day copies do not prove past byte-for-byte availability or absence of subsequent amendments."
+  ]
+}

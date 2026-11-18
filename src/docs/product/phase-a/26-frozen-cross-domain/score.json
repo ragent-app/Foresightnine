@@ -1,0 +1,123 @@
+{
+  "manifest_sha256": "ab1dede80cc44865ee7da33fceb6f73a8ed4289931c12e365bcd576da9aa17cd",
+  "independence": "new task inputs not previously sent to model; nonblind authors; not independent human evaluation",
+  "semantic_support": "unverifiable",
+  "historical_availability": "unverified",
+  "tasks": {
+    "V24": {
+      "input_kind": "derived_text",
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "32653",
+          "located_fact_with_period_and_unit": true,
+          "cited_supporting_claim_mentions_reference": false
+        },
+        {
+          "value": "35926",
+          "located_fact_with_period_and_unit": true,
+          "cited_supporting_claim_mentions_reference": false
+        }
+      ],
+      "all_supporting_claims_have_locations": false,
+      "required_calculation_ok": true,
+      "unknown_percentages_requiring_review": [],
+      "calculation_differences": [],
+      "citation_omission_requires_review": true,
+      "budget_ok": true,
+      "reported_tokens": 996,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "U24": {
+      "input_kind": "derived_text",
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "53717",
+          "located_fact_with_period_and_unit": true,
+          "cited_supporting_claim_mentions_reference": true
+        },
+        {
+          "value": "57063",
+          "located_fact_with_period_and_unit": true,
+          "cited_supporting_claim_mentions_reference": true
+        }
+      ],
+      "all_supporting_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unknown_percentages_requiring_review": [],
+      "calculation_differences": [],
+      "citation_omission_requires_review": true,
+      "budget_ok": true,
+      "reported_tokens": 1145,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "P25": {
+      "input_kind": "original_pdf",
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "0.1",
+          "located_fact_with_period_and_unit": false,
+          "cited_supporting_claim_mentions_reference": false
+        },
+        {
+          "value": "2.1",
+          "located_fact_with_period_and_unit": false,
+          "cited_supporting_claim_mentions_reference": false
+        }
+      ],
+      "all_supporting_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unknown_percentages_requiring_review": [],
+      "calculation_differences": [],
+      "citation_omission_requires_review": false,
+      "budget_ok": true,
+      "reported_tokens": 1225,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "F24": {
+      "input_kind": "original_pdf",
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "4.25",
+          "located_fact_with_period_and_unit": false,
+          "cited_supporting_claim_mentions_reference": true
+        },
+        {
+          "value": "4.5",
+          "located_fact_with_period_and_unit": false,
+          "cited_supporting_claim_mentions_reference": true
+        },
+        {
+          "value": "0.25",
+          "located_fact_with_period_and_unit": true,
+          "cited_supporting_claim_mentions_reference": true
+        }
+      ],
+      "all_supporting_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unknown_percentages_requiring_review": [],
+      "calculation_differences": [],
+      "citation_omission_requires_review": false,
+      "budget_ok": true,
+      "reported_tokens": 1060,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    }
+  },
+  "passed": 0,
+  "total": 4
+}

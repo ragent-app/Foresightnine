@@ -1,0 +1,71 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "In February 2024, CPI-U all items rose 0.4 percent on a seasonally adjusted monthly basis.",
+        "citations": [
+          {
+            "source_id": "source_2688e0d2fa8348339ba6340167988e52",
+            "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"February 2024 monthly\",\"seasonal_adjustment\":\"seasonally adjusted\",\"value\":0.4,\"unit\":\"percent\"}"
+          }
+        ]
+      },
+      {
+        "text": "Over the 12 months ending February 2024, CPI-U all items rose 3.2 percent on a not seasonally adjusted basis.",
+        "citations": [
+          {
+            "source_id": "source_2688e0d2fa8348339ba6340167988e52",
+            "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"12 months ending February 2024\",\"seasonal_adjustment\":\"not seasonally adjusted\",\"value\":3.2,\"unit\":\"percent\"}"
+          }
+        ]
+      },
+      {
+        "text": "The monthly change is seasonally adjusted while the 12-month change is not seasonally adjusted, so the two figures use different seasonal-adjustment bases.",
+        "citations": [
+          {
+            "source_id": "source_2688e0d2fa8348339ba6340167988e52",
+            "quotation": "\"seasonal_adjustment\":\"seasonally adjusted\" ... \"seasonal_adjustment\":\"not seasonally adjusted\""
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "No alternative source or interpretation is present in the supplied text; the structured records directly state the values and adjustment bases.",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "The source is a derived-figures rendering of the BLS release rather than the full release text; only CPI-U all items figures are supplied.",
+      "No underlying data or methodology details (e.g., seasonal factors) are provided."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_monthly_sa",
+        "label": "CPI-U all items monthly change, seasonally adjusted",
+        "value": "0.4",
+        "unit": "percent",
+        "currency": null,
+        "period": "February 2024 monthly",
+        "citation": {
+          "source_id": "source_2688e0d2fa8348339ba6340167988e52",
+          "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"February 2024 monthly\",\"seasonal_adjustment\":\"seasonally adjusted\",\"value\":0.4,\"unit\":\"percent\"}"
+        }
+      },
+      {
+        "fact_id": "fact_12m_nsa",
+        "label": "CPI-U all items 12-month change, not seasonally adjusted",
+        "value": "3.2",
+        "unit": "percent",
+        "currency": null,
+        "period": "12 months ending February 2024",
+        "citation": {
+          "source_id": "source_2688e0d2fa8348339ba6340167988e52",
+          "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"12 months ending February 2024\",\"seasonal_adjustment\":\"not seasonally adjusted\",\"value\":3.2,\"unit\":\"percent\"}"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1045
+}

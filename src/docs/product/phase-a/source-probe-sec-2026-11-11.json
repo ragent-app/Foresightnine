@@ -1,0 +1,81 @@
+{
+  "id": "sec_msft_companyfacts",
+  "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+  "retrieved_at_utc": "2026-11-11T10:59:04.595392+00:00",
+  "method": "one GET; no retries; 20 second timeout; response text not saved",
+  "status": 200,
+  "content_type": "application/json",
+  "byte_count": 4938072,
+  "sha256": "8c1903c041f5c27e86ed15f37debb1f41882b7904bba129ef9edc76478b1e8ea",
+  "taxonomy": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+  "units": "USD",
+  "facts": [
+    {
+      "start": "2020-07-01",
+      "end": "2021-06-30",
+      "val": 168088000000,
+      "accn": "0000950170-23-035122",
+      "fy": 2023,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2023-07-27",
+      "frame": "CY2021"
+    },
+    {
+      "start": "2021-07-01",
+      "end": "2022-06-30",
+      "val": 198270000000,
+      "accn": "0000950170-23-035122",
+      "fy": 2023,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2023-07-27",
+      "frame": null
+    },
+    {
+      "start": "2021-07-01",
+      "end": "2022-06-30",
+      "val": 198270000000,
+      "accn": "0000950170-24-087843",
+      "fy": 2024,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2024-07-30",
+      "frame": null
+    },
+    {
+      "start": "2022-07-01",
+      "end": "2023-06-30",
+      "val": 211915000000,
+      "accn": "0000950170-23-035122",
+      "fy": 2023,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2023-07-27",
+      "frame": null
+    },
+    {
+      "start": "2022-07-01",
+      "end": "2023-06-30",
+      "val": 211915000000,
+      "accn": "0000950170-24-087843",
+      "fy": 2024,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2024-07-30",
+      "frame": null
+    },
+    {
+      "start": "2023-07-01",
+      "end": "2024-06-30",
+      "val": 245122000000,
+      "accn": "0000950170-24-087843",
+      "fy": 2024,
+      "fp": "FY",
+      "form": "10-K",
+      "filed": "2024-07-30",
+      "frame": null
+    }
+  ],
+  "elapsed_seconds": 1.623
+}

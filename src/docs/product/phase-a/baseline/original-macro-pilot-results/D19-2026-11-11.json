@@ -1,0 +1,44 @@
+{
+  "status": "exploratory-task-specific-no-human-grading",
+  "id": "D19",
+  "run_at_utc": "2026-11-11T11:35:58.660745+00:00",
+  "script_sha256": "21030cfe298ad7bef87f5084f799b686429801033eaaca8518f21fd61557488f",
+  "task_sha256": "aa9a1721d829af64ea92d86a071db07fcf31edc77348472145c7ca0b9fa4382d",
+  "as_of": "2024-01-26T00:00:00Z",
+  "sources": [
+    {
+      "source_url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+      "sha256": "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d"
+    }
+  ],
+  "tool_calls": [
+    {
+      "tool": "pdftotext -layout",
+      "source": "bea-gdp-2023-q4-advance.pdf",
+      "exit_code": 0,
+      "elapsed_seconds": 0.179017
+    }
+  ],
+  "model_calls": 0,
+  "network_calls": 0,
+  "retries": 0,
+  "findings": {
+    "annual_2023_percent": "2.5",
+    "annual_page": 2,
+    "q4_annualized_percent": "3.3",
+    "q4_page": 1,
+    "distinction": "annual growth versus quarter-on-quarter annualized growth"
+  },
+  "elapsed_seconds": 0.190525,
+  "cost": {
+    "model_provider_usd": 0,
+    "network_provider_usd": 0,
+    "human_compute_storage": "not measured"
+  },
+  "limitations": [
+    "Patterns were written after inspection of these same documents.",
+    "Candidate input and reference answers are not human-reviewed or frozen.",
+    "No retrieval, independent citation verification, user confirmation, or real-time monitoring.",
+    "Publication cutoff is not proof of historical byte-identical availability."
+  ]
+}

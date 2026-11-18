@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "input_sha256_matches": true,
+    "fy2022_usd": true,
+    "fy2023_usd": true,
+    "fact_quotes_locate": true,
+    "growth_calculation_correct": true,
+    "partial_status_preserved": true,
+    "no_fy2024_in_model_input": true
+  },
+  "semantic_support": "not_independently_verified",
+  "historical_availability": "not_established",
+  "input_class": "derived facts, not original filing",
+  "experiment": "development sample; not held out",
+  "cost_usd": "unknown",
+  "tokens_reported": 1649
+}

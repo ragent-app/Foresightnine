@@ -1,0 +1,1652 @@
+{
+  "schema_version": "1",
+  "format": "research_json",
+  "topic_id": "topic_0bff56c29add4d00b557e42761a66b3a",
+  "generated_at": "2026-11-14T10:29:13.325711Z",
+  "request": {
+    "question": "根据提供的 SEC 派生事实快照，比较微软 2022 与 2023 财年收入，列明财年起止、币种和金额，计算增额及同比增长率；说明材料是否为完整年报及其历史可得性限制。",
+    "source_ids": [
+      "source_fde2452a2abb4ae28daab78e2f2d7f95"
+    ],
+    "scope": "",
+    "as_of": null
+  },
+  "version": {
+    "version_id": "version_0f1fe63d264a488baaf732aa8b6865b2",
+    "parent_version_id": "version_8cf5eaf155844b85b46e08052b111367",
+    "created_at": "2026-11-14T10:28:39.848994Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+          "title": "SEC companyfacts derived Microsoft fiscal 2022–2023 revenue snapshot (not original filing)",
+          "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+          "obtained_at": "2026-11-14T10:28:02.156541+00:00",
+          "is_simulated": false,
+          "verification": "user_declared_not_verified",
+          "content_sha256": "a46d6f7767d87a6bf3b0d2b546ed1b9dd352de1d92c9139fdde266fc01c21c60",
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "status": "complete",
+            "text_characters": 1362,
+            "selected_characters": 1362
+          }
+        }
+      ],
+      "source_candidates": [],
+      "facts": [
+        {
+          "unit": "USD",
+          "label": "微软FY2022财年收入",
+          "value": "198270000000",
+          "period": "2021-07-01至2022-06-30",
+          "fact_id": "fy2022_revenue",
+          "currency": "USD",
+          "location": {
+            "character_end": 721,
+            "character_start": 646
+          },
+          "quotation": "\"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000",
+          "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "whitespace_normalized"
+        },
+        {
+          "unit": "USD",
+          "label": "微软FY2023财年收入",
+          "value": "211915000000",
+          "period": "2022-07-01至2023-06-30",
+          "fact_id": "fy2023_revenue",
+          "currency": "USD",
+          "location": {
+            "character_end": 962,
+            "character_start": 887
+          },
+          "quotation": "\"start\": \"2022-07-01\",\n      \"end\": \"2023-06-30\",\n      \"val\": 211915000000",
+          "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "whitespace_normalized"
+        },
+        {
+          "unit": "USD",
+          "label": "微软FY2022收入",
+          "value": "198270000000",
+          "period": "2021-07-01至2022-06-30",
+          "fact_id": "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+          "currency": "USD",
+          "location": {
+            "character_end": 721,
+            "character_start": 646
+          },
+          "quotation": "\"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000",
+          "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "whitespace_normalized"
+        },
+        {
+          "unit": "USD",
+          "label": "微软FY2023收入",
+          "value": "211915000000",
+          "period": "2022-07-01至2023-06-30",
+          "fact_id": "gap_7fc4e9497915cece567534d6bd2c4742",
+          "currency": "USD",
+          "location": {
+            "character_end": 962,
+            "character_start": 887
+          },
+          "quotation": "\"start\": \"2022-07-01\",\n      \"end\": \"2023-06-30\",\n      \"val\": 211915000000",
+          "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+          "verification": "model_extraction_not_independently_verified",
+          "quotation_match": "whitespace_normalized"
+        }
+      ],
+      "evidence_differences": [],
+      "calculations": [
+        {
+          "unit": "USD",
+          "value": "13645000000.00",
+          "inputs": [
+            {
+              "unit": "USD",
+              "value": "211915000000",
+              "period": "2022-07-01至2023-06-30",
+              "fact_id": "fy2023_revenue",
+              "currency": "USD"
+            },
+            {
+              "unit": "USD",
+              "value": "198270000000",
+              "period": "2021-07-01至2022-06-30",
+              "fact_id": "fy2022_revenue",
+              "currency": "USD"
+            }
+          ],
+          "currency": "USD",
+          "rounding": "half_up",
+          "expression": "first - second",
+          "formula_id": "difference",
+          "input_status": "matched",
+          "result_status": "matched",
+          "decimal_places": 2,
+          "formula_version": "1",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established"
+        },
+        {
+          "unit": "percent",
+          "value": "6.88",
+          "inputs": [
+            {
+              "unit": "USD",
+              "value": "211915000000",
+              "period": "2022-07-01至2023-06-30",
+              "fact_id": "fy2023_revenue",
+              "currency": "USD"
+            },
+            {
+              "unit": "USD",
+              "value": "198270000000",
+              "period": "2021-07-01至2022-06-30",
+              "fact_id": "fy2022_revenue",
+              "currency": "USD"
+            }
+          ],
+          "rounding": "half_up",
+          "expression": "(first / second - 1) * 100",
+          "formula_id": "growth_percent",
+          "input_status": "matched",
+          "result_status": "matched",
+          "decimal_places": 2,
+          "formula_version": "1",
+          "input_verification": "not_verified_by_calculator",
+          "period_order_check": "not_checked",
+          "input_precision_status": "not_established",
+          "period_granularity_check": "not_established"
+        },
+        {
+          "unit": "USD",
+          "value": "13645000000.00",
+          "inputs": [
+            {
+              "unit": "USD",
+              "value": "211915000000",
+              "period": "2022-07-01至2023-06-30",
+              "fact_id": "gap_7fc4e9497915cece567534d6bd2c4742",
+              "currency": "USD"
+            },
+            {
+              "unit": "USD",
+              "value": "198270000000",
+              "period": "2021-07-01至2022-06-30",
+              "fact_id": "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+              "currency": "USD"
+            }
+          ],
+          "currency": "USD",
+          "rounding": "half_up",
+          "expression": "first - second",
+          "formula_id": "difference",
+          "input_status": "matched",
+          "result_status": "matched",
+          "decimal_places": 2,
+          "formula_version": "1",
+          "input_verification": "not_verified_by_calculator",
+          "input_precision_status": "not_established"
+        },
+        {
+          "unit": "percent",
+          "value": "6.88",
+          "inputs": [
+            {
+              "unit": "USD",
+              "value": "211915000000",
+              "period": "2022-07-01至2023-06-30",
+              "fact_id": "gap_7fc4e9497915cece567534d6bd2c4742",
+              "currency": "USD"
+            },
+            {
+              "unit": "USD",
+              "value": "198270000000",
+              "period": "2021-07-01至2022-06-30",
+              "fact_id": "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+              "currency": "USD"
+            }
+          ],
+          "rounding": "half_up",
+          "expression": "(first / second - 1) * 100",
+          "formula_id": "growth_percent",
+          "input_status": "matched",
+          "result_status": "matched",
+          "decimal_places": 2,
+          "formula_version": "1",
+          "input_verification": "not_verified_by_calculator",
+          "period_order_check": "not_checked",
+          "input_precision_status": "not_established",
+          "period_granularity_check": "not_established"
+        }
+      ],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "根据SEC公司事实派生快照，微软FY2022（2021-07-01至2022-06-30）收入为198,270,000,000美元；FY2023（2022-07-01至2023-06-30）收入为211,915,000,000美元，币种均为USD。",
+          "claim_id": "claim_05aa46a4c1604c7c87bf4598030fccd2",
+          "citations": [
+            {
+              "location": {
+                "character_end": 721,
+                "character_start": 646
+              },
+              "quotation": "\"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "whitespace_normalized"
+            },
+            {
+              "location": {
+                "character_end": 962,
+                "character_start": 887
+              },
+              "quotation": "\"start\": \"2022-07-01\",\n      \"end\": \"2023-06-30\",\n      \"val\": 211915000000",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "whitespace_normalized"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "scope_declaration": "other",
+          "uncited_claim_amounts": [
+            "198,270,000,000美元",
+            "211,915,000,000美元"
+          ]
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "FY2023较FY2022收入增加13,645,000,000美元。",
+          "claim_id": "claim_500bb441189046048f26531735865501",
+          "citations": [
+            {
+              "location": {
+                "character_end": 721,
+                "character_start": 646
+              },
+              "quotation": "\"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "whitespace_normalized"
+            },
+            {
+              "location": {
+                "character_end": 962,
+                "character_start": 887
+              },
+              "quotation": "\"start\": \"2022-07-01\",\n      \"end\": \"2023-06-30\",\n      \"val\": 211915000000",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "whitespace_normalized"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "scope_declaration": "other",
+          "uncited_claim_amounts": [
+            "13,645,000,000美元"
+          ]
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "该材料为从SEC API提取的派生事实快照（derived_sec_facts_not_full_filing），并非完整年报原文；快照本身声明其2026年提取时间与申报日期不能独立证明历史数据的确切可得性或不存在重述。",
+          "claim_id": "claim_0512e29b389042e9bbd9887df6d81a96",
+          "citations": [
+            {
+              "location": {
+                "character_end": 47,
+                "character_start": 4
+              },
+              "quotation": "\"type\": \"derived_sec_facts_not_full_filing\"",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            },
+            {
+              "location": {
+                "character_end": 1354,
+                "character_start": 1236
+              },
+              "quotation": "The 2026 snapshot and filing date do not independently prove exact historical availability or absence of restatements.",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_status": "incomplete",
+          "scope_declaration": "absence",
+          "model_absence_refs": [
+            "absence_c03f6a11b6674bf08534daa007d37cd6"
+          ],
+          "absence_scope_status": "not_established"
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "微软FY2022（2021-07-01至2022-06-30）收入为198,270,000,000美元，FY2023（2022-07-01至2023-06-30）收入为211,915,000,000美元，币种均为USD，来源于SEC XBRL companyfacts派生快照（10-K，accession 0000950170-23-035122）。",
+          "claim_id": "claim_43394574e019416e8ee6a4e0262d449c",
+          "citations": [
+            {
+              "location": {
+                "character_end": 721,
+                "character_start": 638
+              },
+              "quotation": "{\n      \"start\": \"2021-07-01\",\n      \"end\": \"2022-06-30\",\n      \"val\": 198270000000",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "whitespace_normalized"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "scope_declaration": "other",
+          "uncited_exact_dates": [
+            "2022-07-01",
+            "2023-06-30"
+          ],
+          "uncited_claim_amounts": [
+            "198,270,000,000美元",
+            "211,915,000,000美元"
+          ],
+          "suggested_related_quotations": [
+            {
+              "status": "requires_semantic_review",
+              "location": {
+                "character_end": 909,
+                "character_start": 887
+              },
+              "quotation": "\"start\": \"2022-07-01\",",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "matched_amounts": [
+                "2022-07-01"
+              ],
+              "from_claim_index": -2
+            },
+            {
+              "status": "requires_semantic_review",
+              "location": {
+                "character_end": 936,
+                "character_start": 916
+              },
+              "quotation": "\"end\": \"2023-06-30\",",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "matched_amounts": [
+                "2023-06-30"
+              ],
+              "from_claim_index": -2
+            }
+          ]
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "FY2023较FY2022收入增加13,645,000,000美元，同比增长率约6.88%（13,645,000,000 / 198,270,000,000）。",
+          "claim_id": "claim_0e943da163d643eb9f2706ad2d6c166a",
+          "citations": [
+            {
+              "location": {
+                "character_end": 962,
+                "character_start": 943
+              },
+              "quotation": "\"val\": 211915000000",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_status": "not_independently_verified",
+          "scope_declaration": "other",
+          "uncited_percentages": [
+            "6.88%"
+          ],
+          "uncited_claim_amounts": [
+            "13,645,000,000美元"
+          ]
+        },
+        {
+          "kind": "model_interpretation",
+          "role": "support",
+          "text": "材料为从SEC API提取的派生事实快照，并非完整原始年报；快照与申报日期不能独立证明历史数据的确切可得性或是否存在重述。",
+          "claim_id": "claim_86c76d54aa414abbb9a9c07165de599b",
+          "citations": [
+            {
+              "location": {
+                "character_end": 1229,
+                "character_start": 1143
+              },
+              "quotation": "\"Rows were extracted from the SEC API response, not copied as a full original filing.\"",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            },
+            {
+              "location": {
+                "character_end": 1355,
+                "character_start": 1235
+              },
+              "quotation": "\"The 2026 snapshot and filing date do not independently prove exact historical availability or absence of restatements.\"",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "support_status": "not_independently_verified",
+              "quotation_match": "exact"
+            }
+          ],
+          "support_status": "incomplete",
+          "scope_declaration": "absence",
+          "model_absence_refs": [
+            "absence_3c4ee2ecc27946bb8b77c1a0f7e8a6a9"
+          ],
+          "absence_scope_status": "not_established"
+        }
+      ],
+      "limitations": [
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): 数据来自SEC companyfacts API响应的提取行，非完整原始10-K申报文件。",
+        "Model-reported limitation (not independently verified): 2026年快照的检索时间与申报日期不能独立证明历史数据的确切可得性或不存在重述。",
+        "Model-reported limitation (not independently verified): 增长率与增额由所提供的两个数值事实计算得出，未经原始申报文件复核。",
+        "Model-reported limitation (not independently verified): 材料为派生的SEC事实快照，非完整原始10-K年报，未包含财报全文",
+        "Model-reported limitation (not independently verified): 快照与申报日期不能独立证明历史数据的确切可得性或是否存在重述",
+        "Model-reported limitation (not independently verified): 同比增长率仅基于快照中两期数值计算，未与其他来源交叉验证",
+        "The evidence-gap follow-up is model generated and is not independent verification.",
+        "A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.",
+        "The model-generated research plan is an unverified guide and may omit relevant questions.",
+        "The requested research plan did not complete; the result used the original question.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+        "The requested model support review did not cover all claims.",
+        "An exact date in a claim is absent from its located quotations; verify the date and its meaning.",
+        "An explicit USD amount could not be confirmed from the attached quotations; check currency, units, source and any calculation.",
+        "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+      ],
+      "run": {
+        "model": "glm-5.3-flash",
+        "status": "partial",
+        "provider": "openai-compatible",
+        "cost_status": "unknown",
+        "model_calls": 3,
+        "operation_id": "operation:a9af3245978bd3c2ef53a3f1",
+        "prompt_bytes": 4108,
+        "search_calls": 0,
+        "total_tokens": 5021,
+        "prompt_sha256": "4beae08a8ff783fadbaae55c9c56355ddf36bcf77c321159019f934d33e6fd57",
+        "research_gaps": {
+          "items": [
+            {
+              "code": "absence_observation_unestablished"
+            },
+            {
+              "code": "model_suggested_evidence_need"
+            },
+            {
+              "code": "citations_missing_or_incomplete",
+              "count": 2,
+              "indexes": [
+                2,
+                5
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "semantic_support_not_independently_verified",
+              "count": 6,
+              "indexes": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "evidence_warnings",
+              "count": 4,
+              "indexes": [
+                0,
+                1,
+                3,
+                4
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "research_planning_incomplete"
+            },
+            {
+              "code": "model_review_incomplete"
+            },
+            {
+              "code": "model_review_missing",
+              "count": 6,
+              "indexes": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ],
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "search_status": "not_requested",
+        "source_hashes": {
+          "source_fde2452a2abb4ae28daab78e2f2d7f95": "a46d6f7767d87a6bf3b0d2b546ed1b9dd352de1d92c9139fdde266fc01c21c60"
+        },
+        "stage_summary": {
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "attention"
+            },
+            {
+              "stage": "sources",
+              "status": "completed"
+            },
+            {
+              "stage": "analysis",
+              "status": "completed"
+            },
+            {
+              "stage": "review",
+              "status": "attention"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ],
+          "meaning": "saved_execution_not_quality_verdict",
+          "schema_version": "1"
+        },
+        "evidence_links": {
+          "facts": [
+            {
+              "fact_id": "fy2022_revenue",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            },
+            {
+              "fact_id": "fy2023_revenue",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            },
+            {
+              "fact_id": "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            },
+            {
+              "fact_id": "gap_7fc4e9497915cece567534d6bd2c4742",
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "attribution": "source_or_model_extraction",
+              "identity_status": "unique",
+              "semantic_status": "not_independently_verified",
+              "dimensions_recorded": {
+                "unit": true,
+                "entity": false,
+                "metric": true,
+                "period": true,
+                "currency": true,
+                "accounting_basis": false
+              },
+              "citation_location_status": "recorded"
+            }
+          ],
+          "claims": [
+            {
+              "role": "support",
+              "claim_id": "claim_05aa46a4c1604c7c87bf4598030fccd2",
+              "citations": [
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": [
+                    "fy2022_revenue",
+                    "gap_9cf43a7c70c19f29ffbbd5cf12d06997"
+                  ]
+                },
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 1,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": [
+                    "fy2023_revenue",
+                    "gap_7fc4e9497915cece567534d6bd2c4742"
+                  ]
+                }
+              ],
+              "claim_index": 0,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_500bb441189046048f26531735865501",
+              "citations": [
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": [
+                    "fy2022_revenue",
+                    "gap_9cf43a7c70c19f29ffbbd5cf12d06997"
+                  ]
+                },
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 1,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": [
+                    "fy2023_revenue",
+                    "gap_7fc4e9497915cece567534d6bd2c4742"
+                  ]
+                }
+              ],
+              "claim_index": 1,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_0512e29b389042e9bbd9887df6d81a96",
+              "citations": [
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                },
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 1,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 2,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_43394574e019416e8ee6a4e0262d449c",
+              "citations": [
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 3,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_0e943da163d643eb9f2706ad2d6c166a",
+              "citations": [
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 4,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            },
+            {
+              "role": "support",
+              "claim_id": "claim_86c76d54aa414abbb9a9c07165de599b",
+              "citations": [
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 0,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                },
+                {
+                  "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+                  "citation_index": 1,
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ],
+              "claim_index": 5,
+              "user_fact_links": [],
+              "responds_to_claim_ids": [],
+              "semantic_support_status": "not_independently_verified",
+              "citation_location_status": "all_recorded",
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "suggested_responds_to_claim_ids": []
+            }
+          ],
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "index_scope": "research_version",
+          "calculations": [
+            {
+              "inputs": [
+                {
+                  "fact_id": "fy2023_revenue",
+                  "fact_reference": "unique"
+                },
+                {
+                  "fact_id": "fy2022_revenue",
+                  "fact_reference": "unique"
+                }
+              ],
+              "input_status": "matched",
+              "result_status": "matched",
+              "semantic_status": "not_independently_verified",
+              "calculation_index": 0
+            },
+            {
+              "inputs": [
+                {
+                  "fact_id": "fy2023_revenue",
+                  "fact_reference": "unique"
+                },
+                {
+                  "fact_id": "fy2022_revenue",
+                  "fact_reference": "unique"
+                }
+              ],
+              "input_status": "matched",
+              "result_status": "matched",
+              "semantic_status": "not_independently_verified",
+              "calculation_index": 1
+            },
+            {
+              "inputs": [
+                {
+                  "fact_id": "gap_7fc4e9497915cece567534d6bd2c4742",
+                  "fact_reference": "unique"
+                },
+                {
+                  "fact_id": "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+                  "fact_reference": "unique"
+                }
+              ],
+              "input_status": "matched",
+              "result_status": "matched",
+              "semantic_status": "not_independently_verified",
+              "calculation_index": 2
+            },
+            {
+              "inputs": [
+                {
+                  "fact_id": "gap_7fc4e9497915cece567534d6bd2c4742",
+                  "fact_reference": "unique"
+                },
+                {
+                  "fact_id": "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+                  "fact_reference": "unique"
+                }
+              ],
+              "input_status": "matched",
+              "result_status": "matched",
+              "semantic_status": "not_independently_verified",
+              "calculation_index": 3
+            }
+          ],
+          "schema_version": "1"
+        },
+        "evidence_needs": {
+          "items": [
+            {
+              "action": "获取accession 0000950170-23-035122对应原始文件进行核对",
+              "origin": "model_suggested",
+              "reason": "材料本身声明非完整年报且不能证明无重述",
+              "status": "not_obtained_or_not_verified",
+              "source_kind": "原始SEC 10-K申报文件",
+              "evidence_type": "model_suggested_material",
+              "requested_fact": "原始10-K申报文件中的收入数据以复核派生快照数值",
+              "model_question_index": 0,
+              "question_relation_status": "not_verified"
+            },
+            {
+              "action": "获取accession 0000950170-23-035122对应的完整年报文件以核实",
+              "origin": "model_suggested",
+              "reason": "派生快照不能替代完整年报，且无法确认历史可得性与重述情况",
+              "status": "not_obtained_or_not_verified",
+              "source_kind": "原始10-K filing",
+              "evidence_type": "model_suggested_material",
+              "requested_fact": "完整10-K年报原文中的收入表",
+              "model_question_index": 1,
+              "question_relation_status": "not_verified"
+            }
+          ],
+          "meaning": "review_actions_not_new_evidence",
+          "schema_version": "1"
+        },
+        "planning_error": "planning_unavailable",
+        "planning_steps": [],
+        "question_links": {
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "questions": [
+            {
+              "source_ids": [
+                "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              ],
+              "finding_ids": [
+                "claim_05aa46a4c1604c7c87bf4598030fccd2",
+                "claim_500bb441189046048f26531735865501",
+                "claim_0512e29b389042e9bbd9887df6d81a96"
+              ],
+              "counterpoints": [],
+              "question_index": 0
+            },
+            {
+              "source_ids": [
+                "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              ],
+              "finding_ids": [
+                "claim_43394574e019416e8ee6a4e0262d449c"
+              ],
+              "counterpoints": [],
+              "question_index": 1
+            }
+          ],
+          "truncated": false,
+          "index_scope": "research_version",
+          "schema_version": "1"
+        },
+        "elapsed_seconds": 35.898,
+        "max_model_calls": 3,
+        "planning_status": "failed",
+        "planning_tokens": 562,
+        "question_origin": "user",
+        "max_search_calls": 0,
+        "max_total_tokens": 20000,
+        "scope_assessment": {
+          "scope": "complete_input_selected",
+          "meaning": "input_selection_not_exhaustive_review",
+          "sources": [
+            {
+              "provided": true,
+              "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+              "analysis_status": "produced",
+              "selection_status": "complete"
+            }
+          ],
+          "attempted": true,
+          "truncated": false,
+          "schema_version": "1",
+          "indexes_truncated": false,
+          "absence_conclusions": "not_independently_verified",
+          "claim_scope_coverage": "complete_model_declarations",
+          "review_scope_coverage": "not_declared",
+          "claim_scope_declarations": [
+            {
+              "claim_id": "claim_05aa46a4c1604c7c87bf4598030fccd2",
+              "assessment": "not_independently_verified",
+              "declaration": "other",
+              "review_status": "not_reviewed",
+              "declaration_status": "model_suggested",
+              "observation_linked": false,
+              "review_declaration": "unknown",
+              "declaration_conflict": false,
+              "available_review_scope": "unknown",
+              "reported_claimed_scope": "unknown"
+            },
+            {
+              "claim_id": "claim_500bb441189046048f26531735865501",
+              "assessment": "not_independently_verified",
+              "declaration": "other",
+              "review_status": "not_reviewed",
+              "declaration_status": "model_suggested",
+              "observation_linked": false,
+              "review_declaration": "unknown",
+              "declaration_conflict": false,
+              "available_review_scope": "unknown",
+              "reported_claimed_scope": "unknown"
+            },
+            {
+              "claim_id": "claim_0512e29b389042e9bbd9887df6d81a96",
+              "assessment": "not_established",
+              "declaration": "absence",
+              "review_status": "not_reviewed",
+              "declaration_status": "model_suggested",
+              "observation_linked": true,
+              "review_declaration": "unknown",
+              "declaration_conflict": false,
+              "available_review_scope": "unknown",
+              "reported_claimed_scope": "unknown"
+            },
+            {
+              "claim_id": "claim_43394574e019416e8ee6a4e0262d449c",
+              "assessment": "not_independently_verified",
+              "declaration": "other",
+              "review_status": "not_reviewed",
+              "declaration_status": "model_suggested",
+              "observation_linked": false,
+              "review_declaration": "unknown",
+              "declaration_conflict": false,
+              "available_review_scope": "unknown",
+              "reported_claimed_scope": "unknown"
+            },
+            {
+              "claim_id": "claim_0e943da163d643eb9f2706ad2d6c166a",
+              "assessment": "not_independently_verified",
+              "declaration": "other",
+              "review_status": "not_reviewed",
+              "declaration_status": "model_suggested",
+              "observation_linked": false,
+              "review_declaration": "unknown",
+              "declaration_conflict": false,
+              "available_review_scope": "unknown",
+              "reported_claimed_scope": "unknown"
+            },
+            {
+              "claim_id": "claim_86c76d54aa414abbb9a9c07165de599b",
+              "assessment": "not_established",
+              "declaration": "absence",
+              "review_status": "not_reviewed",
+              "declaration_status": "model_suggested",
+              "observation_linked": true,
+              "review_declaration": "unknown",
+              "declaration_conflict": false,
+              "available_review_scope": "unknown",
+              "reported_claimed_scope": "unknown"
+            }
+          ],
+          "claim_indexes_requiring_scope_review": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "limitation_indexes_requiring_scope_review": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        },
+        "selection_method": "global_idf_evidence_v57_requirement_geometry",
+        "gap_search_status": "not_requested",
+        "generation_status": "completed",
+        "generation_tokens": 2202,
+        "prompt_characters": 3972,
+        "selected_segments": [
+          {
+            "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+            "character_end": 1362,
+            "character_start": 0,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u0"
+            ],
+            "context_unit_kind": "document",
+            "retrieval_facet_indexes": []
+          }
+        ],
+        "source_processing": [
+          {
+            "provided": true,
+            "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+            "eligibility": "eligible",
+            "analysis_status": "produced",
+            "text_characters": 1362,
+            "selection_status": "complete",
+            "initial_selection": "complete",
+            "selection_details": {
+              "selected_unit_count": 1,
+              "matched_facet_indexes": []
+            },
+            "selected_characters": 1362
+          }
+        ],
+        "workflow_receipts": [
+          {
+            "gaps": [],
+            "stage": "planning",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "planning",
+            "usage": 562,
+            "reason": "planning_unavailable",
+            "status": "failed",
+            "elapsed_ms": 6944,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_discovery",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "source_retrieval",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "analysis",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): 数据来自SEC companyfacts API响应的提取行，非完整原始10-K申报文件。",
+              "Model-reported limitation (not independently verified): 2026年快照的检索时间与申报日期不能独立证明历史数据的确切可得性或不存在重述。",
+              "Model-reported limitation (not independently verified): 增长率与增额由所提供的两个数值事实计算得出，未经原始申报文件复核。"
+            ],
+            "stage": "analysis",
+            "usage": 2202,
+            "status": "completed",
+            "elapsed_ms": 14177,
+            "source_ids": [
+              "source_fde2452a2abb4ae28daab78e2f2d7f95"
+            ],
+            "schema_version": "1",
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              }
+            ],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "counterpoint",
+            "reason": "The task did not authorize this optional action.",
+            "status": "not_requested",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "gap_followup",
+            "reason": "Address an outstanding, authorized research need.",
+            "status": "selected",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): 数据来自SEC companyfacts API响应的提取行，非完整原始10-K申报文件。",
+              "Model-reported limitation (not independently verified): 2026年快照的检索时间与申报日期不能独立证明历史数据的确切可得性或不存在重述。",
+              "Model-reported limitation (not independently verified): 增长率与增额由所提供的两个数值事实计算得出，未经原始申报文件复核。",
+              "Model-reported limitation (not independently verified): 材料为派生的SEC事实快照，非完整原始10-K年报，未包含财报全文",
+              "Model-reported limitation (not independently verified): 快照与申报日期不能独立证明历史数据的确切可得性或是否存在重述",
+              "Model-reported limitation (not independently verified): 同比增长率仅基于快照中两期数值计算，未与其他来源交叉验证",
+              "The evidence-gap follow-up is model generated and is not independent verification."
+            ],
+            "stage": "gap_followup",
+            "usage": 2257,
+            "status": "completed",
+            "elapsed_ms": 14063,
+            "source_ids": [
+              "source_fde2452a2abb4ae28daab78e2f2d7f95"
+            ],
+            "schema_version": "1",
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              }
+            ],
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "support_review",
+            "reason": "The model call budget is exhausted.",
+            "status": "budget_exhausted",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [],
+            "stage": "coordination",
+            "reason": "remaining_gaps",
+            "status": "stopped",
+            "elapsed_ms": 0,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          },
+          {
+            "gaps": [
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): 数据来自SEC companyfacts API响应的提取行，非完整原始10-K申报文件。",
+              "Model-reported limitation (not independently verified): 2026年快照的检索时间与申报日期不能独立证明历史数据的确切可得性或不存在重述。",
+              "Model-reported limitation (not independently verified): 增长率与增额由所提供的两个数值事实计算得出，未经原始申报文件复核。",
+              "Model-reported limitation (not independently verified): 材料为派生的SEC事实快照，非完整原始10-K年报，未包含财报全文",
+              "Model-reported limitation (not independently verified): 快照与申报日期不能独立证明历史数据的确切可得性或是否存在重述",
+              "Model-reported limitation (not independently verified): 同比增长率仅基于快照中两期数值计算，未与其他来源交叉验证",
+              "The evidence-gap follow-up is model generated and is not independent verification.",
+              "A recorded task-related evidence need or absence observation is not established; review it and obtain relevant evidence.",
+              "The model-generated research plan is an unverified guide and may omit relevant questions.",
+              "The requested research plan did not complete; the result used the original question.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+              "The requested model support review did not cover all claims.",
+              "An exact date in a claim is absent from its located quotations; verify the date and its meaning.",
+              "An explicit USD amount could not be confirmed from the attached quotations; check currency, units, source and any calculation.",
+              "A claim percentage is absent from its quotations. It may be calculated; check the calculation and source before treating the claim as supported.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "elapsed_ms": 2,
+            "source_ids": [],
+            "schema_version": "1",
+            "source_references": [],
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0
+          }
+        ],
+        "absence_assessment": {
+          "meaning": "model_suggestions_not_verified_absence",
+          "truncated": false,
+          "observations": [
+            {
+              "text": "材料明确标注为派生事实而非完整年报原文；快照声明不能独立证明历史可得性或无重述。",
+              "origin": "model_suggested",
+              "claim_ids": [
+                "claim_0512e29b389042e9bbd9887df6d81a96"
+              ],
+              "assessment": "not_established",
+              "source_ids": [
+                "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              ],
+              "input_scope": "complete_input_selected",
+              "declared_scope": "full_source"
+            },
+            {
+              "text": "材料明确声明为派生事实快照而非完整原始年报，且不能独立证明历史可得性或无重述",
+              "origin": "model_suggested",
+              "claim_ids": [
+                "claim_86c76d54aa414abbb9a9c07165de599b"
+              ],
+              "assessment": "not_established",
+              "source_ids": [
+                "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              ],
+              "input_scope": "complete_input_selected",
+              "declared_scope": "full_source"
+            }
+          ],
+          "schema_version": "1"
+        },
+        "available_fact_ids": [],
+        "planning_requested": true,
+        "research_questions": [
+          {
+            "origin": "model_suggestion",
+            "status": "linked_not_verified",
+            "question": "比较微软2022与2023财年收入并说明材料性质与历史可得性限制",
+            "claim_ids": [
+              "claim_05aa46a4c1604c7c87bf4598030fccd2",
+              "claim_500bb441189046048f26531735865501",
+              "claim_0512e29b389042e9bbd9887df6d81a96"
+            ]
+          },
+          {
+            "origin": "model_suggestion",
+            "status": "linked_not_verified",
+            "question": "比较微软2022与2023财年收入（财年起止、币种、金额），计算增额及同比增长率；说明材料是否为完整年报及历史可得性限制",
+            "claim_ids": [
+              "claim_43394574e019416e8ee6a4e0262d449c"
+            ]
+          }
+        ],
+        "counterpoint_status": "not_requested",
+        "gap_followup_status": "completed",
+        "gap_followup_tokens": 2257,
+        "max_elapsed_seconds": 180,
+        "support_review_mode": "batch",
+        "gap_followup_targets": [
+          0,
+          1
+        ],
+        "gap_search_requested": false,
+        "model_evidence_needs": [
+          {
+            "action": "获取accession 0000950170-23-035122对应原始文件进行核对",
+            "origin": "model_suggested",
+            "reason": "材料本身声明非完整年报且不能证明无重述",
+            "source_kind": "原始SEC 10-K申报文件",
+            "question_index": 0,
+            "requested_fact": "原始10-K申报文件中的收入数据以复核派生快照数值"
+          },
+          {
+            "action": "获取accession 0000950170-23-035122对应的完整年报文件以核实",
+            "origin": "model_suggested",
+            "reason": "派生快照不能替代完整年报，且无法确认历史可得性与重述情况",
+            "source_kind": "原始10-K filing",
+            "question_index": 1,
+            "requested_fact": "完整10-K年报原文中的收入表"
+          }
+        ],
+        "official_fetch_calls": 0,
+        "requirement_coverage": {
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "requirements": [
+            {
+              "gaps": [
+                "request_decomposition_not_verified"
+              ],
+              "origin": "user",
+              "source_ids": [],
+              "finding_ids": [],
+              "counterpoints": [],
+              "requirement_id": "user_request",
+              "relation_status": "not_assessed",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [],
+              "candidate_calculation_indexes": []
+            },
+            {
+              "gaps": [],
+              "origin": "model_suggested",
+              "source_ids": [
+                "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              ],
+              "finding_ids": [
+                "claim_05aa46a4c1604c7c87bf4598030fccd2",
+                "claim_500bb441189046048f26531735865501",
+                "claim_0512e29b389042e9bbd9887df6d81a96"
+              ],
+              "counterpoints": [],
+              "question_index": 0,
+              "requirement_id": "question:0",
+              "relation_status": "linked_suggestion",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [
+                "fy2022_revenue",
+                "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+                "fy2023_revenue",
+                "gap_7fc4e9497915cece567534d6bd2c4742"
+              ],
+              "model_relation_status": "suggested_not_independently_verified",
+              "candidate_calculation_indexes": [
+                0,
+                1
+              ]
+            },
+            {
+              "gaps": [],
+              "origin": "model_suggested",
+              "source_ids": [
+                "source_fde2452a2abb4ae28daab78e2f2d7f95"
+              ],
+              "finding_ids": [
+                "claim_43394574e019416e8ee6a4e0262d449c"
+              ],
+              "counterpoints": [],
+              "question_index": 1,
+              "requirement_id": "question:1",
+              "relation_status": "linked_suggestion",
+              "semantic_status": "not_independently_verified",
+              "candidate_fact_ids": [
+                "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+                "gap_7fc4e9497915cece567534d6bd2c4742"
+              ],
+              "model_relation_status": "suggested_not_independently_verified",
+              "candidate_calculation_indexes": [
+                2,
+                3
+              ]
+            }
+          ],
+          "schema_version": "1",
+          "requested_actions": [
+            {
+              "action": "planning",
+              "execution_status": "failed",
+              "requirement_status": "unmet"
+            },
+            {
+              "action": "gap_followup",
+              "execution_status": "completed",
+              "requirement_status": "executed"
+            },
+            {
+              "action": "support_review",
+              "execution_status": "budget_exhausted",
+              "requirement_status": "unmet"
+            }
+          ]
+        },
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "completion_assessment": {
+          "meaning": "execution_record_not_task_quality_verdict",
+          "task_coverage": "not_independently_verified",
+          "schema_version": "1",
+          "execution_status": "known_gap",
+          "source_semantics": "not_independently_verified",
+          "model_reported_task_gap": true,
+          "unmet_requested_actions": [
+            "planning",
+            "support_review"
+          ],
+          "suggested_requirement_gaps": []
+        },
+        "gap_followup_segments": [
+          {
+            "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+            "character_end": 1362,
+            "character_start": 0,
+            "model_source_id": "ref-1",
+            "complete_context": true,
+            "context_unit_ids": [
+              "u0"
+            ],
+            "context_unit_kind": "document",
+            "retrieval_facet_indexes": []
+          }
+        ],
+        "official_fetch_status": "not_requested",
+        "planning_requirements": [],
+        "run_source_processing": [
+          {
+            "meaning": "analysis_and_gap_ranges_not_exhaustive_review",
+            "coverage": "complete",
+            "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+            "stage_ranges": [
+              {
+                "stage": "analysis",
+                "ranges": [
+                  {
+                    "end": 1362,
+                    "start": 0
+                  }
+                ]
+              },
+              {
+                "stage": "gap_followup",
+                "ranges": [
+                  {
+                    "end": 1362,
+                    "start": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "support_review_method": "bounded_quotation_context_model_review_v32",
+        "support_review_status": "budget_exhausted",
+        "counterpoint_requested": false,
+        "gap_followup_requested": true,
+        "planning_prompt_sha256": "84a479aa7944053eb2f9ff618bba53713bb713ffa3af12ed96f63e3206a3aa9a",
+        "planning_system_sha256": "934a64284443253a2a5c194e3fa9c602518fac410ba8111ee17dfd10e4f9a02c",
+        "source_search_receipts": [],
+        "support_review_indexes": [],
+        "model_requirement_links": [
+          {
+            "status": "model_suggested",
+            "fact_ids": [
+              "fy2022_revenue",
+              "fy2023_revenue"
+            ],
+            "question": "比较微软2022与2023财年收入并说明材料性质与历史可得性限制",
+            "source_ids": [
+              "source_fde2452a2abb4ae28daab78e2f2d7f95"
+            ],
+            "question_index": 0,
+            "semantic_status": "not_independently_verified",
+            "calculation_indexes": [
+              0,
+              1
+            ]
+          },
+          {
+            "status": "model_suggested",
+            "fact_ids": [
+              "gap_9cf43a7c70c19f29ffbbd5cf12d06997",
+              "gap_7fc4e9497915cece567534d6bd2c4742"
+            ],
+            "question": "比较微软2022与2023财年收入（财年起止、币种、金额），计算增额及同比增长率；说明材料是否为完整年报及历史可得性限制",
+            "source_ids": [
+              "source_fde2452a2abb4ae28daab78e2f2d7f95"
+            ],
+            "question_index": 1,
+            "semantic_status": "not_independently_verified",
+            "calculation_indexes": [
+              2,
+              3
+            ]
+          }
+        ],
+        "support_review_segments": [],
+        "provider_timeout_seconds": 120.0,
+        "require_counterarguments": false,
+        "support_review_omissions": [],
+        "support_review_requested": true,
+        "counterpoint_omitted_rows": 0,
+        "gap_followup_input_targets": [
+          0,
+          1
+        ],
+        "gap_followup_prompt_sha256": "b2686f156b4b946646d3d1b1becdd5d0be5cdf04fda94442ff3e39d3b5c06b68",
+        "model_absence_observations": [
+          {
+            "text": "材料明确标注为派生事实而非完整年报原文；快照声明不能独立证明历史可得性或无重述。",
+            "scope": "full_source",
+            "origin": "model_suggested",
+            "assessment": "not_established",
+            "source_ids": [
+              "source_fde2452a2abb4ae28daab78e2f2d7f95"
+            ],
+            "observation_ref": "absence_c03f6a11b6674bf08534daa007d37cd6"
+          },
+          {
+            "text": "材料明确声明为派生事实快照而非完整原始年报，且不能独立证明历史可得性或无重述",
+            "scope": "full_source",
+            "origin": "model_suggested",
+            "assessment": "not_established",
+            "source_ids": [
+              "source_fde2452a2abb4ae28daab78e2f2d7f95"
+            ],
+            "observation_ref": "absence_3c4ee2ecc27946bb8b77c1a0f7e8a6a9"
+          }
+        ],
+        "provider_input_token_limit": 6000,
+        "gap_followup_input_fact_ids": [],
+        "provider_output_token_limit": 4000,
+        "support_review_system_sha256": "0a684f0bbf1938f4160e3bd35e03b55b44cf846ebc09cb81e4cb5692c244ccf8",
+        "counterpoint_discarded_fields": 0,
+        "gap_followup_question_targets": [],
+        "support_review_failed_indexes": [],
+        "settled_model_budget_accounted_tokens": 5021
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_fde2452a2abb4ae28daab78e2f2d7f95"
+    ],
+    "created_by": "agent"
+  },
+  "source_provenance": [
+    {
+      "schema_version": "1",
+      "source_id": "source_fde2452a2abb4ae28daab78e2f2d7f95",
+      "title": "SEC companyfacts derived Microsoft fiscal 2022–2023 revenue snapshot (not original filing)",
+      "kind": "user_supplied",
+      "is_simulated": false,
+      "published_at": null,
+      "event_at": null,
+      "revised_at": null,
+      "obtained_at": "2026-11-14T10:28:02.156541Z",
+      "content_sha256": "a46d6f7767d87a6bf3b0d2b546ed1b9dd352de1d92c9139fdde266fc01c21c60",
+      "retrieval_method": "user_supplied",
+      "pdf_text_order": null,
+      "derived_from_source_id": null,
+      "response_sha256": null,
+      "response_content_type": null,
+      "permissions": {
+        "store": true,
+        "model_input": true,
+        "display": true,
+        "export": true
+      },
+      "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+      "verification": "user_declared_not_verified"
+    }
+  ],
+  "disclosure": "Model interpretations and declared source permissions are not independently verified.",
+  "calculation_disclosure": "Calculations use the recorded inputs; their source precision and prior rounding are not established."
+}

@@ -1,0 +1,12 @@
+{
+  "version":"holdout-candidates-v0.1-not-frozen",
+  "status":"draft-not-independent-until-review-and-freeze",
+  "tasks":[
+    {"id":"H01","question":"计算 Walmart 2024 财年收入同比，说明数值、单位、分母和来源。","as_of":"2024-03-20T00:00:00Z","sources":["holdout-walmart-2024.json"]},
+    {"id":"H02","question":"计算 Walmart 2024 财年营业利润率，说明分子和分母。","as_of":"2024-03-20T00:00:00Z","sources":["holdout-walmart-2024.json"]},
+    {"id":"H03","question":"Walmart 2024 财年总收入是否完全来自净销售？","as_of":"2024-03-20T00:00:00Z","sources":["holdout-walmart-2024.json"]},
+    {"id":"H04","question":"计算 Coca-Cola 2024 年净营业收入同比，展示计算过程。","as_of":"2025-03-01T00:00:00Z","sources":["holdout-coca-cola-2024.json"]},
+    {"id":"H05","question":"Walmart 和 Coca-Cola 的 2024 财年收入增长率能否视为同一日历期间？说明依据和限制。","as_of":"2025-03-01T00:00:00Z","sources":["holdout-walmart-2024.json","holdout-coca-cola-2024.json"]},
+    {"id":"H06","question":"根据给定资料区分 2023 年全年实际 GDP 增长初值和 2024 年 9 月联邦基金目标区间，能否单凭这两项推断政策对 GDP 的因果效果？","as_of":"2024-09-19T00:00:00Z","sources":["macro-bea-2023-advance.json","macro-fed-2024-09.json"]}
+  ]
+}

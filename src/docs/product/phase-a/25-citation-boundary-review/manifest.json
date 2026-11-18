@@ -1,0 +1,40 @@
+{
+  "expected": {
+    "0": [
+      "does_not_support",
+      "uncertain"
+    ],
+    "1": [
+      "supports"
+    ],
+    "2": [
+      "does_not_support",
+      "contradicts"
+    ]
+  },
+  "files_sha256": {
+    "baseline-system.txt": "89eb428d881fc96dc24a4394d1fd0ab1639535aa796336d96b1d35ba9640e395",
+    "run.py": "a55af9a33dbfaa387bd1560a4351bfb5e370a91f195ccd92cab7e4bea7116955",
+    "score.py": "3e8f3954ccb24492cb13cd8d7a3e5d1e1c1f9bae2d2d30a232c1065ee091d904"
+  },
+  "generation": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "reasoning_effort": "low",
+    "response_format": "json_object",
+    "thinking": "enabled"
+  },
+  "implementation_commit": "5c9375319e1e146aaa1e35feab03985ca722a084",
+  "max_calls": 2,
+  "model": "glm-5.3-flash",
+  "order": [
+    "baseline",
+    "bounded_quote"
+  ],
+  "pricing": "unknown; stop after unknown or invalid result",
+  "provider_timeout_seconds": 60,
+  "purpose": "Compare review prompts using the same three predeclared source-bound claims, source excerpts and model parameters. Development probe, not independent validation.",
+  "retry_external_calls": 0,
+  "source_input_sha256": "084a7c2fd430de74e7a1edfeee7b91f48a56c43d0f4fe46c97fe9d380aa1cf43",
+  "variable": "review prompt and quotation-boundary representation, treated as one prompt-method factor"
+}

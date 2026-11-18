@@ -1,0 +1,170 @@
+{
+  "id": "H01",
+  "operation_status": "completed",
+  "input_sha256": "59acc14d30e6f02ebc94767f6ae719a7a3353d4413c6204c0a8d42411c096862",
+  "manifest_sha256": "df6c79b385c354aa5a6d9cfad09d8857ea585230f74520d54f41a5037476fcf9",
+  "elapsed_seconds_observed": 12.75,
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_9d12269e0e8749178e9ab4cb3827eac9",
+        "title": "Walmart FY2024 SEC filing: derived financial facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/104169/000010416924000056/wmt-20240131.htm",
+        "published_at": null,
+        "obtained_at": "2026-11-12T01:42:28.663755+00:00",
+        "revised_at": null,
+        "content_sha256": "0bf7d6c1fbf8e2e1bc0f829f41e53afaf07efa7ba880aca82b2840f46bdd0223",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fy2024_total_revenues",
+        "value": "648125",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (ending January 31)",
+        "label": "total_revenues FY2024",
+        "source_id": "source_9d12269e0e8749178e9ab4cb3827eac9",
+        "quotation": "\"FY2024\":{\"total_revenues\":648125",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 108,
+          "character_end": 141
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fy2023_total_revenues",
+        "value": "611289",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2023 (ending January 31)",
+        "label": "total_revenues FY2023",
+        "source_id": "source_9d12269e0e8749178e9ab4cb3827eac9",
+        "quotation": "\"FY2023\":{\"total_revenues\":611289",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 73,
+          "character_end": 106
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fy2024_total_revenues",
+            "value": "648125",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024 (ending January 31)"
+          },
+          {
+            "fact_id": "fy2023_total_revenues",
+            "value": "611289",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2023 (ending January 31)"
+          }
+        ],
+        "value": "6.03",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "claims": [
+      {
+        "text": "Walmart FY2024 总收入为 648,125（百万美元），FY2023 为 611,289（百万美元），故 FY2024 同比增速为 (648,125 − 611,289) / 611,289 ≈ 6.03%（基于所引数值的推断性计算，需按公式执行）。分母为 FY2023 总收入 611,289 百万美元，来源为 source_9d12269e0e8749178e9ab4cb3827eac9（Walmart FY2024 SEC filing 衍生财务数据），财年止于1月31日。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_9d12269e0e8749178e9ab4cb3827eac9",
+            "location": {
+              "character_start": 0,
+              "character_end": 141
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "{\"issuer\":\"Walmart\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"January 31\",\"FY2023\":{\"total_revenues\":611289},\"FY2024\":{\"total_revenues\":648125"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "该同比基于 total_revenues；若改用 net_sales（642,637）作为分子或 FY2023 缺少对应 net_sales 口径，结果会不同；且该文件为“derived financial facts”，非原始申报原文。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "源文本为衍生数据，未提供原始 SEC 申报原文链接",
+      "FY2023 缺少 net_sales 等细分口径，无法做口径完全一致的对比",
+      "增速百分比需由系统按公式计算，本回复未自行计算",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:ea288e8c3280e6ee6c88f56a",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 942,
+      "cost_usd": null,
+      "generation_tokens": 942,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 12.29,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "b5ef3a70fe75ca234c952238fda837a3f4fc162c07c887239061e6f54c1918f9",
+      "prompt_characters": 1071,
+      "prompt_bytes": 1117,
+      "selection_method": "ranked_nonoverlapping_windows_v3",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_9d12269e0e8749178e9ab4cb3827eac9",
+          "character_start": 0,
+          "character_end": 222
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_9d12269e0e8749178e9ab4cb3827eac9": "0bf7d6c1fbf8e2e1bc0f829f41e53afaf07efa7ba880aca82b2840f46bdd0223"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

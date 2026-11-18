@@ -1,0 +1,8 @@
+6eae89c36641cfeb4a7eb2c7b32640a1dbb0183d801a33fc7e7cdf3d9e6695c4  src/docs/product/phase-a/349-production-transport-diagnosis/probe.py
+33b9480febd6e3f5d97cbdcf845266c19f138806f1a571b7afb820859d5e343b  src/apps/api/app/openai_compatible.py
+fc6d1b1abdfc3b7cc1bf32c6a8a98bc154285b2feb0cc4ebd5cfa0d64ba04435  src/apps/api/app/transport_diagnostics.py
+29b704405f1cbe1afd767561649e7841fa596f53f0c27cc2cc8d29dba0536eba  src/apps/api/app/research_diagnostics.py
+98f040d2400dd7a0743c373a94b02e6f26ab4ca23133d11cdafbfdfeab983a2c  src/apps/api/app/research_coordinator.py
+71cf1a56329b57562a9f5107ca93161bf2625feb1c6eee5f44985a080ea40a09  src/apps/api/app/research_recovery.py
+739489b16707581f88c7751306fd284832e522a0fa4aac4f2b3ea29ec8148ea9  src/apps/api/app/phase3.py
+9d4845415553d3044f60ddf81432958bd0da7405b56c7bb8679d007acdf994e3  src/docs/product/phase-a/349-production-transport-diagnosis/fixed-parameters.json

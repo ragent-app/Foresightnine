@@ -1,0 +1,60 @@
+{
+  "checked_at_utc": "2026-11-11T11:06:03.598148+00:00",
+  "bank_sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2",
+  "reference_sha256": "af5f35131b0cdfdec15424941a10b7b82e64d08048f70c5d7295bc7dae146928",
+  "checks": [
+    {
+      "id": "D01",
+      "sources": [
+        "msft-fy2023.json"
+      ],
+      "reference_excluded": true,
+      "no_2024_revenue_in_D06": true
+    },
+    {
+      "id": "D02",
+      "sources": [
+        "msft-fy2023.json"
+      ],
+      "reference_excluded": true,
+      "no_2024_revenue_in_D06": true
+    },
+    {
+      "id": "D03",
+      "sources": [
+        "msft-fy2023.json"
+      ],
+      "reference_excluded": true,
+      "no_2024_revenue_in_D06": true
+    },
+    {
+      "id": "D06",
+      "sources": [
+        "msft-fy2023.json"
+      ],
+      "reference_excluded": true,
+      "no_2024_revenue_in_D06": true
+    },
+    {
+      "id": "D07",
+      "sources": [
+        "msft-fy2023.json",
+        "msft-fy2024.json"
+      ],
+      "reference_excluded": true,
+      "no_2024_revenue_in_D06": true
+    },
+    {
+      "id": "D08",
+      "sources": [
+        "msft-fy2023.json",
+        "msft-fy2024.json"
+      ],
+      "reference_excluded": true,
+      "no_2024_revenue_in_D06": true
+    }
+  ],
+  "limitations": [
+    "Does not establish source publication time, model future knowledge, correctness of all facts, human review, or independent test status."
+  ]
+}

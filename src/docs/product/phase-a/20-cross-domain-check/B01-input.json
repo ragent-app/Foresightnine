@@ -1,0 +1,8 @@
+{
+  "id": "B01",
+  "question": "According to the supplied BLS release, what were the January 2024 CPI-U all-items monthly and 12-month changes? State their different seasonal-adjustment bases.",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"U.S. Bureau of Labor Statistics\",\"release\":\"Consumer Price Index January 2024\",\"records\":[{\"metric\":\"CPI-U all items\",\"period\":\"January 2024 monthly\",\"seasonal_adjustment\":\"seasonally adjusted\",\"value\":0.3,\"unit\":\"percent\"},{\"metric\":\"CPI-U all items\",\"period\":\"12 months ending January 2024\",\"seasonal_adjustment\":\"not seasonally adjusted\",\"value\":3.1,\"unit\":\"percent\"}]}",
+  "source_title": "BLS CPI January 2024 release: derived figures",
+  "source_url": "https://www.bls.gov/news.release/archives/cpi_02132024.htm"
+}

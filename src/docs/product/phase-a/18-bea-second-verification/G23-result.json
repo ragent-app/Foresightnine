@@ -1,0 +1,249 @@
+{
+  "id": "G23",
+  "operation_status": "completed",
+  "manifest_sha256": "5c3fbbf143ea7bac1002740086c590a461909043b3f94320946e690896465f6e",
+  "input_sha256": "b4e008482dd600e2ba2e27bac4cb451e45d8bb1310d27eb35a491ef5e14fdfe3",
+  "elapsed_seconds_observed": 18.611,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+        "title": "BEA GDP 2023 second estimate",
+        "url": null,
+        "published_at": "2024-02-28T13:30:00+00:00",
+        "obtained_at": "2026-11-12T02:03:03.926234+00:00",
+        "revised_at": null,
+        "content_sha256": "0ceee0b81c77a187a1891a5ba9ddd19dc1ffd47570ae227fd32d17e7f658ca2c",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fy2023_real_gdp_growth",
+        "value": "2.5",
+        "unit": "percent",
+        "currency": null,
+        "period": "2023 annual (from 2022 annual level to 2023 annual level)",
+        "label": "Full-year 2023 real GDP growth",
+        "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+        "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level)",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 6186,
+          "character_end": 6278,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "q4_2023_annualized_growth",
+        "value": "3.2",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "Fourth quarter of 2023",
+        "label": "Q4 2023 real GDP growth, annualized rate",
+        "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+        "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the fourth quarter of\n2023",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 424,
+          "character_end": 530,
+          "page": 1
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fy2022_real_gdp_growth",
+        "value": "1.9",
+        "unit": "percent",
+        "currency": null,
+        "period": "2022 annual",
+        "label": "Full-year 2022 real GDP growth (comparison)",
+        "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+        "quotation": "compared\nwith an increase of 1.9 percent in 2022",
+        "quotation_match": "whitespace_normalized",
+        "location": {
+          "character_start": 6280,
+          "character_end": 6328,
+          "page": 3
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "difference",
+        "formula_version": "2",
+        "expression": "first - second",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fy2023_real_gdp_growth",
+            "value": "2.5",
+            "unit": "percent",
+            "currency": null,
+            "period": "2023 annual (from 2022 annual level to 2023 annual level)"
+          },
+          {
+            "fact_id": "fy2022_real_gdp_growth",
+            "value": "1.9",
+            "unit": "percent",
+            "currency": null,
+            "period": "2022 annual"
+          }
+        ],
+        "value": "0.60",
+        "unit": "percentage points",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "claims": [
+      {
+        "text": "The BEA second estimate reports full-year 2023 real GDP growth of 2.5 percent, measured as the increase from the 2022 annual level to the 2023 annual level.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+            "location": {
+              "character_start": 6186,
+              "character_end": 6339,
+              "page": 3
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level), compared\nwith an increase of 1.9 percent in 2022 (table 1)."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "The same release reports fourth-quarter 2023 real GDP growth of 3.2 percent expressed as an annual rate, covering only Q4 rather than the full year.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+            "location": {
+              "character_start": 424,
+              "character_end": 621,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the fourth quarter of\n2023 (table 1), according to the \"second\" estimate released by the Bureau of Economic Analysis."
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "These figures are not directly comparable periods: the 2.5 percent is a full-year annual-over-annual growth rate, while the 3.2 percent is a quarter-over-quarter growth rate annualized for the fourth quarter only; the higher Q4 figure does not imply the year grew faster than 2.5 percent.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+            "location": {
+              "character_start": 424,
+              "character_end": 530,
+              "page": 1
+            },
+            "quotation_match": "whitespace_normalized",
+            "support_status": "not_independently_verified",
+            "quotation": "Real gross domestic product (GDP) increased at an annual rate of 3.2 percent in the fourth quarter of\n2023"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "One might interpret the 3.2 percent Q4 annualized rate as indicating full-year momentum exceeding the 2.5 percent annual figure, but they measure different periods (a single quarter vs. the full calendar year) and are not directly comparable.",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+            "location": {
+              "character_start": 6186,
+              "character_end": 6278,
+              "page": 3
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "Real GDP increased 2.5 percent in 2023 (from the 2022 annual level to the 2023 annual level)"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Source source_ae956bff54d04ecaa1f2fc8e916ec86e: only character ranges 147–621, 5888–6362 were analyzed; remaining text was not examined.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "This is the \"second\" estimate, subject to later revision; annual and quarterly figures may change in subsequent updates.",
+      "The 2.5 percent figure is an annual-over-annual comparison, not the sum or average of quarterly annualized rates.",
+      "The source excerpt does not provide Q4's quarterly-over-quarter unannualized rate or details of revision history.",
+      "No data is supplied on which components drove either growth figure.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:f84613da3ecab46f01e3d2fa",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1531,
+      "cost_usd": null,
+      "generation_tokens": 1531,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 17.459,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "8996eb9a8816fb0a1410fd14ac12985cbae5b9a86f957015f7f40109c686d5d5",
+      "prompt_characters": 2055,
+      "prompt_bytes": 2055,
+      "selection_method": "ranked_nonoverlapping_windows_v5",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+          "character_start": 147,
+          "character_end": 621
+        },
+        {
+          "source_id": "source_ae956bff54d04ecaa1f2fc8e916ec86e",
+          "character_start": 5888,
+          "character_end": 6362
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_ae956bff54d04ecaa1f2fc8e916ec86e": "0ceee0b81c77a187a1891a5ba9ddd19dc1ffd47570ae227fd32d17e7f658ca2c"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

@@ -1,0 +1,33 @@
+{
+  "scope": "predeclared strict task-specific engineering checks; all material numbers require exact traceable authorized evidence; model self-assessment is not evidence Correct source mapping, each material claim, currency, metric and period must be independently checkable; absence unsupported by the visible scope must remain uncertain.",
+  "MACRO_CALC": [
+    "2022 Q2 -0.6%, Q3 +2.6%, +3.2 percentage points; annualized; advance estimate",
+    "correct exact source citations and estimate limits"
+  ],
+  "MISSING_BOUNDARY": [
+    "2022 Q3 +2.6% annualized",
+    "unemployment not established by supplied GDP release; identify relevant BLS employment/unemployment source without inventing rate"
+  ],
+  "PDF_TABLE_EN": [
+    "Table 1 2023 Q3/Q4 real GDP 4.9%/3.3%, change -1.6 percentage points; real PCE 3.1%/2.8%, change -0.3 percentage points",
+    "seasonally adjusted annual rates, advance estimate, source table header/row and original offsets, no prose substitution for table proof"
+  ],
+  "POLICY_COMPARE_ZH": [
+    "2020-06-10 and 2020-07-29 both target range 0–0.25%, both endpoints 0 percentage-point change",
+    "two snapshots do not establish all intervening decisions; cite both original statements"
+  ],
+  "COMPANY_REVENUE_PROFIT_BOUNDARY": {
+    "supported_completion": [
+      "2022 FY 2021-07-01 through 2022-06-30 revenue USD 198270000000; 2023 FY 2022-07-01 through 2023-06-30 revenue USD 211915000000",
+      "deterministic difference 13645000000 USD; growth = (211915000000/198270000000 - 1)*100 = 6.882029555656428...%, rounded 6.88%",
+      "each calculation traceably links both inputs, period, unit and corresponding statement; report dataset is a derived SEC facts snapshot, not full filing; historical availability and restatements unverified"
+    ],
+    "honest_degradation": [
+      "Two operating profit margins cannot be computed from revenue alone and supplied snapshot; no invented profit amounts or margins",
+      "Name operating income/profit for both fiscal periods from an appropriately authorized SEC 10-K or company filing, plus consistent revenue/period/currency, as needed material",
+      "Do not claim entire underlying filing or SEC contains no operating profit merely because this derived snapshot lacks it"
+    ],
+    "scoring": "Score supported_completion and honest_degradation separately; missing profit does not excuse failing available revenue facts or calculations."
+  },
+  "overall": "A supported task passes only when every required criterion including citations and calculations is met; record unsupported requests as a separate honest-degradation outcome. Partial delivery or unknown quality is not an automatic pass. Five tasks do not establish independent formal quality or phase B completion."
+}

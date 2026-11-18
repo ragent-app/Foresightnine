@@ -1,0 +1,38 @@
+{
+  "H04": {
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "47061",
+        "45754"
+      ],
+      "unit": "percent",
+      "value": "2.86"
+    },
+    "facts": [
+      {
+        "period": "2023",
+        "value": "45754"
+      },
+      {
+        "period": "2024",
+        "value": "47061"
+      }
+    ],
+    "unit": "USD millions"
+  },
+  "M01": {
+    "calculation": null,
+    "facts": [
+      {
+        "period": "2023",
+        "value": "2.9"
+      },
+      {
+        "period": "2024",
+        "value": "2.8"
+      }
+    ],
+    "unit": "percent"
+  }
+}

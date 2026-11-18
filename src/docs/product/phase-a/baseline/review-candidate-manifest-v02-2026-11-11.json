@@ -1,0 +1,173 @@
+{
+  "version": "review-candidate-manifest-v0.2",
+  "created_at_utc": "2026-11-11T11:26:32.598483+00:00",
+  "status": "draft-not-frozen-human-review-pending",
+  "supersedes": "review-candidate-manifest-2026-11-11.json",
+  "change": "holdout v0.3 clarifies H02 denominator; v0.2 H02 must not be scored as written",
+  "files": [
+    {
+      "file": "apple-2024-details.json",
+      "bytes": 683,
+      "sha256": "e03597e965d533c0a49e0e0a4929353b4545d1f15aefe5c65024b1576020ede6"
+    },
+    {
+      "file": "build_company_input.py",
+      "bytes": 1824,
+      "sha256": "afcbe335ad03953d150e484a7ec1420ee364f8f06050b854c59775f60321009c"
+    },
+    {
+      "file": "build_failure_input.py",
+      "bytes": 1843,
+      "sha256": "503ef746beec40e1899c7331824890543a4538b3e836958b7a6c115374fa888e"
+    },
+    {
+      "file": "build_holdout_input.py",
+      "bytes": 2006,
+      "sha256": "a10a310c6d628a483a12e36c8b2a0dce50714272c18d7814e5935200db722928"
+    },
+    {
+      "file": "build_holdout_v02_input.py",
+      "bytes": 2155,
+      "sha256": "c7f9178d93ad37d4d1dbde4b11502d1670a82409af6167223c23e1fa01c0945a"
+    },
+    {
+      "file": "build_holdout_v03_input.py",
+      "bytes": 2155,
+      "sha256": "00b985d19c65b1137542e97e71a91e6eb50e51e4ae2e863f70305e0a7f37cb4f"
+    },
+    {
+      "file": "build_macro_input.py",
+      "bytes": 2634,
+      "sha256": "603b1a675ae0182826e97abdf21fff809c1bbfcc6c8ac49cd5bc56a40fab2b82"
+    },
+    {
+      "file": "build_pilot_input.py",
+      "bytes": 1863,
+      "sha256": "cee3dbc54e456b07ce3249c95dd8339399926db95823f31dc9d47253aefe39d5"
+    },
+    {
+      "file": "company_reference_v01.json",
+      "bytes": 1511,
+      "sha256": "5651209e7a8dde489faabafe65a04e34f36c20d4a9d97f61a5a2e04efff454b6"
+    },
+    {
+      "file": "company_tasks_v01.json",
+      "bytes": 1901,
+      "sha256": "2d7e5706f1c26544dbc10b2599d5e913ce7c1d825a1c3e077fb13b75435e64b9"
+    },
+    {
+      "file": "failure_reference_v01.json",
+      "bytes": 1554,
+      "sha256": "836ba9ffc72cae5da4f9ecbeb7a23cbfe29cde05db60f1ae02d0f8911c097956"
+    },
+    {
+      "file": "failure_tasks_v01.json",
+      "bytes": 2684,
+      "sha256": "704dbf0cca5775046a4d3509540209306dc1f92744da181b834adc9d179b49d3"
+    },
+    {
+      "file": "holdout-coca-cola-2024.json",
+      "bytes": 545,
+      "sha256": "2991acde214b0a42e6b1110b4030bcf1aecb09d9c54e0dfe925733298fc41bad"
+    },
+    {
+      "file": "holdout-walmart-2024.json",
+      "bytes": 616,
+      "sha256": "05c25b2069b31ec140d4b6ad7a601674d7181b985fcaf16950a276c09f31e5b3"
+    },
+    {
+      "file": "holdout_reference_v01.json",
+      "bytes": 1098,
+      "sha256": "d7f50ca497bf3a5843ccd6def459ff9a8f4c44771cd01359168b55b05bc1be25"
+    },
+    {
+      "file": "holdout_reference_v02.json",
+      "bytes": 1564,
+      "sha256": "bf3b1b6b37656d7405e658e7546bf06328177d11f6bb6ca3b75bd47c6c876f3a"
+    },
+    {
+      "file": "holdout_reference_v03.json",
+      "bytes": 2132,
+      "sha256": "e33c8e76d59aee10e8178b998fc91722ffa0e87b07f4573c4af3d48eebaa7ea7"
+    },
+    {
+      "file": "holdout_tasks_v01.json",
+      "bytes": 1360,
+      "sha256": "b5bfb431da601c96d8483614f09b890ada6fee7973ec36203ef814618695d44e"
+    },
+    {
+      "file": "holdout_tasks_v02.json",
+      "bytes": 2385,
+      "sha256": "047a660625e5e574296b4f51af127d95a16a7544a0d8cd8dffda73ac56ef2e6d"
+    },
+    {
+      "file": "holdout_tasks_v03.json",
+      "bytes": 3161,
+      "sha256": "d67d74b300f88ad172c0d6c80394abc67f52db69de020c99c7d81631f4aaf2c6"
+    },
+    {
+      "file": "macro-bea-2023-advance.json",
+      "bytes": 713,
+      "sha256": "fd773359d4a9dd0ba1a5abd73345df30ce971ed906bec7c4d1111427f010d652"
+    },
+    {
+      "file": "macro-bea-2023-second.json",
+      "bytes": 625,
+      "sha256": "4ac01cf2a1820a3ca6acd8ab878674f47c2a0249df2a24d71753ebe8749db12a"
+    },
+    {
+      "file": "macro-bea-2024-advance.json",
+      "bytes": 747,
+      "sha256": "c6e8eb4706e048f9f131ed97c5313f00fcc8bfcddce3ecf4cf459fc58a84ff4a"
+    },
+    {
+      "file": "macro-fed-2024-09.json",
+      "bytes": 669,
+      "sha256": "8bee435da583e64f87775ba5fd29351fa20d6fede97f3d0a9a879c165f5c0d28"
+    },
+    {
+      "file": "macro_reference_v01.json",
+      "bytes": 1042,
+      "sha256": "a94c4b62ce8a601a84524589712ceaa21f863584239b9ba1aebf7ed7f2b4bc6b"
+    },
+    {
+      "file": "macro_tasks_v01.json",
+      "bytes": 1146,
+      "sha256": "2be004b1207c7503f201bc4201a5bc82dbebd05609efb9ef476fa90f49eefc03"
+    },
+    {
+      "file": "msft-2023-details.json",
+      "bytes": 700,
+      "sha256": "ab26ccc29ee72d5227320ba8486dd8416d1009e296cdabc57bfaea2f87ec870c"
+    },
+    {
+      "file": "msft-2024-details.json",
+      "bytes": 592,
+      "sha256": "ba409bcc55f6f99cd34bc92871c3d2a1aeec29aeb02c47730917a36e2ea5dc7b"
+    },
+    {
+      "file": "msft-fy2023.json",
+      "bytes": 565,
+      "sha256": "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd"
+    },
+    {
+      "file": "msft-fy2024.json",
+      "bytes": 614,
+      "sha256": "d7d1ffdd9abe0a509a246d0620809eab182dc7d5abb681a4a9e0cf581aefe2d5"
+    },
+    {
+      "file": "pilot_reference.json",
+      "bytes": 1208,
+      "sha256": "af5f35131b0cdfdec15424941a10b7b82e64d08048f70c5d7295bc7dae146928"
+    },
+    {
+      "file": "pilot_tasks.json",
+      "bytes": 1222,
+      "sha256": "adf9a39a8c44c549f189e90e4957695415474de8da5985897744be0cdeea11f2"
+    }
+  ],
+  "limitations": [
+    "Content hashes do not certify factual accuracy, legal permission, historical availability, or independent human review.",
+    "Source documents have separate acquisition manifests."
+  ]
+}

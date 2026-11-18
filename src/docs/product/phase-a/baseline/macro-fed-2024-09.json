@@ -1,0 +1,12 @@
+{
+  "snapshot_id": "fed-2024-09-derived-v0.1",
+  "kind": "derived_facts_not_original_document",
+  "as_of": "2024-09-19T00:00:00Z",
+  "source": "https://www.federalreserve.gov/monetarypolicy/files/monetary20240918a1.pdf",
+  "source_snapshot": "../source-snapshots/fed-fomc-2024-09-18.pdf",
+  "source_sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932",
+  "source_publication": "2024-09-18T18:00:00Z",
+  "facts": {"target_range_lower_percent": 4.75, "target_range_upper_percent": 5.0, "decrease_percentage_points": 0.5},
+  "scope": "target range; not a single market rate",
+  "verification": "draft extraction; independent human review pending"
+}

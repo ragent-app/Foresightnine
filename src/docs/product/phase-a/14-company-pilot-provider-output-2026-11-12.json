@@ -1,0 +1,78 @@
+[
+  {
+    "payload": {
+      "claims": [
+        {
+          "text": "Microsoft's revenue grew from fiscal 2022 to fiscal 2023; the growth percentage is obtained from the two reported values (requested calculation: growth_percent using fact_2023 as current and fact_2022 as baseline, which yields approximately 6.88%).",
+          "citations": [
+            {
+              "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+              "quotation": "{\"start\":\"2021-07-01\",\"end\":\"2022-06-30\",\"val\":198270000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"},{\"start\":\"2022-07-01\",\"end\":\"2023-06-30\",\"val\":211915000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"}"
+            }
+          ]
+        },
+        {
+          "text": "Revenue growth alone cannot establish profitability, margins, segment-level drivers, per-segment performance, cash flow, or the sustainability/quality of growth; those require additional data not present in the sources.",
+          "citations": []
+        }
+      ],
+      "counterarguments": [
+        {
+          "text": "A single year of top-line growth may reflect factors like acquisitions, currency, or pricing rather than organic strength; without segment or geographic breakdowns in the sources, attribution is speculative.",
+          "citations": []
+        }
+      ],
+      "limitations": [
+        "Only total revenue (us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax) is provided; no costs, margins, segments, or geography.",
+        "Only two fiscal periods are supplied, so multi-year trend analysis is not possible.",
+        "Data is a derived snapshot; original SEC filings should be consulted for authoritative verification.",
+        "No restatement context or accounting policy changes are disclosed in the source."
+      ],
+      "facts": [
+        {
+          "fact_id": "fact_2022",
+          "label": "Microsoft fiscal 2022 revenue",
+          "value": "198270000000",
+          "unit": "USD",
+          "currency": "USD",
+          "period": "2021-07-01 to 2022-06-30",
+          "citation": {
+            "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+            "quotation": "{\"start\":\"2021-07-01\",\"end\":\"2022-06-30\",\"val\":198270000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"}"
+          }
+        },
+        {
+          "fact_id": "fact_2023",
+          "label": "Microsoft fiscal 2023 revenue",
+          "value": "211915000000",
+          "unit": "USD",
+          "currency": "USD",
+          "period": "2022-07-01 to 2023-06-30",
+          "citation": {
+            "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+            "quotation": "{\"start\":\"2022-07-01\",\"end\":\"2023-06-30\",\"val\":211915000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"}"
+          }
+        }
+      ],
+      "calculations": [
+        {
+          "formula": "growth_percent",
+          "first_fact_id": "fact_2023",
+          "second_fact_id": "fact_2022"
+        }
+      ]
+    },
+    "reported_tokens": 1253
+  },
+  {
+    "payload": {
+      "reviews": [
+        {
+          "claim_index": 0,
+          "verdict": "supports"
+        }
+      ]
+    },
+    "reported_tokens": 396
+  }
+]

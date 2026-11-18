@@ -1,0 +1,58 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据2024年12月18日FOMC声明，联邦基金利率目标区间下调1/4个百分点至4-1/4至4-1/2%（4.25%–4.5%）。",
+        "citations": [
+          {
+            "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+            "quotation": "the Committee decided to lower the target range for the federal funds rate by 1/4 percentage point to 4-1/4 to 4-1/2 percent"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "第二个来源的操作指令确认了同一目标区间，与降息表述一致，无明显反驳；但声明未直接说明降息前的区间（可推断为4-1/2至4-3/4%），该推断未在文本中明示。",
+        "citations": [
+          {
+            "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+            "quotation": "maintain the federal funds rate in a target range of 4-1/4 to 4-1/2 percent"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源文本未明确列出降息前的前一目标区间",
+      "未来是否进一步调整取决于数据评估，文本仅表示将仔细评估，未给出指引数值"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_target_range",
+        "label": "联邦基金利率目标区间",
+        "value": "4-1/4 to 4-1/2 percent",
+        "unit": "percent",
+        "currency": null,
+        "period": "effective December 19, 2024",
+        "citation": {
+          "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+          "quotation": "lower the target range for the federal funds rate by 1/4 percentage point to 4-1/4 to 4-1/2 percent"
+        }
+      },
+      {
+        "fact_id": "fact_cut_size",
+        "label": "本次下调幅度",
+        "value": "1/4",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "December 18, 2024 decision",
+        "citation": {
+          "source_id": "source_448093ee56c94850b31fa30fe432f3f1",
+          "quotation": "lower the target range for the federal funds rate by 1/4 percentage point"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1060
+}

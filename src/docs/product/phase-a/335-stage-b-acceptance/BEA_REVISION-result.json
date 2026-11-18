@@ -1,0 +1,385 @@
+{
+  "task_id": "BEA_REVISION",
+  "operation": {
+    "schema_version": "v1",
+    "created_at": "2026-11-13T14:17:31.381781Z",
+    "source_refs": [
+      {
+        "ref_id": "mock:operation",
+        "source_type": "model_inference",
+        "label": "Deterministic operation controller"
+      }
+    ],
+    "content_hash": "017d5814d45593daa7eb41b84d1ad4eb309c1aa9d4df26227f4b4a8be9ae6318",
+    "operation_id": "operation:38262f7877ecb976dfceef68",
+    "endpoint": "/v1/research/topics/topic_35dd5be4389e456e9279d8a6064c2286/runs",
+    "status": "completed",
+    "updated_at": "2026-11-13T14:17:31.472778Z",
+    "idempotency_key_hash": "d9eb18b7dd69b1e93a9a8b35e7753902cef9bf047f22238c8c6d140901599d47",
+    "last_event_id": "operation:38262f7877ecb976dfceef68:4"
+  },
+  "version": {
+    "version_id": "version_a77217b94ed54b688278b7573072b57d",
+    "parent_version_id": "version_cde7558c70b142a489c7ba07afe2b9e3",
+    "created_at": "2026-11-13T14:17:31.474680Z",
+    "content": {
+      "summary": "",
+      "sources": [],
+      "source_candidates": [],
+      "facts": [],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [],
+      "limitations": [
+        "Source source_7ce949ae8402471ea29ee3668bb700a6: exceeds the current input budget; not processed.",
+        "Source source_016770f201ba45a7b36b7b3ece90f30b: exceeds the current input budget; not processed.",
+        "No source could fit the model input budget.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "The requested model support review did not cover all claims.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+      ],
+      "run": {
+        "operation_id": "operation:38262f7877ecb976dfceef68",
+        "status": "partial",
+        "question_origin": "user",
+        "research_questions": [],
+        "source_processing": [
+          {
+            "source_id": "source_7ce949ae8402471ea29ee3668bb700a6",
+            "eligibility": "eligible",
+            "initial_selection": "not_selected",
+            "selected_characters": null,
+            "text_characters": 131451
+          },
+          {
+            "source_id": "source_016770f201ba45a7b36b7b3ece90f30b",
+            "eligibility": "eligible",
+            "initial_selection": "not_selected",
+            "selected_characters": null,
+            "text_characters": 119589
+          }
+        ],
+        "available_fact_ids": [],
+        "settled_model_budget_accounted_tokens": 0,
+        "source_search_receipts": [],
+        "workflow_receipts": [
+          {
+            "stage": "planning",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "planning",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_discovery",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_retrieval",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "not_started",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 86,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [
+              "Source source_7ce949ae8402471ea29ee3668bb700a6: exceeds the current input budget; not processed.",
+              "Source source_016770f201ba45a7b36b7b3ece90f30b: exceeds the current input budget; not processed.",
+              "No source could fit the model input budget."
+            ],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "counterpoint",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "gap_followup",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "support_review",
+            "status": "unavailable",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The preceding analysis did not produce usable claims.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "coordination",
+            "status": "stopped",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "analysis_unavailable",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [
+              "Source source_7ce949ae8402471ea29ee3668bb700a6: exceeds the current input budget; not processed.",
+              "Source source_016770f201ba45a7b36b7b3ece90f30b: exceeds the current input budget; not processed.",
+              "No source could fit the model input budget.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "The requested model support review did not cover all claims.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          }
+        ],
+        "generation_status": "not_started",
+        "planning_requested": false,
+        "planning_status": "not_requested",
+        "planning_steps": [],
+        "planning_tokens": null,
+        "planning_prompt_sha256": null,
+        "planning_error": null,
+        "planning_system_sha256": null,
+        "counterpoint_requested": false,
+        "counterpoint_status": "not_requested",
+        "gap_search_requested": false,
+        "gap_search_status": "not_requested",
+        "gap_followup_requested": false,
+        "gap_followup_status": "not_requested",
+        "support_review_requested": true,
+        "support_review_status": "unavailable",
+        "require_counterarguments": true,
+        "model_calls": 0,
+        "total_tokens": null,
+        "cost_usd": null,
+        "generation_tokens": null,
+        "support_review_tokens": null,
+        "counterpoint_tokens": null,
+        "counterpoint_prompt_sha256": null,
+        "gap_followup_tokens": null,
+        "gap_followup_prompt_sha256": null,
+        "gap_followup_targets": [],
+        "gap_followup_input_targets": [],
+        "gap_followup_question_targets": [],
+        "gap_search_query_sha256": null,
+        "gap_followup_error": null,
+        "gap_followup_segments": [],
+        "gap_followup_input_fact_ids": [],
+        "counterpoint_discarded_fields": 0,
+        "counterpoint_omitted_rows": 0,
+        "counterpoint_error": null,
+        "support_review_error": null,
+        "support_review_mode": "batch",
+        "support_review_method": "bounded_quotation_context_model_review_v31",
+        "analysis_error_detail": null,
+        "support_review_prompt_sha256": null,
+        "support_review_indexes": [],
+        "support_review_omissions": [],
+        "support_review_failed_indexes": [],
+        "support_review_segments": [],
+        "support_review_system_sha256": "6e64d6378fbdfe43968fd894214937847c09d4b2f6a9ea0835515205a40745c6",
+        "search_calls": 0,
+        "search_status": "not_requested",
+        "official_fetch_calls": 0,
+        "official_fetch_status": "not_requested",
+        "elapsed_seconds": 0.088,
+        "cost_status": "no_external_call",
+        "model": "glm-5.3-flash",
+        "provider": "openai-compatible",
+        "prompt_sha256": null,
+        "prompt_characters": 0,
+        "prompt_bytes": 0,
+        "selection_method": "multilingual_lexical_with_legacy_fallback_v53",
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "selected_segments": [],
+        "provider_timeout_seconds": 120.0,
+        "provider_input_token_limit": 3000,
+        "provider_output_token_limit": 4000,
+        "source_hashes": {
+          "source_7ce949ae8402471ea29ee3668bb700a6": "257ab63c40972440a9ffca79fb1d4b17db123cb84959768908645b1680b34c48",
+          "source_016770f201ba45a7b36b7b3ece90f30b": "d3e55c6896985f8f867da1e876db78df5f0415e89613503632c37c0d1e4f1cb5"
+        },
+        "max_model_calls": 2,
+        "max_search_calls": 0,
+        "max_elapsed_seconds": 180,
+        "max_total_tokens": 20000,
+        "max_cost_usd": null,
+        "error": null,
+        "evidence_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "facts": [],
+          "claims": [],
+          "calculations": []
+        },
+        "question_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "truncated": false,
+          "questions": []
+        },
+        "research_gaps": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "items": [
+            {
+              "code": "no_analyzed_sources"
+            },
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "no_findings"
+            },
+            {
+              "code": "model_review_incomplete"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ]
+        },
+        "stage_summary": {
+          "schema_version": "1",
+          "meaning": "saved_execution_not_quality_verdict",
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "pending"
+            },
+            {
+              "stage": "review",
+              "status": "attention"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ]
+        }
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_7ce949ae8402471ea29ee3668bb700a6",
+      "source_016770f201ba45a7b36b7b3ece90f30b"
+    ],
+    "created_by": "agent"
+  },
+  "cost_usd": "unknown",
+  "model_calls_cumulative": 0
+}

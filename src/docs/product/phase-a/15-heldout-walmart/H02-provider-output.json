@@ -1,0 +1,98 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "以总收入（total revenues 648,125 百万美元）为分母，Walmart FY2024 营业利润率约为 4.17%（27,012 / 648,125）。",
+        "citations": [
+          {
+            "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+            "quotation": "\"FY2024\":{\"total_revenues\":648125,\"net_sales\":642637,\"membership_and_other_income\":5488,\"operating_income\":27012}"
+          }
+        ]
+      },
+      {
+        "text": "若以净销售额（net_sales 642,637 百万美元）为分母，营业利润率会略高（约 4.21%），因为总收入 = 净销售额 + 会员及其他收入（5,488 百万美元），收入分母更大导致比率更低。",
+        "citations": [
+          {
+            "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+            "quotation": "\"total_revenues\":648125,\"net_sales\":642637,\"membership_and_other_income\":5488"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "另一种观点认为以净销售额为分母更能反映零售核心业务的盈利能力，因为会员及其他收入并非商品销售所得；但总收入口径符合 Walmart 利润表中“总收入”的呈现方式。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "来源仅提供 FY2024 关键汇总数字，未提供利润表完整结构，无法验证 operating_income 与 net_sales 的逐项勾稽。",
+      "营业利润率的百分比数值为基于给定数值的除法结果，具体精度依赖计算工具；来源本身不含已算出的比率。",
+      "缺少 FY2024 之前的可比数据（如 FY2023 的 operating_income 和 net_sales），无法进行趋势比较。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fy2024_total_revenues",
+        "label": "total revenues",
+        "value": "648125",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "citation": {
+          "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+          "quotation": "\"FY2024\":{\"total_revenues\":648125"
+        }
+      },
+      {
+        "fact_id": "fy2024_net_sales",
+        "label": "net sales",
+        "value": "642637",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "citation": {
+          "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+          "quotation": "\"net_sales\":642637"
+        }
+      },
+      {
+        "fact_id": "fy2024_operating_income",
+        "label": "operating income",
+        "value": "27012",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "citation": {
+          "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+          "quotation": "\"operating_income\":27012"
+        }
+      },
+      {
+        "fact_id": "fy2024_membership_income",
+        "label": "membership and other income",
+        "value": "5488",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "citation": {
+          "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+          "quotation": "\"membership_and_other_income\":5488"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "margin_percent",
+        "first_fact_id": "fy2024_operating_income",
+        "second_fact_id": "fy2024_total_revenues"
+      },
+      {
+        "formula": "margin_percent",
+        "first_fact_id": "fy2024_operating_income",
+        "second_fact_id": "fy2024_net_sales"
+      }
+    ]
+  },
+  "reported_tokens": 1480
+}

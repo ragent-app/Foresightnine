@@ -1,0 +1,222 @@
+{
+  "id": "B24",
+  "operation_status": "completed",
+  "manifest_sha256": "c8834c706812ba94d270e455efe6711a6f1073ec552eb66b6c5e6b18269c5379",
+  "input_sha256": "d1bbde9d60f0e2116cb2cf298cb7859505039d4c7fbff8db4f053df8f167581f",
+  "elapsed_seconds_observed": 14.105,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+        "title": "Booking Holdings 2024 SEC 10-K: derived total revenue facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/1075531/000107553125000010/bkng-20241231.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T03:41:37.491660+00:00",
+        "revised_at": null,
+        "content_sha256": "fed4e11f96d553e9437c48c4ae034cfb0c4dc623f3ec3f2b512b98ae81d09e02",
+        "is_simulated": false,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "rev_2023",
+        "value": "21365",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2023-12-31",
+        "label": "total revenues FY2023",
+        "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+        "quotation": "\"total_revenues\":{\"2023\":21365,\"2024\":23739}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 122,
+          "character_end": 166
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "rev_2024",
+        "value": "23739",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2024-12-31",
+        "label": "total revenues FY2024",
+        "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+        "quotation": "\"total_revenues\":{\"2023\":21365,\"2024\":23739}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 122,
+          "character_end": 166
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "rev_2024",
+            "value": "23739",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "fiscal year ended 2024-12-31"
+          },
+          {
+            "fact_id": "rev_2023",
+            "value": "21365",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "fiscal year ended 2023-12-31"
+          }
+        ],
+        "value": "11.11",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "amount_differences": [],
+    "claims": [
+      {
+        "text": "Booking Holdings 2023 财年（截至2023-12-31）总收入为 21,365 百万美元。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "location": {
+              "character_start": 140,
+              "character_end": 152
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"2023\":21365"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "Booking Holdings 2024 财年（截至2024-12-31）总收入为 23,739 百万美元。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "location": {
+              "character_start": 153,
+              "character_end": 165
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"2024\":23739"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "以 2023 财年为基期，2024 财年总收入的同比增长率约为 (23,739 − 21,365) / 21,365 × 100% ≈ 11.1%。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "location": {
+              "character_start": 122,
+              "character_end": 166
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"total_revenues\":{\"2023\":21365,\"2024\":23739}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "该增长率基于两期均使用一致的货币单位（USD millions）和财政年度口径，未发现资料内不一致之处；但增长率本身是由两个数值推导，原始摘录未直接给出该百分比。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+            "location": {
+              "character_start": 34,
+              "character_end": 55
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"unit\":\"USD millions\""
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "提供的摘录仅包含两个年度总收入数值，未包含分部收入、汇率影响、会计政策变更或其他背景信息。",
+      "原始摘录未直接提供同比增长率数字；上述约 11.1% 为基于所列两个数值的推导计算。",
+      "资料仅覆盖 2023 和 2024 财年；无法从所给摘录判断更长期趋势或数据是否经审计。",
+      "摘录未说明这些数值是直接摘自 10-K 原文还是衍生（derived）数据，标题中“derived total revenue facts”提示可能为加工后的数据。"
+    ],
+    "run": {
+      "operation_id": "operation:e5dfe44aab61dc8964f512f4",
+      "status": "completed",
+      "model_calls": 1,
+      "total_tokens": 1148,
+      "cost_usd": null,
+      "generation_tokens": 1148,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 12.707,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "01761fa36a1f366336112b8497fd6dfe57113a8f8ca4f7dcfff26ecdb30172bc",
+      "prompt_characters": 1473,
+      "prompt_bytes": 1549,
+      "selection_method": "ranked_nonoverlapping_windows_v7",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_88e7afd1432c4ac99b2b332b01245c6a",
+          "character_start": 0,
+          "character_end": 167
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_88e7afd1432c4ac99b2b332b01245c6a": "fed4e11f96d553e9437c48c4ae034cfb0c4dc623f3ec3f2b512b98ae81d09e02"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

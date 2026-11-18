@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /home/lxx/Foresightnine/src/apps/web
+
+ ✓ src/general-research-client.test.ts (16 tests) 63ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  00:17:29
+   Duration  875ms (transform 296ms, setup 0ms, collect 310ms, tests 63ms, environment 0ms, prepare 197ms)
+

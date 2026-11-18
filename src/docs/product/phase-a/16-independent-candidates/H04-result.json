@@ -1,0 +1,172 @@
+{
+  "id": "H04",
+  "operation_status": "completed",
+  "manifest_sha256": "6639f62bc9f3c86136994819d1b68af1916bbf8ed09705e43097d0ff583ae722",
+  "input_sha256": "e9658e8485549df4fe44331e8b284c55274630673ccf3717e647934d36e2e7a1",
+  "elapsed_seconds_observed": 18.113,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_427d047e0e56438985d261e068312e08",
+        "title": "Coca-Cola 2024 SEC filing: derived revenue facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/21344/000002134425000011/ko-20241231.htm",
+        "published_at": null,
+        "obtained_at": "2026-11-12T01:55:08.452772+00:00",
+        "revised_at": null,
+        "content_sha256": "e4c7655579f2be1462679f746cbb98284331fea7a2cedcb9de1a30c7f573a5bd",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_nor_2024",
+        "value": "47061",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "2024 fiscal year (ended December 31, 2024)",
+        "label": "net_operating_revenues_2024",
+        "source_id": "source_427d047e0e56438985d261e068312e08",
+        "quotation": "\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 88,
+          "character_end": 140
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_nor_2023",
+        "value": "45754",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "2023 fiscal year (ended December 31, 2023)",
+        "label": "net_operating_revenues_2023",
+        "source_id": "source_427d047e0e56438985d261e068312e08",
+        "quotation": "\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 88,
+          "character_end": 140
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fact_nor_2024",
+            "value": "47061",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "2024 fiscal year (ended December 31, 2024)"
+          },
+          {
+            "fact_id": "fact_nor_2023",
+            "value": "45754",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "2023 fiscal year (ended December 31, 2023)"
+          }
+        ],
+        "value": "2.86",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "claims": [
+      {
+        "text": "可口可乐 2024 年净营业收入为 47,061 百万美元，2023 年为 45,754 百万美元；2024 年相对 2023 年的增长率可通过这两个数值计算得出。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_427d047e0e56438985d261e068312e08",
+            "location": {
+              "character_start": 88,
+              "character_end": 140
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "该数据标题标注为 'derived revenue facts'，即源自 SEC 申报文件的衍生数据，而非原始申报文件摘录，可能存在转录误差；未提供原始 10-K 文件原文加以核对。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源仅为一份衍生数据文件，非 SEC 原始申报文件摘录",
+      "未提供 2024 年增长率的直接披露值，增长率需基于两个数值计算",
+      "无法核实该数据是否经过审计调整或重述",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:26bc8ec528b8d404b1e5a780",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 881,
+      "cost_usd": null,
+      "generation_tokens": 881,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 16.151,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "33a72be34858c732a14017ccd4a9d55328e887bb6c70e19adbed3ccb01113805",
+      "prompt_characters": 990,
+      "prompt_bytes": 1060,
+      "selection_method": "ranked_nonoverlapping_windows_v3",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_427d047e0e56438985d261e068312e08",
+          "character_start": 0,
+          "character_end": 141
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_427d047e0e56438985d261e068312e08": "e4c7655579f2be1462679f746cbb98284331fea7a2cedcb9de1a30c7f573a5bd"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

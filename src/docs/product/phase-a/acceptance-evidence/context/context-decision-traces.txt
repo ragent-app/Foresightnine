@@ -1,0 +1,43 @@
+
+CASE long prompt_limit 5000 system_bytes 433 envelope 192 equivalent_total 5625
+SOURCE long characters 32837 units 1702
+NEEDLE 211,915 candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 32837)]), (1, 'sentence', [(28000, 37)])]
+CALL 1 prompt_bytes 4991
+OUTPUT [('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 19, 'Unrelated material.'), ('long', 37, 'Revenue for 2023 was 211,915 million.')]
+NEEDLE_SENT [('211,915', True)]
+LIMITATIONS ['Source long: only character ranges 0–19, 20–39, 40–59, 60–79, 80–99, 100–119, 120–139, 140–159, 160–179, 180–199, 200–219, 220–239, 240–259, 260–279, 280–299, 300–319, 320–339, 340–359, 360–379, 380–399, 400–419, 420–439, 440–459, 460–479, 480–499, 500–519, 520–539, 540–559, 560–579, 580–599, 600–619, 620–639, 640–659, 660–679, 680–699, 700–719, 720–739, 740–759, 760–779, 780–799, 800–819, 820–839, 840–859, 860–879, 880–899, 28000–28037 were analyzed; remaining text was not examined.', 'Matching a quotation does not independently establish that it supports a claim.']
+
+CASE layout-table prompt_limit 2055 system_bytes 433 envelope 192 equivalent_total 2680
+SOURCE first characters 22275 units 1001
+NEEDLE 74.4 candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 22275)]), (1, 'sentence', [(12000, 294)])]
+NEEDLE September candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 22275)]), (1, 'sentence', [(12000, 294)])]
+CALL 1 prompt_bytes 2051
+OUTPUT [('first', 23, 'Unrelated introduction.'), ('first', 23, 'Unrelated introduction.'), ('first', 23, 'Unrelated introduction.'), ('first', 23, 'Unrelated introduction.'), ('first', 23, 'Unrelated introduction.'), ('first', 174, 'Change from preceding month\n\tAugust\tSeptember\nPrevious\tRevised\tPrevious\tRevised\n(Billions of dollars)\t(Percent)\nPersonal income:\nCurrent dollars\t71.6\t74.4\nUnrelated appendix.')]
+NEEDLE_SENT [('74.4', True), ('September', True)]
+LIMITATIONS ['Source first: table structure could not be established for some rows; they are only available if the full source fits.', 'Source first: only character ranges 0–23, 24–47, 48–71, 72–95, 96–119, 12000–12294 were analyzed; remaining text was not examined.', 'Matching a quotation does not independently establish that it supports a claim.']
+
+CASE two-sources prompt_limit 3000 system_bytes 433 envelope 192 equivalent_total 3625
+SOURCE positive characters 9000 units 1001
+NEEDLE 增长 candidates 1001 first_rank_and_ranges [(0, 'paragraph', [(0, 9000)]), (1, 'sentence', [(0, 9)])]
+NEEDLE 下降 candidates 0 first_rank_and_ranges []
+SOURCE negative characters 9000 units 1001
+NEEDLE 增长 candidates 0 first_rank_and_ranges []
+NEEDLE 下降 candidates 1001 first_rank_and_ranges [(0, 'paragraph', [(0, 9000)]), (1, 'sentence', [(0, 9)])]
+CALL 1 prompt_bytes 2931
+OUTPUT [('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('positive', 9, '营业收入增长证据。'), ('negative', 9, '相反证据收入下降。'), ('negative', 9, '相反证据收入下降。'), ('negative', 9, '相反证据收入下降。'), ('negative', 9, '相反证据收入下降。'), ('negative', 9, '相反证据收入下降。'), ('negative', 9, '相反证据收入下降。'), ('negative', 9, '相反证据收入下降。'), ('negative', 9, '相反证据收入下降。')]
+NEEDLE_SENT [('增长', True), ('下降', True)]
+LIMITATIONS ['Source positive: only character ranges 0–9, 9–18, 1206–1215, 2403–2412, 3600–3609, 4806–4815, 6003–6012, 7200–7209, 8406–8415 were analyzed; remaining text was not examined.', 'Source negative: only character ranges 0–9, 1197–1206, 2403–2412, 3600–3609, 4797–4806, 6003–6012, 7200–7209, 8397–8406 were analyzed; remaining text was not examined.', 'Matching a quotation does not independently establish that it supports a claim.']
+
+CASE two-layout-tables prompt_limit 2055 system_bytes 433 envelope 192 equivalent_total 2680
+SOURCE first characters 22275 units 1001
+NEEDLE 74.4 candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 22275)]), (501, 'sentence', [(12000, 294)])]
+NEEDLE 88.2 candidates 0 first_rank_and_ranges []
+NEEDLE September candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 22275)]), (501, 'sentence', [(12000, 294)])]
+SOURCE second characters 22275 units 1001
+NEEDLE 74.4 candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 22275)]), (501, 'sentence', [(12000, 294)])]
+NEEDLE 88.2 candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 22275)]), (501, 'sentence', [(12000, 294)])]
+NEEDLE September candidates 2 first_rank_and_ranges [(0, 'paragraph', [(0, 22275)]), (501, 'sentence', [(12000, 294)])]
+CALL 1 prompt_bytes 2035
+OUTPUT [('first', 23, 'Unrelated introduction.'), ('first', 23, 'Unrelated introduction.'), ('first', 23, 'Unrelated introduction.'), ('first', 23, 'Unrelated introduction.'), ('second', 23, 'Unrelated introduction.'), ('second', 23, 'Unrelated introduction.'), ('second', 23, 'Unrelated introduction.')]
+NEEDLE_SENT [('74.4', False), ('88.2', False), ('September', False)]
+LIMITATIONS ['Source first: table structure could not be established for some rows; they are only available if the full source fits.', 'Source second: table structure could not be established for some rows; they are only available if the full source fits.', 'Source first: only character ranges 0–23, 24–47, 48–71, 72–95 were analyzed; remaining text was not examined.']

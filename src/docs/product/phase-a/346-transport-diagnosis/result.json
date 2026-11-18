@@ -1,0 +1,62 @@
+{
+  "host": "open.bigmodel.cn",
+  "port": 443,
+  "provider_http_sent": false,
+  "model_calls": 0,
+  "proxy_variables_present": {
+    "HTTP_PROXY": false,
+    "HTTPS_PROXY": false,
+    "ALL_PROXY": false,
+    "NO_PROXY": false,
+    "http_proxy": false,
+    "https_proxy": false,
+    "all_proxy": false,
+    "no_proxy": false
+  },
+  "standard_dns": {
+    "stage": "standard_dns",
+    "elapsed_ms": 3,
+    "result": [
+      "47.251.66.145",
+      "47.88.85.161"
+    ]
+  },
+  "validated_dns": {
+    "stage": "actual_validated_resolver",
+    "elapsed_ms": 2,
+    "result": [
+      "47.251.66.145",
+      "47.88.85.161"
+    ]
+  },
+  "connections": [
+    {
+      "address": "47.251.66.145",
+      "http_sent": false,
+      "tcp": {
+        "stage": "tcp",
+        "elapsed_ms": 0
+      },
+      "pinned_connect": {
+        "stage": "pinned_connect_tcp_and_tls",
+        "elapsed_ms": 2640,
+        "result": null
+      },
+      "tls_version": "TLSv1.3"
+    },
+    {
+      "address": "47.88.85.161",
+      "http_sent": false,
+      "tcp": {
+        "stage": "tcp",
+        "elapsed_ms": 1
+      },
+      "pinned_connect": {
+        "stage": "pinned_connect_tcp_and_tls",
+        "elapsed_ms": 2922,
+        "result": null
+      },
+      "tls_version": "TLSv1.3"
+    }
+  ]
+}

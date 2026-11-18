@@ -1,0 +1,1 @@
+{"stage":"isolated_api_startup","exception":"RuntimeError","cause":"System Python lacks uvicorn, fastapi and pydantic; isolated process exited before admission","marker_present":false,"research_submitted":false,"model_outbound":false,"action":"Use the existing API virtual environment; preserve private stderr for diagnosis."}

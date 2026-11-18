@@ -1,0 +1,11 @@
+{
+  "api": "isolated loopback",
+  "storage": "fresh isolated postgres, migrations 001/002",
+  "empty_run_list_http": 200,
+  "task_request_schemas_validated": 6,
+  "model_http_calls": 0,
+  "search_http_calls": 0,
+  "actual_process_environment_matches_zero_http_probe": true,
+  "scope_filter": "exact BEA release only, structured connector restricted; local mock checked",
+  "search_availability": "configured only; actual network/entitlement not yet checked"
+}

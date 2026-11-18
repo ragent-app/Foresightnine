@@ -1,0 +1,40 @@
+{
+  "assessment": "fresh sources not used as model input in earlier runs; public and non-blind, with no independent human validation; company derived data and original GDP PDF reported separately",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "a2ff6aaf56a3578115e68faa0c6389d4ed3fc85b",
+  "inputs": [
+    {
+      "id": "C24",
+      "sha256": "084a7c2fd430de74e7a1edfeee7b91f48a56c43d0f4fe46c97fe9d380aa1cf43"
+    },
+    {
+      "id": "G24",
+      "sha256": "e92007551f185ec3059346099f5a5cd2e3252d18a5374bf07060b80897835f67"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "Both expected facts located with periods and units; supporting claims cited; Costco calculation equals 5.02 percent and a cited claim mentions both 52 and 53 fiscal weeks; no unrecognized percentage, detected numerical discrepancy or omitted quote; budget satisfied. PDF annual and quarterly rates are separate. Each task must meet all mechanical conditions; semantics and overall performance remain unverified.",
+  "provider": "glm_coding",
+  "provider_max_input_tokens": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "7c481d063895a3dcffccffd6ac62ded135d9dcab52003695291f2ab2b08c9783",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "e242f44fb4dff6fd3ff25d495306655d7853c7a888746476c68acad97a9437eb",
+  "scorer_sha256": "fd40129220b5be1437bf328b7a479ae861abba99b22cb060db5d2912fe48d0d2",
+  "search_calls": 0
+}

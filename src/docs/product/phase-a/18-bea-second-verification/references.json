@@ -1,0 +1,17 @@
+{
+  "G23": {
+    "facts": [
+      {
+        "period_kind": "annual",
+        "value": "2.5",
+        "year": "2023"
+      },
+      {
+        "period_kind": "quarter",
+        "value": "3.2",
+        "year": "2023"
+      }
+    ],
+    "unit": "percent"
+  }
+}

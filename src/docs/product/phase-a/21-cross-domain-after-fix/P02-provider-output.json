@@ -1,0 +1,60 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "PepsiCo 净收入从 FY2023 的 91,471 百万美元增至 FY2024 的 91,854 百万美元；增长率需通过 supported 计算得出，约为 0.42%（计算见 calculations）。",
+        "citations": [
+          {
+            "source_id": "source_71f53a8d28c74a90ae7b82a003c93e17",
+            "quotation": "{\"issuer\":\"PepsiCo Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2023\":\"2023-12-30\",\"2024\":\"2024-12-28\"},\"net_revenue\":{\"2023\":91471,\"2024\":91854}}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "增长率仅为基于两年总额的简单比较，可能掩盖业务板块、地域或汇率驱动的结构差异；单点来源无法交叉验证。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "仅提供两年合并净收入总额，缺少分部、季度、汇率或有机增长口径数据，无法解释增长构成",
+      "未提供审计状态或与 SEC 原始申报的核对信息",
+      "fiscal_year_end_dates 表明为 52/53 周财年，两年期末日期不同，期间长度可比性未确认"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_rev_2023",
+        "label": "net_revenue_2023",
+        "value": "91471",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year 2023 (ended 2023-12-30)",
+        "citation": {
+          "source_id": "source_71f53a8d28c74a90ae7b82a003c93e17",
+          "quotation": "\"unit\":\"USD millions\" ... \"net_revenue\":{\"2023\":91471,\"2024\":91854}"
+        }
+      },
+      {
+        "fact_id": "fact_rev_2024",
+        "label": "net_revenue_2024",
+        "value": "91854",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year 2024 (ended 2024-12-28)",
+        "citation": {
+          "source_id": "source_71f53a8d28c74a90ae7b82a003c93e17",
+          "quotation": "\"unit\":\"USD millions\" ... \"net_revenue\":{\"2023\":91471,\"2024\":91854}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_rev_2024",
+        "second_fact_id": "fact_rev_2023"
+      }
+    ]
+  },
+  "reported_tokens": 899
+}

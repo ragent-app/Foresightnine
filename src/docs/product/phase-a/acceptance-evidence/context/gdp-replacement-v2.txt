@@ -1,0 +1,8 @@
+limit 5055 actual 5051 target_count 2
+selected [(274, 'Gross Domestic Product, Fourth Quarter 2022 and Year 2022\n\t(Second Estimate)\nReal gross domestic product (GDP) increased at an annual rate of 2.7 percent in the'), (53, 'In the\nthird quarter, real GDP increased 3.2 percent.'), (114, 'The increase in\nconsumer spending reflected an increase in services that was partly offset by a decrease in goods.'), (122, 'Personal saving was $755.0 billion in the fourth quarter, an upward revision of $101.3 billion from the\nprevious estimate.'), (129, 'Wages and salaries are now estimated to have increased $303.0 billion in the third\nquarter, an upward revision of $115.2 billion.'), (94, 'Advance Estimate\tSecond Estimate\n\t(Percent change from 2021 annual level to 2022 annual level)'), (64, '(Percent change from fourth quarter 2021 to fourth quarter 2022)'), (881, 'Annual-vs-quarterly rates. Quarterly seasonally adjusted\tBEA releases three vintages of the current quarterly\nvalues are expressed at annual rates, unless other'), (133, 'Revisions include changes to series affected by the incorporation of revised wage and salary estimates for the third quarter of 2022.'), (717, ' r Revised. Revisions include changes to series affected by the incorporation of revised wage and salary estimates for the third quarter of 2022.\n 1. Real gross')]
+candidate paragraph [(1631, 1203, 1203)]
+alone_cost 3530
+append_cost 6281
+candidate sentence [(2149, 114, 114)]
+alone_cost 2427
+append_cost 5178

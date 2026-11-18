@@ -1,0 +1,114 @@
+{
+  "F24": {
+    "allowed_percentages": [
+      "4.25",
+      "4.5",
+      "0.25",
+      "2"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "literal": "4-1/4",
+        "period": "2024",
+        "value": "4.25"
+      },
+      {
+        "literal": "4-1/2",
+        "period": "2024",
+        "value": "4.5"
+      },
+      {
+        "literal": "1/4",
+        "period": "2024",
+        "unit_override": "percentage point",
+        "value": "0.25"
+      }
+    ],
+    "kind": "macro",
+    "unit": "percent"
+  },
+  "P25": {
+    "allowed_percentages": [
+      "0.1",
+      "2.1",
+      "2.5"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "basis": [
+          "preceding month"
+        ],
+        "literal": "0.1",
+        "period": "2025",
+        "value": "0.1"
+      },
+      {
+        "basis": [
+          "same month one year",
+          "one year ago"
+        ],
+        "literal": "2.1",
+        "period": "2025",
+        "value": "2.1"
+      }
+    ],
+    "kind": "macro",
+    "unit": "percent"
+  },
+  "U24": {
+    "allowed_percentages": [
+      "6.23"
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "57063",
+        "53717"
+      ],
+      "value": "6.23"
+    },
+    "facts": [
+      {
+        "literal": "53717",
+        "period": "2023",
+        "value": "53717"
+      },
+      {
+        "literal": "57063",
+        "period": "2024",
+        "value": "57063"
+      }
+    ],
+    "kind": "company",
+    "unit": "USD millions"
+  },
+  "V24": {
+    "allowed_percentages": [
+      "10.02"
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "35926",
+        "32653"
+      ],
+      "value": "10.02"
+    },
+    "facts": [
+      {
+        "literal": "32653",
+        "period": "2023",
+        "value": "32653"
+      },
+      {
+        "literal": "35926",
+        "period": "2024",
+        "value": "35926"
+      }
+    ],
+    "kind": "company",
+    "unit": "USD millions"
+  }
+}

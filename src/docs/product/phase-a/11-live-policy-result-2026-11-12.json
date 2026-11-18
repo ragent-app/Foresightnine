@@ -1,0 +1,72 @@
+{
+  "operation_status": "completed",
+  "input_pdf_sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932",
+  "content": {
+    "summary": "",
+    "sources": [],
+    "source_candidates": [],
+    "facts": [],
+    "evidence_differences": [],
+    "calculations": [],
+    "claims": [],
+    "limitations": [
+      "Research analysis could not be completed: invalid_model_output",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:cecd82c92e9ea93d7278b1b9",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 741,
+      "cost_usd": null,
+      "generation_tokens": 741,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": "Model output did not match the research schema.",
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 4.95,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "f3050b09ba754cafcf13d7f8146ddec41c6bbb7c4ebeae118829b6be400e0205",
+      "prompt_characters": 2000,
+      "prompt_bytes": 2054,
+      "selection_method": "ranked_nonoverlapping_windows_v2",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_7c8895e1a18f4152903b4d1068ff6b7c",
+          "character_start": 0,
+          "character_end": 508
+        },
+        {
+          "source_id": "source_7c8895e1a18f4152903b4d1068ff6b7c",
+          "character_start": 2560,
+          "character_end": 3068
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_7c8895e1a18f4152903b4d1068ff6b7c": "dc18c2f3877ce4e971472fba6177c3ea315fcb580d98d5bd30fee434ef78d88f"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": "invalid_model_output"
+    }
+  },
+  "elapsed_seconds_observed": 5.095,
+  "cost_note": "unknown; not assumed zero"
+}

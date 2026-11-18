@@ -1,0 +1,5 @@
+{
+  "manifest_sha256": "df6c79b385c354aa5a6d9cfad09d8857ea585230f74520d54f41a5037476fcf9",
+  "status": "started_once",
+  "models_may_bill_even_if_response_lost": true
+}

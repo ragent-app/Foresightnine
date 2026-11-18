@@ -1,0 +1,50 @@
+{
+  "method": "single GET, 20 second timeout, no retries; response text not saved",
+  "results": [
+    {
+      "id": "msft_ar23",
+      "url": "https://www.microsoft.com/investor/reports/ar23/",
+      "retrieved_at_utc": "2026-11-11T10:52:35.509156+00:00",
+      "status": 200,
+      "final_url": "https://www.microsoft.com/investor/reports/ar23/",
+      "content_type": "text/html",
+      "byte_count": 486646,
+      "sha256": "5a136f3681efc2136e99ce39add47bc0ae21623b36924ef9e86c9436e8647b2f",
+      "truncated": false,
+      "elapsed_seconds": 1.088
+    },
+    {
+      "id": "msft_ar24",
+      "url": "https://www.microsoft.com/investor/reports/ar24/",
+      "retrieved_at_utc": "2026-11-11T10:52:36.597601+00:00",
+      "status": 200,
+      "final_url": "https://www.microsoft.com/investor/reports/ar24/",
+      "content_type": "text/html",
+      "byte_count": 486883,
+      "sha256": "2b49e38b25f3bea8634b603ad5db64ba0803f27e27f93cc406884e6990974065",
+      "truncated": false,
+      "elapsed_seconds": 1.291
+    },
+    {
+      "id": "apple_fy24",
+      "url": "https://www.apple.com/newsroom/2024/10/apple-reports-fourth-quarter-results/",
+      "retrieved_at_utc": "2026-11-11T10:52:37.888936+00:00",
+      "status": 200,
+      "final_url": "https://www.apple.com/newsroom/2024/10/apple-reports-fourth-quarter-results/",
+      "content_type": "text/html;charset=utf-8",
+      "byte_count": 139961,
+      "sha256": "2f83a9e1728dc2deea54548c87ff757ed4e984e48067925e5d648dc8018f58ac",
+      "truncated": false,
+      "elapsed_seconds": 1.581
+    },
+    {
+      "id": "fred_gdp",
+      "url": "https://fred.stlouisfed.org/series/GDP",
+      "retrieved_at_utc": "2026-11-11T10:52:39.470141+00:00",
+      "status": "failed",
+      "error_type": "TimeoutError",
+      "detail": "The read operation timed out",
+      "elapsed_seconds": 20.335
+    }
+  ]
+}

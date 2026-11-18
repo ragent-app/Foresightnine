@@ -1,0 +1,62 @@
+{
+  "kind": "offline replay/selection diagnostic only; not a new test or revised score",
+  "items": {
+    "V24": {
+      "retained_claims": 1,
+      "claim_quote_match": "expanded_ellipsis",
+      "limitations": [
+        "A model-generated quotation did not match the supplied source and was omitted.",
+        "A model-generated claim without a valid quotation was omitted.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "The source data is described as 'derived' rather than a direct quote from the SEC 10-K; figures should be reconciled to the original filing.",
+        "Only two fiscal years are provided, so the growth rate reflects a single annual comparison and cannot show trends.",
+        "No segment breakdown, currency-adjusted metrics, or drivers of revenue growth are provided.",
+        "Fiscal year end dates differ from calendar years (Sep 30 year-end), which matters when comparing to peers on calendar-year reporting.",
+        "No calculation result is supplied in the sources; the growth percentage itself is computed via the requested calculation and should be verified before use."
+      ]
+    },
+    "P25": {
+      "segments": [
+        {
+          "source_id": "source_da6451a500cd40c88d8382bb12989232",
+          "character_start": 5463,
+          "character_end": 5826
+        },
+        {
+          "source_id": "source_da6451a500cd40c88d8382bb12989232",
+          "character_start": 5933,
+          "character_end": 6296
+        }
+      ],
+      "monthly_excerpt_selected": true,
+      "annual_excerpt_selected": true
+    },
+    "F24": {
+      "structured_values": [
+        "4.25",
+        "4.5",
+        "0.25"
+      ],
+      "range_bound_count": 2,
+      "limitations": [
+        "Source source_448093ee56c94850b31fa30fe432f3f1: only character ranges 773–1143, 3338–3708 were analyzed; remaining text was not examined.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "来源文本未明确列出降息前的前一目标区间",
+        "未来是否进一步调整取决于数据评估，文本仅表示将仔细评估，未给出指引数值"
+      ]
+    },
+    "U24": {
+      "amount_review_candidates": [
+        {
+          "claim_index": 0,
+          "claimed_amount": "57,070.63 亿美元",
+          "source_fact_ids": [
+            "fact_ual_rev_2023",
+            "fact_ual_rev_2024"
+          ],
+          "status": "requires_review"
+        }
+      ]
+    }
+  }
+}

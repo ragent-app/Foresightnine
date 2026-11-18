@@ -1,0 +1,31 @@
+{
+  "task_id": "MACRO_CALC",
+  "status": "settlement_unknown",
+  "events": [
+    {
+      "http_status": 200,
+      "operation_status": "completed"
+    }
+  ],
+  "cost_status": "unknown",
+  "topic_id": "topic_d197771512e84c11b7d58763caa5c502",
+  "idempotency_key": "independent-674fef0158074159aedff3ed9311c36d",
+  "operation_id": "operation:ba4a475fd5e56421d628e1a4",
+  "admission_http_status": 202,
+  "settlement_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_d9b81ac61fa64a26b86c66b4c1a20086",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 1,
+      "released_calls": 0,
+      "accounted_tokens": 4500
+    },
+    "unresolved_stage_count": 1,
+    "reported_tokens": null,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  }
+}

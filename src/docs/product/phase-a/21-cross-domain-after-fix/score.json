@@ -1,0 +1,58 @@
+{
+  "manifest_sha256": "6ab3d653ee986bc8442e5fd29e08568eb0b00a9c2cf3dd94b6a82c3cc113b875",
+  "sample": "public, non-blind candidate; derived facts only",
+  "semantic_support": "unverifiable",
+  "historical_availability": "unverified",
+  "tasks": {
+    "P02": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "91471",
+          "valid": false
+        },
+        {
+          "value": "91854",
+          "valid": false
+        }
+      ],
+      "support_claims_have_locations": true,
+      "required_calculation_ok": false,
+      "unrecognized_claim_percentages_requiring_review": [],
+      "program_detected_calculation_differences": [],
+      "citation_omission_requires_review": true,
+      "budget_ok": true,
+      "reported_tokens": 899,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "B02": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "0.4",
+          "valid": true
+        },
+        {
+          "value": "3.2",
+          "valid": true
+        }
+      ],
+      "support_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unrecognized_claim_percentages_requiring_review": [],
+      "program_detected_calculation_differences": [],
+      "citation_omission_requires_review": true,
+      "budget_ok": true,
+      "reported_tokens": 1045,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    }
+  },
+  "mechanical_tasks_passed": 0,
+  "mechanical_task_count": 2
+}

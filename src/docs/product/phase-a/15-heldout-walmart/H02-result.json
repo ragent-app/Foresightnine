@@ -1,0 +1,247 @@
+{
+  "id": "H02",
+  "operation_status": "completed",
+  "input_sha256": "848868f4a17be54b405ed93a347232e5da6a45403f08e471043ea00e69e0da1d",
+  "manifest_sha256": "df6c79b385c354aa5a6d9cfad09d8857ea585230f74520d54f41a5037476fcf9",
+  "elapsed_seconds_observed": 18.333,
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+        "title": "Walmart FY2024 SEC filing: derived financial facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/104169/000010416924000056/wmt-20240131.htm",
+        "published_at": null,
+        "obtained_at": "2026-11-12T01:42:41.413926+00:00",
+        "revised_at": null,
+        "content_sha256": "0bf7d6c1fbf8e2e1bc0f829f41e53afaf07efa7ba880aca82b2840f46bdd0223",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fy2024_total_revenues",
+        "value": "648125",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "label": "total revenues",
+        "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+        "quotation": "\"FY2024\":{\"total_revenues\":648125",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 108,
+          "character_end": 141
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fy2024_net_sales",
+        "value": "642637",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "label": "net sales",
+        "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+        "quotation": "\"net_sales\":642637",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 142,
+          "character_end": 160
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fy2024_operating_income",
+        "value": "27012",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "label": "operating income",
+        "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+        "quotation": "\"operating_income\":27012",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 196,
+          "character_end": 220
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fy2024_membership_income",
+        "value": "5488",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (fiscal year ending January 31)",
+        "label": "membership and other income",
+        "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+        "quotation": "\"membership_and_other_income\":5488",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 161,
+          "character_end": 195
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "margin_percent",
+        "formula_version": "1",
+        "expression": "first / second * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fy2024_operating_income",
+            "value": "27012",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024 (fiscal year ending January 31)"
+          },
+          {
+            "fact_id": "fy2024_total_revenues",
+            "value": "648125",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024 (fiscal year ending January 31)"
+          }
+        ],
+        "value": "4.17",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      },
+      {
+        "formula_id": "margin_percent",
+        "formula_version": "1",
+        "expression": "first / second * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fy2024_operating_income",
+            "value": "27012",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024 (fiscal year ending January 31)"
+          },
+          {
+            "fact_id": "fy2024_net_sales",
+            "value": "642637",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024 (fiscal year ending January 31)"
+          }
+        ],
+        "value": "4.20",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "claims": [
+      {
+        "text": "以总收入（total revenues 648,125 百万美元）为分母，Walmart FY2024 营业利润率约为 4.17%（27,012 / 648,125）。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+            "location": {
+              "character_start": 108,
+              "character_end": 221
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"FY2024\":{\"total_revenues\":648125,\"net_sales\":642637,\"membership_and_other_income\":5488,\"operating_income\":27012}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "若以净销售额（net_sales 642,637 百万美元）为分母，营业利润率会略高（约 4.21%），因为总收入 = 净销售额 + 会员及其他收入（5,488 百万美元），收入分母更大导致比率更低。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+            "location": {
+              "character_start": 118,
+              "character_end": 195
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"total_revenues\":648125,\"net_sales\":642637,\"membership_and_other_income\":5488"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support"
+      },
+      {
+        "text": "另一种观点认为以净销售额为分母更能反映零售核心业务的盈利能力，因为会员及其他收入并非商品销售所得；但总收入口径符合 Walmart 利润表中“总收入”的呈现方式。",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "来源仅提供 FY2024 关键汇总数字，未提供利润表完整结构，无法验证 operating_income 与 net_sales 的逐项勾稽。",
+      "营业利润率的百分比数值为基于给定数值的除法结果，具体精度依赖计算工具；来源本身不含已算出的比率。",
+      "缺少 FY2024 之前的可比数据（如 FY2023 的 operating_income 和 net_sales），无法进行趋势比较。",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:320be2207137629b607fd0ab",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 1480,
+      "cost_usd": null,
+      "generation_tokens": 1480,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 18.133,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "0111e670fff908c08be343c7b851ae6d63aced843e1c7c180b8492f03fced0ea",
+      "prompt_characters": 1085,
+      "prompt_bytes": 1159,
+      "selection_method": "ranked_nonoverlapping_windows_v3",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_3d4b501da7e844e1b1d6a1f2c87185e8",
+          "character_start": 0,
+          "character_end": 222
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_3d4b501da7e844e1b1d6a1f2c87185e8": "0bf7d6c1fbf8e2e1bc0f829f41e53afaf07efa7ba880aca82b2840f46bdd0223"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

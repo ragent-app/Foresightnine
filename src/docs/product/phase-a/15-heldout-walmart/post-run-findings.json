@@ -1,0 +1,12 @@
+{
+  "finding": "H02_model_claim_differs_from_calculator",
+  "task_id": "H02",
+  "claim_index": 1,
+  "model_claim_percent": "4.21",
+  "calculation_percent": "4.20",
+  "calculation_index": 1,
+  "input_denominator": "642637",
+  "impact": "The pre-registered mechanical scorer checked expected calculation objects but did not compare the prose against them; its H02 mechanical_pass result must not be interpreted as numerical correctness of the full answer.",
+  "verification": "Detected by comparing the retained model output and program calculation; the result is not a blinded or independent human assessment.",
+  "handling": "Original frozen inputs, outputs, score and failed H03 record are preserved; no repeat call or re-scoring of this holdout was performed. Product code was subsequently changed to flag a limited set of potentially mismatching percentages for review."
+}

@@ -1,0 +1,84 @@
+{
+  "provider_payload": {
+    "claims": [
+      {
+        "text": "2024年9月美联储将联邦基金目标区间下调至4-3/4至5%。",
+        "citations": [
+          {
+            "source_id": "source_0d3bfc78d66a4c85a36535cf726a8cf9",
+            "quotation": "lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent"
+          }
+        ]
+      },
+      {
+        "text": "变化幅度为下调1/2个百分点（50个基点）。",
+        "citations": [
+          {
+            "source_id": "source_0d3bfc78d66a4c85a36535cf726a8cf9",
+            "quotation": "lower the target range for the federal funds rate by 1/2 percentage point"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "Michelle W. Bowman 投了反对票，倾向于仅下调1/4个百分点，说明委员会内部对降幅存在分歧。",
+        "citations": [
+          {
+            "source_id": "source_0d3bfc78d66a4c85a36535cf726a8cf9",
+            "quotation": "Voting against this action was Michelle W. Bowman, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting."
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源未包含降息前后的具体区间数值以外的历史背景或市场反应信息。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_target_range_new",
+        "label": "new federal funds target range",
+        "value": "4-3/4 to 5",
+        "unit": "percent",
+        "currency": null,
+        "period": "2024年9月18日 FOMC 决议",
+        "citation": {
+          "source_id": "source_0d3bfc78d66a4c85a36535cf726a8cf9",
+          "quotation": "lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent"
+        }
+      },
+      {
+        "fact_id": "fact_cut_size",
+        "label": "rate cut size",
+        "value": "1/2 percentage point",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2024年9月18日 FOMC 决议",
+        "citation": {
+          "source_id": "source_0d3bfc78d66a4c85a36535cf726a8cf9",
+          "quotation": "lower the target range for the federal funds rate by 1/2 percentage point"
+        }
+      },
+      {
+        "fact_id": "fact_dissent",
+        "label": "dissent preferred cut",
+        "value": "1/4 percentage point",
+        "unit": "percentage point",
+        "currency": null,
+        "period": "2024年9月18日 FOMC 会议",
+        "citation": {
+          "source_id": "source_0d3bfc78d66a4c85a36535cf726a8cf9",
+          "quotation": "Voting against this action was Michelle W. Bowman, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting."
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "difference",
+        "first_fact_id": "fact_cut_size",
+        "second_fact_id": "fact_dissent"
+      }
+    ]
+  },
+  "reported_tokens": 1215
+}

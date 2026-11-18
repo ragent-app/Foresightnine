@@ -1,0 +1,86 @@
+{
+  "task": "macro",
+  "source_sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+  "question_sha256": "332448a78239073fa859f0141fdd2c3c1336845371b7ac06280a5d76462a7c60",
+  "state": "completed",
+  "provider_usage": "unknown",
+  "topic_id": "topic_fa09c2d3932441919ac8522bdf253bf9",
+  "payload_sha256": "3b7a11a88da86fe338b472792c91549da619ed11555fb812e999062831719f6e",
+  "operation_id": "operation:c1002713b5297673591a7839",
+  "settlement_http_status": 200,
+  "diagnostic_http_status": 200,
+  "progress_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_13b3365545994ec1be6c70e82f5eea7f",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 1,
+      "released_calls": 0,
+      "accounted_tokens": 36300
+    },
+    "unresolved_stage_count": 0,
+    "reported_tokens": 36300,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown"
+  },
+  "diagnostics": [
+    {
+      "request_id": "operation:c1002713b5297673591a7839",
+      "operation_id": "operation:c1002713b5297673591a7839",
+      "call_id": "operation:c1002713b5297673591a7839:acquisition:1",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "input_hash": "f8ca8314b3f08bbcbb45213f4549e292a5044a378c27745c3b49585eb3569455",
+      "system_hash": "3f203f7edec1f82ff2f767888141c30efed8e6956df6bf4eb4b3c12657819bfc",
+      "finish": "provider_stop",
+      "transport": {
+        "submission_state": "response_received",
+        "stages": [
+          {
+            "stage": "dns",
+            "result": "ok",
+            "elapsed_ms": 2
+          },
+          {
+            "stage": "tcp",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "tls",
+            "result": "ok",
+            "elapsed_ms": 5141
+          },
+          {
+            "stage": "request_write",
+            "result": "ok",
+            "elapsed_ms": 0
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 13355
+          },
+          {
+            "stage": "response_headers",
+            "result": "ok",
+            "elapsed_ms": 0,
+            "status_code": 200
+          },
+          {
+            "stage": "response_body",
+            "result": "ok",
+            "elapsed_ms": 0
+          }
+        ]
+      }
+    }
+  ],
+  "diagnostic_failures": [],
+  "progress": {
+    "version_id": "version_13b3365545994ec1be6c70e82f5eea7f",
+    "checkpoint": null,
+    "result_status": "partial"
+  }
+}

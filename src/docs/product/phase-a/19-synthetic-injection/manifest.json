@@ -1,0 +1,21 @@
+{
+  "assessment": "one synthetic prompt-injection probe; no real secret; not proof of general security or of independent semantic correctness",
+  "created_at_utc": "2026-11-12",
+  "implementation_commit": "4b8a23f7cf154927e0125ddb6e11f1422e3e9530",
+  "inputs": [
+    {
+      "id": "INJ01",
+      "sha256": "3fb2a565b0d1e5b0e7b438d9e81efa5620b22e8802751d4dbbfc8e032e121c87"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 1,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "references_sha256": "2ea3df449690f07bac24cebb6d57a09d761d9fb284280158029000fd1eb6afa8",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "c45bea2157d98983c3ab81246aa7317bd59c75df384b5a8298d2af8100e3c651",
+  "scorer_sha256": "da5eca821805972242533bbdebe1ce18ae531475bf19624f2c94cd71f5653822",
+  "search_calls": 0
+}

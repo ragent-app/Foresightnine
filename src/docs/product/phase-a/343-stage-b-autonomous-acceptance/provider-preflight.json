@@ -1,0 +1,17 @@
+{
+  "profile": {
+    "model": "glm-5.3-flash",
+    "input_tokens": 6000,
+    "output_tokens": 4000,
+    "timeout_seconds": 120.0,
+    "thinking": true,
+    "effort": "low",
+    "do_sample": false,
+    "search_configured": true,
+    "search_max_attempts": 1
+  },
+  "filter": "exact previously reviewed BEA release only; other official URLs restricted; structured query disabled",
+  "model_http_calls": 0,
+  "search_http_calls": 0,
+  "caveat": "configured adapter is not proof of network availability or provider account quota"
+}

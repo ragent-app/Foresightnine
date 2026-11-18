@@ -1,0 +1,49 @@
+{
+  "checked_at_utc": "2026-11-11T11:12:57.044013+00:00",
+  "bank_sha256": "b5bfb431da601c96d8483614f09b890ada6fee7973ec36203ef814618695d44e",
+  "reference_sha256": "d7f50ca497bf3a5843ccd6def459ff9a8f4c44771cd01359168b55b05bc1be25",
+  "tasks": [
+    {
+      "id": "H01",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H02",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H03",
+      "sources": [
+        "holdout-walmart-2024.json"
+      ]
+    },
+    {
+      "id": "H04",
+      "sources": [
+        "holdout-coca-cola-2024.json"
+      ]
+    },
+    {
+      "id": "H05",
+      "sources": [
+        "holdout-walmart-2024.json",
+        "holdout-coca-cola-2024.json"
+      ]
+    },
+    {
+      "id": "H06",
+      "sources": [
+        "macro-bea-2023-advance.json",
+        "macro-fed-2024-09.json"
+      ]
+    }
+  ],
+  "future_source_rejected": true,
+  "limitations": [
+    "Candidate set is unreviewed, not frozen or private. Snapshot dates do not prove historical availability."
+  ]
+}

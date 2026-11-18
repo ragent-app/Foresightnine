@@ -1,0 +1,14 @@
+{
+  "provider": "glm_coding",
+  "model": "glm-5.3-flash",
+  "input_tokens": 6000,
+  "output_tokens": 4000,
+  "timeout_seconds": 120.0,
+  "thinking_enabled": true,
+  "reasoning_effort": "low",
+  "do_sample": false,
+  "api_process_environment_matches_probe": true,
+  "model_http_requests": 0,
+  "341_root_cause": "fixed model override is prohibited; removed for this attempt",
+  "storage": "isolated postgres, migrations 001/002"
+}

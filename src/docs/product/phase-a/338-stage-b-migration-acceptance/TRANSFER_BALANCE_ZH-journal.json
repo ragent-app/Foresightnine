@@ -1,0 +1,143 @@
+{
+  "task_id": "TRANSFER_BALANCE_ZH",
+  "status": "settlement_unknown",
+  "events": [
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "completed"
+    }
+  ],
+  "cost_status": "unknown",
+  "topic_id": "topic_51f6aedd19a94bf6a9bdd5e32dcd45fc",
+  "idempotency_key": "independent-90b820cbeaf84ccbb190d166c03501fb",
+  "operation_id": "operation:057437976ce1671ec219c7bb",
+  "admission_http_status": 202,
+  "settlement_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_962a1842bcfa48a2849e6203a40de86c",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 3,
+      "released_calls": 0,
+      "accounted_tokens": 4241
+    },
+    "unresolved_stage_count": 1,
+    "reported_tokens": 4241,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  },
+  "reconciliation": {
+    "operation_http_status": 200,
+    "operation_status": "completed",
+    "settlement_http_status": 200,
+    "settlement": {
+      "operation_status": "completed",
+      "checkpoint_version_id": "version_962a1842bcfa48a2849e6203a40de86c",
+      "model_ledger": {
+        "reserved_calls": 0,
+        "settled_calls": 3,
+        "released_calls": 0,
+        "accounted_tokens": 4241
+      },
+      "unresolved_stage_count": 1,
+      "reported_tokens": 4241,
+      "reported_tokens_scope": "run_chain_including_prior_continuations",
+      "cost_status": "unknown",
+      "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+    }
+  }
+}

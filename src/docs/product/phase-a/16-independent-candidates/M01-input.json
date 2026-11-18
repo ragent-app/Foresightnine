@@ -1,0 +1,9 @@
+{
+  "id": "M01",
+  "published_at": "2025-01-30T13:30:00Z",
+  "question": "According to the BEA 2024 advance estimate, what are the annual real GDP growth rates for 2023 and 2024? Identify the vintage and limitations.",
+  "source_file": "../source-snapshots/bea-gdp-2024-q4-advance.pdf",
+  "source_kind": "original_pdf",
+  "source_sha256": "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1",
+  "source_title": "BEA 2024 GDP advance estimate"
+}

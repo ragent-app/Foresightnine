@@ -1,0 +1,17 @@
+{
+  "type": "offline numeric-coverage diagnostic only, not new model run or semantic review",
+  "claims": [
+    {
+      "index": 0,
+      "role": "support",
+      "uncited_percentages": []
+    },
+    {
+      "index": 1,
+      "role": "counterargument",
+      "uncited_percentages": [
+        "2.6%"
+      ]
+    }
+  ]
+}

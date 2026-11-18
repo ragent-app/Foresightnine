@@ -1,0 +1,16 @@
+{
+  "checked_at_utc": "2026-11-11T11:39:04.456570+00:00",
+  "manifest_sha256": "3529f433662f3819be74fcdcf43ad165ff3e3f862636c0ebb87b97f615763b60",
+  "method": "temporary candidate copies; no original material changed; no model or network",
+  "legacy_v02_accepted_changed_question": true,
+  "pinned_verifier_rejections": {
+    "modified_task": "task hash mismatch",
+    "modified_task_and_manifest": "candidate manifest hash mismatch",
+    "modified_pdf": "source hash mismatch"
+  },
+  "limitations": [
+    "An externally retained trustworthy pin and operating-system isolation remain necessary.",
+    "Hashes do not establish historical authenticity, permission or evaluation quality.",
+    "The old successful run was a synthetic input-integrity probe, not a model experiment."
+  ]
+}

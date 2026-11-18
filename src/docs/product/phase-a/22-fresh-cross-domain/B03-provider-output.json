@@ -1,0 +1,57 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "The March 2024 CPI-U all-items monthly change was 0.4 percent on a seasonally adjusted basis.",
+        "citations": [
+          {
+            "source_id": "source_9bd657e4dd5a4235957e90d542aeea0c",
+            "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"March 2024 monthly\",\"seasonal_adjustment\":\"seasonally adjusted\",\"value\":0.4,\"unit\":\"percent\"}"
+          }
+        ]
+      },
+      {
+        "text": "The 12-month change ending March 2024 was 3.5 percent on a not seasonally adjusted basis.",
+        "citations": [
+          {
+            "source_id": "source_9bd657e4dd5a4235957e90d542aeea0c",
+            "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"12 months ending March 2024\",\"seasonal_adjustment\":\"not seasonally adjusted\",\"value\":3.5,\"unit\":\"percent\"}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [],
+    "limitations": [
+      "The supplied source is a derived-figures JSON rather than the full BLS release text; original publication context could not be verified.",
+      "No further detail (e.g., index levels or component breakdowns) is available in the supplied sources."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_cpi_monthly_mar2024",
+        "label": "CPI-U all items monthly change, March 2024 (seasonally adjusted)",
+        "value": 0.4,
+        "unit": "percent",
+        "currency": null,
+        "period": "March 2024 monthly",
+        "citation": {
+          "source_id": "source_9bd657e4dd5a4235957e90d542aeea0c",
+          "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"March 2024 monthly\",\"seasonal_adjustment\":\"seasonally adjusted\",\"value\":0.4,\"unit\":\"percent\"}"
+        }
+      },
+      {
+        "fact_id": "fact_cpi_12mo_mar2024",
+        "label": "CPI-U all items 12-month change ending March 2024 (not seasonally adjusted)",
+        "value": 3.5,
+        "unit": "percent",
+        "currency": null,
+        "period": "12 months ending March 2024",
+        "citation": {
+          "source_id": "source_9bd657e4dd5a4235957e90d542aeea0c",
+          "quotation": "{\"metric\":\"CPI-U all items\",\"period\":\"12 months ending March 2024\",\"seasonal_adjustment\":\"not seasonally adjusted\",\"value\":3.5,\"unit\":\"percent\"}"
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 938
+}

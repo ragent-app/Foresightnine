@@ -1,0 +1,32 @@
+{
+  "request": "HEAD https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+  "authentication_sent": false,
+  "model_calls": 0,
+  "http_status": 401,
+  "elapsed_ms": 2666,
+  "trace": [
+    {
+      "stage": "tcp",
+      "elapsed_ms": 0,
+      "address": "47.251.66.145"
+    },
+    {
+      "stage": "tcp_and_tls",
+      "elapsed_ms": 1088,
+      "address": "47.251.66.145",
+      "timeout_seconds": 5.0
+    },
+    {
+      "stage": "send_head",
+      "elapsed_ms": 0
+    },
+    {
+      "stage": "response_headers",
+      "elapsed_ms": 1571
+    },
+    {
+      "stage": "read_response_body",
+      "elapsed_ms": 0
+    }
+  ]
+}

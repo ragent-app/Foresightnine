@@ -1,0 +1,10 @@
+{
+  "id": "F24",
+  "question": "根据提供的美联储 2024 年 12 月 18 日声明，联邦基金利率目标区间是多少，本次下调多少个百分点？",
+  "source_kind": "original_pdf",
+  "source_file": "fed-2024-12-18.pdf",
+  "source_title": "Federal Reserve FOMC statement December 18, 2024",
+  "published_at": "2024-12-18T19:00:00Z",
+  "source_sha256": "9c21bc7aa2b6e8014ed3fac9d684093be0b8bf4cd61454579debc5e40b733ed0",
+  "source_text_sha256": "82a91e921f5a7a34af76b05b14b99f7460fa8fc013d0092c46dfdcdedbd5432d"
+}

@@ -1,0 +1,26 @@
+{
+  "assessment": "fresh sources of related task types selected after earlier failures; public and non-blind, derived facts only; no independent human verification",
+  "created_at_utc": "2026-11-12",
+  "implementation_commit": "83ad3ee1596171e8b81427193a432600e5bc3250",
+  "inputs": [
+    {
+      "id": "P03",
+      "sha256": "c680bd685a1a09c569dc1248968f5f058c7b50d91b2988ba100db236651c9e5c"
+    },
+    {
+      "id": "B03",
+      "sha256": "c752b5f7d820efeb58b52b6b7548eb1ff4837247c5895197607b6af2a0780ef2"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "pass_rule": "All expected facts with periods, units and source positions; cited supporting claims; required deterministic calculation; no omitted citation or flagged percentage; budgets respected. Semantics and history remain unverified.",
+  "references_sha256": "fa246e58a39bfcfb398d9f3baaef052d0ef0505fe48e825eb8d3a5d2cfd66d67",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "e242f44fb4dff6fd3ff25d495306655d7853c7a888746476c68acad97a9437eb",
+  "scorer_sha256": "7efd32db53cc192f5c2dab33ee5478970c95a0b1a2f418ce852abb93a9033db6",
+  "search_calls": 0
+}

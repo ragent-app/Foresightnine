@@ -1,0 +1,23 @@
+....F..                                                                  [100%]
+=================================== FAILURES ===================================
+_____ test_analyze_keeps_short_structured_total_row_with_its_longer_header _____
+
+    def test_analyze_keeps_short_structured_total_row_with_its_longer_header():
+        header = ("ACME CORP\nConsolidated Statements of Operations\n(in millions)\n"
+                  "| Years Ended | July 31, 2024 | July 31, 2023 |\n")
+        middle = "| Product | 150 | 140 |\n" + "| Other item | 5 | 4 |\n" * 28
+        text = "other " * 600 + header + middle + "| Total revenue | 200 | 190 |\n" + "other " * 600
+        report = source("source_0123456789abcdef0123456789abcdef", text=text)
+        received = []
+        def generate(prompt):
+            received.extend(json.loads(prompt)["sources"])
+            return {}, 1
+        result = analyze("2024 与 2023 财年营收多少？", [report], None, generate, max_prompt_chars=1800)
+        excerpts = " ".join(item["text"] for item in received)
+>       assert all(value in excerpts for value in ("ACME CORP", "millions", "2024", "2023", "200", "190"))
+E       assert False
+E        +  where False = all(<generator object test_analyze_keeps_short_structured_total_row_with_its_longer_header.<locals>.<genexpr> at 0x773c2457b100>)
+
+tests/test_research_analysis.py:1204: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_analysis.py::test_analyze_keeps_short_structured_total_row_with_its_longer_header

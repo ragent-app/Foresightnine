@@ -1,0 +1,123 @@
+{
+  "status": "draft; freeze after implementation and deterministic checks; no model call authorized until then",
+  "scope": "two known 338 regressions and three nonblind transfers; limited macro, policy, SEC derived company facts and PDF table checks; not an independent quality baseline",
+  "limits": {
+    "tasks": 5,
+    "calls_per_task": 3,
+    "tokens_per_task": 20000,
+    "seconds_per_task": 180,
+    "total_calls": 15,
+    "total_tokens": 100000,
+    "total_seconds": 900,
+    "search_calls": 0
+  },
+  "provider": "existing configured GLM Coding profile; final model and supported parameters frozen before launch; no purchase; actual cost unknown",
+  "stop": "Any unknown provider outcome or settlement stops the batch; no retry and no replacement task.",
+  "sources": {
+    "bea_2022": {
+      "title": "bea-2022-q3",
+      "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/bea-2022-q3.txt",
+      "sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/bea-2022-q3.pdf",
+      "pdf_sha256": "ab3b58ba736229158593e7c64098fe7a7c1cca40213ee77f767aec8d092824b4",
+      "retrieved_at_utc": "2026-11-14T07:32:33.522826+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true,
+      "upload_kind": "text"
+    },
+    "sec_derived": {
+      "file": "src/docs/product/phase-a/source-snapshots/sec-msft-2023-revenue-derived.json",
+      "sha256": "a46d6f7767d87a6bf3b0d2b546ed1b9dd352de1d92c9139fdde266fc01c21c60",
+      "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+      "permission_basis": "03-source-inventory.md §§ 50–54: previously saved SEC public structured filing facts; no new retrieval; derived snapshot, not original filing; historical availability and restatements not independently established",
+      "export_permitted": true,
+      "upload_kind": "derived_text",
+      "title": "SEC companyfacts derived Microsoft fiscal 2022–2023 revenue snapshot (not original filing)"
+    },
+    "bea_table": {
+      "original_pdf": "src/docs/product/phase-a/source-snapshots/bea-gdp-2023-q4-advance.pdf",
+      "pdf_sha256": "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d",
+      "url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+      "permission_basis": "03-source-inventory.md, government-authored BEA release; exclude third-party content",
+      "export_permitted": true,
+      "upload_kind": "pdf",
+      "title": "BEA 2023 Q4 advance GDP release PDF"
+    },
+    "fed_june": {
+      "title": "fed-2020-june",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200610a1.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-june.txt",
+      "sha256": "fec9898ca7650e7ed9a8271704c57ea4c7157d34174546273a1169c150f415ed",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-june.pdf",
+      "pdf_sha256": "7ae6963831825b499a82a07133755ac057a14ae5fab01ed3bfb489c620a24407",
+      "retrieved_at_utc": "2026-11-14T07:48:25.764916+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true,
+      "upload_kind": "text"
+    },
+    "fed_july": {
+      "title": "fed-2020-july",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200729a1.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-july.txt",
+      "sha256": "ef2d9218bd4e8ebd1ba2c5c34444dad2a6ca49b7c02407a155ccc058ca29bc06",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-july.pdf",
+      "pdf_sha256": "32bfee173c447622e8dc66466df57168baf214cc5332b8c4067b9bc061ec128f",
+      "retrieved_at_utc": "2026-11-14T07:48:26.848912+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true,
+      "upload_kind": "text"
+    }
+  },
+  "tasks": [
+    {
+      "id": "MACRO_CALC",
+      "question": "Using the supplied BEA release, report the real GDP growth rates for the second and third quarters of 2022 and calculate the difference in percentage points. Explain the estimate and period limitations.",
+      "sources": [
+        "bea_2022"
+      ],
+      "require_counterarguments": true,
+      "gap_followup": true
+    },
+    {
+      "id": "MISSING_BOUNDARY",
+      "question": "Using the supplied release, what were third-quarter 2022 real GDP growth and the September 2022 unemployment rate? Explain any information not established by this source.",
+      "sources": [
+        "bea_2022"
+      ],
+      "require_counterarguments": false,
+      "gap_followup": true
+    },
+    {
+      "id": "COMPANY_REVENUE_ZH",
+      "question": "根据提供的 SEC 派生事实快照，比较微软 2022 与 2023 财年收入，列明财年起止、币种和金额，计算增额及同比增长率；说明材料是否为完整年报及其历史可得性限制。",
+      "sources": [
+        "sec_derived"
+      ],
+      "plan_research": true,
+      "require_counterarguments": false,
+      "gap_followup": true
+    },
+    {
+      "id": "PDF_TABLE_EN",
+      "question": "Using Table 1 in the supplied BEA PDF, report real GDP and personal consumption expenditure growth for 2023 Q3 and Q4. Calculate each change in percentage points and explain the period, annualization, estimate and document limitations. Cite the correct table header and rows.",
+      "sources": [
+        "bea_table"
+      ],
+      "plan_research": true,
+      "require_counterarguments": false,
+      "gap_followup": true
+    },
+    {
+      "id": "POLICY_COMPARE_ZH",
+      "question": "根据所给两份美联储声明，用中文比较 2020 年 6 月和 7 月联邦基金目标利率区间及日期，计算上下限变化，并说明这两份文件不能单独证明期间是否存在其他决定。",
+      "sources": [
+        "fed_june",
+        "fed_july"
+      ],
+      "plan_research": true,
+      "require_counterarguments": false,
+      "gap_followup": true
+    }
+  ]
+}

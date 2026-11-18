@@ -1,0 +1,79 @@
+{
+  "state": "finished",
+  "error_code": "invalid_model_output",
+  "provider_response": "returned",
+  "actual_tokens": 2254,
+  "reserved_tokens": 10000,
+  "accounted_tokens": 2254,
+  "cost": "unknown",
+  "local_receipt": {
+    "provider": "returned",
+    "settlement": "settled",
+    "processing_error": "contract_validation"
+  },
+  "observation": {
+    "contract": "research-draft-v1",
+    "mode": "json_object",
+    "prompt_sha256": "4f6636fdf3fc7cffdbca8a74773fa4f1aa43e5bf59a3fcbb2e170ae1007d76b7",
+    "prompt_bytes": 5344,
+    "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+    "budget_bytes": 5375,
+    "source_passages": 23
+  },
+  "diagnostics": {
+    "transport": {
+      "submission_state": "response_received",
+      "stages": [
+        {
+          "stage": "dns",
+          "result": "ok",
+          "elapsed_ms": 2
+        },
+        {
+          "stage": "tcp",
+          "result": "ok",
+          "elapsed_ms": 0
+        },
+        {
+          "stage": "tls",
+          "result": "ok",
+          "elapsed_ms": 5016
+        },
+        {
+          "stage": "request_write",
+          "result": "ok",
+          "elapsed_ms": 0
+        },
+        {
+          "stage": "response_headers",
+          "result": "ok",
+          "elapsed_ms": 19945
+        },
+        {
+          "stage": "response_headers",
+          "result": "ok",
+          "elapsed_ms": 0,
+          "status_code": 200
+        },
+        {
+          "stage": "response_body",
+          "result": "ok",
+          "elapsed_ms": 1863
+        }
+      ]
+    },
+    "category": "contract_validation",
+    "errors": [
+      {
+        "type": "invalid_draft_envelope"
+      }
+    ],
+    "finish": "provider_stop"
+  },
+  "claims": 0,
+  "facts": 0,
+  "calculations": 0,
+  "counterarguments": 0,
+  "structured_output_status": "complete",
+  "elapsed_ms": 28074
+}

@@ -1,0 +1,74 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "根据BEA初次估计，2024年全年实际GDP增长2.8%（年度水平对比口径，即2023年年度水平到2024年年度水平），而2024年第四季度实际GDP按季度环比年化增长率计算为2.3%。两者口径不同：前者是年度总量变化，后者是单季度环比折算成年化速率。",
+        "citations": [
+          {
+            "source_id": "source_54f60e829e904fe99d7b8f84b6b6e5ac",
+            "quotation": "Real GDP increased 2.8 percent in 2024 (from the 2023 annual level to the 2024 annual level)"
+          },
+          {
+            "source_id": "source_54f60e829e904fe99d7b8f84b6b6e5ac",
+            "quotation": "an annual rate of 2.3 percent in the fourth quarter of 2024 (October, November, and December), according to the advance estimate"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "无相反证据，但需注意该数据为初次估计（advance estimate），后续修订可能改变数值；且此为初估版本，非最终数据。",
+        "citations": [
+          {
+            "source_id": "source_54f60e829e904fe99d7b8f84b6b6e5ac",
+            "quotation": "according to the advance estimate released by the U.S. Bureau of Economic Analysis"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源文本未提供2024年第四季度环比年化增速与全年增速之外的分季度其他数据（仅提及第三季度为3.1%）。",
+      "数据为advance estimate，后续修订数值可能不同。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_2024_annual_gdp",
+        "label": "2024年全年实际GDP增速（年度口径）",
+        "value": "2.8",
+        "unit": "percent",
+        "currency": null,
+        "period": "2024年（2023年度水平到2024年度水平）",
+        "citation": {
+          "source_id": "source_54f60e829e904fe99d7b8f84b6b6e5ac",
+          "quotation": "Real GDP increased 2.8 percent in 2024 (from the 2023 annual level to the 2024 annual level), compared with an increase of 2.9 percent in 2023."
+        }
+      },
+      {
+        "fact_id": "fact_2024q4_gdp_saar",
+        "label": "2024年第四季度实际GDP季度环比年化增速",
+        "value": "2.3",
+        "unit": "percent (annual rate)",
+        "currency": null,
+        "period": "2024年第四季度（10–12月）",
+        "citation": {
+          "source_id": "source_54f60e829e904fe99d7b8f84b6b6e5ac",
+          "quotation": "an annual rate of 2.3 percent in the fourth quarter of 2024 (October, November, and December)"
+        }
+      },
+      {
+        "fact_id": "fact_2024q3_gdp_saar",
+        "label": "2024年第三季度实际GDP季度环比年化增速（对比参考）",
+        "value": "3.1",
+        "unit": "percent",
+        "currency": null,
+        "period": "2024年第三季度",
+        "citation": {
+          "source_id": "source_54f60e829e904fe99d7b8f84b6b6e5ac",
+          "quotation": "In the third quarter, real GDP increased 3.1 percent."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1313
+}

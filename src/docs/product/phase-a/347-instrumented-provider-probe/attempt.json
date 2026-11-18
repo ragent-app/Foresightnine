@@ -1,0 +1,50 @@
+{
+  "state": "returned",
+  "reserved_tokens": 10000,
+  "attempts": 1,
+  "provider_response": "returned",
+  "settlement": "reported_usage",
+  "actual_tokens": 40,
+  "cost": "unknown",
+  "stages": [
+    {
+      "stage": "dns",
+      "result": "success",
+      "elapsed_ms": 3
+    },
+    {
+      "stage": "dns",
+      "result": "success",
+      "elapsed_ms": 0
+    },
+    {
+      "stage": "tcp",
+      "address": "47.251.66.145",
+      "result": "success",
+      "elapsed_ms": 2
+    },
+    {
+      "stage": "tls",
+      "result": "success",
+      "elapsed_ms": 1652
+    },
+    {
+      "stage": "http_request",
+      "result": "success",
+      "elapsed_ms": 0
+    },
+    {
+      "stage": "http_response_headers",
+      "result": "success",
+      "http_status": 200,
+      "elapsed_ms": 2726
+    },
+    {
+      "stage": "http_read",
+      "result": "success",
+      "elapsed_ms": 0
+    }
+  ],
+  "schema_valid": true,
+  "elapsed_ms": 4404
+}

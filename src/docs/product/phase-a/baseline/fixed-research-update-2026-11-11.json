@@ -1,0 +1,44 @@
+{
+  "as_of": "2024-08-01T00:00:00Z",
+  "stage": "update",
+  "unit": "USD millions",
+  "source": {
+    "url": "https://www.sec.gov/Archives/edgar/data/789019/000095017024087843/msft-20240630.htm",
+    "location": "Income Statements",
+    "snapshot_sha256": "d7d1ffdd9abe0a509a246d0620809eab182dc7d5abb681a4a9e0cf581aefe2d5"
+  },
+  "previous_result_sha256": "12cb86727eaefbef743a6ab7ef4f3666185ad49dcf320c180764ea19affb27a3",
+  "facts": {
+    "revenue_2023": 211915,
+    "revenue_2024": 245122,
+    "operating_income_2024": 109433
+  },
+  "calculations": {
+    "revenue_growth": {
+      "formula": "(2024 revenue - 2023 revenue) / 2023 revenue * 100",
+      "percent": "15.67"
+    },
+    "operating_margin": {
+      "formula": "2024 operating income / 2024 revenue * 100",
+      "percent": "44.64"
+    }
+  },
+  "changes": [
+    "FY2024 total revenue and operating income are newly supplied; FY2023 revenue and operating income match the previous snapshot."
+  ],
+  "retained_counter_evidence": [
+    "The initial FY2023 segment decline remains a historical fact; the provided FY2024 snapshot does not show whether that segment recovered."
+  ],
+  "unknowns": [
+    "No FY2024 segment evidence, assessment of causes, price outlook, or user confirmation is provided.",
+    "This is an offline historical replay and does not demonstrate monitoring or detection."
+  ],
+  "status": "provisional; source extraction and human review pending",
+  "script_sha256": "6b3ec0a5bf668c48b0f50904c302fc04ef2f7b410b9142459d9339ee1801ab33",
+  "run_at_utc": "2026-11-11T11:19:30.568370+00:00",
+  "elapsed_seconds": 0.000327,
+  "model_calls": 0,
+  "network_calls": 0,
+  "provider_charge_usd": 0,
+  "human_and_infrastructure_cost": "not measured"
+}

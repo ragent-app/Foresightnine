@@ -1,0 +1,40 @@
+{
+  "checked_at_utc": "2026-11-11T11:02:15.419821+00:00",
+  "checks": [
+    {
+      "snapshot": "msft-fy2023.json",
+      "fiscal_year": "2022",
+      "filing": "0000950170-23-035122",
+      "matches": 1,
+      "unit_conversion": "USD millions to USD",
+      "pass": true
+    },
+    {
+      "snapshot": "msft-fy2023.json",
+      "fiscal_year": "2023",
+      "filing": "0000950170-23-035122",
+      "matches": 1,
+      "unit_conversion": "USD millions to USD",
+      "pass": true
+    },
+    {
+      "snapshot": "msft-fy2024.json",
+      "fiscal_year": "2023",
+      "filing": "0000950170-24-087843",
+      "matches": 1,
+      "unit_conversion": "USD millions to USD",
+      "pass": true
+    },
+    {
+      "snapshot": "msft-fy2024.json",
+      "fiscal_year": "2024",
+      "filing": "0000950170-24-087843",
+      "matches": 1,
+      "unit_conversion": "USD millions to USD",
+      "pass": true
+    }
+  ],
+  "limitations": [
+    "Only revenue facts checked against SEC JSON; source permissions, operating income and human review remain pending."
+  ]
+}

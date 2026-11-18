@@ -1,0 +1,154 @@
+{
+  "id": "V24",
+  "operation_status": "completed",
+  "manifest_sha256": "ab1dede80cc44865ee7da33fceb6f73a8ed4289931c12e365bcd576da9aa17cd",
+  "input_sha256": "9fd56eedf721bd6859798d4f6792833c6a747b65c235129a77cb5b3894f9393a",
+  "elapsed_seconds_observed": 16.108,
+  "poll_errors": [],
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+        "title": "Visa 2024 SEC 10-K: derived net revenue facts",
+        "url": "https://www.sec.gov/Archives/edgar/data/1403161/000140316124000058/v-20240930.htm",
+        "event_at": null,
+        "published_at": null,
+        "obtained_at": "2026-11-12T03:23:14.741662+00:00",
+        "revised_at": null,
+        "content_sha256": "59bed7e76fa6d5f0834165b068ef47f82ee0b8476509d1301d24d130adc3672b",
+        "is_simulated": false,
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_visa_net_revenue_fy2023",
+        "value": "32653",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2023-09-30",
+        "label": "net_revenue_fy2023",
+        "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+        "quotation": "\"net_revenue\":{\"2023\":32653,\"2024\":35926}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 110,
+          "character_end": 151
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_visa_net_revenue_fy2024",
+        "value": "35926",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2024-09-30",
+        "label": "net_revenue_fy2024",
+        "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+        "quotation": "\"net_revenue\":{\"2023\":32653,\"2024\":35926}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 110,
+          "character_end": 151
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fact_visa_net_revenue_fy2024",
+            "value": "35926",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "fiscal year ended 2024-09-30"
+          },
+          {
+            "fact_id": "fact_visa_net_revenue_fy2023",
+            "value": "32653",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "fiscal year ended 2023-09-30"
+          }
+        ],
+        "value": "10.02",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "calculation_differences": [],
+    "claims": [],
+    "limitations": [
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "A model-generated quotation did not match the supplied source and was omitted.",
+      "A model-generated claim without a valid quotation was omitted.",
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "The source data is described as 'derived' rather than a direct quote from the SEC 10-K; figures should be reconciled to the original filing.",
+      "Only two fiscal years are provided, so the growth rate reflects a single annual comparison and cannot show trends.",
+      "No segment breakdown, currency-adjusted metrics, or drivers of revenue growth are provided.",
+      "Fiscal year end dates differ from calendar years (Sep 30 year-end), which matters when comparing to peers on calendar-year reporting.",
+      "No calculation result is supplied in the sources; the growth percentage itself is computed via the requested calculation and should be verified before use.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:f2f24f50341eb6e354ef1185",
+      "status": "partial",
+      "model_calls": 1,
+      "total_tokens": 996,
+      "cost_usd": null,
+      "generation_tokens": 996,
+      "support_review_tokens": null,
+      "support_review_requested": false,
+      "support_review_status": "not_requested",
+      "support_review_error": null,
+      "support_review_method": null,
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": null,
+      "support_review_indexes": [],
+      "support_review_segments": [],
+      "support_review_system_sha256": null,
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 15.055,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "0e0b066ce3c1cc6464857fca3708d12801f233708b9007593d5909d248cb244b",
+      "prompt_characters": 1252,
+      "prompt_bytes": 1334,
+      "selection_method": "ranked_nonoverlapping_windows_v5",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+          "character_start": 0,
+          "character_end": 152
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_8ed46ccd1ce24af1bf1cb5db8ea90deb": "59bed7e76fa6d5f0834165b068ef47f82ee0b8476509d1301d24d130adc3672b"
+      },
+      "max_model_calls": 1,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 10000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "cost_usd": "unknown"
+}

@@ -1,0 +1,8 @@
+{
+  "as_of": null,
+  "id": "H01",
+  "question": "计算 Walmart 2024 财年收入同比，说明数值、单位、分母和来源。",
+  "source_text": "{\"issuer\":\"Walmart\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"January 31\",\"FY2023\":{\"total_revenues\":611289},\"FY2024\":{\"total_revenues\":648125,\"net_sales\":642637,\"membership_and_other_income\":5488,\"operating_income\":27012}}",
+  "source_title": "Walmart FY2024 SEC filing: derived financial facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/104169/000010416924000056/wmt-20240131.htm"
+}

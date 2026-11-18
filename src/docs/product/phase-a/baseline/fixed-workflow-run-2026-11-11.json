@@ -1,0 +1,39 @@
+{
+  "status": "provisional_calculation_smoke_run_not_formal_comparison",
+  "run_at_utc": "2026-11-11T10:57:14.068569+00:00",
+  "method": "local deterministic arithmetic; Python Decimal, two decimals, half up; one run; no retries",
+  "source_snapshot_hashes": {
+    "initial": "9c6ad6279f638eee1139942ea4c5c837d239fa8f2b6d2512db1b6cc3ae5986cd",
+    "update": "d7d1ffdd9abe0a509a246d0620809eab182dc7d5abb681a4a9e0cf581aefe2d5"
+  },
+  "model": null,
+  "model_calls": 0,
+  "network_calls": 0,
+  "provider_charges_incurred": 0,
+  "compute_and_storage_cost": "not measured",
+  "duration_seconds": 0.000347,
+  "initial": {
+    "source": "https://microsoft.gcs-web.com/static-files/e2931fdb-9823-4130-b2a8-f6b8db0b15a9",
+    "as_of": "2023-08-01T00:00:00Z",
+    "unit": "USD millions",
+    "revenue_2022": 198270,
+    "revenue_2023": 211915,
+    "revenue_growth_percent": "6.88",
+    "operating_margin_percent": "41.77",
+    "limitations": [
+      "No interpretation, counterargument, source-fetching, or verification was performed."
+    ]
+  },
+  "update": {
+    "source": "https://www.sec.gov/Archives/edgar/data/789019/000095017024087843/msft-20240630.htm",
+    "as_of": "2024-08-01T00:00:00Z",
+    "unit": "USD millions",
+    "revenue_2023_unchanged": true,
+    "revenue_2024": 245122,
+    "revenue_growth_percent": "15.67",
+    "operating_margin_percent": "44.64",
+    "limitations": [
+      "Historical replay, not real-time detection; no interpretation or counterargument."
+    ]
+  }
+}

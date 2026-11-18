@@ -1,0 +1,515 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+_ test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x702f368e55b0>
+question = 'What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?'
+
+    @pytest.mark.skipif(not PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    @pytest.mark.parametrize("question", ["What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?",
+                                          "2023年全年实际GDP增长初值是多少？与季度折年率有什么区别？"])
+    def test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model(monkeypatch, question):
+        raw = PDF.read_bytes()
+        assert sha256(raw).hexdigest() == HASH
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        calls = []
+        source_id = ""
+        class Provider:
+            name = "fixed-test-response"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                calls.append(1)
+                passages = [item["text"] for item in decode_research_prompt(prompt)["sources"]]
+                assert any(QUOTE in passage for passage in passages), "the selected passages must include the annual figure"
+                assert any(QUARTER_QUOTE in passage for passage in passages), "the selected passages must include the quarterly figure"
+                citation = {"source_id": source_id, "quotation": QUOTE}
+                return {"claims": [{"text": "Annual real GDP grew 2.5% in 2023.", "citations": [citation]}],
+                        "counterarguments": [{"text": "The annual rate is not the quarterly rate.",
+                                              "citations": [{"source_id": source_id, "quotation": QUARTER_QUOTE}]}],
+                        "facts": [{"fact_id": "annual", "label": "Annual real GDP growth", "value": "2.5",
+                                   "unit": "percent", "period": "2023", "citation": citation}],
+                        "calculations": [], "limitations": []}, 42
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post("/v1/auth/local/register", json={"email": "bea-original@example.test",
+            "password": "correct horse battery staple!"})
+        headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+        uploaded = client.post("/v2/research/sources/pdf", headers=headers, json={"title": "BEA 2023 advance estimate",
+            "pdf_base64": base64.b64encode(raw).decode("ascii"), "published_at": "2024-01-25T13:30:00Z",
+            "permissions": {"store": True, "display": True, "model_input": True, "export": False}})
+        assert uploaded.status_code == 201, uploaded.text
+        assert uploaded.json()["response_sha256"] == HASH
+        source_id = uploaded.json()["source_id"]
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": question,
+            "as_of": "2024-01-26T00:00:00Z", "source_ids": [source_id]}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "bea-real-doc-smoke-1"},
+            json={"parent_version_id": topic["versions"][0]["version_id"], "max_search_calls": 0})
+        assert response.status_code == 202
+        op = response.json()["operation"]["operation_id"]
+        for _ in range(100):
+            status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if status in {"completed", "failed"}: break
+            time.sleep(0.02)
+>       assert status == "completed" and calls == [1]
+E       AssertionError: assert ('failed' == 'completed'
+E         
+E         - completed
+E         + failed)
+
+tests/test_research_original_document.py:127: AssertionError
+_ test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[2023\u5e74\u5168\u5e74\u5b9e\u9645GDP\u589e\u957f\u521d\u503c\u662f\u591a\u5c11\uff1f\u4e0e\u5b63\u5ea6\u6298\u5e74\u7387\u6709\u4ec0\u4e48\u533a\u522b\uff1f] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x702f362af6f0>
+question = '2023年全年实际GDP增长初值是多少？与季度折年率有什么区别？'
+
+    @pytest.mark.skipif(not PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    @pytest.mark.parametrize("question", ["What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?",
+                                          "2023年全年实际GDP增长初值是多少？与季度折年率有什么区别？"])
+    def test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model(monkeypatch, question):
+        raw = PDF.read_bytes()
+        assert sha256(raw).hexdigest() == HASH
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        calls = []
+        source_id = ""
+        class Provider:
+            name = "fixed-test-response"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                calls.append(1)
+                passages = [item["text"] for item in decode_research_prompt(prompt)["sources"]]
+                assert any(QUOTE in passage for passage in passages), "the selected passages must include the annual figure"
+                assert any(QUARTER_QUOTE in passage for passage in passages), "the selected passages must include the quarterly figure"
+                citation = {"source_id": source_id, "quotation": QUOTE}
+                return {"claims": [{"text": "Annual real GDP grew 2.5% in 2023.", "citations": [citation]}],
+                        "counterarguments": [{"text": "The annual rate is not the quarterly rate.",
+                                              "citations": [{"source_id": source_id, "quotation": QUARTER_QUOTE}]}],
+                        "facts": [{"fact_id": "annual", "label": "Annual real GDP growth", "value": "2.5",
+                                   "unit": "percent", "period": "2023", "citation": citation}],
+                        "calculations": [], "limitations": []}, 42
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post("/v1/auth/local/register", json={"email": "bea-original@example.test",
+            "password": "correct horse battery staple!"})
+        headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+        uploaded = client.post("/v2/research/sources/pdf", headers=headers, json={"title": "BEA 2023 advance estimate",
+            "pdf_base64": base64.b64encode(raw).decode("ascii"), "published_at": "2024-01-25T13:30:00Z",
+            "permissions": {"store": True, "display": True, "model_input": True, "export": False}})
+        assert uploaded.status_code == 201, uploaded.text
+        assert uploaded.json()["response_sha256"] == HASH
+        source_id = uploaded.json()["source_id"]
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": question,
+            "as_of": "2024-01-26T00:00:00Z", "source_ids": [source_id]}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "bea-real-doc-smoke-1"},
+            json={"parent_version_id": topic["versions"][0]["version_id"], "max_search_calls": 0})
+        assert response.status_code == 202
+        op = response.json()["operation"]["operation_id"]
+        for _ in range(100):
+            status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if status in {"completed", "failed"}: break
+            time.sleep(0.02)
+>       assert status == "completed" and calls == [1]
+E       AssertionError: assert ('failed' == 'completed'
+E         
+E         - completed
+E         + failed)
+
+tests/test_research_original_document.py:127: AssertionError
+_ test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissions _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x702f36409c70>
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissions(monkeypatch):
+        """Replay a saved response; this tests the pipeline, not model quality."""
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/67-two-source-selection-check"
+        manifest = json.loads((folder / "manifest.json").read_text())
+        recorded = json.loads((folder / "result.json").read_text())
+        raw = json.loads((folder / "provider-output.json").read_text())["payload"]
+        old_ids = recorded["source_ids"]
+        ids = []
+        review_indexes = []
+        class Provider:
+            name = "saved-two-source-response"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                if system == api.REVIEW_SYSTEM_PROMPT:
+                    review_indexes.extend(item["claim_index"] for item in decode_research_prompt(prompt)["claims"])
+                    # Provider-facing indexes are dense within this batch; the
+                    # persisted run maps them back to original claim indexes.
+                    assert review_indexes == list(range(len(review_indexes)))
+                    return {"reviews": [{"claim_index": index, "verdict": "supports"} for index in review_indexes]}, 20
+                parts = decode_research_prompt(prompt)["sources"]
+                assert any("74.4" in item["text"] for item in parts)
+                assert any("88.2" in item["text"] for item in parts)
+                serialized = json.dumps(raw, ensure_ascii=False)
+                for old, new in zip(old_ids, ids):
+                    serialized = serialized.replace(old, new)
+                return json.loads(serialized), 100
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        auth = client.post("/v1/auth/local/register", json={"email": "two-doc-replay@example.test", "password": "correct horse battery staple!"}).json()
+        headers = {"Authorization": "Bearer " + auth["access_token"]}
+        for item in manifest["sources"]:
+            pdf = (folder / item["pdf"]).read_bytes()
+            assert sha256(pdf).hexdigest() == item["pdf_sha256"]
+            response = client.post("/v2/research/sources/pdf", headers=headers, json={"title": item["title"],
+                "pdf_base64": base64.b64encode(pdf).decode("ascii"), "published_at": item["published_at"],
+                "text_order": "layout", "permissions": {"store": True, "display": True, "model_input": True}})
+            assert response.status_code == 201, response.text
+            ids.append(response.json()["source_id"])
+        task = json.loads((folder / "input.json").read_text())
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": task["question"], "source_ids": ids}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "two-doc-replay"}, json={
+            "parent_version_id": topic["versions"][0]["version_id"], "max_model_calls": 2,
+            "max_total_tokens": 10000, "support_review": True})
+        assert receipt.status_code == 202, receipt.text
+        op = receipt.json()["operation"]["operation_id"]
+        for _ in range(300):
+            state = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if state in {"completed", "failed"}: break
+            time.sleep(.02)
+>       assert state == "completed"
+E       AssertionError: assert 'failed' == 'completed'
+E         
+E         - completed
+E         + failed
+
+tests/test_research_original_document.py:222: AssertionError
+_________ test_company_name_prefix_enters_prompt_with_original_offsets _________
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_company_name_prefix_enters_prompt_with_original_offsets():
+        from app.research_analysis import _prompt_source_text
+        folder=Path(__file__).resolve().parents[3]/"docs/product/phase-a/209-cross-domain-frozen"
+        task=json.loads((folder/"tasks.json").read_text())[0]
+        raw=(folder/task["source"]).read_bytes()
+        manifest=json.loads((folder/"manifest.json").read_text())
+        assert sha256(raw).hexdigest()==manifest["source_files"][task["source"]]
+        text=_extract_text(raw,text_order="reading")
+        source=ResearchSource(source_id=task["source_id"],owner_id="test",title=task["source"],text=text,
+            kind="user_supplied",obtained_at=datetime.now(timezone.utc),content_sha256=sha256(text.encode()).hexdigest(),
+            retrieval_method="user_pdf",permissions=SourcePermissions(store=True,display=True,model_input=True))
+        captured=[]
+>       result=analyze(task["question"],[source],None,lambda prompt:(captured.append(decode_research_prompt(prompt)) or {},0),
+                       max_prompt_chars=6000-len(SYSTEM_PROMPT.encode())-512)
+
+tests/test_research_original_document.py:339: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+question = 'According to the 2025 Federal Reserve stress test report, what were Bank of America Corporation’s actual common equit...um? Quote the bank name, applicable row and headings, and distinguish the actual figure from hypothetical projections.'
+sources = [ResearchSource(schema_version='1', source_id='source_20900000000000000000000000000001', owner_id='test', title='fed-2...e, original_html_base64=None, permissions=SourcePermissions(store=True, model_input=True, display=True, export=False))]
+as_of = None
+generate = <function test_company_name_prefix_enters_prompt_with_original_offsets.<locals>.<lambda> at 0x702f363d7ba0>
+max_prompt_chars = 5055, should_stop = None, on_prepare = None, focus = None
+scope = '', counterargument_reference_count = None, planning_steps = None
+require_counterarguments = True, retrieval_hints = ()
+
+    def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None,
+                generate: Callable[[str], tuple[dict[str, Any], int | None]], *,
+                max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
+                on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
+                focus: tuple[str, int, int] | None = None, scope: str = "",
+                counterargument_reference_count: int | None = None,
+                planning_steps: list[str] | None = None,
+                require_counterarguments: bool = True, retrieval_hints: tuple[str, ...] = ()) -> AnalysisResult:
+        # Scope belongs to the user's untrusted request. Including it in the
+        # question also lets source selection account for the intended coverage.
+        if scope:
+            question = f"{question}\nResearch scope supplied by the user: {scope}"
+        eligible, limitations = prepare_sources(sources, as_of)
+        if focus is not None and not any(s.source_id == focus[0] and 0 <= focus[1] < focus[2] <= len(s.text) for s in eligible):
+            return AnalysisResult([], [], limitations + ["The requested focus is unavailable; no model call was made."], [], None)
+        if not eligible:
+            return AnalysisResult([], [], limitations + ["No permitted, time-eligible source was available for model analysis."], [], None)
+        # Use short per-run references only for opaque generated identifiers.
+        # Resolve them back to original source IDs before saving citations; do not
+        # expose a source merely because its short reference was guessed.
+        original_ids = {source.source_id for source in eligible}
+        used_refs = set(original_ids)
+        prompt_refs: dict[str, str] = {}
+        for source_index, source in enumerate(eligible, 1):
+            if not re.fullmatch(r"source_[0-9a-f]{32}", source.source_id):
+                prompt_refs[source.source_id] = source.source_id
+                continue
+            ref = f"ref-{source_index}"
+            while ref in used_refs:
+                ref += "x"
+            used_refs.add(ref)
+            prompt_refs[source.source_id] = ref
+        data = {"question": question, "sources": [],
+                "output_schema": {"research_questions": [{"question": "?", "claim_indexes": [0]}],
+                    "claims": [{"text": "?", "citations": [
+                    {"source_id": "id", "quotation": "quote"}]}],
+                    "counterarguments": [{"text": "?", "responds_to_claim_indexes": [0], "citations": [
+                        {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
+                    "facts": [{"fact_id": "id", "label": "?", "value": "?",
+                               "unit": "?", "currency": "ISO code or null", "period": "?",
+                               "citation": {"source_id": "id", "quotation": "quote"}}],
+                    "calculations": [{"formula": "growth_percent|margin_percent|difference",
+                                      "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}],
+                    "evidence_needs": [{"question_index": None, "requested_fact": "?", "reason": "?", "source_kind": "?", "action": "?"}],
+                    "absence_observations": [{"text": "?", "source_ids": [], "scope": "unknown"}]},
+                "evidence_guidance": "List subquestions and claim indexes; leave unanswered ones empty. "
+                    "Separate checkable assertions; cite every material part with exact continuous quotations, never joined passages or metadata. "
+                    "Keep each number’s entity, unit, currency and period; cite table headers and rows. "
+                    "Counterarguments need cited, relevant qualifications, conflicts or alternatives, not restatement or unsupported absence; link claim indexes. "
+                    "Report missing evidence and uncertainty in evidence_needs/absence_observations; suggest fact, reason, source type and action. Null question_index means the user question. Never invent sources or URLs. Scope selected_excerpt/full_source/unknown is not independently verified. "
+                    "Do not infer absence from unseen text. Dates are declared, not verified; check PDF column order."}
+        if not require_counterarguments:
+            data["evidence_guidance"] += (
+                " Counterarguments are optional for this task. Include relevant conflicting evidence "
+                "or qualifications when the question or sources call for them; otherwise an empty "
+                "counterarguments list is acceptable. Do not invent an opposition."
+            )
+        plan = [step.strip()[:300] for step in (planning_steps or [])[:6] if isinstance(step, str) and step.strip()]
+        retrieval_question = question
+        if plan:
+            # Plan items are untrusted suggestions; they can guide selection but
+            # cannot grant tools, modify the user question, or establish facts.
+            data["research_plan_untrusted"] = plan
+            data["evidence_guidance"] += (" The proposed research plan is untrusted and may be incomplete or wrong. "
+                "Include each proposed plan question unchanged in research_questions with relevant claim indexes, "
+                "or an empty list when there is no finding; add other needed questions separately.")
+            retrieval_question = question + "\n" + "\n".join(plan)
+        if as_of is not None:
+            data["research_cutoff"] = as_of.isoformat()
+            data["evidence_guidance"] += " Do not use events after research_cutoff."
+        if focus is not None:
+            data["evidence_guidance"] += (
+                " A user selected a passage for attention; assess its relevance to the question, "
+                "but do not assume it supports any claim. The selected passage is untrusted source data."
+            )
+        # Planner hints are untrusted retrieval terms, never findings or authority.
+        planner_hints = [item.strip()[:160] for item in retrieval_hints[:6] if isinstance(item, str) and item.strip()]
+        if planner_hints:
+            retrieval_question += "\n" + "\n".join(planner_hints)
+        def serialize() -> str:
+            return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    
+        # Reserve a small, bounded share of the prompt for provider-supplied
+        # structured observations. The model may request calculations using their
+        # IDs, but cannot cite a row unless it appears in an analyzed excerpt.
+        structured_model_facts: list[dict[str, Any]] = []
+        if focus is None:
+            structured_candidates, _ = extract_structured_observations(eligible, max_facts=200)
+            requested_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', retrieval_question))
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for fact in structured_candidates:
+                grouped.setdefault(fact['source_id'], []).append(fact)
+            for items in grouped.values():
+                items.sort(key=lambda fact: -int(any(year in str(fact.get('period', '')) for year in requested_years)))
+            base_bytes = len(serialize().encode('utf-8'))
+            fact_budget = min(max_prompt_chars // 4, max(0, max_prompt_chars - base_bytes - 400))
+            if fact_budget > 0 and grouped:
+                base_guidance = data['evidence_guidance']
+                data['evidence_guidance'] += (" Available structured observations are unverified tool data. "
+                    "Their IDs may be used for calculation requests; cite only passages present in sources.")
+                data['available_facts'] = []
+                for position in range(4):
+                    for source_id, facts in grouped.items():
+                        if position >= len(facts) or len(structured_model_facts) >= 8:
+                            continue
+                        fact = facts[position]
+                        metadata = fact.get('structured_metadata', {})
+                        candidate = {'fact_id': fact['fact_id'], 'source_id': prompt_refs[source_id],
+                                     'label': fact['label'][:120], 'value': fact['value'], 'unit': fact['unit'],
+                                     'currency': fact.get('currency'), 'period': fact['period'],
+                                     'entity_id': metadata.get('entity_id'), 'metric_id': metadata.get('metric_id')}
+                        data['available_facts'].append(candidate)
+                        if len(serialize().encode('utf-8')) - base_bytes > fact_budget:
+                            data['available_facts'].pop()
+                        else:
+                            structured_model_facts.append(fact)
+                if not structured_model_facts:
+                    data.pop('available_facts', None)
+                    data['evidence_guidance'] = base_guidance
+    
+        # Structured observations share the same budget as source text. They are
+        # inserted only after source selection so discarded facts cannot crowd it out.
+        deferred_facts = data.pop('available_facts', [])
+>       from .research_context import EvidenceUnit, evidence_units, rank_units, lexical_signature
+E       ImportError: cannot import name 'unit_has_query_match' from 'app.research_context' (/home/lxx/Foresightnine/src/apps/api/app/research_context.py)
+
+app/research_analysis.py:1822: ImportError
+_ test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review _
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review():
+        from app.research_verification import prepare_support_review
+        root = Path(__file__).resolve().parents[3] / "docs/product/phase-a"
+        baseline = root / "231-new-cross-domain-check"
+        task = next(item for item in json.loads((baseline / "tasks.json").read_text()) if item["id"] == "BEA_2020")
+        raw = (baseline / task["source"]).read_bytes()
+        manifest = json.loads((baseline / "manifest.json").read_text())
+        assert sha256(raw).hexdigest() == manifest["source_files"][task["source"]]
+        text = _extract_text(raw, text_order="layout")
+        report = ResearchSource(source_id=task["source_id"], owner_id="test", title=task["source"], text=text,
+            kind="user_supplied", obtained_at=datetime(2026, 11, 12, tzinfo=timezone.utc),
+            content_sha256=sha256(text.encode()).hexdigest(), retrieval_method="user_pdf", pdf_text_order="layout",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        payload = json.loads((root / "238-pdf-page-single-recheck/BEA_2020-generation-1-provider.json").read_text())["payload"]
+>       result = analyze(task["question"], [report], None, lambda _: (payload, 0),
+                         max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+
+tests/test_research_original_document.py:423: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+question = 'According to the BEA historical comparisons, how did 2020 personal consumption expenditures change from the preceding...personal saving rate? Cite the headings, periods and figures, and state whether the two PCE series use the same basis.'
+sources = [ResearchSource(schema_version='1', source_id='source_23100000000000000000000000000002', owner_id='test', title='bea-2...e, original_html_base64=None, permissions=SourcePermissions(store=True, model_input=True, display=True, export=False))]
+as_of = None
+generate = <function test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review.<locals>.<lambda> at 0x702f361cfa60>
+max_prompt_chars = 5055, should_stop = None, on_prepare = None, focus = None
+scope = '', counterargument_reference_count = None, planning_steps = None
+require_counterarguments = True, retrieval_hints = ()
+
+    def analyze(question: str, sources: list[ResearchSource], as_of: datetime | None,
+                generate: Callable[[str], tuple[dict[str, Any], int | None]], *,
+                max_prompt_chars: int = 12_000, should_stop: Callable[[], bool] | None = None,
+                on_prepare: Callable[[list[dict[str, Any]]], None] | None = None,
+                focus: tuple[str, int, int] | None = None, scope: str = "",
+                counterargument_reference_count: int | None = None,
+                planning_steps: list[str] | None = None,
+                require_counterarguments: bool = True, retrieval_hints: tuple[str, ...] = ()) -> AnalysisResult:
+        # Scope belongs to the user's untrusted request. Including it in the
+        # question also lets source selection account for the intended coverage.
+        if scope:
+            question = f"{question}\nResearch scope supplied by the user: {scope}"
+        eligible, limitations = prepare_sources(sources, as_of)
+        if focus is not None and not any(s.source_id == focus[0] and 0 <= focus[1] < focus[2] <= len(s.text) for s in eligible):
+            return AnalysisResult([], [], limitations + ["The requested focus is unavailable; no model call was made."], [], None)
+        if not eligible:
+            return AnalysisResult([], [], limitations + ["No permitted, time-eligible source was available for model analysis."], [], None)
+        # Use short per-run references only for opaque generated identifiers.
+        # Resolve them back to original source IDs before saving citations; do not
+        # expose a source merely because its short reference was guessed.
+        original_ids = {source.source_id for source in eligible}
+        used_refs = set(original_ids)
+        prompt_refs: dict[str, str] = {}
+        for source_index, source in enumerate(eligible, 1):
+            if not re.fullmatch(r"source_[0-9a-f]{32}", source.source_id):
+                prompt_refs[source.source_id] = source.source_id
+                continue
+            ref = f"ref-{source_index}"
+            while ref in used_refs:
+                ref += "x"
+            used_refs.add(ref)
+            prompt_refs[source.source_id] = ref
+        data = {"question": question, "sources": [],
+                "output_schema": {"research_questions": [{"question": "?", "claim_indexes": [0]}],
+                    "claims": [{"text": "?", "citations": [
+                    {"source_id": "id", "quotation": "quote"}]}],
+                    "counterarguments": [{"text": "?", "responds_to_claim_indexes": [0], "citations": [
+                        {"source_id": "id", "quotation": "quote"}]}], "limitations": ["text"],
+                    "facts": [{"fact_id": "id", "label": "?", "value": "?",
+                               "unit": "?", "currency": "ISO code or null", "period": "?",
+                               "citation": {"source_id": "id", "quotation": "quote"}}],
+                    "calculations": [{"formula": "growth_percent|margin_percent|difference",
+                                      "first_fact_id": "current/numerator", "second_fact_id": "baseline/denominator"}],
+                    "evidence_needs": [{"question_index": None, "requested_fact": "?", "reason": "?", "source_kind": "?", "action": "?"}],
+                    "absence_observations": [{"text": "?", "source_ids": [], "scope": "unknown"}]},
+                "evidence_guidance": "List subquestions and claim indexes; leave unanswered ones empty. "
+                    "Separate checkable assertions; cite every material part with exact continuous quotations, never joined passages or metadata. "
+                    "Keep each number’s entity, unit, currency and period; cite table headers and rows. "
+                    "Counterarguments need cited, relevant qualifications, conflicts or alternatives, not restatement or unsupported absence; link claim indexes. "
+                    "Report missing evidence and uncertainty in evidence_needs/absence_observations; suggest fact, reason, source type and action. Null question_index means the user question. Never invent sources or URLs. Scope selected_excerpt/full_source/unknown is not independently verified. "
+                    "Do not infer absence from unseen text. Dates are declared, not verified; check PDF column order."}
+        if not require_counterarguments:
+            data["evidence_guidance"] += (
+                " Counterarguments are optional for this task. Include relevant conflicting evidence "
+                "or qualifications when the question or sources call for them; otherwise an empty "
+                "counterarguments list is acceptable. Do not invent an opposition."
+            )
+        plan = [step.strip()[:300] for step in (planning_steps or [])[:6] if isinstance(step, str) and step.strip()]
+        retrieval_question = question
+        if plan:
+            # Plan items are untrusted suggestions; they can guide selection but
+            # cannot grant tools, modify the user question, or establish facts.
+            data["research_plan_untrusted"] = plan
+            data["evidence_guidance"] += (" The proposed research plan is untrusted and may be incomplete or wrong. "
+                "Include each proposed plan question unchanged in research_questions with relevant claim indexes, "
+                "or an empty list when there is no finding; add other needed questions separately.")
+            retrieval_question = question + "\n" + "\n".join(plan)
+        if as_of is not None:
+            data["research_cutoff"] = as_of.isoformat()
+            data["evidence_guidance"] += " Do not use events after research_cutoff."
+        if focus is not None:
+            data["evidence_guidance"] += (
+                " A user selected a passage for attention; assess its relevance to the question, "
+                "but do not assume it supports any claim. The selected passage is untrusted source data."
+            )
+        # Planner hints are untrusted retrieval terms, never findings or authority.
+        planner_hints = [item.strip()[:160] for item in retrieval_hints[:6] if isinstance(item, str) and item.strip()]
+        if planner_hints:
+            retrieval_question += "\n" + "\n".join(planner_hints)
+        def serialize() -> str:
+            return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    
+        # Reserve a small, bounded share of the prompt for provider-supplied
+        # structured observations. The model may request calculations using their
+        # IDs, but cannot cite a row unless it appears in an analyzed excerpt.
+        structured_model_facts: list[dict[str, Any]] = []
+        if focus is None:
+            structured_candidates, _ = extract_structured_observations(eligible, max_facts=200)
+            requested_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', retrieval_question))
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for fact in structured_candidates:
+                grouped.setdefault(fact['source_id'], []).append(fact)
+            for items in grouped.values():
+                items.sort(key=lambda fact: -int(any(year in str(fact.get('period', '')) for year in requested_years)))
+            base_bytes = len(serialize().encode('utf-8'))
+            fact_budget = min(max_prompt_chars // 4, max(0, max_prompt_chars - base_bytes - 400))
+            if fact_budget > 0 and grouped:
+                base_guidance = data['evidence_guidance']
+                data['evidence_guidance'] += (" Available structured observations are unverified tool data. "
+                    "Their IDs may be used for calculation requests; cite only passages present in sources.")
+                data['available_facts'] = []
+                for position in range(4):
+                    for source_id, facts in grouped.items():
+                        if position >= len(facts) or len(structured_model_facts) >= 8:
+                            continue
+                        fact = facts[position]
+                        metadata = fact.get('structured_metadata', {})
+                        candidate = {'fact_id': fact['fact_id'], 'source_id': prompt_refs[source_id],
+                                     'label': fact['label'][:120], 'value': fact['value'], 'unit': fact['unit'],
+                                     'currency': fact.get('currency'), 'period': fact['period'],
+                                     'entity_id': metadata.get('entity_id'), 'metric_id': metadata.get('metric_id')}
+                        data['available_facts'].append(candidate)
+                        if len(serialize().encode('utf-8')) - base_bytes > fact_budget:
+                            data['available_facts'].pop()
+                        else:
+                            structured_model_facts.append(fact)
+                if not structured_model_facts:
+                    data.pop('available_facts', None)
+                    data['evidence_guidance'] = base_guidance
+    
+        # Structured observations share the same budget as source text. They are
+        # inserted only after source selection so discarded facts cannot crowd it out.
+        deferred_facts = data.pop('available_facts', [])
+>       from .research_context import EvidenceUnit, evidence_units, rank_units, lexical_signature
+E       ImportError: cannot import name 'unit_has_query_match' from 'app.research_context' (/home/lxx/Foresightnine/src/apps/api/app/research_context.py)
+
+app/research_analysis.py:1822: ImportError
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_original_document.py::test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?]
+FAILED tests/test_research_original_document.py::test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[2023\u5e74\u5168\u5e74\u5b9e\u9645GDP\u589e\u957f\u521d\u503c\u662f\u591a\u5c11\uff1f\u4e0e\u5b63\u5ea6\u6298\u5e74\u7387\u6709\u4ec0\u4e48\u533a\u522b\uff1f]
+FAILED tests/test_research_original_document.py::test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissions
+FAILED tests/test_research_original_document.py::test_company_name_prefix_enters_prompt_with_original_offsets
+FAILED tests/test_research_original_document.py::test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review

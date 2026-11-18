@@ -1,0 +1,13 @@
+{
+  "method": "offline check against retained output after implementation change; not a re-score or new model call",
+  "candidates": [
+    {
+      "claim_index": 0,
+      "calculation_index": 0,
+      "claimed_value": "13.70",
+      "calculated_value": "13.69",
+      "unit": "percent",
+      "status": "requires_review"
+    }
+  ]
+}

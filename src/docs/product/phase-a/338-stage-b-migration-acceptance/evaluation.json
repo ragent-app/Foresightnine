@@ -1,0 +1,58 @@
+{
+  "evaluated_at_utc": "2026-11-14T09:30:24.527378+00:00",
+  "assessment": "pre-registered strict criteria; non-blind; first three are development regressions, fourth narrow transfer, fifth not run; no broad generalization",
+  "tasks": [
+    {
+      "id": "MACRO_CALC",
+      "type": "development_regression",
+      "operation": "completed",
+      "quality": "fail",
+      "reason": "Q2 -0.6 reported, Q3 2.6 omitted and no deterministic difference; claim that the extracted text lacks Q3 exceeds the selected passages. Q3 is present in frozen source."
+    },
+    {
+      "id": "FED_COMPARE",
+      "type": "development_regression",
+      "operation": "completed",
+      "quality": "fail",
+      "reason": "Both target ranges and no-change interpretation reported, intervening-period limitation recognized, but exact June 10 and July 29 dates not supplied or cited."
+    },
+    {
+      "id": "MISSING_BOUNDARY",
+      "type": "development_regression",
+      "operation": "completed",
+      "quality": "fail",
+      "reason": "GDP Q3 2.6 omitted; appropriate additional unemployment source was suggested and absence marked unestablished."
+    },
+    {
+      "id": "TRANSFER_BALANCE_ZH",
+      "type": "narrow_transfer",
+      "operation": "completed_with_unresolved_stage",
+      "quality": "fail_on_saved_partial",
+      "reason": "First-quarter 439.8 stated; second-quarter 251.3 and deterministic difference missing. Full-source absence claim is unsupported; an absence observation is separately marked not established, but that claim remains not_independently_verified. The unresolved stage is a separate operation uncertainty."
+    },
+    {
+      "id": "TRANSFER_PRODUCTION_EN",
+      "type": "narrow_transfer",
+      "operation": "not_started",
+      "quality": "not_evaluated",
+      "reason": "Batch stopped when previous operation had an unresolved stage."
+    }
+  ],
+  "citations_exact": {
+    "MACRO_CALC": "5/5",
+    "FED_COMPARE": "6/6",
+    "MISSING_BOUNDARY": "3/3",
+    "TRANSFER_BALANCE_ZH": "5/5",
+    "meaning": "character offsets match frozen extracted source; not a semantic support evaluation"
+  },
+  "accounting": {
+    "settled_calls": 9,
+    "accounted_tokens": 12518,
+    "unresolved_stage_count": 1,
+    "total_external_calls": "unknown pending reconciliation; do not infer upper bound from settled ledger",
+    "cost_usd": "unknown",
+    "fifth_task_started": false,
+    "read_only_review": "Unresolved marker is failed support_review: receipt records one review call with 1925 tokens and review_unavailable; planning 409, generation 1907 and review 1925 accounted for three settled calls. Specific error type not persisted; marker alone does not establish an additional external call. Provider-side receipt/cost not independently known."
+  },
+  "retries": "none"
+}

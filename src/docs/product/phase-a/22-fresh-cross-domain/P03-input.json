@@ -1,0 +1,8 @@
+{
+  "id": "P03",
+  "question": "使用提供的 AMD 2023 和 2024 财年净收入数据，列示金额、单位和期间，计算收入增长率，并说明信息不足之处。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"Advanced Micro Devices Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end_dates\":{\"2023\":\"2023-12-30\",\"2024\":\"2024-12-28\"},\"net_revenue\":{\"2023\":22680,\"2024\":25785}}",
+  "source_title": "AMD 2024 SEC filing: derived net revenue facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/2488/000000248825000012/amd-20241228.htm"
+}

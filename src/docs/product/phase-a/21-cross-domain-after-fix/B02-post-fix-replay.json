@@ -1,0 +1,23 @@
+{
+  "experiment": "offline replay of stored response; not a new model run and not a re-score",
+  "facts": [
+    [
+      "0.4",
+      "February 2024 monthly",
+      "exact"
+    ],
+    [
+      "3.2",
+      "12 months ending February 2024",
+      "exact"
+    ]
+  ],
+  "retained_support_claims": 3,
+  "calculations": [],
+  "citation_methods": [
+    "exact",
+    "exact",
+    "expanded_ellipsis"
+  ],
+  "all_quotes_contiguous": true
+}

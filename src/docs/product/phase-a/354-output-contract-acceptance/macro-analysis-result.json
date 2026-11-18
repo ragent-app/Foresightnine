@@ -1,0 +1,316 @@
+{
+  "analysis": {
+    "claims": [],
+    "counterarguments": [],
+    "limitations": [
+      "Sources were selected for analysis, but the run did not produce valid research; check the run status and model-call record.",
+      "Research analysis could not be completed: invalid_model_output"
+    ],
+    "source_ids": [
+      "source_00000000000000000000000000000001"
+    ],
+    "total_tokens": 2254,
+    "facts": [],
+    "calculations": [],
+    "prompt_sha256": "4f6636fdf3fc7cffdbca8a74773fa4f1aa43e5bf59a3fcbb2e170ae1007d76b7",
+    "prompt_characters": 5334,
+    "prompt_bytes": 5344,
+    "segments": [
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 329,
+        "character_end": 692,
+        "context_unit_kind": "paragraph",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u329"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 4259,
+        "character_end": 4274,
+        "context_unit_kind": "paragraph",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u4259"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 5181,
+        "character_end": 5222,
+        "context_unit_kind": "paragraph",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u5181"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 7725,
+        "character_end": 7806,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u7725"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 7819,
+        "character_end": 7865,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u7819"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 8014,
+        "character_end": 8054,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u8014"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 8530,
+        "character_end": 8539,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u8530"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 10621,
+        "character_end": 10855,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u10621"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 10875,
+        "character_end": 10903,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u10875"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 11173,
+        "character_end": 11219,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u11173"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 11522,
+        "character_end": 11530,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u11522"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 12054,
+        "character_end": 12080,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u12054"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 12269,
+        "character_end": 12317,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u12269"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 13528,
+        "character_end": 13964,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u13528"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 14159,
+        "character_end": 14229,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u14159"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 16371,
+        "character_end": 16421,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u16371"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 16609,
+        "character_end": 16820,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u16609"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 16962,
+        "character_end": 16990,
+        "context_unit_kind": "paragraph",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u16962"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 17169,
+        "character_end": 17240,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u17169"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 17350,
+        "character_end": 17409,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u17350"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 17578,
+        "character_end": 17631,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u17578"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 29929,
+        "character_end": 29969,
+        "context_unit_kind": "paragraph",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u29929"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      },
+      {
+        "source_id": "source_00000000000000000000000000000001",
+        "character_start": 89365,
+        "character_end": 89464,
+        "context_unit_kind": "sentence",
+        "complete_context": true,
+        "context_unit_ids": [
+          "u89365"
+        ],
+        "retrieval_facet_indexes": [],
+        "model_source_id": "ref-1"
+      }
+    ],
+    "research_questions": [],
+    "available_fact_ids": [],
+    "evidence_needs": [],
+    "absence_observations": [],
+    "requirement_links": [],
+    "discovered_requirements": [],
+    "selection_diagnostics": [],
+    "pdf_structure_diagnostics": [],
+    "structured_output_status": "complete",
+    "structured_output_errors": [],
+    "structured_output_ids": {},
+    "output_contract_version": null,
+    "analyzed_source_hashes": {}
+  },
+  "calls": 1,
+  "usage": 2254,
+  "generation_tokens": 2254,
+  "max_prompt_chars": 5375,
+  "unavailable_reason": "invalid_model_output",
+  "error_detail": "Model output did not match the research schema."
+}

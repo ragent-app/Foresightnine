@@ -1,0 +1,28 @@
+{
+  "manifest_sha256": "9f2cd585a92e35f8bfe0d1152004301abe2dbe68bd1c55709b1638d3db15d9c6",
+  "independent": false,
+  "variants": {
+    "baseline": {
+      "status": "returned",
+      "checks": {
+        "unquoted_weeks_not_supported": false,
+        "quoted_revenue_supported": true,
+        "wrong_year_rejected": true
+      },
+      "all_checks_passed": false,
+      "reported_tokens": 528,
+      "cost_usd": null
+    },
+    "bounded_quote": {
+      "status": "returned",
+      "checks": {
+        "unquoted_weeks_not_supported": true,
+        "quoted_revenue_supported": true,
+        "wrong_year_rejected": true
+      },
+      "all_checks_passed": true,
+      "reported_tokens": 732,
+      "cost_usd": null
+    }
+  }
+}

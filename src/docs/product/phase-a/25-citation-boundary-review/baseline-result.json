@@ -1,0 +1,31 @@
+{
+  "variant": "baseline",
+  "status": "returned",
+  "prompt_sha256": "94f02fc9ee1954de79aec12fc6fd34241d33d0f9442e701527786138cdc5343b",
+  "system_sha256": "89eb428d881fc96dc24a4394d1fd0ab1639535aa796336d96b1d35ba9640e395",
+  "model": "glm-5.3-flash",
+  "elapsed_seconds": 2.609,
+  "reported_tokens": 528,
+  "verdicts": {
+    "0": "supports",
+    "1": "supports",
+    "2": "contradicts"
+  },
+  "raw_response": {
+    "reviews": [
+      {
+        "claim_index": 0,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 1,
+        "verdict": "supports"
+      },
+      {
+        "claim_index": 2,
+        "verdict": "contradicts"
+      }
+    ]
+  },
+  "cost_usd": null
+}

@@ -1,0 +1,90 @@
+{
+  "state": "finished",
+  "attempts": 1,
+  "reserved_tokens": 10000,
+  "provider_response": "returned",
+  "actual_tokens": 2211,
+  "cost": "unknown",
+  "error_code": "invalid_model_output",
+  "accounted_tokens": 2211,
+  "local_receipt": {
+    "provider": "returned",
+    "settlement": "settled",
+    "processing_error": "contract_validation"
+  },
+  "observation": {
+    "prompt_sha256": "366044c9743ce6aa00928a27629be5c2a4d2d638f8c58104ca39fa442ad4aefb",
+    "prompt_bytes": 5345,
+    "system_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+    "system_bytes": 433,
+    "timeout_seconds": 120.0
+  },
+  "diagnostics": {
+    "transport": {
+      "submission_state": "response_received",
+      "stages": [
+        {
+          "stage": "dns",
+          "result": "ok",
+          "elapsed_ms": 2
+        },
+        {
+          "stage": "tcp",
+          "result": "ok",
+          "elapsed_ms": 0
+        },
+        {
+          "stage": "tls",
+          "result": "ok",
+          "elapsed_ms": 4537
+        },
+        {
+          "stage": "request_write",
+          "result": "ok",
+          "elapsed_ms": 0
+        },
+        {
+          "stage": "response_headers",
+          "result": "ok",
+          "elapsed_ms": 20481
+        },
+        {
+          "stage": "response_headers",
+          "result": "ok",
+          "elapsed_ms": 0,
+          "status_code": 200
+        },
+        {
+          "stage": "response_body",
+          "result": "ok",
+          "elapsed_ms": 0
+        }
+      ]
+    },
+    "category": "contract_validation",
+    "errors": [
+      {
+        "path": [
+          "claims",
+          0,
+          "assertions",
+          0,
+          "citations"
+        ],
+        "type": "extra_forbidden"
+      },
+      {
+        "path": [
+          "claims",
+          0,
+          "assertions",
+          1,
+          "citations"
+        ],
+        "type": "extra_forbidden"
+      }
+    ],
+    "finish": "provider_stop"
+  },
+  "elapsed_ms": 26599
+}

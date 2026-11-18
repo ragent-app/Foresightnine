@@ -1,0 +1,12 @@
+{
+  "version": "macro-pilot-reference-v0.1-not-frozen",
+  "status": "draft-human-review-pending",
+  "instructions": "Evaluator-only reference; never provide to the system being assessed.",
+  "tasks": {
+    "D19": {"checks":["2023 annual real GDP growth advance estimate 2.5%", "2023 Q4 quarter-on-quarter annualized growth is 3.3%, a distinct measure", "cite the initial release"]},
+    "D20": {"checks":["advance 3.3%, second 3.2%", "revision -0.1 percentage points", "both are 2023 Q4 quarter-on-quarter annualized rates", "cite both vintages"]},
+    "D21": {"checks":["2024 January estimate 2.5%", "2025 January estimate 2.9%", "difference +0.4 percentage points", "cite both release dates and do not claim the later estimate was available earlier"]},
+    "D22": {"checks":["2024 annual real GDP advance estimate 2.8%", "released 2025-01-30", "2024 is the measured year, not release year"]},
+    "D23": {"checks":["target range 4.75%-5.00%", "decrease 0.5 percentage points or 50 basis points", "target range is not a single rate"]}
+  }
+}

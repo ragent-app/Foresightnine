@@ -1,0 +1,73 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "辉瑞总收入从2023年的59,553百万美元增至2024年的63,627百万美元（12月31日财年截止，单位：百万美元）。",
+        "citations": [
+          {
+            "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+            "quotation": "{\"issuer\":\"Pfizer Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":59553,\"2024\":63627}}"
+          }
+        ]
+      },
+      {
+        "text": "基于两个财年收入数据，2024年相对2023年的收入增长率约为6.8%。",
+        "citations": [
+          {
+            "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+            "quotation": "{\"2023\":59553,\"2024\":63627}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该增长率仅基于单一汇总收入指标，未考虑业务分部、汇率影响或一次性项目，可能无法反映底层经营趋势。",
+        "citations": []
+      },
+      {
+        "text": "数据来源标注为'derived revenue facts'，为源自SEC文件的衍生数据而非原文，可能存在提取误差。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "数据未注明具体SEC文件（如10-K）及提交日期。",
+      "仅有两年总收入数据，无分部、季度或经审计的原始报表文本。",
+      "增长率计算为简单同比，未提供剔除汇率、并购或产品线变化影响的信息。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_fy2023_revenue",
+        "label": "total_revenues_2023",
+        "value": "59553",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2023 (ended December 31)",
+        "citation": {
+          "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+          "quotation": "{\"issuer\":\"Pfizer Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":59553,\"2024\":63627}}"
+        }
+      },
+      {
+        "fact_id": "fact_fy2024_revenue",
+        "label": "total_revenues_2024",
+        "value": "63627",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024 (ended December 31)",
+        "citation": {
+          "source_id": "source_7ee2fdae00bb42fd8322fce2a75e95cb",
+          "quotation": "{\"issuer\":\"Pfizer Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":59553,\"2024\":63627}}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_fy2024_revenue",
+        "second_fact_id": "fact_fy2023_revenue"
+      }
+    ]
+  },
+  "reported_tokens": 968
+}

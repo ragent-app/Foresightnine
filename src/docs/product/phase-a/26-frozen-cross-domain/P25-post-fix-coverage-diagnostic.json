@@ -1,0 +1,21 @@
+{
+  "kind": "offline development diagnostic after prompt coverage change; no new model call or rescore",
+  "monthly_excerpt_selected": false,
+  "annual_excerpt_selected": true,
+  "source_coverage": [
+    "partial",
+    "partial"
+  ],
+  "segments": [
+    {
+      "source_id": "source_da6451a500cd40c88d8382bb12989232",
+      "character_start": 5376,
+      "character_end": 5623
+    },
+    {
+      "source_id": "source_da6451a500cd40c88d8382bb12989232",
+      "character_start": 5888,
+      "character_end": 6135
+    }
+  ]
+}

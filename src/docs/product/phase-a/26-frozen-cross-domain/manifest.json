@@ -1,0 +1,49 @@
+{
+  "assessment": "Four newly selected public inputs not previously used to tune this system; developer knows references, not blind or independently human reviewed. Derived company inputs and original public PDFs scored separately.",
+  "cost_usd": "unknown; no monetary cap asserted",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "0f8e1d8f869071151506ad86b67144f3c40c7343",
+  "inputs": [
+    {
+      "id": "V24",
+      "sha256": "9fd56eedf721bd6859798d4f6792833c6a747b65c235129a77cb5b3894f9393a"
+    },
+    {
+      "id": "U24",
+      "sha256": "1d27358200c157c3b768d4c4e6e96fa64c9744881e2a620151e70a85b36e1f01"
+    },
+    {
+      "id": "P25",
+      "sha256": "196294635c7a9d29cca7d4ab89b7b24241eb75eb1b871d42006b9917acf11045"
+    },
+    {
+      "id": "F24",
+      "sha256": "dc5d97f143c453b1ef89dfe2fd4ca802a9bee97470e1864edbfd59ec8acd5744"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 4,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "Every required fact matches value, period, unit, source position and contextual qualifier; each has a corresponding located support citation; every supporting claim is cited; company calculations match inputs/formula/value; no unrecognized percentage, omitted citation or program-reported numeric mismatch; budget respected. Four of four mechanical passes are required for this small set. This does not prove natural-language entailment, historical byte identity, full-document coverage or overall product quality.",
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "a091f0f8012fbda77c8adbff48c2e75f4516bf5d25a2a8f48b40abc99e4ab720",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "d4433b011c800c9380eea8453d4bafad19f4836017c627fd437e86c7826c9848",
+  "scorer_sha256": "ded4315247bfd8c8a34be8cd3eb18a93822d20bfa7cad5bf1c70b1f06935f683",
+  "search_calls": 0
+}

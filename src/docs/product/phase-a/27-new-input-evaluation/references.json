@@ -1,0 +1,58 @@
+{
+  "B24": {
+    "allowed_percentages": [
+      "11.11"
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "23739",
+        "21365"
+      ],
+      "value": "11.11"
+    },
+    "facts": [
+      {
+        "literal": "21365",
+        "period": "2023",
+        "value": "21365"
+      },
+      {
+        "literal": "23739",
+        "period": "2024",
+        "value": "23739"
+      }
+    ],
+    "kind": "company",
+    "unit": "USD millions"
+  },
+  "P24": {
+    "allowed_percentages": [
+      "0.3",
+      "2.6",
+      "0.2",
+      "2.8"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "literal": "0.3",
+        "period": "2024",
+        "value": "0.3",
+        "basis": [
+          "preceding month"
+        ]
+      },
+      {
+        "literal": "2.6",
+        "period": "2024",
+        "value": "2.6",
+        "basis": [
+          "same month one year"
+        ]
+      }
+    ],
+    "kind": "macro",
+    "unit": "percent"
+  }
+}

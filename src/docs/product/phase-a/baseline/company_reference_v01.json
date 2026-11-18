@@ -1,0 +1,17 @@
+{
+  "version": "company-details-reference-v0.1-not-frozen",
+  "status": "draft-human-review-pending",
+  "instructions": "Evaluator-only reference, do not include in model input.",
+  "tasks": {
+    "D04": {"checks":["More Personal Computing revenue decreased from 59941 to 54734 USD millions", "distinguish the segment from products/services classification"]},
+    "D05": {"checks":["income growth does not prove a future stock price increase", "distinguish reported historical facts from forward-looking causal claims", "identify relevant unknowns"]},
+    "D09": {"checks":["Microsoft growth 15.67%", "Apple growth 2.02%", "fiscal year-end dates differ: 2024-06-30 versus 2024-09-28", "do not describe as identical calendar periods"]},
+    "D10": {"checks":["products fell from 298085 to 294866", "services rose from 85200 to 96169", "figures are USD millions for fiscal years"]},
+    "D13": {"checks":["147216 - 125538 = 21678 USD millions", "service and other revenue is not a single cloud product"]},
+    "D14": {"checks":["2024 revenue 245122 and operating income 109433 USD millions", "full fiscal year, not quarter"]},
+    "D15": {"checks":["245122 - 211915 = 33207 USD millions", "absolute change is not a percentage"]},
+    "D16": {"checks":["294866 - 298085 = -3219 USD millions", "product income decreased"]},
+    "D17": {"checks":["96169 - 85200 = 10969 USD millions", "service income increased"]},
+    "D18": {"checks":["391035 - 383285 = 7750 USD millions", "annual net sales, not quarter"]}
+  }
+}

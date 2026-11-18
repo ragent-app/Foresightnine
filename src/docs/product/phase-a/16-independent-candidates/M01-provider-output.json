@@ -1,0 +1,43 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "The supplied source is BEA's advance estimate of Q4 2024 real GDP and reports quarterly growth rates, not annual averages; the annual real GDP growth rates for 2023 and 2024 are not stated in the provided text.",
+        "citations": [
+          {
+            "source_id": "source_a9f457c20b014e049dc7a03fe2e87687",
+            "quotation": "ercent in the fourth quarter of 2024 (October, November, and December), according to the advance estimate released by the U.S. Bureau of Economic Analysis. In the third quarter, real GDP increased 3.1 percent."
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "One could infer that full-year 2024 rates could be approximated by averaging quarterly figures, but the source only contains Q3 2024 (3.1%) and an incomplete Q4 2024 figure (the number itself is truncated in the text), so no annual rate for 2023 or 2024 can be reliably computed from the supplied evidence.",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "The advance estimate is an early, preliminary release subject to substantial revision in subsequent estimates (second and third estimates, plus annual revisions).",
+      "The text is truncated: the exact Q4 2024 percent figure is cut off ('ercent in the fourth quarter'), so even the quarterly value cannot be fully verified.",
+      "The source reports seasonally adjusted quarterly rates ('Seasonally adjusted annual rates'), not calendar-year annual growth rates.",
+      "No 2023 annual or full-year quarterly figures are included beyond chart axis labels, so 2023 growth cannot be determined."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_q3_2024",
+        "label": "real GDP quarterly growth",
+        "value": "3.1",
+        "unit": "percent (seasonally adjusted annual rate)",
+        "currency": null,
+        "period": "Q3 2024",
+        "citation": {
+          "source_id": "source_a9f457c20b014e049dc7a03fe2e87687",
+          "quotation": "In the third quarter, real GDP increased 3.1 percent."
+        }
+      }
+    ],
+    "calculations": []
+  },
+  "reported_tokens": 1070
+}

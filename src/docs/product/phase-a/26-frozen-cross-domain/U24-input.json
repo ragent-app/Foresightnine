@@ -1,0 +1,8 @@
+{
+  "id": "U24",
+  "question": "使用提供的 United Airlines 2023 和 2024 年总营业收入，列示金额、期间和单位，计算同比增长率并说明数据的限制。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"United Airlines Holdings Inc.\",\"unit\":\"USD millions\",\"year_end\":\"December 31\",\"total_operating_revenue\":{\"2023\":53717,\"2024\":57063}}",
+  "source_title": "United Airlines 2024 SEC 10-K: derived operating revenue facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/319687/000010051725000046/ual-20241231.htm"
+}

@@ -1,0 +1,12 @@
+{
+  "snapshot_id": "bea-2023-advance-derived-v0.1",
+  "kind": "derived_facts_not_original_document",
+  "as_of": "2024-01-26T00:00:00Z",
+  "source": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+  "source_snapshot": "../source-snapshots/bea-gdp-2023-q4-advance.pdf",
+  "source_sha256": "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d",
+  "source_publication": "2024-01-25T13:30:00Z",
+  "facts": {"real_gdp_2023_annual_growth_percent": 2.5, "real_gdp_2023_q4_annualized_growth_percent": 3.3},
+  "scope": "advance estimate; annual growth and quarter-on-quarter annualized growth are different measures",
+  "verification": "draft extraction; independent human review pending"
+}

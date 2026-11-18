@@ -1,0 +1,16 @@
+{
+  "version": "company-details-pilot-v0.1-not-frozen",
+  "status": "draft-human-review-pending",
+  "tasks": [
+    {"id":"D04","question":"Microsoft 2023 财年所有业务分部收入都增长了吗？列出有依据的反例。","as_of":"2023-08-01T00:00:00Z","sources":["msft-2023-details.json"]},
+    {"id":"D05","question":"Microsoft 2023 年收入增长是否足以证明未来股价上涨？明确证据和不能确定的内容。","as_of":"2023-08-01T00:00:00Z","sources":["msft-2023-details.json"]},
+    {"id":"D09","question":"比较 Microsoft 与 Apple 2024 财年收入同比，并解释可比性限制。","as_of":"2024-11-02T00:00:00Z","sources":["msft-2024-details.json","apple-2024-details.json"]},
+    {"id":"D10","question":"Apple 2024 财年产品和服务收入是否都增长？给出依据。","as_of":"2024-11-02T00:00:00Z","sources":["apple-2024-details.json"]},
+    {"id":"D13","question":"Microsoft 服务和其他收入 2023 财年相对 2022 财年的变化额是多少？","as_of":"2023-08-01T00:00:00Z","sources":["msft-2023-details.json"]},
+    {"id":"D14","question":"Microsoft 2024 财年总收入与营业利润分别是多少？","as_of":"2024-08-01T00:00:00Z","sources":["msft-2024-details.json"]},
+    {"id":"D15","question":"Microsoft 2024 财年总收入相对 2023 财年的增加额是多少？","as_of":"2024-08-01T00:00:00Z","sources":["msft-2024-details.json"]},
+    {"id":"D16","question":"Apple 2024 财年产品收入相对 2023 财年变化多少？","as_of":"2024-11-02T00:00:00Z","sources":["apple-2024-details.json"]},
+    {"id":"D17","question":"Apple 2024 财年服务收入相对 2023 财年变化多少？","as_of":"2024-11-02T00:00:00Z","sources":["apple-2024-details.json"]},
+    {"id":"D18","question":"Apple 2024 财年总净销售相对 2023 财年变化多少？","as_of":"2024-11-02T00:00:00Z","sources":["apple-2024-details.json"]}
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "assessment": "paired, nonblind development probe; no claim of independent semantic validation",
+  "implementation_commit": "00f6ddc8c837c00ad2dfbf7f7431f6820da5fb04",
+  "variable": "research prompt counterargument citation example and guidance only",
+  "order": [
+    "baseline",
+    "counterevidence_guidance"
+  ],
+  "source": "SEC public filing derived facts, not full original document",
+  "max_model_calls": 2,
+  "max_model_calls_per_variant": 1,
+  "per_call_timeout_seconds": 60,
+  "automatic_provider_retries": 0,
+  "on_unknown_or_failed_stop": true,
+  "pricing": "unknown",
+  "pass_rule": "an explicitly cited counterargument has a uniquely located quotation containing both gross profit values 17660 and 17450; this is a narrow mechanical check, not semantic verification",
+  "sha256": {
+    "input.json": "2babcfcae3f1507db1e7094867b47dc08fdd2a9f1bf7f9aaf00e38b06ab6a0bd",
+    "run.py": "2175d6c11d04d3a56a7fc98332ac0b2a8d4e404a39a4fbae8b579c67f8f05f05",
+    "score.py": "68862ed0659ffdd2f062489c49bc6b9a731b33bc01faa57fffd338ee73273b25"
+  }
+}

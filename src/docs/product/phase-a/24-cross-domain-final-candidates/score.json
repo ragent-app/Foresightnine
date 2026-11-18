@@ -1,0 +1,71 @@
+{
+  "manifest_sha256": "f77f64ab2a1bc8f556a07bba26659f0ee2f96749e79748d05e1090a884ceb7f2",
+  "sample": "public, non-blind candidate; company facts derived; GDP original PDF",
+  "semantic_support": "unverifiable",
+  "historical_availability": "unverified",
+  "tasks": {
+    "C24": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "242290",
+          "valid": true
+        },
+        {
+          "value": "254453",
+          "valid": true
+        }
+      ],
+      "support_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unrecognized_claim_percentages_requiring_review": [
+        "100"
+      ],
+      "program_detected_calculation_differences": [
+        {
+          "claim_index": 0,
+          "calculation_index": 0,
+          "claimed_value": "100",
+          "calculated_value": "5",
+          "unit": "percent",
+          "status": "requires_review"
+        }
+      ],
+      "citation_omission_requires_review": false,
+      "cited_fiscal_week_comparison": true,
+      "budget_ok": true,
+      "reported_tokens": 1232,
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "G24": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "facts": [
+        {
+          "value": "2.8",
+          "valid": true
+        },
+        {
+          "value": "2.3",
+          "valid": true
+        }
+      ],
+      "support_claims_have_locations": true,
+      "required_calculation_ok": true,
+      "unrecognized_claim_percentages_requiring_review": [],
+      "program_detected_calculation_differences": [],
+      "citation_omission_requires_review": false,
+      "cited_fiscal_week_comparison": null,
+      "budget_ok": true,
+      "reported_tokens": 1313,
+      "mechanical_pass": true,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    }
+  },
+  "mechanical_tasks_passed": 1,
+  "mechanical_task_count": 2
+}

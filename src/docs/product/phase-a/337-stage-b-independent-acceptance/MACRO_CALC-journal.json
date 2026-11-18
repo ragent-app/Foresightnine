@@ -1,0 +1,71 @@
+{
+  "task_id": "MACRO_CALC",
+  "status": "completed",
+  "events": [
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "running"
+    },
+    {
+      "http_status": 200,
+      "operation_status": "completed"
+    }
+  ],
+  "cost_status": "unknown",
+  "topic_id": "topic_9b466171bce342c19f53db52216cbb7b",
+  "idempotency_key": "independent-49b0505b41464b88a0984490b8377fa0",
+  "operation_id": "operation:7d43f399a8786cbc14fca983",
+  "admission_http_status": 202,
+  "settlement_http_status": 200,
+  "settlement": {
+    "operation_status": "completed",
+    "checkpoint_version_id": "version_759b4167cf5d425d8f38689e5328614d",
+    "model_ledger": {
+      "reserved_calls": 0,
+      "settled_calls": 2,
+      "released_calls": 0,
+      "accounted_tokens": 2715
+    },
+    "unresolved_stage_count": 0,
+    "reported_tokens": 2715,
+    "reported_tokens_scope": "run_chain_including_prior_continuations",
+    "cost_status": "unknown",
+    "interpretation": "Ledger tokens are conservative accounted amounts, not proof of provider usage or cost."
+  }
+}

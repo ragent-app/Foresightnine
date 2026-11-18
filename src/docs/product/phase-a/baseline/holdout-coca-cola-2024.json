@@ -1,0 +1,11 @@
+{
+  "snapshot_id":"holdout-coca-cola-fy2024-derived-v0.1",
+  "kind":"derived_facts_not_original_document",
+  "as_of":"2025-03-01T00:00:00Z",
+  "source":"https://investors.coca-colacompany.com/filings-reports/annual-filings-10-k/content/0000021344-25-000011/ko-20241231.htm",
+  "source_location":"Net Operating Revenues",
+  "unit":"USD millions",
+  "fiscal_year_end":"December 31",
+  "facts":{"net_operating_revenues":{"2023":45754,"2024":47061}},
+  "verification":"draft facts; exact public availability and source permissions require review"
+}

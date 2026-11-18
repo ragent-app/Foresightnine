@@ -1,0 +1,157 @@
+{
+  "mock": true,
+  "checks": [
+    {
+      "name": "page identity and visible workspace",
+      "status": "passed"
+    },
+    {
+      "name": "legacy version without new receipts",
+      "status": "passed"
+    },
+    {
+      "name": "question-only research entry",
+      "status": "passed"
+    },
+    {
+      "name": "run and cancellation",
+      "status": "passed"
+    },
+    {
+      "name": "recovery unknown call fails closed",
+      "status": "passed"
+    },
+    {
+      "name": "saved workflow, evidence and unknown support",
+      "status": "passed"
+    },
+    {
+      "name": "multi-stage continuation and denial reasons",
+      "status": "passed"
+    },
+    {
+      "name": "deliver saved results",
+      "status": "passed"
+    },
+    {
+      "name": "restricted full export",
+      "status": "passed"
+    },
+    {
+      "name": "metadata-only export",
+      "status": "passed"
+    },
+    {
+      "name": "edit and save version",
+      "status": "passed"
+    },
+    {
+      "name": "account switch clears previous research",
+      "status": "passed"
+    },
+    {
+      "name": "material-only research entry",
+      "status": "passed"
+    }
+  ],
+  "errors": [
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "events": [
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/legacy",
+    "GET /v2/research/topics/legacy/runs",
+    "GET /v2/research/topics/legacy/versions/version_1/sources",
+    "POST /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_1/sources",
+    "POST /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/progress",
+    "POST /v1/operations/operation_qa/cancel",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/sources/source_qa/context",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "POST /v2/research/topics/topic_1794579603929/runs/operation_qa/continue",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "POST /v2/research/topics/topic_1794579603929/runs/operation_qa/recover",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579603929",
+    "GET /v2/research/topics/topic_1794579603929/runs",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/inputs",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/export",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_2/export/metadata",
+    "POST /v2/research/topics/topic_1794579603929/versions",
+    "GET /v2/research/topics/topic_1794579603929/versions/version_3/sources",
+    "GET /v2/research/topics/topic_1794579603929/runs/operation_qa/recovery-status",
+    "GET /v2/research/topics",
+    "POST /v2/research/sources",
+    "POST /v2/research/topics",
+    "GET /v2/research/topics/topic_1794579629009/versions/version_1/sources"
+  ]
+}

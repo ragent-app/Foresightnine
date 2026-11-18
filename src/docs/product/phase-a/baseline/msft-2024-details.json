@@ -1,0 +1,11 @@
+{
+  "snapshot_id": "msft-2024-details-derived-v0.1",
+  "kind": "derived_facts_not_original_document",
+  "as_of": "2024-08-01T00:00:00Z",
+  "source": "https://www.sec.gov/Archives/edgar/data/789019/000095017024087843/msft-20240630.htm",
+  "source_location": "Income Statements",
+  "unit": "USD millions",
+  "fiscal_year_end": "June 30",
+  "facts": {"total_revenue": {"2023": 211915, "2024": 245122}, "operating_income": {"2023": 88523, "2024": 109433}},
+  "verification": "draft extraction, independent human review pending; actual dissemination timing and permissions require confirmation"
+}

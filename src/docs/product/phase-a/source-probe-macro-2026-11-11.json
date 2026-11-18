@@ -1,0 +1,27 @@
+{
+  "method": "single GET; 20 second timeout; no retries; response text not saved",
+  "results": [
+    {
+      "id": "bea_advance_2023",
+      "url": "https://www.bea.gov/news/2024/gross-domestic-product-fourth-quarter-and-year-2023-advance-estimate",
+      "retrieved_at_utc": "2026-11-11T10:55:26.918991+00:00",
+      "status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_count": 63439,
+      "sha256": "10970e0f520e4571372e2f5e5d121f92ad1448e7871c26297f46cd8bdc3cee76",
+      "truncated": false,
+      "elapsed_seconds": 0.877
+    },
+    {
+      "id": "fed_sept_2024",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20240918a1.pdf",
+      "retrieved_at_utc": "2026-11-11T10:55:27.796092+00:00",
+      "status": 200,
+      "content_type": "application/pdf",
+      "byte_count": 115977,
+      "sha256": "415c291eb7e754b99349cd3a2b0c6561de8ef5258da9f037bbd0fc0564b22932",
+      "truncated": false,
+      "elapsed_seconds": 0.993
+    }
+  ]
+}

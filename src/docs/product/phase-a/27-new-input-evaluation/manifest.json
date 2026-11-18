@@ -1,0 +1,41 @@
+{
+  "assessment": "Two fresh nonblind development inputs, company derived facts and BEA original PDF; not independent or human-reviewed; not broad stage acceptance.",
+  "cost_usd": "unknown; no monetary cap asserted",
+  "generation_parameters": {
+    "do_sample": false,
+    "max_tokens": 4000,
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "response_format": {
+      "type": "json_object"
+    },
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "implementation_commit": "d75246f7746305165abac459ac9f46bc9bd0f34e",
+  "inputs": [
+    {
+      "id": "B24",
+      "sha256": "d1bbde9d60f0e2116cb2cf298cb7859505039d4c7fbff8db4f053df8f167581f"
+    },
+    {
+      "id": "P24",
+      "sha256": "5871c8dcbc77057e50e9ef5e8435be9ec2e8f40d7bbf0f26cd0dd0dd84b5fdf4"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "glm-5.3-flash",
+  "pass_rule": "Every required fact matches value, period, unit, source position and contextual qualifier; each has a corresponding located support citation; every supporting claim is cited; company calculations match inputs/formula/value; no unrecognized percentage, omitted citation or program-reported numeric or amount mismatch; budget respected. Two of two mechanical passes are required for this small set. This does not prove natural-language entailment, historical byte identity, full-document coverage or overall product quality.",
+  "provider_input_token_limit": 3000,
+  "provider_timeout_seconds": 60,
+  "references_sha256": "d6cc243c8e645197ba1e2f0416efb6c2ad66203efae41fb6af47882be02eaa45",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "04e1660bb0757d4b1d30975073eb23b8374d194166a0cdcaff66fddcf66aa187",
+  "scorer_sha256": "c2b7f0d6aace30cae411cead3190750221c22cb2745ab5344ca4eddf89ce140d",
+  "search_calls": 0
+}

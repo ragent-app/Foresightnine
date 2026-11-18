@@ -1,0 +1,26 @@
+{
+  "host": "open.bigmodel.cn",
+  "model_calls": 0,
+  "authentication_sent": false,
+  "request": "HEAD /",
+  "ordinary_hostname_tls": {
+    "elapsed_ms": 3040,
+    "result": {
+      "tls_version": "TLSv1.3",
+      "peer_ip": "47.253.242.212"
+    }
+  },
+  "production_transport_head": {
+    "elapsed_ms": 5492,
+    "result": {
+      "http_status": 200
+    }
+  },
+  "pinned_trace": [
+    {
+      "address": "47.251.66.145",
+      "elapsed_ms": 4570,
+      "result": "connected"
+    }
+  ]
+}

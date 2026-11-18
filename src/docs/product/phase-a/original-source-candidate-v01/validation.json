@@ -1,0 +1,44 @@
+{
+  "checked_at_utc": "2026-11-11T11:33:43.195720+00:00",
+  "manifest_sha256": "3529f433662f3819be74fcdcf43ad165ff3e3f862636c0ebb87b97f615763b60",
+  "tasks": [
+    {
+      "id": "D19",
+      "pdf_count": 1,
+      "hashes_match": true,
+      "cutoff_check": true,
+      "reference_fields_absent": true
+    },
+    {
+      "id": "D20",
+      "pdf_count": 2,
+      "hashes_match": true,
+      "cutoff_check": true,
+      "reference_fields_absent": true
+    },
+    {
+      "id": "D21",
+      "pdf_count": 2,
+      "hashes_match": true,
+      "cutoff_check": true,
+      "reference_fields_absent": true
+    },
+    {
+      "id": "D22",
+      "pdf_count": 1,
+      "hashes_match": true,
+      "cutoff_check": true,
+      "reference_fields_absent": true
+    },
+    {
+      "id": "D23",
+      "pdf_count": 1,
+      "hashes_match": true,
+      "cutoff_check": true,
+      "reference_fields_absent": true
+    }
+  ],
+  "limitations": [
+    "Directory separation is not filesystem isolation. Source text may contain later-scheduled release dates. Historical PDF byte identity and human review unproven."
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "G24",
+  "question": "根据提供的美国经济分析局初次估计，2024 年全年实际 GDP 增速是多少，2024 年第四季度实际 GDP 的季度环比年化增速是多少？请区分两者口径。",
+  "source_kind": "original_pdf",
+  "source_file": "../source-snapshots/bea-gdp-2024-q4-advance.pdf",
+  "source_sha256": "65cdc63c9f33ec1ec0933c369494bf99e7f549c3381c9095d52a51e69b7d7af1",
+  "source_text_sha256": "d3e55c6896985f8f867da1e876db78df5f0415e89613503632c37c0d1e4f1cb5",
+  "source_title": "BEA GDP fourth quarter and year 2024 advance estimate",
+  "published_at": "2025-01-30T13:30:00Z"
+}

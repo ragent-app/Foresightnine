@@ -1,0 +1,10 @@
+{
+  "id": "P25",
+  "question": "根据提供的美国经济分析局公告，2025 年 4 月 PCE 价格指数较上月和较上年同期分别变化多少？区分两种比较口径。",
+  "source_kind": "original_pdf",
+  "source_file": "bea-pce-2025-04.pdf",
+  "source_title": "BEA Personal Income and Outlays April 2025",
+  "published_at": "2025-05-30T12:30:00Z",
+  "source_sha256": "58129e2a65d373d663a1905b6790b9a0f92bbefcefc421eb8a04242e92cf0586",
+  "source_text_sha256": "2136d9a1810a4e4c31c896dfedeedf19e785f34df84e8582d9ba4b603aadd969"
+}

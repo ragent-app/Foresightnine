@@ -1,0 +1,10 @@
+{
+  "model": "glm-5.3-flash",
+  "provider": "openai-compatible",
+  "prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+  "selection_method": "multilingual_lexical_with_legacy_fallback_v53",
+  "max_input_tokens": 3000,
+  "max_output_tokens": 4000,
+  "provider_timeout_seconds": 120.0,
+  "cost_usd": "unknown"
+}

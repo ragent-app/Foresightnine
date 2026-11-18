@@ -1,0 +1,9 @@
+{
+  "task_id": "MACRO_CALC",
+  "status": "admission_unknown",
+  "events": [],
+  "cost_status": "unknown",
+  "topic_id": "topic_a1f97c86a0b3480ea47aa42d2ba3c59f",
+  "idempotency_key": "independent-286877ab048c41bc807e9ec49d46438a",
+  "http_status": 422
+}

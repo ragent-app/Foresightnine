@@ -1,0 +1,24 @@
+{
+  "id": "D20",
+  "question": "比较 2023 年四季度实际 GDP 增长的初值与第二次估计，报告修订幅度与口径。",
+  "as_of": "2024-02-29T00:00:00Z",
+  "sources": [
+    {
+      "filename": "bea-gdp-2023-q4-advance.pdf",
+      "sha256": "3cc68c16d15ce51e8a5c821c407e32b9f2185edbcadbaadfb1a3fed01ed9b31d",
+      "source_url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+      "publication_utc": "2024-01-25T13:30:00Z"
+    },
+    {
+      "filename": "bea-gdp-2023-q4-second.pdf",
+      "sha256": "f9588ee32147acde028b38c278840142b50b0884b254b98c6c8c1edfa37db4e8",
+      "source_url": "https://www.bea.gov/sites/default/files/2024-02/gdp4q23-2nd.pdf",
+      "publication_utc": "2024-02-28T13:30:00Z"
+    }
+  ],
+  "status": "candidate-not-reviewed-not-frozen",
+  "notes": [
+    "Read the allowed PDFs as source documents; extracted answers are not supplied.",
+    "Present-day copies do not prove past byte-for-byte availability or absence of subsequent amendments."
+  ]
+}

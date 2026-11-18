@@ -1,0 +1,95 @@
+{
+  "manifest_sha256": "df6c79b385c354aa5a6d9cfad09d8857ea585230f74520d54f41a5037476fcf9",
+  "semantic_support": "unverifiable",
+  "historical_availability": "unverified",
+  "sample": "known, unblinded and correlated; no population quality inference",
+  "tasks": {
+    "H01": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 942,
+      "budget_ok": true,
+      "facts": {
+        "611289": {
+          "present": true,
+          "unit_period_and_source": true
+        },
+        "648125": {
+          "present": true,
+          "unit_period_and_source": true
+        }
+      },
+      "calculations": [
+        {
+          "formula": "growth_percent",
+          "expected_value": "6.03",
+          "matched": true
+        }
+      ],
+      "mechanical_pass": true,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "H02": {
+      "operation_status": "completed",
+      "research_status": "partial",
+      "reported_tokens": 1480,
+      "budget_ok": true,
+      "facts": {
+        "27012": {
+          "present": true,
+          "unit_period_and_source": true
+        },
+        "648125": {
+          "present": true,
+          "unit_period_and_source": true
+        },
+        "642637": {
+          "present": true,
+          "unit_period_and_source": true
+        }
+      },
+      "calculations": [
+        {
+          "formula": "margin_percent",
+          "expected_value": "4.17",
+          "matched": true
+        },
+        {
+          "formula": "margin_percent",
+          "expected_value": "4.20",
+          "matched": true
+        }
+      ],
+      "mechanical_pass": true,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    },
+    "H03": {
+      "operation_status": "local_failure",
+      "research_status": null,
+      "reported_tokens": null,
+      "budget_ok": false,
+      "facts": {
+        "648125": {
+          "present": false,
+          "unit_period_and_source": false
+        },
+        "642637": {
+          "present": false,
+          "unit_period_and_source": false
+        },
+        "5488": {
+          "present": false,
+          "unit_period_and_source": false
+        }
+      },
+      "calculations": [],
+      "mechanical_pass": false,
+      "semantic_support": "unverifiable",
+      "cost_usd": "unknown"
+    }
+  },
+  "mechanical_tasks_passed": 2,
+  "mechanical_task_count": 3
+}

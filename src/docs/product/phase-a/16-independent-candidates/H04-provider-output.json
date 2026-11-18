@@ -1,0 +1,60 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "可口可乐 2024 年净营业收入为 47,061 百万美元，2023 年为 45,754 百万美元；2024 年相对 2023 年的增长率可通过这两个数值计算得出。",
+        "citations": [
+          {
+            "source_id": "source_427d047e0e56438985d261e068312e08",
+            "quotation": "\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "该数据标题标注为 'derived revenue facts'，即源自 SEC 申报文件的衍生数据，而非原始申报文件摘录，可能存在转录误差；未提供原始 10-K 文件原文加以核对。",
+        "citations": []
+      }
+    ],
+    "limitations": [
+      "来源仅为一份衍生数据文件，非 SEC 原始申报文件摘录",
+      "未提供 2024 年增长率的直接披露值，增长率需基于两个数值计算",
+      "无法核实该数据是否经过审计调整或重述"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_nor_2024",
+        "label": "net_operating_revenues_2024",
+        "value": "47061",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "2024 fiscal year (ended December 31, 2024)",
+        "citation": {
+          "source_id": "source_427d047e0e56438985d261e068312e08",
+          "quotation": "\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}"
+        }
+      },
+      {
+        "fact_id": "fact_nor_2023",
+        "label": "net_operating_revenues_2023",
+        "value": "45754",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "2023 fiscal year (ended December 31, 2023)",
+        "citation": {
+          "source_id": "source_427d047e0e56438985d261e068312e08",
+          "quotation": "\"net_operating_revenues\":{\"2023\":45754,\"2024\":47061}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_nor_2024",
+        "second_fact_id": "fact_nor_2023"
+      }
+    ]
+  },
+  "reported_tokens": 881
+}

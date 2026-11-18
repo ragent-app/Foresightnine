@@ -1,0 +1,10 @@
+{
+  "id": "P24",
+  "question": "根据提供的美国经济分析局公告，2024 年 12 月总体 PCE 价格指数较上月和较上年同期分别变化多少？区分两种比较口径。",
+  "source_kind": "original_pdf",
+  "source_file": "bea-pce-2024-12.pdf",
+  "source_title": "BEA Personal Income and Outlays December 2024",
+  "published_at": "2025-01-31T13:30:00Z",
+  "source_sha256": "2b38f61776d80906d2bf3c220ea50f1ba2b1a4691acaabc77b186aaaae3c0276",
+  "source_text_sha256": "c8d77a85d4cbf5163cc3ed9c4320d76b5dfdeb4e49b14a0efdab0282893e2b70"
+}

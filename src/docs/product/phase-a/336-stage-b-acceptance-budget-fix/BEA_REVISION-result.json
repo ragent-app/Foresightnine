@@ -1,0 +1,738 @@
+{
+  "task_id": "BEA_REVISION",
+  "operation": {
+    "schema_version": "v1",
+    "created_at": "2026-11-13T14:24:14.590574Z",
+    "source_refs": [
+      {
+        "ref_id": "mock:operation",
+        "source_type": "model_inference",
+        "label": "Deterministic operation controller"
+      }
+    ],
+    "content_hash": "aa702000295695d9104f8409c99528683fb9583435dab8e595dd5f050fc30c81",
+    "operation_id": "operation:8add2ee001e6d26fa43d9ba0",
+    "endpoint": "/v1/research/topics/topic_6eb866cb7d17484e81ffe06ffb71e258/runs",
+    "status": "completed",
+    "updated_at": "2026-11-13T14:24:24.940283Z",
+    "idempotency_key_hash": "d959f30086f43633927c94e00c4f41aad9c3843128e0b5b7b28bc3b1ab35ff80",
+    "last_event_id": "operation:8add2ee001e6d26fa43d9ba0:4"
+  },
+  "version": {
+    "version_id": "version_0022a2525e7e49c39adc00bc3f1b8675",
+    "parent_version_id": "version_a28f3eb12fbb445c84f1e8efe6da0fb4",
+    "created_at": "2026-11-13T14:24:24.944109Z",
+    "content": {
+      "summary": "",
+      "sources": [
+        {
+          "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+          "title": "BEA GDP 2023 Q4 advance, January 2024",
+          "url": "https://www.bea.gov/sites/default/files/2024-01/gdp4q23-adv.pdf",
+          "event_at": null,
+          "published_at": null,
+          "obtained_at": "2026-11-13T14:24:14.558753+00:00",
+          "revised_at": null,
+          "content_sha256": "257ab63c40972440a9ffca79fb1d4b17db123cb84959768908645b1680b34c48",
+          "is_simulated": false,
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "text_characters": 131451,
+            "selected_characters": 31,
+            "status": "partial"
+          },
+          "pdf_text_order": null,
+          "derived_from_source_id": null,
+          "verification": "user_declared_not_verified"
+        },
+        {
+          "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+          "title": "BEA GDP 2024 Q4 advance, January 2025",
+          "url": "https://www.bea.gov/sites/default/files/2025-01/gdp4q24-adv.pdf",
+          "event_at": null,
+          "published_at": null,
+          "obtained_at": "2026-11-13T14:24:14.571123+00:00",
+          "revised_at": null,
+          "content_sha256": "d3e55c6896985f8f867da1e876db78df5f0415e89613503632c37c0d1e4f1cb5",
+          "is_simulated": false,
+          "initial_prompt_coverage": {
+            "method": "initial_prompt_ranges_v1",
+            "text_characters": 119589,
+            "selected_characters": 30,
+            "status": "partial"
+          },
+          "pdf_text_order": null,
+          "derived_from_source_id": null,
+          "verification": "user_declared_not_verified"
+        }
+      ],
+      "source_candidates": [],
+      "facts": [],
+      "evidence_differences": [],
+      "calculations": [],
+      "calculation_differences": [],
+      "amount_differences": [],
+      "claims": [
+        {
+          "text": "The supplied text excerpts do not contain any 2023 annual real GDP growth estimates from either BEA release.",
+          "kind": "model_interpretation",
+          "citations": [
+            {
+              "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+              "location": {
+                "character_start": 19345,
+                "character_end": 19376
+              },
+              "quotation_match": "exact",
+              "support_status": "not_independently_verified",
+              "partial_token": true,
+              "quotation": "the same; any differences are d"
+            },
+            {
+              "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+              "location": {
+                "character_start": 5492,
+                "character_end": 5522
+              },
+              "quotation_match": "exact",
+              "support_status": "not_independently_verified",
+              "partial_token": true,
+              "quotation": "ntions, updates to GDP, and mo"
+            }
+          ],
+          "support_status": "incomplete",
+          "role": "support",
+          "claim_id": "claim_452e76574ad84e208866dbc5ffd67fb1"
+        },
+        {
+          "text": "The first release is titled BEA GDP 2023 Q4 advance, January 2024, indicating a declared publication date of January 2024, though the date is declared in the title rather than verified in the text.",
+          "kind": "model_interpretation",
+          "citations": [
+            {
+              "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+              "location": {
+                "character_start": 19345,
+                "character_end": 19376
+              },
+              "quotation_match": "exact",
+              "support_status": "not_independently_verified",
+              "partial_token": true,
+              "quotation": "the same; any differences are d"
+            }
+          ],
+          "support_status": "incomplete",
+          "role": "support",
+          "claim_id": "claim_8226795bf7ce4e66a9ac5c9baa9f8f77"
+        },
+        {
+          "text": "The second release is titled BEA GDP 2024 Q4 advance, January 2025, indicating a declared publication date of January 2025, though the date is declared in the title rather than verified in the text.",
+          "kind": "model_interpretation",
+          "citations": [
+            {
+              "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+              "location": {
+                "character_start": 5492,
+                "character_end": 5522
+              },
+              "quotation_match": "exact",
+              "support_status": "not_independently_verified",
+              "partial_token": true,
+              "quotation": "ntions, updates to GDP, and mo"
+            }
+          ],
+          "support_status": "incomplete",
+          "role": "support",
+          "claim_id": "claim_4fbaeb1ae2604f5faa54371f74afb136"
+        }
+      ],
+      "limitations": [
+        "Source source_2d5ce02d2fa44f45a701c1d1b8849502: only character ranges 19345–19376 were analyzed; remaining text was not examined.",
+        "Source source_1e900c778ef648fba3231da671cd3cb6: only character ranges 5492–5522 were analyzed; remaining text was not examined.",
+        "A model-generated quotation cuts through a word or number; review the surrounding source.",
+        "A model-generated quotation cuts through a word or number; review the surrounding source.",
+        "A model-generated quotation cuts through a word or number; review the surrounding source.",
+        "A model-generated quotation cuts through a word or number; review the surrounding source.",
+        "Matching a quotation does not independently establish that it supports a claim.",
+        "Model-reported limitation (not independently verified): Both source excerpts are severely truncated fragments and contain no numeric GDP growth figures, so no comparison of 2023 annual real GDP growth estimates can be made from the supplied sources.",
+        "Model-reported limitation (not independently verified): The release dates appear only in source titles and are declared, not verified from publication metadata within the texts.",
+        "Model-reported limitation (not independently verified): No evidence is provided explaining why any estimates might differ between the two releases (e.g., revised source data, definitional updates), and no cited material describes unresolved uncertainty; the second excerpt's fragment 'ntions, updates to GDP, and mo' suggests possible discussion of updates but is insufficient to support any claim.",
+        "Model-reported limitation (not independently verified): Excerpts are partial; absence of growth figures in the excerpts does not establish that the full releases lack such figures.",
+        "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+        "No counterarguments were provided; this does not establish that none exist.",
+        "A second model assessment is not independent proof that evidence supports a claim.",
+        "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+        "The requested model support review did not cover all claims.",
+        "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+      ],
+      "run": {
+        "operation_id": "operation:8add2ee001e6d26fa43d9ba0",
+        "status": "partial",
+        "question_origin": "user",
+        "research_questions": [
+          {
+            "question": "What are the two releases' estimates for 2023 annual real GDP growth?",
+            "claim_ids": [
+              "claim_452e76574ad84e208866dbc5ffd67fb1"
+            ],
+            "origin": "model_suggestion",
+            "status": "linked_not_verified"
+          },
+          {
+            "question": "What are the release dates of the two releases?",
+            "claim_ids": [
+              "claim_8226795bf7ce4e66a9ac5c9baa9f8f77",
+              "claim_4fbaeb1ae2604f5faa54371f74afb136"
+            ],
+            "origin": "model_suggestion",
+            "status": "linked_not_verified"
+          },
+          {
+            "question": "Why do the estimates differ, and what uncertainty remains unresolved?",
+            "claim_ids": [],
+            "origin": "model_suggestion",
+            "status": "no_linked_finding"
+          }
+        ],
+        "source_processing": [
+          {
+            "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+            "eligibility": "eligible",
+            "initial_selection": "partial",
+            "selected_characters": 31,
+            "text_characters": 131451
+          },
+          {
+            "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+            "eligibility": "eligible",
+            "initial_selection": "partial",
+            "selected_characters": 30,
+            "text_characters": 119589
+          }
+        ],
+        "available_fact_ids": [],
+        "settled_model_budget_accounted_tokens": 1146,
+        "source_search_receipts": [],
+        "workflow_receipts": [
+          {
+            "stage": "planning",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Prepare the optional plan within the authorized task.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "planning",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_discovery",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Existing sources or task permissions do not require discovery.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "source_retrieval",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "No authorized eligible candidate is available for retrieval.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Produce the initial research or an explicit partial result.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "analysis",
+            "status": "completed",
+            "model_calls_admitted": 1,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 10327,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [
+              "source_2d5ce02d2fa44f45a701c1d1b8849502",
+              "source_1e900c778ef648fba3231da671cd3cb6"
+            ],
+            "gaps": [
+              "Source source_2d5ce02d2fa44f45a701c1d1b8849502: only character ranges 19345–19376 were analyzed; remaining text was not examined.",
+              "Source source_1e900c778ef648fba3231da671cd3cb6: only character ranges 5492–5522 were analyzed; remaining text was not examined.",
+              "A model-generated quotation cuts through a word or number; review the surrounding source.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): Both source excerpts are severely truncated fragments and contain no numeric GDP growth figures, so no comparison of 2023 annual real GDP growth estimates can be made from the supplied sources.",
+              "Model-reported limitation (not independently verified): The release dates appear only in source titles and are declared, not verified from publication metadata within the texts.",
+              "Model-reported limitation (not independently verified): No evidence is provided explaining why any estimates might differ between the two releases (e.g., revised source data, definitional updates), and no cited material describes unresolved uncertainty; the second excerpt's fragment 'ntions, updates to GDP, and mo' suggests possible discussion of updates but is insufficient to support any claim.",
+              "Model-reported limitation (not independently verified): Excerpts are partial; absence of growth figures in the excerpts does not establish that the full releases lack such figures."
+            ],
+            "usage": 1146,
+            "source_references": [
+              {
+                "kind": "stored_source",
+                "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+                "url": null
+              },
+              {
+                "kind": "stored_source",
+                "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+                "url": null
+              }
+            ],
+            "retryable": null
+          },
+          {
+            "stage": "counterpoint",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "gap_followup",
+            "status": "not_requested",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "The task did not authorize this optional action.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "support_review",
+            "status": "selected",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "Address an outstanding, authorized research need.",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "support_review",
+            "status": "not_reviewable",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 2,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "coordination",
+            "status": "stopped",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": "remaining_gaps",
+            "source_ids": [],
+            "gaps": [],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          },
+          {
+            "stage": "delivery_assessment",
+            "status": "partial",
+            "model_calls_admitted": 0,
+            "search_calls_admitted": 0,
+            "elapsed_ms": 0,
+            "schema_version": "1",
+            "reason": null,
+            "source_ids": [],
+            "gaps": [
+              "Source source_2d5ce02d2fa44f45a701c1d1b8849502: only character ranges 19345–19376 were analyzed; remaining text was not examined.",
+              "Source source_1e900c778ef648fba3231da671cd3cb6: only character ranges 5492–5522 were analyzed; remaining text was not examined.",
+              "A model-generated quotation cuts through a word or number; review the surrounding source.",
+              "Matching a quotation does not independently establish that it supports a claim.",
+              "Model-reported limitation (not independently verified): Both source excerpts are severely truncated fragments and contain no numeric GDP growth figures, so no comparison of 2023 annual real GDP growth estimates can be made from the supplied sources.",
+              "Model-reported limitation (not independently verified): The release dates appear only in source titles and are declared, not verified from publication metadata within the texts.",
+              "Model-reported limitation (not independently verified): No evidence is provided explaining why any estimates might differ between the two releases (e.g., revised source data, definitional updates), and no cited material describes unresolved uncertainty; the second excerpt's fragment 'ntions, updates to GDP, and mo' suggests possible discussion of updates but is insufficient to support any claim.",
+              "Model-reported limitation (not independently verified): Excerpts are partial; absence of growth figures in the excerpts does not establish that the full releases lack such figures.",
+              "A model-suggested research question has no linked finding; its coverage remains unestablished.",
+              "No counterarguments were provided; this does not establish that none exist.",
+              "A second model assessment is not independent proof that evidence supports a claim.",
+              "Some findings were not supported, were contradicted, remained uncertain or were not reviewed in the model assessment; inspect each recorded opinion and its evidence.",
+              "The requested model support review did not cover all claims.",
+              "The research is partial: review the recorded findings, requested steps and outstanding limitations."
+            ],
+            "usage": null,
+            "source_references": [],
+            "retryable": null
+          }
+        ],
+        "generation_status": "completed",
+        "planning_requested": false,
+        "planning_status": "not_requested",
+        "planning_steps": [],
+        "planning_tokens": null,
+        "planning_prompt_sha256": null,
+        "planning_error": null,
+        "planning_system_sha256": null,
+        "counterpoint_requested": false,
+        "counterpoint_status": "not_requested",
+        "gap_search_requested": false,
+        "gap_search_status": "not_requested",
+        "gap_followup_requested": false,
+        "gap_followup_status": "not_requested",
+        "support_review_requested": true,
+        "support_review_status": "not_reviewable",
+        "require_counterarguments": true,
+        "model_calls": 1,
+        "total_tokens": 1146,
+        "cost_usd": null,
+        "generation_tokens": 1146,
+        "support_review_tokens": null,
+        "counterpoint_tokens": null,
+        "counterpoint_prompt_sha256": null,
+        "gap_followup_tokens": null,
+        "gap_followup_prompt_sha256": null,
+        "gap_followup_targets": [],
+        "gap_followup_input_targets": [],
+        "gap_followup_question_targets": [],
+        "gap_search_query_sha256": null,
+        "gap_followup_error": null,
+        "gap_followup_segments": [],
+        "gap_followup_input_fact_ids": [],
+        "counterpoint_discarded_fields": 0,
+        "counterpoint_omitted_rows": 0,
+        "counterpoint_error": null,
+        "support_review_error": null,
+        "support_review_mode": "batch",
+        "support_review_method": "bounded_quotation_context_model_review_v31",
+        "analysis_error_detail": null,
+        "support_review_prompt_sha256": null,
+        "support_review_indexes": [],
+        "support_review_omissions": [
+          {
+            "claim_index": 0,
+            "reason": "not_reviewable"
+          },
+          {
+            "claim_index": 1,
+            "reason": "not_reviewable"
+          },
+          {
+            "claim_index": 2,
+            "reason": "not_reviewable"
+          }
+        ],
+        "support_review_failed_indexes": [],
+        "support_review_segments": [],
+        "support_review_system_sha256": "6e64d6378fbdfe43968fd894214937847c09d4b2f6a9ea0835515205a40745c6",
+        "search_calls": 0,
+        "search_status": "not_requested",
+        "official_fetch_calls": 0,
+        "official_fetch_status": "not_requested",
+        "elapsed_seconds": 10.347,
+        "cost_status": "unknown",
+        "model": "glm-5.3-flash",
+        "provider": "openai-compatible",
+        "prompt_sha256": "92ffe11319b762169f67aae3524689bd6d98ad4304fa5344f96b9f9fe154b4db",
+        "prompt_characters": 2375,
+        "prompt_bytes": 2375,
+        "selection_method": "multilingual_lexical_with_legacy_fallback_v53",
+        "system_prompt_sha256": "a5eb6e45ac3565451f73e4e2d920b276b99828bd5e895ac27cede1945939f9f7",
+        "selected_segments": [
+          {
+            "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+            "character_start": 19345,
+            "character_end": 19376
+          },
+          {
+            "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+            "character_start": 5492,
+            "character_end": 5522
+          }
+        ],
+        "provider_timeout_seconds": 120.0,
+        "provider_input_token_limit": 3000,
+        "provider_output_token_limit": 4000,
+        "source_hashes": {
+          "source_2d5ce02d2fa44f45a701c1d1b8849502": "257ab63c40972440a9ffca79fb1d4b17db123cb84959768908645b1680b34c48",
+          "source_1e900c778ef648fba3231da671cd3cb6": "d3e55c6896985f8f867da1e876db78df5f0415e89613503632c37c0d1e4f1cb5"
+        },
+        "max_model_calls": 2,
+        "max_search_calls": 0,
+        "max_elapsed_seconds": 180,
+        "max_total_tokens": 20000,
+        "max_cost_usd": null,
+        "error": null,
+        "evidence_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_links_not_semantic_verification",
+          "truncated": false,
+          "facts": [],
+          "claims": [
+            {
+              "claim_index": 0,
+              "claim_id": "claim_452e76574ad84e208866dbc5ffd67fb1",
+              "citation_location_status": "all_recorded",
+              "semantic_support_status": "not_independently_verified",
+              "model_review_opinion": null,
+              "counterpoint_relevance_opinion": null,
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "responds_to_claim_ids": [],
+              "suggested_responds_to_claim_ids": [],
+              "user_fact_links": [],
+              "role": "support",
+              "citations": [
+                {
+                  "citation_index": 0,
+                  "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                },
+                {
+                  "citation_index": 1,
+                  "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ]
+            },
+            {
+              "claim_index": 1,
+              "claim_id": "claim_8226795bf7ce4e66a9ac5c9baa9f8f77",
+              "citation_location_status": "all_recorded",
+              "semantic_support_status": "not_independently_verified",
+              "model_review_opinion": null,
+              "counterpoint_relevance_opinion": null,
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "responds_to_claim_ids": [],
+              "suggested_responds_to_claim_ids": [],
+              "user_fact_links": [],
+              "role": "support",
+              "citations": [
+                {
+                  "citation_index": 0,
+                  "source_id": "source_2d5ce02d2fa44f45a701c1d1b8849502",
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ]
+            },
+            {
+              "claim_index": 2,
+              "claim_id": "claim_4fbaeb1ae2604f5faa54371f74afb136",
+              "citation_location_status": "all_recorded",
+              "semantic_support_status": "not_independently_verified",
+              "model_review_opinion": null,
+              "counterpoint_relevance_opinion": null,
+              "counterpoint_link_status": "not_applicable",
+              "candidate_calculation_indexes": [],
+              "responds_to_claim_ids": [],
+              "suggested_responds_to_claim_ids": [],
+              "user_fact_links": [],
+              "role": "support",
+              "citations": [
+                {
+                  "citation_index": 0,
+                  "source_id": "source_1e900c778ef648fba3231da671cd3cb6",
+                  "location_recorded": true,
+                  "same_passage_fact_ids": []
+                }
+              ]
+            }
+          ],
+          "calculations": []
+        },
+        "question_links": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_relationships_not_verified_coverage",
+          "truncated": false,
+          "questions": [
+            {
+              "question_index": 0,
+              "finding_ids": [
+                "claim_452e76574ad84e208866dbc5ffd67fb1"
+              ],
+              "source_ids": [
+                "source_2d5ce02d2fa44f45a701c1d1b8849502",
+                "source_1e900c778ef648fba3231da671cd3cb6"
+              ],
+              "counterpoints": []
+            },
+            {
+              "question_index": 1,
+              "finding_ids": [
+                "claim_8226795bf7ce4e66a9ac5c9baa9f8f77",
+                "claim_4fbaeb1ae2604f5faa54371f74afb136"
+              ],
+              "source_ids": [
+                "source_2d5ce02d2fa44f45a701c1d1b8849502",
+                "source_1e900c778ef648fba3231da671cd3cb6"
+              ],
+              "counterpoints": []
+            },
+            {
+              "question_index": 2,
+              "finding_ids": [],
+              "source_ids": [],
+              "counterpoints": []
+            }
+          ]
+        },
+        "research_gaps": {
+          "schema_version": "1",
+          "index_scope": "research_version",
+          "meaning": "recorded_review_cues_not_a_quality_verdict",
+          "items": [
+            {
+              "code": "source_processing_incomplete"
+            },
+            {
+              "code": "subquestions_unlinked",
+              "indexes": [
+                2
+              ],
+              "count": 1,
+              "truncated": false,
+              "index_kind": "question"
+            },
+            {
+              "code": "citations_missing_or_incomplete",
+              "indexes": [
+                0,
+                1,
+                2
+              ],
+              "count": 3,
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "semantic_support_not_independently_verified",
+              "indexes": [
+                0,
+                1,
+                2
+              ],
+              "count": 3,
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "no_counterpoint"
+            },
+            {
+              "code": "model_review_incomplete"
+            },
+            {
+              "code": "model_review_missing",
+              "indexes": [
+                0,
+                1,
+                2
+              ],
+              "count": 3,
+              "truncated": false,
+              "index_kind": "claim"
+            },
+            {
+              "code": "last_run_partial"
+            }
+          ]
+        },
+        "stage_summary": {
+          "schema_version": "1",
+          "meaning": "saved_execution_not_quality_verdict",
+          "stages": [
+            {
+              "stage": "planning",
+              "status": "not_requested"
+            },
+            {
+              "stage": "sources",
+              "status": "attention"
+            },
+            {
+              "stage": "analysis",
+              "status": "completed"
+            },
+            {
+              "stage": "review",
+              "status": "attention"
+            },
+            {
+              "stage": "delivery",
+              "status": "attention"
+            }
+          ]
+        }
+      }
+    },
+    "review": "draft",
+    "note": "",
+    "source_ids": [
+      "source_2d5ce02d2fa44f45a701c1d1b8849502",
+      "source_1e900c778ef648fba3231da671cd3cb6"
+    ],
+    "created_by": "agent"
+  },
+  "cost_usd": "unknown",
+  "model_calls_cumulative": 5
+}

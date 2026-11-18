@@ -1,0 +1,1359 @@
+..............................FF.............................F......F.F. [ 19%]
+.............F..................F........F.FF.FFF....................... [ 38%]
+..F...........F......................................................... [ 57%]
+.................................F........................F......F...... [ 76%]
+..........F..................................................FFFFFFFFFFF [ 95%]
+...F.FFFF.FFF.sFF                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_prompt_distinguishes_full_source_from_partial_excerpts __________
+
+    def test_prompt_distinguishes_full_source_from_partial_excerpts():
+        def inspect(expected):
+            def generate(prompt):
+                payload = decode_research_prompt(prompt)
+                assert all(entry["source_coverage"] == expected for entry in payload["sources"])
+                assert "excerpts are partial, so do not infer absence from unseen text" in payload["evidence_guidance"]
+                return {"claims": []}, 10
+            return generate
+>       analyze("Revenue?", [source("short")], None, inspect("complete"))
+
+tests/test_research_analysis.py:293: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2088: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"Revenue?","sources":[{"source_id":"short","source_coverage":"complete","title":"Report","passages":[{"te...xt_unit_ids link passages. Cite source_id and an exact continuous quote from one passage.","source_input_version":"2"}'
+
+    def generate(prompt):
+        payload = decode_research_prompt(prompt)
+        assert all(entry["source_coverage"] == expected for entry in payload["sources"])
+>       assert "excerpts are partial, so do not infer absence from unseen text" in payload["evidence_guidance"]
+E       AssertionError: assert 'excerpts are partial, so do not infer absence from unseen text' in 'List subquestions and claim indexes; leave unanswered ones empty. Separate checkable assertions; cite every material ...parate passages; shared context_unit_ids link passages. Cite source_id and an exact continuous quote from one passage.'
+
+tests/test_research_analysis.py:290: AssertionError
+__ test_prompt_exposes_declared_source_times_separately_from_reporting_period __
+
+    def test_prompt_exposes_declared_source_times_separately_from_reporting_period():
+        published = datetime(2023, 10, 27, 12, 30, tzinfo=timezone.utc)
+        revised = datetime(2023, 11, 1, tzinfo=timezone.utc)
+        event = datetime(2023, 9, 30, tzinfo=timezone.utc)
+        report = source("dated", published_at=published).model_copy(update={"revised_at": revised, "event_at": event})
+    
+        def model(prompt):
+            payload = decode_research_prompt(prompt)
+            item = payload["sources"][0]
+            assert item["declared_published_at"] == published.isoformat()
+            assert item["declared_revised_at"] == revised.isoformat()
+            assert item["declared_event_at"] == event.isoformat()
+            assert "declared publication dates and periods are not verified" in payload["evidence_guidance"]
+            return {}, 1
+    
+>       analyze("What happened?", [report], None, model)
+
+tests/test_research_analysis.py:312: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/research_analysis.py:2088: in analyze
+    raw, tokens = generate(prompt)
+                  ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+prompt = '{"question":"What happened?","sources":[{"source_id":"dated","source_coverage":"complete","title":"Report","passages"...xt_unit_ids link passages. Cite source_id and an exact continuous quote from one passage.","source_input_version":"2"}'
+
+    def model(prompt):
+        payload = decode_research_prompt(prompt)
+        item = payload["sources"][0]
+        assert item["declared_published_at"] == published.isoformat()
+        assert item["declared_revised_at"] == revised.isoformat()
+        assert item["declared_event_at"] == event.isoformat()
+>       assert "declared publication dates and periods are not verified" in payload["evidence_guidance"]
+E       AssertionError: assert 'declared publication dates and periods are not verified' in 'List subquestions and claim indexes; leave unanswered ones empty. Separate checkable assertions; cite every material ...parate passages; shared context_unit_ids link passages. Cite source_id and an exact continuous quote from one passage.'
+
+tests/test_research_analysis.py:309: AssertionError
+________ test_two_pdf_tables_keep_labels_and_values_under_shared_budget ________
+
+    def test_two_pdf_tables_keep_labels_and_values_under_shared_budget():
+        def report(sid, earlier, revised):
+            table = ("Change from preceding month\n" + " " * 40 + "August" + " " * 30 + "September\n" +
+                     "Previous  Revised  Previous  Revised\n(Billions of dollars)  (Percent)\nPersonal income:\n" +
+                     "Current dollars" + " " * 45 + f"{earlier}     {revised}\n")
+            text = "Unrelated introduction. " * 500 + table + "Unrelated appendix. " * 500
+            return source(sid, text=text).model_copy(update={"retrieval_method": "user_pdf"})
+        reports = [report("first", "71.6", "74.4"), report("second", "74.4", "88.2")]
+    
+        def model(prompt):
+            parts = decode_research_prompt(prompt)["sources"]
+            for sid, value in (("first", "74.4"), ("second", "88.2")):
+                assert any(part["source_id"] == sid and value in part["text"] and "income" in part["text"].lower()
+                           and "september" in part["text"].lower() for part in parts)
+            assert len(prompt.encode()) <= 2055
+            return {}, 10
+    
+        result = analyze("比较2024年9月个人收入较前月的当期美元变化。", reports, None, model, max_prompt_chars=2055)
+>       assert result.source_ids == ["first", "second"]
+E       AssertionError: assert [] == ['first', 'second']
+E         
+E         Right contains 2 more items, first extra item: 'first'
+E         Use -v to get more diff
+
+tests/test_research_analysis.py:722: AssertionError
+___ test_long_document_uses_two_windows_under_a_thousand_character_allowance ___
+
+    def test_long_document_uses_two_windows_under_a_thousand_character_allowance():
+        report = source("s", text="2023 Revenue 100. " + "background " * 400 +
+                        "2023 Profit 200. " + "irrelevant " * 400)
+        def model(prompt):
+            parts = decode_research_prompt(prompt)["sources"]
+            assert len(parts) == 2
+            assert sum(len(part["text"]) for part in parts) < 1000
+            assert any("2023 Revenue 100." in part["text"] for part in parts)
+            assert any("2023 Profit 200." in part["text"] for part in parts)
+            return {"claims": [], "counterarguments": [], "limitations": []}, 10
+        result = analyze("2023 revenue and profit", [report], None, model, max_prompt_chars=1750)
+>       assert len(result.segments) == 2 and result.prompt_bytes <= 1750
+E       AssertionError: assert (0 == 2)
+E        +  where 0 = len([])
+E        +    where [] = AnalysisResult(claims=[], counterarguments=[], limitations=['Source s: no relevant complete evidence unit was selected... prompt_bytes=0, segments=[], research_questions=[], available_fact_ids=[], evidence_needs=[], absence_observations=[]).segments
+
+tests/test_research_analysis.py:811: AssertionError
+_________ test_casefold_expansion_preserves_original_character_offsets _________
+
+    def test_casefold_expansion_preserves_original_character_offsets():
+        prefix = "ß " * 1000
+        quote = "2023 Revenue was 100 million."
+        report = source("s", text=prefix + quote + " unrelated " * 1000)
+        def model(prompt):
+            assert any(quote in part["text"] for part in decode_research_prompt(prompt)["sources"])
+            return {"claims": [{"text": "Revenue", "citations": [{"source_id": "s", "quotation": quote}]}]}, 10
+        result = analyze("2023 revenue", [report], None, model, max_prompt_chars=3000)
+>       location = result.claims[0]["citations"][0]["location"]
+                   ^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:830: IndexError
+____ test_additional_sentence_never_shrinks_expanded_baseline_source_ranges ____
+
+    def test_additional_sentence_never_shrinks_expanded_baseline_source_ranges():
+        from app.research_analysis import SYSTEM_PROMPT
+        directory = Path(__file__).resolve().parents[3] / "docs/product/phase-a/140-trade-bank-fresh"
+        task = json.loads((directory / "STRESS_2023-input.json").read_text())
+        report = source(task["source"]["source_id"], text=(directory / task["source"]["text_file"]).read_text()).model_copy(
+            update={"title": task["source"]["title"], "retrieval_method": "user_pdf", "pdf_text_order": "reading"})
+        budget = 3000 - len(SYSTEM_PROMPT.encode()) - 512
+        with patch("app.research_analysis._additional_query_sentences", return_value=[]):
+            baseline = analyze(task["question"], [report], None, lambda _: ({}, 0), max_prompt_chars=budget)
+        result = analyze(task["question"], [report], None, lambda _: ({}, 0), max_prompt_chars=budget)
+        actual = [(segment["character_start"], segment["character_end"]) for segment in result.segments]
+        for segment in baseline.segments:
+            assert any(start <= segment["character_start"] and end >= segment["character_end"] for start, end in actual)
+>       assert any("12.4" in report.text[start:end] and "9.9" in report.text[start:end] for start, end in actual)
+E       assert False
+E        +  where False = any(<generator object test_additional_sentence_never_shrinks_expanded_baseline_source_ranges.<locals>.<genexpr> at 0x746fe8483b50>)
+
+tests/test_research_analysis.py:985: AssertionError
+_____ test_analyze_keeps_short_structured_total_row_with_its_longer_header _____
+
+    def test_analyze_keeps_short_structured_total_row_with_its_longer_header():
+        header = ("ACME CORP\nConsolidated Statements of Operations\n(in millions)\n"
+                  "| Years Ended | July 31, 2024 | July 31, 2023 |\n")
+        middle = "| Product | 150 | 140 |\n" + "| Other item | 5 | 4 |\n" * 28
+        text = "other " * 600 + header + middle + "| Total revenue | 200 | 190 |\n" + "other " * 600
+        report = source("source_0123456789abcdef0123456789abcdef", text=text)
+        received = []
+        def generate(prompt):
+            received.extend(decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze("2024 与 2023 财年营收多少？", [report], None, generate, max_prompt_chars=1800)
+        excerpts = " ".join(item["text"] for item in received)
+>       assert all(value in excerpts for value in ("ACME CORP", "millions", "2024", "2023", "200", "190"))
+E       assert False
+E        +  where False = all(<generator object test_analyze_keeps_short_structured_total_row_with_its_longer_header.<locals>.<genexpr> at 0x746fe8f20e10>)
+
+tests/test_research_analysis.py:1200: AssertionError
+______ test_chinese_multitopic_question_balances_phrases_and_utf8_windows ______
+
+    def test_chinese_multitopic_question_balances_phrases_and_utf8_windows():
+        text = ('資料來源：星島研究院，星島研究院發布的財務報告。\n' +
+                '其他事項說明沒有相關收入與支出的數字。' * 60 +
+                '2024年倉儲物流收入為123億元，按年上升5%。' +
+                '其他事項說明沒有相關收入與支出的數字。' * 220 +
+                '2024年雲端支出為47億元，按年下降3%。' + '其他事項說明。' * 300)
+        report = source('s', text=text).model_copy(update={'title': '財務報告'})
+        captured = []
+        def generate(prompt):
+            captured.append(decode_research_prompt(prompt))
+            return {}, 1
+        result = analyze('根據星島研究院2024年報告，倉儲物流收入及雲端支出分別是多少？',
+                         [report], None, generate, max_prompt_chars=2055)
+        passages = [item['text'] for item in captured[0]['sources']]
+        assert any('倉儲物流收入為123億元' in part for part in passages)
+>       assert any('雲端支出為47億元' in part for part in passages)
+E       assert False
+E        +  where False = any(<generator object test_chinese_multitopic_question_balances_phrases_and_utf8_windows.<locals>.<genexpr> at 0x746fe82072a0>)
+
+tests/test_research_analysis.py:1374: AssertionError
+____ test_traditional_chinese_policy_query_selects_decision_not_other_rate _____
+
+    def test_traditional_chinese_policy_query_selects_decision_not_other_rate():
+        decision = 'The Committee decided to raise the target range for the federal funds rate to 3-3/4 to 4 percent. The Committee anticipates that ongoing increases will be appropriate.'
+        other = 'The Board voted to raise the interest rate paid on reserve balances to 3.9 percent.'
+        text = 'Unrelated text. ' * 80 + decision + ' Other material. ' * 100 + (other + ' Other information. ') * 20
+        report = source('s', text=text)
+        prompts = []
+        result = analyze('美聯儲決議的聯邦基金目標利率區間和未來政策為何？', [report], None,
+                         lambda q: (prompts.append(decode_research_prompt(q)) or {}, 1), max_prompt_chars=2055)
+>       assert any('target range for the federal funds rate to 3-3/4 to 4 percent' in item['text'] for item in prompts[0]['sources'])
+                                                                                                               ^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:1403: IndexError
+_ test_structured_annual_observations_keep_period_value_and_issuer_within_budget _
+
+    def test_structured_annual_observations_keep_period_value_and_issuer_within_budget():
+        from app.research_analysis import _structured_observation_windows
+        data = {'issuer': 'Example Corp', 'concept': 'Revenue', 'unit': 'USD', 'notes': 'unrelated ' * 180,
+                'records': [{'start': '2021-07-01', 'end': '2022-06-30', 'val': 100, 'fy': 2023},
+                            {'start': '2022-07-01', 'end': '2023-06-30', 'val': 120, 'fy': 2023}]}
+        text = json.dumps(data, indent=2)
+        question = 'Compare revenue for 2022 and 2023.'
+        windows = _structured_observation_windows(text, question, 1000)
+        assert windows and len(windows) == 3
+        assert 'Example Corp' in windows[0][1] and 'USD' in windows[0][1]
+        assert '2022-06-30' in windows[1][1] and '100' in windows[1][1] and '"fy": 2023' in windows[1][1]
+        assert '2023-06-30' in windows[2][1] and '120' in windows[2][1]
+        assert all(text[start:start + len(part)] == part for start, part in windows)
+        assert _structured_observation_windows(text, question, 20) is None
+        duplicate = {**data, 'records': [*data['records'], data['records'][0]]}
+        assert _structured_observation_windows(json.dumps(duplicate), question, 1000) is None
+        mismatch = {**data, 'records': [data['records'][0], {**data['records'][1], 'unit': 'EUR'}]}
+        assert _structured_observation_windows(json.dumps(mismatch), question, 1000) is None
+        quarter = {**data, 'records': [data['records'][0], {**data['records'][1], 'start': '2023-04-01'}]}
+        assert _structured_observation_windows(json.dumps(quarter), question, 1000) is None
+        # Root metadata must not be attributed to nested records whose parent
+        # can override it, even when the individual leaf repeats no unit.
+        grouped = {k: v for k, v in data.items() if k != 'records'} | {
+            'groups': [{'unit': 'EUR', 'records': data['records']}]}
+        assert _structured_observation_windows(json.dumps(grouped), question, 1000) is None
+        mixed = {**data, 'nested': {'unit': 'EUR', 'records': data['records']}}
+        assert _structured_observation_windows(json.dumps(mixed), question, 1000) is None
+        root_records_with_nested = {**data, 'records': [{**data['records'][0], 'dimensions': {'unit': 'EUR'}}, data['records'][1]]}
+        assert _structured_observation_windows(json.dumps(root_records_with_nested), question, 1000) is None
+        duplicate_key = text.replace('"issuer": "Example Corp"', '"issuer": "Example Corp", "issuer": "Other"')
+        assert _structured_observation_windows(duplicate_key, question, 1000) is None
+        assert _structured_observation_windows(text[:-2], question, 1000) is None
+        assert _structured_observation_windows(text, 'Compare 2022, 2023 and 2024.', 1000) is None
+        with pytest.raises(AnalysisInterrupted):
+            _structured_observation_windows(text, question, 1000, lambda: True)
+        captured = []
+        def generate(prompt):
+            payload = decode_research_prompt(prompt);captured.append(payload)
+            parts = payload['sources']
+            return {'claims': [], 'facts': [
+                {'fact_id': 'prior', 'label': 'Revenue', 'value': '100', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2022', 'citation': {'source_id': 's', 'quotation': parts[1]['text']}},
+                {'fact_id': 'current', 'label': 'Revenue', 'value': '120', 'unit': 'USD', 'currency': 'USD', 'period': 'FY2023', 'citation': {'source_id': 's', 'quotation': parts[2]['text']}}],
+                'calculations': [{'formula': 'growth_percent', 'first_fact_id': 'current', 'second_fact_id': 'prior'}]}, 5
+        result = analyze(question, [source('s', text=text)], None, generate, max_prompt_chars=2055)
+>       assert len(captured[0]['sources']) == 3 and result.prompt_bytes <= 2055
+                   ^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:1452: IndexError
+_ test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact __
+
+    def test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact():
+        q = '比较第二次估计与第三次估计的实际GDP及修订方向。'
+        second = ('Other information. ' * 20 + 'Real GDP increased at an annual rate of 2.8 percent in the third quarter, according to the "second" estimate. ' +
+                  'Other material. ' * 30 + 'In the third estimate, the prior 2.9 percent was revised. ' + 'Other material. ' * 200)
+        third = ('Other information. ' * 20 + 'Real GDP increased at an annual rate of 3.1 percent in the third quarter, according to the "third" estimate. ' +
+                 'Other material. ' * 30 + 'In the second estimate, the increase in real GDP was 2.8 percent. ' * 5 + 'Other material. ' * 200)
+        sources = [source('s1', text=second).model_copy(update={'title': 'GDP second estimate'}),
+                   source('s2', text=third).model_copy(update={'title': 'GDP third estimate'})]
+        captured = []
+        result = analyze(q, sources, None, lambda prompt: (captured.append(decode_research_prompt(prompt)) or {}, 1), max_prompt_chars=2055)
+        excerpts = captured[0]['sources']
+>       assert any(part['source_id'] == 's1' and '2.8 percent' in part['text'] for part in excerpts)
+E       assert False
+E        +  where False = any(<generator object test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact.<locals>.<genexpr> at 0x746fea7f5b10>)
+
+tests/test_research_analysis.py:1481: AssertionError
+_______ test_policy_factor_selection_covers_decision_and_considerations ________
+
+    def test_policy_factor_selection_covers_decision_and_considerations():
+        text = ('Other policy material. ' * 60 +
+                'The Committee decided to maintain the target range for the federal funds rate at 5-1/4 to 5-1/2 percent. ' +
+                'Other policy details. ' * 15 +
+                'The Committee will take into account the cumulative tightening of monetary policy, the lags with which policy affects the economy, and economic and financial developments. ' +
+                'Other text. ' * 140 +
+                'The Desk will maintain the federal funds rate in a target range. ' * 10)
+        prompt = []
+        result = analyze('决议目标利率区间及后续政策考虑因素是什么？', [source('s', text=text)], None,
+                         lambda q: (prompt.append(decode_research_prompt(q)) or {}, 1), max_prompt_chars=2055)
+>       combined = ' '.join(part['text'] for part in prompt[0]['sources'])
+                                                     ^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:1498: IndexError
+_ test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget _
+
+    def test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget():
+        from datetime import datetime, timezone
+        q = '比较第二次估计与第三次估计的GDP，说明修订原因和抵消因素。'
+        first_text = ('Other context. ' * 20 + 'Real gross domestic product (GDP) increased at an annual rate of 2.8 percent in the third quarter of 2024, according to the "second" estimate released by the U.S. Bureau of Economic Analysis. ' + 'Other information. ' * 200)
+        third_text = ('Other context. ' * 20 + 'Real gross domestic product (GDP) increased at an annual rate of 3.1 percent in the third quarter of 2024, according to the "third" estimate released by the U.S. Bureau of Economic Analysis. ' +
+            'Other preliminary information. ' * 15 + 'The update primarily reflected upward revisions to exports and consumer spending that were partly offset by a downward revision to private inventory investment. ' + 'Other information. ' * 200)
+        sources = [source('second', text=first_text).model_copy(update={'title':'GDP second estimate', 'published_at':datetime(2024, 11, 27, tzinfo=timezone.utc)}),
+                   source('third', text=third_text).model_copy(update={'title':'GDP third estimate', 'published_at':datetime(2024, 12, 19, tzinfo=timezone.utc)})]
+        captured = []
+        result = analyze(q, sources, None, lambda prompt: (captured.append(decode_research_prompt(prompt)) or {}, 1), max_prompt_chars=2055)
+>       parts = captured[0]['sources']
+                ^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_analysis.py:1514: IndexError
+____ test_multiple_windows_share_metadata_and_stay_within_serialized_budget ____
+
+    def test_multiple_windows_share_metadata_and_stay_within_serialized_budget():
+        from datetime import datetime, timezone
+        text = ("Revenue analysis showed 100 million in the previous year. " + " unrelated filler " * 140 +
+                "Profit analysis showed 50 million for the current year. " + " other filler " * 140)
+        report = source("s", text=text).model_copy(update={"title":"Financial annual report",
+            "published_at":datetime(2024,1,1,tzinfo=timezone.utc)})
+        prompts=[]
+        result=analyze("Compare revenue and profit amounts.",[report],None,lambda p:(prompts.append(p) or {},0),max_prompt_chars=2200)
+        assert len(prompts[0].encode()) <= 2200
+        items=json.loads(prompts[0])["sources"]
+>       assert len(items)==2 and all(item["source_id"]=="s" for item in items)
+E       AssertionError: assert (1 == 2)
+E        +  where 1 = len([{'source_id': 's', 'source_coverage': 'partial', 'title': 'Financial annual report', 'passages': [{'text': 'Revenue analysis showed 100 million in the previous year.'}], ...}])
+
+tests/test_research_analysis.py:1972: AssertionError
+___ test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately ____
+
+    def test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately():
+        from app.research_analysis import SYSTEM_PROMPT
+        from app.research_uploads import _extract_text
+        pdf = Path(__file__).resolve().parents[3] / 'docs/product/phase-a/263-holdout-candidates/bea-gdp4q22.pdf'
+        text = _extract_text(pdf.read_bytes(), text_order='layout')
+        report = source('s', text=text).model_copy(update={'retrieval_method':'user_pdf', 'pdf_text_order':'layout'})
+        question = ('According to the attached BEA second estimate, compare annualized real GDP growth in the fourth '
+                    'and third quarters of 2022. Assess whether both goods and services consumption increased in the '
+                    'fourth quarter; cite evidence and distinguish a revision to an estimate from an actual change.')
+        captured = []
+        analyze(question, [report], None, lambda prompt: (captured.append(decode_research_prompt(prompt)) or {}, 0),
+                max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+        excerpts = [item['text'] for item in captured[0]['sources']]
+        import re
+>       assert any('2.7 percent' in part and '3.2 percent' in part for part in excerpts)
+E       assert False
+E        +  where False = any(<generator object test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately.<locals>.<genexpr> at 0x746fea42b9f0>)
+
+tests/test_research_analysis.py:2186: AssertionError
+_____________ test_research_run_commits_evidence_once_and_replays ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe8282660>
+
+    def test_research_run_commits_evidence_once_and_replays(monkeypatch):
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        calls = []
+    
+        class Provider:
+            name = "test-provider"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+    
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                calls.append(prompt)
+                assert "untrusted data" in system
+                assert 0 < timeout_seconds <= 5
+                return {"claims": [{"text": "Revenue is reported", "citations": [
+                    {"source_id": source_id, "quotation": "Revenue was USD 100"}]}],
+                    "counterarguments": [{"text": "Revenue alone does not establish profit growth", "citations": [
+                        {"source_id": source_id, "quotation": "Revenue was USD 100"}]}],
+                    "limitations": [], "facts": [
+                        {"fact_id": "current", "label": "Revenue", "value": "100", "unit": "USD million", "currency": "USD", "period": "2023", "citation": {"source_id": source_id, "quotation": "Revenue was USD 100 million in 2023."}},
+                        {"fact_id": "prior", "label": "Revenue", "value": "80", "unit": "USD million", "currency": "USD", "period": "2022", "citation": {"source_id": source_id, "quotation": "Revenue was USD 80 million in 2022."}}],
+                    "calculations": [{"formula": "growth_percent", "first_fact_id": "current", "second_fact_id": "prior"}]}, 55
+    
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registered = client.post("/v1/auth/local/register", json={"email": "a@example.test",
+            "password": "correct horse battery staple!"})
+        headers = {"Authorization": "Bearer " + registered.json()["access_token"]}
+        source = client.post("/v2/research/sources", headers=headers, json={"title": "Report",
+            "text": "Revenue was USD 100 million in 2023. Revenue was USD 80 million in 2022.",
+            "event_at": "2023-12-31T00:00:00Z", "published_at": "2024-01-01T00:00:00Z",
+            "revised_at": "2024-02-01T00:00:00Z", "permissions": {"store": True,
+            "model_input": True, "display": True}}).json()
+        source_id = source["source_id"]
+        topic = client.post("/v2/research/topics", headers=headers, json={
+            "question": "What is revenue?"}).json()
+        topic_path = "/v2/research/topics/" + topic["topic_id"]
+        attached = client.post(topic_path + "/sources", headers=headers, json={
+            "parent_version_id": topic["versions"][-1]["version_id"], "source_ids": [source_id]})
+        assert attached.status_code == 201
+        topic = attached.json()
+        run_path = topic_path + "/runs"
+        payload = {"parent_version_id": topic["versions"][-1]["version_id"]}
+        request_headers = {**headers, "Idempotency-Key": "research-request-0001"}
+        started = client.post(run_path, headers=request_headers, json=payload)
+        assert started.status_code == 202, started.text
+        operation_id = started.json()["operation"]["operation_id"]
+        inputs_path = run_path + "/" + operation_id + "/inputs"
+        inputs = client.get(inputs_path, headers=headers)
+        assert inputs.status_code == 200
+        snapshot = inputs.json()
+        assert snapshot["parent_version_id"] == payload["parent_version_id"]
+        assert snapshot["sources"][0]["source_id"] == source_id
+        assert snapshot["sources"][0]["permissions"]["model_input"] is True
+        assert snapshot["sources"][0]["event_at"].startswith("2023-12-31")
+        assert snapshot["sources"][0]["published_at"].startswith("2024-01-01")
+        assert snapshot["sources"][0]["revised_at"].startswith("2024-02-01")
+        assert snapshot["sources"][0]["obtained_at"]
+        assert snapshot["budget"]["max_model_calls"] == 1
+        from app.research_analysis import SELECTION_METHOD
+        assert snapshot["selection_method"] == SELECTION_METHOD
+        assert "Revenue was USD 100" not in inputs.text and "owner_id" not in inputs.json()
+        other = client.post("/v1/auth/local/register", json={"email": "other@example.test",
+            "password": "correct horse battery staple!"}).json()["access_token"]
+        assert client.get(inputs_path, headers={"Authorization": "Bearer " + other}).status_code == 404
+        for _ in range(100):
+            state = client.get(run_path + "/" + operation_id, headers=headers)
+            if state.json()["operation"]["status"] in {"completed", "failed"}:
+                break
+            time.sleep(0.02)
+        assert state.json()["operation"]["status"] == "completed", state.text
+        updated = client.get(topic_path, headers=headers).json()
+        _assert_version_chain(updated["versions"])
+        assert [v["created_by"] for v in updated["versions"][:2]] == ["user", "user"]
+        assert all(v["created_by"] == "agent" for v in updated["versions"][2:])
+        result = updated["versions"][-1]["content"]
+        assert result["run"]["status"] == "completed"
+        assert result["run"]["cost_status"] == "unknown"
+        assert result["run"]["selection_method"] == snapshot["selection_method"]
+        assert result["sources"][0]["event_at"] == snapshot["sources"][0]["event_at"]
+        assert result["sources"][0]["revised_at"] == snapshot["sources"][0]["revised_at"]
+        assert result["claims"][0]["citations"][0]["quotation"] == "Revenue was USD 100"
+        assert result["calculations"][0]["value"] == "25.00"
+        assert result["facts"][0]["verification"] == "model_extraction_not_independently_verified"
+        assert updated["versions"][-1]["source_ids"] == [source_id]
+        replay = client.post(run_path, headers=request_headers, json=payload)
+        assert replay.status_code == 202, replay.text
+        assert replay.headers["Idempotency-Replayed"] == "true"
+        assert len(calls) == 1
+        assert client.get(inputs_path, headers=headers).json() == snapshot
+        runs = client.get(run_path, headers=headers)
+        assert runs.status_code == 200
+        assert runs.json()[0]["operation"]["operation_id"] == operation_id
+    
+        # A later user edit cannot erase source permissions from version lineage.
+        edited = deepcopy(result)
+        edited["summary"] = "Edited"
+        edited["sources"] = []
+        edited["run"] = {"status": "fabricated", "requirement_coverage": {"meaning": "fabricated"}}
+        edited["claims"][0]["text"] = "User changed the finding"
+        edited["claims"][0]["support_status"] = "verified"
+        edited["facts"][0]["value"] = "999"
+        edited["calculations"][0]["value"] = "999"
+        scrubbed = client.post(topic_path + "/versions", headers=headers, json={
+            "parent_version_id": updated["versions"][-1]["version_id"], "content": edited,
+            "review": "confirmed", "note": "My retained reservation"})
+        assert scrubbed.status_code == 201
+        version = scrubbed.json()["versions"][-1]
+        assert version["created_by"] == "user"
+        derived = {"evidence_links", "question_links", "research_gaps", "stage_summary", "requirement_coverage", "scope_assessment", "evidence_needs", "absence_assessment", "completion_assessment"}
+>       assert {k: v for k, v in version["content"]["run"].items() if k not in derived} == {
+            k: v for k, v in result["run"].items() if k not in derived}
+E       AssertionError: assert {'operation_i...ons': [], ...} == {'operation_i...ons': [], ...}
+E         
+E         Omitting 79 identical items, use -vv to show
+E         Right contains 2 more items:
+E         {'model_absence_observations': [], 'model_evidence_needs': []}
+E         Use -v to get more diff
+
+tests/test_research_runs.py:631: AssertionError
+___ test_simulated_source_is_not_sent_to_real_research_or_saved_as_evidence ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746feabd58d0>
+
+    def test_simulated_source_is_not_sent_to_real_research_or_saved_as_evidence(monkeypatch):
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        seen = []
+        class Provider:
+            name = "simulation-boundary-test"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                seen.append(prompt)
+                import json
+                data = decode_research_prompt(prompt)
+                assert len(data["sources"]) == 1 and "SIMULATED_VALUE" not in prompt
+                citation = {"source_id": data["sources"][0]["source_id"], "quotation": "Revenue was 100"}
+                return {"claims": [{"text": "Revenue was 100", "citations": [citation]}],
+                        "counterarguments": [{"text": "Revenue is not profit", "citations": [citation]}]}, 55
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        client = TestClient(api.app)
+        reg = client.post("/v1/auth/local/register", json={"email": "simulation-boundary@example.test", "password": "correct horse battery staple!"})
+        headers = {"Authorization": "Bearer " + reg.json()["access_token"]}
+        def create(title, text, simulated):
+            response = client.post("/v2/research/sources", headers=headers, json={"title": title, "text": text,
+                "is_simulated": simulated, "permissions": {"store": True, "display": True, "model_input": True, "export": True}})
+            assert response.status_code == 201
+            return response.json()
+        real = create("Report", "Revenue was 100.", False)
+        simulated = create("Scenario", "SIMULATED_VALUE 900", True)
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?",
+            "source_ids": [real["source_id"], simulated["source_id"]]}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        # Marked simulated material cannot be promoted by manual citations or facts either.
+        for content in ({"claims": [{"text": "A finding", "citations": [{"source_id": simulated["source_id"], "quotation": "SIMULATED_VALUE 900"}]}]},
+                        {"facts": [{"fact_id": "sim", "label": "Revenue", "value": "900", "unit": "USD", "period": "2024", "source_id": simulated["source_id"]}]}):
+            assert client.post(path + "/versions", headers=headers, json={"parent_version_id": topic["versions"][0]["version_id"], "content": content}).status_code == 422
+        started = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "simulation-boundary-run"},
+            json={"parent_version_id": topic["versions"][0]["version_id"]}).json()["operation"]["operation_id"]
+        for _ in range(100):
+            state = client.get(path + "/runs/" + started, headers=headers).json()["operation"]["status"]
+            if state in {"completed", "failed"}: break
+            time.sleep(.02)
+        assert state == "completed" and len(seen) == 1
+        version = client.get(path, headers=headers).json()["versions"][-1]
+        content = version["content"]
+>       assert content["run"]["status"] == "partial"
+E       AssertionError: assert 'completed' == 'partial'
+E         
+E         - partial
+E         + completed
+
+tests/test_research_runs.py:1354: AssertionError
+____________ test_discarded_model_annotations_keep_research_partial ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe81cf460>
+
+    def test_discarded_model_annotations_keep_research_partial(monkeypatch):
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        source_id = ""
+        class Provider:
+            name = "extra-metadata-test"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                return {"claims": [{"text": "Revenue was 100", "status": "evidence", "citations": [
+                    {"source_id": source_id, "quotation": "Revenue was 100"}]}], "counterarguments": []}, 10
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        client = TestClient(api.app)
+        account = client.post("/v1/auth/local/register", json={"email": "extra-model-fields@example.test",
+            "password": "correct horse battery staple!"}).json()
+        headers = {"Authorization": "Bearer " + account["access_token"]}
+        source_id = client.post("/v2/research/sources", headers=headers, json={"title": "Report", "text": "Revenue was 100.",
+            "permissions": {"store": True, "model_input": True, "display": True}}).json()["source_id"]
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": "Revenue?", "source_ids": [source_id]}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "extra-metadata-001"},
+            json={"parent_version_id": topic["versions"][0]["version_id"], "require_counterarguments": False}).json()
+        op = receipt["operation"]["operation_id"]
+        for _ in range(100):
+            status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if status in {"completed", "failed"}: break
+            time.sleep(0.02)
+        assert status == "completed"
+        content = client.get(path, headers=headers).json()["versions"][-1]["content"]
+>       assert content["run"]["status"] == "partial" and content["run"]["error"] is None
+E       AssertionError: assert ('completed' == 'partial'
+E         
+E         - partial
+E         + completed)
+
+tests/test_research_runs.py:1666: AssertionError
+____ test_unverified_period_comparability_keeps_automatic_research_partial _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe938ba10>
+
+    def test_unverified_period_comparability_keeps_automatic_research_partial(monkeypatch):
+        monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+        class Provider:
+            name = 'period-grain-test'
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                def item(fid, val, period, quote):
+                    return {'fact_id':fid, 'label':'Metric', 'value':val, 'unit':'USD', 'currency':'USD', 'period':period,
+                            'citation':{'source_id':source_id, 'quotation':quote}}
+                return {'claims':[{'text':'Two values were reported.', 'citations':[{'source_id':source_id,'quotation':'Annual revenue was 100'}]}],
+                        'facts':[item('annual','100','FY2024','Annual revenue was 100'), item('quarter','80','2023-Q4','Quarterly revenue was 80')],
+                        'calculations':[{'formula':'growth_percent','first_fact_id':'annual','second_fact_id':'quarter'}]}, 10
+        monkeypatch.setattr(api,'challenge_provider',Provider())
+        client=TestClient(api.app)
+        account=client.post('/v1/auth/local/register',json={'email':'period-grain@example.test','password':'correct horse battery staple!'}).json()
+        headers={'Authorization':'Bearer '+account['access_token']}
+        source_id=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Annual revenue was 100. Quarterly revenue was 80.',
+            'permissions':{'store':True,'display':True,'model_input':True}}).json()['source_id']
+        topic=client.post('/v2/research/topics',headers=headers,json={'question':'Compare values','source_ids':[source_id]}).json()
+        path='/v2/research/topics/'+topic['topic_id']
+        receipt=client.post(path+'/runs',headers={**headers,'Idempotency-Key':'period-grain-test'},
+            json={'parent_version_id':topic['versions'][0]['version_id'],'require_counterarguments':False}).json()
+        op=receipt['operation']['operation_id']
+        for _ in range(100):
+            status=client.get(path+'/runs/'+op,headers=headers).json()['operation']['status']
+            if status in {'completed','failed'}: break
+            time.sleep(.02)
+        assert status=='completed'
+        content=client.get(path,headers=headers).json()['versions'][-1]['content']
+>       assert content['run']['status']=='partial'
+E       AssertionError: assert 'completed' == 'partial'
+E         
+E         - partial
+E         + completed
+
+tests/test_research_runs.py:2320: AssertionError
+__ test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf ___
+
+    @pytest.mark.skipif(not FED_PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    def test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf():
+        text = _extract_text(FED_PDF.read_bytes())
+        report = ResearchSource(source_id="fed", owner_id="test", title="Federal Reserve 2024 September decision", text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc), content_sha256="test", retrieval_method="user_pdf",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        quotation = "1/2 percentage point to 4-3/4 to 5 percent"
+        def model(prompt):
+            assert any(quotation in part["text"] for part in decode_research_prompt(prompt)["sources"])
+            return {"claims": [{"text": "The target range was lowered.", "citations": [
+                {"source_id": "fed", "quotation": quotation}]}]}, 1
+        result = analyze("2024 年 9 月美联储决定的联邦基金目标区间和变化幅度是多少？", [report], None, model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+>       citation = result.claims[0]["citations"][0]
+                   ^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/test_research_original_document.py:47: IndexError
+______ test_annual_and_quarterly_question_selects_both_distinct_passages _______
+
+    @pytest.mark.skipif(not BEA_2022_PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    def test_annual_and_quarterly_question_selects_both_distinct_passages():
+        text = _extract_text(BEA_2022_PDF.read_bytes())
+        question = ("According to the BEA advance estimate for 2022, report the full-year 2022 real GDP growth "
+                    "and the fourth-quarter annualized real GDP growth; distinguish their periods and note relevant limitations.")
+        windows = _select_windows(text, question, 468, 2)
+        assert len(windows) == 2
+        assert any("2.9 percent in the fourth quarter" in passage for _, passage in windows)
+        assert any("Real GDP increased 2.1 percent in 2022" in passage for _, passage in windows)
+        report = ResearchSource(source_id="bea-dev", owner_id="test", title="BEA GDP 2022 advance estimate", text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc), content_sha256="test",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        def fixed_model(prompt):
+            parts = decode_research_prompt(prompt)["sources"]
+            assert any("2.9 percent in the fourth quarter" in part["text"] for part in parts)
+            assert any("Real GDP increased 2.1 percent in 2022" in part["text"] for part in parts)
+            return {}, 10
+        result = analyze(question, [report], None, fixed_model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+>       assert len(result.segments) == 2
+E       AssertionError: assert 0 == 2
+E        +  where 0 = len([])
+E        +    where [] = AnalysisResult(claims=[], counterarguments=[], limitations=['Source bea-dev: no relevant complete evidence unit was se... prompt_bytes=0, segments=[], research_questions=[], available_fact_ids=[], evidence_needs=[], absence_observations=[]).segments
+
+tests/test_research_original_document.py:71: AssertionError
+_ test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe86ed7f0>
+question = 'What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?'
+
+    @pytest.mark.skipif(not PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    @pytest.mark.parametrize("question", ["What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?",
+                                          "2023年全年实际GDP增长初值是多少？与季度折年率有什么区别？"])
+    def test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model(monkeypatch, question):
+        raw = PDF.read_bytes()
+        assert sha256(raw).hexdigest() == HASH
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        calls = []
+        source_id = ""
+        class Provider:
+            name = "fixed-test-response"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                calls.append(1)
+                passages = [item["text"] for item in decode_research_prompt(prompt)["sources"]]
+                assert any(QUOTE in passage for passage in passages), "the selected passages must include the annual figure"
+                assert any(QUARTER_QUOTE in passage for passage in passages), "the selected passages must include the quarterly figure"
+                citation = {"source_id": source_id, "quotation": QUOTE}
+                return {"claims": [{"text": "Annual real GDP grew 2.5% in 2023.", "citations": [citation]}],
+                        "counterarguments": [{"text": "The annual rate is not the quarterly rate.",
+                                              "citations": [{"source_id": source_id, "quotation": QUARTER_QUOTE}]}],
+                        "facts": [{"fact_id": "annual", "label": "Annual real GDP growth", "value": "2.5",
+                                   "unit": "percent", "period": "2023", "citation": citation}],
+                        "calculations": [], "limitations": []}, 42
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post("/v1/auth/local/register", json={"email": "bea-original@example.test",
+            "password": "correct horse battery staple!"})
+        headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+        uploaded = client.post("/v2/research/sources/pdf", headers=headers, json={"title": "BEA 2023 advance estimate",
+            "pdf_base64": base64.b64encode(raw).decode("ascii"), "published_at": "2024-01-25T13:30:00Z",
+            "permissions": {"store": True, "display": True, "model_input": True, "export": False}})
+        assert uploaded.status_code == 201, uploaded.text
+        assert uploaded.json()["response_sha256"] == HASH
+        source_id = uploaded.json()["source_id"]
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": question,
+            "as_of": "2024-01-26T00:00:00Z", "source_ids": [source_id]}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "bea-real-doc-smoke-1"},
+            json={"parent_version_id": topic["versions"][0]["version_id"], "max_search_calls": 0})
+        assert response.status_code == 202
+        op = response.json()["operation"]["operation_id"]
+        for _ in range(100):
+            status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if status in {"completed", "failed"}: break
+            time.sleep(0.02)
+>       assert status == "completed" and calls == [1]
+E       AssertionError: assert ('failed' == 'completed'
+E         
+E         - completed
+E         + failed)
+
+tests/test_research_original_document.py:123: AssertionError
+_ test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[2023\u5e74\u5168\u5e74\u5b9e\u9645GDP\u589e\u957f\u521d\u503c\u662f\u591a\u5c11\uff1f\u4e0e\u5b63\u5ea6\u6298\u5e74\u7387\u6709\u4ec0\u4e48\u533a\u522b\uff1f] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746feadf7af0>
+question = '2023年全年实际GDP增长初值是多少？与季度折年率有什么区别？'
+
+    @pytest.mark.skipif(not PDF.is_file() or not shutil.which("pdftotext") or not shutil.which("prlimit"),
+                        reason="retained official document or PDF tools unavailable")
+    @pytest.mark.parametrize("question", ["What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?",
+                                          "2023年全年实际GDP增长初值是多少？与季度折年率有什么区别？"])
+    def test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model(monkeypatch, question):
+        raw = PDF.read_bytes()
+        assert sha256(raw).hexdigest() == HASH
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        calls = []
+        source_id = ""
+        class Provider:
+            name = "fixed-test-response"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                calls.append(1)
+                passages = [item["text"] for item in decode_research_prompt(prompt)["sources"]]
+                assert any(QUOTE in passage for passage in passages), "the selected passages must include the annual figure"
+                assert any(QUARTER_QUOTE in passage for passage in passages), "the selected passages must include the quarterly figure"
+                citation = {"source_id": source_id, "quotation": QUOTE}
+                return {"claims": [{"text": "Annual real GDP grew 2.5% in 2023.", "citations": [citation]}],
+                        "counterarguments": [{"text": "The annual rate is not the quarterly rate.",
+                                              "citations": [{"source_id": source_id, "quotation": QUARTER_QUOTE}]}],
+                        "facts": [{"fact_id": "annual", "label": "Annual real GDP growth", "value": "2.5",
+                                   "unit": "percent", "period": "2023", "citation": citation}],
+                        "calculations": [], "limitations": []}, 42
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post("/v1/auth/local/register", json={"email": "bea-original@example.test",
+            "password": "correct horse battery staple!"})
+        headers = {"Authorization": "Bearer " + registration.json()["access_token"]}
+        uploaded = client.post("/v2/research/sources/pdf", headers=headers, json={"title": "BEA 2023 advance estimate",
+            "pdf_base64": base64.b64encode(raw).decode("ascii"), "published_at": "2024-01-25T13:30:00Z",
+            "permissions": {"store": True, "display": True, "model_input": True, "export": False}})
+        assert uploaded.status_code == 201, uploaded.text
+        assert uploaded.json()["response_sha256"] == HASH
+        source_id = uploaded.json()["source_id"]
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": question,
+            "as_of": "2024-01-26T00:00:00Z", "source_ids": [source_id]}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        response = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "bea-real-doc-smoke-1"},
+            json={"parent_version_id": topic["versions"][0]["version_id"], "max_search_calls": 0})
+        assert response.status_code == 202
+        op = response.json()["operation"]["operation_id"]
+        for _ in range(100):
+            status = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if status in {"completed", "failed"}: break
+            time.sleep(0.02)
+>       assert status == "completed" and calls == [1]
+E       AssertionError: assert ('completed' == 'completed'
+E         
+E           completed and [] == [1]
+E         
+E         Right contains one more item: 1
+E         Use -v to get more diff)
+
+tests/test_research_original_document.py:123: AssertionError
+___ test_relevant_original_pdf_passages_fit_bounded_prompt[GDP_AQ-needles0] ____
+
+case = 'GDP_AQ'
+needles = ('0.7 percent in the fourth quarter', 'Real GDP increased 2.1 percent in 2025')
+
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+        ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+        ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+        ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+    ])
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+        assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+        report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+        normalized = [" ".join(part.split()) for part in captured]
+>       assert all(any(needle in part for part in normalized) for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_relevant_original_pdf_passages_fit_bounded_prompt.<locals>.<genexpr> at 0x746fe86c0740>)
+
+tests/test_research_original_document.py:160: AssertionError
+___ test_relevant_original_pdf_passages_fit_bounded_prompt[GDP_REV-needles1] ___
+
+case = 'GDP_REV'
+needles = ('0.7 percent in the fourth quarter', 'Real GDP was revised down 0.7 percentage point')
+
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+        ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+        ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+        ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+    ])
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+        assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+        report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+        normalized = [" ".join(part.split()) for part in captured]
+>       assert all(any(needle in part for part in normalized) for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_relevant_original_pdf_passages_fit_bounded_prompt.<locals>.<genexpr> at 0x746feab417e0>)
+
+tests/test_research_original_document.py:160: AssertionError
+__ test_relevant_original_pdf_passages_fit_bounded_prompt[FED_RATE-needles2] ___
+
+case = 'FED_RATE'
+needles = ('lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent',)
+
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+        ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+        ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+        ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+    ])
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+        assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+        report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+        normalized = [" ".join(part.split()) for part in captured]
+>       assert all(any(needle in part for part in normalized) for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_relevant_original_pdf_passages_fit_bounded_prompt.<locals>.<genexpr> at 0x746feab42500>)
+
+tests/test_research_original_document.py:160: AssertionError
+__ test_relevant_original_pdf_passages_fit_bounded_prompt[FED_DISS-needles3] ___
+
+case = 'FED_DISS'
+needles = ('Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point',)
+
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_AQ", ("0.7 percent in the fourth quarter", "Real GDP increased 2.1 percent in 2025")),
+        ("GDP_REV", ("0.7 percent in the fourth quarter", "Real GDP was revised down 0.7 percentage point")),
+        ("FED_RATE", ("lower the target range for the federal funds rate by 1/4 percentage point to 3-1/2 to 3-3/4 percent",)),
+        ("FED_DISS", ("Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point",)),
+    ])
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_relevant_original_pdf_passages_fit_bounded_prompt(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/37-cross-domain-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        text = _extract_text((folder / task["source_file"]).read_bytes(), text_order=task["text_order"])
+        assert sha256(text.encode()).hexdigest() == task["source_text_sha256"]
+        report = ResearchSource(source_id="a" * 39, owner_id="test", title=task["source_title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(task["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+        normalized = [" ".join(part.split()) for part in captured]
+>       assert all(any(needle in part for part in normalized) for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_relevant_original_pdf_passages_fit_bounded_prompt.<locals>.<genexpr> at 0x746feab40c80>)
+
+tests/test_research_original_document.py:160: AssertionError
+_ test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissions _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe92f60b0>
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissions(monkeypatch):
+        """Replay a saved response; this tests the pipeline, not model quality."""
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/67-two-source-selection-check"
+        manifest = json.loads((folder / "manifest.json").read_text())
+        recorded = json.loads((folder / "result.json").read_text())
+        raw = json.loads((folder / "provider-output.json").read_text())["payload"]
+        old_ids = recorded["source_ids"]
+        ids = []
+        review_indexes = []
+        class Provider:
+            name = "saved-two-source-response"
+            policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=3000, max_output_tokens=1500)
+            def generate_structured(self, prompt, *, cancel_event, system, timeout_seconds):
+                if system == api.REVIEW_SYSTEM_PROMPT:
+                    review_indexes.extend(item["claim_index"] for item in decode_research_prompt(prompt)["claims"])
+                    # Provider-facing indexes are dense within this batch; the
+                    # persisted run maps them back to original claim indexes.
+                    assert review_indexes == list(range(len(review_indexes)))
+                    return {"reviews": [{"claim_index": index, "verdict": "supports"} for index in review_indexes]}, 20
+                parts = decode_research_prompt(prompt)["sources"]
+                assert any("74.4" in item["text"] for item in parts)
+                assert any("88.2" in item["text"] for item in parts)
+                serialized = json.dumps(raw, ensure_ascii=False)
+                for old, new in zip(old_ids, ids):
+                    serialized = serialized.replace(old, new)
+                return json.loads(serialized), 100
+        monkeypatch.setenv("FORESIGHTNINE_LOCAL_AUTH_MODE", "mock")
+        monkeypatch.setattr(api, "challenge_provider", Provider())
+        monkeypatch.setattr(api, "_reserve_model_call", lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, "_settle_model_call", lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        auth = client.post("/v1/auth/local/register", json={"email": "two-doc-replay@example.test", "password": "correct horse battery staple!"}).json()
+        headers = {"Authorization": "Bearer " + auth["access_token"]}
+        for item in manifest["sources"]:
+            pdf = (folder / item["pdf"]).read_bytes()
+            assert sha256(pdf).hexdigest() == item["pdf_sha256"]
+            response = client.post("/v2/research/sources/pdf", headers=headers, json={"title": item["title"],
+                "pdf_base64": base64.b64encode(pdf).decode("ascii"), "published_at": item["published_at"],
+                "text_order": "layout", "permissions": {"store": True, "display": True, "model_input": True}})
+            assert response.status_code == 201, response.text
+            ids.append(response.json()["source_id"])
+        task = json.loads((folder / "input.json").read_text())
+        topic = client.post("/v2/research/topics", headers=headers, json={"question": task["question"], "source_ids": ids}).json()
+        path = "/v2/research/topics/" + topic["topic_id"]
+        receipt = client.post(path + "/runs", headers={**headers, "Idempotency-Key": "two-doc-replay"}, json={
+            "parent_version_id": topic["versions"][0]["version_id"], "max_model_calls": 2,
+            "max_total_tokens": 10000, "support_review": True})
+        assert receipt.status_code == 202, receipt.text
+        op = receipt.json()["operation"]["operation_id"]
+        for _ in range(300):
+            state = client.get(path + "/runs/" + op, headers=headers).json()["operation"]["status"]
+            if state in {"completed", "failed"}: break
+            time.sleep(.02)
+>       assert state == "completed"
+E       AssertionError: assert 'failed' == 'completed'
+E         
+E         - completed
+E         + failed
+
+tests/test_research_original_document.py:218: AssertionError
+_ test_retrieval_keeps_requested_estimates_and_purchase_plans[GDP_ESTIMATE-needles0] _
+
+case = 'GDP_ESTIMATE'
+needles = ('2.9 percent', '2.6 percent', 'advance estimate')
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_ESTIMATE", ("2.9 percent", "2.6 percent", "advance estimate")),
+        ("FED_PURCHASES", ("$20 billion for treasury", "$10 billion for agency", "$40 billion per month", "$20 billion per month")),
+    ])
+    def test_retrieval_keeps_requested_estimates_and_purchase_plans(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/70-multitask-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        item = task["sources"][0]
+        text = _extract_text((folder / item["file"]).read_bytes(), text_order="reading")
+        assert sha256(text.encode()).hexdigest() == item["text_sha256"]
+        report = ResearchSource(source_id=item["source_id"], owner_id="test", title=item["title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(item["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+        content = " ".join(" ".join(part.lower().split()) for part in captured)
+>       assert all(needle in content for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_retrieval_keeps_requested_estimates_and_purchase_plans.<locals>.<genexpr> at 0x746fe8720860>)
+
+tests/test_research_original_document.py:256: AssertionError
+_ test_retrieval_keeps_requested_estimates_and_purchase_plans[FED_PURCHASES-needles1] _
+
+case = 'FED_PURCHASES'
+needles = ('$20 billion for treasury', '$10 billion for agency', '$40 billion per month', '$20 billion per month')
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    @pytest.mark.parametrize("case,needles", [
+        ("GDP_ESTIMATE", ("2.9 percent", "2.6 percent", "advance estimate")),
+        ("FED_PURCHASES", ("$20 billion for treasury", "$10 billion for agency", "$40 billion per month", "$20 billion per month")),
+    ])
+    def test_retrieval_keeps_requested_estimates_and_purchase_plans(case, needles):
+        folder = Path(__file__).resolve().parents[3] / "docs/product/phase-a/70-multitask-evaluation"
+        task = json.loads((folder / (case + "-input.json")).read_text())
+        item = task["sources"][0]
+        text = _extract_text((folder / item["file"]).read_bytes(), text_order="reading")
+        assert sha256(text.encode()).hexdigest() == item["text_sha256"]
+        report = ResearchSource(source_id=item["source_id"], owner_id="test", title=item["title"], text=text,
+            kind="user_supplied", obtained_at=datetime.now(timezone.utc),
+            published_at=datetime.fromisoformat(item["published_at"].replace("Z", "+00:00")),
+            content_sha256="test", retrieval_method="user_pdf", permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        def model(prompt):
+            captured.extend(item["text"] for item in decode_research_prompt(prompt)["sources"])
+            return {}, 1
+        result = analyze(task["question"], [report], None, model,
+                         max_prompt_chars=3000 - len(SYSTEM_PROMPT.encode("utf-8")) - 512)
+        content = " ".join(" ".join(part.lower().split()) for part in captured)
+>       assert all(needle in content for needle in needles)
+E       assert False
+E        +  where False = all(<generator object test_retrieval_keeps_requested_estimates_and_purchase_plans.<locals>.<genexpr> at 0x746fe8584040>)
+
+tests/test_research_original_document.py:256: AssertionError
+_________ test_company_name_prefix_enters_prompt_with_original_offsets _________
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_company_name_prefix_enters_prompt_with_original_offsets():
+        from app.research_analysis import _prompt_source_text
+        folder=Path(__file__).resolve().parents[3]/"docs/product/phase-a/209-cross-domain-frozen"
+        task=json.loads((folder/"tasks.json").read_text())[0]
+        raw=(folder/task["source"]).read_bytes()
+        manifest=json.loads((folder/"manifest.json").read_text())
+        assert sha256(raw).hexdigest()==manifest["source_files"][task["source"]]
+        text=_extract_text(raw,text_order="reading")
+        source=ResearchSource(source_id=task["source_id"],owner_id="test",title=task["source"],text=text,
+            kind="user_supplied",obtained_at=datetime.now(timezone.utc),content_sha256=sha256(text.encode()).hexdigest(),
+            retrieval_method="user_pdf",permissions=SourcePermissions(store=True,display=True,model_input=True))
+        captured=[]
+        result=analyze(task["question"],[source],None,lambda prompt:(captured.append(decode_research_prompt(prompt)) or {},0),
+                       max_prompt_chars=6000-len(SYSTEM_PROMPT.encode())-512)
+>       assert any("Bank of America Corporation" in item["text"] for item in captured[0]["sources"])
+E       assert False
+E        +  where False = any(<generator object test_company_name_prefix_enters_prompt_with_original_offsets.<locals>.<genexpr> at 0x746fe88ca8e0>)
+
+tests/test_research_original_document.py:337: AssertionError
+____ test_pdf_page_hints_preserve_frozen_research_excerpt_budget[BANK_2020] ____
+
+task_id = 'BANK_2020'
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    @pytest.mark.parametrize("task_id", ["BANK_2020", "BEA_2020", "FOMC_2016"])
+    def test_pdf_page_hints_preserve_frozen_research_excerpt_budget(task_id):
+        from app.research_analysis import _prompt_source_text
+        root = Path(__file__).resolve().parents[3] / "docs/product/phase-a"
+        folder = root / "231-new-cross-domain-check"
+        tasks = json.loads((folder / "tasks.json").read_text())
+        baseline = json.loads((root / "235-cross-domain-recheck/manifest.json").read_text())
+        task = next(item for item in tasks if item["id"] == task_id)
+        condition = next(item for item in baseline["conditions"] if item["task"] == task_id)
+        raw = (folder / task["source"]).read_bytes()
+        assert sha256(raw).hexdigest() == baseline["source_files"][task["source"]]
+        text = _extract_text(raw, text_order="layout")
+        report = ResearchSource(source_id=task["source_id"], owner_id="test", title=task["source"], text=text,
+            kind="user_supplied", obtained_at=datetime(2026, 11, 12, tzinfo=timezone.utc),
+            content_sha256=sha256(text.encode()).hexdigest(), retrieval_method="user_pdf", pdf_text_order="layout",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        budget = 6000 - len(SYSTEM_PROMPT.encode()) - 512
+        result = analyze(task["question"], [report], None,
+                         lambda prompt: (captured.append(prompt) or {}, 0), max_prompt_chars=budget)
+>       assert result.segments == condition["segments"]
+E       AssertionError: assert [{'source_id'...e', ...}, ...] == [{'source_id'...id': 'ref-1'}]
+E         
+E         At index 0 diff: {'source_id': 'source_23100000000000000000000000000001', 'character_start': 4782, 'character_end': 4845, 'context_unit_kind': 'sentence', 'complete_context': True, 'context_unit_ids': ['u4782'], 'retrieval_facet_indexes': [], 'model_source_id': 'ref-1'} != {'source_id': 'source_23100000000000000000000000000001', 'character_start': 188496, 'character_end': 190567, 'model_source_id': 'ref-1'}
+E         Left contains 12 more items, first extra item: {'source_id': 'source_23100000000000000000000000000001', 'character_start': 25817, 'character_end': 25913, 'context_unit_kind': 'paragraph', ...}
+E         Use -v to get more diff
+
+tests/test_research_original_document.py:386: AssertionError
+____ test_pdf_page_hints_preserve_frozen_research_excerpt_budget[BEA_2020] _____
+
+task_id = 'BEA_2020'
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    @pytest.mark.parametrize("task_id", ["BANK_2020", "BEA_2020", "FOMC_2016"])
+    def test_pdf_page_hints_preserve_frozen_research_excerpt_budget(task_id):
+        from app.research_analysis import _prompt_source_text
+        root = Path(__file__).resolve().parents[3] / "docs/product/phase-a"
+        folder = root / "231-new-cross-domain-check"
+        tasks = json.loads((folder / "tasks.json").read_text())
+        baseline = json.loads((root / "235-cross-domain-recheck/manifest.json").read_text())
+        task = next(item for item in tasks if item["id"] == task_id)
+        condition = next(item for item in baseline["conditions"] if item["task"] == task_id)
+        raw = (folder / task["source"]).read_bytes()
+        assert sha256(raw).hexdigest() == baseline["source_files"][task["source"]]
+        text = _extract_text(raw, text_order="layout")
+        report = ResearchSource(source_id=task["source_id"], owner_id="test", title=task["source"], text=text,
+            kind="user_supplied", obtained_at=datetime(2026, 11, 12, tzinfo=timezone.utc),
+            content_sha256=sha256(text.encode()).hexdigest(), retrieval_method="user_pdf", pdf_text_order="layout",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        budget = 6000 - len(SYSTEM_PROMPT.encode()) - 512
+        result = analyze(task["question"], [report], None,
+                         lambda prompt: (captured.append(prompt) or {}, 0), max_prompt_chars=budget)
+>       assert result.segments == condition["segments"]
+E       AssertionError: assert [{'source_id'...e', ...}, ...] == [{'source_id'...id': 'ref-1'}]
+E         
+E         At index 0 diff: {'source_id': 'source_23100000000000000000000000000002', 'character_start': 121, 'character_end': 306, 'context_unit_kind': 'paragraph', 'complete_context': True, 'context_unit_ids': ['u121'], 'retrieval_facet_indexes': [], 'model_source_id': 'ref-1'} != {'source_id': 'source_23100000000000000000000000000002', 'character_start': 0, 'character_end': 6417, 'model_source_id': 'ref-1'}
+E         Left contains 28 more items, first extra item: {'source_id': 'source_23100000000000000000000000000002', 'character_start': 385, 'character_end': 704, 'context_unit_kind': 'paragraph', ...}
+E         Use -v to get more diff
+
+tests/test_research_original_document.py:386: AssertionError
+____ test_pdf_page_hints_preserve_frozen_research_excerpt_budget[FOMC_2016] ____
+
+task_id = 'FOMC_2016'
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    @pytest.mark.parametrize("task_id", ["BANK_2020", "BEA_2020", "FOMC_2016"])
+    def test_pdf_page_hints_preserve_frozen_research_excerpt_budget(task_id):
+        from app.research_analysis import _prompt_source_text
+        root = Path(__file__).resolve().parents[3] / "docs/product/phase-a"
+        folder = root / "231-new-cross-domain-check"
+        tasks = json.loads((folder / "tasks.json").read_text())
+        baseline = json.loads((root / "235-cross-domain-recheck/manifest.json").read_text())
+        task = next(item for item in tasks if item["id"] == task_id)
+        condition = next(item for item in baseline["conditions"] if item["task"] == task_id)
+        raw = (folder / task["source"]).read_bytes()
+        assert sha256(raw).hexdigest() == baseline["source_files"][task["source"]]
+        text = _extract_text(raw, text_order="layout")
+        report = ResearchSource(source_id=task["source_id"], owner_id="test", title=task["source"], text=text,
+            kind="user_supplied", obtained_at=datetime(2026, 11, 12, tzinfo=timezone.utc),
+            content_sha256=sha256(text.encode()).hexdigest(), retrieval_method="user_pdf", pdf_text_order="layout",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        captured = []
+        budget = 6000 - len(SYSTEM_PROMPT.encode()) - 512
+        result = analyze(task["question"], [report], None,
+                         lambda prompt: (captured.append(prompt) or {}, 0), max_prompt_chars=budget)
+>       assert result.segments == condition["segments"]
+E       AssertionError: assert [{'source_id'...e', ...}, ...] == [{'source_id'...id': 'ref-1'}]
+E         
+E         At index 0 diff: {'source_id': 'source_23100000000000000000000000000003', 'character_start': 105, 'character_end': 322, 'context_unit_kind': 'sentence', 'complete_context': True, 'context_unit_ids': ['u105'], 'retrieval_facet_indexes': [], 'model_source_id': 'ref-1'} != {'source_id': 'source_23100000000000000000000000000003', 'character_start': 850, 'character_end': 2740, 'model_source_id': 'ref-1'}
+E         Left contains 12 more items, first extra item: {'source_id': 'source_23100000000000000000000000000003', 'character_start': 406, 'character_end': 500, 'context_unit_kind': 'sentence', ...}
+E         Use -v to get more diff
+
+tests/test_research_original_document.py:386: AssertionError
+_ test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review _
+
+    @pytest.mark.skipif(not shutil.which("pdftotext") or not shutil.which("prlimit"), reason="PDF tools unavailable")
+    def test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review():
+        from app.research_verification import prepare_support_review
+        root = Path(__file__).resolve().parents[3] / "docs/product/phase-a"
+        baseline = root / "231-new-cross-domain-check"
+        task = next(item for item in json.loads((baseline / "tasks.json").read_text()) if item["id"] == "BEA_2020")
+        raw = (baseline / task["source"]).read_bytes()
+        manifest = json.loads((baseline / "manifest.json").read_text())
+        assert sha256(raw).hexdigest() == manifest["source_files"][task["source"]]
+        text = _extract_text(raw, text_order="layout")
+        report = ResearchSource(source_id=task["source_id"], owner_id="test", title=task["source"], text=text,
+            kind="user_supplied", obtained_at=datetime(2026, 11, 12, tzinfo=timezone.utc),
+            content_sha256=sha256(text.encode()).hexdigest(), retrieval_method="user_pdf", pdf_text_order="layout",
+            permissions=SourcePermissions(store=True, model_input=True, display=True))
+        payload = json.loads((root / "238-pdf-page-single-recheck/BEA_2020-generation-1-provider.json").read_text())["payload"]
+        result = analyze(task["question"], [report], None, lambda _: (payload, 0),
+                         max_prompt_chars=6000 - len(SYSTEM_PROMPT.encode()) - 512)
+>       assert result.facts and all(item.get("table_alignment_unverified") for item in result.facts)
+E       assert ([])
+E        +  where [] = AnalysisResult(claims=[{'text': "The two PCE series do not use the same basis: the -399.3 figure is under the 'Current...'model_source_id': 'ref-1'}], research_questions=[], available_fact_ids=[], evidence_needs=[], absence_observations=[]).facts
+
+tests/test_research_original_document.py:414: AssertionError
+__ test_repeated_continuation_preserves_committed_stages_and_original_budget ___
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe9411160>
+
+    def test_repeated_continuation_preserves_committed_stages_and_original_budget(monkeypatch):
+>       client, headers, source_id, path, parent = _setup(monkeypatch)
+                                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:54: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe9411160>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:39: AssertionError
+__ test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe96db070>
+
+    def test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery(monkeypatch):
+>       client, headers, source_id, path, parent = _setup(monkeypatch)
+                                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:155: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe96db070>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:39: AssertionError
+___ test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe96db5b0>
+
+    def test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation(monkeypatch):
+>       client, headers, source_id, path, parent = _setup(monkeypatch)
+                                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:205: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe96db5b0>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:39: AssertionError
+_ test_settlement_is_account_scoped_and_separates_ledger_from_provider_report __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe9412970>
+
+    def test_settlement_is_account_scoped_and_separates_ledger_from_provider_report(monkeypatch):
+>       client, headers, source_id, path, parent = _setup(monkeypatch)
+                                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:302: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe9412970>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:39: AssertionError
+_ test_direction_proof_rejected_when_forged_and_invalidated_by_source_or_location_edits _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe96d8ec0>
+
+    def test_direction_proof_rejected_when_forged_and_invalidated_by_source_or_location_edits(monkeypatch):
+        from copy import deepcopy
+        from app.research_calculations import verified_direction_proof
+    
+>       client, headers, _, _, _ = _setup(monkeypatch)
+                                   ^^^^^^^^^^^^^^^^^^^
+
+tests/test_research_recovery_acceptance.py:338: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x746fe96d8ec0>
+
+    def _setup(monkeypatch):
+        monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+        monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+        client = TestClient(api.app)
+        registration = client.post('/v1/auth/local/register', json={
+            'email': f'recovery-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'})
+>       assert registration.status_code == 201, registration.text
+E       AssertionError: {"schema_version":"v1","error_code":"internal_error","message":"Local staging authentication is not enabled.","request_id":"request:08365ae80c00bca22fdb2c49","retryable":false,"details":[]}
+E       assert 503 == 201
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_research_recovery_acceptance.py:39: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_analysis.py::test_prompt_distinguishes_full_source_from_partial_excerpts
+FAILED tests/test_research_analysis.py::test_prompt_exposes_declared_source_times_separately_from_reporting_period
+FAILED tests/test_research_analysis.py::test_two_pdf_tables_keep_labels_and_values_under_shared_budget
+FAILED tests/test_research_analysis.py::test_long_document_uses_two_windows_under_a_thousand_character_allowance
+FAILED tests/test_research_analysis.py::test_casefold_expansion_preserves_original_character_offsets
+FAILED tests/test_research_analysis.py::test_additional_sentence_never_shrinks_expanded_baseline_source_ranges
+FAILED tests/test_research_analysis.py::test_analyze_keeps_short_structured_total_row_with_its_longer_header
+FAILED tests/test_research_analysis.py::test_chinese_multitopic_question_balances_phrases_and_utf8_windows
+FAILED tests/test_research_analysis.py::test_traditional_chinese_policy_query_selects_decision_not_other_rate
+FAILED tests/test_research_analysis.py::test_structured_annual_observations_keep_period_value_and_issuer_within_budget
+FAILED tests/test_research_analysis.py::test_comparison_prefers_each_labeled_release_without_trusting_title_as_fact
+FAILED tests/test_research_analysis.py::test_policy_factor_selection_covers_decision_and_considerations
+FAILED tests/test_research_analysis.py::test_revision_comparison_preserves_both_levels_and_opposing_drivers_within_budget
+FAILED tests/test_research_analysis.py::test_multiple_windows_share_metadata_and_stay_within_serialized_budget
+FAILED tests/test_research_analysis.py::test_real_gdp_retrieval_keeps_headline_and_consumer_contrast_separately
+FAILED tests/test_research_runs.py::test_research_run_commits_evidence_once_and_replays
+FAILED tests/test_research_runs.py::test_simulated_source_is_not_sent_to_real_research_or_saved_as_evidence
+FAILED tests/test_research_runs.py::test_discarded_model_annotations_keep_research_partial
+FAILED tests/test_research_runs.py::test_unverified_period_comparability_keeps_automatic_research_partial
+FAILED tests/test_research_original_document.py::test_chinese_policy_question_selects_english_decision_in_retained_fed_pdf
+FAILED tests/test_research_original_document.py::test_annual_and_quarterly_question_selects_both_distinct_passages
+FAILED tests/test_research_original_document.py::test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[What was 2023 annual real GDP growth, and how does it differ from the quarterly annualized rate?]
+FAILED tests/test_research_original_document.py::test_real_bea_pdf_is_searched_cited_and_reopened_without_a_live_model[2023\u5e74\u5168\u5e74\u5b9e\u9645GDP\u589e\u957f\u521d\u503c\u662f\u591a\u5c11\uff1f\u4e0e\u5b63\u5ea6\u6298\u5e74\u7387\u6709\u4ec0\u4e48\u533a\u522b\uff1f]
+FAILED tests/test_research_original_document.py::test_relevant_original_pdf_passages_fit_bounded_prompt[GDP_AQ-needles0]
+FAILED tests/test_research_original_document.py::test_relevant_original_pdf_passages_fit_bounded_prompt[GDP_REV-needles1]
+FAILED tests/test_research_original_document.py::test_relevant_original_pdf_passages_fit_bounded_prompt[FED_RATE-needles2]
+FAILED tests/test_research_original_document.py::test_relevant_original_pdf_passages_fit_bounded_prompt[FED_DISS-needles3]
+FAILED tests/test_research_original_document.py::test_two_official_pdfs_replay_persists_candidate_warnings_and_review_omissions
+FAILED tests/test_research_original_document.py::test_retrieval_keeps_requested_estimates_and_purchase_plans[GDP_ESTIMATE-needles0]
+FAILED tests/test_research_original_document.py::test_retrieval_keeps_requested_estimates_and_purchase_plans[FED_PURCHASES-needles1]
+FAILED tests/test_research_original_document.py::test_company_name_prefix_enters_prompt_with_original_offsets
+FAILED tests/test_research_original_document.py::test_pdf_page_hints_preserve_frozen_research_excerpt_budget[BANK_2020]
+FAILED tests/test_research_original_document.py::test_pdf_page_hints_preserve_frozen_research_excerpt_budget[BEA_2020]
+FAILED tests/test_research_original_document.py::test_pdf_page_hints_preserve_frozen_research_excerpt_budget[FOMC_2016]
+FAILED tests/test_research_original_document.py::test_recorded_ambiguous_table_excerpt_remains_incomplete_and_out_of_support_review
+FAILED tests/test_research_recovery_acceptance.py::test_repeated_continuation_preserves_committed_stages_and_original_budget
+FAILED tests/test_research_recovery_acceptance.py::test_unresolved_external_call_blocks_replay_but_preserves_partial_delivery
+FAILED tests/test_research_recovery_acceptance.py::test_checkpoint_is_account_scoped_and_user_revision_blocks_continuation
+FAILED tests/test_research_recovery_acceptance.py::test_settlement_is_account_scoped_and_separates_ledger_from_provider_report
+FAILED tests/test_research_recovery_acceptance.py::test_direction_proof_rejected_when_forged_and_invalidated_by_source_or_location_edits

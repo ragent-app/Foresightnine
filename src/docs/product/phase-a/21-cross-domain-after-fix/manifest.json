@@ -1,0 +1,26 @@
+{
+  "assessment": "known non-blind, small derived-fact sample selected after a related held-out failure; no independent human verification",
+  "created_at_utc": "2026-11-12",
+  "implementation_commit": "35194b470e32d7c29bdd258df748775ca091b803",
+  "inputs": [
+    {
+      "id": "P02",
+      "sha256": "f37d2049825b511d6ecb9e89ceb6076d4dcc44c1ad26bf0af7e2d47329c0720a"
+    },
+    {
+      "id": "B02",
+      "sha256": "67752ed09b09d336763959f191a6493c693e0e012e9728e0e58d454e01688ba5"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 2,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "pass_rule": "Each task must return all expected facts with periods, units and source positions; cited supporting claims; required deterministic calculation; no omitted citation or flagged percentage; budgets respected. Semantics and history remain unverified.",
+  "references_sha256": "d452e1aa2d0d27e5661f24ffc73617ca2c701acc403dcf2ca38b84303c30eabd",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "runner_sha256": "e242f44fb4dff6fd3ff25d495306655d7853c7a888746476c68acad97a9437eb",
+  "scorer_sha256": "7efd32db53cc192f5c2dab33ee5478970c95a0b1a2f418ce852abb93a9033db6",
+  "search_calls": 0
+}

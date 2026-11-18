@@ -1,0 +1,36 @@
+{
+  "assessment": "known held-out tasks; not blinded; automated checks only; semantic support remains unverified",
+  "created_at_utc": "2026-11-12",
+  "inputs": [
+    {
+      "id": "H01",
+      "sha256": "59acc14d30e6f02ebc94767f6ae719a7a3353d4413c6204c0a8d42411c096862"
+    },
+    {
+      "id": "H02",
+      "sha256": "848868f4a17be54b405ed93a347232e5da6a45403f08e471043ea00e69e0da1d"
+    },
+    {
+      "id": "H03",
+      "sha256": "d7cfa0775f2e458c5cc93a04ab08e2302a7c23a842a455e32a0c10c2724e1818"
+    }
+  ],
+  "max_calls_per_task": 1,
+  "max_calls_total": 3,
+  "max_elapsed_seconds_per_task": 120,
+  "max_tokens_per_task": 10000,
+  "model": "configured GLM Coding profile",
+  "pass_rule": "Each task requires all expected facts, exact source locations, required deterministic calculations and no invalid output. Unassessed semantics remain unverified; do not infer overall quality from this small correlated sample.",
+  "reference_sha256": "e76d67159884ebe2b3a7c5fe7b211a366295c5cd60f455d783a43e32dbde091e",
+  "retry_external_calls": 0,
+  "review_calls": 0,
+  "search_calls": 0,
+  "sources": [
+    {
+      "input_sha256": "05c25b2069b31ec140d4b6ad7a601674d7181b985fcaf16950a276c09f31e5b3",
+      "sec_filing_location": "Consolidated Statements of Income; 2024, 2023",
+      "source": "https://www.sec.gov/Archives/edgar/data/104169/000010416924000056/wmt-20240131.htm",
+      "source_type": "derived facts, not original document"
+    }
+  ]
+}

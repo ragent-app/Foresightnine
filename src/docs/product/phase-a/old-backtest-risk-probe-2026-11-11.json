@@ -1,0 +1,54 @@
+{
+  "checked_at_utc": "2026-11-11T11:30:46.146088+00:00",
+  "source": "/home/lxx/Openclaw-stock/openclaw/skills/backtesting/enhanced_backtest.py",
+  "source_sha256": "49f2c462339228e24e047604b8a22e156937319157ee1253f17b4c8cc21f9100",
+  "method": "Original class via AST; same synthetic signal and parameters; only later candle inclusion changes",
+  "signal": {
+    "symbol": "SYNTHETIC",
+    "action": "BUY",
+    "price": 100.0,
+    "timestamp": "2024-01-01T10:00:30"
+  },
+  "bars_before_signal": [
+    {
+      "timestamp": "2024-01-01T10:00:00",
+      "close": 100.0
+    }
+  ],
+  "added_later_bar": {
+    "timestamp": "2024-01-01T10:01:00",
+    "close": 80.0
+  },
+  "parameters": {
+    "initial_capital": 1000,
+    "slippage_pct": 0,
+    "commission_pct": 0,
+    "max_position_size": 0.2
+  },
+  "without_later_bar": {
+    "position_open": true,
+    "closed_trades": [],
+    "alerts": []
+  },
+  "with_later_bar": {
+    "position_open": false,
+    "closed_trades": [
+      {
+        "exit_reason": "STOP_LOSS",
+        "exit_time": "2024-01-01T10:00:30",
+        "exit_price": 80.0
+      }
+    ],
+    "alerts": [
+      {
+        "type": "STOP_LOSS_TRIGGER",
+        "timestamp": "2024-01-01T10:00:30"
+      }
+    ]
+  },
+  "limitations": [
+    "Synthetic single signal and direct _process_signal call, not full historical performance.",
+    "Original class loaded with a no-op logger; external dependencies and full metric path not exercised.",
+    "Source-specific bar timestamp and publication semantics need separate verification."
+  ]
+}

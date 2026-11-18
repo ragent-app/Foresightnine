@@ -1,0 +1,68 @@
+{
+  "checked_at_utc": "2026-11-11T11:32:02.754293+00:00",
+  "source": "/home/lxx/Openclaw-stock/openclaw/skills/backtesting/enhanced_backtest.py",
+  "source_sha256": "49f2c462339228e24e047604b8a22e156937319157ee1253f17b4c8cc21f9100",
+  "method": "Original run_backtest trade/risk loop via AST; summary metrics and logging stubbed; synthetic data only",
+  "candles": [
+    {
+      "timestamp": "2024-01-01T10:00:00",
+      "close": 100.0
+    },
+    {
+      "timestamp": "2024-01-01T10:30:00",
+      "close": 80.0
+    },
+    {
+      "timestamp": "2024-01-01T11:00:00",
+      "close": 100.0
+    }
+  ],
+  "buy_signal": {
+    "symbol": "SYNTHETIC",
+    "action": "BUY",
+    "price": 100.0,
+    "timestamp": "2024-01-01T10:00:00"
+  },
+  "added_nontrading_event": {
+    "symbol": "SYNTHETIC",
+    "action": "HOLD",
+    "price": 80.0,
+    "timestamp": "2024-01-01T10:30:00"
+  },
+  "parameters": {
+    "initial_capital": 1000,
+    "slippage_pct": 0,
+    "commission_pct": 0,
+    "max_position_size": 0.2
+  },
+  "without_hold_event": {
+    "closed_trades": [
+      {
+        "reason": "END_OF_BACKTEST",
+        "time": "2024-01-01T11:00:00",
+        "price": 100.0
+      }
+    ],
+    "alerts": []
+  },
+  "with_hold_event": {
+    "closed_trades": [
+      {
+        "reason": "STOP_LOSS",
+        "time": "2024-01-01T10:30:00",
+        "price": 80.0
+      }
+    ],
+    "alerts": [
+      {
+        "type": "STOP_LOSS_TRIGGER",
+        "time": "2024-01-01T10:30:00"
+      }
+    ]
+  },
+  "limitations": [
+    "The HOLD event is a test stimulus, not a trading recommendation or proof production receives HOLD events.",
+    "Summary metrics were stubbed and are not evidence; no historical performance conclusion.",
+    "Synthetic timestamps do not establish any vendor bar-time semantics."
+  ]
+}

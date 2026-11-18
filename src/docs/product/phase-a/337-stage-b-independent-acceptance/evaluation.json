@@ -1,0 +1,45 @@
+{
+  "evaluated_at_utc": "2026-11-14T07:55:54.116792+00:00",
+  "status": "failed_narrow_preregistered_criteria",
+  "scope": "Non-blind assessor, three previously unused government macro snapshots, no broad financial-generalization inference. All three research states partial.",
+  "criteria_passed": 1,
+  "criteria_total": 3,
+  "tasks": {
+    "MACRO_CALC": {
+      "status": "fail",
+      "evidence": "The two real-GDP observations and 3.2 percentage-point claim appeared, but no deterministic calculation was delivered; negative direction was explicitly left for confirmation. This fails the preregistered calculation criterion despite the plausible numeric claim."
+    },
+    "FED_COMPARE": {
+      "status": "pass",
+      "evidence": "Both 2020 FOMC target ranges were sourced, dates attributed (July date via accompanying implementation notice), both zero endpoint differences computed deterministically, and intervening decisions remained unknown. Research state remains partial and model support reviews are incomplete."
+    },
+    "MISSING_BOUNDARY": {
+      "status": "fail",
+      "evidence": "GDP figure was sourced and no unemployment value invented, but no needed external source was identified; a model limitation also made an unqualified whole-release absence statement while another acknowledged only excerpts were examined."
+    }
+  },
+  "usage": {
+    "operation_status": "all completed",
+    "model_calls_reported": [
+      2,
+      2,
+      2
+    ],
+    "reported_tokens": [
+      2715,
+      3374,
+      2333
+    ],
+    "reported_tokens_total": 8422,
+    "cost_usd": "unknown",
+    "unresolved_stage_count": [
+      0,
+      0,
+      0
+    ],
+    "caveat": "Per-task reporting is cumulative within each separate run chain; no continuations. Provider alias and actual monetary cost remain unverified."
+  },
+  "preflight": "Initial 422 rejected 30000-token request at schema validation; after applying the missing operation migration, original topic run list and four operation tables contained zero operations/records. Corrected request reduced per-task cap to 20000, total 60000 before the first actual run; original evidence retained.",
+  "engineering": "API context focused regression 209 passed/10 failed; failures were not rerun as a full suite after additional changes. Two quotation-security focused tests and hints recovery focused test passed. See acceptance-evidence/context and runtime-current.",
+  "independent_review": "Runtime reviewer independently matched 14/14 recorded quotation character offsets to stored source text, checked the FOMC dates and ranges in the original documents, and agreed with the 1/3 task verdict. Exact location does not establish semantic support; no additional model call."
+}

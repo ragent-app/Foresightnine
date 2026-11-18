@@ -1,0 +1,65 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Costco 2023 财年（截至 2023-09-03，53 周）总收入为 242,290 百万美元；2024 财年（截至 2024-09-01，52 周）总收入为 254,453 百万美元，单位均为 USD millions。基于这两个事实，收入增长率可通过公式 (254,453 − 242,290) ÷ 242,290 × 100% 计算（增长率数值需基于引用的原始数据执行该公式得出，本文不自行计算具体数值）。",
+        "citations": [
+          {
+            "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+            "quotation": "\"total_revenue\":{\"2023\":242290,\"2024\":254453}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "两期总收入并非严格可比：2023 财年含 53 周，2024 财年含 52 周，多出的一周会抬高 2023 基数，从而使直接计算的同比增长率低估可比口径下的增长。",
+        "citations": [
+          {
+            "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+            "quotation": "\"fiscal_year_weeks\":{\"2023\":53,\"2024\":52}"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "来源仅提供总收入数据，未提供同店销售、每周平均收入或剔除第 53 周影响后的调整口径，无法量化 53 周与 52 周差异对增长率的具体影响。",
+      "来源未包含分部或收入构成（如会员费 vs. 商品销售），无法进一步解释收入增长驱动因素。",
+      "本回复不自行执行算术；具体增长率数值需以引用的原始数字按公式计算确认。"
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_costco_total_revenue_fy2023",
+        "label": "total_revenue",
+        "value": "242290",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year 2023 (ended 2023-09-03, 53 weeks)",
+        "citation": {
+          "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+          "quotation": "\"total_revenue\":{\"2023\":242290,\"2024\":254453}"
+        }
+      },
+      {
+        "fact_id": "fact_costco_total_revenue_fy2024",
+        "label": "total_revenue",
+        "value": "254453",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year 2024 (ended 2024-09-01, 52 weeks)",
+        "citation": {
+          "source_id": "source_1e98f17029f64bc78676110ff84252fc",
+          "quotation": "\"total_revenue\":{\"2023\":242290,\"2024\":254453}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_costco_total_revenue_fy2024",
+        "second_fact_id": "fact_costco_total_revenue_fy2023"
+      }
+    ]
+  },
+  "reported_tokens": 1232
+}

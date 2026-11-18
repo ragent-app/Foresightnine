@@ -1,0 +1,84 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_persisted_stage_ranges_and_requirement_links_survive_version_edit_export _
+
+tmp_path = PosixPath('/tmp/pytest-of-lxx/pytest-69/test_persisted_stage_ranges_an0')
+
+    @pytest.mark.skipif(not os.getenv('FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'), reason='disposable PostgreSQL not configured')
+    def test_persisted_stage_ranges_and_requirement_links_survive_version_edit_export(tmp_path):
+        """Trusted staged fixture exercises persistence and API sanitization; no model is called."""
+        env = dict(os.environ, FORESIGHTNINE_STORAGE_MODE='postgres', FORESIGHTNINE_LOCAL_AUTH_MODE='mock',
+                   FORESIGHTNINE_POSTGRES_DSN=os.environ['FORESIGHTNINE_DISPOSABLE_POSTGRES_DSN'],
+                   VERSION_TEST_STATE=str(tmp_path / 'version.json'))
+        root = Path(__file__).resolve().parents[3]
+        start = r'''
+    import json, os, sys
+    from uuid import uuid4
+    sys.path.insert(0,'apps/api')
+    import app.main as api
+    from app.research_topics import ResearchContent, VersionInput
+    from fastapi.testclient import TestClient
+    client=TestClient(api.app)
+    r=client.post('/v1/auth/local/register',json={'email':f'version-{uuid4().hex}@example.test','password':'correct horse battery staple!'})
+    assert r.status_code==201, r.text
+    owner=r.json()['account']['account_id']; token=r.json()['access_token']; headers={'Authorization':'Bearer '+token}
+    s=client.post('/v2/research/sources',headers=headers,json={'title':'Report','text':'Revenue increased. Costs increased.','permissions':{'store':True,'model_input':True,'display':True,'export':True}})
+    assert s.status_code==201, s.text
+    sid=s.json()['source_id']
+    t=client.post('/v2/research/topics',headers=headers,json={'question':'How did revenue and costs change?','source_ids':[sid]})
+    assert t.status_code==201, t.text
+    path='/v2/research/topics/'+t.json()['topic_id']; initial=t.json()['versions'][-1]['version_id']
+    run={'operation_id':'fixture-only','status':'partial','source_processing':[{'source_id':sid,'eligibility':'eligible','provided':True,'text_characters':35,'initial_selection':'partial','selection_status':'partial','analysis_status':'produced'}],
+     'selected_segments':[{'source_id':sid,'character_start':0,'character_end':18}],
+     'gap_followup_requested':True,'gap_followup_status':'completed','gap_followup_segments':[{'source_id':sid,'character_start':19,'character_end':35}],
+     'research_questions':[{'question':'How did revenue and costs change?','claim_indexes':[0]}],
+     'planning_requirements':[{'question':'How did revenue and costs change?','dimensions':{'metrics':['revenue','costs']},'calculation_requested':False}],
+     'model_requirement_links':[{'question_index':0,'question':'How did revenue and costs change?','fact_ids':[],'calculation_indexes':[],'source_ids':[sid]}]}
+    content=ResearchContent(claims=[{'text':'Revenue increased.','scope_declaration':'other','citations':[{'source_id':sid,'quotation':'Revenue increased.'}]}],run=run)
+    api.research_topics.add_version(owner,t.json()['topic_id'],VersionInput(parent_version_id=initial,content=content),created_by='agent')
+    with open(os.environ['VERSION_TEST_STATE'],'w') as f: json.dump({'token':token,'path':path,'source':sid},f)
+    '''
+        check = r'''
+    import json,os,sys
+    sys.path.insert(0,'apps/api')
+    from fastapi.testclient import TestClient
+    import app.main as api
+    with open(os.environ['VERSION_TEST_STATE']) as f: state=json.load(f)
+    client=TestClient(api.app); headers={'Authorization':'Bearer '+state['token']}; path=state['path']; sid=state['source']
+    topic=client.get(path,headers=headers); assert topic.status_code==200,topic.text
+    old=topic.json()['versions'][-1]; run=old['content']['run']
+    row=next(x for x in run['run_source_processing'] if x['source_id']==sid)
+    assert row['stage_ranges']==[{'stage':'analysis','ranges':[{'start':0,'end':18}]},{'stage':'gap_followup','ranges':[{'start':19,'end':35}]}]
+    assert run['source_processing'][0]['initial_selection']=='partial'
+    assert run['requirement_coverage']['requirements'] and run['requirement_coverage']['meaning']=='recorded_links_not_semantic_verification'
+    content=old['content']; content['run']['selected_segments']=[]; content['run']['gap_followup_segments']=[]
+    content['run']['requirement_coverage']={'forged_client_value':True}; content['run']['scope_assessment']={'forged_client_value':True}
+    content['claims'][0]['text']='User revised the finding.'; content['claims'][0]['scope_declaration']='absence'
+    edit=client.post(path+'/versions',headers=headers,json={'parent_version_id':old['version_id'],'content':content,'review':'confirmed'})
+    assert edit.status_code==201,edit.text
+    new=edit.json()['versions'][-1]; saved=new['content']['run']
+    assert new['parent_version_id']==old['version_id'] and saved['selected_segments']==run['selected_segments'] and saved['gap_followup_segments']==run['gap_followup_segments']
+    assert saved['model_requirement_links']==[]
+    assert 'scope_declaration' not in new['content']['claims'][0]
+    for key in ('requirement_coverage','scope_assessment'): assert 'forged_client_value' not in saved[key]
+    out=client.get(path+'/versions/'+new['version_id']+'/export',headers=headers)
+    assert out.status_code==200,out.text
+    for key in ('run_source_processing','requirement_coverage','scope_assessment'): assert out.json()['version']['content']['run'][key]==saved[key]
+    '''
+        for script in (start, check):
+            result = subprocess.run([sys.executable, '-c', script], cwd=root, env=env, capture_output=True, text=True, timeout=90)
+>           assert result.returncode == 0, result.stderr
+E           AssertionError: /home/lxx/Foresightnine/src/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+E               from starlette.testclient import TestClient as TestClient  # noqa
+E             Traceback (most recent call last):
+E               File "<string>", line 20, in <module>
+E                 assert new['parent_version_id']==old['version_id'] and saved['selected_segments']==run['selected_segments'] and saved['gap_followup_segments']==run['gap_followup_segments']
+E                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E             AssertionError
+E             
+E           assert 1 == 0
+E            +  where 1 = CompletedProcess(args=['/home/lxx/Foresightnine/src/apps/api/.venv/bin/python', '-c', "\nimport json,os,sys\nsys.path....^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n').returncode
+
+apps/api/tests/test_research_postgres_restart.py:800: AssertionError
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_research_postgres_restart.py::test_persisted_stage_ranges_and_requirement_links_survive_version_edit_export

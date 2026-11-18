@@ -1,0 +1,67 @@
+{
+  "payload": {
+    "claims": [
+      {
+        "text": "Visa FY2024 net revenue of USD 35,926 million vs FY2023 net revenue of USD 32,653 million implies year-over-year net revenue growth; the exact percentage is produced by the requested calculation below.",
+        "citations": [
+          {
+            "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+            "quotation": "{\"issuer\":\"Visa Inc.\",\"unit\":\"USD millions\",...\"net_revenue\":{\"2023\":32653,\"2024\":35926}}"
+          }
+        ]
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "The figures are labeled as 'derived' facts rather than directly quoted from the 10-K, so they should be verified against the primary filing before relying on them.",
+        "citations": [
+          {
+            "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+            "quotation": "Visa 2024 SEC 10-K: derived net revenue facts"
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "The source data is described as 'derived' rather than a direct quote from the SEC 10-K; figures should be reconciled to the original filing.",
+      "Only two fiscal years are provided, so the growth rate reflects a single annual comparison and cannot show trends.",
+      "No segment breakdown, currency-adjusted metrics, or drivers of revenue growth are provided.",
+      "Fiscal year end dates differ from calendar years (Sep 30 year-end), which matters when comparing to peers on calendar-year reporting.",
+      "No calculation result is supplied in the sources; the growth percentage itself is computed via the requested calculation and should be verified before use."
+    ],
+    "facts": [
+      {
+        "fact_id": "fact_visa_net_revenue_fy2023",
+        "label": "net_revenue_fy2023",
+        "value": "32653",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2023-09-30",
+        "citation": {
+          "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+          "quotation": "\"net_revenue\":{\"2023\":32653,\"2024\":35926}"
+        }
+      },
+      {
+        "fact_id": "fact_visa_net_revenue_fy2024",
+        "label": "net_revenue_fy2024",
+        "value": "35926",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "fiscal year ended 2024-09-30",
+        "citation": {
+          "source_id": "source_8ed46ccd1ce24af1bf1cb5db8ea90deb",
+          "quotation": "\"net_revenue\":{\"2023\":32653,\"2024\":35926}"
+        }
+      }
+    ],
+    "calculations": [
+      {
+        "formula": "growth_percent",
+        "first_fact_id": "fact_visa_net_revenue_fy2024",
+        "second_fact_id": "fact_visa_net_revenue_fy2023"
+      }
+    ]
+  },
+  "reported_tokens": 996
+}

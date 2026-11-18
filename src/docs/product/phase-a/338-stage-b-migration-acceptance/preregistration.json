@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "scope": "MACRO_CALC, FED_COMPARE, MISSING_BOUNDARY are known development regression tasks; the two TRANSFER tasks are newly sourced macro-indicator and language transfer checks, prepared and assessed non-blind. Neither two transfer tasks nor all five passing establish broad finance quality.",
+  "limits": {
+    "calls_per_task": 3,
+    "tokens_per_task": 20000,
+    "seconds_per_task": 180,
+    "search_calls": 0
+  },
+  "budget": "Maximum 5 tasks, 15 model calls and 100000 tokens; each task maximum 3 calls, 20000 tokens, 180 seconds. No search, automatic fetch or model POST retries; unknown admission, outcome or settlement stops the batch. Actual USD cost unknown; no purchase.",
+  "provider": "Existing authorized GLM Coding profile; supported parameters and code hashes fixed before execution.",
+  "source_permissions": "US government BEA/Federal Reserve government-authored release text only for isolated model-input evaluation and service-authorized export; third-party material excluded. See 03-source-inventory; historical immutability not proved.",
+  "sources": {
+    "bea": {
+      "title": "bea-2022-q3",
+      "url": "https://www.bea.gov/sites/default/files/2022-10/gdp3q22_adv.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/bea-2022-q3.txt",
+      "sha256": "f36fc389b6b0420ccd8416938f1028fd8c644b1c14c2e0624e5ba7ebb15aa4ef",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/bea-2022-q3.pdf",
+      "pdf_sha256": "ab3b58ba736229158593e7c64098fe7a7c1cca40213ee77f767aec8d092824b4",
+      "retrieved_at_utc": "2026-11-14T07:32:33.522826+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true
+    },
+    "fed_june": {
+      "title": "fed-2020-june",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200610a1.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-june.txt",
+      "sha256": "fec9898ca7650e7ed9a8271704c57ea4c7157d34174546273a1169c150f415ed",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-june.pdf",
+      "pdf_sha256": "7ae6963831825b499a82a07133755ac057a14ae5fab01ed3bfb489c620a24407",
+      "retrieved_at_utc": "2026-11-14T07:48:25.764916+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true
+    },
+    "fed_july": {
+      "title": "fed-2020-july",
+      "url": "https://www.federalreserve.gov/monetarypolicy/files/monetary20200729a1.pdf",
+      "file": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-july.txt",
+      "sha256": "ef2d9218bd4e8ebd1ba2c5c34444dad2a6ca49b7c02407a155ccc058ca29bc06",
+      "original_pdf": "src/docs/product/phase-a/337-stage-b-independent-acceptance/snapshots/fed-2020-july.pdf",
+      "pdf_sha256": "32bfee173c447622e8dc66466df57168baf214cc5332b8c4067b9bc061ec128f",
+      "retrieved_at_utc": "2026-11-14T07:48:26.848912+00:00",
+      "extraction": "pdftotext -layout; complete extracted text, unedited",
+      "export_permitted": true
+    },
+    "bea_transactions": {
+      "title": "bea-trans-2025q2",
+      "url": "https://www.bea.gov/sites/default/files/2025-09/trans225.pdf",
+      "file": "src/docs/product/phase-a/338-stage-b-migration-acceptance/snapshots/bea-trans-2025q2.txt",
+      "sha256": "e42390f3a41d60bcf8b6e6de9282865f97b718e92c436d3448272ea2eca4811c",
+      "original_pdf": "src/docs/product/phase-a/338-stage-b-migration-acceptance/snapshots/bea-trans-2025q2.pdf",
+      "pdf_sha256": "4a530c1928d0ec30d72afd580325ea0a8ed89fd1c083116b46ec419c93cd7825",
+      "retrieved_at_utc": "2026-11-14T08:57:23.285256+00:00",
+      "extraction": "pdftotext -layout full extracted text, unedited",
+      "export_permitted": true
+    },
+    "fed_g17": {
+      "title": "fed-g17-20250916",
+      "url": "https://www.federalreserve.gov/RELEASES/g17/20250916/g17.pdf",
+      "file": "src/docs/product/phase-a/338-stage-b-migration-acceptance/snapshots/fed-g17-20250916.txt",
+      "sha256": "5b46a690eeb26c3da2c793a547ef6b373ea76646079cd004d92a46336511c57f",
+      "original_pdf": "src/docs/product/phase-a/338-stage-b-migration-acceptance/snapshots/fed-g17-20250916.pdf",
+      "pdf_sha256": "6cf39b5fb42adfa82f25abaa0756a9cbeb6e2c85d2d21f04d7c4d7c8509e52da",
+      "retrieved_at_utc": "2026-11-14T08:57:24.608957+00:00",
+      "extraction": "pdftotext -layout full extracted text, unedited",
+      "export_permitted": true
+    }
+  },
+  "tasks": [
+    {
+      "id": "MACRO_CALC",
+      "question": "Using the supplied BEA release, report the real GDP growth rates for the second and third quarters of 2022 and calculate the difference in percentage points. Explain the estimate and period limitations.",
+      "sources": [
+        "bea"
+      ],
+      "require_counterarguments": true
+    },
+    {
+      "id": "FED_COMPARE",
+      "question": "Compare the federal funds target ranges in the two supplied FOMC statements. Give both dates and the change in the endpoints, and identify what the documents cannot establish about intervening decisions.",
+      "sources": [
+        "fed_june",
+        "fed_july"
+      ],
+      "require_counterarguments": true
+    },
+    {
+      "id": "MISSING_BOUNDARY",
+      "question": "Using the supplied release, what were third-quarter 2022 real GDP growth and the September 2022 unemployment rate? Explain any information not established by this source.",
+      "sources": [
+        "bea"
+      ],
+      "require_counterarguments": false
+    },
+    {
+      "id": "TRANSFER_BALANCE_ZH",
+      "question": "根据所给资料，用中文说明 2025 年第一和第二季度经常账户赤字金额、币种、期间和两期赤字规模的变化，并计算变化额；解释方向、数据口径与资料局限。",
+      "sources": [
+        "bea_transactions"
+      ],
+      "require_counterarguments": true,
+      "plan_research": true
+    },
+    {
+      "id": "TRANSFER_PRODUCTION_EN",
+      "question": "Using the supplied Federal Reserve release, compare manufacturing output changes in July and August 2025, calculate the difference in percentage points, and explain whether this release establishes September 2025 output and what additional material would be needed. Cite each observation and state the limitations.",
+      "sources": [
+        "fed_g17"
+      ],
+      "require_counterarguments": true,
+      "plan_research": true
+    }
+  ],
+  "runner_sha256": "9628c06cf6d7768d25bba8febe5087b581945ab875fc9e24b3c98ef31901593b",
+  "criteria_sha256": "a98077932f690d201d0c6d6032deaf73898d29a77a62ab2ff330c0451d1bc6c9",
+  "pre_run_change": "New preregistered five-task batch after engineering improvements. The first three are prior development tasks, not independent holdout. Two new tasks use newly obtained BEA/Fed materials. These task/criteria and source hashes are fixed before any call; final application hash and supported parameters frozen separately before execution."
+}

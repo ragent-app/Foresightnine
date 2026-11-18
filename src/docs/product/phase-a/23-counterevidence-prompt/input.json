@@ -1,0 +1,6 @@
+{
+  "question": "根据提供的特斯拉财报衍生事实，比较 2023 和 2024 财年的总收入和毛利润，并用可引用的反方材料分析单看收入增长的局限；缺失信息请明确列出。",
+  "source_title": "Tesla 2024 SEC 10-K: derived revenue and gross profit facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828025003063/tsla-20241231.htm",
+  "source_text": "{\"issuer\":\"Tesla Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":96773,\"2024\":97690},\"gross_profit\":{\"2023\":17660,\"2024\":17450}}"
+}

@@ -1,0 +1,193 @@
+{
+  "operation_status": "completed",
+  "input_sha256": "60e3a98fb936ed02648d9368c29acef38b3452606eda9a9a149c9e795a7818c2",
+  "content": {
+    "summary": "",
+    "sources": [
+      {
+        "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+        "title": "Microsoft FY2023 SEC revenue facts (derived snapshot)",
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+        "published_at": null,
+        "obtained_at": "2026-11-12T01:39:36.005107+00:00",
+        "revised_at": null,
+        "content_sha256": "60e3a98fb936ed02648d9368c29acef38b3452606eda9a9a149c9e795a7818c2",
+        "verification": "user_declared_not_verified"
+      }
+    ],
+    "source_candidates": [],
+    "facts": [
+      {
+        "fact_id": "fact_2022",
+        "value": "198270000000",
+        "unit": "USD",
+        "currency": "USD",
+        "period": "2021-07-01 to 2022-06-30",
+        "label": "Microsoft fiscal 2022 revenue",
+        "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+        "quotation": "{\"start\":\"2021-07-01\",\"end\":\"2022-06-30\",\"val\":198270000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 165,
+          "character_end": 260
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "fact_2023",
+        "value": "211915000000",
+        "unit": "USD",
+        "currency": "USD",
+        "period": "2022-07-01 to 2023-06-30",
+        "label": "Microsoft fiscal 2023 revenue",
+        "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+        "quotation": "{\"start\":\"2022-07-01\",\"end\":\"2023-06-30\",\"val\":211915000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 261,
+          "character_end": 356
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "evidence_differences": [],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "fact_2023",
+            "value": "211915000000",
+            "unit": "USD",
+            "currency": "USD",
+            "period": "2022-07-01 to 2023-06-30"
+          },
+          {
+            "fact_id": "fact_2022",
+            "value": "198270000000",
+            "unit": "USD",
+            "currency": "USD",
+            "period": "2021-07-01 to 2022-06-30"
+          }
+        ],
+        "value": "6.88",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "claims": [
+      {
+        "text": "Microsoft's revenue grew from fiscal 2022 to fiscal 2023; the growth percentage is obtained from the two reported values (requested calculation: growth_percent using fact_2023 as current and fact_2022 as baseline, which yields approximately 6.88%).",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+            "location": {
+              "character_start": 165,
+              "character_end": 356
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "{\"start\":\"2021-07-01\",\"end\":\"2022-06-30\",\"val\":198270000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"},{\"start\":\"2022-07-01\",\"end\":\"2023-06-30\",\"val\":211915000000,\"form\":\"10-K\",\"filed\":\"2023-07-27\"}"
+          }
+        ],
+        "support_status": "not_independently_verified",
+        "role": "support",
+        "support_review": {
+          "verdict": "supports",
+          "method": "bounded_excerpt_model_review_v1",
+          "independently_verified": false
+        }
+      },
+      {
+        "text": "Revenue growth alone cannot establish profitability, margins, segment-level drivers, per-segment performance, cash flow, or the sustainability/quality of growth; those require additional data not present in the sources.",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "support"
+      },
+      {
+        "text": "A single year of top-line growth may reflect factors like acquisitions, currency, or pricing rather than organic strength; without segment or geographic breakdowns in the sources, attribution is speculative.",
+        "kind": "model_interpretation",
+        "citations": [],
+        "support_status": "unsupported",
+        "role": "counterargument"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "Only total revenue (us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax) is provided; no costs, margins, segments, or geography.",
+      "Only two fiscal periods are supplied, so multi-year trend analysis is not possible.",
+      "Data is a derived snapshot; original SEC filings should be consulted for authoritative verification.",
+      "No restatement context or accounting policy changes are disclosed in the source.",
+      "A second model assessment is not independent proof that evidence supports a claim.",
+      "The requested model support review did not cover all claims.",
+      "The research is partial: supported claims or counterarguments are incomplete."
+    ],
+    "run": {
+      "operation_id": "operation:2f9360f9808966001d3de1a5",
+      "status": "partial",
+      "model_calls": 2,
+      "total_tokens": 1649,
+      "cost_usd": null,
+      "generation_tokens": 1253,
+      "support_review_tokens": 396,
+      "support_review_requested": true,
+      "support_review_status": "partial",
+      "support_review_error": null,
+      "support_review_method": "bounded_excerpt_model_review_v1",
+      "analysis_error_detail": null,
+      "support_review_prompt_sha256": "a8db3ee417fac99b836d25b7cbb2cdf13aa66e03dba0af54727d4654ad144f3b",
+      "support_review_indexes": [
+        0
+      ],
+      "support_review_segments": [
+        {
+          "claim_index": 0,
+          "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+          "character_start": 0,
+          "character_end": 358,
+          "context_radius": 180
+        }
+      ],
+      "support_review_system_sha256": "89eb428d881fc96dc24a4394d1fd0ab1639535aa796336d96b1d35ba9640e395",
+      "search_calls": 0,
+      "search_status": "not_requested",
+      "elapsed_seconds": 20.374,
+      "cost_status": "unknown",
+      "model": "glm-5.3-flash",
+      "provider": "openai-compatible",
+      "prompt_sha256": "5961097de88b804d92a33a40defa754548c30e1cf67194b3783a0bcfcef9822d",
+      "prompt_characters": 1389,
+      "prompt_bytes": 1389,
+      "selection_method": "ranked_nonoverlapping_windows_v3",
+      "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+      "selected_segments": [
+        {
+          "source_id": "source_91282bebd83f4eef90314f3273c5114e",
+          "character_start": 0,
+          "character_end": 358
+        }
+      ],
+      "provider_timeout_seconds": 60.0,
+      "provider_input_token_limit": 3000,
+      "provider_output_token_limit": 4000,
+      "source_hashes": {
+        "source_91282bebd83f4eef90314f3273c5114e": "60e3a98fb936ed02648d9368c29acef38b3452606eda9a9a149c9e795a7818c2"
+      },
+      "max_model_calls": 2,
+      "max_search_calls": 0,
+      "max_elapsed_seconds": 120,
+      "max_total_tokens": 20000,
+      "max_cost_usd": null,
+      "error": null
+    }
+  },
+  "observed_elapsed_seconds": 20.787,
+  "cost_note": "unknown; not assumed zero"
+}

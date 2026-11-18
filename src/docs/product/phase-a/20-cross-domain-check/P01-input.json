@@ -1,0 +1,8 @@
+{
+  "id": "P01",
+  "question": "使用提供的辉瑞 2023 和 2024 财年收入数据，列示金额、单位与期间，计算收入增长率，并说明信息不足之处。",
+  "source_kind": "derived_text",
+  "source_text": "{\"issuer\":\"Pfizer Inc.\",\"unit\":\"USD millions\",\"fiscal_year_end\":\"December 31\",\"total_revenues\":{\"2023\":59553,\"2024\":63627}}",
+  "source_title": "Pfizer 2024 SEC filing: derived revenue facts",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/78003/000007800325000054/pfe-20241231.htm"
+}

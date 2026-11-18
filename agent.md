@@ -26,7 +26,7 @@
 - plan.md、agent.md 和 GOAL_PROMPT.md 是根目录允许存在的治理文件。
 - D:\FM acceleration、D:\FM acceleration-deepseek、D:\WL-data-final、D:\ACFM_WL_paperwriting 和服务器目录一律只读。
 - 可以读取、复制和生成 golden fixtures，不得修改原始 FM、AC、9WL 或论文文件。
-- 不进行破坏性 Git 或文件操作。
+- 不进行破坏性 Git 操作；项目未公开发行，开发库及运行状态可按用户指令和开发需要重建，不因旧数据兼容阻塞。保留其他协作者的未提交工作。
 
 ## 4. 角色
 
@@ -70,13 +70,13 @@
 
 - Challenge 必须提出真正的反方意见。
 - 事实、用户声明和模型推断必须分开。
-- DeepSeek 无搜索时使用客户端 SearchEvidenceBundle。
+- 模型按具体 wire API 协议与显式能力配置适配；搜索和金融数据连接器独立，来源权限及失败状态须明确。
 - 所有模型结构化输出必须经过 schema 验证。
 - 模型不可用时显示失败，不生成伪造结果。
 
 ## 8. 密钥与隐私
 
-- 绝不使用历史对话中暴露的 DeepSeek key。
+- 绝不使用历史对话中暴露的任何密钥。
 - 新 key 只能从服务端 secret/environment 注入。
 - 不得写入仓库、客户端 bundle、日志、数据库、截图或错误上报。
 - 无 key 时先用 mock provider 完成可验证工作。
@@ -106,7 +106,7 @@
 - 每个 phase 记录：改动、测试、证据、已知限制、下一步。
 - Sol 验收失败后，Luna/Terra 修复并重新提交。
 - 不因部分界面可见就宣称产品完成。
-- 最终完成条件以 plan.md 第 19 节为准。
+- 完成条件以当前 plan.md 各里程碑及阶段出口为准。
 
 ## 12. 何时询问用户
 

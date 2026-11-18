@@ -1,0 +1,49 @@
+{
+  "B02": {
+    "allowed_percentages": [
+      "0.4",
+      "3.2"
+    ],
+    "calculation": null,
+    "facts": [
+      {
+        "basis": "seasonally adjusted",
+        "period": "2024",
+        "qualifier": "monthly",
+        "value": "0.4"
+      },
+      {
+        "basis": "not seasonally adjusted",
+        "period": "2024",
+        "qualifier": "12",
+        "value": "3.2"
+      }
+    ],
+    "unit": "percent"
+  },
+  "P02": {
+    "allowed_percentages": [
+      "0.42"
+    ],
+    "calculation": {
+      "formula_id": "growth_percent",
+      "inputs": [
+        "91854",
+        "91471"
+      ],
+      "unit": "percent",
+      "value": "0.42"
+    },
+    "facts": [
+      {
+        "period": "2023",
+        "value": "91471"
+      },
+      {
+        "period": "2024",
+        "value": "91854"
+      }
+    ],
+    "unit": "USD millions"
+  }
+}

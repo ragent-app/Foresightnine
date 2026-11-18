@@ -1,0 +1,311 @@
+{
+  "variant": "counterevidence_guidance",
+  "status": "returned",
+  "provider_prompt_sha256": "07cae9bb5d5be0404a81e514efc512d4ff4537a1a52531243dae90c807d3b7c6",
+  "system_prompt_sha256": "b07026e3d3dfb7df4e41f0e86cf6709b48c595d0eb19dc8fef7170859ab4705d",
+  "source_sha256": "2389d137a788cdb1466ae1dd9363e25ca692b7c56ec0708e1ed4ea5eff160d6f",
+  "model": "glm-5.3-flash",
+  "reported_tokens": 1493,
+  "elapsed_seconds": 21.14,
+  "result": {
+    "claims": [
+      {
+        "text": "特斯拉2024财年总收入97690百万美元，高于2023财年的96773百万美元，收入略有增长。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "derived-filing",
+            "location": {
+              "character_start": 77,
+              "character_end": 121
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"total_revenues\":{\"2023\":96773,\"2024\":97690}"
+          }
+        ],
+        "support_status": "not_independently_verified"
+      },
+      {
+        "text": "毛利润方向相反：2024财年毛利润17450百万美元，低于2023财年的17660百万美元，即收入增长的同时毛利润下滑。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "derived-filing",
+            "location": {
+              "character_start": 122,
+              "character_end": 164
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"gross_profit\":{\"2023\":17660,\"2024\":17450}"
+          }
+        ],
+        "support_status": "not_independently_verified"
+      },
+      {
+        "text": "推论：单看收入增长会得出经营向好的结论，但结合毛利润可发现盈利质量恶化，收入增长可能是以牺牲利润率为代价实现的。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "derived-filing",
+            "location": {
+              "character_start": 77,
+              "character_end": 164
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"total_revenues\":{\"2023\":96773,\"2024\":97690},\"gross_profit\":{\"2023\":17660,\"2024\":17450}"
+          }
+        ],
+        "support_status": "not_independently_verified"
+      }
+    ],
+    "counterarguments": [
+      {
+        "text": "反方观点：收入增长是规模扩张的信号，若增长主要来自降价换量，则不可持续；毛利润绝对值下降且收入几乎持平，暗示2024年毛利率被压缩。但仅凭总收入与毛利润无法判断降价、产品结构变化或一次性因素，需要价格与销量数据支持。",
+        "kind": "model_interpretation",
+        "citations": [
+          {
+            "source_id": "derived-filing",
+            "location": {
+              "character_start": 77,
+              "character_end": 164
+            },
+            "quotation_match": "exact",
+            "support_status": "not_independently_verified",
+            "quotation": "\"total_revenues\":{\"2023\":96773,\"2024\":97690},\"gross_profit\":{\"2023\":17660,\"2024\":17450}"
+          }
+        ],
+        "support_status": "not_independently_verified"
+      }
+    ],
+    "limitations": [
+      "Matching a quotation does not independently establish that it supports a claim.",
+      "缺少成本口径（COGS）与毛利率的原始披露数据，无法直接引用毛利率数字。",
+      "缺少分部收入（汽车/能源/服务）数据，无法判断收入结构变化。",
+      "缺少销量与平均售价（ASP）数据，无法验证降价换量假设。",
+      "缺少2022年及更早期间数据，无法评估长期趋势。",
+      "缺少非经常项目、会计政策变更信息，无法排除口径调整影响。",
+      "反方分析中关于降价/利润率压缩的判断为推论，源文本未提供直接证据。"
+    ],
+    "source_ids": [
+      "derived-filing"
+    ],
+    "total_tokens": 1493,
+    "facts": [
+      {
+        "fact_id": "rev_2023",
+        "value": "96773",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2023",
+        "label": "total_revenues",
+        "source_id": "derived-filing",
+        "quotation": "\"total_revenues\":{\"2023\":96773,\"2024\":97690}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 77,
+          "character_end": 121
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "rev_2024",
+        "value": "97690",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024",
+        "label": "total_revenues",
+        "source_id": "derived-filing",
+        "quotation": "\"total_revenues\":{\"2023\":96773,\"2024\":97690}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 77,
+          "character_end": 121
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "gp_2023",
+        "value": "17660",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2023",
+        "label": "gross_profit",
+        "source_id": "derived-filing",
+        "quotation": "\"gross_profit\":{\"2023\":17660,\"2024\":17450}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 122,
+          "character_end": 164
+        },
+        "verification": "model_extraction_not_independently_verified"
+      },
+      {
+        "fact_id": "gp_2024",
+        "value": "17450",
+        "unit": "USD millions",
+        "currency": "USD",
+        "period": "FY2024",
+        "label": "gross_profit",
+        "source_id": "derived-filing",
+        "quotation": "\"gross_profit\":{\"2023\":17660,\"2024\":17450}",
+        "quotation_match": "exact",
+        "location": {
+          "character_start": 122,
+          "character_end": 164
+        },
+        "verification": "model_extraction_not_independently_verified"
+      }
+    ],
+    "calculations": [
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "rev_2024",
+            "value": "97690",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024"
+          },
+          {
+            "fact_id": "rev_2023",
+            "value": "96773",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2023"
+          }
+        ],
+        "value": "0.95",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      },
+      {
+        "formula_id": "growth_percent",
+        "formula_version": "1",
+        "expression": "(first / second - 1) * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "gp_2024",
+            "value": "17450",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024"
+          },
+          {
+            "fact_id": "gp_2023",
+            "value": "17660",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2023"
+          }
+        ],
+        "value": "-1.19",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      },
+      {
+        "formula_id": "margin_percent",
+        "formula_version": "1",
+        "expression": "first / second * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "gp_2023",
+            "value": "17660",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2023"
+          },
+          {
+            "fact_id": "rev_2023",
+            "value": "96773",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2023"
+          }
+        ],
+        "value": "18.25",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      },
+      {
+        "formula_id": "margin_percent",
+        "formula_version": "1",
+        "expression": "first / second * 100",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "gp_2024",
+            "value": "17450",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024"
+          },
+          {
+            "fact_id": "rev_2024",
+            "value": "97690",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024"
+          }
+        ],
+        "value": "17.86",
+        "unit": "percent",
+        "currency": null,
+        "rounding": "half_up",
+        "decimal_places": 2
+      },
+      {
+        "formula_id": "difference",
+        "formula_version": "1",
+        "expression": "first - second",
+        "input_verification": "not_verified_by_calculator",
+        "inputs": [
+          {
+            "fact_id": "gp_2024",
+            "value": "17450",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2024"
+          },
+          {
+            "fact_id": "gp_2023",
+            "value": "17660",
+            "unit": "USD millions",
+            "currency": "USD",
+            "period": "FY2023"
+          }
+        ],
+        "value": "-210.00",
+        "unit": "USD millions",
+        "currency": "USD",
+        "rounding": "half_up",
+        "decimal_places": 2
+      }
+    ],
+    "prompt_sha256": "07cae9bb5d5be0404a81e514efc512d4ff4537a1a52531243dae90c807d3b7c6",
+    "prompt_characters": 1269,
+    "prompt_bytes": 1391,
+    "segments": [
+      {
+        "source_id": "derived-filing",
+        "character_start": 0,
+        "character_end": 165
+      }
+    ]
+  },
+  "cost_usd": null
+}

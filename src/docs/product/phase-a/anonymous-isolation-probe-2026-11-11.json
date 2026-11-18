@@ -1,0 +1,11 @@
+{
+  "checked_at_utc": "2026-11-11T11:17:17.574686+00:00",
+  "environment": "two unauthenticated TestClients; in-memory storage; deterministic mock provider",
+  "session_create_status": 201,
+  "challenge_create_status": 201,
+  "other_client_get_known_id_status": 200,
+  "limitations": [
+    "Does not assess whether identifiers are guessable.",
+    "Does not establish behavior with production storage or authenticated accounts."
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "G23",
+  "published_at": "2024-02-28T13:30:00Z",
+  "question": "According to the BEA second estimate for 2023, report the full-year 2023 real GDP growth and the fourth-quarter annualized real GDP growth; distinguish their periods and note relevant limitations.",
+  "source_file": "../source-snapshots/bea-gdp-2023-q4-second.pdf",
+  "source_kind": "original_pdf",
+  "source_sha256": "f9588ee32147acde028b38c278840142b50b0884b254b98c6c8c1edfa37db4e8",
+  "source_title": "BEA GDP 2023 second estimate"
+}
