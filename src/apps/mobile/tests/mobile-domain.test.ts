@@ -11,7 +11,6 @@ import { createPortfolioPlan, displayAsset, publicWeights, scenarioNavFor } from
 import { canConfirmNormally, canConfirmReserved, canEnterWorldline, canUseChallengeRoute, parseCapital, validateThesis } from "../src/validation";
 import { mobileInitialState, reduceChallengeAction, resetMobileWorkflowState } from "../src/lifecycle";
 import { switchLanguageState } from "../src/language-state";
-import { fmInput as webFmInput } from "../../web/src/fixtures";
 
 const FRESH_FIXTURE = { runtimeAsOf: "2026-08-10T00:00:00Z", providerStatus: "fresh" as const, fxProviderStatus: "fresh" as const, fxAsOf: "2026-08-10", fxCnyPerUnit: { CNY: 1, USD: 7.18, EUR: 7.82 } };
 
@@ -211,19 +210,6 @@ describe("worldline, FM and Public Default", () => {
     expect(displayAsset(plan.rows[0]!.asset, "en").name).toBe("Grid equipment ETF");
     const englishPlan = createPortfolioPlan(result, 100, "CNY", undefined, "en", "main", FRESH_FIXTURE);
     expect(englishPlan.rows.some((row) => row.reasons.some((reason) => reason.includes("Capital is too small")))).toBe(true);
-  });
-
-  it("keeps the Android fixture and FM result exactly aligned with Web", () => {
-    const mobileInput = fmInput();
-    const webInput = webFmInput();
-    expect(mobileInput).toEqual(webInput);
-
-    const mobileResult = computeFm(mobileInput);
-    const webResult = computeFm(webInput);
-    expect(mobileResult.selectedFactorIds).toEqual(webResult.selectedFactorIds);
-    expect(mobileResult.weights.weights).toEqual(webResult.weights.weights);
-    expect(mobileResult.combination.combined).toEqual(webResult.combination.combined);
-    expect(mobileResult.forecasts).toEqual(webResult.forecasts);
   });
 
   it("enforces the high-volatility boundary and sends residual value to cash", () => {

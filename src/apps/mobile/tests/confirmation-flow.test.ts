@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { ChallengeRecord, WorldlineBundle } from "@foresightnine/contracts";
 vi.mock("expo-crypto", () => ({ getRandomBytes: () => new Uint8Array(16) }));
 import { ConfirmationInputChanged, continueAfterConfirmation, createConfirmationFlow } from "../src/confirmation-flow";
-import { branches as fixtureBranches } from "../../web/src/fixtures";
+import { legacyProbabilityAssessments, legacyWorldlines } from "./fixtures/legacy-web-worldlines";
 
 const record: ChallengeRecord = { schema_version: "v1", created_at: "2026-10-03T00:00:00Z", content_hash: "a".repeat(64), source_refs: [], turn_id: "qa-confirm", challenge_id: "qa-challenge", thesis_id: "qa-thesis", claims: [], objections: [], missing_evidence: [], questions: [], rubric_scores: [], unresolved_issues: [], citation_ids: [], public_fact_citation_ids: [], native_search_used: false, provenance: "synthetic", user_confirmation: "confirmed_with_reservations", private_evidence_declared: false, status: "CONFIRMED" };
-const bundle: WorldlineBundle = { schema_version: "v1", created_at: "2026-10-03T00:00:00Z", source_refs: [], content_hash: "b".repeat(64), bundle_id: "qa-bundle", challenge_id: record.challenge_id, worldlines: fixtureBranches.map((branch) => branch.worldline), probability_assessments: fixtureBranches.map((branch) => branch.assessment) };
+const bundle: WorldlineBundle = { schema_version: "v1", created_at: "2026-10-03T00:00:00Z", source_refs: [], content_hash: "b".repeat(64), bundle_id: "qa-bundle", challenge_id: record.challenge_id, worldlines: legacyWorldlines, probability_assessments: legacyProbabilityAssessments };
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 function setup() {
   let key = 0; const factory = vi.fn(() => `synthetic-idempotency-${++key}`);

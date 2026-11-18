@@ -1,0 +1,40 @@
+diff --git a/src/apps/web/src/components/GeneralResearch.tsx b/src/apps/web/src/components/GeneralResearch.tsx
+index 3178395..bb57bfb 100644
+--- a/src/apps/web/src/components/GeneralResearch.tsx
++++ b/src/apps/web/src/components/GeneralResearch.tsx
+@@ -40,6 +40,16 @@ function localizeLimitation(value: string, en: boolean): string {
+     return en ? value : "无法获取官方资料，搜索结果仍只是待核验线索。";
+   if (value === "No counterarguments were provided; this does not establish that none exist.")
+     return en ? "The last model run provided no counterarguments; this does not establish that none exist." : "上次模型运行未提供反方材料；这不代表不存在反方意见。";
++  if (value === "Some submitted claims were omitted because their source location could not be verified.")
++    return en ? value : "部分结论因无法核实引文位置而未保留，请核对来源和引文。";
++  if (value === "No source-backed claims with verified locations were submitted; add or read relevant authorized material and continue research.")
++    return en ? value : "尚无引文位置已核实的来源支持结论；请添加或读取相关授权资料后继续研究。";
++  if (value === "Search returned results in an invalid format; the connector must be repaired before it can provide leads.")
++    return en ? value : "搜索已返回结果，但连接器输出格式有误，无法将线索交给研究。";
++  if (value === "No authorized historical price series was available for the requested instrument and period.")
++    return en ? value : "所请求的标的和期间未取得已授权的历史行情。";
++  if (value === "Search found candidate links, but their original material could not be acquired through the configured sources.")
++    return en ? value : "搜索找到了候选链接，但当前信源无法获取原文。";
+   if (value === "The research is partial: supported claims or counterarguments are incomplete.")
+     return en ? "The last research run was partial: supported findings or counterarguments were incomplete." : "上次研究运行尚未完成：有依据的结论或反方材料不足。";
+   if (en) return value;
+@@ -941,7 +951,7 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
+       </details>
+       </> : null}
+       </details>
+-      {operation ? <p role="status">{en ? "Run status: " : "运行状态："}{statusLabel(operation.status, en)}{running ? <> <Button disabled={busy} onClick={() => void cancel()}>{en ? "Cancel" : "取消"}</Button></> : null}</p> : null}
++      {operation ? <p role="status">{en ? "Task status: " : "任务状态："}{operation.status === "completed" ? (en ? "Finished" : "已结束") : statusLabel(operation.status, en)}{running ? <> <Button disabled={busy} onClick={() => void cancel()}>{en ? "Cancel" : "取消"}</Button></> : null}</p> : null}
+       {running && savedProgress?.version_id ? <p role="status">{en ? "A research stage has been saved; later steps may still be running." : "已保存阶段成果，后续步骤可能仍在运行。"} <Button disabled={busy || hasUnsavedReview} onClick={() => void openSavedProgress()}>{en ? "View saved stage" : "查看阶段成果"}</Button></p> : null}
+       {pollNotice ? <p role="status">{pollNotice}</p> : null}
+       {runInputs ? <details className="general-source"><summary>{en ? "Run input snapshot" : "运行时输入记录"}</summary>
+@@ -974,7 +984,8 @@ export function GeneralResearch({ baseUrl, accountId, language }: Props) {
+       </section> : null}
+       <ResearchStageSummary value={current.content.run.stage_summary} en={en} />
+       <ResearchWorkflowTrace value={current.content.run.workflow_receipts} en={en} />
+-      {current.content.run.status ? <p>{en ? "Last run result: " : "上次运行结果："}{statusLabel(String(current.content.run.status), en)}</p> : null}
++      {current.content.run.status ? <p>{en ? "Research result: " : "研究结果："}{statusLabel(String(current.content.run.status), en)}</p> : null}
++      {current.content.run.status === "partial" && current.content.limitations[0] ? <p role="status">{en ? "First gap: " : "首要缺口："}{localizeLimitation(current.content.limitations[0], en)}</p> : null}
+       {current.content.run.question_origin === "document_overview_default" ? <p>{en ? "This version used the default document-overview task because no question was provided." : "本版本未收到用户问题，使用了默认资料概览任务。"}</p> : null}
+       {current.content.run.checkpoint === "planning" ? <p role="status">{en ? "Planning was saved; source discovery and analysis may not have finished." : "研究规划已保存；来源发现和分析可能尚未完成。"}</p> : null}
+       {current.content.run.checkpoint === "initial_analysis" ? <p role="status">{en ? "Initial analysis was saved; later steps and final delivery may not have finished." : "首次分析已保存；后续步骤和最终交付可能尚未完成。"}</p> : null}
