@@ -24,4 +24,13 @@ export const routes: RouteObject[] = [
   { path: "*", element: <NotFoundPage /> },
 ];
 
-export const router = createBrowserRouter(routes);
+/** Opt in to React Router v7 behaviour now so the upgrade does not change semantics later. */
+export const routerFuture = {
+  v7_relativeSplatPath: true,
+  v7_fetcherPersist: true,
+  v7_normalizeFormMethod: true,
+  v7_partialHydration: true,
+  v7_skipActionErrorRevalidation: true,
+} as const;
+
+export const router: ReturnType<typeof createBrowserRouter> = createBrowserRouter(routes, { future: routerFuture });

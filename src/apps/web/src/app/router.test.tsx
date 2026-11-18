@@ -4,13 +4,13 @@ import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { storeSession } from "../test/fixtures";
 import { queryClient } from "./queryClient";
-import { routes } from "./router";
+import { routerFuture, routes } from "./router";
 
 function renderAt(path: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  const router = createMemoryRouter(routes, { future: routerFuture, initialEntries: [path] });
   return render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <RouterProvider router={router} future={{ v7_startTransition: true }} />
     </QueryClientProvider>,
   );
 }
