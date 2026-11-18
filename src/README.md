@@ -230,6 +230,12 @@ The recommended Linux application workspace is a new directory owned by the depl
   contract or metadata. Web/Android request, validation, FM input conversion,
   factor computation, weights, amounts and shares remain client-side.
 
+## License
+
+The original ForesightNine source code is licensed under the [GNU Affero General Public License, version 3 only](../LICENSE) (`AGPL-3.0-only`), unless a file states otherwise. The copyright holders may offer separate commercial licenses for code they have the right to relicense.
+
+Third-party code and materials retain their applicable terms. Market data, financial filings, and other research inputs remain subject to their sources’ usage and redistribution terms.
+
 ## Further reading
 
 - [`docs/architecture/README.md`](docs/architecture/README.md) — architecture baseline and decisions.
