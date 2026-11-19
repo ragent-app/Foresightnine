@@ -258,4 +258,117 @@ describe("TopicPage", () => {
       expect(JSON.parse(String(call![1]!.body)).selected_source_ids).toEqual(["s1"]);
     });
   });
+
+  describe("review and versions", () => {
+    const withV3 = (base: ResearchV2.ResearchTopic): ResearchV2.ResearchTopic => ({
+      ...base,
+      versions: [...base.versions, { version_id: "v3", created_at: NOW, created_by: "user", review: "confirmed", content: base.versions[1]!.content }],
+    });
+
+    it("edits a claim in the record panel and saves it as a new version", async () => {
+      const completed = turn(2, { turn_id: "turn_2", claim_ids: ["C1", "C2"] });
+      const topic = topicWith([turn(1), completed], CLAIMS);
+      const fetchMock = mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1/versions" && init.method === "POST") return jsonResponse(withV3(topic), { status: 201 });
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topic);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "completed")]);
+        return undefined;
+      });
+      renderTopic();
+      await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(screen.getByRole("button", { name: "研究记录" }));
+      fireEvent.click((await screen.findAllByRole("button", { name: "编辑" }))[0]!);
+      fireEvent.change(screen.getByLabelText("结论文字"), { target: { value: "总收入为 48,612 百万美元（2026 财年）。" } });
+      fireEvent.click(screen.getByRole("button", { name: "完成" }));
+      expect(screen.getByText("1 条修改还没有保存。")).toBeTruthy();
+      expect(screen.getByText("有未保存的修改")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "去保存" }));
+      fireEvent.click(await screen.findByRole("button", { name: "已确认" }));
+      fireEvent.click(screen.getByRole("button", { name: "保存为新版本" }));
+      await waitFor(() => expect(screen.queryByText("有未保存的修改")).toBeNull());
+      const call = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/v2/research/topics/t1/versions") && init?.method === "POST");
+      const body = JSON.parse(String(call![1]!.body)) as ResearchV2.VersionInput;
+      expect(body.parent_version_id).toBe("v2");
+      expect(body.review).toBe("confirmed");
+      expect(body.content.claims![0]!.text).toBe("总收入为 48,612 百万美元（2026 财年）。");
+      expect(body.content.claims![1]).toEqual(CLAIMS[1]);
+      expect(body.content.turns).toEqual(topic.versions[1]!.content.turns);
+    });
+
+    it("asks before sending with unsaved review changes and saves first when chosen", async () => {
+      const topic = topicWith([turn(1)]);
+      const fetchMock = mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1/versions" && init.method === "POST") return jsonResponse(withV3(topic), { status: 201 });
+        if (url.pathname === "/v2/research/topics/t1/runs" && init.method === "POST") return jsonResponse(operation("op_9", "pending"), { status: 202 });
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topic);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      renderTopic();
+      fireEvent.click(await screen.findByRole("button", { name: "v2 草稿" }));
+      fireEvent.change(await screen.findByLabelText("你的研究总结"), { target: { value: "我的判断" } });
+      fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+      const composer = screen.getByRole("textbox", { name: "追问" });
+      fireEvent.change(composer, { target: { value: "下一步看什么？" } });
+      fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
+      expect(await screen.findByText("发送新问题前，先保存复核修改吗？")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "保存并发送" }));
+      await waitFor(() => {
+        const run = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/v2/research/topics/t1/runs") && init?.method === "POST");
+        expect(JSON.parse(String(run![1]!.body)).parent_version_id).toBe("v3");
+      });
+      const save = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/v2/research/topics/t1/versions"));
+      expect(JSON.parse(String(save![1]!.body)).content.summary).toBe("我的判断");
+    });
+
+    it("discards the draft and sends on the current version when chosen", async () => {
+      const fetchMock = mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1/runs" && init.method === "POST") return jsonResponse(operation("op_9", "pending"), { status: 202 });
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      renderTopic();
+      fireEvent.click(await screen.findByRole("button", { name: "v2 草稿" }));
+      fireEvent.click(await screen.findByRole("button", { name: "已确认" }));
+      fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+      const composer = screen.getByRole("textbox", { name: "追问" });
+      fireEvent.change(composer, { target: { value: "继续" } });
+      fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
+      fireEvent.click(await screen.findByRole("button", { name: "放弃修改并发送" }));
+      await waitFor(() => {
+        const run = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/v2/research/topics/t1/runs") && init?.method === "POST");
+        expect(JSON.parse(String(run![1]!.body)).parent_version_id).toBe("v2");
+      });
+      expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/versions"))).toBe(false);
+      expect(screen.queryByText("有未保存的修改")).toBeNull();
+    });
+
+    it("creates a calculation from two recorded facts", async () => {
+      const fact = (id: string, period: string, value: string): ResearchV2.ResearchFact => ({
+        fact_id: id, turn_id: "turn_1", label: "总收入", value, unit: "millions", currency: "USD", period, source_id: "s1", quotation: QUOTE,
+        character_start: START, character_end: END, location: { character_start: START, character_end: END }, verification: "numeric_and_location_match_semantics_not_verified",
+      });
+      const topic = topicWith([turn(1, { turn_id: "turn_1" })]);
+      const content = { ...topic.versions[1]!.content, facts: [fact("F1", "FY2026", "48612"), fact("F2", "FY2025", "43310")] };
+      const withFacts = { ...topic, versions: [topic.versions[0]!, { ...topic.versions[1]!, content }] };
+      const fetchMock = mockApi((url, init) => {
+        if (url.pathname === "/v2/research/topics/t1/calculations" && init.method === "POST") return jsonResponse(withV3(withFacts), { status: 201 });
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(withFacts);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        return undefined;
+      });
+      renderTopic();
+      await screen.findByRole("region", { name: "第 1 轮" });
+      fireEvent.click(screen.getByRole("button", { name: "研究记录" }));
+      fireEvent.click(await screen.findByRole("tab", { name: "数字" }));
+      fireEvent.change(screen.getByLabelText("本期数字"), { target: { value: "F1" } });
+      fireEvent.change(screen.getByLabelText("基期数字"), { target: { value: "F2" } });
+      fireEvent.click(screen.getByRole("button", { name: "计算" }));
+      await waitFor(() => {
+        const call = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/v2/research/topics/t1/calculations") && init?.method === "POST");
+        expect(JSON.parse(String(call![1]!.body))).toEqual({ parent_version_id: "v2", formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2" });
+      });
+    });
+  });
 });

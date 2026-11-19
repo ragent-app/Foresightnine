@@ -139,3 +139,18 @@ export function latestVersion(topic: ResearchV2.ResearchTopic): ResearchV2.Resea
 export function isActiveStatus(status: OperationStatus): boolean {
   return status === "pending" || status === "running";
 }
+
+// apps/api/app/main.py create_research_calculation: the backend computes and saves a new version.
+export type CreateCalculationRequest = ResearchV2.CreateResearchCalculationRequest;
+
+export function createCalculation(topicId: string, body: CreateCalculationRequest): Promise<ResearchV2.ResearchTopic> {
+  return apiRequest<ResearchV2.ResearchTopic>(`${topicPath(topicId)}/calculations`, { method: "POST", body });
+}
+
+// apps/api/app/main.py recalculate_research
+export function recalculateCalculation(topicId: string, parentVersionId: string, calculationIndex: number): Promise<ResearchV2.ResearchTopic> {
+  return apiRequest<ResearchV2.ResearchTopic>(`${topicPath(topicId)}/calculations/recalculate`, {
+    method: "POST",
+    body: { parent_version_id: parentVersionId, calculation_index: calculationIndex },
+  });
+}

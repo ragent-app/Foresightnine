@@ -108,4 +108,7 @@ describe("turnStamp and groups", () => {
     expect(dateGroup("bad", now)).toBe("earlier");
     expect(DATE_GROUP_LABEL).toEqual({ today: "今天", week: "本周", earlier: "更早" });
   });
+  it("labels percentage-point differences", () => {
+    expect(formatQuantity("-0.38", "percentage points", null)).toEqual({ value: "-0.38", unit: "个百分点" });
+  });
 });

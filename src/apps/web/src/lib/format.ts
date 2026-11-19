@@ -12,7 +12,8 @@ export function formatInteger(n: number): string {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
 }
 
-const UNIT_LABEL: Readonly<Record<string, string>> = { millions: "百万", thousands: "千", billions: "十亿", percent: "" };
+// "percentage points" is the backend unit for a difference of two percentages (research_calculations.calculate).
+const UNIT_LABEL: Readonly<Record<string, string>> = { millions: "百万", thousands: "千", billions: "十亿", percent: "", "percentage points": "个百分点" };
 
 export function unitLabel(unit: string, currency?: string | null): string {
   const label = UNIT_LABEL[unit] ?? unit;

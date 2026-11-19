@@ -20,6 +20,7 @@ export const S1_TEXT =
   "Northwind Holdings Annual Report FY2026 (illustrative excerpt). Amounts are presented in millions of U.S. dollars unless otherwise noted.\n\n" +
   "Year ended June 30, 2026: total revenue 48,612. Year ended June 30, 2025: total revenue 41,270. Revenue growth was driven primarily by cloud services and recurring subscriptions.\n\n" +
   "Year ended June 30, 2026: operating income 15,104. Year ended June 30, 2025: operating income 12,980. Operating expenses increased as the company expanded data-center capacity.\n\n" +
+  "Year ended June 30, 2026: operating margin 31.07%. Year ended June 30, 2025: operating margin 31.45%.\n\n" +
   "Management expects capacity investment to remain elevated in the next fiscal year.";
 
 export const Q_REV26 = "Year ended June 30, 2026: total revenue 48,612.";
@@ -28,6 +29,8 @@ export const Q_DRIVER = "Revenue growth was driven primarily by cloud services a
 export const Q_OPI26 = "Year ended June 30, 2026: operating income 15,104.";
 export const Q_OPI25 = "Year ended June 30, 2025: operating income 12,980.";
 export const Q_OPEX = "Operating expenses increased as the company expanded data-center capacity.";
+export const Q_MARGIN26 = "Year ended June 30, 2026: operating margin 31.07%.";
+export const Q_MARGIN25 = "Year ended June 30, 2025: operating margin 31.45%.";
 
 /** Exact span of `quotation` inside `text`; offsets always come from indexOf. */
 export function span(text, quotation) {
@@ -333,9 +336,18 @@ export function seed(now) {
   const F2 = fact("F2", "总收入（FY2025）", "41270", "FY2025", Q_REV25, "turn_a1");
   const F3 = fact("F3", "营业利润（FY2026）", "15104", "FY2026", Q_OPI26, "turn_a2", { currency_quote_missing: true });
   const F4 = fact("F4", "营业利润（FY2025）", "12980", "FY2025", Q_OPI25, "turn_a2", { currency_quote_missing: true });
+  const F5 = fact("F5", "营业利润率（FY2026）", "31.07", "FY2026", Q_MARGIN26, "turn_a2", { unit: "percent", currency: null });
+  const F6 = fact("F6", "营业利润率（FY2025）", "31.45", "FY2025", Q_MARGIN25, "turn_a2", { unit: "percent", currency: null });
   const CGROWTH = calc("C-growth", "growth_percent", "(48612 / 41270 - 1) * 100", "17.79", F1, F2, "turn_a1", "unverifiable");
   const CM26 = calc("C-margin-fy26", "margin_percent", "(15104 / 48612) * 100", "31.07", F3, F1, "turn_a2", "matched");
   const CM25 = calc("C-margin-fy25", "margin_percent", "(12980 / 41270) * 100", "31.45", F4, F2, "turn_a2", "matched");
+  // Legacy record (index 3): a percent difference saved before the percentage-point unit existed.
+  const CLEGACY = {
+    ...calc("C-margin-diff-legacy", "difference", "31.07 - 31.45", "-0.38", F5, F6, "turn_a2", "unverifiable"),
+    formula_version: "1",
+    result_status: "mismatch",
+    legacy_unit_warning: "percentage_difference_requires_recalculation",
+  };
 
   const claim = (id, role, textZh, quotation, extra = {}) => ({
     claim_id: id,
@@ -415,9 +427,9 @@ export function seed(now) {
     operation_ids: ["op_seed_a2"],
     usage: { model_calls: 4, search_calls: 0, total_tokens: 12480 },
     events: events2,
-    fact_ids: ["F3", "F4"],
+    fact_ids: ["F3", "F4", "F5", "F6"],
     claim_ids: ["C1", "C2", "C3", "C4"],
-    calculation_ids: ["C-margin-fy26", "C-margin-fy25"],
+    calculation_ids: ["C-margin-fy26", "C-margin-fy25", "C-margin-diff-legacy"],
     gaps: [],
     read_ranges: [revenueParagraphRange(text), operatingParagraphRange(text)],
     official_fetch_status: "not_requested",
@@ -483,9 +495,9 @@ export function seed(now) {
       created_by: "agent",
       review: "draft",
       content: {
-        calculations: [CGROWTH, CM26, CM25],
+        calculations: [CGROWTH, CM26, CM25, CLEGACY],
         claims,
-        facts: [F1, F2, F3, F4],
+        facts: [F1, F2, F3, F4, F5, F6],
         gaps: [],
         source_candidates: candidates,
         sources: structuredClone(sourceRowsA),

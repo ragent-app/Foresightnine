@@ -1,17 +1,19 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useBlocker, useParams } from "react-router-dom";
 import { ApiError } from "../api/http";
-import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useStartTurn, useTopic, useVersionSources } from "../api/queries";
+import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useSaveVersion, useStartTurn, useTopic, useVersionSources } from "../api/queries";
 import { exportFull, exportMetadata, isActiveStatus, latestVersion } from "../api/research";
 import type { AvailableVersionSource, CreatedSource } from "../api/types";
 import { gapText, REVIEW_LABEL } from "../lib/copy";
 import { saveJson } from "../lib/download";
 import { displayTurnNumber, formatDateTimeWithOffset } from "../lib/format";
 import { buildCitationIndex, suggestionsFor, topicTitle, type AnswerTab } from "../lib/research";
+import { buildVersionInput, draftProblem, isDirty, type ReviewDraft } from "../lib/review";
 import { ineligibility, INELIGIBLE_TEXT } from "../lib/sources";
 import { useLayout } from "../ui/AppLayout";
 import { Composer, type ComposerHandle, type ComposerToken } from "../ui/Composer";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Icon } from "../ui/icons";
 import { MEDIA, prefersReducedMotion, useMedia, useScrolledPast } from "../ui/media";
 import { Menu } from "../ui/Menu";
@@ -27,6 +29,7 @@ import { InterruptedTurn, PendingTurn, TurnView, type TurnActions } from "./topi
 import { LiveBar } from "./topic/LiveBar";
 import { ReaderPanel } from "./topic/ReaderPanel";
 import { RecordPanel } from "./topic/RecordPanel";
+import { ReviewPanel, saveErrorText } from "./topic/ReviewPanel";
 
 interface PendingAsk {
   question: string;
@@ -56,6 +59,9 @@ export function TopicPage() {
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: "info" | "error" } | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [draft, setDraftState] = useState<ReviewDraft>({});
+  // Asked before sending while review changes are unsaved (spec §4.3).
+  const [sendPrompt, setSendPrompt] = useState<{ error: string | null } | null>(null);
 
   const startTurn = useStartTurn(topicId);
   const cancel = useCancelRun(topicId);
@@ -63,6 +69,7 @@ export function TopicPage() {
   const recoverTurn = useRecoverTurn(topicId);
   const attach = useAttachSources(topicId);
   const reextract = useReextractPdf();
+  const saveVersion = useSaveVersion(topicId);
 
   const topic = topicQuery.data;
   const version = topic ? latestVersion(topic) : null;
@@ -91,8 +98,33 @@ export function TopicPage() {
 
   // Reset per-topic state when navigating between topics.
   useEffect(() => {
-    setPanel(null); setText(""); setFocus(null); setPendingAsk(null); setNotice(null); setOptions(DEFAULT_OPTIONS);
+    setPanel(null); setText(""); setFocus(null); setPendingAsk(null); setNotice(null); setOptions(DEFAULT_OPTIONS); setDraftState({}); setSendPrompt(null);
   }, [topicId]);
+
+  const dirty = version ? isDirty(version, draft) : false;
+  const setDraft = useCallback((update: (current: ReviewDraft) => ReviewDraft) => setDraftState(update), []);
+  const notify = useCallback((text: string, tone: "info" | "error" = "info") => setNotice({ text, tone }), []);
+
+  /** Applies the draft to the latest version and saves it as a new one; resolves with its id. */
+  const saveDraft = useCallback(async (): Promise<string> => {
+    const latest = topicQuery.data ? latestVersion(topicQuery.data) : null;
+    if (!latest) throw new Error("topic_not_loaded");
+    const problem = draftProblem(latest, draft);
+    if (problem) throw new Error(problem);
+    const saved = await saveVersion.mutateAsync(buildVersionInput(latest, draft));
+    setDraftState({});
+    return latestVersion(saved).version_id;
+  }, [topicQuery.data, draft, saveVersion]);
+
+  // Leaving with unsaved review changes asks first (spec §7); closing the tab uses the browser prompt.
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const handler = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   // Pending question bubble: hide once the turn is saved or the run stops without one.
   useEffect(() => {
@@ -172,6 +204,12 @@ export function TopicPage() {
       sources,
       live,
       locked,
+      draft,
+      setDraft,
+      dirty,
+      saveDraft,
+      saving: saveVersion.isPending,
+      notify,
       turnNumber: (turnId) => (turnId ? turnNumbers.get(turnId) ?? null : null),
       sourceTitle: (sourceId) => {
         const known = sources.get(sourceId)?.title;
@@ -202,14 +240,21 @@ export function TopicPage() {
     };
     // progressMatches reads progress.progress, listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, turnNumbers, topicId, inspector, locked, addToTopic]);
+  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, turnNumbers, topicId, inspector, locked, addToTopic, draft, setDraft, dirty, saveDraft, saveVersion.isPending, notify]);
   const cancelling = cancel.isPending || (cancel.isSuccess && cancel.variables?.operation_id === activeRun?.operation_id);
 
   const send = () => {
     const question = text.trim();
     if (!version || !question || locked || !optionsValid(options)) return;
+    if (dirty) { setSendPrompt({ error: null }); return; }
+    sendWith(version.version_id);
+  };
+
+  const sendWith = (parentVersionId: string) => {
+    const question = text.trim();
+    if (!question) return;
     const body: ResearchV2.ResearchRunRequest = {
-      parent_version_id: version.version_id,
+      parent_version_id: parentVersionId,
       question_override: question,
       ...runRequestFields(options),
       ...(focus ? { focus_citation: { claim_id: focus.claimId, citation_index: focus.citationIndex } } : {}),
@@ -301,6 +346,7 @@ export function TopicPage() {
           trigger={<Icon name="more" />}
           triggerClassName="icon-btn"
           items={[
+            { key: "review", label: "复核与版本", icon: "check", onSelect: () => setPanel({ kind: "review" }) },
             { key: "settings", label: "研究设置", icon: "tune", onSelect: () => setPanel({ kind: "settings" }) },
             { key: "add", label: "添加资料", icon: "plus", onSelect: () => setPanel({ kind: "add" }), disabled: locked || !version },
             "separator",
@@ -326,7 +372,8 @@ export function TopicPage() {
                 <h1>{title}</h1>
                 <div className="meta">
                   {topic!.request.as_of ? <><span>截止 {formatDateTimeWithOffset(topic!.request.as_of)}</span><span aria-hidden="true">·</span></> : null}
-                  <span>{versionLabel}</span><span aria-hidden="true">·</span><span>{turns.length} 轮</span>
+                  <button type="button" className="link meta-link" onClick={() => setPanel({ kind: "review" })}>{versionLabel}</button><span aria-hidden="true">·</span><span>{turns.length} 轮</span>
+                  {dirty ? <><span aria-hidden="true">·</span><button type="button" className="link meta-link unsaved" onClick={() => setPanel({ kind: "review" })}>有未保存的修改</button></> : null}
                 </div>
               </header>
               {turns.map((turn, index) => (
@@ -411,6 +458,43 @@ export function TopicPage() {
           {panel?.kind === "cite" ? <CitationSheet n={panel.n} claimId={panel.claimId} citationIndex={panel.citationIndex} onClose={() => setPanel(null)} /> : null}
           {panel?.kind === "settings" ? (
             <ResearchSettingsPanel mode="topic" options={options} asOfIso={topic!.request.as_of ?? null} scope={topic!.request.scope ?? ""} sources={[...sources.values()]} onApply={setOptions} onClose={() => setPanel(null)} />
+          ) : null}
+          {panel?.kind === "review" ? <ReviewPanel onClose={() => setPanel(null)} /> : null}
+          {sendPrompt ? (
+            <ConfirmDialog
+              title="发送新问题前，先保存复核修改吗？"
+              description="保存后，研究 Agent 会在你修改过的版本上继续。"
+              error={sendPrompt.error}
+              onCancel={() => setSendPrompt(null)}
+              actions={[
+                {
+                  key: "save", label: saveVersion.isPending ? "正在保存…" : "保存并发送", tone: "primary", disabled: saveVersion.isPending,
+                  onSelect: () => {
+                    saveDraft().then((versionId) => { setSendPrompt(null); sendWith(versionId); })
+                      .catch((error: unknown) => setSendPrompt({ error: error instanceof Error && !(error instanceof ApiError) ? error.message : saveErrorText(error) }));
+                  },
+                },
+                { key: "discard", label: "放弃修改并发送", tone: "plain", disabled: saveVersion.isPending, onSelect: () => { setDraftState({}); setSendPrompt(null); sendWith(version!.version_id); } },
+              ]}
+            />
+          ) : null}
+          {blocker.state === "blocked" ? (
+            <ConfirmDialog
+              title="离开前保存复核修改吗？"
+              description="没有保存的修改离开后会丢失。"
+              error={leaveError}
+              onCancel={() => { setLeaveError(null); blocker.reset(); }}
+              actions={[
+                {
+                  key: "save", label: saveVersion.isPending ? "正在保存…" : "保存为新版本", tone: "primary", disabled: saveVersion.isPending,
+                  onSelect: () => {
+                    saveDraft().then(() => { setLeaveError(null); blocker.proceed(); })
+                      .catch((error: unknown) => setLeaveError(error instanceof Error && !(error instanceof ApiError) ? error.message : saveErrorText(error)));
+                  },
+                },
+                { key: "discard", label: "放弃修改", tone: "plain", disabled: saveVersion.isPending, onSelect: () => { setDraftState({}); setLeaveError(null); blocker.proceed(); } },
+              ]}
+            />
           ) : null}
           {panel?.kind === "add" ? (
             <AddSourcesPanel

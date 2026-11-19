@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResearchV2 } from "@foresightnine/contracts";
 import { nextPollDelay } from "../lib/polling";
 import { ApiError } from "./http";
-import { getProgress, getRecoveryStatus, getTopic, getVersionSourceText, isActiveStatus, listRuns, listTopics, listVersionSources } from "./research";
+import { createCalculation, createVersion, getProgress, getRecoveryStatus, getTopic, getVersionSourceText, isActiveStatus, listRuns, listTopics, listVersionSources, recalculateCalculation, type CreateCalculationRequest } from "./research";
 import { attachSources, reextractPdfSource } from "./sources";
 import type { CreatedSource, ProgressEvent, RecoveryStatus, RunProgress, SourceText, VersionSource } from "./types";
 import { cancelRun, continueTurn, createResearch, idempotentWrite, recoverTurn, startTurn } from "./writes";
@@ -246,4 +246,30 @@ export function useReextractPdf() {
     mutationFn: ({ sourceId, textOrder }) =>
       idempotentWrite(`reextract:${sourceId}:${textOrder}`, { text_order: textOrder }, (key) => reextractPdfSource(sourceId, textOrder, key)),
   });
+}
+
+function useTopicWrite<TVariables>(topicId: string, send: (variables: TVariables) => Promise<ResearchV2.ResearchTopic>) {
+  const queryClient = useQueryClient();
+  return useMutation<ResearchV2.ResearchTopic, unknown, TVariables>({
+    mutationFn: send,
+    onSuccess: (topic) => {
+      queryClient.setQueryData(queryKeys.topic(topicId), topic);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.topics });
+    },
+    // A 409 means the topic moved on; refetch so the user sees the latest version.
+    onError: () => queryClient.invalidateQueries({ queryKey: queryKeys.topic(topicId) }),
+  });
+}
+
+/** Saves review changes as a new user version (spec §4.7 保存为新版本). */
+export function useSaveVersion(topicId: string) {
+  return useTopicWrite<ResearchV2.VersionInput>(topicId, (input) => createVersion(topicId, input));
+}
+
+export function useCreateCalculation(topicId: string) {
+  return useTopicWrite<CreateCalculationRequest>(topicId, (body) => createCalculation(topicId, body));
+}
+
+export function useRecalculate(topicId: string) {
+  return useTopicWrite<{ parentVersionId: string; index: number }>(topicId, ({ parentVersionId, index }) => recalculateCalculation(topicId, parentVersionId, index));
 }

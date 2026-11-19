@@ -204,8 +204,8 @@ describe("mock research API", () => {
     assert.equal(topic.versions.at(-1).created_by, "agent");
     assert.equal(topic.versions.at(-1).parent_version_id, topic.versions.at(-2).version_id);
     assert.equal(content.claims.length, 5);
-    assert.equal(content.facts.length, 5);
-    assert.equal(content.calculations.length, 4);
+    assert.equal(content.facts.length, 7);
+    assert.equal(content.calculations.length, 5);
     const newClaim = content.claims.at(-1);
     const sourceText = (await call("GET", `${topicPath(a.topic_id)}/versions/${topic.versions.at(-1).version_id}/sources/${S1_ID}/text`)).json.text;
     const cite = newClaim.citations[0];
@@ -721,5 +721,392 @@ describe("mock research API", () => {
     const saved = (await call("GET", topicPath(topic.topic_id))).json.versions.at(-1);
     assert.equal(saved.content.source_candidates.length, 2);
     assert.equal(saved.content.turns.length, 2);
+  });
+  // ---- Versions and calculations (fresh account per test: seeded topic A, latest = 3 versions) ----
+
+  const versionPath = (topic) => `${topicPath(topic.topic_id)}/versions`;
+
+  /** Runs `fn` with a fresh account's seeded topic A, then restores the suite session. */
+  async function withTopicA(fn) {
+    const saved = token;
+    token = (await login()).token;
+    try {
+      const topic = (await call("GET", "/v2/research/topics")).json.find((t) => t.request.question.startsWith("Northwind"));
+      await fn(topic, topic.versions.at(-1));
+    } finally {
+      token = saved;
+    }
+  }
+
+  const saveVersion = (topic, parent, content, extra = {}) =>
+    call("POST", versionPath(topic), { body: { parent_version_id: parent.version_id, content, ...extra } });
+
+  test("get version: seeded history differs per version; unknown version or topic is 404", async () => {
+    await withTopicA(async (topic, latest) => {
+      assert.equal(topic.versions.length, 3);
+      const [v1, v2, v3] = topic.versions;
+      const read = await call("GET", `${versionPath(topic)}/${v3.version_id}`);
+      assert.equal(read.status, 200);
+      assert.deepEqual(read.json, v3);
+      assert.deepEqual(v1.content, {});
+      assert.equal(v2.content.claims.length, 0);
+      assert.equal(v2.content.facts.length, 2);
+      assert.equal(v3.content.claims.length, 4);
+      assert.equal(v3.content.facts.length, 6);
+      assert.equal(v3.content.calculations.length, 4);
+      assert.equal(latest.version_id, v3.version_id);
+      const missing = await call("GET", `${versionPath(topic)}/nope`);
+      assert.equal(missing.status, 404);
+      assert.equal(missing.json.error_code, "not_found");
+      assert.equal((await call("GET", `${topicPath("nope")}/versions/${v3.version_id}`)).status, 404);
+      assert.equal((await call("GET", `${versionPath(topic)}/${v3.version_id}`, { auth: false })).status, 401);
+    });
+  });
+
+  test("seeded topic A offers growth, margin and a legacy percent difference", async () => {
+    await withTopicA(async (topic, latest) => {
+      const text = (await call("GET", `${versionPath(topic)}/${latest.version_id}/sources/${S1_ID}/text`)).json.text;
+      const byId = Object.fromEntries(latest.content.facts.map((fact) => [fact.fact_id, fact]));
+      for (const fact of Object.values(byId)) assert.equal(text.slice(fact.character_start, fact.character_end), fact.quotation);
+      assert.deepEqual([byId.F1.period, byId.F2.period, byId.F3.period], ["FY2026", "FY2025", "FY2026"]);
+      assert.equal(byId.F5.unit, "percent");
+      assert.equal(byId.F5.currency, null);
+      const legacy = latest.content.calculations[3];
+      assert.equal(legacy.formula_id, "difference");
+      assert.equal(legacy.legacy_unit_warning, "percentage_difference_requires_recalculation");
+      assert.deepEqual(legacy.inputs.map((input) => input.fact_id), ["F5", "F6"]);
+      // Unflagged seeded calculations carry no legacy warning.
+      assert.equal(latest.content.calculations.slice(0, 3).some((calc) => calc.legacy_unit_warning), false);
+    });
+  });
+
+  test("create version: review, note and summary change keep findings untouched", async () => {
+    await withTopicA(async (topic, latest) => {
+      const content = { ...structuredClone(latest.content), summary: "我的研究摘要" };
+      const response = await saveVersion(topic, latest, content, { review: "confirmed", note: "复核通过" });
+      assert.equal(response.status, 201);
+      assert.equal(response.json.versions.length, 4);
+      const saved = response.json.versions.at(-1);
+      assert.match(saved.version_id, /^version_[0-9a-f]{32}$/);
+      assert.equal(saved.created_by, "user");
+      assert.equal(saved.review, "confirmed");
+      assert.equal(saved.note, "复核通过");
+      assert.equal(saved.parent_version_id, latest.version_id);
+      assert.deepEqual(saved.source_ids, latest.source_ids);
+      assert.equal(saved.content.summary, "我的研究摘要");
+      assert.deepEqual(saved.content.claims, latest.content.claims);
+      assert.equal(saved.content.claims.some((claim) => claim.edited_by_user), false);
+      assert.deepEqual(saved.content.turns, latest.content.turns);
+      assert.equal(response.json.updated_at, saved.created_at);
+      // Defaults and strict bodies.
+      const bare = await saveVersion(response.json, saved, saved.content);
+      assert.equal(bare.json.versions.at(-1).review, "draft");
+      assert.equal(bare.json.versions.at(-1).note, "");
+      assert.equal((await saveVersion(topic, latest, content, { extra: 1 })).status, 422);
+      assert.equal((await saveVersion(topic, latest, content, { review: "approved" })).status, 422);
+      assert.equal((await saveVersion(topic, latest, { ...content, summary: "x".repeat(100001) })).status, 422);
+      assert.equal((await saveVersion(topic, latest, content, { note: "x".repeat(10001) })).status, 422);
+      assert.equal((await saveVersion(topic, latest, { ...content, bogus: [] })).status, 422);
+    });
+  });
+
+  test("create version: claim edits, new claims, deletions and citation checks", async () => {
+    await withTopicA(async (topic, latest) => {
+      const source = (await call("GET", `${versionPath(topic)}/${latest.version_id}/sources/${S1_ID}/text`)).json.text;
+      const [first, ...rest] = latest.content.claims;
+
+      // Edited text keeps the id and turn, marks the claim and leaves the others alone.
+      const edited = await saveVersion(topic, latest, { ...latest.content, claims: [{ ...first, text: "改写后的主张" }, ...rest] });
+      assert.equal(edited.status, 201);
+      const claims = edited.json.versions.at(-1).content.claims;
+      assert.equal(claims[0].claim_id, first.claim_id);
+      assert.equal(claims[0].text, "改写后的主张");
+      assert.equal(claims[0].edited_by_user, true);
+      assert.equal(claims[0].turn_id, first.turn_id);
+      assert.deepEqual(claims.slice(1), rest);
+      assert.equal(claims.slice(1).some((claim) => claim.edited_by_user), false);
+
+      // A new claim gets a server id, no turn, and may challenge a temporary or existing id.
+      const quotation = "Management expects capacity investment to remain elevated in the next fiscal year.";
+      const start = source.indexOf(quotation);
+      assert.ok(start > 0);
+      const added = {
+        claim_id: "tmp-1",
+        role: "counterargument",
+        text: "管理层预期投资将保持高位。",
+        citations: [{ source_id: S1_ID, quotation, location: { character_start: start, character_end: start + quotation.length } }],
+        challenges_claim_ids: ["C1"],
+      };
+      const withNew = await saveVersion(topic, edited.json.versions.at(-1), { ...edited.json.versions.at(-1).content, claims: [...claims, added] });
+      assert.equal(withNew.status, 201);
+      const created = withNew.json.versions.at(-1).content.claims.at(-1);
+      assert.match(created.claim_id, /^claim-[0-9a-f]{32}$/);
+      assert.equal(created.turn_id, null);
+      assert.equal(created.edited_by_user, true);
+      assert.deepEqual(created.challenges_claim_ids, ["C1"]);
+      const latest2 = withNew.json.versions.at(-1);
+
+      // Citation that does not match the source text, or that points at an unattached source.
+      const bad = { ...added, citations: [{ ...added.citations[0], quotation: "Not in the source." }] };
+      const mismatch = await saveVersion(withNew.json, latest2, { ...latest2.content, claims: [...latest2.content.claims, bad] });
+      assert.equal(mismatch.status, 422);
+      assert.equal(mismatch.json.error_code, "invalid_request");
+      assert.equal(mismatch.json.message, "Citation must match an attached, displayable, time-eligible source.");
+      const wrongSource = { ...added, citations: [{ ...added.citations[0], source_id: S4_ID }] };
+      assert.equal((await saveVersion(withNew.json, latest2, { ...latest2.content, claims: [...latest2.content.claims, wrongSource] })).status, 422);
+      // Duplicate ids and bad challenge targets.
+      const dup = await saveVersion(withNew.json, latest2, { ...latest2.content, claims: [...latest2.content.claims, latest2.content.claims[0]] });
+      assert.equal(dup.json.message, "Research findings or their citations are invalid.");
+      const selfChallenge = await saveVersion(withNew.json, latest2, { ...latest2.content, claims: [...latest2.content.claims, { ...added, claim_id: "tmp-2", challenges_claim_ids: ["tmp-2"] }] });
+      assert.equal(selfChallenge.json.message, "A challenged finding must be another existing finding.");
+      const unknownChallenge = await saveVersion(withNew.json, latest2, { ...latest2.content, claims: [...latest2.content.claims, { ...added, claim_id: "tmp-3", challenges_claim_ids: ["missing"] }] });
+      assert.equal(unknownChallenge.status, 422);
+
+      // Omitted claims are deleted.
+      const deleted = await saveVersion(withNew.json, latest2, { ...latest2.content, claims: latest2.content.claims.slice(1) });
+      assert.equal(deleted.status, 201);
+      assert.equal(deleted.json.versions.at(-1).content.claims.length, latest2.content.claims.length - 1);
+    });
+  });
+
+  test("create version: server-produced records, stale parent and unknown topic", async () => {
+    await withTopicA(async (topic, latest) => {
+      for (const key of ["turns", "sources", "source_candidates", "gaps"]) {
+        const changed = key === "gaps" ? [{ code: "x", message: "y" }] : [...structuredClone(latest.content[key]).slice(1)];
+        const response = await saveVersion(topic, latest, { ...latest.content, [key]: changed.length || key === "gaps" ? changed : [{}] });
+        assert.equal(response.status, 422, key);
+        assert.equal(response.json.message, "Server-produced research records cannot be edited.", key);
+      }
+      // A missing key equals the parent's empty default: topic A's gaps are [] so omitting them is fine.
+      const { gaps: _gaps, ...withoutGaps } = latest.content;
+      assert.equal((await saveVersion(topic, latest, withoutGaps)).status, 201);
+
+      const stale = await saveVersion(topic, latest, latest.content);
+      assert.equal(stale.status, 409);
+      assert.equal(stale.json.error_code, "lifecycle_conflict");
+      assert.equal(stale.json.message, "Research topic has changed; reload before saving.");
+      const missing = await call("POST", `${topicPath("nope")}/versions`, { body: { parent_version_id: latest.version_id, content: {} } });
+      assert.equal(missing.status, 404);
+      assert.equal((await call("POST", versionPath(topic), { auth: false, body: {} })).status, 401);
+    });
+  });
+
+  test("create version: edited facts are rechecked and downgraded; edited calculations become user-authored", async () => {
+    await withTopicA(async (topic, latest) => {
+      const [f1, ...otherFacts] = latest.content.facts;
+      // Value present in the quotation (ignoring thousands separators).
+      const sameQuote = await saveVersion(topic, latest, { ...latest.content, facts: [{ ...f1, label: "总收入（改标签）" }, ...otherFacts] });
+      assert.equal(sameQuote.status, 201);
+      const kept = sameQuote.json.versions.at(-1).content.facts[0];
+      assert.equal(kept.verification, "user_edited_not_independently_verified");
+      assert.equal(kept.turn_id, f1.turn_id);
+      assert.deepEqual(sameQuote.json.versions.at(-1).content.facts.slice(1), otherFacts);
+      // The dependent growth calculation is unchanged and stays untouched except for its recomputed input status.
+      const growth = sameQuote.json.versions.at(-1).content.calculations[0];
+      assert.equal(growth.value, "17.79");
+      assert.equal(growth.authorship, undefined);
+
+      // A value that is not in the quotation is flagged and cannot feed calculations.
+      const latest2 = sameQuote.json.versions.at(-1);
+      const wrongValue = await saveVersion(sameQuote.json, latest2, { ...latest2.content, facts: [{ ...kept, value: "99999" }, ...latest2.content.facts.slice(1)] });
+      assert.equal(wrongValue.status, 201);
+      const latest3 = wrongValue.json.versions.at(-1);
+      assert.equal(latest3.content.facts[0].verification, "user_edited_value_not_in_quotation");
+      assert.equal(latest3.content.calculations[1].input_status, "changed"); // margin FY26 uses F1
+      assert.equal(latest3.content.calculations[0].input_status, "unverifiable"); // seeded unverifiable stays closed
+      const calc = await call("POST", `${topicPath(topic.topic_id)}/calculations`, {
+        body: { parent_version_id: latest3.version_id, formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2" },
+      });
+      assert.equal(calc.status, 422);
+      assert.equal(calc.json.message, "The fact's source quotation requires review before calculation.");
+
+      // Facts with a span that does not match the source are rejected; duplicates too.
+      const badSpan = { ...kept, fact_id: "F-new", character_start: 0, character_end: 5, location: { character_start: 0, character_end: 5 } };
+      const spanResponse = await saveVersion(wrongValue.json, latest3, { ...latest3.content, facts: [...latest3.content.facts, badSpan] });
+      assert.equal(spanResponse.status, 422);
+      assert.equal(spanResponse.json.message, "Research fact must use an attached, displayable, time-eligible real source.");
+      assert.equal((await saveVersion(wrongValue.json, latest3, { ...latest3.content, facts: [...latest3.content.facts, latest3.content.facts[1]] })).status, 422);
+
+      // An edited calculation keeps its id and turn, loses the legacy warning and is user-authored.
+      const legacy = latest3.content.calculations[3];
+      const editedCalcs = [...latest3.content.calculations];
+      editedCalcs[3] = { ...legacy, value: "-0.40" };
+      const calcEdit = await saveVersion(wrongValue.json, latest3, { ...latest3.content, calculations: editedCalcs });
+      assert.equal(calcEdit.status, 201);
+      const saved = calcEdit.json.versions.at(-1).content.calculations[3];
+      assert.equal(saved.calculation_id, legacy.calculation_id);
+      assert.equal(saved.turn_id, legacy.turn_id);
+      assert.equal(saved.authorship, "user");
+      assert.equal(saved.verification, "user_edited_not_independently_verified");
+      assert.equal(saved.legacy_unit_warning, null);
+      assert.equal(saved.result_status, "mismatch");
+    });
+  });
+
+  const CALC_KEYS = ["calculation_id", "formula_id", "formula_version", "expression", "value", "unit", "currency", "decimal_places", "rounding", "inputs", "input_verification", "input_precision_status", "period_order_check", "period_granularity_check", "input_status", "result_status", "turn_id", "legacy_unit_warning", "authorship"];
+  const calculate = (topic, parent, extra) =>
+    call("POST", `${topicPath(topic.topic_id)}/calculations`, { body: { parent_version_id: parent.version_id, ...extra } });
+
+  test("calculations: growth, margin and difference give exact half-up decimal strings", async () => {
+    await withTopicA(async (topic, latest) => {
+      const growth = await calculate(topic, latest, { formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2" });
+      assert.equal(growth.status, 201);
+      assert.equal(growth.json.versions.length, 4);
+      const version = growth.json.versions.at(-1);
+      assert.equal(version.created_by, "user");
+      assert.equal(version.review, "draft");
+      assert.equal(version.note, latest.note);
+      assert.deepEqual(version.source_ids, latest.source_ids);
+      assert.equal(version.content.calculations.length, latest.content.calculations.length + 1);
+      assert.deepEqual(version.content.calculations.slice(0, -1), latest.content.calculations);
+      const created = version.content.calculations.at(-1);
+      assert.deepEqual(Object.keys(created).sort(), [...CALC_KEYS].sort());
+      assert.match(created.calculation_id, /^calc-[0-9a-f]{32}$/);
+      assert.equal(created.value, "17.79");
+      assert.equal(created.unit, "percent");
+      assert.equal(created.currency, null);
+      assert.equal(created.expression, "(first / second - 1) * 100");
+      assert.equal(created.formula_version, "1");
+      assert.equal(created.rounding, "half_up");
+      assert.equal(created.decimal_places, 2);
+      assert.equal(created.turn_id, null);
+      assert.equal(created.authorship, "calculation_engine");
+      assert.equal(created.input_status, "matched");
+      assert.equal(created.result_status, "matched");
+      assert.equal(created.period_order_check, "recognized_formats_only");
+      assert.deepEqual(created.inputs.map((input) => input.fact_id), ["F1", "F2"]);
+      assert.deepEqual(Object.keys(created.inputs[0]), ["fact_id", "value", "unit", "currency", "period"]);
+
+      const precise = await calculate(topic, version, { formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2", decimal_places: 4 });
+      assert.equal(precise.json.versions.at(-1).content.calculations.at(-1).value, "17.7902");
+      const whole = await calculate(topic, precise.json.versions.at(-1), { formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2", decimal_places: 0 });
+      assert.equal(whole.json.versions.at(-1).content.calculations.at(-1).value, "18");
+
+      const margin = await calculate(topic, whole.json.versions.at(-1), { formula: "margin_percent", first_fact_id: "F3", second_fact_id: "F1" });
+      const marginCalc = margin.json.versions.at(-1).content.calculations.at(-1);
+      assert.equal(marginCalc.value, "31.07");
+      assert.equal(marginCalc.expression, "first / second * 100");
+      assert.equal(marginCalc.period_order_check, null);
+
+      const diff = await calculate(topic, margin.json.versions.at(-1), { formula: "difference", first_fact_id: "F1", second_fact_id: "F2" });
+      const diffCalc = diff.json.versions.at(-1).content.calculations.at(-1);
+      assert.equal(diffCalc.value, "7342.00");
+      assert.equal(diffCalc.unit, "millions");
+      assert.equal(diffCalc.currency, "USD");
+      const pp = await calculate(topic, diff.json.versions.at(-1), { formula: "difference", first_fact_id: "F5", second_fact_id: "F6", decimal_places: 1 });
+      const ppCalc = pp.json.versions.at(-1).content.calculations.at(-1);
+      assert.equal(ppCalc.value, "-0.4");
+      assert.equal(ppCalc.unit, "percentage points");
+      assert.equal(ppCalc.formula_version, "2");
+      assert.equal(ppCalc.currency, null);
+    });
+  });
+
+  test("calculations: rounding is half-up away from zero on exact decimals", async () => {
+    const source = await textSource({ title: "Rounding note", text: "Revenue FY2025 was 100 and FY2026 was 99.5 and FY2027 was 0.1 and FY2028 was 0.3." });
+    const topic = await newTopic([source.source_id]);
+    const fact = (id, quotation, value, period) => {
+      const start = source.text.indexOf(quotation);
+      const location = { character_start: start, character_end: start + quotation.length };
+      return { fact_id: id, label: id, value, unit: "millions", currency: "USD", period, source_id: source.source_id, quotation, ...location, location, verification: "x" };
+    };
+    const facts = [fact("a", "FY2025 was 100", "100", "FY2025"), fact("b", "FY2026 was 99.5", "99.5", "FY2026"),
+      fact("c", "FY2027 was 0.1", "0.1", "FY2027"), fact("d", "FY2028 was 0.3", "0.3", "FY2028")];
+    const saved = await saveVersion(topic, topic.versions[0], { facts });
+    assert.equal(saved.status, 201);
+    let latest = saved.json.versions.at(-1);
+    assert.equal(latest.content.facts[0].turn_id, null);
+    const run = async (extra) => {
+      const response = await calculate(saved.json, latest, extra);
+      assert.equal(response.status, 201);
+      latest = response.json.versions.at(-1);
+      return latest.content.calculations.at(-1).value;
+    };
+    // (99.5 / 100 - 1) * 100 = -0.5
+    assert.equal(await run({ formula: "growth_percent", first_fact_id: "b", second_fact_id: "a", decimal_places: 0 }), "-1");
+    assert.equal(await run({ formula: "growth_percent", first_fact_id: "b", second_fact_id: "a", decimal_places: 1 }), "-0.5");
+    // (0.3 / 0.1 - 1) * 100 = 200 exactly (float math would give 199.99999999999997)
+    assert.equal(await run({ formula: "growth_percent", first_fact_id: "d", second_fact_id: "c", decimal_places: 8 }), "200.00000000");
+    // 0.1 - 0.3 = -0.2 exactly; 100 - 99.5 = 0.5 -> "1" half-up
+    assert.equal(await run({ formula: "difference", first_fact_id: "c", second_fact_id: "d", decimal_places: 3 }), "-0.200");
+    assert.equal(await run({ formula: "difference", first_fact_id: "a", second_fact_id: "b", decimal_places: 0 }), "1");
+    // 100 - 0.1 = 99.9 exactly
+    assert.equal(await run({ formula: "difference", first_fact_id: "a", second_fact_id: "c", decimal_places: 2 }), "99.90");
+  });
+
+  test("calculations: rejected inputs are 422 and stale parents are 409", async () => {
+    await withTopicA(async (topic, latest) => {
+      const rejected = async (extra, message) => {
+        const response = await calculate(topic, latest, extra);
+        assert.equal(response.status, 422, JSON.stringify(extra));
+        assert.equal(response.json.error_code, message ? "invalid_request" : "validation_error", JSON.stringify(extra));
+        if (message) assert.equal(response.json.message, message, JSON.stringify(extra));
+      };
+      const failed = "Calculation cannot be performed with the current facts.";
+      await rejected({ formula: "margin_percent", first_fact_id: "F3", second_fact_id: "F2" }, failed); // different periods
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F3" }, failed); // same period
+      await rejected({ formula: "growth_percent", first_fact_id: "F2", second_fact_id: "F1" }, failed); // baseline later than current
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F1" }, failed); // same fact
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F5" }, failed); // unit mismatch
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "nope" }, "Calculation input facts are missing or ambiguous.");
+      await rejected({ formula: "growth_percent", first_fact_id: "nope", second_fact_id: "F1" }, "Calculation input facts are missing or ambiguous.");
+      await rejected({ formula: "ratio", first_fact_id: "F1", second_fact_id: "F2" });
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2", decimal_places: 9 });
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2", decimal_places: 1.5 });
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2", decimal_places: "2" });
+      await rejected({ formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2", extra: true });
+      assert.equal((await call("GET", topicPath(topic.topic_id))).json.versions.length, topic.versions.length);
+
+      const ok = await calculate(topic, latest, { formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2" });
+      assert.equal(ok.status, 201);
+      const stale = await calculate(topic, latest, { formula: "growth_percent", first_fact_id: "F1", second_fact_id: "F2" });
+      assert.equal(stale.status, 409);
+      assert.equal(stale.json.error_code, "lifecycle_conflict");
+      assert.equal((await call("POST", `${topicPath("nope")}/calculations`, { body: { parent_version_id: "x", formula: "difference", first_fact_id: "a", second_fact_id: "b" } })).status, 404);
+    });
+  });
+
+  test("recalculate: clears the legacy warning and uses percentage points; bad index and stale parent fail", async () => {
+    await withTopicA(async (topic, latest) => {
+      const index = latest.content.calculations.findIndex((calc) => calc.legacy_unit_warning);
+      assert.equal(index, 3);
+      const old = latest.content.calculations[index];
+      const recalc = (parent, calculation_index) =>
+        call("POST", `${topicPath(topic.topic_id)}/calculations/recalculate`, { body: { parent_version_id: parent.version_id, calculation_index } });
+      const response = await recalc(latest, index);
+      assert.equal(response.status, 201);
+      const version = response.json.versions.at(-1);
+      assert.equal(version.created_by, "user");
+      assert.equal(version.parent_version_id, latest.version_id);
+      assert.equal(version.content.calculations.length, latest.content.calculations.length);
+      const fresh = version.content.calculations[index];
+      assert.equal(fresh.calculation_id, old.calculation_id);
+      assert.equal(fresh.turn_id, old.turn_id);
+      assert.equal(fresh.legacy_unit_warning, null);
+      assert.equal(fresh.unit, "percentage points");
+      assert.equal(fresh.formula_version, "2");
+      assert.equal(fresh.value, "-0.38");
+      assert.equal(fresh.expression, "first - second");
+      assert.equal(fresh.input_status, "matched");
+      assert.equal(fresh.result_status, "matched");
+      assert.equal(fresh.authorship, "calculation_engine");
+      assert.deepEqual(version.content.calculations.filter((_, i) => i !== index), latest.content.calculations.filter((_, i) => i !== index));
+
+      // The old version is untouched; recalculating against it is stale.
+      assert.equal((await recalc(latest, index)).status, 409);
+      const latest2 = version;
+      const outOfRange = await recalc(latest2, latest2.content.calculations.length);
+      assert.equal(outOfRange.status, 422);
+      assert.equal(outOfRange.json.message, "Calculation does not exist in this version.");
+      assert.equal((await recalc(latest2, -1)).status, 422);
+      assert.equal((await recalc(latest2, 2000)).status, 422);
+      assert.equal((await recalc(latest2, 1.5)).status, 422);
+      assert.equal((await call("POST", `${topicPath(topic.topic_id)}/calculations/recalculate`, { body: { parent_version_id: latest2.version_id, calculation_index: 0, extra: 1 } })).status, 422);
+      // Recalculating an ordinary calculation keeps its value.
+      const again = await recalc(latest2, 0);
+      assert.equal(again.status, 201);
+      assert.equal(again.json.versions.at(-1).content.calculations[0].value, "17.79");
+      assert.equal(again.json.versions.at(-1).content.calculations[0].calculation_id, "C-growth");
+    });
   });
 });

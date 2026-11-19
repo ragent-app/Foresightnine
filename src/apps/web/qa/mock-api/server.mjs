@@ -186,6 +186,395 @@ function validateResearchInput(body) {
   }
 }
 
+// ---- Deterministic calculation engine (mirrors research_calculations.calculate) ------------
+
+class CalcError extends Error {}
+
+const DECIMAL = /^(-?)(\d+)(?:\.(\d+))?$/;
+
+/** Exact decimal: value = n / 10^s. Mirrors NumericFact's finite, <=30-digit, |exponent|<=30 rule. */
+function parseDecimal(text) {
+  const match = typeof text === "string" ? DECIMAL.exec(text.trim()) : null;
+  if (!match) throw new CalcError("Value must be a plain decimal string.");
+  const [, sign, whole, fraction = ""] = match;
+  const digits = (whole + fraction).replace(/^0+/, "");
+  const adjusted = digits ? digits.length - 1 - fraction.length : -fraction.length;
+  if (digits.length > 30 || Math.abs(adjusted) > 30) throw new CalcError("Value must be finite and within supported precision.");
+  return { n: BigInt(`${sign}${whole}${fraction}`), s: fraction.length };
+}
+
+const pow10 = (exponent) => 10n ** BigInt(exponent);
+const alignDecimals = (a, b) => {
+  const s = Math.max(a.s, b.s);
+  return { A: a.n * pow10(s - a.s), B: b.n * pow10(s - b.s), s };
+};
+const decimalEquals = (x, y) => {
+  const { A, B } = alignDecimals(parseDecimal(x), parseDecimal(y));
+  return A === B;
+};
+
+/** Round num/den (den > 0) half-up (ties away from zero) to `places` and print as a fixed-decimal string. */
+function formatQuotient(num, den, places) {
+  const scaled = num * pow10(places);
+  const magnitude = scaled < 0n ? -scaled : scaled;
+  let q = magnitude / den;
+  if (2n * (magnitude % den) >= den) q += 1n;
+  const digits = q.toString().padStart(places + 1, "0");
+  const body = places ? `${digits.slice(0, -places)}.${digits.slice(-places)}` : digits;
+  return `${scaled < 0n ? "-" : ""}${body}`;
+}
+
+const PERCENT_UNIT = /^(?:(?:annual|annualized|annualised)\s+)?(?:percent|percentage|%|百分比)(?:\s*\([^()]{1,80}\)|(?:,\s*|\s+)(?:at\s+an?\s+)?(?:seasonally\s+adjusted\s+)?(?:annualized(?:\s+rate)?|annualised(?:\s+rate)?|annual\s+rate))?$/;
+
+function isPercentUnit(unit) {
+  const normalized = String(unit).trim().toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+  if (/\bpoints?\b|百分点/.test(normalized)) return false;
+  return PERCENT_UNIT.test(normalized);
+}
+
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const validDay = (y, m, d) => {
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+};
+
+function parseAnnualPeriodEnd(period) {
+  const match = /^(?:(?:FY\s*((?:19|20)\d{2}))\s*\(\s*)?(?:fiscal\s+)?year\s+ended\s+([A-Za-z]+)\s+(\d{1,2}),?\s+((?:19|20)\d{2})(\s*\))?$/i.exec(period.trim());
+  if (!match || Boolean(match[1]) !== Boolean(match[5])) return null;
+  const month = MONTHS.indexOf(match[2].toLowerCase()) + 1;
+  const year = Number(match[4]);
+  if (!month || !validDay(year, month, Number(match[3]))) return null;
+  return match[1] === undefined || Number(match[1]) === year ? [year, month, Number(match[3])] : null;
+}
+
+/** Only unambiguous period formats are comparable; returns [kind, tuple] or null. */
+function comparablePeriod(period) {
+  const value = period.trim();
+  let match = /^(FY)?((?:19|20)\d{2})$/i.exec(value);
+  if (match) return [match[1] ? "fiscal_year" : "calendar_year", [Number(match[2])]];
+  match = /^((?:19|20)\d{2})[- ]?Q([1-4])$/i.exec(value);
+  if (match) return ["calendar_quarter", [Number(match[1]), Number(match[2])]];
+  match = /^((?:19|20)\d{2})-(0[1-9]|1[0-2])$/.exec(value);
+  if (match) return ["calendar_month", [Number(match[1]), Number(match[2])]];
+  const annual = parseAnnualPeriodEnd(value);
+  if (annual) return ["year_ended_date", annual];
+  match = /^((?:19|20)\d{2})-(\d{2})-(\d{2})$/.exec(value);
+  if (match && validDay(Number(match[1]), Number(match[2]), Number(match[3]))) return ["date", match.slice(1).map(Number)];
+  return null;
+}
+
+const GRANULARITY = { fiscal_year: "year", calendar_year: "year", year_ended_date: "year", calendar_quarter: "quarter", calendar_month: "month" };
+const granularityOf = (period) => GRANULARITY[comparablePeriod(period)?.[0]] ?? null;
+const tupleCompare = (x, y) => {
+  for (let i = 0; i < Math.max(x.length, y.length); i += 1) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+  return 0;
+};
+
+/**
+ * `first` is current/numerator, `second` baseline/denominator. Inputs are
+ * {fact_id, value, unit, currency, period}. Returns the calculation fields the backend derives.
+ */
+function calculateEngine(formula, first, second, places) {
+  const a = parseDecimal(first.value);
+  const b = parseDecimal(second.value);
+  if (first.fact_id === second.fact_id) throw new CalcError("Inputs must identify distinct facts.");
+  if (first.unit !== second.unit || (first.currency ?? null) !== (second.currency ?? null)) throw new CalcError("Input units and currencies must match.");
+  if (formula === "margin_percent" && first.period !== second.period) throw new CalcError("Margin inputs must have the same period.");
+  if (formula === "growth_percent" && first.period === second.period) throw new CalcError("Growth inputs must refer to different periods.");
+  let orderCheck = "not_checked";
+  if (formula === "growth_percent") {
+    const current = comparablePeriod(first.period);
+    const baseline = comparablePeriod(second.period);
+    if (current && baseline && current[0] === baseline[0]) {
+      if (tupleCompare(current[1], baseline[1]) <= 0) throw new CalcError("Growth current period must be later than its baseline.");
+      orderCheck = "recognized_formats_only";
+    }
+    if (b.n <= 0n) throw new CalcError("Growth requires a positive baseline.");
+  }
+  if (formula === "margin_percent" && b.n <= 0n) throw new CalcError("Margin requires a positive denominator.");
+  const { A, B, s } = alignDecimals(a, b);
+  let value;
+  let expression;
+  let unit = "percent";
+  let formulaVersion = "1";
+  if (formula === "growth_percent") {
+    value = formatQuotient((A - B) * 100n, B, places);
+    expression = "(first / second - 1) * 100";
+  } else if (formula === "margin_percent") {
+    value = formatQuotient(A * 100n, B, places);
+    expression = "first / second * 100";
+  } else {
+    value = formatQuotient(A - B, pow10(s), places);
+    expression = "first - second";
+    unit = first.unit;
+    if (isPercentUnit(first.unit)) {
+      if ((first.currency ?? null) !== null) throw new CalcError("Percentage inputs cannot have a currency.");
+      unit = "percentage points";
+      formulaVersion = "2";
+    }
+  }
+  return {
+    formula_id: formula,
+    formula_version: formulaVersion,
+    expression,
+    value,
+    unit,
+    currency: unit === "percent" || unit === "percentage points" ? null : first.currency ?? null,
+    decimal_places: places,
+    rounding: "half_up",
+    inputs: [first, second].map((item) => ({ fact_id: item.fact_id, value: item.value, unit: item.unit, currency: item.currency ?? null, period: item.period })),
+    input_verification: "not_verified_by_calculator",
+    input_precision_status: "not_established",
+    period_order_check: formula === "growth_percent" ? orderCheck : null,
+    period_granularity_check: formula === "growth_percent"
+      ? (() => {
+          const g1 = granularityOf(first.period);
+          const g2 = granularityOf(second.period);
+          return g1 !== null && g2 !== null && g1 !== g2 ? "different_labels_verify_stock_or_flow" : "not_established";
+        })()
+      : null,
+  };
+}
+
+/** Mirrors calculation_result_status: recompute and compare stored output. */
+function calcResultStatus(calc) {
+  try {
+    if (!Array.isArray(calc.inputs) || calc.inputs.length !== 2 || !Number.isInteger(calc.decimal_places)) return "unverifiable";
+    const expected = calculateEngine(calc.formula_id, calc.inputs[0], calc.inputs[1], calc.decimal_places);
+    if (!decimalEquals(String(calc.value), expected.value)) return "mismatch";
+    return ["formula_version", "expression", "unit", "currency", "rounding"].some((key) => (calc[key] ?? null) !== expected[key]) ? "mismatch" : "matched";
+  } catch {
+    return "unverifiable";
+  }
+}
+
+const legacyPercentageDifference = (calc) =>
+  calc.formula_id === "difference" && Array.isArray(calc.inputs) && calc.inputs.length === 2 &&
+  calc.inputs.every((item) => isRecord(item) && typeof item.unit === "string" && isPercentUnit(item.unit)) && calc.unit !== "percentage points";
+
+/** Mirrors calculation_input_status for the checks the mock models. */
+function calcInputStatus(calc, facts) {
+  if (legacyPercentageDifference(calc)) return "unverifiable";
+  try {
+    if (!Array.isArray(calc.inputs) || calc.inputs.length !== 2 || calc.inputs[0].fact_id === calc.inputs[1].fact_id) return "unverifiable";
+    let unverifiable = false;
+    for (const input of calc.inputs) {
+      const matches = facts.filter((fact) => fact.fact_id === input.fact_id);
+      if (matches.length !== 1) return "missing_or_ambiguous";
+      const [fact] = matches;
+      if (input.unit !== fact.unit || input.period !== fact.period || (input.currency ?? null) !== (fact.currency ?? null) || !decimalEquals(input.value, fact.value)) {
+        return "changed";
+      }
+      if (fact.verification === "user_edited_value_not_in_quotation") unverifiable = true;
+    }
+    return unverifiable ? "unverifiable" : "matched";
+  } catch {
+    return "unverifiable";
+  }
+}
+
+// ---- Version content validation (mirrors the research_topics models) ------------------------
+
+const CONTENT_KEYS = ["summary", "sources", "source_candidates", "facts", "calculations", "claims", "gaps", "turns"];
+const FACT_COMPUTED_FIELDS = ["currency_quote_missing", "scale_quote_missing", "currency_unspecified"];
+const CALCULATION_COMPUTED_FIELDS = ["input_status", "legacy_unit_warning", "result_status"];
+const FACT_KEYS = ["fact_id", "turn_id", "label", "value", "unit", "currency", "period", "source_id", "quotation", "character_start", "character_end", "location", "verification", ...FACT_COMPUTED_FIELDS];
+const CLAIM_KEYS = ["claim_id", "turn_id", "role", "text", "citations", "challenges_claim_ids", "edited_by_user"];
+const CALCULATION_KEYS = ["calculation_id", "turn_id", "formula_id", "formula_version", "expression", "input_verification", "input_precision_status", "period_order_check", "period_granularity_check", "inputs", "value", "unit", "currency", "rounding", "decimal_places", ...CALCULATION_COMPUTED_FIELDS, "authorship", "verification"];
+const FORMULAS = ["growth_percent", "margin_percent", "difference"];
+
+function exactKeys(value, allowed, location) {
+  if (!isRecord(value)) throw invalid("Input should be a valid dictionary or object.", location);
+  for (const key of Object.keys(value)) if (!allowed.includes(key)) throw invalid("Extra inputs are not permitted.", `${location}/${key}`);
+  return value;
+}
+
+function readString(value, location, { min = 0, max = Infinity, nullable = false } = {}) {
+  if (value === null && nullable) return null;
+  if (typeof value !== "string" || value.length < min || value.length > max) {
+    throw invalid(`Input should be a string${min ? " of at least 1 character" : ""}${max < Infinity ? ` and at most ${max} characters` : ""}.`, location);
+  }
+  return value;
+}
+
+function readInt(value, location, { min = 0, max = Infinity } = {}) {
+  if (!Number.isInteger(value) || value < min || value > max) throw invalid("Input should be a valid integer in range.", location);
+  return value;
+}
+
+function readLocation(value, location) {
+  exactKeys(value, ["character_start", "character_end"], location);
+  const start = readInt(value.character_start, `${location}/character_start`);
+  const end = readInt(value.character_end, `${location}/character_end`);
+  if (end <= start) throw invalid("character_end must be greater than character_start.", location);
+  return { character_start: start, character_end: end };
+}
+
+function readClaim(raw, index) {
+  const where = `body/content/claims/${index}`;
+  exactKeys(raw, CLAIM_KEYS, where);
+  if (!["support", "counterargument"].includes(raw.role)) throw invalid("Input should be 'support' or 'counterargument'.", `${where}/role`);
+  const citations = raw.citations ?? [];
+  if (!Array.isArray(citations) || citations.length > 10) throw invalid("Input should be a list of at most 10 citations.", `${where}/citations`);
+  const challenges = raw.challenges_claim_ids ?? [];
+  if (!isStringArray(challenges)) throw invalid("Input should be a list of strings.", `${where}/challenges_claim_ids`);
+  if (raw.edited_by_user !== undefined && typeof raw.edited_by_user !== "boolean") throw invalid("Input should be a valid boolean.", `${where}/edited_by_user`);
+  return {
+    claim_id: raw.claim_id === undefined ? `claim-${randomBytes(16).toString("hex")}` : readString(raw.claim_id, `${where}/claim_id`, { min: 1, max: 100 }),
+    turn_id: raw.turn_id === undefined ? null : readString(raw.turn_id, `${where}/turn_id`, { nullable: true }),
+    role: raw.role,
+    text: readString(raw.text, `${where}/text`, { min: 1, max: 3000 }),
+    citations: citations.map((cite, i) => {
+      exactKeys(cite, ["source_id", "quotation", "location"], `${where}/citations/${i}`);
+      return {
+        source_id: readString(cite.source_id, `${where}/citations/${i}/source_id`, { min: 1, max: 100 }),
+        quotation: readString(cite.quotation, `${where}/citations/${i}/quotation`, { max: 1000 }),
+        location: readLocation(cite.location, `${where}/citations/${i}/location`),
+      };
+    }),
+    challenges_claim_ids: [...challenges],
+    edited_by_user: raw.edited_by_user ?? false,
+  };
+}
+
+/** Defaulted view of a stored claim, comparable with readClaim output. */
+const claimIdentity = (claim) => ({
+  claim_id: claim.claim_id,
+  turn_id: claim.turn_id ?? null,
+  role: claim.role,
+  text: claim.text,
+  citations: (claim.citations ?? []).map((cite) => ({ source_id: cite.source_id, quotation: cite.quotation, location: { character_start: cite.location?.character_start, character_end: cite.location?.character_end } })),
+  challenges_claim_ids: claim.challenges_claim_ids ?? [],
+  edited_by_user: claim.edited_by_user ?? false,
+});
+
+function readFact(raw, index) {
+  const where = `body/content/facts/${index}`;
+  exactKeys(raw, FACT_KEYS, where);
+  for (const flag of FACT_COMPUTED_FIELDS) {
+    if (raw[flag] !== undefined && raw[flag] !== null && typeof raw[flag] !== "boolean") throw invalid("Input should be a valid boolean.", `${where}/${flag}`);
+  }
+  return {
+    fact_id: readString(raw.fact_id, `${where}/fact_id`, { min: 1, max: 200 }),
+    turn_id: raw.turn_id === undefined ? null : readString(raw.turn_id, `${where}/turn_id`, { nullable: true }),
+    label: readString(raw.label, `${where}/label`, { min: 1 }),
+    value: readString(raw.value, `${where}/value`, { min: 1 }),
+    unit: readString(raw.unit, `${where}/unit`, { min: 1 }),
+    currency: raw.currency === undefined ? null : readString(raw.currency, `${where}/currency`, { nullable: true }),
+    period: readString(raw.period, `${where}/period`, { min: 1 }),
+    source_id: readString(raw.source_id, `${where}/source_id`, { min: 1 }),
+    quotation: readString(raw.quotation, `${where}/quotation`),
+    character_start: readInt(raw.character_start, `${where}/character_start`),
+    character_end: readInt(raw.character_end, `${where}/character_end`, { min: 1 }),
+    location: readLocation(raw.location, `${where}/location`),
+    verification: readString(raw.verification, `${where}/verification`),
+  };
+}
+
+const factIdentity = (fact) => ({
+  fact_id: fact.fact_id,
+  turn_id: fact.turn_id ?? null,
+  label: fact.label,
+  value: fact.value,
+  unit: fact.unit,
+  currency: fact.currency ?? null,
+  period: fact.period,
+  source_id: fact.source_id,
+  quotation: fact.quotation,
+  character_start: fact.character_start,
+  character_end: fact.character_end,
+  location: fact.location,
+  verification: fact.verification,
+});
+
+function readCalculation(raw, index) {
+  const where = `body/content/calculations/${index}`;
+  exactKeys(raw, CALCULATION_KEYS, where);
+  if (!FORMULAS.includes(raw.formula_id)) throw invalid("Input should be 'growth_percent', 'margin_percent' or 'difference'.", `${where}/formula_id`);
+  if (!Array.isArray(raw.inputs) || raw.inputs.length !== 2) throw invalid("List should have exactly 2 items.", `${where}/inputs`);
+  const optional = (key) => (raw[key] === undefined ? null : readString(raw[key], `${where}/${key}`, { nullable: true }));
+  const calc = {
+    calculation_id: readString(raw.calculation_id, `${where}/calculation_id`, { min: 1, max: 200 }),
+    turn_id: optional("turn_id"),
+    formula_id: raw.formula_id,
+    formula_version: readString(raw.formula_version, `${where}/formula_version`),
+    expression: readString(raw.expression, `${where}/expression`),
+    input_verification: readString(raw.input_verification, `${where}/input_verification`),
+    input_precision_status: readString(raw.input_precision_status, `${where}/input_precision_status`),
+    period_order_check: optional("period_order_check"),
+    period_granularity_check: optional("period_granularity_check"),
+    inputs: raw.inputs.map((item, i) => {
+      exactKeys(item, ["fact_id", "value", "unit", "currency", "period"], `${where}/inputs/${i}`);
+      return {
+        fact_id: readString(item.fact_id, `${where}/inputs/${i}/fact_id`),
+        value: readString(item.value, `${where}/inputs/${i}/value`),
+        unit: readString(item.unit, `${where}/inputs/${i}/unit`),
+        currency: item.currency === undefined ? null : readString(item.currency, `${where}/inputs/${i}/currency`, { nullable: true }),
+        period: readString(item.period, `${where}/inputs/${i}/period`),
+      };
+    }),
+    value: readString(raw.value, `${where}/value`),
+    unit: readString(raw.unit, `${where}/unit`),
+    currency: optional("currency"),
+    rounding: readString(raw.rounding, `${where}/rounding`),
+    decimal_places: readInt(raw.decimal_places, `${where}/decimal_places`, { max: 8 }),
+    result_status: optional("result_status"),
+    input_status: optional("input_status"),
+    legacy_unit_warning: optional("legacy_unit_warning"),
+    authorship: optional("authorship"),
+    verification: optional("verification"),
+  };
+  return calc;
+}
+
+const calculationIdentity = (calc) => {
+  const { input_status: _a, legacy_unit_warning: _b, result_status: _c, ...rest } = calc;
+  return {
+    ...rest,
+    turn_id: calc.turn_id ?? null,
+    period_order_check: calc.period_order_check ?? null,
+    period_granularity_check: calc.period_granularity_check ?? null,
+    currency: calc.currency ?? null,
+    authorship: calc.authorship ?? null,
+    verification: calc.verification ?? null,
+    inputs: (calc.inputs ?? []).map((item) => ({ ...item, currency: item.currency ?? null })),
+  };
+};
+
+const omitKeys = (value, keys) => Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+const same = (x, y) => stableStringify(x) === stableStringify(y);
+
+function validateVersionInput(body) {
+  exactKeys(body, ["parent_version_id", "content", "review", "note"], "body");
+  readString(body.parent_version_id, "body/parent_version_id");
+  if (!isRecord(body.content)) throw invalid("Input should be a valid dictionary or object.", "body/content");
+  exactKeys(body.content, CONTENT_KEYS, "body/content");
+  if (body.review !== undefined && !["draft", "confirmed", "reservation"].includes(body.review)) {
+    throw invalid("Input should be 'draft', 'confirmed' or 'reservation'.", "body/review");
+  }
+  if (body.note !== undefined) readString(body.note, "body/note", { max: 10000 });
+  const { content } = body;
+  if (content.summary !== undefined) readString(content.summary, "body/content/summary", { max: 100000 });
+  for (const key of ["sources", "source_candidates", "facts", "calculations", "claims", "gaps", "turns"]) {
+    if (content[key] !== undefined && !Array.isArray(content[key])) throw invalid("Input should be a valid list.", `body/content/${key}`);
+  }
+  if ((content.source_candidates ?? []).length > 10) throw invalid("List should have at most 10 items.", "body/content/source_candidates");
+}
+
+function validateCalculationRequest(body, { recalculate }) {
+  exactKeys(body, recalculate ? ["parent_version_id", "calculation_index"] : ["parent_version_id", "formula", "first_fact_id", "second_fact_id", "decimal_places"], "body");
+  const parent = readString(body.parent_version_id, "body/parent_version_id", { min: 1 }).trim();
+  if (parent.length < 1 || parent.length > 100) throw invalid("String should have at least 1 and at most 100 characters.", "body/parent_version_id");
+  if (recalculate) return { parent, index: readInt(body.calculation_index, "body/calculation_index", { max: 1999 }) };
+  if (!FORMULAS.includes(body.formula)) throw invalid("Input should be 'growth_percent', 'margin_percent' or 'difference'.", "body/formula");
+  const ids = ["first_fact_id", "second_fact_id"].map((key) => {
+    const id = readString(body[key], `body/${key}`, { min: 1 }).trim();
+    if (id.length < 1 || id.length > 200) throw invalid("String should have at least 1 and at most 200 characters.", `body/${key}`);
+    return id;
+  });
+  return { parent, formula: body.formula, first: ids[0], second: ids[1], places: body.decimal_places === undefined ? 2 : readInt(body.decimal_places, "body/decimal_places", { max: 8 }) };
+}
+
 // ---- Source validation and construction ----------------------------------------------
 
 function strictKeys(body, allowed) {
@@ -529,11 +918,12 @@ function commitTurn(data, run, mode, now) {
     version_id: randomId("ver"),
     created_at: iso(now),
     created_by: "agent",
+    // Backend ResearchVersionChain: an agent version resets review to draft but keeps the user's note.
     review: "draft",
+    note: previous.note ?? "",
     content,
     source_ids: [...new Set([...sourceIds, ...(run.bodySourceIds ?? [])])],
     parent_version_id: previous.version_id,
-    note: "",
   };
   topic.versions.push(version);
   topic.updated_at = version.created_at;
@@ -1395,6 +1785,213 @@ export function createServer({ tickMs = 1500 } = {}) {
     topic.updated_at = now;
     send(res, 201, topic);
   });
+
+  // ---- Version reads and user edits ---------------------------------------------------------
+
+  route("GET", "/v2/research/topics/:topic/versions/:version", true, ({ res, auth, params }) => {
+    const topic = getTopic(dataFor(auth.accountId), params.topic);
+    send(res, 200, getVersion(topic, params.version));
+  });
+
+  /** Appends a new user version (parent = latest) and returns the full topic. */
+  function pushUserVersion(topic, previous, { content, review = "draft", note }) {
+    const now = iso(new Date());
+    topic.versions.push({
+      version_id: `version_${randomBytes(16).toString("hex")}`,
+      parent_version_id: previous.version_id,
+      created_at: now,
+      created_by: "user",
+      review,
+      note,
+      content,
+      source_ids: [...previous.source_ids],
+    });
+    topic.updated_at = now;
+  }
+
+  const unprocessable = (message) => new HttpError(422, "invalid_request", message);
+
+  route("POST", "/v2/research/topics/:topic/versions", true, ({ res, auth, params, body }) => {
+    const data = dataFor(auth.accountId);
+    validateVersionInput(body);
+    const topic = getTopic(data, params.topic);
+    const previous = latestOf(topic);
+    if (previous.version_id !== body.parent_version_id) {
+      throw new HttpError(409, "lifecycle_conflict", "Research topic has changed; reload before saving.");
+    }
+    const before = ensureContent(previous.content);
+    const incoming = body.content;
+    for (const key of ["turns", "sources", "source_candidates", "gaps"]) {
+      if (!same(incoming[key] ?? [], before[key])) throw unprocessable("Server-produced research records cannot be edited.");
+    }
+
+    const allowedSources = new Set(previous.source_ids);
+    const checkSpan = (sourceId, quotation, start, end, message) => {
+      const source = allowedSources.has(sourceId) ? data.sources.get(sourceId) : null;
+      if (!source || !textAvailable(topic, source)) throw unprocessable(message);
+      if (!quotation.trim() || end > source.text.length || source.text.slice(start, end) !== quotation) throw unprocessable(message);
+    };
+
+    // Claims: unchanged ones pass untouched; changed or new ones are rechecked and marked.
+    const claimsIn = (incoming.claims ?? []).map(readClaim);
+    if (new Set(claimsIn.map((claim) => claim.claim_id)).size !== claimsIn.length) throw unprocessable("Research findings or their citations are invalid.");
+    const parentClaims = new Map(before.claims.map((claim) => [claim.claim_id, claim]));
+    const idMap = new Map();
+    const claims = [];
+    const changedClaims = [];
+    for (const claim of claimsIn) {
+      const original = parentClaims.get(claim.claim_id);
+      if (original && same(claim, claimIdentity(original))) {
+        claims.push(structuredClone(original));
+        continue;
+      }
+      for (const cite of claim.citations) {
+        checkSpan(cite.source_id, cite.quotation, cite.location.character_start, cite.location.character_end,
+          "Citation must match an attached, displayable, time-eligible source.");
+      }
+      if (!original) idMap.set(claim.claim_id, `claim-${randomBytes(16).toString("hex")}`);
+      const saved = { ...claim, claim_id: idMap.get(claim.claim_id) ?? claim.claim_id, turn_id: original ? original.turn_id ?? null : null, edited_by_user: true };
+      claims.push(saved);
+      changedClaims.push(saved);
+    }
+    const finalIds = new Set(claims.map((claim) => claim.claim_id));
+    for (const claim of changedClaims) {
+      claim.challenges_claim_ids = claim.challenges_claim_ids.map((id) => idMap.get(id) ?? id);
+      if (claim.challenges_claim_ids.some((id) => !finalIds.has(id) || id === claim.claim_id)) {
+        throw unprocessable("A challenged finding must be another existing finding.");
+      }
+    }
+
+    // Facts: an unchanged fact (ignoring computed flags) is kept; edits are rechecked and downgraded.
+    const factsIn = (incoming.facts ?? []).map(readFact);
+    if (new Set(factsIn.map((fact) => fact.fact_id.trim())).size !== factsIn.length) throw unprocessable("Research fact identifiers must be unique.");
+    const parentFacts = new Map(before.facts.map((fact) => [fact.fact_id, fact]));
+    const facts = [];
+    for (const fact of factsIn) {
+      const original = parentFacts.get(fact.fact_id);
+      if (original && same(factIdentity(fact), factIdentity(original))) {
+        facts.push(structuredClone(original));
+        continue;
+      }
+      try {
+        parseDecimal(fact.value);
+      } catch {
+        throw unprocessable("Research fact value, unit, currency, or period is invalid.");
+      }
+      if (fact.label.length > 300 || fact.quotation.length > 1000 || fact.source_id.length > 100) throw unprocessable("Research fact provenance is invalid.");
+      if (fact.location.character_start !== fact.character_start || fact.location.character_end !== fact.character_end) {
+        throw unprocessable("Research fact location is inconsistent.");
+      }
+      checkSpan(fact.source_id, fact.quotation, fact.character_start, fact.character_end,
+        "Research fact must use an attached, displayable, time-eligible real source.");
+      const inQuotation = fact.quotation.replace(/,/g, "").includes(fact.value.replace(/,/g, ""));
+      facts.push({
+        ...fact,
+        turn_id: original ? original.turn_id ?? null : null,
+        verification: inQuotation ? "user_edited_not_independently_verified" : "user_edited_value_not_in_quotation",
+      });
+    }
+
+    // Calculations: an unchanged one (ignoring computed fields) is kept; edits become user-authored.
+    const calcsIn = (incoming.calculations ?? []).map(readCalculation);
+    if (new Set(calcsIn.map((calc) => calc.calculation_id)).size !== calcsIn.length) throw unprocessable("Research calculation identifiers must be unique.");
+    const parentCalcs = new Map(before.calculations.map((calc) => [calc.calculation_id, calc]));
+    const calculations = calcsIn.map((calc) => {
+      const original = parentCalcs.get(calc.calculation_id);
+      if (original && same(calculationIdentity(calc), calculationIdentity(original))) {
+        const kept = structuredClone(original);
+        // Fail closed: a status the mock cannot re-derive stays unverifiable.
+        kept.input_status = original.input_status === "unverifiable" ? "unverifiable" : calcInputStatus(kept, facts);
+        return kept;
+      }
+      const edited = {
+        ...calc,
+        turn_id: original ? original.turn_id ?? null : null,
+        legacy_unit_warning: null,
+        authorship: "user",
+        verification: "user_edited_not_independently_verified",
+      };
+      edited.input_status = calcInputStatus(edited, facts);
+      edited.result_status = calcResultStatus(edited);
+      return edited;
+    });
+
+    const content = { ...before, summary: incoming.summary ?? "", claims, facts, calculations };
+    pushUserVersion(topic, previous, { content, review: body.review ?? "draft", note: body.note ?? "" });
+    send(res, 201, topic);
+  });
+
+  // ---- Calculations -----------------------------------------------------------------------
+
+  /** Mirrors _research_calculation_inputs: version-owned, unambiguous, quotation-backed facts. */
+  function calculationInputs(content, factIds) {
+    return factIds.map((id) => {
+      const matches = content.facts.filter((fact) => fact.fact_id === id);
+      if (matches.length !== 1) throw unprocessable("Calculation input facts are missing or ambiguous.");
+      const [fact] = matches;
+      if (fact.verification === "user_edited_value_not_in_quotation") throw unprocessable("The fact's source quotation requires review before calculation.");
+      if (isPercentUnit(String(fact.unit)) && (fact.currency ?? null) !== null) throw unprocessable("Percentage currency context requires review before calculation.");
+      return { fact_id: fact.fact_id, value: fact.value, unit: fact.unit, currency: fact.currency ?? null, period: fact.period };
+    });
+  }
+
+  function runCalculation(formula, content, factIds, places) {
+    const [first, second] = calculationInputs(content, factIds);
+    try {
+      return calculateEngine(formula, first, second, places);
+    } catch (error) {
+      if (error instanceof CalcError) throw unprocessable("Calculation cannot be performed with the current facts.");
+      throw error;
+    }
+  }
+
+  function calculationTopic(data, topicId, parent) {
+    const topic = getTopic(data, topicId);
+    const previous = latestOf(topic);
+    if (previous.version_id !== parent) throw new HttpError(409, "lifecycle_conflict", "Research topic has changed; reload before calculating.");
+    return { topic, previous, content: ensureContent(previous.content) };
+  }
+
+  route("POST", "/v2/research/topics/:topic/calculations", true, ({ res, auth, params, body }) => {
+    const request = validateCalculationRequest(body, { recalculate: false });
+    const { topic, previous, content } = calculationTopic(dataFor(auth.accountId), params.topic, request.parent);
+    if (content.calculations.length >= 2000) throw unprocessable("The research calculation limit has been reached.");
+    const result = runCalculation(request.formula, content, [request.first, request.second], request.places);
+    content.calculations.push({
+      calculation_id: `calc-${randomBytes(16).toString("hex")}`,
+      ...result,
+      input_status: "matched",
+      result_status: "matched",
+      turn_id: null,
+      legacy_unit_warning: null,
+      authorship: "calculation_engine",
+    });
+    pushUserVersion(topic, previous, { content, note: previous.note });
+    send(res, 201, topic);
+  });
+
+  route("POST", "/v2/research/topics/:topic/calculations/recalculate", true, ({ res, auth, params, body }) => {
+    const request = validateCalculationRequest(body, { recalculate: true });
+    const { topic, previous, content } = calculationTopic(dataFor(auth.accountId), params.topic, request.parent);
+    if (request.index >= content.calculations.length) throw unprocessable("Calculation does not exist in this version.");
+    const old = content.calculations[request.index];
+    if (!["1", "2"].includes(old.formula_version) || !Array.isArray(old.inputs) || old.inputs.length !== 2) {
+      throw unprocessable("Calculation inputs or formula version are unavailable.");
+    }
+    const result = runCalculation(old.formula_id, content, old.inputs.map((item) => item.fact_id), old.decimal_places);
+    content.calculations[request.index] = {
+      calculation_id: old.calculation_id,
+      ...result,
+      input_status: "matched",
+      result_status: "matched",
+      turn_id: old.turn_id ?? null,
+      legacy_unit_warning: null,
+      authorship: "calculation_engine",
+    };
+    pushUserVersion(topic, previous, { content, note: previous.note });
+    send(res, 201, topic);
+  });
+
 
   function resolve(method, segments) {
     for (const candidate of routes) {
