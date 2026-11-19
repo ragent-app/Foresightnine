@@ -309,3 +309,31 @@ def test_postgres_connection_failures_are_not_swallowed_or_replaced_with_memory(
         repository.get("missing")
 
     assert "connection refused" not in str(error.value)
+
+
+def test_postgres_items_for_owner_pushes_owner_filter_to_sql() -> None:
+    connection = FakeConnection()
+    connection.all_results = [[("topic_a", {"owner_id": "owner-a", "name": "Ada"}, 1)]]
+    repository = PostgresDocumentRepository(
+        "postgresql://db.example.test/app",
+        "research_topics",
+        value_loader=lambda value: value["name"],
+        connection_factory=lambda _dsn: connection,
+    )
+
+    assert list(repository.items_for_owner("owner-a")) == [("topic_a", "Ada")]
+
+    statement, parameters = connection.calls[0]
+    assert "document->>'owner_id' = %s" in statement
+    assert "expires_at" in statement.lower()
+    assert parameters == ("research_topics", "owner-a")
+
+
+def test_in_memory_items_for_owner_filters_expired_and_other_owners() -> None:
+    now = datetime(2026, 8, 10, tzinfo=timezone.utc)
+    repository: InMemoryDocumentRepository[Any] = InMemoryDocumentRepository(clock=lambda: now)
+    repository["mine"] = {"owner_id": "owner-a", "name": "Mine"}
+    repository["expired"] = type("ExpiredDoc", (), {"owner_id": "owner-a", "expires_at": now})()
+    repository["other"] = {"owner_id": "owner-b", "name": "Other"}
+
+    assert list(repository.items_for_owner("owner-a")) == [("mine", {"owner_id": "owner-a", "name": "Mine"})]

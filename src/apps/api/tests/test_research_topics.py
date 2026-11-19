@@ -300,3 +300,35 @@ def test_fact_with_unmatched_value_blocks_calculation_until_corrected(monkeypatc
     assert uncertain["content"]["calculations"][0]["input_status"] == "unverifiable"
     assert client.post(path + "/calculations/recalculate", headers=headers,
                        json={"parent_version_id": uncertain["version_id"], "calculation_index": 0}).status_code == 422
+
+
+def test_topic_list_queries_only_current_owner_and_ignores_other_owners_records():
+    from app.research_topics import ResearchInput, ResearchTopics
+
+    class OwnerScopedRepository:
+        def __init__(self):
+            self.items_called = False
+            self.owners_queried: list[str] = []
+            self.store = {}
+
+        def put(self, key, value, *, expected_version=None):
+            self.store[key] = value
+            return 1
+
+        def items(self):
+            self.items_called = True
+            raise AssertionError("ResearchTopics.list must not scan all owners when items_for_owner is available")
+
+        def items_for_owner(self, owner_id: str):
+            self.owners_queried.append(owner_id)
+            return ((key, value) for key, value in self.store.items() if value.owner_id == owner_id)
+
+    repo = OwnerScopedRepository()
+    topics = ResearchTopics(repo)
+    topic_a = topics.create("owner-a", ResearchInput(question="Owner A question"))
+    repo.store["corrupted-b"] = type("BadTopic", (), {"owner_id": "owner-b"})()
+
+    listed = topics.list("owner-a")
+    assert [item.topic_id for item in listed] == [topic_a.topic_id]
+    assert repo.items_called is False
+    assert repo.owners_queried == ["owner-a"]

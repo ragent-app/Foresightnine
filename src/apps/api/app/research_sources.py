@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
-from .storage import JsonDocumentRepository
+from .storage import JsonDocumentRepository, owner_items
 
 
 class SourcePermissions(BaseModel):
@@ -246,6 +246,6 @@ class ResearchSources:
         return source.model_copy(deep=True)
 
     def delete_owner(self, owner: str) -> None:
-        for source_id, source in list(self.repository.items()):
+        for source_id, source in list(owner_items(self.repository, owner)):
             if source.owner_id == owner:
                 self.repository.delete(source_id)

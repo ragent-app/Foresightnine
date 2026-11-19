@@ -2513,12 +2513,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
             reserve_search=lambda: _reserve_search_call(http_request), entitlement_remaining=remaining_entitlement)
         if continuation_input is not None:
             saved = admitted_continuation['runtime']
-            accounting = saved['_accounting']
-            context.calls = accounting['calls']
-            context.search_calls = accounting['search_calls']
-            context.usage = accounting['usage']
-            context.accounted_tokens = accounting['accounted_tokens']
-            context.model_call_receipts = accounting['model_call_receipts']
+            accounting = saved.get('_accounting') or {}
+            context.calls = accounting.get('calls', 0)
+            context.search_calls = accounting.get('search_calls', 0)
+            context.usage = accounting.get('usage')
+            context.accounted_tokens = accounting.get('accounted_tokens')
+            context.model_call_receipts = dict(accounting.get('model_call_receipts') or {})
             if request.max_elapsed_seconds is not None:
                 elapsed = (lifecycle_clock.now() - datetime.fromisoformat(continuation_input['captured_at'])).total_seconds()
                 context.budget = ResearchExecutionBudget(request.max_model_calls, request.max_search_calls,

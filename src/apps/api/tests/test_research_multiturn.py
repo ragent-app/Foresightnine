@@ -257,6 +257,31 @@ def test_continuation_works_when_run_inputs_come_back_without_null_fields(env, m
     assert env.latest()['content']['turns'][0]['status'] == 'completed'
 
 
+def test_continuation_works_when_failure_precedes_any_model_usage_and_null_fields_dropped(env, monkeypatch):
+    """When an attempt fails before any provider usage is recorded, `_accounting['usage']` is None and stripped by PostgreSQL read normalization."""
+    from copy import deepcopy
+    from app.storage import _drop_legacy_null_fields
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
+    repository = api.RESEARCH_RUN_INPUTS
+    original_get = repository.get
+    monkeypatch.setattr(repository, 'get', lambda key, default=None: _drop_legacy_null_fields(deepcopy(original_get(key, default))))
+    sid = env.source_id
+
+    def immediate_failure(messages, kwargs):
+        kwargs['diagnostic_callback']({'submission_state': 'not_started', 'stages': [{'stage': 'tls', 'result': 'timeout', 'elapsed_ms': 1}]})
+        raise ProviderFailure('provider_timeout', 'connection timed out', retryable=True)
+
+    env.install(Scripted(immediate_failure, read_all(sid), submit(sid)))
+    first_id = env.run()
+    assert env.latest()['content']['turns'][0]['status'] == 'partial'
+    status = env.client.get(f'{env.path}/runs/{first_id}/recovery-status', headers=env.headers).json()
+    assert status['can_continue'], status
+    continued = env.client.post(f'{env.path}/runs/{first_id}/continue', headers={**env.headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert continued.status_code == 202, continued.text
+    assert env.wait(continued.json()['operation']['operation_id'])['status'] == 'completed'
+    assert env.latest()['content']['turns'][0]['status'] == 'completed'
+
+
 def test_explanation_only_follow_up_completes_without_new_claims(env):
     sid = env.source_id
     env.install(Scripted(read_all(sid), submit(sid), submit(sid, claims=False)))

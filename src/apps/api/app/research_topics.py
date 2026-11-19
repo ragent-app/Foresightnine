@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .storage import JsonDocumentRepository, StorageConflictError
+from .storage import JsonDocumentRepository, StorageConflictError, owner_items
 from .research_calculations import calculation_result_status
 
 
@@ -304,7 +304,7 @@ class ResearchTopics:
         return topic.model_copy(deep=True)
 
     def list(self, owner: str) -> list[ResearchTopic]:
-        return [topic.model_copy(deep=True) for _, topic in self.repository.items()
+        return [topic.model_copy(deep=True) for _, topic in owner_items(self.repository, owner)
                 if topic.owner_id == owner]
 
     def delete_owner(self, owner: str) -> None:

@@ -297,6 +297,14 @@ class InMemoryDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
         """Enumerate all stored documents for retention, including expired values."""
         return self._values.items()
 
+    def items_for_owner(self, owner_id: str) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-expired documents belonging to ``owner_id``."""
+        _validate_key(owner_id)
+        for key, value in list(self.items()):
+            owner = value.get("owner_id") if isinstance(value, Mapping) else getattr(value, "owner_id", None)
+            if owner == owner_id:
+                yield key, value
+
 
 _GET_SQL = f"""
 SELECT document, version
@@ -309,6 +317,15 @@ _ITEMS_SQL = f"""
 SELECT document_key, document, version
 FROM {DOCUMENT_TABLE}
 WHERE collection = %s
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+ORDER BY document_key
+""".strip()
+
+_OWNER_ITEMS_SQL = f"""
+SELECT document_key, document, version
+FROM {DOCUMENT_TABLE}
+WHERE collection = %s
+  AND document->>'owner_id' = %s
   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
 ORDER BY document_key
 """.strip()
@@ -456,11 +473,15 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
     def __len__(self) -> int:
         return sum(1 for _ in self._items_with_versions(_ITEMS_SQL))
 
-    def _items_with_versions(self, statement: str) -> list[tuple[str, ValueT, int]]:
+    def _items_with_versions(
+        self,
+        statement: str,
+        parameters: tuple[Any, ...] | None = None,
+    ) -> list[tuple[str, ValueT, int]]:
         try:
             with self._connection() as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute(statement, (self.collection,))
+                    cursor.execute(statement, parameters if parameters is not None else (self.collection,))
                     rows = cursor.fetchall()
         except StorageRuntimeError:
             raise
@@ -480,6 +501,14 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
 
     def items(self) -> Iterator[tuple[str, ValueT]]:
         return ((key, value) for key, value, _version in self._items_with_versions(_ITEMS_SQL))
+
+    def items_for_owner(self, owner_id: str) -> Iterator[tuple[str, ValueT]]:
+        """Enumerate non-expired documents belonging to one top-level ``owner_id``."""
+        _validate_key(owner_id)
+        return (
+            (key, value)
+            for key, value, _version in self._items_with_versions(_OWNER_ITEMS_SQL, (self.collection, owner_id))
+        )
 
     def items_for_retention(self) -> Iterator[tuple[str, ValueT]]:
         """Enumerate non-deleted documents, including expired documents, for cleanup only."""
@@ -592,6 +621,14 @@ class PostgresDocumentRepository(MutableMapping[str, ValueT], Generic[ValueT]):
             raise StorageRuntimeError("PostgreSQL storage is unavailable.") from error
 
 
+def owner_items(repository: JsonDocumentRepository[ValueT], owner_id: str) -> Iterator[tuple[str, ValueT]]:
+    """Iterate documents filtered to ``owner_id`` when the repository supports pushdown."""
+    scoped = getattr(repository, "items_for_owner", None)
+    if callable(scoped):
+        return scoped(owner_id)
+    return repository.items()
+
+
 def build_repository(
     config_or_mode: StorageConfig | StorageMode | str,
     collection: str,
@@ -635,6 +672,7 @@ __all__ = [
     "StorageMode",
     "StorageRuntimeError",
     "build_repository",
+    "owner_items",
     "postgres_unit_of_work",
     "current_postgres_unit_of_work",
     "pydantic_json_dumper",
