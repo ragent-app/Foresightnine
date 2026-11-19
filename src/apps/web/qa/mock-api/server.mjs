@@ -10,9 +10,11 @@ import {
   RUN_STEPS,
   S1_ID,
   citation,
+  fictionalPdfText,
   isEligibleForRun,
   iso,
   makeOperation,
+  makeSource,
   operatingParagraphRange,
   rawEvent,
   seed,
@@ -29,7 +31,25 @@ const FULL_EXPORT_DISCLOSURE = "Model interpretations and declared source permis
 const CALCULATION_DISCLOSURE =
   "Calculations use the recorded inputs; their source precision and prior rounding are not established.";
 const METADATA_DISCLOSURE = "No research text or source content is included. Full export requires source permissions.";
-const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_BODY_BYTES = 8 * 1024 * 1024; // PDF/HTML uploads carry up to 5 MB as base64
+const MAX_ORIGINAL_BYTES = 5_000_000;
+const HTML_EXTRACTION_DISCLOSURE =
+  "Webpage text is extracted; table separators and span markers, when present, " +
+  "are generated. Extraction does not reproduce browser rendering; check the original document for layout and visibility.";
+const SEC_LIMITATION = "Current SEC ticker mapping only; exchange, security class and historical validity are not established.";
+const HTML_METHODS = new Set(["official_html", "user_html", "sec_filing_html"]);
+const ALLOWED_FETCH_HOSTS = new Set(["www.bea.gov", "www.federalreserve.gov", "www.sec.gov"]);
+const SEC_FILING_PATH = /^\/Archives\/edgar\/data\/\d{1,10}\/\d{18}\/[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.html?$/;
+const SEC_INDEX = [
+  { cik: 1000001, ticker: "NWEX", name: "Northwind Example Corp" },
+  { cik: 1000002, ticker: "CTEX", name: "Contoso Example Holdings" },
+  { cik: 1000003, ticker: "FBEX", name: "Fabrikam Example Inc" },
+];
+const DISCOVERY_STEP = { kind: "tool", name: "discover_sources", status: "completed", rationale: "搜索公开线索" };
+const DISCOVERY_CANDIDATES = [
+  { url: "https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm", title: "Northwind Example Corp 10-K (fictional)", published_at: "2026-08-12T00:00:00Z" },
+  { url: "https://news.example.com/northwind-capex", title: "示例新闻：Northwind 资本开支", published_at: "2026-10-20T00:00:00Z" },
+];
 
 class HttpError extends Error {
   constructor(status, code, message, { retryable = false, details = [] } = {}) {
@@ -134,6 +154,10 @@ function validateRunRequest(body) {
   if ("question_override" in body && body.question_override !== null && typeof body.question_override !== "string") throw invalid("Input should be a string.", "body/question_override");
   if ("source_ids" in body && !isStringArray(body.source_ids)) throw invalid("Input should be a list of strings.", "body/source_ids");
   if ("selected_source_ids" in body && body.selected_source_ids !== null && !isStringArray(body.selected_source_ids)) throw invalid("Input should be a list of strings.", "body/selected_source_ids");
+  if (Array.isArray(body.selected_source_ids) &&
+      (body.selected_source_ids.some((id) => !id.trim()) || new Set(body.selected_source_ids).size !== body.selected_source_ids.length)) {
+    throw invalid("Selected source IDs must be nonblank and unique.", "body/selected_source_ids");
+  }
   for (const key of ["max_elapsed_seconds", "max_input_tokens_per_call", "max_model_calls", "max_search_calls", "max_total_tokens"]) {
     if (key in body && !isNullableInt(body[key])) throw invalid("Input should be a non-negative integer.", `body/${key}`);
   }
@@ -160,6 +184,175 @@ function validateResearchInput(body) {
   if ("as_of" in body && body.as_of !== null && (typeof body.as_of !== "string" || Number.isNaN(Date.parse(body.as_of)))) {
     throw invalid("Input should be a valid datetime.", "body/as_of");
   }
+}
+
+// ---- Source validation and construction ----------------------------------------------
+
+function strictKeys(body, allowed) {
+  if (!isRecord(body)) throw invalid("Body must be a JSON object.");
+  for (const key of Object.keys(body)) if (!allowed.includes(key)) throw invalid("Extra inputs are not permitted.", `body/${key}`);
+}
+
+const PERMISSION_KEYS = ["store", "model_input", "display", "export"];
+
+function readPermissions(value) {
+  if (value === undefined) throw invalid("Field required.", "body/permissions");
+  if (!isRecord(value)) throw invalid("Input should be a valid dictionary or object.", "body/permissions");
+  for (const key of Object.keys(value)) if (!PERMISSION_KEYS.includes(key)) throw invalid("Extra inputs are not permitted.", `body/permissions/${key}`);
+  const result = {};
+  for (const key of PERMISSION_KEYS) {
+    if (value[key] !== undefined && typeof value[key] !== "boolean") throw invalid("Input should be a valid boolean.", `body/permissions/${key}`);
+    result[key] = value[key] ?? false;
+  }
+  return result;
+}
+
+function readTitle(body) {
+  if (body.title === undefined) throw invalid("Field required.", "body/title");
+  if (typeof body.title !== "string" || body.title.length > 500) throw invalid("Input should be a string of at most 500 characters.", "body/title");
+  const title = body.title.trim();
+  if (!title) throw invalid("Title must not be blank.", "body/title");
+  return title;
+}
+
+function readText(body) {
+  if (body.text === undefined) throw invalid("Field required.", "body/text");
+  if (typeof body.text !== "string" || body.text.length < 1 || body.text.length > 2_000_000) {
+    throw invalid("String should have at least 1 and at most 2000000 characters.", "body/text");
+  }
+  if (!body.text.trim()) throw invalid("Source text must not be blank.", "body/text");
+  return body.text;
+}
+
+function readBool(body, key, fallback = false) {
+  if (body[key] === undefined) return fallback;
+  if (typeof body[key] !== "boolean") throw invalid("Input should be a valid boolean.", `body/${key}`);
+  return body[key];
+}
+
+const TIMESTAMP = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?)(Z|[+-]\d{2}(?::?\d{2})?)$/i;
+
+function readTimestamp(body, key) {
+  const value = body[key];
+  if (value === undefined || value === null) return null;
+  const match = typeof value === "string" ? TIMESTAMP.exec(value.trim()) : null;
+  if (!match) throw invalid("Input should be a valid datetime with a timezone offset.", `body/${key}`);
+  let [, day, clock, zone] = match;
+  if (/^[+-]\d{2}$/.test(zone)) zone += ":00";
+  else if (/^[+-]\d{4}$/.test(zone)) zone = `${zone.slice(0, 3)}:${zone.slice(3)}`;
+  const parsed = Date.parse(`${day}T${clock}${zone.toUpperCase()}`);
+  if (Number.isNaN(parsed)) throw invalid("Input should be a valid datetime with a timezone offset.", `body/${key}`);
+  return iso(new Date(parsed));
+}
+
+const readDates = (body) => ({
+  published_at: readTimestamp(body, "published_at"),
+  event_at: readTimestamp(body, "event_at"),
+  revised_at: readTimestamp(body, "revised_at"),
+});
+
+function parseUrl(value, location = "body/url") {
+  if (value === undefined) throw invalid("Field required.", location);
+  let url = null;
+  try {
+    url = typeof value === "string" && value.length <= 2083 ? new URL(value.trim()) : null;
+  } catch {
+    url = null;
+  }
+  if (!url || (url.protocol !== "http:" && url.protocol !== "https:") || !url.hostname) throw invalid("Input should be a valid URL.", location);
+  return url;
+}
+
+function readOptionalUrl(body) {
+  if (body.url === undefined || body.url === null) return null;
+  const url = parseUrl(body.url);
+  if (url.username || url.password) throw invalid("Source URLs cannot include credentials.");
+  return url.href;
+}
+
+/** Strict base64 (no whitespace, correct padding); returns null when invalid. */
+function decodeBase64(value, location) {
+  if (value === undefined) throw invalid("Field required.", location);
+  if (typeof value !== "string" || value.length < 1 || value.length > 4 * Math.ceil((MAX_ORIGINAL_BYTES + 2) / 3)) {
+    throw invalid("String should have at least 1 and at most 6666668 characters.", location);
+  }
+  if (value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return null;
+  return Buffer.from(value, "base64");
+}
+
+const newSourceId = () => `source_${randomBytes(16).toString("hex")}`;
+
+function storeSource(data, accountId, fields) {
+  const now = new Date();
+  const source = makeSource(now, {
+    source_id: fields.source_id ?? newSourceId(),
+    owner_id: accountId,
+    title: fields.title,
+    text: fields.text,
+    url: fields.url ?? null,
+    kind: fields.kind ?? "user_supplied",
+    is_simulated: Boolean(fields.is_simulated),
+    published_at: fields.published_at ?? null,
+    event_at: fields.event_at ?? null,
+    revised_at: fields.revised_at ?? null,
+    obtained_at: iso(now),
+    permissions: fields.permissions,
+    retrieval_method: fields.retrieval_method ?? "user_supplied",
+    pdf_text_order: fields.pdf_text_order ?? null,
+    derived_from_source_id: fields.derived_from_source_id ?? null,
+    response_sha256: fields.response_sha256 ?? null,
+    response_content_type: fields.response_content_type ?? null,
+  });
+  if (fields.original_bytes) source.original_bytes = fields.original_bytes;
+  if (fields.pdf_text_spacing_warning) source.pdf_text_spacing_warning = true;
+  data.sources.set(source.source_id, source);
+  return source;
+}
+
+const bytesSha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+const HTML_ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " };
+
+/** Dependency-free tag stripper for fictional QA uploads; not a real HTML parser. */
+function extractHtmlText(html) {
+  const stripped = html
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|ix:header)\b[\s\S]*?<\/\1\s*>/gi, " ")
+    .replace(/<\/?(?:p|div|br|li|tr|h[1-6]|table|section|article)\b[^>]*>/gi, "\n")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&(?:amp|lt|gt|quot|nbsp|#39);/g, (entity) => HTML_ENTITIES[entity]);
+  return stripped
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function secConceptRecords(cik, tag, unit, filingBefore, maxRecords) {
+  const seed = Number.parseInt(sha256(`${cik}:${tag}`).slice(0, 4), 16) % 500;
+  const records = [];
+  for (let i = 0; i < 12; i += 1) {
+    const year = 2023 + Math.floor(i / 4);
+    const quarter = i % 4;
+    const end = new Date(Date.UTC(year, quarter * 3 + 3, 0));
+    const filed = new Date(end.getTime() + 45 * 24 * 60 * 60 * 1000);
+    records.push({
+      period_end: end.toISOString().slice(0, 10),
+      filed: filed.toISOString().slice(0, 10),
+      form: quarter === 3 ? "10-K" : "10-Q",
+      value: (1000 + i * 137 + seed) * 1_000_000,
+    });
+  }
+  return records.filter((record) => !filingBefore || record.filed < filingBefore).slice(0, maxRecords).map(
+    (record) => `period ${record.period_end} | filed ${record.filed} | form ${record.form} | ${unit} ${record.value.toLocaleString("en-US")}`,
+  );
+}
+
+function resolveDiscovery(body) {
+  if ("discover_sources" in body) return body.discover_sources === true;
+  const selected = body.selected_source_ids;
+  const searches = body.max_search_calls;
+  return searches !== 0 && !(Array.isArray(selected) && selected.length === 0 && !(typeof searches === "number" && searches > 0));
 }
 
 // ---- Run simulation -------------------------------------------------------------
@@ -263,7 +456,9 @@ function commitTurn(data, run, mode, now) {
   const previous = topic.versions[topic.versions.length - 1];
   const content = ensureContent(previous.content);
   const sourceIds = previous.source_ids ?? topic.request.source_ids;
-  const attached = sourceIds.map((id) => data.sources.get(id)).filter(Boolean);
+  // Only the sources this run read feed findings and summaries (seeded runs read every attached source).
+  const readIds = run.readSourceIds ?? sourceIds;
+  const attached = readIds.map((id) => data.sources.get(id)).filter(Boolean);
   const northwind = attached.find((source) => source.source_id === S1_ID && isEligibleForRun(source));
   const existing = run.replace_turn ? content.turns.find((turn) => turn.turn_id === run.turn_id) : null;
   const turnId = existing?.turn_id ?? run.turn_id ?? randomId("turn");
@@ -271,7 +466,24 @@ function commitTurn(data, run, mode, now) {
   const completed = mode === "completed";
 
   if (northwind) addScriptedFindings(content, northwind, turnId, completed);
-  if (content.sources.length === 0) content.sources = summarizeSources(attached.filter(isEligibleForRun));
+  const summarized = new Set(content.sources.map((row) => row.source_id));
+  content.sources.push(...summarizeSources(attached.filter((source) => isEligibleForRun(source) && !summarized.has(source.source_id))));
+  if (run.discoverActive) {
+    const known = new Set(content.source_candidates.map((row) => row.url));
+    for (const lead of DISCOVERY_CANDIDATES) {
+      if (known.has(lead.url)) continue;
+      content.source_candidates.push({
+        title: lead.title,
+        url: lead.url,
+        published_at: lead.published_at,
+        retrieved_at: iso(now),
+        search_result_hash: sha256(lead.url).slice(0, 16),
+        search_provider: "mock",
+        status: "unverified",
+      });
+    }
+  }
+  const noSources = readIds.length === 0;
 
   const question = effectiveQuestion(topic, run);
   const turn = {
@@ -290,20 +502,22 @@ function commitTurn(data, run, mode, now) {
     fact_ids: content.facts.filter((item) => item.turn_id === turnId).map((item) => item.fact_id),
     claim_ids: content.claims.filter((item) => item.turn_id === turnId).map((item) => item.claim_id),
     calculation_ids: content.calculations.filter((item) => item.turn_id === turnId).map((item) => item.calculation_id),
-    gaps: completed ? [] : structuredClone(PARTIAL_GAPS),
+    gaps: completed ? (noSources ? [structuredClone(PARTIAL_GAPS[0])] : []) : structuredClone(PARTIAL_GAPS),
     read_ranges: northwind
       ? completed
         ? [operatingParagraphRange(northwind.text)]
         : [{ source_id: S1_ID, ...span(northwind.text, Q_OPI26) }]
       : [],
     official_fetch_status: "not_requested",
-    search_status: "not_requested",
+    search_status: run.discoverActive ? "completed" : "not_requested",
     stopping_note: null,
   };
   if (completed) {
     turn.report = northwind
       ? "本轮复核了年报摘录中的营业利润：2026 财年营业利润为 15,104 百万美元，上一财年为 12,980 百万美元，同比增长约 16.36%。\n\n结果来自对摘录的读取和确定性计算；金额单位与币种沿用摘录开头的说明，尚未与原始披露逐项核对。"
-      : "本轮已读取所附资料，但没有形成可引用的具体主张。\n\n这是本地 QA 模拟的运行结果，不含真实研究结论。";
+      : noSources
+        ? "本轮没有选择任何来源，因此没有形成可引用的主张。\n\n这是本地 QA 模拟的运行结果，不含真实研究结论。"
+        : "本轮已读取所附资料，但没有形成可引用的具体主张。\n\n这是本地 QA 模拟的运行结果，不含真实研究结论。";
   }
   const focus = run.focus_citation ?? existing?.focus_citation;
   if (focus) turn.focus_citation = { citation_index: focus.citation_index, claim_id: focus.claim_id };
@@ -317,7 +531,7 @@ function commitTurn(data, run, mode, now) {
     created_by: "agent",
     review: "draft",
     content,
-    source_ids: [...sourceIds],
+    source_ids: [...new Set([...sourceIds, ...(run.bodySourceIds ?? [])])],
     parent_version_id: previous.version_id,
     note: "",
   };
@@ -534,7 +748,12 @@ export function createServer({ tickMs = 1500 } = {}) {
       version_id: null,
       started_at: iso(now),
       seq: runSeq,
+      readSourceIds: init.readSourceIds,
+      bodySourceIds: init.bodySourceIds ?? [],
+      resolvedDiscover: init.resolvedDiscover ?? false,
+      discoverActive: init.discoverActive ?? false,
     };
+    run.operation.last_event_id = `${operationId}:${run.events.length}`;
     run.question = init.question;
     data.runs.set(operationId, run);
     return run;
@@ -561,6 +780,16 @@ export function createServer({ tickMs = 1500 } = {}) {
     const topic = getTopic(data, params.topic);
     const key = requireKey(req);
     validateRunRequest(body);
+    const bodySourceIds = body.source_ids ?? [];
+    const available = [...new Set([...topic.request.source_ids, ...latestOf(topic).source_ids, ...bodySourceIds])];
+    const selected = Array.isArray(body.selected_source_ids) ? body.selected_source_ids : null;
+    if (selected && !selected.every((id) => available.includes(id))) {
+      throw new HttpError(422, "invalid_request", "Selected sources must belong to this research request.");
+    }
+    const readSourceIds = selected ?? available;
+    for (const id of [...bodySourceIds, ...readSourceIds]) {
+      if (!data.sources.has(id)) throw notFound("Research topic or source");
+    }
     const scope = `${auth.accountId}|start|${topic.topic_id}|${key}`;
     const hash = sha256(stableStringify(body));
     const existing = replay(data, scope, key, hash);
@@ -572,10 +801,17 @@ export function createServer({ tickMs = 1500 } = {}) {
       throw new HttpError(409, "lifecycle_conflict", "A research run is already active on this topic.");
     }
     const question = effectiveQuestion(topic, { question_override: body.question_override });
+    const resolvedDiscover = resolveDiscovery(body);
+    const discoverActive = resolvedDiscover && body.max_search_calls !== 0;
     const run = newRun(data, topic, {
       kind: "start",
       key,
       body,
+      readSourceIds,
+      bodySourceIds,
+      resolvedDiscover,
+      discoverActive,
+      events: discoverActive ? [rawEvent(DISCOVERY_STEP)] : [],
       variant: pickVariant(question),
       question: question || DOCUMENT_OVERVIEW_QUESTION,
       question_override: body.question_override,
@@ -616,17 +852,39 @@ export function createServer({ tickMs = 1500 } = {}) {
       replace_turn: partial,
       events: structuredClone(source.events),
       cursor: source.cursor,
+      readSourceIds: source.readSourceIds,
+      bodySourceIds: source.bodySourceIds,
+      resolvedDiscover: source.resolvedDiscover,
+      discoverActive: source.discoverActive,
     });
     source.continued_by = run.operation.operation_id;
     idempotency.set(scope, { hash, operationId: run.operation.operation_id });
     send(res, 202, operationResponse(run));
   }
 
+  /** Visible source metadata (no text, no status); mirrors the backend's _visible_research_source. */
   function sourceRow(source) {
-    const { text: _text, owner_id: _owner, url: _url, ...metadata } = source;
+    const { text: _text, owner_id: _owner, url: _url, original_bytes: _original, ...metadata } = source;
     if (source.url) metadata.url = source.url;
+    if (source.retrieval_method === "user_pdf") metadata.original_pdf_available = Boolean(source.original_bytes);
+    if (HTML_METHODS.has(source.retrieval_method)) {
+      metadata.original_html_available = Boolean(source.original_bytes);
+      metadata.extraction_disclosure = HTML_EXTRACTION_DISCLOSURE;
+    }
+    metadata.verification = "user_declared_not_verified";
     return metadata;
   }
+
+  const visibleSource = (source, { withText = true } = {}) => {
+    const row = sourceRow(source);
+    if (withText && source.permissions.display) row.text = source.text;
+    return row;
+  };
+  const getSource = (data, id) => {
+    const source = data.sources.get(id);
+    if (!source) throw notFound("Research source");
+    return source;
+  };
 
   function versionSources(data, topic, version) {
     return version.source_ids.map((id) => {
@@ -826,6 +1084,316 @@ export function createServer({ tickMs = 1500 } = {}) {
       version_created_at: version.created_at,
       version_id: version.version_id,
     });
+  });
+
+  // ---- Sources ----------------------------------------------------------------------
+
+  const requirePermissionStore = (permissions, message = "Source storage permission is required.") => {
+    if (!permissions.store) throw new HttpError(422, "invalid_request", message);
+  };
+
+  route("POST", "/v2/research/sources", true, ({ res, auth, body }) => {
+    const data = dataFor(auth.accountId);
+    strictKeys(body, ["title", "text", "url", "kind", "is_simulated", "published_at", "event_at", "revised_at", "permissions"]);
+    const title = readTitle(body);
+    const text = readText(body);
+    const url = readOptionalUrl(body);
+    if (body.kind !== undefined && !["user_supplied", "official", "market_data"].includes(body.kind)) {
+      throw invalid("Input should be 'user_supplied', 'official' or 'market_data'.", "body/kind");
+    }
+    const fields = {
+      title,
+      text,
+      url,
+      kind: body.kind ?? "user_supplied",
+      is_simulated: readBool(body, "is_simulated"),
+      ...readDates(body),
+      permissions: readPermissions(body.permissions),
+    };
+    requirePermissionStore(fields.permissions);
+    send(res, 201, visibleSource(storeSource(data, auth.accountId, { ...fields, retrieval_method: "user_supplied" })));
+  });
+
+  route("POST", "/v2/research/sources/pdf", true, ({ res, auth, body }) => {
+    const data = dataFor(auth.accountId);
+    strictKeys(body, ["title", "pdf_base64", "text_order", "is_simulated", "published_at", "event_at", "revised_at", "permissions"]);
+    const title = readTitle(body);
+    const bytes = decodeBase64(body.pdf_base64, "body/pdf_base64");
+    if (body.text_order !== undefined && body.text_order !== "layout" && body.text_order !== "reading") {
+      throw invalid("Input should be 'layout' or 'reading'.", "body/text_order");
+    }
+    const textOrder = body.text_order ?? "layout";
+    const isSimulated = readBool(body, "is_simulated");
+    const dates = readDates(body);
+    const permissions = readPermissions(body.permissions);
+    // Magic title: the extractor is busy or timed out.
+    if (title.includes("繁忙")) {
+      throw new HttpError(503, "internal_error", "PDF extraction is unavailable or timed out.", { retryable: true });
+    }
+    if (!bytes || bytes.length > MAX_ORIGINAL_BYTES || !bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+      throw new HttpError(422, "invalid_request", "PDF is invalid, too large, encrypted, or has no extractable text.");
+    }
+    requirePermissionStore(permissions);
+    const spacing = title.includes("间距");
+    const source = storeSource(data, auth.accountId, {
+      title,
+      text: fictionalPdfText(title, textOrder, { joined: spacing }),
+      is_simulated: isSimulated,
+      ...dates,
+      permissions,
+      retrieval_method: "user_pdf",
+      pdf_text_order: textOrder,
+      response_sha256: bytesSha256(bytes),
+      response_content_type: "application/pdf",
+      original_bytes: bytes,
+      pdf_text_spacing_warning: spacing,
+    });
+    send(res, 201, visibleSource(source, { withText: false }));
+  });
+
+  route("POST", "/v2/research/sources/html", true, ({ res, auth, body }) => {
+    const data = dataFor(auth.accountId);
+    strictKeys(body, ["title", "html_base64", "is_simulated", "published_at", "event_at", "revised_at", "permissions"]);
+    const title = readTitle(body);
+    const bytes = decodeBase64(body.html_base64, "body/html_base64");
+    const isSimulated = readBool(body, "is_simulated");
+    const dates = readDates(body);
+    const permissions = readPermissions(body.permissions);
+    const unusable = () => new HttpError(422, "invalid_request", "HTML is invalid, too large, not UTF-8, or has no extractable text.");
+    if (!bytes || bytes.length < 1 || bytes.length > MAX_ORIGINAL_BYTES || !permissions.store) throw unusable();
+    let text;
+    try {
+      text = extractHtmlText(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    } catch {
+      throw unusable();
+    }
+    if (!text || text.length > 2_000_000) throw unusable();
+    const source = storeSource(data, auth.accountId, {
+      title,
+      text,
+      is_simulated: isSimulated,
+      ...dates,
+      permissions,
+      retrieval_method: "user_html",
+      response_sha256: bytesSha256(bytes),
+      response_content_type: "text/html",
+      original_bytes: bytes,
+    });
+    send(res, 201, visibleSource(source, { withText: false }));
+  });
+
+  route("POST", "/v2/research/sources/fetch", true, ({ res, auth, body }) => {
+    const data = dataFor(auth.accountId);
+    strictKeys(body, ["url", "title", "permissions", "is_simulated", "published_at", "event_at", "revised_at"]);
+    const url = parseUrl(body.url);
+    if (url.protocol !== "https:" || !ALLOWED_FETCH_HOSTS.has(url.hostname) || url.username || url.password ||
+        (url.port !== "" && url.port !== "443") || url.hash || body.url.includes("#")) {
+      throw invalid("Only supported official HTTPS sources are available.", "body/url");
+    }
+    const isSec = url.hostname === "www.sec.gov";
+    if (isSec && (url.search || body.url.includes("?") || !SEC_FILING_PATH.test(url.pathname))) {
+      throw invalid("Only direct SEC filing HTML paths are available.", "body/url");
+    }
+    const title = readTitle(body);
+    const isSimulated = readBool(body, "is_simulated");
+    const dates = readDates(body);
+    const permissions = readPermissions(body.permissions);
+    requirePermissionStore(permissions);
+    // Magic path: the upstream source is unavailable or timed out.
+    if (url.pathname.includes("timeout")) {
+      throw new HttpError(503, "internal_error", "Source unavailable or timed out.", { retryable: true });
+    }
+    const text = isSec
+      ? `Fictional SEC filing extract from ${url.href}. Item 7. Management's discussion (fictional). Total revenue 12,345 (fictional).\nCapital expenditure 987 (fictional).`
+      : `Fictional official page extract from ${url.href}. Headline indicator 2.5 percent (fictional).\nThis page text is invented for QA.`;
+    const original = Buffer.from(`<html><body><p>${text.replace(/\n/g, "</p><p>")}</p></body></html>`, "utf8");
+    const source = storeSource(data, auth.accountId, {
+      title,
+      text,
+      url: url.href,
+      kind: "official",
+      is_simulated: isSimulated,
+      ...dates,
+      permissions,
+      retrieval_method: isSec ? "sec_filing_html" : "official_html",
+      response_sha256: bytesSha256(original),
+      response_content_type: "text/html",
+      original_bytes: original,
+    });
+    send(res, 201, visibleSource(source, { withText: !isSec }));
+  });
+
+  route("POST", "/v2/research/identities/sec-search", true, ({ res, body }) => {
+    strictKeys(body, ["query"]);
+    if (body.query === undefined) throw invalid("Field required.", "body/query");
+    if (typeof body.query !== "string") throw invalid("Input should be a valid string.", "body/query");
+    const raw = body.query.trim();
+    if (raw.length < 1 || raw.length > 100) throw invalid("String should have at least 1 and at most 100 characters.", "body/query");
+    // Magic query: the SEC contact is not configured on this deployment.
+    if (raw === "未配置") throw new HttpError(503, "internal_error", "SEC source contact is not configured.", { retryable: false });
+    const query = raw.toLowerCase();
+    const matches = [];
+    for (const item of SEC_INDEX) {
+      const ticker = item.ticker.toLowerCase();
+      const name = item.name.toLowerCase();
+      if (!ticker.includes(query) && !name.includes(query) && query !== String(item.cik)) continue;
+      const rank = query === ticker || query === String(item.cik) ? 0 : name.startsWith(query) ? 1 : 2;
+      matches.push({ rank, ticker, cik: item.cik, row: { cik: String(item.cik).padStart(10, "0"), ticker: item.ticker, name: item.name, exchange: null } });
+    }
+    matches.sort((a, b) => a.rank - b.rank || (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0) || a.cik - b.cik);
+    send(res, 200, {
+      candidates: matches.slice(0, 10).map((match) => match.row),
+      source_url: "https://www.sec.gov/files/company_tickers.json",
+      retrieved_at: new Date().toISOString(),
+      response_sha256: sha256(JSON.stringify(SEC_INDEX)),
+      limitation: SEC_LIMITATION,
+    });
+  });
+
+  route("POST", "/v2/research/sources/sec-concept", true, ({ res, auth, body }) => {
+    const data = dataFor(auth.accountId);
+    strictKeys(body, ["cik", "taxonomy", "tag", "unit", "filing_before", "max_records", "permissions"]);
+    if (body.cik === undefined) throw invalid("Field required.", "body/cik");
+    if (typeof body.cik !== "string" || !/^\d{1,10}$/.test(body.cik.trim())) throw invalid("String should match pattern '^\\d{1,10}$'.", "body/cik");
+    if (Number(body.cik.trim()) === 0) throw invalid("CIK must be nonzero.", "body/cik");
+    const cik = body.cik.trim().padStart(10, "0");
+    if (body.taxonomy !== undefined && !["us-gaap", "ifrs-full", "dei"].includes(body.taxonomy)) {
+      throw invalid("Input should be 'us-gaap', 'ifrs-full' or 'dei'.", "body/taxonomy");
+    }
+    const taxonomy = body.taxonomy ?? "us-gaap";
+    if (body.tag === undefined) throw invalid("Field required.", "body/tag");
+    if (typeof body.tag !== "string" || !/^[A-Za-z][A-Za-z0-9_]*$/.test(body.tag.trim()) || body.tag.trim().length > 128) {
+      throw invalid("String should match pattern '^[A-Za-z][A-Za-z0-9_]*$' and have at most 128 characters.", "body/tag");
+    }
+    const tag = body.tag.trim();
+    let unit = "USD";
+    if (body.unit !== undefined && body.unit !== null) {
+      if (typeof body.unit !== "string" || !/^[A-Za-z0-9-]+$/.test(body.unit.trim()) || body.unit.trim().length > 64) {
+        throw invalid("String should match pattern '^[A-Za-z0-9-]+$' and have at most 64 characters.", "body/unit");
+      }
+      unit = body.unit.trim();
+    }
+    let filingBefore = null;
+    if (body.filing_before !== undefined && body.filing_before !== null) {
+      const value = typeof body.filing_before === "string" ? body.filing_before.trim() : "";
+      const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00Z`) : null;
+      if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+        throw invalid("Input should be a valid date (YYYY-MM-DD).", "body/filing_before");
+      }
+      filingBefore = value;
+    }
+    const maxRecords = body.max_records ?? 30;
+    if (!Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > 100) throw invalid("Input should be an integer between 1 and 100.", "body/max_records");
+    const permissions = readPermissions(body.permissions);
+    const unusable = () => new HttpError(422, "invalid_request", "SEC source data could not be used.");
+    if (!permissions.store || cik === "0009999999") throw unusable(); // 0009999999 is the unknown-company magic CIK
+    const lines = secConceptRecords(cik, tag, unit, filingBefore, maxRecords);
+    if (lines.length === 0) throw unusable();
+    const title = `SEC companyconcept ${taxonomy}:${tag} CIK ${cik}`;
+    const text = `${title} (fictional QA data)\nUnit: ${unit}\n${lines.join("\n")}`;
+    const source = storeSource(data, auth.accountId, {
+      title,
+      text,
+      url: `https://data.sec.gov/api/xbrl/companyconcept/CIK${cik}/${taxonomy}/${tag}.json`,
+      kind: "official",
+      permissions,
+      retrieval_method: "sec_companyconcept",
+      response_sha256: sha256(text),
+      response_content_type: "application/json",
+    });
+    send(res, 201, visibleSource(source));
+  });
+
+  route("GET", "/v2/research/sources/:source", true, ({ res, auth, params }) =>
+    send(res, 200, visibleSource(getSource(dataFor(auth.accountId), params.source))));
+
+  route("GET", "/v2/research/sources/:source/original", true, ({ res, auth, params }) => {
+    const source = getSource(dataFor(auth.accountId), params.source);
+    if (!source.original_bytes || !source.permissions.display || !source.permissions.export) {
+      throw new HttpError(403, "invalid_request", "The original document is not available for download.");
+    }
+    const html = HTML_METHODS.has(source.retrieval_method);
+    res.writeHead(200, {
+      "Content-Type": html ? "application/octet-stream" : "application/pdf",
+      "Content-Length": source.original_bytes.length,
+      "Content-Disposition": html ? 'attachment; filename="source.html"' : 'attachment; filename="source.pdf"',
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.end(source.original_bytes);
+  });
+
+  route("POST", "/v2/research/sources/:source/reextract", true, ({ req, res, auth, params, body }) => {
+    const data = dataFor(auth.accountId);
+    strictKeys(body, ["text_order"]);
+    if (body.text_order === undefined) throw invalid("Field required.", "body/text_order");
+    if (body.text_order !== "layout" && body.text_order !== "reading") throw invalid("Input should be 'layout' or 'reading'.", "body/text_order");
+    const rawKey = req.headers["idempotency-key"];
+    if (rawKey !== undefined && (typeof rawKey !== "string" || rawKey.length < 8 || rawKey.length > 128)) {
+      throw invalid("String should have at least 8 and at most 128 characters.", "header/Idempotency-Key");
+    }
+    const original = getSource(data, params.source);
+    if (original.retrieval_method !== "user_pdf" || !original.original_bytes) {
+      throw new HttpError(422, "invalid_request", "The retained original PDF is unavailable.");
+    }
+    const title = original.title.slice(0, 470) + (body.text_order === "layout" ? " — layout" : " — reading");
+    const stableId = rawKey === undefined ? undefined : `source_${sha256(`pdf-reextract-v1\0${auth.accountId}\0${rawKey}`).slice(0, 32)}`;
+    const existing = stableId ? data.sources.get(stableId) : undefined;
+    if (existing) {
+      if (existing.derived_from_source_id !== original.source_id || existing.pdf_text_order !== body.text_order) {
+        throw new HttpError(409, "idempotency_conflict", "This key was used for a different PDF extraction.");
+      }
+      return send(res, 200, visibleSource(existing, { withText: false }), { "Idempotency-Replayed": "true" });
+    }
+    const source = storeSource(data, auth.accountId, {
+      source_id: stableId,
+      title,
+      text: fictionalPdfText(title, body.text_order, { normalized: true }),
+      url: original.url,
+      kind: original.kind,
+      is_simulated: original.is_simulated,
+      published_at: original.published_at,
+      event_at: original.event_at,
+      revised_at: original.revised_at,
+      permissions: { ...original.permissions },
+      retrieval_method: "user_pdf",
+      pdf_text_order: body.text_order,
+      derived_from_source_id: original.source_id,
+      response_sha256: bytesSha256(original.original_bytes),
+      response_content_type: "application/pdf",
+      original_bytes: original.original_bytes,
+    });
+    send(res, 201, visibleSource(source, { withText: false }), { "Idempotency-Replayed": "false" });
+  });
+
+  route("POST", "/v2/research/topics/:topic/sources", true, ({ res, auth, params, body }) => {
+    const data = dataFor(auth.accountId);
+    strictKeys(body, ["parent_version_id", "source_ids"]);
+    if (body.parent_version_id === undefined) throw invalid("Field required.", "body/parent_version_id");
+    const parent = typeof body.parent_version_id === "string" ? body.parent_version_id.trim() : "";
+    if (parent.length < 1 || parent.length > 100) throw invalid("String should have at least 1 and at most 100 characters.", "body/parent_version_id");
+    if (body.source_ids === undefined) throw invalid("Field required.", "body/source_ids");
+    if (!isStringArray(body.source_ids) || body.source_ids.length < 1) throw invalid("List should have at least 1 item.", "body/source_ids");
+    const ids = body.source_ids.map((id) => id.trim());
+    if (ids.some((id) => !id)) throw invalid("Source IDs must not be blank.", "body/source_ids");
+    const missing = () => notFound("Research topic or source");
+    const topic = data.topics.get(params.topic);
+    if (!topic || ids.some((id) => !data.sources.has(id))) throw missing();
+    const previous = latestOf(topic);
+    if (previous.version_id !== parent) throw new HttpError(409, "lifecycle_conflict", "Research topic has changed; reload before saving.");
+    const now = iso(new Date());
+    topic.versions.push({
+      version_id: `version_${randomBytes(16).toString("hex")}`,
+      parent_version_id: parent,
+      created_at: now,
+      created_by: "user",
+      review: "draft",
+      note: previous.note,
+      content: structuredClone(previous.content ?? {}),
+      source_ids: [...new Set([...previous.source_ids, ...ids])],
+    });
+    topic.updated_at = now;
+    send(res, 201, topic);
   });
 
   function resolve(method, segments) {

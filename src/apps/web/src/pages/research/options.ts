@@ -2,9 +2,12 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 
 /** Next-run options shown in the research settings panel (spec §4.6). Form values stay strings. */
 export interface RunOptions {
-  discover: "auto" | "off";
+  /** Web search for leads. On by default (user decision 2026-11-19); sent explicitly as true/false. */
+  discover: "on" | "off";
   autoFetch: "auto" | "off";
   budget: BudgetFields;
+  /** Sources the next turn reads; null means every source of the topic (backend default). */
+  selectedSourceIds: readonly string[] | null;
 }
 
 export interface BudgetFields {
@@ -19,7 +22,7 @@ export interface BudgetFields {
 export type BudgetKey = keyof BudgetFields;
 
 export const EMPTY_BUDGET: BudgetFields = { modelCalls: "", searchCalls: "", totalTokens: "", minutes: "", costUsd: "", inputTokensPerCall: "" };
-export const DEFAULT_OPTIONS: RunOptions = { discover: "auto", autoFetch: "auto", budget: EMPTY_BUDGET };
+export const DEFAULT_OPTIONS: RunOptions = { discover: "on", autoFetch: "auto", budget: EMPTY_BUDGET, selectedSourceIds: null };
 
 export const BUDGET_FIELDS: { key: BudgetKey; label: string; decimal?: boolean; placeholder: string }[] = [
   { key: "modelCalls", label: "模型调用上限", placeholder: "不设上限" },
@@ -57,12 +60,17 @@ function integerOrNull(raw: string): number | null {
 /**
  * Maps the panel to run request fields. Empty means "not set"; an explicit 0 is sent as 0
  * (AGENTS.md: no budget is added unless the user sets one).
+ *
+ * `discover_sources` is always sent as a boolean. The backend treats an explicit null as caller
+ * input and then as "off" (research_runs.resolve_automatic_research_request only fills omitted
+ * fields), so null must never be sent.
  */
 export function runRequestFields(options: RunOptions): Omit<ResearchV2.ResearchRunRequest, "parent_version_id"> {
   const fields: { -readonly [K in keyof ResearchV2.ResearchRunRequest]?: ResearchV2.ResearchRunRequest[K] } = {
-    discover_sources: options.discover === "off" ? false : null,
+    discover_sources: options.discover === "on",
     auto_fetch_official: options.autoFetch === "auto",
   };
+  if (options.selectedSourceIds !== null) fields.selected_source_ids = [...options.selectedSourceIds];
   const { budget } = options;
   const calls = integerOrNull(budget.modelCalls);
   const searches = integerOrNull(budget.searchCalls);

@@ -2,20 +2,24 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../api/http";
-import { useActiveRun, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useRunProgress, useStartTurn, useTopic, useVersionSources } from "../api/queries";
+import { useActiveRun, useAttachSources, useCancelRun, useContinueTurn, useRecoverTurn, useRecoveryStatus, useReextractPdf, useRunProgress, useStartTurn, useTopic, useVersionSources } from "../api/queries";
 import { exportFull, exportMetadata, isActiveStatus, latestVersion } from "../api/research";
-import type { AvailableVersionSource } from "../api/types";
+import type { AvailableVersionSource, CreatedSource } from "../api/types";
 import { gapText, REVIEW_LABEL } from "../lib/copy";
+import { saveJson } from "../lib/download";
 import { displayTurnNumber, formatDateTimeWithOffset } from "../lib/format";
 import { buildCitationIndex, suggestionsFor, topicTitle, type AnswerTab } from "../lib/research";
+import { ineligibility, INELIGIBLE_TEXT } from "../lib/sources";
 import { useLayout } from "../ui/AppLayout";
 import { Composer, type ComposerHandle, type ComposerToken } from "../ui/Composer";
 import { Icon } from "../ui/icons";
 import { MEDIA, prefersReducedMotion, useMedia, useScrolledPast } from "../ui/media";
 import { Menu } from "../ui/Menu";
 import { NetworkBanner, Toolbar } from "../ui/Toolbar";
+import { AddSourcesPanel } from "./research/AddSourcesPanel";
 import { describeError } from "./research/errors";
 import { DEFAULT_OPTIONS, optionsValid, runRequestFields, type RunOptions } from "./research/options";
+import { optionTokens } from "./research/optionTokens";
 import { ResearchSettingsPanel } from "./research/ResearchSettingsPanel";
 import { CitationSheet } from "./topic/Citation";
 import { TopicContext, type FocusCitation, type LiveRun, type PanelState, type TopicView } from "./topic/context";
@@ -28,18 +32,6 @@ interface PendingAsk {
   question: string;
   at: string;
   turnsAt: number;
-}
-
-function downloadJson(data: unknown, name: string): void {
-  const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function flash(element: Element): void {
@@ -62,13 +54,15 @@ export function TopicPage() {
   const [focus, setFocus] = useState<FocusCitation | null>(null);
   const [options, setOptions] = useState<RunOptions>(DEFAULT_OPTIONS);
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tone: "info" | "error" } | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
   const startTurn = useStartTurn(topicId);
   const cancel = useCancelRun(topicId);
   const continueTurn = useContinueTurn(topicId);
   const recoverTurn = useRecoverTurn(topicId);
+  const attach = useAttachSources(topicId);
+  const reextract = useReextractPdf();
 
   const topic = topicQuery.data;
   const version = topic ? latestVersion(topic) : null;
@@ -141,6 +135,22 @@ export function TopicPage() {
   const citations = useMemo(() => buildCitationIndex(content.claims ?? []), [content.claims]);
   const turnNumbers = useMemo(() => new Map(turns.map((turn) => [turn.turn_id, displayTurnNumber(turn)])), [turns]);
 
+  const locked = activeRun !== null || startTurn.isPending;
+
+  /**
+   * Adds a created source to the topic as a new version. A narrowed source selection keeps
+   * including newly added sources, since adding one signals the user wants it read.
+   */
+  const addToTopic = useCallback(async (source: CreatedSource | AvailableVersionSource, label: string) => {
+    const latest = topicQuery.data ? latestVersion(topicQuery.data) : null;
+    if (!latest) throw new Error("topic_not_loaded");
+    await attach.mutateAsync({ parentVersionId: latest.version_id, sourceIds: [source.source_id] });
+    const reason = ineligibility(source, topicQuery.data?.request.as_of ?? null);
+    if (reason === null) setOptions((current) => (current.selectedSourceIds === null || current.selectedSourceIds.includes(source.source_id)
+      ? current : { ...current, selectedSourceIds: [...current.selectedSourceIds, source.source_id] }));
+    setNotice({ tone: "info", text: reason === null ? `${label}「${source.title}」。下一轮研究会读取它。` : `${label}「${source.title}」，但下一轮不会读取：${INELIGIBLE_TEXT[reason]}。` });
+  }, [attach, topicQuery.data]);
+
   const prefill = useCallback((value: string) => {
     setPanel(null);
     setText(value);
@@ -161,6 +171,7 @@ export function TopicPage() {
       citations,
       sources,
       live,
+      locked,
       turnNumber: (turnId) => (turnId ? turnNumbers.get(turnId) ?? null : null),
       sourceTitle: (sourceId) => {
         const known = sources.get(sourceId)?.title;
@@ -174,6 +185,11 @@ export function TopicPage() {
         setPanel(null);
         requestAnimationFrame(() => composerRef.current?.focus());
       },
+      reextractPdf: async (source) => {
+        const textOrder = source.pdf_text_order === "reading" ? "layout" : "reading";
+        const created = await reextract.mutateAsync({ sourceId: source.source_id, textOrder });
+        await addToTopic(created, "已重新提取并添加");
+      },
       gotoClaim: (claimId) => {
         if (!inspector) setPanel(null);
         requestAnimationFrame(() => {
@@ -186,9 +202,7 @@ export function TopicPage() {
     };
     // progressMatches reads progress.progress, listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, turnNumbers, topicId, inspector]);
-
-  const locked = activeRun !== null || startTurn.isPending;
+  }, [topic, version, content, turns, citations, sources, activeRun, progress.progress, progress.events, turnNumbers, topicId, inspector, locked, addToTopic]);
   const cancelling = cancel.isPending || (cancel.isSuccess && cancel.variables?.operation_id === activeRun?.operation_id);
 
   const send = () => {
@@ -222,9 +236,9 @@ export function TopicPage() {
     if (!version) return;
     try {
       const data = kind === "full" ? await exportFull(topicId, version.version_id) : await exportMetadata(topicId, version.version_id);
-      downloadJson(data, `foresightnine-${topicId}-${version.version_id}${kind === "metadata" ? "-metadata" : ""}.json`);
+      saveJson(data, `foresightnine-${topicId}-${version.version_id}${kind === "metadata" ? "-metadata" : ""}.json`);
     } catch (error) {
-      setNotice(error instanceof ApiError && error.status === 403 ? "有资料不允许导出，无法导出完整记录。可以只导出元数据。" : describeError(error));
+      setNotice({ tone: "error", text: error instanceof ApiError && error.status === 403 ? "有资料不允许导出，无法导出完整记录。可以只导出元数据。" : describeError(error) });
     }
   };
 
@@ -253,6 +267,7 @@ export function TopicPage() {
     onDeliver: () => { if (recoveryOperation) recoverTurn.mutate(recoveryOperation); },
     onAskAgain: () => prefill(question),
     onFillGap: lastGap ? () => prefill(`请继续补充上一轮的缺口：${gapText(lastGap)}`) : null,
+    onAddSources: () => setPanel({ kind: "add" }),
   });
 
   const live = view?.live ?? null;
@@ -260,9 +275,10 @@ export function TopicPage() {
   const showLiveTurn = live !== null && (live.progress ? liveIndex > turns.length : pendingAsk !== null || turns.length === 0);
   const liveQuestion = (live?.progress?.turn.question || pendingAsk?.question || (turns.length === 0 ? topic?.request.question : "")) ?? "";
 
-  const tokens: ComposerToken[] = focus
-    ? [{ key: "focus", label: `深挖引用 ${focus.n}`, removeLabel: "移除深挖", onRemove: () => setFocus(null) }]
-    : [];
+  const tokens: ComposerToken[] = [
+    ...(focus ? [{ key: "focus", label: `深挖引用 ${focus.n}`, removeLabel: "移除深挖", onRemove: () => setFocus(null) }] : []),
+    ...optionTokens(options, setOptions),
+  ];
   const suggestions = view && !locked ? suggestionsFor(content) : [];
   const versionLabel = version ? `v${topic!.versions.length} ${REVIEW_LABEL[version.review] ?? version.review}` : "";
 
@@ -286,6 +302,7 @@ export function TopicPage() {
           triggerClassName="icon-btn"
           items={[
             { key: "settings", label: "研究设置", icon: "tune", onSelect: () => setPanel({ kind: "settings" }) },
+            { key: "add", label: "添加资料", icon: "plus", onSelect: () => setPanel({ kind: "add" }), disabled: locked || !version },
             "separator",
             { key: "export", label: "导出完整记录（JSON）", icon: "download", onSelect: () => void exportVersion("full"), disabled: !version },
             { key: "metadata", label: "仅导出元数据", icon: "download", onSelect: () => void exportVersion("metadata"), disabled: !version },
@@ -293,7 +310,7 @@ export function TopicPage() {
         />
       </Toolbar>
       <NetworkBanner />
-      {notice ? <div className="net-banner notice" role="alert">{notice}</div> : null}
+      {notice ? <div className={`net-banner ${notice.tone === "error" ? "notice" : "info"}`} role={notice.tone === "error" ? "alert" : "status"}>{notice.text}</div> : null}
       <div className="sr-only" aria-live="polite">{announcement}</div>
       <div className="scroll" ref={scrollRef} data-page="TopicPage">
         <div className="col">
@@ -367,6 +384,9 @@ export function TopicPage() {
                 onChange={setText}
                 onSubmit={send}
                 onOpenSettings={() => setPanel({ kind: "settings" })}
+                onAddSources={() => setPanel({ kind: "add" })}
+                addDisabled={locked}
+                onDropFiles={(files) => { if (files[0]) setPanel({ kind: "add", initial: { tab: "file", file: files[0] } }); }}
                 label="追问"
                 placeholder={locked ? "本轮研究进行中，可以先取消再提问" : "继续追问…"}
                 submitLabel="发送"
@@ -390,7 +410,16 @@ export function TopicPage() {
           {panel?.kind === "reader" ? <ReaderPanel key={`${panel.sourceId}:${panel.range?.join(":") ?? ""}`} sourceId={panel.sourceId} range={panel.range} onClose={() => setPanel(null)} /> : null}
           {panel?.kind === "cite" ? <CitationSheet n={panel.n} claimId={panel.claimId} citationIndex={panel.citationIndex} onClose={() => setPanel(null)} /> : null}
           {panel?.kind === "settings" ? (
-            <ResearchSettingsPanel mode="topic" options={options} asOfIso={topic!.request.as_of ?? null} scope={topic!.request.scope ?? ""} onApply={setOptions} onClose={() => setPanel(null)} />
+            <ResearchSettingsPanel mode="topic" options={options} asOfIso={topic!.request.as_of ?? null} scope={topic!.request.scope ?? ""} sources={[...sources.values()]} onApply={setOptions} onClose={() => setPanel(null)} />
+          ) : null}
+          {panel?.kind === "add" ? (
+            <AddSourcesPanel
+              asOfIso={topic!.request.as_of ?? null}
+              initial={panel.initial}
+              locked={locked}
+              onAdded={(source) => addToTopic(source, "已添加")}
+              onClose={() => setPanel(null)}
+            />
           ) : null}
         </TopicContext.Provider>
       ) : null}

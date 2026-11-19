@@ -74,3 +74,35 @@ export interface SourceText {
   text: string;
   content_sha256: string;
 }
+
+// apps/api/app/main.py _visible_research_source: creation endpoints return the
+// source metadata; `text` is present only when display is permitted and the
+// endpoint does not strip it (PDF, HTML and SEC filing uploads never return it).
+export type CreatedSource = Omit<AvailableVersionSource, "status"> & { text?: string; url?: string | null };
+
+// apps/api/app/research_uploads.py HtmlUploadRequest (not in the generated contract)
+export interface HtmlUploadRequest {
+  title: string;
+  html_base64: string;
+  is_simulated?: boolean;
+  published_at?: string | null;
+  event_at?: string | null;
+  revised_at?: string | null;
+  permissions: SourcePermissionFlags;
+}
+
+// apps/api/app/research_sec.py search_sec_identities
+export interface SecIdentity {
+  cik: string;
+  ticker: string;
+  name: string;
+  exchange: string | null;
+}
+
+export interface SecIdentitySearchResult {
+  candidates: SecIdentity[];
+  source_url: string;
+  retrieved_at: string;
+  response_sha256: string;
+  limitation: string;
+}

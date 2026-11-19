@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { createServer } from "./server.mjs";
-import { S1_ID, S3_ID, S4_ID } from "./fixtures.mjs";
+import { S1_ID, S3_ID, S4_ID, S5_ID } from "./fixtures.mjs";
 
 let server;
 let base;
@@ -64,9 +64,41 @@ async function waitForTerminal(topicId, operationId, { collect } = {}) {
 async function startRun(topicId, extra = {}, key = randomUUID()) {
   const topic = (await call("GET", topicPath(topicId))).json;
   const parent = topic.versions.at(-1).version_id;
-  const body = { parent_version_id: parent, ...extra };
+  // Discovery is on by default when the key is omitted; pin it off so the scripted event counts stay fixed.
+  const body = { parent_version_id: parent, discover_sources: false, ...extra };
   const response = await call("POST", `${topicPath(topicId)}/runs`, { body, headers: { "Idempotency-Key": key } });
   return { response, body, key };
+}
+
+const ALL = { store: true, model_input: true, display: true, export: true };
+const b64 = (value) => Buffer.from(value).toString("base64");
+const SOURCE_KEYS = ["source_id", "title", "kind", "is_simulated", "published_at", "event_at", "revised_at", "obtained_at", "content_sha256", "retrieval_method", "pdf_text_order", "derived_from_source_id", "permissions", "verification"];
+
+async function textSource(extra = {}) {
+  const response = await call("POST", "/v2/research/sources", { body: { title: "Fictional note", text: "Fabrikam Example Inc reported revenue of 100 (fictional).", permissions: ALL, ...extra } });
+  assert.equal(response.status, 201);
+  return response.json;
+}
+
+async function pdfSource(extra = {}) {
+  const response = await call("POST", "/v2/research/sources/pdf", { body: { title: "Fictional deck", pdf_base64: b64("%PDF-1.4 fictional"), permissions: ALL, ...extra } });
+  assert.equal(response.status, 201);
+  return response.json;
+}
+
+async function newTopic(sourceIds = [], question = "新研究主题") {
+  const response = await call("POST", "/v2/research/topics", { body: { question, source_ids: sourceIds } });
+  assert.equal(response.status, 201);
+  return response.json;
+}
+
+/** Finds the in-memory run record (test hook) for the signed-in session. */
+function runRecord(operationId) {
+  for (const account of server.mockState.accounts.values()) {
+    const run = account.data?.runs.get(operationId);
+    if (run) return run;
+  }
+  throw new Error("run not found");
 }
 
 describe("mock research API", () => {
@@ -331,5 +363,363 @@ describe("mock research API", () => {
     assert.equal((await call("POST", "/v1/auth/local/logout")).status, 204);
     assert.equal((await call("GET", "/v2/research/topics")).status, 401);
     token = (await login()).token;
+  });
+  test("text source: display on returns text, display off omits it, strict body", async () => {
+    const shown = await textSource({ url: "https://news.example.com/a", published_at: "2026-10-01T08:00:00+08:00" });
+    assert.match(shown.source_id, /^source_[0-9a-f]{32}$/);
+    assert.equal(shown.text, "Fabrikam Example Inc reported revenue of 100 (fictional).");
+    assert.equal(shown.retrieval_method, "user_supplied");
+    assert.equal(shown.kind, "user_supplied");
+    assert.equal(shown.published_at, "2026-10-01T00:00:00Z");
+    assert.equal(shown.url, "https://news.example.com/a");
+    assert.equal(shown.verification, "user_declared_not_verified");
+    assert.equal("status" in shown, false);
+    for (const key of SOURCE_KEYS) assert.ok(key in shown, key);
+    const hidden = await textSource({ permissions: { store: true } });
+    assert.equal("text" in hidden, false);
+    assert.deepEqual(hidden.permissions, { store: true, model_input: false, display: false, export: false });
+    const fetched = await call("GET", `/v2/research/sources/${shown.source_id}`);
+    assert.equal(fetched.status, 200);
+    assert.equal(fetched.json.content_sha256, shown.content_sha256);
+    assert.equal((await call("GET", "/v2/research/sources/source_missing")).status, 404);
+
+    const base = { title: "T", text: "x", permissions: ALL };
+    for (const extra of [{ surprise: 1 }, { title: "   " }, { text: "  \n" }, { published_at: "2026-10-01T08:00:00" }, { url: "https://u:p@news.example.com/" }, { kind: "other" }]) {
+      const bad = await call("POST", "/v2/research/sources", { body: { ...base, ...extra } });
+      assert.equal(bad.status, 422, JSON.stringify(extra));
+      assert.equal(bad.json.error_code, "validation_error");
+    }
+    assert.equal((await call("POST", "/v2/research/sources", { body: { title: "T", text: "x" } })).status, 422);
+    const noStore = await call("POST", "/v2/research/sources", { body: { ...base, permissions: { display: true } } });
+    assert.equal(noStore.status, 422);
+    assert.equal(noStore.json.error_code, "invalid_request");
+    assert.equal(noStore.json.message, "Source storage permission is required.");
+    assert.equal((await call("POST", "/v2/research/sources", { body: base, auth: false })).status, 401);
+  });
+
+  test("pdf upload: original kept without text; invalid, busy and spacing magic", async () => {
+    const created = await pdfSource({ text_order: "reading" });
+    assert.equal("text" in created, false);
+    assert.equal(created.retrieval_method, "user_pdf");
+    assert.equal(created.pdf_text_order, "reading");
+    assert.equal(created.original_pdf_available, true);
+    assert.equal("pdf_text_spacing_warning" in created, false);
+    const full = (await call("GET", `/v2/research/sources/${created.source_id}`)).json;
+    assert.ok(full.text.split("\f").length >= 3);
+    const spaced = await pdfSource({ title: "间距问题文档" });
+    assert.equal(spaced.pdf_text_spacing_warning, true);
+
+    const notPdf = await call("POST", "/v2/research/sources/pdf", { body: { title: "T", pdf_base64: b64("hello"), permissions: ALL } });
+    assert.equal(notPdf.status, 422);
+    assert.equal(notPdf.json.error_code, "invalid_request");
+    assert.equal(notPdf.json.message, "PDF is invalid, too large, encrypted, or has no extractable text.");
+    const badBase64 = await call("POST", "/v2/research/sources/pdf", { body: { title: "T", pdf_base64: "%%%not-base64", permissions: ALL } });
+    assert.equal(badBase64.status, 422);
+    assert.equal(badBase64.json.error_code, "invalid_request");
+    const tooLarge = await call("POST", "/v2/research/sources/pdf", { body: { title: "T", pdf_base64: Buffer.concat([Buffer.from("%PDF-"), Buffer.alloc(4_999_996)]).toString("base64"), permissions: ALL } });
+    assert.equal(tooLarge.status, 422);
+    assert.equal(tooLarge.json.error_code, "invalid_request");
+    const busy = await call("POST", "/v2/research/sources/pdf", { body: { title: "繁忙的解析器", pdf_base64: b64("%PDF-1.4"), permissions: ALL } });
+    assert.equal(busy.status, 503);
+    assert.equal(busy.json.error_code, "internal_error");
+    assert.equal(busy.json.retryable, true);
+    assert.equal((await call("POST", "/v2/research/sources/pdf", { body: { title: "T", pdf_base64: b64("%PDF-"), text_order: "zigzag", permissions: ALL } })).status, 422);
+  });
+
+  test("html upload: tags stripped, invalid UTF-8 rejected", async () => {
+    const html = "<html><head><style>p{}</style><script>var x=1</script></head><body><p>Contoso   Example Holdings</p><p>Revenue 7</p></body></html>";
+    const created = await call("POST", "/v2/research/sources/html", { body: { title: "Fictional page", html_base64: b64(html), permissions: ALL } });
+    assert.equal(created.status, 201);
+    assert.equal("text" in created.json, false);
+    assert.equal(created.json.retrieval_method, "user_html");
+    assert.equal(created.json.original_html_available, true);
+    assert.match(created.json.extraction_disclosure, /^Webpage text is extracted/);
+    const full = (await call("GET", `/v2/research/sources/${created.json.source_id}`)).json;
+    assert.equal(full.text, "Contoso Example Holdings\nRevenue 7");
+    const invalidUtf8 = await call("POST", "/v2/research/sources/html", { body: { title: "T", html_base64: Buffer.from([0xff, 0xfe, 0x3c, 0x70, 0x3e]).toString("base64"), permissions: ALL } });
+    assert.equal(invalidUtf8.status, 422);
+    assert.equal(invalidUtf8.json.message, "HTML is invalid, too large, not UTF-8, or has no extractable text.");
+    const empty = await call("POST", "/v2/research/sources/html", { body: { title: "T", html_base64: b64("<script>1</script>"), permissions: ALL } });
+    assert.equal(empty.status, 422);
+    assert.equal(empty.json.error_code, "invalid_request");
+  });
+
+  test("official fetch: SEC filing keeps text hidden; allowlist, store and timeout rules", async () => {
+    const sec = "https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm";
+    const filing = await call("POST", "/v2/research/sources/fetch", { body: { url: sec, title: "Fictional 10-K", permissions: ALL } });
+    assert.equal(filing.status, 201);
+    assert.equal("text" in filing.json, false);
+    assert.equal(filing.json.kind, "official");
+    assert.equal(filing.json.retrieval_method, "sec_filing_html");
+    assert.equal(filing.json.original_html_available, true);
+    assert.ok(filing.json.extraction_disclosure);
+    const page = await call("POST", "/v2/research/sources/fetch", { body: { url: "https://www.bea.gov/data/example", title: "Fictional BEA page", permissions: ALL } });
+    assert.equal(page.status, 201);
+    assert.equal(page.json.retrieval_method, "official_html");
+    assert.ok(page.json.text.length > 0);
+    const bad = [
+      "https://news.example.com/a",
+      "http://www.bea.gov/data",
+      "https://user:pw@www.bea.gov/data",
+      "https://www.bea.gov:8443/data",
+      "https://www.bea.gov/data#frag",
+      "https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm?x=1",
+      "https://www.sec.gov/cgi-bin/browse-edgar",
+    ];
+    for (const url of bad) {
+      const response = await call("POST", "/v2/research/sources/fetch", { body: { url, title: "T", permissions: ALL } });
+      assert.equal(response.status, 422, url);
+      assert.equal(response.json.error_code, "validation_error");
+      assert.equal(response.json.details[0].location, "body/url");
+    }
+    const noStore = await call("POST", "/v2/research/sources/fetch", { body: { url: sec, title: "T", permissions: { display: true } } });
+    assert.equal(noStore.status, 422);
+    assert.equal(noStore.json.message, "Source storage permission is required.");
+    const slow = await call("POST", "/v2/research/sources/fetch", { body: { url: "https://www.federalreserve.gov/timeout/report", title: "T", permissions: ALL } });
+    assert.equal(slow.status, 503);
+    assert.equal(slow.json.retryable, true);
+  });
+
+  test("sec identity search and companyconcept", async () => {
+    const byTicker = await call("POST", "/v2/research/identities/sec-search", { body: { query: "nwex" } });
+    assert.equal(byTicker.status, 200);
+    assert.deepEqual(byTicker.json.candidates, [{ cik: "0001000001", ticker: "NWEX", name: "Northwind Example Corp", exchange: null }]);
+    assert.equal(byTicker.json.source_url, "https://www.sec.gov/files/company_tickers.json");
+    assert.match(byTicker.json.response_sha256, /^[0-9a-f]{64}$/);
+    assert.ok(byTicker.json.limitation);
+    const byName = await call("POST", "/v2/research/identities/sec-search", { body: { query: "example" } });
+    assert.deepEqual(byName.json.candidates.map((c) => c.ticker), ["CTEX", "FBEX", "NWEX"]);
+    assert.deepEqual((await call("POST", "/v2/research/identities/sec-search", { body: { query: "1000002" } })).json.candidates.map((c) => c.ticker), ["CTEX"]);
+    assert.deepEqual((await call("POST", "/v2/research/identities/sec-search", { body: { query: "zzz" } })).json.candidates, []);
+    const unconfigured = await call("POST", "/v2/research/identities/sec-search", { body: { query: "未配置" } });
+    assert.equal(unconfigured.status, 503);
+    assert.equal(unconfigured.json.retryable, false);
+    assert.equal(unconfigured.json.message, "SEC source contact is not configured.");
+    assert.equal((await call("POST", "/v2/research/identities/sec-search", { body: { query: "  " } })).status, 422);
+
+    const concept = await call("POST", "/v2/research/sources/sec-concept", { body: { cik: "1000001", tag: "Revenues", max_records: 4, permissions: ALL } });
+    assert.equal(concept.status, 201);
+    assert.equal(concept.json.title, "SEC companyconcept us-gaap:Revenues CIK 0001000001");
+    assert.equal(concept.json.url, "https://data.sec.gov/api/xbrl/companyconcept/CIK0001000001/us-gaap/Revenues.json");
+    assert.equal(concept.json.retrieval_method, "sec_companyconcept");
+    assert.equal(concept.json.kind, "official");
+    assert.equal(concept.json.text.split("\n").filter((line) => line.startsWith("period ")).length, 4);
+    assert.match(concept.json.text, /USD/);
+    const hidden = await call("POST", "/v2/research/sources/sec-concept", { body: { cik: "1000001", tag: "Revenues", permissions: { store: true } } });
+    assert.equal("text" in hidden.json, false);
+    for (const extra of [{ tag: "1bad-tag" }, { cik: "abc" }, { cik: "0" }, { max_records: 101 }, { taxonomy: "other" }, { unit: "US D" }, { filing_before: "2026-13-40" }, { surprise: true }]) {
+      const bad = await call("POST", "/v2/research/sources/sec-concept", { body: { cik: "1000001", tag: "Revenues", permissions: ALL, ...extra } });
+      assert.equal(bad.status, 422, JSON.stringify(extra));
+      assert.equal(bad.json.error_code, "validation_error");
+    }
+    for (const body of [{ cik: "0009999999", tag: "Revenues", permissions: ALL }, { cik: "1000001", tag: "Revenues", permissions: { display: true } }]) {
+      const unusable = await call("POST", "/v2/research/sources/sec-concept", { body });
+      assert.equal(unusable.status, 422);
+      assert.equal(unusable.json.error_code, "invalid_request");
+      assert.equal(unusable.json.message, "SEC source data could not be used.");
+    }
+  });
+
+  test("attach sources: union of ids, stale parent 409, unknown source or topic 404", async () => {
+    const first = await textSource();
+    const second = await textSource({ title: "Second note" });
+    const topic = await newTopic([first.source_id]);
+    const parent = topic.versions.at(-1).version_id;
+    const attached = await call("POST", `${topicPath(topic.topic_id)}/sources`, { body: { parent_version_id: parent, source_ids: [first.source_id, second.source_id] } });
+    assert.equal(attached.status, 201);
+    assert.equal(attached.json.versions.length, 2);
+    const version = attached.json.versions.at(-1);
+    assert.match(version.version_id, /^version_[0-9a-f]{32}$/);
+    assert.equal(version.parent_version_id, parent);
+    assert.equal(version.created_by, "user");
+    assert.equal(version.review, "draft");
+    assert.deepEqual(version.source_ids, [first.source_id, second.source_id]);
+    assert.ok(Date.parse(attached.json.updated_at) >= Date.parse(attached.json.created_at));
+    assert.equal((await call("GET", topicPath(topic.topic_id))).json.versions.length, 2);
+
+    const stale = await call("POST", `${topicPath(topic.topic_id)}/sources`, { body: { parent_version_id: parent, source_ids: [second.source_id] } });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.json.error_code, "lifecycle_conflict");
+    assert.equal(stale.json.message, "Research topic has changed; reload before saving.");
+    const unknown = await call("POST", `${topicPath(topic.topic_id)}/sources`, { body: { parent_version_id: version.version_id, source_ids: ["source_missing"] } });
+    assert.equal(unknown.status, 404);
+    assert.equal(unknown.json.message, "Research topic or source not found.");
+    assert.equal((await call("POST", `${topicPath("topic_missing")}/sources`, { body: { parent_version_id: parent, source_ids: [first.source_id] } })).status, 404);
+    for (const body of [{ parent_version_id: parent, source_ids: [] }, { parent_version_id: parent }, { parent_version_id: parent, source_ids: [" "] }, { parent_version_id: parent, source_ids: ["x"], extra: 1 }]) {
+      assert.equal((await call("POST", `${topicPath(topic.topic_id)}/sources`, { body })).status, 422, JSON.stringify(body));
+    }
+  });
+
+  test("original download: bytes with attachment headers; export or display off is 403", async () => {
+    const bytes = "%PDF-1.4 fictional original";
+    const pdf = await pdfSource({ pdf_base64: b64(bytes) });
+    const response = await fetch(`${base}/v2/research/sources/${pdf.source_id}/original`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "application/pdf");
+    assert.equal(response.headers.get("content-disposition"), 'attachment; filename="source.pdf"');
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(await response.text(), bytes);
+
+    const html = await call("POST", "/v2/research/sources/html", { body: { title: "Page", html_base64: b64("<p>hi</p>"), permissions: ALL } });
+    const htmlResponse = await fetch(`${base}/v2/research/sources/${html.json.source_id}/original`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(htmlResponse.headers.get("content-type"), "application/octet-stream");
+    assert.equal(htmlResponse.headers.get("content-disposition"), 'attachment; filename="source.html"');
+    assert.equal(await htmlResponse.text(), "<p>hi</p>");
+
+    // Seeded sources: S5 is downloadable; S1 has an original but forbids export; S2 has no original.
+    const seeded = await fetch(`${base}/v2/research/sources/${S5_ID}/original`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(seeded.status, 200);
+    assert.equal(seeded.headers.get("content-type"), "application/pdf");
+    assert.ok((await seeded.text()).startsWith("%PDF-"));
+    for (const forbidden of [S1_ID, "src_harbor_shipments", (await pdfSource({ permissions: { store: true, display: true } })).source_id]) {
+      const denied = await call("GET", `/v2/research/sources/${forbidden}/original`);
+      assert.equal(denied.status, 403, forbidden);
+      assert.equal(denied.json.error_code, "invalid_request");
+      assert.equal(denied.json.message, "The original document is not available for download.");
+    }
+    assert.equal((await call("GET", "/v2/research/sources/source_missing/original")).status, 404);
+    const topicA = (await call("GET", "/v2/research/topics")).json.find((t) => t.request.question.startsWith("Northwind"));
+    assert.deepEqual(topicA.request.source_ids, [S1_ID, S5_ID]);
+  });
+
+  test("re-extract: derived source, idempotent replay, conflicts and non-PDF", async () => {
+    const original = await pdfSource({ title: "Fictional deck", published_at: "2026-09-01T00:00:00Z", permissions: { store: true, display: true, export: false } });
+    const key = `reextract-${randomUUID()}`;
+    const created = await call("POST", `/v2/research/sources/${original.source_id}/reextract`, { body: { text_order: "reading" }, headers: { "Idempotency-Key": key } });
+    assert.equal(created.status, 201);
+    assert.equal(created.headers.get("idempotency-replayed"), "false");
+    assert.equal("text" in created.json, false);
+    assert.notEqual(created.json.source_id, original.source_id);
+    assert.equal(created.json.derived_from_source_id, original.source_id);
+    assert.equal(created.json.pdf_text_order, "reading");
+    assert.equal(created.json.title, "Fictional deck — reading");
+    assert.equal(created.json.retrieval_method, "user_pdf");
+    assert.equal(created.json.original_pdf_available, true);
+    assert.equal(created.json.published_at, "2026-09-01T00:00:00Z");
+    assert.deepEqual(created.json.permissions, original.permissions);
+    assert.notEqual(created.json.content_sha256, original.content_sha256);
+
+    const replay = await call("POST", `/v2/research/sources/${original.source_id}/reextract`, { body: { text_order: "reading" }, headers: { "Idempotency-Key": key } });
+    assert.equal(replay.status, 200);
+    assert.equal(replay.headers.get("idempotency-replayed"), "true");
+    assert.equal(replay.json.source_id, created.json.source_id);
+    const otherOrder = await call("POST", `/v2/research/sources/${original.source_id}/reextract`, { body: { text_order: "layout" }, headers: { "Idempotency-Key": key } });
+    assert.equal(otherOrder.status, 409);
+    assert.equal(otherOrder.json.error_code, "idempotency_conflict");
+    const otherSource = await pdfSource();
+    const otherOriginal = await call("POST", `/v2/research/sources/${otherSource.source_id}/reextract`, { body: { text_order: "reading" }, headers: { "Idempotency-Key": key } });
+    assert.equal(otherOriginal.status, 409);
+
+    const plain = await call("POST", `/v2/research/sources/${original.source_id}/reextract`, { body: { text_order: "layout" } });
+    assert.equal(plain.status, 201);
+    assert.notEqual(plain.json.source_id, created.json.source_id);
+    const text = await textSource();
+    const notPdf = await call("POST", `/v2/research/sources/${text.source_id}/reextract`, { body: { text_order: "layout" } });
+    assert.equal(notPdf.status, 422);
+    assert.equal(notPdf.json.message, "The retained original PDF is unavailable.");
+    assert.equal((await call("POST", "/v2/research/sources/source_missing/reextract", { body: { text_order: "layout" } })).status, 404);
+    assert.equal((await call("POST", `/v2/research/sources/${original.source_id}/reextract`, { body: {} })).status, 422);
+    assert.equal((await call("POST", `/v2/research/sources/${original.source_id}/reextract`, { body: { text_order: "layout" }, headers: { "Idempotency-Key": "short" } })).status, 422);
+  });
+
+  test("runs: source selection rules, body source ids and read sources", async () => {
+    const attached = await textSource({ title: "Attached note" });
+    const extra = await textSource({ title: "Extra note" });
+    const topic = await newTopic([attached.source_id]);
+    const subset = await startRun(topic.topic_id, { selected_source_ids: ["source_missing"] });
+    assert.equal(subset.response.status, 422);
+    assert.equal(subset.response.json.error_code, "invalid_request");
+    assert.equal(subset.response.json.message, "Selected sources must belong to this research request.");
+    for (const selected of [[attached.source_id, attached.source_id], [" "], "nope"]) {
+      assert.equal((await startRun(topic.topic_id, { selected_source_ids: selected })).response.status, 422, JSON.stringify(selected));
+    }
+    assert.equal((await startRun(topic.topic_id, { source_ids: ["source_missing"] })).response.status, 404);
+    assert.equal((await startRun(topic.topic_id, { source_ids: "x" })).response.status, 422);
+
+    // Selecting nothing: no findings, a no_cited_claims gap and no summarized sources.
+    const none = await startRun(topic.topic_id, { selected_source_ids: [] });
+    assert.equal(none.response.status, 202);
+    await waitForTerminal(topic.topic_id, none.response.json.operation.operation_id);
+    const afterNone = (await call("GET", topicPath(topic.topic_id))).json;
+    const noneTurn = afterNone.versions.at(-1).content.turns.at(-1);
+    assert.deepEqual(noneTurn.gaps.map((gap) => gap.code), ["no_cited_claims"]);
+    assert.equal(afterNone.versions.at(-1).content.sources.length, 0);
+
+    // A body source id outside the selection is still merged into the version; the selection decides what is read.
+    const picked = await startRun(topic.topic_id, { source_ids: [extra.source_id], selected_source_ids: [extra.source_id] });
+    assert.equal(picked.response.status, 202);
+    await waitForTerminal(topic.topic_id, picked.response.json.operation.operation_id);
+    const afterPicked = (await call("GET", topicPath(topic.topic_id))).json;
+    assert.deepEqual(afterPicked.versions.at(-1).source_ids, [attached.source_id, extra.source_id]);
+    assert.deepEqual(afterPicked.versions.at(-1).content.sources.map((row) => row.source_id), [extra.source_id]);
+    assert.equal((await call("GET", `${topicPath(topic.topic_id)}/versions/${afterPicked.versions.at(-1).version_id}/sources/${extra.source_id}/text`)).status, 200);
+  });
+
+  test("runs: source discovery follows the explicit flag, then the omitted-key rule", async () => {
+    const leads = [
+      "https://www.sec.gov/Archives/edgar/data/1000001/000100000126000012/nwex-20260630.htm",
+      "https://news.example.com/northwind-capex",
+    ];
+    const ran = async (extra) => {
+      const topic = await newTopic([], "发现来源测试");
+      const { response } = await startRun(topic.topic_id, extra);
+      assert.equal(response.status, 202);
+      const operationId = response.json.operation.operation_id;
+      const events = [];
+      const final = await waitForTerminal(topic.topic_id, operationId, { collect: events });
+      assert.equal(final.operation_status, "completed");
+      const saved = (await call("GET", topicPath(topic.topic_id))).json.versions.at(-1);
+      return { run: runRecord(operationId), events, final, saved, turn: saved.content.turns.at(-1) };
+    };
+
+    const on = await ran({ discover_sources: true });
+    assert.equal(on.run.resolvedDiscover, true);
+    const discovery = on.events.find((event) => event.kind === "tool" && event.name === "discover_sources");
+    assert.equal(discovery.status, "completed");
+    assert.equal(discovery.rationale, "搜索公开线索");
+    assert.ok(on.final.usage.search_calls >= 1);
+    assert.ok(on.turn.usage.search_calls >= 1);
+    assert.ok(on.turn.events.some((event) => event.kind === "tool" && event.name === "discover_sources"));
+    assert.equal(on.turn.search_status, "completed");
+    assert.deepEqual(on.saved.content.source_candidates.map((row) => row.url), leads);
+    assert.deepEqual(Object.keys(on.saved.content.source_candidates[0]).sort(), ["published_at", "retrieved_at", "search_provider", "search_result_hash", "status", "title", "url"]);
+
+    for (const extra of [{ discover_sources: null }, { discover_sources: false }, { max_search_calls: 0 }, { discover_sources: true, max_search_calls: 0 }]) {
+      const off = await ran(extra);
+      assert.equal(off.events.some((event) => event.name === "discover_sources"), false, JSON.stringify(extra));
+      assert.equal(off.turn.search_status, "not_requested");
+      assert.equal(off.turn.usage.search_calls, 0);
+      assert.deepEqual(off.saved.content.source_candidates, []);
+    }
+    assert.equal((await ran({ discover_sources: null })).run.resolvedDiscover, false);
+
+    // The helper pins discover_sources: false, so build omitted-key bodies by hand.
+    const omitted = async (extra) => {
+      const topic = await newTopic([], "发现来源测试");
+      const body = { parent_version_id: topic.versions.at(-1).version_id, ...extra };
+      const response = await call("POST", `${topicPath(topic.topic_id)}/runs`, { body, headers: { "Idempotency-Key": randomUUID() } });
+      assert.equal(response.status, 202);
+      const operationId = response.json.operation.operation_id;
+      await waitForTerminal(topic.topic_id, operationId);
+      return runRecord(operationId);
+    };
+    assert.equal((await omitted({})).resolvedDiscover, true);
+    assert.equal((await omitted({ max_search_calls: 3 })).resolvedDiscover, true);
+    assert.equal((await omitted({ selected_source_ids: [] })).resolvedDiscover, false);
+    assert.equal((await omitted({ selected_source_ids: [], max_search_calls: 2 })).resolvedDiscover, true);
+    assert.equal((await omitted({ max_search_calls: 0 })).resolvedDiscover, false);
+    const omittedRun = await omitted({});
+    assert.equal(omittedRun.discoverActive, true);
+    assert.ok(omittedRun.events.some((event) => event.name === "discover_sources"));
+
+    // A candidate URL that is already saved is not duplicated by a later discovery.
+    const topic = await newTopic([], "发现来源测试");
+    for (let i = 0; i < 2; i += 1) {
+      const { response } = await startRun(topic.topic_id, { discover_sources: true, question_override: `第 ${i + 1} 轮` });
+      await waitForTerminal(topic.topic_id, response.json.operation.operation_id);
+    }
+    const saved = (await call("GET", topicPath(topic.topic_id))).json.versions.at(-1);
+    assert.equal(saved.content.source_candidates.length, 2);
+    assert.equal(saved.content.turns.length, 2);
   });
 });

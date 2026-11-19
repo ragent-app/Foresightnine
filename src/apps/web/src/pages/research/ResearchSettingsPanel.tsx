@@ -1,9 +1,12 @@
 import { useId, useState } from "react";
+import type { AvailableVersionSource } from "../../api/types";
 import { formatDateTimeWithOffset } from "../../lib/format";
+import { ineligibility, INELIGIBLE_TEXT, MAX_SOURCES_PER_RUN } from "../../lib/sources";
 import { Disclosure, Segmented } from "../../ui/controls";
 import { Panel } from "../../ui/Panel";
 import { BUDGET_FIELDS, budgetError, optionsValid, type RunOptions } from "./options";
 
+const SEARCH = [{ value: "on" as const, label: "开启" }, { value: "off" as const, label: "关闭" }];
 const SWITCH = [{ value: "auto" as const, label: "自动" }, { value: "off" as const, label: "关闭" }];
 
 export interface TopicFields {
@@ -13,7 +16,10 @@ export interface TopicFields {
 
 type Props =
   | { mode: "new"; options: RunOptions; topic: TopicFields; onApply: (options: RunOptions, topic: TopicFields) => void; onClose: () => void }
-  | { mode: "topic"; options: RunOptions; asOfIso: string | null; scope: string; onApply: (options: RunOptions) => void; onClose: () => void };
+  | {
+    mode: "topic"; options: RunOptions; asOfIso: string | null; scope: string; sources: readonly AvailableVersionSource[];
+    onApply: (options: RunOptions) => void; onClose: () => void;
+  };
 
 /** Spec §4.6. On an existing topic the cutoff and scope are fixed at creation and read-only. */
 export function ResearchSettingsPanel(props: Props) {
@@ -57,8 +63,9 @@ export function ResearchSettingsPanel(props: Props) {
       <div className="list">
         <div className="item">
           <div className="line"><span className="grow">联网搜索</span>
-            <Segmented inline label="联网搜索" options={SWITCH} value={options.discover} onChange={(discover) => setOptions({ ...options, discover })} />
+            <Segmented inline label="联网搜索" options={SEARCH} value={options.discover} onChange={(discover) => setOptions({ ...options, discover })} />
           </div>
+          <span className="meta">搜索结果只作为线索，获取原文后才能作为证据。</span>
         </div>
         <div className="item">
           <div className="line"><span className="grow">自动获取官方资料</span>
@@ -66,6 +73,9 @@ export function ResearchSettingsPanel(props: Props) {
           </div>
         </div>
       </div>
+      {props.mode === "topic" && props.sources.length > 0 ? (
+        <SourceSelection sources={props.sources} asOfIso={props.asOfIso} selected={options.selectedSourceIds} onChange={(selectedSourceIds) => setOptions({ ...options, selectedSourceIds })} />
+      ) : null}
       <Disclosure summary="预算（可选）" defaultOpen={BUDGET_FIELDS.some(({ key }) => options.budget[key] !== "")}>
         <div className="grid2">
           {BUDGET_FIELDS.map((field) => {
@@ -91,5 +101,47 @@ export function ResearchSettingsPanel(props: Props) {
         <p className="note">留空表示不设上限；0 表示该项额度为零。单次请求超时和供应商限制仍然有效。</p>
       </Disclosure>
     </Panel>
+  );
+}
+
+/** Which of the topic's sources the next turn reads; all eligible ones by default (null). */
+function SourceSelection({ sources, asOfIso, selected, onChange }: {
+  sources: readonly AvailableVersionSource[];
+  asOfIso: string | null;
+  selected: readonly string[] | null;
+  onChange: (selected: readonly string[] | null) => void;
+}) {
+  const reasons = new Map(sources.map((source) => [source.source_id, ineligibility(source, asOfIso)]));
+  const eligible = sources.filter((source) => reasons.get(source.source_id) === null).map((source) => source.source_id);
+  const chosen = new Set(selected ?? eligible);
+  const count = eligible.filter((id) => chosen.has(id)).length;
+  const toggle = (id: string) => {
+    const next = new Set(chosen);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    const ids = eligible.filter((item) => next.has(item));
+    onChange(ids.length === eligible.length ? null : ids);
+  };
+  return (
+    <div className="field">
+      <span className="lt">本轮读取的资料</span>
+      <div className="list">
+        {sources.map((source) => {
+          const reason = reasons.get(source.source_id) ?? null;
+          return (
+            <label key={source.source_id} className={`item check-row${reason ? " off" : ""}`}>
+              <input type="checkbox" checked={reason === null && chosen.has(source.source_id)} disabled={reason !== null} onChange={() => toggle(source.source_id)} />
+              <span className="grow">
+                <span>{source.title}</span>
+                {reason ? <span className="meta">不会读取：{INELIGIBLE_TEXT[reason]}</span> : null}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      <span className="help">
+        已选 {count} / {eligible.length} 份可读取的资料。{count === 0 ? "不选择资料时，本轮只依靠联网搜索和自动获取的资料。" : ""}
+        {count > MAX_SOURCES_PER_RUN ? `每轮最多读取 ${MAX_SOURCES_PER_RUN} 份，超出的部分不会处理。` : ""}
+      </span>
+    </div>
   );
 }

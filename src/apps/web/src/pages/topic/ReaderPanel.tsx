@@ -6,7 +6,7 @@ import { formatInteger } from "../../lib/format";
 import { prefersReducedMotion } from "../../ui/media";
 import { Panel, useKeyShortcut } from "../../ui/Panel";
 import { useTopicView } from "./context";
-import { Permissions, sourceMeta } from "./RecordPanel";
+import { DownloadOriginalButton, Permissions, sourceMeta } from "./RecordPanel";
 
 type Range = readonly [number, number];
 const CONTEXT = 2000;
@@ -93,6 +93,7 @@ export function ReaderPanel({ sourceId, range, onClose }: { sourceId: string; ra
         <div className="actions-row">
           <button type="button" className="btn" onClick={() => go(-1)} disabled={cited.length === 0 || index === 0} title="上一处（K）">上一处</button>
           <button type="button" className="btn" onClick={() => go(1)} disabled={cited.length === 0 || index === cited.length - 1} title="下一处（J）">下一处</button>
+          {source ? <DownloadOriginalButton source={source} /> : null}
         </div>
       }
     >

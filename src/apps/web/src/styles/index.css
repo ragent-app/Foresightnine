@@ -124,6 +124,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 2px; padding: calc(8px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px)); min-height: calc(52px + env(safe-area-inset-top, 0px));
   transition: background 180ms var(--ease), box-shadow 180ms var(--ease), right 320ms var(--spring); }
 .app.with-panel .toolbar, .app.with-panel .dock { right: calc(var(--panel-w) + 12px); }
+/* .main is padded for the inspector, but absolute children center on its padding box. */
+.app.with-panel .net-banner { left: calc((100% - var(--panel-w) - 12px) / 2); max-width: calc(100% - var(--panel-w) - 44px); }
 .toolbar.scrolled { background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: 0 0.5px 0 var(--hairline); }
 .toolbar .tb-title { flex: 1; min-width: 0; text-align: center; font-size: 13.5px; font-weight: 600; opacity: 0; transform: translateY(4px); transition: opacity 180ms var(--ease), transform 180ms var(--ease);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
@@ -220,6 +222,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .panel header h2 { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel .body { flex: 1; overflow: auto; overscroll-behavior: contain; padding: 6px 14px 28px; display: flex; flex-direction: column; gap: 18px; }
 .panel .body.tight { gap: 12px; }
+/* Groups clip their rounded corners (overflow: hidden), which would otherwise let them shrink in this scrolling column. */
+.panel .body > * { flex-shrink: 0; }
 .panel .foot { padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; justify-content: flex-end; box-shadow: 0 -0.5px 0 var(--separator); flex-wrap: wrap; }
 .panel .foot.split { justify-content: space-between; }
 .panel .foot.stretch > .btn { flex: 1; }
@@ -284,6 +288,40 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .skeleton.line { height: 16px; margin-top: 12px; }
 .skeleton.short { width: 40%; }
 
+/* sources (M3): add-sources panel, selection rows, leads */
+.gtitle .link { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 500; }
+.link[disabled] { opacity: .4; cursor: not-allowed; }
+.link .i { flex: none; }
+.add-source { display: flex; flex-direction: column; gap: 16px; }
+.dropzone { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px; border-radius: 16px; text-align: center; font-size: 14px; color: var(--on-variant);
+  border: 1.5px dashed var(--separator); background: var(--fill-3); transition: background 160ms var(--ease), border-color 160ms var(--ease); }
+.dropzone .i { color: var(--on-tertiary); }
+.dropzone.over { border-color: var(--primary); background: var(--fill-2); }
+.file-row { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; border-radius: 12px; background: var(--group); box-shadow: inset 0 0 0 0.5px var(--separator); }
+.file-row > .i { color: var(--on-variant); flex: none; }
+.file-row .grow, .check-row .grow { display: flex; flex-direction: column; gap: 1px; overflow-wrap: anywhere; }
+.file-row .title { font-size: 14px; font-weight: 500; }
+.check-row { flex-direction: row; align-items: flex-start; gap: 12px; cursor: pointer; }
+.field .check-row input, .check-row input { flex: none; width: 18px; height: 18px; min-height: 0; margin: 1px 0 0; padding: 0; border-radius: 0; background: none; box-shadow: none; accent-color: var(--primary); cursor: pointer; }
+.field .check-row input:focus { box-shadow: none; }
+.field .check-row input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.check-row input[disabled] { cursor: not-allowed; }
+.check-row.off { color: var(--on-tertiary); cursor: default; }
+.check-row .meta { font-size: 12px; }
+.input-row { display: flex; gap: 8px; align-items: center; }
+.input-row input { flex: 1; min-width: 0; }
+.field textarea.tall { min-height: 160px; }
+.callout-lite { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
+.callout-lite .i { flex: none; margin-top: 1px; }
+.callout-lite.ok { background: var(--fill-3); color: var(--on-variant); }
+.callout-lite.ok .i { color: var(--success); }
+.callout-lite.warn { background: var(--warning-t); color: var(--on-surface); }
+.callout-lite.warn .i { color: var(--warning); }
+.lead-actions { display: flex; gap: 14px; margin-top: 3px; }
+.lead-actions .link { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 500; color: var(--on-surface); }
+.composer.dragover { box-shadow: inset 0 0 0 1.5px var(--primary), var(--float-sm); }
+.net-banner.info { background: var(--glass-strong); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: 0 0 0 0.5px var(--hairline), var(--float-sm); color: var(--on-surface); }
+
 /* home, login, prefs */
 .home { max-width: 680px; margin: 0 auto; padding: 16vh 24px 64px; display: flex; flex-direction: column; gap: 16px; }
 .home h1 { margin: 0 0 8px; font-size: 30px; font-weight: 600; letter-spacing: -0.025em; text-align: center; line-height: 1.3; }
@@ -315,7 +353,7 @@ mark.cited { background: none; color: inherit; text-decoration: underline; text-
 .center-page h1 { font-size: 22px; margin: 0 0 8px; }
 
 @media (max-width: 1279px) {
-  .app.with-panel .main { padding-right: 0; } .app.with-panel .toolbar, .app.with-panel .dock { right: 0; }
+  .app.with-panel .main { padding-right: 0; } .app.with-panel .toolbar, .app.with-panel .dock { right: 0; } .app.with-panel .net-banner { left: 50%; max-width: calc(100% - 32px); }
 }
 @media (max-width: 899px) {
   .app, .app.side-collapsed { grid-template-columns: minmax(0, 1fr); }

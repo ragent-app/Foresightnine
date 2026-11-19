@@ -17,6 +17,7 @@ export interface TurnActions {
   onDeliver: () => void;
   onAskAgain: () => void;
   onFillGap: (() => void) | null;
+  onAddSources: () => void;
 }
 
 const FORMULA_LABEL: Record<string, string> = { growth_percent: "增长率", margin_percent: "利润率", difference: "差额" };
@@ -68,6 +69,7 @@ function CalloutActions({ actions }: { actions: TurnActions }) {
   const more: MenuEntry[] = [];
   if (canDeliver && canContinue) more.push({ key: "deliver", label: "交付已有成果", icon: "check", onSelect: actions.onDeliver, disabled });
   if (actions.onFillGap) more.push({ key: "gap", label: "补充缺口", icon: "chev", onSelect: actions.onFillGap, disabled: actions.locked });
+  more.push({ key: "add", label: "添加资料", icon: "plus", onSelect: actions.onAddSources, disabled: actions.locked });
   if (primary.label !== "重新提问") more.push({ key: "ask", label: "重新提问", icon: "pen", onSelect: actions.onAskAgain, disabled: actions.locked });
 
   return (

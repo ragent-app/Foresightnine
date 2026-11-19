@@ -162,7 +162,8 @@ describe("TopicPage", () => {
       expect(body.question_override).toBe("这个数字的口径是什么？");
       expect(body.focus_citation).toEqual({ claim_id: "C1", citation_index: 0 });
       expect(body.auto_fetch_official).toBe(true);
-      expect(body.discover_sources).toBeNull();
+      expect(body.discover_sources).toBe(true);
+      expect("selected_source_ids" in body).toBe(false);
       expect("max_model_calls" in body).toBe(false);
     });
   });
@@ -183,5 +184,78 @@ describe("TopicPage", () => {
     expect(await within(region).findByText("恢复检查：外部请求结果未知")).toBeTruthy();
     expect(await within(region).findByText("失败的问题")).toBeTruthy();
     expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
+  });
+
+  it("adds a pasted text source and attaches it to the latest version", async () => {
+    const created = {
+      source_id: "src_new", title: "年报摘录", kind: "user_supplied", is_simulated: false, published_at: null, event_at: null, revised_at: null,
+      obtained_at: NOW, content_sha256: "a".repeat(64), retrieval_method: "user_supplied", pdf_text_order: null, derived_from_source_id: null,
+      permissions: { store: true, model_input: true, display: true, export: true }, verification: "user_declared_not_verified", text: "收入 100。",
+    };
+    const fetchMock = mockApi((url, init) => {
+      if (url.pathname === "/v2/research/topics/t1/sources" && init.method === "POST") {
+        const topic = topicWith([turn(1)]);
+        return jsonResponse({ ...topic, versions: [...topic.versions, { version_id: "v3", created_at: NOW, created_by: "user", review: "draft", content: topic.versions[1]!.content, source_ids: ["src_new"] }] }, { status: 201 });
+      }
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+      if (url.pathname === "/v2/research/sources" && init.method === "POST") return jsonResponse(created, { status: 201 });
+      return undefined;
+    });
+    renderTopic();
+    fireEvent.click(await screen.findByRole("button", { name: "添加资料" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "文本" }));
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "年报摘录" } });
+    fireEvent.change(screen.getByLabelText("正文"), { target: { value: "收入 100。" } });
+    expect(screen.getByText("下一轮研究会读取这份资料。")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "添加" }));
+    expect(await screen.findByText("已添加「年报摘录」。下一轮研究会读取它。")).toBeTruthy();
+    const createCall = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/v2/research/sources") && init?.method === "POST");
+    expect(JSON.parse(String(createCall![1]!.body))).toEqual({
+      title: "年报摘录", text: "收入 100。", permissions: { store: true, model_input: true, display: true, export: true },
+    });
+    const attachCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/v2/research/topics/t1/sources"));
+    expect(JSON.parse(String(attachCall![1]!.body))).toEqual({ parent_version_id: "v2", source_ids: ["src_new"] });
+  });
+
+  it("explains why a source will not be read before it is added", async () => {
+    mockApi((url) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse({ ...topicWith([turn(1)]), request: { question: "Q", source_ids: [], as_of: "2026-06-30T00:00:00Z" } });
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+      return undefined;
+    });
+    renderTopic();
+    fireEvent.click(await screen.findByRole("button", { name: "添加资料" }));
+    expect(await screen.findByText("添加后下一轮不会读取：没有公开时间，无法确认在截止时间前已公开。")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: /供模型读取/ }));
+    expect(screen.getByText("添加后下一轮不会读取：没有允许供模型读取。")).toBeTruthy();
+  });
+
+  it("sends only the sources selected for the next turn", async () => {
+    const source = (id: string, title: string) => ({
+      status: "available", source_id: id, title, kind: "user_supplied", is_simulated: false, published_at: null, event_at: null, revised_at: null, obtained_at: NOW,
+      content_sha256: "b".repeat(64), retrieval_method: "user_supplied", pdf_text_order: null, derived_from_source_id: null,
+      permissions: { store: true, model_input: true, display: true, export: true }, verification: "user_declared_not_verified",
+    });
+    const fetchMock = mockApi((url, init) => {
+      if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+      if (url.pathname === "/v2/research/topics/t1/runs" && init.method === "POST") return jsonResponse(operation("op_9", "pending"), { status: 202 });
+      if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+      if (url.pathname.endsWith("/versions/v2/sources")) return jsonResponse([source("s1", "年报"), source("s2", "新闻稿")]);
+      return undefined;
+    });
+    renderTopic();
+    await screen.findByRole("region", { name: "第 1 轮" });
+    fireEvent.click(screen.getByRole("button", { name: "研究设置" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /新闻稿/ }));
+    fireEvent.click(screen.getByRole("button", { name: "应用" }));
+    expect(await screen.findByText("本轮读取 1 份资料")).toBeTruthy();
+    const composer = screen.getByRole("textbox", { name: "追问" });
+    fireEvent.change(composer, { target: { value: "只看年报" } });
+    fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input, init]) => String(input).endsWith("/v2/research/topics/t1/runs") && init?.method === "POST");
+      expect(JSON.parse(String(call![1]!.body)).selected_source_ids).toEqual(["s1"]);
+    });
   });
 });

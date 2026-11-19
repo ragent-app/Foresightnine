@@ -4,8 +4,9 @@ import type { ResearchV2 } from "@foresightnine/contracts";
 import { nextPollDelay } from "../lib/polling";
 import { ApiError } from "./http";
 import { getProgress, getRecoveryStatus, getTopic, getVersionSourceText, isActiveStatus, listRuns, listTopics, listVersionSources } from "./research";
-import type { ProgressEvent, RecoveryStatus, RunProgress, SourceText, VersionSource } from "./types";
-import { cancelRun, continueTurn, createResearch, recoverTurn, startTurn } from "./writes";
+import { attachSources, reextractPdfSource } from "./sources";
+import type { CreatedSource, ProgressEvent, RecoveryStatus, RunProgress, SourceText, VersionSource } from "./types";
+import { cancelRun, continueTurn, createResearch, idempotentWrite, recoverTurn, startTurn } from "./writes";
 import type { CreateResearchResult } from "./writes";
 
 export const queryKeys = {
@@ -223,4 +224,26 @@ export function useContinueTurn(topicId: string) {
 
 export function useRecoverTurn(topicId: string) {
   return useRecoveryMutation(topicId, recoverTurn);
+}
+
+/** Adds sources to a topic (a new user version) and swaps in the returned topic. */
+export function useAttachSources(topicId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<ResearchV2.ResearchTopic, unknown, { parentVersionId: string; sourceIds: readonly string[] }>({
+    mutationFn: ({ parentVersionId, sourceIds }) => attachSources(topicId, parentVersionId, sourceIds),
+    onSuccess: (topic) => {
+      queryClient.setQueryData(queryKeys.topic(topicId), topic);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.topics });
+    },
+    // A 409 means the topic moved on; refetch so the next attempt uses the latest version.
+    onError: () => queryClient.invalidateQueries({ queryKey: queryKeys.topic(topicId) }),
+  });
+}
+
+/** Re-extracts a retained PDF in another text order; the key survives retries of the same request. */
+export function useReextractPdf() {
+  return useMutation<CreatedSource, unknown, { sourceId: string; textOrder: "layout" | "reading" }>({
+    mutationFn: ({ sourceId, textOrder }) =>
+      idempotentWrite(`reextract:${sourceId}:${textOrder}`, { text_order: textOrder }, (key) => reextractPdfSource(sourceId, textOrder, key)),
+  });
 }

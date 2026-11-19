@@ -14,6 +14,7 @@ export const S1_ID = "src_northwind_fy26";
 export const S2_ID = "src_harbor_shipments";
 export const S3_ID = "src_atlas_restricted";
 export const S4_ID = "src_atlas_simulated";
+export const S5_ID = "src_northwind_deck";
 
 export const S1_TEXT =
   "Northwind Holdings Annual Report FY2026 (illustrative excerpt). Amounts are presented in millions of U.S. dollars unless otherwise noted.\n\n" +
@@ -112,7 +113,7 @@ export function usageFromEvents(events) {
   const models = events.filter((e) => e.kind === "model");
   return {
     model_calls: models.length,
-    search_calls: 0,
+    search_calls: events.filter((e) => e.kind === "tool" && e.name === "discover_sources" && e.status === "completed").length,
     total_tokens: models.reduce((sum, e) => sum + (Number.isInteger(e.usage) ? e.usage : 0), 0),
   };
 }
@@ -176,7 +177,7 @@ function seededRun({ operationId, topicId, question, turn, versionId, parentVers
 
 // ---- Seed -------------------------------------------------------------------
 
-function makeSource(now, fields) {
+export function makeSource(now, fields) {
   return {
     schema_version: "1",
     owner_id: "",
@@ -196,6 +197,20 @@ function makeSource(now, fields) {
   };
 }
 
+/** Tiny fictional stand-in for an uploaded PDF original (never a renderable document). */
+export const fictionalPdfBytes = (label) =>
+  Buffer.from(`%PDF-1.4\n% Fictional QA original: ${label}\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n`, "utf8");
+
+/** Deterministic fictional PDF text: three pages separated by form feeds. */
+export function fictionalPdfText(title, order, { joined = false, normalized = false } = {}) {
+  const pages = [
+    `Fictional PDF extract of "${title}" (${order} text order). Page 1 of 3. Total revenue 12,345 (fictional).${normalized ? " Spacing normalized on re-extraction." : ""}`,
+    "Page 2 of 3. Operating income 2,468 (fictional). Segment notes are invented for QA.",
+    "Page 3 of 3. Capital expenditure 987 (fictional). End of fictional extract.",
+  ];
+  return pages.map((page) => (joined ? page.replace(/ /g, "") : page)).join("\f");
+}
+
 export const REPORT_TURN2 =
   "营业利润率没有随收入一起提高。按摘录中的金额计算，2026 财年营业利润率约为 31.07%（15,104 / 48,612），上一财年约为 31.45%（12,980 / 41,270），小幅下降约 0.38 个百分点。\n\n" +
   "不支持“增长强劲”的证据主要有两点：一是利润率下滑，说明收入增速没有完全转化为利润；二是年报提到营业费用因扩建数据中心而上升，管理层预期容量投资下一财年仍将保持高位，可能继续压制利润率。";
@@ -213,11 +228,26 @@ export function seed(now) {
     title: "Northwind 示例公司 2026 财年年报摘录",
     kind: "user_supplied",
     retrieval_method: "user_pdf",
+    pdf_text_order: "layout",
+    original_bytes: fictionalPdfBytes("Northwind FY2026 annual report excerpt"),
     is_simulated: false,
     published_at: "2026-08-01T00:00:00Z",
     obtained_at: iso(at(-2 * HOUR)),
     permissions: { store: true, model_input: true, display: true, export: false },
     text: S1_TEXT,
+  });
+  // Downloadable seeded PDF (display and export allowed) so the original-download flow can be exercised.
+  const s5Title = "Northwind 示例公司投资者介绍材料（PDF）";
+  const s5 = makeSource(now, {
+    source_id: S5_ID,
+    title: s5Title,
+    retrieval_method: "user_pdf",
+    pdf_text_order: "layout",
+    original_bytes: fictionalPdfBytes("Northwind investor presentation"),
+    published_at: "2026-08-05T00:00:00Z",
+    obtained_at: iso(at(-2 * HOUR)),
+    permissions: { store: true, model_input: true, display: true, export: true },
+    text: fictionalPdfText(s5Title, "layout"),
   });
   const s2 = makeSource(now, {
     source_id: S2_ID,
@@ -425,7 +455,7 @@ export function seed(now) {
       created_by: "user",
       review: "draft",
       content: {},
-      source_ids: [S1_ID],
+      source_ids: [S1_ID, S5_ID],
       parent_version_id: null,
       note: "",
     },
@@ -443,7 +473,7 @@ export function seed(now) {
         sources: structuredClone(sourceRowsA),
         turns: [turn1],
       },
-      source_ids: [S1_ID],
+      source_ids: [S1_ID, S5_ID],
       parent_version_id: "ver_a1",
       note: "",
     },
@@ -461,7 +491,7 @@ export function seed(now) {
         sources: structuredClone(sourceRowsA),
         turns: [turn1, turn2],
       },
-      source_ids: [S1_ID],
+      source_ids: [S1_ID, S5_ID],
       parent_version_id: "ver_a2",
       note: "",
     },
@@ -472,7 +502,7 @@ export function seed(now) {
     schema_version: "1",
     created_at: iso(createdA),
     updated_at: iso(t2End),
-    request: { as_of: iso(asOf), question: questionA, scope: "", source_ids: [S1_ID] },
+    request: { as_of: iso(asOf), question: questionA, scope: "", source_ids: [S1_ID, S5_ID] },
     versions: versionsA,
   };
 
@@ -582,7 +612,7 @@ export function seed(now) {
   });
 
   return {
-    sources: { [S1_ID]: s1, [S2_ID]: s2, [S3_ID]: s3, [S4_ID]: s4 },
+    sources: { [S1_ID]: s1, [S2_ID]: s2, [S3_ID]: s3, [S4_ID]: s4, [S5_ID]: s5 },
     topics: [topicA, topicB, topicC],
     runs,
   };

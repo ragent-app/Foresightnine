@@ -4,10 +4,16 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  Database,
   Download,
   Ellipsis,
+  ExternalLink,
+  FileText,
   Globe,
   LineChart,
+  Link2,
   LogOut,
   PanelLeft,
   PanelRight,
@@ -18,6 +24,7 @@ import {
   Sigma,
   SlidersHorizontal,
   SquarePen,
+  Upload,
   X,
 } from "lucide-react";
 
@@ -43,6 +50,13 @@ export const Icons = {
   download: Download,
   globe: Globe,
   chart: LineChart,
+  file: FileText,
+  upload: Upload,
+  link: Link2,
+  external: ExternalLink,
+  database: Database,
+  ok: CircleCheck,
+  alert: CircleAlert,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof Icons;

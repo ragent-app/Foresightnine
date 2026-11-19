@@ -1,14 +1,19 @@
 import type { ResearchV2 } from "@foresightnine/contracts";
+import { useState } from "react";
 import { useVersionSources } from "../../api/queries";
+import { downloadSourceOriginal } from "../../api/sources";
 import type { AvailableVersionSource } from "../../api/types";
 import {
   CALC_NOTE, calcChecks, INVALID_NOTE, LEAD_NOTE, PERMISSION_LABEL, PERMISSION_ORDER, retrievalMethodLabel, SOURCE_KIND_LABEL, toolLabel, VERIFICATION_LABEL,
 } from "../../lib/copy";
+import { saveBlob } from "../../lib/download";
 import { formatDateTime, formatInteger, formatQuantity } from "../../lib/format";
+import { ineligibility, INELIGIBLE_TEXT, isFetchableUrl } from "../../lib/sources";
 import { claimRole, parseTurnEvents, readCoverage, ROLE_LABEL, stepRows, type AnswerTab, type ClaimRole } from "../../lib/research";
 import { Segmented } from "../../ui/controls";
 import { Icon, toolIcon } from "../../ui/icons";
 import { Panel } from "../../ui/Panel";
+import { describeError } from "../research/errors";
 import { calculationTitle } from "./Conversation";
 import { LIVE_TURN, useTopicView } from "./context";
 
@@ -104,22 +109,77 @@ function CoverageBar({ ranges, total }: { ranges: readonly (readonly [number, nu
   );
 }
 
+export function canDownloadOriginal(source: AvailableVersionSource): boolean {
+  return Boolean(source.original_pdf_available || source.original_html_available) && source.permissions.display && source.permissions.export;
+}
+
+/** Downloads the retained PDF or HTML (needs display and export permission). */
+export function DownloadOriginalButton({ source }: { source: AvailableVersionSource }) {
+  const [state, setState] = useState<"idle" | "busy" | "error">("idle");
+  if (!canDownloadOriginal(source)) return null;
+  const download = async () => {
+    setState("busy");
+    try {
+      const { blob, filename } = await downloadSourceOriginal(source.source_id);
+      saveBlob(blob, filename);
+      setState("idle");
+    } catch {
+      setState("error");
+    }
+  };
+  const label = source.original_pdf_available ? "下载原始 PDF" : "下载原始网页";
+  return (
+    <>
+      <button type="button" className="btn" onClick={() => void download()} disabled={state === "busy"}>{state === "busy" ? "正在下载…" : label}</button>
+      {state === "error" ? <span className="inline-error" role="alert">原件暂时无法下载。</span> : null}
+    </>
+  );
+}
+
+function ReextractButton({ source }: { source: AvailableVersionSource }) {
+  const view = useTopicView();
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const order = source.pdf_text_order === "reading" ? "按版面" : "按阅读顺序";
+  const run = async () => {
+    setState({ busy: true, error: null });
+    try {
+      await view.reextractPdf(source);
+      setState({ busy: false, error: null });
+    } catch (error) {
+      setState({ busy: false, error: describeError(error) });
+    }
+  };
+  return (
+    <>
+      <button type="button" className="btn" onClick={() => void run()} disabled={state.busy || view.locked}>{state.busy ? "正在提取…" : `${order}重新提取`}</button>
+      {state.error ? <span className="inline-error" role="alert">{state.error}</span> : null}
+    </>
+  );
+}
+
 function SourcesTab() {
   const view = useTopicView();
   const query = useVersionSources(view.topicId, view.version.version_id);
+  const asOf = view.topic.request.as_of ?? null;
   const candidates = (view.content.source_candidates ?? []).map((row) => ({
     title: typeof row.title === "string" ? row.title : "未命名线索",
     url: typeof row.url === "string" ? row.url : "",
     published: typeof row.published_at === "string" ? row.published_at : null,
   }));
+  const known = new Set((query.data ?? []).flatMap((row) => (row.status === "available" && row.url ? [row.url] : [])));
   const rows = query.data ?? [];
   return (
     <>
       <div>
-        <div className="gtitle">资料 · {rows.length}</div>
+        <div className="gtitle">
+          <span className="grow">资料 · {rows.length}</span>
+          <button type="button" className="link" onClick={() => view.openPanel({ kind: "add" })} disabled={view.locked} title={view.locked ? "本轮研究进行中，结束后再添加" : undefined}>
+            <Icon name="plus" size={14} />添加资料
+          </button>
+        </div>
         {query.isLoading ? <div className="skeleton line" /> : null}
         {query.isError ? <p className="note inset">资料列表暂时无法加载。</p> : null}
-        {query.data && rows.length === 0 ? <p className="note inset">这个研究还没有资料。</p> : null}
+        {query.data && rows.length === 0 ? <p className="note inset">这个研究还没有资料。添加文件、文本或官方网址后，下一轮研究会读取它们。</p> : null}
         {rows.length > 0 ? (
           <div className="list">
             {rows.map((source) => {
@@ -127,18 +187,23 @@ function SourcesTab() {
                 return <div key={source.source_id} className="item"><span className="title">资料不可用</span><span className="meta mono">{source.source_id}</span></div>;
               }
               const coverage = readCoverage(view.content, source.source_id);
+              const reason = ineligibility(source, asOf);
               return (
                 <div key={source.source_id} className="item">
                   <span className="title">{source.title}</span>
                   <span className="meta">{sourceMeta(source)}</span>
                   <Permissions source={source} />
+                  {reason ? <span className="flag">下一轮不会读取：{INELIGIBLE_TEXT[reason]}</span> : null}
+                  {source.pdf_text_spacing_warning ? <span className="flag">PDF 提取的文字间距可能有误，可以换一种顺序重新提取。</span> : null}
                   {coverage.totalCharacters ? <CoverageBar ranges={coverage.ranges} total={coverage.totalCharacters} /> : null}
                   <span className="meta">
                     {coverage.totalCharacters !== null ? `已读 ${formatInteger(coverage.readCharacters)} / ${formatInteger(coverage.totalCharacters)} 字符` : `已读 ${formatInteger(coverage.readCharacters)} 字符`}
                     {" · "}{VERIFICATION_LABEL[source.verification] ?? source.verification}
                   </span>
-                  <div>
+                  <div className="actions-row">
                     <button type="button" className="btn" onClick={() => view.openPanel({ kind: "reader", sourceId: source.source_id, range: coverage.ranges[0] ?? null })}>打开原文</button>
+                    <DownloadOriginalButton source={source} />
+                    {source.retrieval_method === "user_pdf" && source.original_pdf_available && source.pdf_text_spacing_warning ? <ReextractButton source={source} /> : null}
                   </div>
                 </div>
               );
@@ -152,16 +217,34 @@ function SourcesTab() {
           <div className="list leads">
             {candidates.map((lead, index) => {
               let host = "";
-              try { host = lead.url ? new URL(lead.url).host : ""; } catch { host = ""; }
+              let web = false;
+              try {
+                const parsed = new URL(lead.url);
+                host = parsed.host;
+                web = parsed.protocol === "https:" || parsed.protocol === "http:";
+              } catch { host = ""; }
+              const acquired = known.has(lead.url);
+              const fetchable = !acquired && isFetchableUrl(lead.url);
               return (
                 <div key={`${lead.url}-${index}`} className="lead">
                   <span>{lead.title}</span>
-                  <span className="meta">{[host, lead.published ? formatDateTime(lead.published).slice(0, 10) : null, "未获取"].filter(Boolean).join(" · ")}</span>
+                  <span className="meta">{[host, lead.published ? formatDateTime(lead.published).slice(0, 10) : null, acquired ? "已获取" : "未获取"].filter(Boolean).join(" · ")}</span>
+                  {!acquired && (fetchable || web) ? (
+                    <span className="lead-actions">
+                      {fetchable ? (
+                        <button type="button" className="link" disabled={view.locked} onClick={() => view.openPanel({ kind: "add", initial: { tab: "url", url: lead.url, title: lead.title } })}>
+                          <Icon name="fetch" size={13} />获取原文
+                        </button>
+                      ) : (
+                        <a className="link" href={lead.url} target="_blank" rel="noopener noreferrer"><Icon name="external" size={13} />打开网页</a>
+                      )}
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
           </div>
-          <p className="note inset">{LEAD_NOTE}</p>
+          <p className="note inset">{LEAD_NOTE}{candidates.some((lead) => !isFetchableUrl(lead.url)) ? " 无法直接获取的网页，可以保存后按文件添加。" : ""}</p>
         </div>
       ) : null}
     </>
