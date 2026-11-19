@@ -1485,3 +1485,636 @@ def test_read_sources_enforces_span_and_batch_caps_while_preserving_small_source
     assert len(saved[-1]['read_ranges']) == 1
     assert saved[-1]['read_ranges'][0]['end'] - saved[-1]['read_ranges'][0]['start'] <= 600
 
+
+def test_below_watermark_runtime_keeps_history_prefix_byte_identical_for_kv_cache():
+    from app.research_runtime import compact_runtime_history
+
+    src = source()
+    src.text = 'Revenue was 100 USD in FY2025. Revenue was 80 USD in FY2024. ' + ('Detail text. ' * 200)
+    src.content_sha256 = 'hash-kv'
+
+    m = Model([
+        turn('outline_source', {'source_id': 's1'}, 'c1'),
+        turn('search_source', {'source_id': 's1', 'query': 'Revenue was 100'}, 'c2'),
+        turn('read_sources', {'reads': [{'source_id': 's1', 'start': 0, 'end': 80}], 'rationale': 'read metrics'}, 'c3'),
+        turn('record_facts', {'facts': [{
+            'label': 'revenue', 'value': 100, 'unit': 'USD', 'currency': 'USD', 'period': 'FY2025',
+            'source_id': 's1', 'quotation': 'Revenue was 100 USD in FY2025.',
+        }], 'rationale': 'record'}, 'c4'),
+        turn('submit_research', {
+            'report': 'Revenue was 100 USD in FY2025.',
+            'claims': [{'text': 'Revenue was 100 USD in FY2025.', 'source_id': 's1',
+                        'quotation': 'Revenue was 100 USD in FY2025.', 'role': 'support'}],
+            'limitations': [],
+            'stopping_reason': 'answered',
+        }, 'c5'),
+    ])
+    saved = []
+    res = run_research_agent(
+        question='Revenue?',
+        sources=[src],
+        model=m,
+        context=context(),
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert res.status == 'completed'
+    assert res.partial_notes is None
+    assert 'compaction_count' not in saved[-1]
+    assert len(m.inputs) == 5
+
+    # Every call's prefix of messages must match the previous call's entire prompt byte-for-byte.
+    for idx in range(1, len(m.inputs)):
+        prev_msgs = m.inputs[idx - 1]
+        curr_prefix = m.inputs[idx][:len(prev_msgs)]
+        assert json.dumps(curr_prefix, sort_keys=True) == json.dumps(prev_msgs, sort_keys=True)
+
+    # Direct helper check below watermark is a pure no-op.
+    snapshot_before = json.dumps(saved[-1]['history'], sort_keys=True)
+    report = compact_runtime_history(saved[-1], keep_recent=2, trigger_chars=120_000, force=False)
+    assert report['compacted'] is False
+    assert report['reason'] == 'below_threshold'
+    assert report['cleared_count'] == 0
+    assert json.dumps(saved[-1]['history'], sort_keys=True) == snapshot_before
+
+
+def test_compact_runtime_history_handles_bulk_protected_idempotency_and_force_modes():
+    from app.research_runtime import compact_runtime_history
+
+    big_text = 'R' * 2_000
+    state = {
+        'user': '{}',
+        'read_ranges': [{'source_id': 's1', 'start': 0, 'end': 2_000}],
+        'facts': [{'fact_id': 'f1'}, {'fact_id': 'f2'}],
+        'calculations': [{'calculation_id': 'calc1'}],
+        'events': [
+            {'kind': 'tool', 'tool_call_id': 't_search', 'name': 'search_source', 'status': 'completed'},
+        ],
+        'history': [
+            {
+                'assistant': {'role': 'assistant', 'content': [
+                    {'type': 'tool_use', 'id': 't_read_anth', 'name': 'read_sources',
+                     'input': {'reads': [{'source_id': 's1', 'start': 0, 'end': 2_000}], 'rationale': 'r'}},
+                    {'type': 'tool_use', 'id': 't_search', 'name': 'search_source',
+                     'input': {'source_id': 's1', 'query': 'Revenue'}},
+                ]},
+                'results': [
+                    {
+                        'tool_call_id': 't_read_anth',
+                        'content': json.dumps({'results': [{'source_id': 's1', 'start': 0, 'end': 2_000,
+                                                            'status': 'read', 'text': big_text}]}),
+                        'is_error': False,
+                    },
+                    {
+                        'tool_call_id': 't_search',
+                        'content': json.dumps({'source_id': 's1', 'status': 'completed', 'query': 'Revenue',
+                                               'total_matches': 3, 'hits': [{'start': 10, 'end': 17, 'snippet': 'S' * 900}]}),
+                        'is_error': False,
+                    },
+                ],
+            },
+            {
+                'assistant': {'role': 'assistant', 'content': None, 'tool_calls': [
+                    {'id': 't_facts', 'type': 'function', 'function': {'name': 'record_facts', 'arguments': '{}'}},
+                    {'id': 't_sec', 'type': 'function', 'function': {'name': 'sec_company_concept', 'arguments': '{}'}},
+                    {'id': 't_tiny', 'type': 'function', 'function': {'name': 'read_sources', 'arguments': '{}'}},
+                ]},
+                'results': [
+                    {
+                        'tool_call_id': 't_facts',
+                        'content': json.dumps({'facts': [{'fact_id': 'f1', 'quotation': 'Q' * 1_200}]}),
+                        'is_error': False,
+                    },
+                    {
+                        'tool_call_id': 't_sec',
+                        'content': json.dumps({'status': 'acquired', 'source_id': 's_sec', 'note': 'X' * 1_000}),
+                        'is_error': False,
+                    },
+                    {
+                        'tool_call_id': 't_tiny',
+                        'content': json.dumps({'results': [{'source_id': 's_tiny', 'status': 'read', 'text': 'ok'}]}),
+                        'is_error': False,
+                    },
+                ],
+            },
+            {
+                'assistant': {'role': 'assistant', 'content': None, 'tool_calls': [
+                    {'id': 't_recent_1', 'type': 'function', 'function': {'name': 'read_sources', 'arguments': '{}'}},
+                ]},
+                'results': [
+                    {
+                        'tool_call_id': 't_recent_1',
+                        'content': json.dumps({'results': [{'source_id': 's2', 'start': 0, 'end': 1_500,
+                                                            'status': 'read', 'text': 'Z' * 1_500}]}),
+                        'is_error': False,
+                    },
+                ],
+            },
+            {
+                'assistant': {'role': 'assistant', 'content': None, 'tool_calls': [
+                    {'id': 't_recent_2', 'type': 'function', 'function': {'name': 'outline_source', 'arguments': '{}'}},
+                ]},
+                'results': [
+                    {
+                        'tool_call_id': 't_recent_2',
+                        'content': json.dumps({'source_id': 's2', 'entries': [{'title': 'H' * 1_200}]}),
+                        'is_error': False,
+                    },
+                ],
+            },
+        ],
+    }
+
+    recent_snapshot = json.dumps(state['history'][-2:], sort_keys=True)
+    res1 = compact_runtime_history(state, keep_recent=2, trigger_chars=3_000, force=False)
+    assert res1['compacted'] is True
+    assert res1['reason'] == 'context_compacted'
+    assert res1['cleared_count'] == 3  # t_read_anth, t_search, t_sec (t_facts protected, t_tiny too small)
+    assert res1['chars_saved'] > 3_000
+    assert state['compaction_count'] == 1
+    assert json.dumps(state['history'][-2:], sort_keys=True) == recent_snapshot
+
+    # Protected record_facts and tiny read_sources stayed verbatim.
+    facts_entry = json.loads(state['history'][1]['results'][0]['content'])
+    assert 'facts' in facts_entry and 'cleared' not in facts_entry
+    tiny_entry = json.loads(state['history'][1]['results'][2]['content'])
+    assert 'results' in tiny_entry and 'cleared' not in tiny_entry
+
+    # Compacted descriptors preserve fields and recovery hint.
+    read_desc = json.loads(state['history'][0]['results'][0]['content'])
+    assert read_desc['cleared'] is True
+    assert read_desc['tool'] == 'read_sources'
+    assert read_desc['reason'] == 'context_compacted'
+    assert read_desc['source_ids'] == ['s1']
+    assert read_desc['source_spans'] == [{'source_id': 's1', 'start': 0, 'end': 2_000}]
+    assert read_desc['original_chars'] > 2_000
+    assert read_desc['facts_recorded_count'] == 2
+    assert 'read_ranges remain valid' in read_desc['hint']
+
+    search_desc = json.loads(state['history'][0]['results'][1]['content'])
+    assert search_desc['cleared'] is True and search_desc['tool'] == 'search_source'
+    assert search_desc['query'] == 'Revenue' and search_desc['total_matches'] == 3
+
+    # State anchors remain completely intact.
+    assert len(state['read_ranges']) == 1
+    assert len(state['facts']) == 2
+    assert len(state['calculations']) == 1
+    assert len(state['events']) == 1
+
+    # Re-running at same cutoff skips already-cleared entries (zero mutation).
+    snapshot_after_l1 = json.dumps(state['history'], sort_keys=True)
+    res_idem = compact_runtime_history(state, keep_recent=2, trigger_chars=500, force=False)
+    assert res_idem['compacted'] is False
+    assert res_idem['cleared_count'] == 0
+    assert state['compaction_count'] == 1
+    assert json.dumps(state['history'], sort_keys=True) == snapshot_after_l1
+
+    # L2 forced compaction with keep_recent=0 clears recent bulk items too, leaving already-cleared older items byte-identical.
+    first_two_before = json.dumps(state['history'][:2], sort_keys=True)
+    res_force = compact_runtime_history(state, keep_recent=0, force=True)
+    assert res_force['compacted'] is True
+    assert res_force['reason'] == 'continuation_compacted'
+    assert res_force['cleared_count'] == 2  # t_recent_1, t_recent_2
+    assert state['compaction_count'] == 2
+    assert json.dumps(state['history'][:2], sort_keys=True) == first_two_before
+    recent1_desc = json.loads(state['history'][2]['results'][0]['content'])
+    assert recent1_desc['cleared'] is True and recent1_desc['reason'] == 'continuation_compacted'
+
+
+def test_l1_compaction_triggers_under_tight_context_and_record_facts_still_locates():
+    quote_1 = 'FY2025 total revenue was $130,497 million.'
+    quote_2 = 'FY2024 total revenue was $60,922 million.'
+    doc_text = (
+        quote_1 + ' ' + ('Filler segment one. ' * 900)
+        + quote_2 + ' ' + ('Filler segment two. ' * 900)
+        + 'Segment three closing notes. ' * 900
+    )
+    src = source()
+    src.source_id = 's_comp'
+    src.title = 'NVDA Filing'
+    src.text = doc_text
+    src.content_sha256 = 'hash-comp'
+
+    q2_start = doc_text.index(quote_2)
+    s3_start = doc_text.index('Segment three')
+
+    class TightCapacityModel:
+        policy = SimpleNamespace(timeout_seconds=10, max_input_tokens=None, max_output_tokens=1000)
+
+        def __init__(self):
+            self.turns = []
+            self.step = 0
+
+        def research_capacity(self):
+            # Trigger watermark: ~32_000 * 3 * 0.58 - fixed (~10k) ≈ ~45k chars.
+            return SimpleNamespace(context_tokens=32_000, output_tokens=1000, input_counter='chars_div_3')
+
+        def estimate_turn_input(self, turn_obj):
+            return 100
+
+        def complete_turn(self, turn_obj, **kwargs):
+            self.turns.append(turn_obj)
+            self.step += 1
+            if self.step == 1:
+                return ModelResponse(
+                    {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r1', 'name': 'read_sources',
+                                                       'input': {'reads': [{'source_id': 's_comp', 'start': 0, 'end': 18_000}], 'rationale': 's1'}}]},
+                    (ModelToolCall('r1', 'read_sources', {'reads': [{'source_id': 's_comp', 'start': 0, 'end': 18_000}], 'rationale': 's1'}),),
+                    ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+                )
+            if self.step == 2:
+                return ModelResponse(
+                    {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r2', 'name': 'read_sources',
+                                                       'input': {'reads': [{'source_id': 's_comp', 'start': q2_start, 'end': q2_start + 18_000}], 'rationale': 's2'}}]},
+                    (ModelToolCall('r2', 'read_sources', {'reads': [{'source_id': 's_comp', 'start': q2_start, 'end': q2_start + 18_000}], 'rationale': 's2'}),),
+                    ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+                )
+            if self.step == 3:
+                return ModelResponse(
+                    {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'r3', 'name': 'read_sources',
+                                                       'input': {'reads': [{'source_id': 's_comp', 'start': s3_start, 'end': min(len(doc_text), s3_start + 18_000)}], 'rationale': 's3'}}]},
+                    (ModelToolCall('r3', 'read_sources', {'reads': [{'source_id': 's_comp', 'start': s3_start, 'end': min(len(doc_text), s3_start + 18_000)}], 'rationale': 's3'}),),
+                    ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+                )
+            if self.step == 4:
+                # r1 (>45k total history now!) must be compacted to descriptor; r2 & r3 stay verbatim!
+                r1_view = json.loads(turn_obj.history[0].results[0].content)
+                r2_view = json.loads(turn_obj.history[1].results[0].content)
+                r3_view = json.loads(turn_obj.history[2].results[0].content)
+                assert r1_view['cleared'] is True and r1_view['tool'] == 'read_sources'
+                assert r1_view['source_spans'] == [{'source_id': 's_comp', 'start': 0, 'end': 18_000}]
+                assert 'cleared' not in r2_view and quote_2 in r2_view['results'][0]['text']
+                assert 'cleared' not in r3_view
+
+                # record_facts citing quote_1 from the compacted r1 slice MUST still locate via state['read_ranges']!
+                return ModelResponse(
+                    {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'f1', 'name': 'record_facts', 'input': {
+                        'facts': [{
+                            'label': 'FY2025 revenue', 'value': 130497, 'unit': 'millions', 'currency': 'USD',
+                            'period': 'FY2025', 'source_id': 's_comp', 'quotation': quote_1,
+                        }],
+                        'rationale': 'record compacted slice fact',
+                    }}]},
+                    (ModelToolCall('f1', 'record_facts', {
+                        'facts': [{
+                            'label': 'FY2025 revenue', 'value': 130497, 'unit': 'millions', 'currency': 'USD',
+                            'period': 'FY2025', 'source_id': 's_comp', 'quotation': quote_1,
+                        }],
+                        'rationale': 'record compacted slice fact',
+                    }),),
+                    ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+                )
+            # Step 5: below watermark after L1 compaction -> prefix [0..3] must match step 4 verbatim!
+            assert turn_obj.history[:3] == self.turns[3].history[:3]
+            return ModelResponse(
+                {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'sub1', 'name': 'submit_research', 'input': {
+                    'report': 'FY2025 revenue was $130,497 million.',
+                    'claims': [{'text': 'FY2025 revenue was $130,497 million.', 'source_id': 's_comp',
+                                'quotation': quote_1, 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }}]},
+                (ModelToolCall('sub1', 'submit_research', {
+                    'report': 'FY2025 revenue was $130,497 million.',
+                    'claims': [{'text': 'FY2025 revenue was $130,497 million.', 'source_id': 's_comp',
+                                'quotation': quote_1, 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }),),
+                ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+            )
+
+    saved = []
+    model = TightCapacityModel()
+    outcome = run_research_agent(
+        question='What was FY2025 revenue?',
+        sources=[src],
+        model=model,
+        context=context(),
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert outcome.status == 'completed'
+    assert outcome.partial_notes is None
+    assert len(outcome.facts) == 1
+    assert outcome.facts[0]['character_start'] == 0
+    assert saved[-1]['compaction_count'] == 1
+    assert len(saved[-1]['read_ranges']) == 3
+
+
+def test_failed_attempts_and_partial_notes_recorded_across_truncation_context_incomplete_and_no_submission(monkeypatch):
+    from app.anthropic_messages import AnthropicMessagesProvider
+    from app.openai_compatible import HttpResponse
+    from app.phase3 import ProviderFailure, ProviderPolicy
+
+    src = source()
+    src.text = 'Revenue was 100 USD. Revenue was 80 USD.'
+
+    # 1. Real AnthropicMessagesProvider hitting stop_reason='max_tokens' after reading a source:
+    #    records failed_attempts with stop_reason='max_tokens', usage, history_chars, and deterministic partial_notes.
+    call_idx = {'n': 0}
+
+    def transport(method, url, headers, body, timeout, *, diagnostics, **kwargs):
+        call_idx['n'] += 1
+        diagnostics.submission('response_received')
+        if call_idx['n'] == 1:
+            return HttpResponse(200, json.dumps({
+                'role': 'assistant',
+                'stop_reason': 'tool_use',
+                'content': [{'type': 'tool_use', 'id': 'r1', 'name': 'read_sources',
+                             'input': {'reads': [{'source_id': 's1'}], 'rationale': 'read'}}],
+                'usage': {'input_tokens': 10, 'output_tokens': 5},
+            }), {})
+        return HttpResponse(200, json.dumps({
+            'role': 'assistant',
+            'stop_reason': 'max_tokens',
+            'content': [{'type': 'thinking', 'thinking': 'long thinking...', 'signature': 'sig'}],
+            'usage': {'input_tokens': 50, 'output_tokens': 100},
+        }), {})
+
+    monkeypatch.setattr('app.anthropic_messages._default_transport', transport)
+    settings = SimpleNamespace(base_url='https://example.com', model='model', api_key='fixture', allow_private_network=False)
+    provider = AnthropicMessagesProvider(settings, ProviderPolicy(retry_base_seconds=0),
+        anthropic_version='2023-06-01', auth_scheme='x-api-key', max_tokens=100)
+    saved = []
+    res_trunc = run_research_agent(
+        question='Compare revenue?',
+        sources=[src],
+        model=provider,
+        context=context(),
+        checkpoint=lambda s: saved.append(json.loads(json.dumps(s))),
+    )
+    assert res_trunc.status == 'partial'
+    assert res_trunc.reason == 'provider_output_truncated'
+    assert res_trunc.partial_notes is not None
+    assert 'provider_output_truncated' in res_trunc.partial_notes
+    assert '已收集资料 1 份' in res_trunc.partial_notes
+    assert '已读片段 1 段' in res_trunc.partial_notes
+    assert '已记录事实 0 条' in res_trunc.partial_notes
+    assert '已完成计算 0 项' in res_trunc.partial_notes
+    final_cp = saved[-1]
+    assert final_cp['pending'] is None
+    assert len(final_cp['failed_attempts']) == 1
+    attempt = final_cp['failed_attempts'][0]
+    assert attempt['reason'] == 'provider_output_truncated'
+    assert attempt['finish_reason'] == 'max_tokens'
+    assert attempt['usage'] == 150
+    assert attempt['history_chars'] > 0
+    assert isinstance(attempt['call_id'], str) and attempt['call_id']
+    assert isinstance(attempt['at'], str) and attempt['at']
+
+    # Resuming from that checkpoint injects prior_failed_attempts + recovery_guidance into turn.user transiently,
+    # without mutating state['user'], and preserves JSON structure.
+    original_user = final_cp['user']
+
+    class CaptureResume:
+        def __init__(self):
+            self.turns = []
+
+        def estimate_turn_input(self, t):
+            return 10
+
+        def complete_turn(self, t, **kwargs):
+            self.turns.append(t)
+            return ModelResponse(
+                {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 's_ok', 'name': 'submit_research', 'input': {
+                    'report': 'Revenue was 100 USD.',
+                    'claims': [{'text': 'Revenue was 100 USD.', 'source_id': 's1',
+                                'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }}]},
+                (ModelToolCall('s_ok', 'submit_research', {
+                    'report': 'Revenue was 100 USD.',
+                    'claims': [{'text': 'Revenue was 100 USD.', 'source_id': 's1',
+                                'quotation': 'Revenue was 100 USD.', 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }),),
+                ModelUsage(20, 10, 30), 'tool_use', 'tool_calls',
+            )
+
+    resumed_saved = []
+    capture = CaptureResume()
+    res_ok = run_research_agent(
+        question='Compare revenue?',
+        sources=[src],
+        model=capture,
+        context=context(),
+        initial_state=final_cp,
+        checkpoint=lambda s: resumed_saved.append(json.loads(json.dumps(s))),
+    )
+    assert res_ok.status == 'completed'
+    assert res_ok.partial_notes is None
+    assert resumed_saved[-1]['user'] == original_user
+    resumed_user_payload = json.loads(capture.turns[0].user)
+    assert resumed_user_payload['question'] == 'Compare revenue?'
+    assert resumed_user_payload['prior_failed_attempts'][0]['reason'] == 'provider_output_truncated'
+    assert 'search_source' in resumed_user_payload['recovery_guidance']
+
+    # 2. received=False truncation and context_limit still save failed_attempts & clear pending!
+    for code in ('provider_output_truncated', 'provider_context_limit'):
+        class UnconfirmedTruncModel:
+            def complete(self, messages, tools, **kwargs):
+                raise ProviderFailure(code, f'{code} msg', retryable=False)
+
+        cp_list = []
+        out = run_research_agent(
+            question='Q',
+            sources=[src],
+            model=UnconfirmedTruncModel(),
+            context=context(),
+            checkpoint=lambda s: cp_list.append(json.loads(json.dumps(s))),
+        )
+        assert out.reason == code
+        assert out.partial_notes is not None and code in out.partial_notes
+        assert cp_list[-1]['pending'] is None
+        assert cp_list[-1]['failed_attempts'][-1]['reason'] == code
+
+    # 3. incomplete_model_response & no_submission record failed_attempts and partial_notes.
+    class IncompleteModel:
+        def estimate_turn_input(self, t):
+            return 10
+
+        def complete_turn(self, t, **kwargs):
+            return ModelResponse({'role': 'assistant', 'content': []}, (), ModelUsage(5, 8, 13), 'max_tokens', 'truncated')
+
+    inc_saved = []
+    out_inc = run_research_agent(
+        question='Q',
+        sources=[src],
+        model=IncompleteModel(),
+        context=context(),
+        checkpoint=lambda s: inc_saved.append(json.loads(json.dumps(s))),
+    )
+    assert out_inc.reason == 'incomplete_model_response'
+    assert out_inc.partial_notes is not None and 'incomplete_model_response' in out_inc.partial_notes
+    assert inc_saved[-1]['failed_attempts'][-1]['reason'] == 'incomplete_model_response'
+    assert inc_saved[-1]['failed_attempts'][-1]['finish_reason'] == 'max_tokens'
+    assert inc_saved[-1]['failed_attempts'][-1]['usage'] == 13
+
+    no_sub_saved = []
+    out_nosub = run_research_agent(
+        question='Q',
+        sources=[src],
+        model=Model([ModelResponse({'role': 'assistant', 'content': 'stopping early'}, (), ModelUsage(4, 3, 7), 'stop')]),
+        context=context(),
+        checkpoint=lambda s: no_sub_saved.append(json.loads(json.dumps(s))),
+    )
+    assert out_nosub.reason == 'no_submission'
+    assert out_nosub.partial_notes is not None and 'no_submission' in out_nosub.partial_notes
+    assert no_sub_saved[-1]['failed_attempts'][-1]['reason'] == 'no_submission'
+    assert no_sub_saved[-1]['failed_attempts'][-1]['usage'] == 7
+
+    # 4. settlement_failed records failed_attempts & generates informative partial_notes.
+    c_settle = context()
+    c_settle.settle = lambda *_: (_ for _ in ()).throw(RuntimeError('ledger down'))
+    settle_saved = []
+    out_settle = run_research_agent(
+        question='Q',
+        sources=[src],
+        model=Model([turn('read_sources', {'reads': [{'source_id': 's1'}], 'rationale': 'read'}, 'r_settle')]),
+        context=c_settle,
+        checkpoint=lambda s: settle_saved.append(json.loads(json.dumps(s))),
+    )
+    assert out_settle.reason == 'settlement_failed'
+    assert out_settle.partial_notes is not None and 'settlement_failed' in out_settle.partial_notes
+    assert settle_saved[-1]['failed_attempts'][-1]['reason'] == 'settlement_failed'
+
+
+def test_default_120k_and_max_input_tokens_watermarks_and_giant_protected_force():
+    from app.research_runtime import compact_runtime_history
+
+    # 1. Default 120,000-char L1 watermark in run_research_agent:
+    #    4 x 24,000-char reads (~98k history) stay verbatim; 6th read pushes >120k and compacts older turns!
+    doc_text = ''.join(f'[CHUNK_{i:02d}] ' + ('X' * 23_989) for i in range(6))
+    src = source()
+    src.source_id = 's_big'
+    src.text = doc_text
+    src.content_sha256 = 'hash-big'
+
+    class SixReadsModel:
+        def __init__(self):
+            self.step = 0
+            self.turns = []
+
+        def estimate_turn_input(self, turn_obj):
+            return 100
+
+        def complete_turn(self, turn_obj, **kwargs):
+            self.turns.append(turn_obj)
+            self.step += 1
+            if self.step <= 6:
+                start = (self.step - 1) * 24_000
+                return ModelResponse(
+                    {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': f'r{self.step}', 'name': 'read_sources',
+                                                       'input': {'reads': [{'source_id': 's_big', 'start': start, 'end': start + 24_000}], 'rationale': f'read {self.step}'}}]},
+                    (ModelToolCall(f'r{self.step}', 'read_sources',
+                                   {'reads': [{'source_id': 's_big', 'start': start, 'end': start + 24_000}], 'rationale': f'read {self.step}'}),),
+                    ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+                )
+            return ModelResponse(
+                {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'sub', 'name': 'submit_research', 'input': {
+                    'report': 'Verified chunk 0 and chunk 5.',
+                    'claims': [{'text': 'Chunk 0 seen.', 'source_id': 's_big', 'quotation': '[CHUNK_00]', 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }}]},
+                (ModelToolCall('sub', 'submit_research', {
+                    'report': 'Verified chunk 0 and chunk 5.',
+                    'claims': [{'text': 'Chunk 0 seen.', 'source_id': 's_big', 'quotation': '[CHUNK_00]', 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }),),
+                ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+            )
+
+    m_big = SixReadsModel()
+    saved_big = []
+    res_big = run_research_agent(
+        question='Inspect big filing?',
+        sources=[src],
+        model=m_big,
+        context=context(),
+        checkpoint=lambda s: saved_big.append(json.loads(json.dumps(s))),
+    )
+    assert res_big.status == 'completed'
+    # Before step 6 (after 5 x 24k = ~122k history!), L1 triggers once; before step 5 (4 x 24k = ~98k), zero compaction!
+    assert 'cleared' not in m_big.turns[4].history[0].results[0].content
+    assert json.loads(m_big.turns[5].history[0].results[0].content)['cleared'] is True
+    assert json.loads(m_big.turns[5].history[2].results[0].content)['cleared'] is True
+    assert 'cleared' not in m_big.turns[5].history[3].results[0].content  # keep_recent=2
+    assert 'cleared' not in m_big.turns[5].history[4].results[0].content
+    # Step 7 is below 120k again -> steps 0..4 stay byte-identical to step 6!
+    assert m_big.turns[6].history[:5] == m_big.turns[5].history[:5]
+    assert saved_big[-1]['compaction_count'] == 1
+
+    # 2. Policy max_input_tokens tightens L1 trigger_chars so 4 x 6k reads compact instead of overflowing 25k limit.
+    small_doc = ''.join(f'[PART_{i}] ' + ('Y' * 5_991) for i in range(4))
+    small_src = source()
+    small_src.source_id = 's_pol'
+    small_src.text = small_doc
+    small_src.content_sha256 = 'hash-pol'
+
+    class PolicyTightModel:
+        policy = SimpleNamespace(timeout_seconds=10, max_input_tokens=24_000, max_output_tokens=1000)
+
+        def __init__(self):
+            self.step = 0
+            self.turns = []
+
+        def estimate_turn_input(self, turn_obj):
+            return len(json.dumps([{'role': 'user', 'content': turn_obj.user}], ensure_ascii=False)) + sum(
+                len(r.content) for ex in turn_obj.history for r in ex.results
+            )
+
+        def complete_turn(self, turn_obj, **kwargs):
+            self.turns.append(turn_obj)
+            self.step += 1
+            if self.step <= 3:
+                start = (self.step - 1) * 6_000
+                return ModelResponse(
+                    {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': f'p{self.step}', 'name': 'read_sources',
+                                                       'input': {'reads': [{'source_id': 's_pol', 'start': start, 'end': start + 6_000}], 'rationale': 'read'}}]},
+                    (ModelToolCall(f'p{self.step}', 'read_sources',
+                                   {'reads': [{'source_id': 's_pol', 'start': start, 'end': start + 6_000}], 'rationale': 'read'}),),
+                    ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+                )
+            assert json.loads(turn_obj.history[0].results[0].content)['cleared'] is True
+            return ModelResponse(
+                {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'psub', 'name': 'submit_research', 'input': {
+                    'report': 'Part 0 seen.',
+                    'claims': [{'text': 'Part 0.', 'source_id': 's_pol', 'quotation': '[PART_0]', 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }}]},
+                (ModelToolCall('psub', 'submit_research', {
+                    'report': 'Part 0 seen.',
+                    'claims': [{'text': 'Part 0.', 'source_id': 's_pol', 'quotation': '[PART_0]', 'role': 'support'}],
+                    'limitations': [],
+                    'stopping_reason': 'answered',
+                }),),
+                ModelUsage(10, 5, 15), 'tool_use', 'tool_calls',
+            )
+
+    res_pol = run_research_agent(question='Check policy?', sources=[small_src], model=PolicyTightModel(), context=context())
+    assert res_pol.status == 'completed'
+
+    # 3. Protected tool > 8000 chars stays protected under force=False, compacts only under force=True.
+    prot_state = {
+        'history': [
+            {
+                'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'rf1', 'name': 'record_facts', 'input': {}}]},
+                'results': [{'tool_call_id': 'rf1', 'content': json.dumps({'facts': [{'q': 'A' * 9_000}]}), 'is_error': False}],
+            },
+            {
+                'assistant': {'role': 'assistant', 'content': [{'type': 'tool_use', 'id': 'rf2', 'name': 'submit_research', 'input': {}}]},
+                'results': [{'tool_call_id': 'rf2', 'content': 'ok', 'is_error': False}],
+            },
+        ],
+        'facts': [{'fact_id': 'f1'}],
+        'events': [],
+    }
+    no_force = compact_runtime_history(prot_state, keep_recent=1, trigger_chars=1_000, force=False)
+    assert no_force['compacted'] is False
+    yes_force = compact_runtime_history(prot_state, keep_recent=1, force=True)
+    assert yes_force['compacted'] is True
+    assert json.loads(prot_state['history'][0]['results'][0]['content'])['cleared'] is True

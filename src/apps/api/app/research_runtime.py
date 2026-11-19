@@ -870,6 +870,500 @@ def _read_sources(req: ReadRequest, *, source_by_id: Mapping[str, ResearchSource
     return {'results': results, 'rationale': req.rationale}, tool_summary
 
 
+DEFAULT_L1_COMPACT_TRIGGER_CHARS = 120_000
+DEFAULT_L1_KEEP_RECENT = 2
+_COMPACT_MIN_RESULT_CHARS = 800
+_COMPACT_GIANT_PROTECTED_CHARS = 8_000
+_COMPACT_RECOVERY_HINT = (
+    'Use search_source or targeted read_sources if re-inspection needed; recorded read_ranges remain valid.'
+)
+_BULK_COMPACT_TOOLS = frozenset({
+    'read_sources',
+    'search_source',
+    'outline_source',
+    'discover_sources',
+    'acquire_sources',
+    'historical_prices',
+    'sec_company_concept',
+})
+_PROTECTED_COMPACT_TOOLS = frozenset({
+    'submit_research',
+    'record_facts',
+    'calculate_financials',
+})
+_TOOLS_SERIALIZED_CHARS = len(json.dumps([asdict(t) for t in TOOLS], ensure_ascii=False, separators=(',', ':')))
+
+_PARTIAL_REASON_LABELS = {
+    'no_submission': '模型没有提交结果就停止了',
+    'no_progress': '模型重复相同操作，证据没有变化，已停止',
+    'native_tools_unavailable': '当前模型不支持研究工具调用',
+    'external_result_unknown': '有一次外部请求的结果未知，需要核对后才能继续',
+    'incomplete_model_response': '模型回复不完整，无法安全执行',
+    'settlement_failed': '模型回复已保存，用量结算待核对',
+    'provider_cancelled': '已取消',
+    'acquisition_result_unknown': '资料获取结果未知',
+    'search_result_unknown': '搜索结果未知，需要核对',
+    'provider_timeout': '模型服务请求超时',
+    'provider_transport_error': '与模型服务的连接中断',
+    'provider_output_truncated': '模型输出达到单次长度上限而被截断',
+    'provider_context_limit': '输入与对话上下文超出模型窗口上限',
+    'provider_request_rejected': '模型服务拒绝了本次请求',
+    'provider_output_refused': '模型服务拒绝生成该内容',
+    'provider_unavailable': '模型服务暂时不可用',
+    'provider_rate_limited': '模型服务请求过于频繁，请稍后重试',
+    'provider_budget_exhausted': '已达到本次研究或账户的用量/时间预算上限',
+    'provider_budget_unknown': '无法确认本次模型调用的用量边界',
+    'provider_secret_missing': '当前环境未配置模型服务密钥',
+    'provider_configuration_invalid': '模型服务配置无效',
+    'invalid_provider_output': '模型服务返回了格式无效的响应',
+    'provider_no_result': '模型请求没有返回可用结果',
+    'token_budget_exhausted': 'Token 预算已用完',
+    'submitted': '模型已提交部分结果',
+}
+
+
+def _history_serialized_chars(history: Any) -> int:
+    if not isinstance(history, list) or not history:
+        return 0
+    return len(json.dumps(history, ensure_ascii=False, separators=(',', ':'), default=str))
+
+
+def _extract_assistant_tool_calls(assistant: Any) -> dict[str, tuple[str, dict[str, Any]]]:
+    calls: dict[str, tuple[str, dict[str, Any]]] = {}
+    if not isinstance(assistant, Mapping):
+        return calls
+    content = assistant.get('content')
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, Mapping) or block.get('type') != 'tool_use':
+                continue
+            cid, cname = block.get('id'), block.get('name')
+            if isinstance(cid, str) and cid and isinstance(cname, str) and cname:
+                raw_input = block.get('input')
+                calls[cid] = (cname, dict(raw_input) if isinstance(raw_input, Mapping) else {})
+    tool_calls = assistant.get('tool_calls')
+    if isinstance(tool_calls, list):
+        for tc in tool_calls:
+            if not isinstance(tc, Mapping):
+                continue
+            cid = tc.get('id')
+            fn = tc.get('function') if isinstance(tc.get('function'), Mapping) else {}
+            cname = fn.get('name') or tc.get('name')
+            if not isinstance(cid, str) or not cid or not isinstance(cname, str) or not cname:
+                continue
+            raw_args = fn.get('arguments') if 'arguments' in fn else tc.get('arguments')
+            parsed_args: dict[str, Any] = {}
+            if isinstance(raw_args, Mapping):
+                parsed_args = dict(raw_args)
+            elif isinstance(raw_args, str) and raw_args.strip().startswith('{'):
+                try:
+                    loaded = json.loads(raw_args)
+                    if isinstance(loaded, dict):
+                        parsed_args = loaded
+                except (TypeError, ValueError):
+                    pass
+            calls[cid] = (cname, parsed_args)
+    return calls
+
+
+def _infer_tool_name(parsed: Mapping[str, Any] | None) -> str:
+    if not isinstance(parsed, Mapping):
+        return 'unknown'
+    if 'hits' in parsed and 'query' in parsed:
+        return 'search_source'
+    if 'entries' in parsed and 'total_detected_entries' in parsed:
+        return 'outline_source'
+    if 'leads' in parsed:
+        return 'discover_sources'
+    if 'facts' in parsed:
+        return 'record_facts'
+    if 'calculations' in parsed:
+        return 'calculate_financials'
+    results = parsed.get('results')
+    if isinstance(results, list):
+        if any(isinstance(r, Mapping) and 'start' in r and 'text' in r for r in results):
+            return 'read_sources'
+        if any(isinstance(r, Mapping) and 'url' in r for r in results):
+            return 'acquire_sources'
+    return 'unknown'
+
+
+def _extract_compaction_coverage(
+    tool_name: str,
+    parsed: Mapping[str, Any] | None,
+    args: Mapping[str, Any],
+) -> tuple[list[str], list[dict[str, Any]]]:
+    source_ids: list[str] = []
+    source_spans: list[dict[str, Any]] = []
+
+    def add_source_id(val: Any) -> None:
+        if isinstance(val, str) and val and val not in source_ids and len(source_ids) < 20:
+            source_ids.append(val)
+
+    def add_span(row: Mapping[str, Any]) -> None:
+        sid, start, end = row.get('source_id'), row.get('start'), row.get('end')
+        add_source_id(sid)
+        if (
+            tool_name == 'read_sources'
+            and isinstance(sid, str) and sid
+            and type(start) is int and type(end) is int
+            and len(source_spans) < 20
+        ):
+            span = {'source_id': sid, 'start': start, 'end': end}
+            if span not in source_spans:
+                source_spans.append(span)
+
+    if isinstance(parsed, Mapping):
+        add_source_id(parsed.get('source_id'))
+        for list_key in ('results', 'reads'):
+            rows = parsed.get(list_key)
+            if isinstance(rows, list):
+                for row in rows:
+                    if isinstance(row, Mapping):
+                        add_span(row)
+    if not source_ids and isinstance(args, Mapping):
+        add_source_id(args.get('source_id'))
+        arg_reads = args.get('reads')
+        if isinstance(arg_reads, list):
+            for row in arg_reads:
+                if isinstance(row, Mapping):
+                    add_span(row)
+    return source_ids, source_spans
+
+
+def compact_runtime_history(
+    state: dict[str, Any],
+    *,
+    keep_recent: int = DEFAULT_L1_KEEP_RECENT,
+    trigger_chars: int = DEFAULT_L1_COMPACT_TRIGGER_CHARS,
+    force: bool = False,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Deterministically replace bulky older tool results in ``state['history']`` with compact descriptors.
+
+    Preserves ``state['history'][-keep_recent:]`` verbatim (and leaves ``state['history']``
+    completely untouched below ``trigger_chars`` when ``force=False`` so prompt prefixes
+    stay byte-identical for KV-cache reuse). Never modifies ``read_ranges``, ``facts``,
+    ``calculations``, or ``events``.
+    """
+    history = state.get('history')
+    if not isinstance(history, list) or not history:
+        return {
+            'compacted': False,
+            'reason': 'empty_history',
+            'before_chars': 0,
+            'after_chars': 0,
+            'chars_saved': 0,
+            'cleared_count': 0,
+            'kept_recent': 0,
+            'compacted_tools': [],
+            'cleared_call_ids': [],
+        }
+
+    keep = max(0, int(keep_recent))
+    cutoff = len(history) if keep == 0 else max(0, len(history) - keep)
+    kept_recent = len(history) - cutoff
+    before_chars = _history_serialized_chars(history)
+
+    if not force and before_chars <= trigger_chars:
+        return {
+            'compacted': False,
+            'reason': 'below_threshold',
+            'before_chars': before_chars,
+            'after_chars': before_chars,
+            'chars_saved': 0,
+            'cleared_count': 0,
+            'kept_recent': kept_recent,
+            'compacted_tools': [],
+            'cleared_call_ids': [],
+        }
+    if cutoff == 0:
+        return {
+            'compacted': False,
+            'reason': 'within_keep_recent',
+            'before_chars': before_chars,
+            'after_chars': before_chars,
+            'chars_saved': 0,
+            'cleared_count': 0,
+            'kept_recent': kept_recent,
+            'compacted_tools': [],
+            'cleared_call_ids': [],
+        }
+
+    effective_reason = reason or ('continuation_compacted' if force else 'context_compacted')
+    facts_recorded_count = len(state.get('facts') or []) if isinstance(state.get('facts'), list) else 0
+    event_tool_names: dict[str, str] = {}
+    for ev in state.get('events') or []:
+        if isinstance(ev, Mapping) and ev.get('kind') == 'tool':
+            tc_id, t_name = ev.get('tool_call_id'), ev.get('name')
+            if isinstance(tc_id, str) and tc_id and isinstance(t_name, str) and t_name:
+                event_tool_names[tc_id] = t_name
+
+    cleared_count = 0
+    compacted_tools: list[str] = []
+    cleared_call_ids: list[str] = []
+
+    for exchange in history[:cutoff]:
+        if not isinstance(exchange, Mapping):
+            continue
+        results = exchange.get('results')
+        if not isinstance(results, list) or not results:
+            continue
+        assistant_calls = _extract_assistant_tool_calls(exchange.get('assistant'))
+        for res in results:
+            if not isinstance(res, dict):
+                continue
+            raw_content = res.get('content')
+            if not isinstance(raw_content, str):
+                continue
+            parsed_content: dict[str, Any] | None = None
+            if raw_content.lstrip().startswith('{'):
+                try:
+                    loaded = json.loads(raw_content)
+                    if isinstance(loaded, dict):
+                        parsed_content = loaded
+                except (TypeError, ValueError):
+                    parsed_content = None
+            if parsed_content is not None and parsed_content.get('cleared') is True:
+                continue
+
+            call_id = res.get('tool_call_id') if isinstance(res.get('tool_call_id'), str) else ''
+            tool_name, call_args = assistant_calls.get(call_id, ('', {}))
+            if not tool_name:
+                tool_name = event_tool_names.get(call_id, '')
+            if not tool_name:
+                tool_name = _infer_tool_name(parsed_content)
+
+            original_chars = len(raw_content)
+            is_error = bool(res.get('is_error', False))
+            source_ids, source_spans = _extract_compaction_coverage(tool_name, parsed_content, call_args)
+
+            descriptor: dict[str, Any] = {
+                'cleared': True,
+                'tool': tool_name,
+                'reason': effective_reason,
+                'source_ids': source_ids,
+                'source_spans': source_spans,
+                'original_chars': original_chars,
+                'facts_recorded_count': facts_recorded_count,
+                'hint': _COMPACT_RECOVERY_HINT,
+            }
+            if tool_name == 'search_source' and isinstance(parsed_content, Mapping):
+                if isinstance(parsed_content.get('query'), str) and parsed_content['query']:
+                    descriptor['query'] = _clip(parsed_content['query'], 80)
+                if type(parsed_content.get('total_matches')) is int:
+                    descriptor['total_matches'] = parsed_content['total_matches']
+            elif tool_name == 'outline_source' and isinstance(parsed_content, Mapping):
+                if type(parsed_content.get('total_characters')) is int:
+                    descriptor['total_characters'] = parsed_content['total_characters']
+
+            descriptor_json = json.dumps(descriptor, ensure_ascii=False, separators=(',', ':'))
+            if len(descriptor_json) >= original_chars:
+                continue
+
+            if tool_name in _PROTECTED_COMPACT_TOOLS:
+                should_compact = force and original_chars > _COMPACT_GIANT_PROTECTED_CHARS
+            elif tool_name in _BULK_COMPACT_TOOLS:
+                if is_error:
+                    should_compact = original_chars > _COMPACT_MIN_RESULT_CHARS
+                else:
+                    should_compact = original_chars > _COMPACT_MIN_RESULT_CHARS or original_chars > 400 or force
+            else:
+                should_compact = original_chars > _COMPACT_MIN_RESULT_CHARS
+
+            if not should_compact:
+                continue
+
+            res['content'] = descriptor_json
+            cleared_count += 1
+            if tool_name not in compacted_tools:
+                compacted_tools.append(tool_name)
+            if call_id:
+                cleared_call_ids.append(call_id)
+
+    after_chars = _history_serialized_chars(history)
+    if cleared_count > 0:
+        prev_count = state.get('compaction_count')
+        state['compaction_count'] = (prev_count if type(prev_count) is int and prev_count >= 0 else 0) + 1
+    return {
+        'compacted': cleared_count > 0,
+        'reason': effective_reason if cleared_count > 0 else 'nothing_to_compact',
+        'before_chars': before_chars,
+        'after_chars': after_chars,
+        'chars_saved': max(0, before_chars - after_chars),
+        'cleared_count': cleared_count,
+        'kept_recent': kept_recent,
+        'compacted_tools': compacted_tools,
+        'cleared_call_ids': cleared_call_ids,
+    }
+
+
+def _l1_compaction_trigger_chars(
+    state: Mapping[str, Any],
+    model: Any,
+    context: Any,
+    default_trigger: int = DEFAULT_L1_COMPACT_TRIGGER_CHARS,
+) -> int:
+    """Compute history compaction watermark honoring tighter provider/budget limits."""
+    trigger = default_trigger
+    fixed_chars = len(SYSTEM) + len(str(state.get('user') or '')) + _TOOLS_SERIALIZED_CHARS
+
+    policy = getattr(model, 'policy', None)
+    explicit_input = getattr(policy, 'max_input_tokens', None)
+    if type(explicit_input) is int and explicit_input > 0:
+        available = explicit_input - fixed_chars
+        budget_trigger = max(1_000, int(available * 0.65)) if available > 0 else 1_000
+        trigger = min(trigger, budget_trigger)
+
+    capacity = getattr(model, 'research_capacity', None)
+    profile = capacity() if callable(capacity) else None
+    if profile is not None:
+        context_limit = getattr(profile, 'context_tokens', None)
+        input_counter = getattr(profile, 'input_counter', None)
+        if type(context_limit) is int and context_limit > 0:
+            if input_counter == 'chars_div_3':
+                available = int(context_limit * 3 * 0.58) - fixed_chars
+                trigger = min(trigger, max(1_000, available))
+            elif input_counter == 'utf8_byte_upper_bound':
+                available = int(context_limit * 0.58) - fixed_chars
+                trigger = min(trigger, max(1_000, available))
+
+    budget = getattr(context, 'budget', None)
+    max_total_tokens = getattr(budget, 'max_total_tokens', None)
+    accounted_tokens = getattr(context, 'accounted_tokens', None)
+    if type(max_total_tokens) is int and max_total_tokens > 0 and type(accounted_tokens) is int:
+        remaining = max(0, max_total_tokens - accounted_tokens)
+        if remaining < 200_000:
+            available = int(remaining * 0.65) - fixed_chars
+            trigger = min(trigger, max(1_000, available if available > 0 else 1_000))
+
+    return trigger
+
+
+def _sanitize_failed_usage(usage: Any) -> int | dict[str, int] | None:
+    if type(usage) is int and usage >= 0:
+        return usage
+    if isinstance(usage, Mapping):
+        clean = {
+            k: int(v)
+            for k, v in usage.items()
+            if k in (
+                'input_tokens',
+                'output_tokens',
+                'total_tokens',
+                'cache_creation_input_tokens',
+                'cache_read_input_tokens',
+            )
+            and type(v) is int and v >= 0
+        }
+        return clean or None
+    return None
+
+
+def _record_failed_attempt(
+    state: dict[str, Any],
+    *,
+    call_id: str | None,
+    reason: str,
+    finish_reason: str | None = None,
+    usage: Any = None,
+) -> None:
+    attempts = state.get('failed_attempts')
+    if not isinstance(attempts, list):
+        attempts = []
+        state['failed_attempts'] = attempts
+    clean_call_id = _clip(call_id, 128) if isinstance(call_id, str) and call_id else None
+    clean_reason = _clip(reason, 100)
+    if clean_call_id and any(
+        isinstance(item, Mapping) and item.get('call_id') == clean_call_id and item.get('reason') == clean_reason
+        for item in attempts
+    ):
+        return
+    attempts.append({
+        'call_id': clean_call_id,
+        'reason': clean_reason,
+        'finish_reason': _clip(finish_reason, 100) if isinstance(finish_reason, str) and finish_reason else None,
+        'usage': _sanitize_failed_usage(usage),
+        'history_chars': _history_serialized_chars(state.get('history')),
+        'at': _now_iso(),
+    })
+    if len(attempts) > 20:
+        del attempts[:-20]
+
+
+def _user_with_failure_awareness(user_text: str, state: Mapping[str, Any]) -> str:
+    """Inject bounded failure/continuation awareness transiently without mutating ``state['user']``."""
+    raw_attempts = state.get('failed_attempts')
+    attempts = [item for item in raw_attempts if isinstance(item, Mapping)] if isinstance(raw_attempts, list) else []
+    raw_guidance = state.get('continuation_guidance')
+    custom_guidance = _clip(raw_guidance.strip(), 500) if isinstance(raw_guidance, str) and raw_guidance.strip() else None
+    if not attempts and not custom_guidance:
+        return user_text
+    recent: list[dict[str, Any]] = []
+    for item in attempts[-3:]:
+        row: dict[str, Any] = {'reason': item.get('reason')}
+        if isinstance(item.get('finish_reason'), str) and item['finish_reason']:
+            row['finish_reason'] = item['finish_reason']
+        if type(item.get('history_chars')) is int:
+            row['history_chars'] = item['history_chars']
+        if item.get('usage') is not None:
+            row['usage'] = item['usage']
+        recent.append(row)
+    reasons = {row.get('reason') for row in recent}
+    if custom_guidance:
+        guidance = custom_guidance
+    elif reasons & {'provider_output_truncated', 'provider_context_limit', 'incomplete_model_response'}:
+        guidance = (
+            'Prior attempt failed due to output/context limit or truncated response. '
+            'Do not repeat wide reads or emit overly long drafts; rely on recorded facts and read_ranges, '
+            'use search_source and tiny targeted read_sources slices only if essential, and call submit_research concisely.'
+        )
+    else:
+        guidance = (
+            'Resuming after prior incomplete attempt(s). Review recorded facts, read_ranges, and history, '
+            'then proceed toward submit_research.'
+        )
+    try:
+        parsed = json.loads(user_text)
+    except (TypeError, ValueError):
+        parsed = None
+    if isinstance(parsed, dict):
+        augmented = dict(parsed)
+        if recent:
+            augmented['prior_failed_attempts'] = recent
+        augmented['recovery_guidance'] = guidance
+        return json.dumps(augmented, ensure_ascii=False)
+    note_payload = {'prior_failed_attempts': recent, 'recovery_guidance': guidance} if recent else {'recovery_guidance': guidance}
+    return f'{user_text}\n[Recovery context: {json.dumps(note_payload, ensure_ascii=False)}]'
+
+
+def _default_partial_notes(
+    *,
+    state: Mapping[str, Any],
+    reason: str,
+    eligible_sources: list[ResearchSource],
+) -> str:
+    reason_label = _PARTIAL_REASON_LABELS.get(reason)
+    reason_text = f'{reason_label}（{reason}）' if reason_label else reason
+    acquired_ids = [sid for sid in (state.get('acquired_source_ids') or []) if isinstance(sid, str) and sid]
+    read_ranges = [r for r in (state.get('read_ranges') or []) if isinstance(r, Mapping)]
+    read_source_ids = [r.get('source_id') for r in read_ranges if isinstance(r.get('source_id'), str) and r.get('source_id')]
+    collected_count = len(dict.fromkeys([*(s.source_id for s in eligible_sources), *acquired_ids, *read_source_ids]))
+    acquired_count = len(dict.fromkeys(acquired_ids))
+    read_range_count = len(read_ranges)
+    facts_count = len(state.get('facts') or []) if isinstance(state.get('facts'), list) else 0
+    calcs_count = len(state.get('calculations') or []) if isinstance(state.get('calculations'), list) else 0
+    source_part = (
+        f'已收集资料 {collected_count} 份（本轮新获取 {acquired_count} 份）'
+        if acquired_count > 0
+        else f'已收集资料 {collected_count} 份'
+    )
+    return (
+        f'部分结果已保留：停止原因：{reason_text}；{source_part}，'
+        f'已读片段 {read_range_count} 段，已记录事实 {facts_count} 条，已完成计算 {calcs_count} 项。'
+    )
+
+
 def _prior_research(prior: dict, sources: list[ResearchSource], as_of: datetime | None) -> tuple[dict, dict]:
     """Build the bounded prior-turn summary for the model and the private state it needs.
 
@@ -945,6 +1439,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
     source_by_id = {s.source_id: s for s in sources}
     if initial_state:
         state = json.loads(json.dumps(initial_state))
+        if not isinstance(state.get('failed_attempts'), list):
+            state['failed_attempts'] = []
     else:
         inventory = [{'source_id': s.source_id, 'eligibility': code,
                       **({'title': s.title,
@@ -972,7 +1468,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
             payload['prior_research'], prior_state = _prior_research(prior, sources, as_of)
         state = {'user': json.dumps(payload, ensure_ascii=False), 'history': [],
                  'events': [], 'read_ranges': [], 'facts': [], 'calculations': [], 'leads': [],
-                 'acquired_source_ids': [], 'pending': None, 'focus_ranges': focus_ranges, **prior_state}
+                 'acquired_source_ids': [], 'failed_attempts': [], 'pending': None,
+                 'focus_ranges': focus_ranges, **prior_state}
     def save() -> None:
         if checkpoint is not None:
             checkpoint(state)
@@ -1095,10 +1592,17 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 for event in state['events']
             ):
                 derived.append(gap('search_candidates_not_acquired'))
+        resolved_partial_notes = partial_notes
+        if status == 'partial' and not (isinstance(resolved_partial_notes, str) and resolved_partial_notes.strip()):
+            resolved_partial_notes = _default_partial_notes(
+                state=state,
+                reason=reason,
+                eligible_sources=[s for s in sources if _is_source_eligible(s, as_of)],
+            )
         unique = list({(item['code'], item['message']): item for item in [*derived, *(gaps or [])]}.values())
         return RuntimeOutcome(status, reason, report, claims or [], state.get('facts', []), state['calculations'], unique[:500],
                               list(dict.fromkeys(x['source_id'] for x in state['read_ranges'])), [], state['events'],
-                              stopping_note, partial_notes)
+                              stopping_note, resolved_partial_notes)
     if state.get('stopped'):
         return outcome('partial', state['stopped'], gaps=[gap('run_stopped')])
     if state.get('submission'):
@@ -1142,9 +1646,18 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
     submission_retries = 0
 
     def turn_input():
-        return ModelTurnInput(SYSTEM, state['user'], tuple(TOOLS), tuple(
-            ModelTurnExchange(ModelAssistantContinuation(item['assistant']), tuple(
-                ModelToolResult(**result) for result in item['results'])) for item in state['history']))
+        return ModelTurnInput(
+            SYSTEM,
+            _user_with_failure_awareness(state['user'], state),
+            tuple(TOOLS),
+            tuple(
+                ModelTurnExchange(
+                    ModelAssistantContinuation(item['assistant']),
+                    tuple(ModelToolResult(**result) for result in item['results']),
+                )
+                for item in state['history']
+            ),
+        )
     def append_result(call_id, result):
         state['history'][-1]['results'].append({'tool_call_id': call_id,
             'content': json.dumps(result, ensure_ascii=False, default=str),
@@ -1185,6 +1698,12 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
         else:
             if not callable(getattr(model, 'complete_turn', None)):
                 return outcome('partial', 'native_tools_unavailable', gaps=[gap('native_tools_unavailable')])
+            compact_runtime_history(
+                state,
+                keep_recent=DEFAULT_L1_KEEP_RECENT,
+                trigger_chars=_l1_compaction_trigger_chars(state, model, context),
+                force=False,
+            )
             turn = turn_input()
             wire = json.dumps({'user': turn.user}, ensure_ascii=False)
             try:
@@ -1202,6 +1721,8 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 call_id = str(context.diagnostic_context.get('operation_id') or 'research') + ':research-agent:' + uuid4().hex
                 before = context.start_model(call_id, reservation)
             except ProviderFailure as error:
+                _record_failed_attempt(state, call_id=None, reason=error.code)
+                save()
                 return outcome('partial', error.code, gaps=[provider_gap(error)])
             stream_call_seq += 1
             active_call_seq = stream_call_seq
@@ -1243,7 +1764,10 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
             except ProviderFailure as error:
                 received = getattr(error, 'provider_response_received', False) is True
                 tokens = error.reported_tokens if received else None
-                diagnostic = context.private_diagnostics.get(call_id, {}).get('transport', {})
+                call_diag = context.private_diagnostics.get(call_id, {})
+                diagnostic = call_diag.get('transport', {})
+                diag_finish = call_diag.get('stop_reason') or call_diag.get('finish') or context.private_finish.get(call_id)
+                diag_usage = tokens if type(tokens) is int and tokens >= 0 else call_diag.get('usage')
                 not_started = not received and diagnostic.get('submission_state') == 'not_started'
                 cancel_ev = kwargs.get('cancel_event')
                 is_cancelled = error.code == 'provider_cancelled' or (cancel_ev is not None and cancel_ev.is_set())
@@ -1252,7 +1776,6 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     state['events'].append({'kind': 'model_failure', 'call_id': call_id, 'code': error.code,
                                             'external_state': 'not_started', 'usage': None})
                     state['pending'] = None
-                    save()
                     # Retry connection failures before the request was sent (DNS, TCP or TLS).
                     # The prior tool results and history stay intact, and accounting is restored.
                     if (error.retryable and error.code in ('provider_transport_error', 'provider_timeout')
@@ -1260,6 +1783,7 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                         and any(stage['stage'] in PRE_SEND_STAGES and stage['result'] in ('error', 'timeout')
                                 for stage in diagnostic.get('stages', ()))
                         and not any(stage['stage'] not in PRE_SEND_STAGES for stage in diagnostic.get('stages', ()))):
+                        save()
                         delay = min(presend_base * (2 ** submission_retries), max(presend_base, 8.0))
                         if delay < context.budget.deadline - context.now():
                             _emit_reset(active_call_seq, 'retrying')
@@ -1271,16 +1795,43 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                                 context.ensure_running()
                                 return outcome('partial', 'provider_cancelled', gaps=[gap('cancelled')])
                             continue
+                    if error.code in ('provider_output_truncated', 'provider_context_limit') or (not error.retryable and not is_cancelled):
+                        _record_failed_attempt(
+                            state,
+                            call_id=call_id,
+                            reason=error.code,
+                            finish_reason=diag_finish,
+                            usage=diag_usage,
+                        )
+                    save()
                     _emit_reset(active_call_seq, 'cancelled' if is_cancelled else 'failed')
                     active_call_seq = None
                     return outcome('partial', error.code, gaps=[provider_gap(error)])
                 elif received:
                     state['pending'] = {'kind': 'model_returned', 'call_id': call_id,
                         'usage': tokens, 'before': list(before), 'started_at': model_started_at,
-                        'error': {'code': error.code, 'message': str(error)}}
+                        'finish_reason': diag_finish, 'usage_detail': diag_usage,
+                        'error': {'code': error.code, 'message': str(error), 'retryable': error.retryable}}
                     save()
                 else:
                     context.finish_model(call_id, None, before)
+                    is_trunc_or_ctx = error.code in ('provider_output_truncated', 'provider_context_limit')
+                    should_record = is_trunc_or_ctx or (not error.retryable and not is_cancelled)
+                    if should_record:
+                        _record_failed_attempt(
+                            state,
+                            call_id=call_id,
+                            reason=error.code,
+                            finish_reason=diag_finish,
+                            usage=diag_usage,
+                        )
+                    if is_trunc_or_ctx:
+                        state['events'].append({'kind': 'model_failure', 'call_id': call_id, 'code': error.code,
+                                                'external_state': 'unknown', 'usage': None})
+                        state['pending'] = None
+                        save()
+                    elif should_record:
+                        save()
                     _emit_reset(active_call_seq, 'cancelled' if is_cancelled else 'failed')
                     active_call_seq = None
                     return outcome('partial', error.code, gaps=[provider_gap(error)])
@@ -1304,6 +1855,14 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 context.finish_model(call_id, returned.get('usage'), tuple(returned['before']))
             except Exception:
                 # The saved response is recoverable; never resubmit this request.
+                _record_failed_attempt(
+                    state,
+                    call_id=call_id,
+                    reason='settlement_failed',
+                    finish_reason=returned.get('finish_reason'),
+                    usage=returned.get('usage') if returned.get('usage') is not None else returned.get('usage_detail'),
+                )
+                save()
                 _emit_reset(active_call_seq, 'failed')
                 active_call_seq = None
                 return outcome('partial', 'settlement_failed', gaps=[gap('settlement_failed')])
@@ -1314,6 +1873,17 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 state['events'].append({'kind': 'model_failure', 'call_id': call_id, 'code': error['code'],
                     'external_state': 'returned', 'usage': returned.get('usage'), 'settlement': accounting})
                 state.setdefault('model_receipts', []).append({'call_id': call_id, 'provider': 'returned', 'settlement': accounting})
+                if (
+                    error['code'] in ('provider_output_truncated', 'provider_context_limit')
+                    or (error.get('retryable') is False and error['code'] != 'provider_cancelled')
+                ):
+                    _record_failed_attempt(
+                        state,
+                        call_id=call_id,
+                        reason=error['code'],
+                        finish_reason=returned.get('finish_reason'),
+                        usage=returned.get('usage') if returned.get('usage') is not None else returned.get('usage_detail'),
+                    )
                 state['pending'] = None
                 save()
                 _emit_reset(active_call_seq, 'cancelled' if error['code'] == 'provider_cancelled' else 'failed')
@@ -1326,6 +1896,13 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                 any(not isinstance(c.id, str) or not c.id or not isinstance(c.name, str) or not c.name or
                     (c.arguments is not None and not isinstance(c.arguments, dict)) for c in calls) or
                 len(ids) != len(set(ids))):
+                _record_failed_attempt(
+                    state,
+                    call_id=call_id,
+                    reason='incomplete_model_response',
+                    finish_reason=returned.get('finish_reason'),
+                    usage=returned.get('usage') if returned.get('usage') is not None else returned.get('usage_detail'),
+                )
                 state['pending'] = None
                 state['stopped'] = 'incomplete_model_response'
                 save()
@@ -1343,6 +1920,13 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
             state['events'].append(model_event)
             state.setdefault('model_receipts', []).append({'call_id': call_id, 'provider': 'returned', 'settlement': accounting})
             if not calls:
+                _record_failed_attempt(
+                    state,
+                    call_id=call_id,
+                    reason='no_submission',
+                    finish_reason=returned.get('finish_reason'),
+                    usage=returned.get('usage') if returned.get('usage') is not None else returned.get('usage_detail'),
+                )
                 state['pending'] = None
                 save()
                 _emit_reset(active_call_seq, 'call_completed')
@@ -1844,6 +2428,9 @@ def run_research_agent(*, question: str, sources: list[ResearchSource], model: A
                     return outcome(status, 'submitted', report=report, claims=claims,
                                    gaps=gaps, stopping_note=req.stopping_reason, partial_notes=partial_notes)
             except ProviderFailure as error:
+                if error.code in ('provider_output_truncated', 'provider_context_limit') or not error.retryable:
+                    _record_failed_attempt(state, call_id=call.id, reason=error.code)
+                    save()
                 _emit_reset(batch_call_seq, 'failed')
                 active_call_seq = None
                 return outcome('partial', error.code, gaps=[provider_gap(error)])

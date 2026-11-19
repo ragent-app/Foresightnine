@@ -181,6 +181,7 @@ export const RECOVERY_REASON_LABEL: Readonly<Record<string, string>> = {
   unknown_external: "外部请求结果未知",
   already_used: "这个检查点已经用过",
   budget_exhausted: "预算已用完",
+  repeated_truncation: "连续多次达到模型输出或上下文长度上限，无法再通过“继续研究”恢复；建议缩小问题范围重新提问，或先查看、导出已收集的部分事实",
   unavailable: "当前无法恢复",
 };
 

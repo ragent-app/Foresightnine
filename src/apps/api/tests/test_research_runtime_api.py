@@ -639,6 +639,7 @@ def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkey
 
     version = client.get(path, headers=headers).json()['versions'][-1]
     assert version['content']['turns'][-1]['status'] == 'completed'
+    assert version['content']['turns'][-1]['official_fetch_status'] == 'completed'
     assert version['content']['turns'][-1]['partial_notes'] is None
     sec_sid = version['content']['claims'][0]['citations'][0]['source_id']
     assert sec_sid in version['source_ids']
@@ -685,6 +686,7 @@ def test_question_only_run_calls_sec_company_concept_and_cites_sec_source(monkey
     assert op['status'] == 'completed'
     denied_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
     assert denied_turn['status'] == 'partial' and denied_turn['report'] == ''
+    assert denied_turn['official_fetch_status'] == 'not_requested'
     assert denied_turn['partial_notes'] == 'SEC tool permission denied.'
 
 
@@ -921,3 +923,141 @@ def test_start_research_run_uses_pace_sec_request_and_honors_reserve_override(mo
         time.sleep(.01)
     assert op2['status'] == 'completed', op2
     assert len(reserve_calls) >= 2 and all(reserve_calls)
+    override_turn = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
+    assert override_turn['official_fetch_status'] == 'failed'
+
+
+def test_sec_company_concept_syncs_official_fetch_status_with_priority_guard(monkeypatch):
+    import app.research_official_retrieval as retrieval
+    import app.research_structured_connector as connector
+    from app.research_sec import SecFilingResult, SecResult
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_SEC_USER_AGENT', 'Example Research contact@example.test')
+    monkeypatch.setattr(api, '_reserve_search_call', lambda *_: None)
+    monkeypatch.setattr(api, 'reserve_sec_request', lambda *_: True)
+
+    filing_url = 'https://www.sec.gov/Archives/edgar/data/1045810/000104581025000001/nvda-20250126.htm'
+    rev_quote = '{"val": 130497000000, "unit": "USD", "start": "2024-01-29", "end": "2025-01-26", "filed": "2025-02-26", "form": "10-K"}'
+
+    class Search:
+        supports_project_search = True
+
+        def search(self, query, **kwargs):
+            return [ProviderSearchCandidate('NVIDIA Form 10-K', filing_url, 'Annual filing.', 'SEC EDGAR', None, True)]
+
+    def fake_identities(req, agent):
+        return {
+            'candidates': [{'cik': '0001045810', 'ticker': 'NVDA', 'name': 'NVIDIA CORP', 'exchange': None}],
+            'source_url': 'https://www.sec.gov/files/company_tickers.json',
+            'retrieved_at': '2026-01-01T00:00:00Z',
+            'response_sha256': 'idhash',
+            'limitation': 'current mapping',
+        }
+
+    def fake_concept(req, agent):
+        text = 'SEC XBRL companyconcept\n' if req.tag == 'WrongTag' else f'SEC XBRL companyconcept\n{rev_quote}'
+        return SecResult(
+            url=f'https://data.sec.gov/api/xbrl/companyconcept/CIK0001045810/us-gaap/{req.tag}.json',
+            title=f'NVIDIA CORP: {req.tag} (USD)',
+            text=text,
+            response_sha256=f'sha-{req.tag}',
+        )
+
+    def fake_filing(req, agent, **kwargs):
+        return SecFilingResult('NVIDIA Form 10-K revenue 130497.', 'filing-sha', 'PGh0bWw+PC9odG1sPg==')
+
+    monkeypatch.setattr(api, 'evidence_provider', Search())
+    monkeypatch.setattr(connector, 'search_sec_identities', fake_identities)
+    monkeypatch.setattr(connector, 'fetch_sec_concept', fake_concept)
+    monkeypatch.setattr(retrieval, 'fetch_sec_filing', fake_filing)
+
+    # Turn 1: unknown SEC tag first, then valid SEC tag -> official_fetch_status becomes 'completed'.
+    class Turn1Provider:
+        name = 'sec-status-turn1'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            if len(results) == 0:
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'WrongTag', 'unit': 'USD',
+                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'First guess.',
+                }, 's1')
+            if len(results) == 1:
+                assert results[0]['status'] == 'unknown'
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'Revenues', 'unit': 'USD',
+                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Correct tag.',
+                }, 's2')
+            if len(results) == 2:
+                self.sec_sid = results[1]['source_id']
+                return turn('read_sources', {'reads': [{'source_id': self.sec_sid}], 'rationale': 'Read.'}, 'r1')
+            return turn('submit_research', {
+                'report': 'NVDA FY25 revenue was 130,497,000,000 USD.',
+                'claims': [{'text': 'Revenue was 130,497,000,000 USD.', 'source_id': self.sec_sid, 'quotation': rev_quote, 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
+            }, 'sub1')
+
+    monkeypatch.setattr(api, 'challenge_provider', Turn1Provider())
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'NVDA FY25 revenue?'}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    run1 = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic['versions'][0]['version_id'],
+    })
+    assert run1.status_code == 202
+    op1 = run1.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + op1, headers=headers).json()['operation']['status']
+        if status in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert status == 'completed'
+    v1 = client.get(path, headers=headers).json()['versions'][-1]
+    assert v1['content']['turns'][-1]['official_fetch_status'] == 'completed'
+
+    # Turn 2: acquire_sources succeeds ('completed'), then sec_company_concept returns 'unknown' -> keeps 'completed'.
+    class Turn2Provider:
+        name = 'sec-status-turn2'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1000)
+
+        def complete(self, messages, tools, **kwargs):
+            results = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            if len(results) == 0:
+                return turn('discover_sources', {'query': 'NVDA 10-K', 'rationale': 'Find 10-K.'}, 'd1')
+            if len(results) == 1:
+                return turn('acquire_sources', {'urls': [filing_url], 'rationale': 'Acquire 10-K.'}, 'a1')
+            if len(results) == 2:
+                self.filing_sid = results[1]['results'][0]['source_id']
+                return turn('sec_company_concept', {
+                    'entity_query': 'NVDA', 'taxonomy': 'us-gaap', 'tag': 'WrongTag', 'unit': 'USD',
+                    'period_start': '2024-01-29', 'period_end': '2025-01-26', 'rationale': 'Check concept.',
+                }, 's_miss')
+            if len(results) == 3:
+                assert results[2]['status'] == 'unknown'
+                return turn('read_sources', {'reads': [{'source_id': self.filing_sid}], 'rationale': 'Read 10-K.'}, 'r2')
+            return turn('submit_research', {
+                'report': '10-K reports 130497.',
+                'claims': [{'text': '10-K reports 130497.', 'source_id': self.filing_sid, 'quotation': 'NVIDIA Form 10-K revenue 130497.', 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
+            }, 'sub2')
+
+    monkeypatch.setattr(api, 'challenge_provider', Turn2Provider())
+    run2 = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': v1['version_id'],
+        'question_override': 'Check 10-K filing.',
+    })
+    assert run2.status_code == 202
+    op2 = run2.json()['operation']['operation_id']
+    for _ in range(200):
+        status = client.get(path + '/runs/' + op2, headers=headers).json()['operation']['status']
+        if status in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert status == 'completed'
+    v2 = client.get(path, headers=headers).json()['versions'][-1]
+    assert v2['content']['turns'][-1]['official_fetch_status'] == 'completed'

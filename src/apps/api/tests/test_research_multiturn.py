@@ -488,3 +488,167 @@ def test_delivering_a_saved_partial_submission_replaces_its_turn(env):
     assert provider.calls == 2 and len(content['turns']) == 1
     assert content['turns'][0]['operation_ids'] == [first_id, second_id]
     assert len(content['claims']) == 1 and content['turns'][0]['claim_ids'] == [content['claims'][0]['claim_id']]
+
+
+def test_continue_after_provider_output_truncated_runs_l2_compaction_and_succeeds(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
+    quote = 'Revenue was 100 USD.'
+    long_text = quote + ' ' + ('Risk factor filler text. ' * 250)  # > 6000 chars, well within 25k read_sources span cap
+    seen_payloads: list[dict] = []
+
+    class TruncatingThenRecoveringProvider:
+        name = 'l2-compaction-continue-test'
+        policy = ProviderPolicy(max_attempts=1, max_output_tokens=1000, timeout_seconds=5)
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages, tools, **kwargs):
+            self.calls += 1
+            seen_payloads.append({
+                'bytes': len(json.dumps(messages, ensure_ascii=False).encode('utf-8')),
+                'messages': messages,
+            })
+            if self.calls == 1:
+                return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'Read full filing.'}, 'r1')
+            if self.calls == 2:
+                err = ProviderFailure('provider_output_truncated', 'Provider output was truncated.', retryable=False, reported_tokens=4096)
+                err.provider_response_received = True
+                raise err
+            # Call 3 runs after L2 compaction on /continue: tool result must be compacted and guidance injected,
+            # while recorded read_ranges still let submit_research locate the quotation verbatim.
+            tool_msg = json.loads(messages[-1]['content'])
+            assert tool_msg.get('cleared') is True and tool_msg.get('reason') == 'continuation_compacted', tool_msg
+            user_payload = json.loads(messages[1]['content'])
+            assert 'continuation_guidance' in user_payload or 'recovery_guidance' in user_payload, user_payload
+            return turn('submit_research', {
+                'report': 'Revenue was 100 USD.',
+                'claims': [{'text': 'Revenue was 100 USD.', 'source_id': source_id, 'quotation': quote, 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
+            }, 's1')
+
+    provider = TruncatingThenRecoveringProvider()
+    monkeypatch.setattr(api, 'challenge_provider', provider)
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={
+        'title': 'Long Filing', 'text': long_text,
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True},
+    }).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'What was revenue?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    run1 = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic['versions'][0]['version_id'], 'discover_sources': False,
+    })
+    assert run1.status_code == 202
+    op1 = run1.json()['operation']['operation_id']
+    for _ in range(300):
+        op = client.get(f'{path}/runs/{op1}', headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed'
+    turn1 = client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]
+    assert turn1['status'] == 'partial' and turn1['reason'] == 'provider_output_truncated'
+    assert turn1['partial_notes']
+    cp1 = api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint']
+    assert len(cp1.get('failed_attempts', [])) == 1 and cp1['failed_attempts'][0]['reason'] == 'provider_output_truncated'
+
+    rec = client.get(f'{path}/runs/{op1}/recovery-status', headers=headers).json()
+    assert rec['can_continue'] is True and rec['can_deliver'] is False and rec['reason'] is None
+
+    cont = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert cont.status_code == 202, cont.text
+    op2 = cont.json()['operation']['operation_id']
+    for _ in range(300):
+        op = client.get(f'{path}/runs/{op2}', headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed'
+    assert provider.calls == 3
+    assert seen_payloads[2]['bytes'] < seen_payloads[1]['bytes']
+    final = client.get(path, headers=headers).json()['versions'][-1]['content']
+    assert final['turns'][-1]['status'] == 'completed'
+    assert final['turns'][-1]['operation_ids'] == [op1, op2]
+    assert final['claims'][0]['citations'][0]['quotation'] == quote
+
+
+def test_continue_after_incomplete_model_response_clears_stopped_and_compacts(monkeypatch):
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    quote = 'Revenue was 100 USD.'
+    long_text = quote + ' ' + ('Supplemental note. ' * 200)
+    payloads: list[int] = []
+
+    class IncompleteThenOkProvider:
+        name = 'incomplete-continue-test'
+        policy = ProviderPolicy(max_attempts=1, max_output_tokens=1000, timeout_seconds=5)
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages, tools, **kwargs):
+            self.calls += 1
+            payloads.append(len(json.dumps(messages, ensure_ascii=False).encode('utf-8')))
+            if self.calls == 1:
+                return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'Read source.'}, 'r1')
+            if self.calls == 2:
+                return turn('record_facts', {'rationale': 'Record fact.', 'facts': [
+                    {**FACT_ARGS, 'value': 100, 'period': '2025', 'source_id': source_id, 'quotation': quote},
+                ]}, 'f1')
+            if self.calls == 3:
+                return ModelResponse({'role': 'assistant', 'content': 'Truncated half JSON'}, (), None, 'max_tokens', 'truncated')
+            tool_contents = [json.loads(m['content']) for m in messages if m['role'] == 'tool']
+            assert tool_contents[0].get('cleared') is True and tool_contents[0].get('reason') == 'continuation_compacted'
+            assert 'facts' in tool_contents[1]
+            return turn('submit_research', {
+                'report': 'Revenue was 100 USD.',
+                'claims': [{'text': 'Revenue was 100 USD.', 'source_id': source_id, 'quotation': quote, 'role': 'support'}],
+                'limitations': [], 'stopping_reason': 'answered', 'status': 'completed',
+            }, 's1')
+
+    provider = IncompleteThenOkProvider()
+    monkeypatch.setattr(api, 'challenge_provider', provider)
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+    client = TestClient(api.app)
+    auth = client.post('/v1/auth/local/register', json={'email': f'{uuid4().hex}@example.test', 'password': 'correct horse battery staple!'}).json()
+    headers = {'Authorization': 'Bearer ' + auth['access_token']}
+    source_id = client.post('/v2/research/sources', headers=headers, json={
+        'title': 'Long Filing', 'text': long_text,
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True},
+    }).json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={'question': 'Revenue?', 'source_ids': [source_id]}).json()
+    path = '/v2/research/topics/' + topic['topic_id']
+
+    run1 = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic['versions'][0]['version_id'], 'discover_sources': False,
+    })
+    assert run1.status_code == 202
+    op1 = run1.json()['operation']['operation_id']
+    for _ in range(300):
+        op = client.get(f'{path}/runs/{op1}', headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed'
+    assert client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]['reason'] == 'incomplete_model_response'
+    assert api.RESEARCH_RUN_INPUTS.get(op1)['runtime_checkpoint'].get('stopped') == 'incomplete_model_response'
+
+    cont = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert cont.status_code == 202, cont.text
+    op2 = cont.json()['operation']['operation_id']
+    for _ in range(300):
+        op = client.get(f'{path}/runs/{op2}', headers=headers).json()['operation']
+        if op['status'] in ('completed', 'failed', 'cancelled'):
+            break
+        time.sleep(.01)
+    assert op['status'] == 'completed'
+    assert provider.calls == 4
+    assert payloads[3] < payloads[2]
+    assert client.get(path, headers=headers).json()['versions'][-1]['content']['turns'][-1]['status'] == 'completed'

@@ -790,3 +790,191 @@ def test_truncated_analysis_splits_into_distinct_checkpointed_calls(monkeypatch)
     assert len(calls[0]['sources']) == 2 and all(len(call['sources']) == 1 for call in calls[1:])
     assert sum(bool(item['plan'].get('generation_continuation')) for item in snapshots) >= 2
     assert snapshots[-1]['analysis']['structured_output_status'] == 'partial'
+
+
+@pytest.mark.parametrize('failure_code', ['provider_output_truncated', 'provider_context_limit', 'incomplete_model_response'])
+def test_repeated_truncation_circuit_breaker_blocks_recovery_status_and_continue(monkeypatch, failure_code):
+    from app.model_protocol import ModelResponse
+    from app.phase3 import ProviderFailure
+    from tests.test_research_runtime import turn
+
+    monkeypatch.setenv('FORESIGHTNINE_LOCAL_AUTH_MODE', 'mock')
+    monkeypatch.setenv('FORESIGHTNINE_RESEARCH_PRESEND_RETRIES', '0')
+    monkeypatch.setattr(api, '_reserve_model_call', lambda *args, **kwargs: None)
+    monkeypatch.setattr(api, '_settle_model_call', lambda *args, **kwargs: None)
+
+    client = TestClient(api.app)
+    registration = client.post('/v1/auth/local/register', json={
+        'email': f'circuit-{uuid4().hex}@example.test', 'password': 'correct horse battery staple!',
+    })
+    assert registration.status_code == 201
+    headers = {'Authorization': 'Bearer ' + registration.json()['access_token']}
+    long_text = 'Revenue increased to 100 USD. ' + ('Detailed financial footnote. ' * 200)
+    source = client.post('/v2/research/sources', headers=headers, json={
+        'title': '10-K Report', 'text': long_text,
+        'permissions': {'store': True, 'display': True, 'model_input': True, 'export': True},
+    })
+    assert source.status_code == 201
+    source_id = source.json()['source_id']
+    topic = client.post('/v2/research/topics', headers=headers, json={
+        'question': 'Summarize revenue.', 'source_ids': [source_id],
+    })
+    assert topic.status_code == 201
+    path = '/v2/research/topics/' + topic.json()['topic_id']
+
+    observed_input_sizes: list[int] = []
+
+    class AlwaysTruncatingProvider:
+        name = 'always-truncating-test'
+        policy = SimpleNamespace(timeout_seconds=5, max_input_tokens=None, max_output_tokens=1500)
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, messages, tools, **kwargs):
+            self.calls += 1
+            observed_input_sizes.append(len(json.dumps(messages, ensure_ascii=False).encode('utf-8')))
+            if self.calls == 1:
+                return turn('read_sources', {'reads': [{'source_id': source_id}], 'rationale': 'Read source.'}, 'read1')
+            if failure_code == 'incomplete_model_response' and self.calls == 2:
+                return turn('search_source', {'source_id': source_id, 'query': 'Revenue', 'rationale': 'Locate.'}, 'search1')
+            if failure_code == 'incomplete_model_response':
+                return ModelResponse({'role': 'assistant', 'content': 'Partial'}, (), None, 'max_tokens', 'truncated')
+            err = ProviderFailure(failure_code, f'Simulated {failure_code}.', retryable=False, reported_tokens=1500)
+            err.provider_response_received = True
+            raise err
+
+    provider = AlwaysTruncatingProvider()
+    monkeypatch.setattr(api, 'challenge_provider', provider)
+
+    started = client.post(path + '/runs', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={
+        'parent_version_id': topic.json()['versions'][-1]['version_id'],
+        'discover_sources': False,
+    })
+    assert started.status_code == 202, started.text
+    op1 = started.json()['operation']['operation_id']
+    assert _terminal(client, path, headers, op1) == 'completed'
+
+    status1 = client.get(f'{path}/runs/{op1}/recovery-status', headers=headers)
+    assert status1.status_code == 200
+    assert status1.json()['can_continue'] is True
+    assert status1.json()['can_deliver'] is False
+    assert status1.json()['reason'] is None
+
+    cont1 = client.post(f'{path}/runs/{op1}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert cont1.status_code == 202, cont1.text
+    op2 = cont1.json()['operation']['operation_id']
+    assert _terminal(client, path, headers, op2) == 'completed'
+    expected_calls = 4 if failure_code == 'incomplete_model_response' else 3
+    assert provider.calls == expected_calls
+    assert observed_input_sizes[-1] < observed_input_sizes[-2]
+    cp2 = api.RESEARCH_RUN_INPUTS.get(op2)['runtime_checkpoint']
+    assert cp2['continuation_count'] == 1
+    assert cp2['consecutive_truncation_continuations'] == 1
+    assert len(cp2['failed_attempts']) == 2
+
+    status2 = client.get(f'{path}/runs/{op2}/recovery-status', headers=headers)
+    assert status2.status_code == 200
+    assert status2.json()['can_continue'] is False
+    assert status2.json()['can_deliver'] is False
+    assert status2.json()['reason'] == 'repeated_truncation'
+
+    blocked = client.post(f'{path}/runs/{op2}/continue', headers={**headers, 'Idempotency-Key': uuid4().hex}, json={})
+    assert blocked.status_code == 409, blocked.text
+    body = blocked.json()
+    assert body['error_code'] == 'lifecycle_conflict'
+    assert provider.calls == expected_calls
+
+
+def test_runtime_continuation_policy_and_recovery_status_edge_cases():
+    from app.research_recovery import (
+        MAX_TRUNCATION_CONTINUATIONS,
+        prepare_runtime_continuation,
+        recovery_status,
+        runtime_truncation_loop_blocked,
+    )
+
+    assert MAX_TRUNCATION_CONTINUATIONS == 2
+
+    # 1. no_submission compacts with keep_recent=1 when small, escalating to keep_recent=0 above threshold.
+    small_cp = {
+        'user': '{}',
+        'history': [
+            {'assistant': {'role': 'assistant', 'content': '', 'tool_calls': [{'id': 'c1', 'name': 'read_sources', 'arguments': {}}]},
+             'results': [{'tool_call_id': 'c1', 'content': json.dumps({'results': [{'text': 'A' * 2500}]}), 'is_error': False}]},
+            {'assistant': {'role': 'assistant', 'content': '', 'tool_calls': [{'id': 'c2', 'name': 'read_sources', 'arguments': {}}]},
+             'results': [{'tool_call_id': 'c2', 'content': json.dumps({'results': [{'text': 'B' * 2500}]}), 'is_error': False}]},
+        ],
+        'failed_attempts': [{'reason': 'no_submission'}],
+        'read_ranges': [{'source_id': 's1', 'start': 0, 'end': 2500}],
+        'facts': [],
+    }
+    prepared_small = prepare_runtime_continuation(small_cp)
+    assert prepared_small['continuation_count'] == 1
+    assert prepared_small['consecutive_truncation_continuations'] == 0
+    assert json.loads(prepared_small['history'][0]['results'][0]['content'])['cleared'] is True
+    assert 'B' * 2500 in prepared_small['history'][1]['results'][0]['content']
+    assert prepared_small['read_ranges'] == [{'source_id': 's1', 'start': 0, 'end': 2500}]
+
+    # Above tight max_history_chars -> escalates to keep_recent=0
+    prepared_tight = prepare_runtime_continuation(small_cp, max_history_chars=2_000)
+    assert json.loads(prepared_tight['history'][1]['results'][0]['content'])['cleared'] is True
+
+    # 2. Transient provider_transport_error after truncation does not trip repeated_truncation,
+    #    but a second truncation after recovery does trip it.
+    transport_cp = {
+        'failed_attempts': [
+            {'reason': 'provider_output_truncated'},
+            {'reason': 'provider_transport_error'},
+        ],
+        'continuation_count': 1,
+        'consecutive_truncation_continuations': 1,
+    }
+    assert runtime_truncation_loop_blocked(transport_cp) is False
+    second_trunc_cp = {
+        'failed_attempts': [
+            {'reason': 'provider_output_truncated'},
+            {'reason': 'provider_transport_error'},
+            {'reason': 'provider_output_truncated'},
+        ],
+        'continuation_count': 2,
+        'consecutive_truncation_continuations': 1,
+    }
+    assert runtime_truncation_loop_blocked(second_trunc_cp) is True
+
+    # 3. Completed submission waiting for delivery is never blocked by repeated_truncation.
+    submitted_cp = {
+        **second_trunc_cp,
+        'submission': {'status': 'partial', 'report': '', 'claims': [], 'gaps': [], 'stopping_reason': 'ok'},
+    }
+    assert runtime_truncation_loop_blocked(submitted_cp) is False
+
+    # 4. recovery_status reports repeated_truncation when runtime_checkpoint hits the circuit breaker.
+    now = datetime.now(timezone.utc)
+    topic = SimpleNamespace(
+        topic_id='t1',
+        owner_id='owner1',
+        versions=[SimpleNamespace(
+            version_id='v1',
+            created_by='agent',
+            review='draft',
+            content=SimpleNamespace(run={'operation_id': 'op1', 'checkpoint': 'runtime'}),
+        )],
+    )
+    status = recovery_status(
+        topic=topic,
+        operation={'operation_id': 'op1', 'owner_subject': 'account:owner1', 'endpoint': '/v1/research/topics/t1/runs', 'status': 'failed'},
+        inputs={'owner_id': 'owner1', 'topic_id': 't1', 'operation_id': 'op1', 'runtime_checkpoint': second_trunc_cp},
+        owner_id='owner1',
+        operation_id='op1',
+        now=now,
+        source_fingerprints=[],
+        provider_matches=True,
+    )
+    assert status == {
+        'can_continue': False,
+        'can_deliver': False,
+        'reason': 'repeated_truncation',
+        'checkpoint': 'runtime',
+        'version_id': 'v1',
+    }

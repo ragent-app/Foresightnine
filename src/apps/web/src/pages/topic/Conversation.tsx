@@ -86,18 +86,19 @@ export function AskBubble({ text, focusLabel }: { text: string; focusLabel?: str
 /** Callout actions follow spec §4.3: one primary decision, the rest under “更多”. */
 function CalloutActions({ actions }: { actions: TurnActions }) {
   const { recovery } = actions;
-  const canContinue = recovery?.can_continue === true;
-  const canDeliver = recovery?.can_deliver === true && actions.deliverable;
+  const repeatedTruncation = recovery?.reason === "repeated_truncation";
+  const canContinue = recovery?.can_continue === true && !repeatedTruncation;
+  const canDeliver = recovery?.can_deliver === true && actions.deliverable && !repeatedTruncation;
   const disabled = actions.busy || actions.locked;
   let primary: { label: string; onClick: () => void; disabled: boolean };
-  if (actions.checking && !recovery) primary = { label: "继续研究", onClick: () => undefined, disabled: true };
+  if (actions.checking && !recovery) primary = { label: "正在检查恢复状态…", onClick: () => undefined, disabled: true };
   else if (canContinue) primary = { label: "继续研究", onClick: actions.onContinue, disabled };
   else if (canDeliver) primary = { label: "交付已有成果", onClick: actions.onDeliver, disabled };
   else primary = { label: "重新提问", onClick: actions.onAskAgain, disabled: actions.locked };
 
   const more: MenuEntry[] = [];
   if (canDeliver && canContinue) more.push({ key: "deliver", label: "交付已有成果", icon: "check", onSelect: actions.onDeliver, disabled });
-  if (actions.onFillGap) more.push({ key: "gap", label: "补充缺口", icon: "chev", onSelect: actions.onFillGap, disabled: actions.locked });
+  if (actions.onFillGap && !repeatedTruncation) more.push({ key: "gap", label: "补充缺口", icon: "chev", onSelect: actions.onFillGap, disabled: actions.locked });
   more.push({ key: "add", label: "添加资料", icon: "plus", onSelect: actions.onAddSources, disabled: actions.locked });
   if (primary.label !== "重新提问") more.push({ key: "ask", label: "重新提问", icon: "pen", onSelect: actions.onAskAgain, disabled: actions.locked });
 
@@ -119,6 +120,9 @@ function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchTurn; ac
   if (tone === "completed" && gaps.length === 0) return null;
   const shown = gaps.slice(0, 2);
   const hidden = gaps.length - shown.length;
+  const recoveryReason = tone === "partial" && actions?.recovery?.reason
+    ? recoveryReasonLabel(actions.recovery.reason)
+    : null;
   return (
     <div className="callout" role="note">
       <span className="h">{tone === "partial" ? "未完成的部分" : "仍有缺口"}</span>
@@ -129,6 +133,7 @@ function GapCallout({ turn, actions, tone }: { turn: ResearchV2.ResearchTurn; ac
       ) : null}
       {hidden > 0 ? <span className="why">另有 {hidden} 项缺口，在研究记录里查看。</span> : null}
       {tone === "partial" ? <span className="why">停止原因：{turnReasonLabel(turn.reason, turn.stopping_note)}</span> : null}
+      {recoveryReason ? <span className="why">恢复检查：{recoveryReason}</span> : null}
       {tone === "partial" && actions ? <CalloutActions actions={actions} /> : null}
     </div>
   );

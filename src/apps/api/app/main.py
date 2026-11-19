@@ -122,7 +122,7 @@ from .research_workflow import ResearchWorkflow, StageReceipt
 from .research_orchestrator import CoordinationObservation, ResearchOrchestrator
 from .research_recovery import (prepare_recovery, recovered_content, RecoveryJournal, RecoverySnapshot, RecoveryBudget,
     prepare_continuation, continuation_context, restore_stage_state, stage_result_settled, model_receipts_confirmed,
-    external_results_confirmed, recovery_status)
+    external_results_confirmed, recovery_status, runtime_truncation_loop_blocked, _REPEATED_TRUNCATION_MESSAGE)
 from .research_gap_followup import build_gap_focus
 from .research_requirements import combined_requirements, unresolved_original_requirement, unresolved_requirement_indexes, evidence_need_details
 from .research_coordinator import has_usable_research_counterpoint
@@ -2525,6 +2525,40 @@ def _runtime_provider_binding(provider: Any, request: Request) -> str:
     return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
+_OFFICIAL_FETCH_STATUS_PRIORITY = {
+    "not_requested": 0,
+    "no_eligible_source": 1,
+    "empty": 1,
+    "question_missing": 2,
+    "empty_selection": 2,
+    "historical_cutoff": 2,
+    "cost_unknown": 2,
+    "source_capacity": 2,
+    "time_budget": 2,
+    "restricted": 3,
+    "unavailable": 3,
+    "unconfigured": 3,
+    "sec_contact_unconfigured": 3,
+    "unknown": 4,
+    "failed": 5,
+    "partial": 6,
+    "retrieved": 7,
+    "completed": 7,
+}
+
+
+def _merge_official_fetch_status(current: str, next_status: str | None, *, auto_fetch_official: bool) -> str:
+    if not isinstance(next_status, str) or not next_status:
+        return current
+    if not auto_fetch_official and current == "not_requested" and next_status not in {"completed", "retrieved", "partial"}:
+        return "not_requested"
+    if next_status == "partial" and current in {"completed", "retrieved"}:
+        return "partial"
+    if _OFFICIAL_FETCH_STATUS_PRIORITY.get(next_status, 0) >= _OFFICIAL_FETCH_STATUS_PRIORITY.get(current, 0):
+        return next_status
+    return current
+
+
 @app.post("/v1/research/topics/{topic_id}/runs", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, include_in_schema=False)
 @app.post("/v2/research/topics/{topic_id}/runs", response_model=OperationResponse, response_model_exclude_none=True, status_code=202, include_in_schema=False)
 def start_research_run(topic_id: str, request: ResearchRunRequest, response: Response,
@@ -2632,6 +2666,12 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
         search_calls = 0
         official_fetch_calls = 0
         official_fetch_status = "not_requested" if not request.auto_fetch_official else "no_eligible_source"
+        if continuation_input is not None and parent_version.content.turns and parent_version.content.turns[-1].turn_id == turn_meta.get('turn_id'):
+            official_fetch_status = _merge_official_fetch_status(
+                official_fetch_status,
+                parent_version.content.turns[-1].official_fetch_status,
+                auto_fetch_official=request.auto_fetch_official,
+            )
         discovered: list[dict[str, Any]] = []
         search_receipts: list[dict[str, Any]] = []
         discovery_notes: list[str] = []
@@ -2711,10 +2751,15 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 reserve_sec=reserve_sec_for_run, context=context,
                 batch_id=uuid4().hex)
             official_fetch_calls += result.calls
-            official_fetch_status = result.status
+            official_fetch_status = _merge_official_fetch_status(
+                official_fetch_status,
+                result.status,
+                auto_fetch_official=request.auto_fetch_official,
+            )
             return result.source, {'status': result.status, 'notes': result.notes, 'outcomes': result.outcomes}
         def query_sec_concept(tool_request):
-            return execute_structured_query(
+            nonlocal official_fetch_calls, official_fetch_status
+            result = execute_structured_query(
                 StructuredQuery(
                     source_kind='sec_company_concept',
                     parameters=tool_request.model_dump(mode='json', exclude={'rationale'}),
@@ -2728,6 +2773,13 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                 permitted=retrieval_permitted,
                 as_of=topic.request.as_of,
             )
+            official_fetch_calls += getattr(result, 'calls', 0) or 0
+            official_fetch_status = _merge_official_fetch_status(
+                official_fetch_status,
+                getattr(result, 'status', None),
+                auto_fetch_official=request.auto_fetch_official,
+            )
+            return result
         historical_config_for_run = historical_config if historical_available and retrieval_permitted else None
         allowed_hosts = fetch_allowed_hosts()
         retrieval_active = retrieval_permitted and topic.request.as_of is None and request.max_cost_usd is None
@@ -2910,7 +2962,15 @@ def start_research_run(topic_id: str, request: ResearchRunRequest, response: Res
                     or _stored_form({k: v for k, v in (original.get('runtime_request') or {}).items() if k != 'parent_version_id'}) !=
                        _stored_form({k: v for k, v in request.model_dump(mode='json').items() if k != 'parent_version_id'})):
                 raise ApiProblem(409, 'lifecycle_conflict', 'Research inputs or provider configuration changed.')
-            admitted_continuation['runtime'] = RecoveryJournal(RESEARCH_RUN_INPUTS, prior_id, account.account_id).claim_runtime_continuation(operation_id)
+            max_history_chars: int | None = None
+            policy_input_limit = getattr(getattr(provider, 'policy', None), 'max_input_tokens', None)
+            if type(policy_input_limit) is int and policy_input_limit > 0:
+                max_history_chars = max(2_000, policy_input_limit * 2)
+            admitted_continuation['runtime'] = RecoveryJournal(RESEARCH_RUN_INPUTS, prior_id, account.account_id).claim_runtime_continuation(
+                operation_id,
+                max_history_chars=max_history_chars,
+                saved_turn=_agent_turn_for(parent_version, prior_id),
+            )
         policy = getattr(provider, "policy", None)
         RESEARCH_RUN_INPUTS.put(operation_id, {
             "schema_version": "1", "operation_id": operation_id, "owner_id": account.account_id,
@@ -2994,10 +3054,12 @@ def get_research_recovery_status(topic_id: str, operation_id: str, http_request:
                 reason = 'changed'
         except (ValueError, TypeError, KeyError, SourceNotFound, ApiProblem):
             reason = 'unavailable'
+        saved_turn = _agent_turn_for(latest, operation_id)
         if operation.get('status') in {'pending', 'running'}: reason = 'running'
         elif inputs.get('runtime_continuation_operation_id'): reason = 'already_used'
         elif unknown: reason = 'unknown_external'
-        elif checkpoint.get('submission') and getattr(_agent_turn_for(latest, operation_id), 'status', None) == 'completed': reason = 'unavailable'
+        elif checkpoint.get('submission') and getattr(saved_turn, 'status', None) == 'completed': reason = 'unavailable'
+        elif reason is None and runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn): reason = 'repeated_truncation'
         return {'can_continue': reason is None and not checkpoint.get('submission'),
                 'can_deliver': reason is None and bool(checkpoint.get('submission')),
                 'reason': reason, 'checkpoint': pending.get('kind') or 'runtime', 'version_id': latest.version_id}
@@ -3035,6 +3097,8 @@ def continue_research_run(topic_id: str, operation_id: str, response: Response,
     saved_turn = _agent_turn_for(parent, operation_id)
     if checkpoint.get('submission') and saved_turn is not None and saved_turn.status == 'completed':
         raise ApiProblem(409, 'lifecycle_conflict', 'This research submission was already saved.')
+    if runtime_truncation_loop_blocked(checkpoint, saved_turn=saved_turn):
+        raise ApiProblem(409, 'lifecycle_conflict', _REPEATED_TRUNCATION_MESSAGE)
     if parent.version_id != inputs['parent_version_id']:
         if parent.review != 'draft' or saved_turn is None:
             raise ApiProblem(409, 'lifecycle_conflict', 'Research changed after the checkpoint.')

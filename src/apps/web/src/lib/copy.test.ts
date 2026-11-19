@@ -68,8 +68,16 @@ describe("labels", () => {
     expect(turnReasonLabel("boom")).toBe("模型服务返回错误（boom）");
   });
   it("labels recovery reasons", () => {
-    expect(Object.keys(RECOVERY_REASON_LABEL)).toHaveLength(7);
+    expect(Object.keys(RECOVERY_REASON_LABEL)).toHaveLength(8);
     expect(recoveryReasonLabel("budget_exhausted")).toBe("预算已用完");
+    const repeated = recoveryReasonLabel("repeated_truncation");
+    expect(repeated).toBe(RECOVERY_REASON_LABEL["repeated_truncation"]);
+    expect(repeated).not.toBe("当前无法恢复");
+    expect(repeated).not.toContain("repeated_truncation");
+    expect(repeated).not.toContain("/continue");
+    expect(repeated).toMatch(/输出|上下文/);
+    expect(repeated).toMatch(/缩小/);
+    expect(repeated).toMatch(/查看|导出/);
     expect(recoveryReasonLabel("???")).toBe("当前无法恢复");
     expect(recoveryReasonLabel("repeated_output_truncation")).toBe("当前无法恢复");
     expect(recoveryReasonLabel("")).toBe("");

@@ -1066,4 +1066,120 @@ describe("TopicPage", () => {
       expect(screen.queryByText("尚未完成核验的草稿内容。")).toBeNull();
     });
   });
+
+  describe("Stage 2 repeated truncation and recovery guidance", () => {
+    it("suppresses continue retry, displays localized repeated_truncation guidance and partial_notes on a partial turn", async () => {
+      const fact: ResearchV2.ResearchFact = {
+        fact_id: "F1", turn_id: "turn_1", label: "总收入", value: "48612", unit: "millions", currency: "USD", period: "FY2026",
+        source_id: "s1", quotation: QUOTE, character_start: START, character_end: END, location: { character_start: START, character_end: END },
+        verification: "numeric_and_location_match_semantics_not_verified",
+      };
+      const partial = turn(1, {
+        question: "对比过去五年所有附注与分部利润率",
+        status: "partial",
+        reason: "provider_output_truncated",
+        report: "",
+        fact_ids: ["F1"],
+        partial_notes: "已获取 1 份资料并记录 1 个数字，因模型输出达到上限中止。\n\n建议先核对已记录数字，或缩小时间范围再提问。",
+        gaps: [{ code: "provider_output_truncated", message: "Provider output was truncated." }],
+      });
+      const baseTopic = topicWith([partial]);
+      const topicWithFact: ResearchV2.ResearchTopic = {
+        ...baseTopic,
+        versions: [
+          baseTopic.versions[0]!,
+          { ...baseTopic.versions[1]!, content: { ...baseTopic.versions[1]!.content, facts: [fact] } },
+        ],
+      };
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWithFact);
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_1/recovery-status")) {
+          return jsonResponse({ can_continue: false, can_deliver: false, reason: "repeated_truncation", checkpoint: "tool_batch", version_id: "v2" });
+        }
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      expect(within(region).getByText("部分完成")).toBeTruthy();
+      expect(within(region).getByText("已记录 1 个数字，还没有形成可引用的结论。")).toBeTruthy();
+      expect(within(region).getByText("停止原因：模型输出达到单次长度上限而被截断")).toBeTruthy();
+      expect(await within(region).findByText(/恢复检查：连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
+      expect(within(region).queryByText(/repeated_truncation/)).toBeNull();
+      expect(within(region).queryByText(/provider_output_truncated/)).toBeNull();
+
+      // Partial notes remain visible and explicitly marked as unverified.
+      const notesRegion = within(region).getByRole("note", { name: "过程与缺口说明（未核实线索与建议，非正式结论）" });
+      expect(within(notesRegion).getByText("已获取 1 份资料并记录 1 个数字，因模型输出达到上限中止。")).toBeTruthy();
+      expect(within(notesRegion).getByText("建议先核对已记录数字，或缩小时间范围再提问。")).toBeTruthy();
+
+      // Circuit-breaker replaces retry with narrow/re-ask without showing "继续研究".
+      expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
+      const reaskButton = within(region).getByRole("button", { name: "重新提问" });
+      fireEvent.click(within(region).getByRole("button", { name: "更多" }));
+      const menu = await screen.findByRole("menu");
+      expect(within(menu).getByRole("menuitem", { name: "添加资料" })).toBeTruthy();
+      expect(within(menu).queryByRole("menuitem", { name: "补充缺口" })).toBeNull();
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "取消" }));
+
+      fireEvent.click(reaskButton);
+      expect((screen.getByRole("textbox", { name: "追问" }) as HTMLTextAreaElement).value).toBe("对比过去五年所有附注与分部利润率");
+    });
+
+    it("never exposes continue even if recovery payload carries can_continue alongside repeated_truncation", async () => {
+      const partial = turn(1, {
+        status: "partial",
+        reason: "provider_context_limit",
+        report: "",
+        gaps: [{ code: "provider_context_limit", message: "Provider context limit was reached." }],
+      });
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([partial]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_1/recovery-status")) {
+          return jsonResponse({ can_continue: true, can_deliver: true, reason: "repeated_truncation", checkpoint: "tool_batch", version_id: "v2" });
+        }
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 1 轮" });
+      expect(await within(region).findByText(/恢复检查：连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
+      expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
+      expect(within(region).queryByRole("button", { name: "交付已有成果" })).toBeNull();
+      expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
+    });
+
+    it("shows localized repeated_truncation guidance on an interrupted orphan run without a continue button", async () => {
+      mockApi((url) => {
+        if (url.pathname === "/v2/research/topics/t1") return jsonResponse(topicWith([turn(1)]));
+        if (url.pathname === "/v2/research/topics/t1/runs") return jsonResponse([operation("op_2", "failed"), operation("op_1", "completed")]);
+        if (url.pathname.endsWith("/op_2/recovery-status")) {
+          return jsonResponse({ can_continue: false, can_deliver: false, reason: "repeated_truncation", checkpoint: "tool_batch", version_id: "v2" });
+        }
+        if (url.pathname.endsWith("/op_2/events")) return jsonResponse({ error_code: "method_not_allowed", message: "fallback" }, { status: 405 });
+        if (url.pathname.endsWith("/op_2/progress")) {
+          return jsonResponse({
+            operation_id: "op_2",
+            operation_status: "failed",
+            turn: { index: 2, question: "超长截断中断问题" },
+            usage: { model_calls: 2, search_calls: 0, total_tokens: 12000 },
+            current: null,
+            events: [{ index: 0, kind: "model_failure", code: "provider_output_truncated" }],
+            event_count: 1,
+            started_at: NOW,
+            updated_at: NOW,
+            version_id: null,
+          });
+        }
+        return undefined;
+      });
+      renderTopic();
+      const region = await screen.findByRole("region", { name: "第 2 轮" });
+      expect(within(region).getByText("运行中断")).toBeTruthy();
+      expect(await within(region).findByText("模型调用失败 · 输出达到单次长度上限被截断")).toBeTruthy();
+      expect(await within(region).findByText(/恢复检查：连续多次达到模型输出或上下文长度上限/)).toBeTruthy();
+      expect(within(region).queryByRole("button", { name: "继续研究" })).toBeNull();
+      expect(within(region).getByRole("button", { name: "重新提问" })).toBeTruthy();
+    });
+  });
 });

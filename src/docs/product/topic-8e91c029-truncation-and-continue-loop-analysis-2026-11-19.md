@@ -128,3 +128,59 @@
    - 在隔离测试或受控复测环境中以 `topic_8e91c0299a7b4b25823bc12ab9c7e53a` 的两段核心路径验证：
      1. 首次对比英伟达最近两个财年总收入与营业利润率；
      2. 追问“从 10-K 财务报表原文核对并建立语义验证”——验证模型能否先通过 `search_source` 命中两份 10-K 合并利润表原文，配合精读窗口与必要时的确定性折叠，最终完成 `record_facts` / 引文核验并产出 `status="completed"`，无 `provider_output_truncated` 与 `/continue` 死循环，同时记录实际 `cache_read_input_tokens` 命中率与总耗时/Token 变化。
+
+---
+
+## 7. 实施与阶段性验收记录（2026-11-19）
+
+本节记录上述改进方案按三阶段（Stage 1 工具与诊断基础 → Stage 2 上下文折叠与熔断保护 → Stage 3 合约门禁、配置调优、公网滚动升级与受控回环真实验收）的实施内容与实际核验结果（含如实未完成项与局限）。
+
+### 7.1 Stage 1：文档导航、表格瘦身、诊断与双轨估算（提交 `7cc486f`，看板验收 `#12`）
+
+- **HTML 表格瘦身**（[research_fetch.py](../../apps/api/app/research_fetch.py)）：`_TextParser`（配合 `_TableRowState` / `_TableCellState`）过滤空占位 `<td>`/`<th>` 单元格、空白占位行、无正文内容的 `[colspan]`/`[rowspan]` 标记及行尾空单元格，将连续空列折叠为单个 `|  |` 分隔符，同时保持财务数值、嵌套表格与 `research_table_provenance` 行列对齐。
+- **站内只读定位工具与 `read_sources` 硬上限**（[research_runtime.py](../../apps/api/app/research_runtime.py)）：
+  - 新增只读工具 `outline_source` 与 `search_source`，并在工具执行与 `_tool_activity_meta` 中强制执行 `_is_source_eligible(source, as_of)`（不泄露受限、FRED 或晚于 `as_of` 的来源标题、字符数与正文）；
+  - 在 `_read_sources` 中引入 `MAX_READ_SOURCE_SPAN_CHARS = 25000` 与 `MAX_READ_SOURCES_BATCH_CHARS = 40000` 硬上限；单区间超限（含对 `>25,000` 字符原文传入 `end=None`）或单批超限均返回 `status='invalid'`（`is_error=True`）、总长度与先调 `outline_source`/`search_source` 再读 `[start, end]` 的引导而不污染 `read_ranges`，`<=25,000` 字符小来源沿用原行为。
+- **`stop_reason` / 用量 / 报文观测诊断**（[anthropic_messages.py](../../apps/api/app/anthropic_messages.py)、[research_diagnostics.py](../../apps/api/app/research_diagnostics.py)、[research_coordinator.py](../../apps/api/app/research_coordinator.py)）：在 HTTP 200 JSON 与 SSE 流式两条路径触发 `provider_output_truncated` 或结构化校验失败抛出异常前，安全采集并仅写入一次 `stop_reason`、标准化 `finish`、`usage`、`wire_bytes`、`max_tokens` 与 `stream`；保持白名单脱敏，不泄露密钥、提示词或半成品输出。
+- **双轨输入估算与非硬编码能力配置**（[provider_capabilities.py](../../apps/api/app/provider_capabilities.py)、[research_coordinator.py](../../apps/api/app/research_coordinator.py)）：新增 `DualInputEstimate`（拆分账务/准入保守上界 `utf8_byte_upper_bound` 与工作容量估算 `chars_div_3` 即 `ceil(chars/3)`）、`configured_research_max_output_tokens`、`resolve_output_token_limit` 与 `VALID_INPUT_COUNTERS`，全过程不硬编码任何模型品牌。
+- **Web 中文化错误映射**（[copy.ts](../../apps/web/src/lib/copy.ts)）：补全 `provider_output_truncated`、`provider_context_limit`、`provider_request_rejected` 等失败文案、`TOOL_LABEL` 中的 `search_source`/`outline_source`、`PROVIDER_ERROR_MESSAGE_LABEL` 与 `recoveryReasonLabel` 安全兜底。
+- **Stage 1 验收结果（容器内执行）**：
+  - API Stage 1 与流式/输入预算 12 个测试文件 **`199 passed`**；
+  - API 下游 10 个回归文件 **`210 passed`**；
+  - API 既有遗留上下文/容量基线（[test_research_context_capacity.py](../../apps/api/tests/test_research_context_capacity.py)、[test_runtime_capacity_policy.py](../../apps/api/tests/test_runtime_capacity_policy.py)、[test_research_input_budget.py](../../apps/api/tests/test_research_input_budget.py)）：**`17 passed, 3 failed`**（其中 `test_research_input_budget.py` `2/2` 通过；3 项失败均属 `949fc89` 之前即存在的旧版 `ResearchOrchestrator._choose` 与已退役分阶段 `/runs` 字段返回 HTTP 422 的基线差异，与 Stage 1 无关）；
+  - Web（`foresightnine-web-test:local`）：`typecheck` **PASS**，`copy.test.ts` + `TopicPage.test.tsx` `40/40 passed`，全量 `vitest run`（21 个文件）**`231 passed`**。
+
+### 7.2 Stage 2：KV-Cache 友好折叠、失败记忆、`/continue` 熔断与界面保护（工作区相对 `7cc486f` 的 11 个已跟踪文件，看板验收 `#24`）
+
+- **共享轮内 L1 确定性压缩**（[research_runtime.py](../../apps/api/app/research_runtime.py)、[research_recovery.py](../../apps/api/app/research_recovery.py)）：实现唯一共享函数 `compact_runtime_history(state, *, keep_recent=2, trigger_chars=120_000, force=False, reason=None)`（由 `research_recovery.py` 直接导入复用）。未超过阈值（随 `max_input_tokens`、`research_capacity` 与剩余 `max_total_tokens` 动态收紧）时保持 `state['history']` 前缀字节不变以保留前缀 KV-Cache；越限时仅将更早轮次的大体积工具结果折叠为紧凑 JSON 描述符（保留 `source_id`、`source_spans`、`original_chars`、`facts_recorded_count` 与重定位提示），同时保留最近 `keep_recent` 步、`read_ranges`、`facts`、`calculations` 与 `events`，确保 `record_facts`/`submit_research` 的 `locate()` 持续通过。
+- **失败记忆、瞬态引导与中文 `partial_notes`**（[research_runtime.py](../../apps/api/app/research_runtime.py)）：在截断、上下文超限、不完整响应、`no_submission` 及非重试/结算失败（含 `received=False` 截断/超限）时将 `failed_attempts`（`call_id`、`reason`、`finish_reason`、`usage`、`history_chars`、`at`）写入检查点；`turn_input()` 仅瞬态注入有界 `prior_failed_attempts`、`recovery_guidance` 与 `continuation_guidance`（不污染 `state['user']`）；`outcome('partial', ...)` 缺省时自动生成简洁中文 `partial_notes`（`_default_partial_notes`）。
+- **`/continue` L2 强制压缩、连续截断熔断与 `sec_company_concept` 状态同步**（[research_recovery.py](../../apps/api/app/research_recovery.py)、[main.py](../../apps/api/app/main.py)）：
+  - `RecoveryJournal.claim_runtime_continuation` 与 `prepare_runtime_continuation` 在建议锁内执行 L2 强制压缩（`keep_recent=1, force=True`，若因截断/上下文超限或超出 `effective_limit` 则升级为 `keep_recent=0, force=True`），清除 `stopped` 并递增 `continuation_count` 与 `consecutive_truncation_continuations`；
+  - 新增 `MAX_TRUNCATION_CONTINUATIONS = 2`（`runtime_truncation_loop_blocked`）熔断器：连续达到 2 次截断续跑后，`get_research_recovery_status` 与 `recovery_status` 均返回 `can_continue=false, can_deliver=false, reason='repeated_truncation'`，`POST /continue` 在调用 `start_research_run` 前直接拒绝并返回 HTTP `409`（`lifecycle_conflict`）；
+  - `query_sec_concept` 通过 `_merge_official_fetch_status` 同步更新 `official_fetch_calls` 与 `official_fetch_status`（不降级先前 `'completed'`/`'retrieved'`，失败时不覆盖 `'not_requested'`）。
+- **Web 恢复保护与中文文案**（[copy.ts](../../apps/web/src/lib/copy.ts)、[Conversation.tsx](../../apps/web/src/pages/topic/Conversation.tsx)）：`RECOVERY_REASON_LABEL` 补齐 `repeated_truncation` 中文说明（不暴露原始错误码或内部路径）；`CalloutActions` 在 `repeated_truncation` 时屏蔽继续/交付/补缺按钮并将检查文案修正为 `"正在检查恢复状态…"`，`GapCallout` 与 `PartialNotesBlock` 协同展示。
+- **Stage 2 验收结果（容器内执行）**：
+  - API 18 个核心研究/恢复/流式/SEC/计算套件 **`393 passed`**；
+  - [test_research_recovery_acceptance.py](../../apps/api/tests/test_research_recovery_acceptance.py)（`FORESIGHTNINE_LOCAL_AUTH_MODE=mock`）：**`18 passed`**（含全部 6 项 Stage 2 与恢复用例及 12 项回执用例），`1 skipped`（未配 Postgres DSN），`17` 项为既有遗留分阶段流水线 HTTP 422 / `direction_derivation` 基线失败；
+  - Web `typecheck` **PASS**，`vitest run` 21 个文件 **`234 passed`**；
+  - **离线 Stage 2 端到端检查 PASS**：实证 120k 水位以下前缀字节严格不变、跨过 120k 后 L1 折叠且 `read_ranges`（6 段）保留并完成 `record_facts` + `submit_research`；真实 `AnthropicMessagesProvider` 模拟截断 → `/continue` L2 折叠使报文由 `22,292` 降至 `15,374` 字节并顺利完成；二次截断触发 `repeated_truncation` 熔断且第三次 `POST /continue` 返回 HTTP `409`（未再发起模型调用）。
+
+### 7.3 Stage 3：契约/安全门禁、配置调优、滚动部署与受控回环实测（看板验收 `#27`、`#35`）
+
+- **部署前门禁与可逆备份**：
+  - `export_openapi.py --check`（`PASS OpenAPI 25 paths`）、`packages/contracts` 两个生成检查脚本、`packages/asset-registry` 校验与 `scripts/verify/boundaries.mjs` 均 **PASS**；`scripts/verify/secret-scan.mjs` 扫描 6,670 个历史 Git 对象及工作区，`git diff HEAD` **0 新告警**（仅余既有测试夹具/Phase A 文档与历史 Git blob 基线匹配）；
+  - 在 `/home/ubuntu/.local/state/foresightnine/aws-runtime` 创建可逆备份：镜像 `foresightnine-migration-api:pre-contextgov-20261119`（`00af76c0062d`）、`api.env.bak-contextgov-20261119` 与 `web.bak-contextgov-20261119`。
+- **运行时配置调优与滚动重启**：
+  - 更新 `aws-runtime/api.env` 非秘密参数：`FORESIGHTNINE_RESEARCH_MAX_OUTPUT_TOKENS='16384'`（由 `4096` 提升）、`FORESIGHTNINE_LLM_ENDPOINT_VERSION='2023-06-01'` 及 `FORESIGHTNINE_LLM_CAPABILITY_PROFILE`（`chars_div_3`, `output_tokens: 16384`, `mode: "json_object"`, `native_tools: true`, `stream: true`, `continuation: true`，不设 `context_tokens` 以保留 `utf8_byte_upper_bound` 计费防护与 `120,000` 字符 L1 水位）；
+  - 在隔离构建容器重建 Web 静态资源（`assets/index-P5gDvInw.js` `533,807 B`、`assets/index-ThGviAW-.css` `44,854 B`，保留 4 个发布 App Link 指纹且实测包含 Stage 1/2 中文文案）与 API 镜像 `foresightnine-migration-api:public`（`17b1cd96a8fb`），滚动重启 `aws-runtime` 全部 6 个容器（`api`、`challenge-gateway`、`origin`、`postgres`、`redis`、`web`），回环及公网 `https://app.foresightnine.com` `/readyz`、`/`、`/.well-known/assetlinks.json` 等均 `200`。
+- **受控回环真实验收（`http://127.0.0.1:8000`，`anthropic_messages` / `glm-5.3-flash`，使用隔离一次性账号并在测后清理，未触动 `account_8887e09f4185483a8323042c6e4ba643` 与 `topic_8e91c0299a7b4b25823bc12ab9c7e53a`）**：
+  - **已实证生效的改进**：
+    1. **Run 1**（`operation:c3624fb5e817bd907ed11bc0`，MSFT FY24 vs FY25，上限 `8 calls / 240s / 200k tokens`）：`sec_company_concept` 获取 4 份 US-GAAP 数据源并正确同步 `official_fetch_status="completed"`；轮内 L1 压缩（`context_compacted`, `compaction_count=2`）将 Call 5 `wire_bytes` 从 `141,472` 降至 `43,057`（`input_tokens` `39,686 -> 12,104`），结束时生成中文 `partial_notes`；
+    2. **10-K 表格瘦身直测**（`POST /v2/research/sources/fetch`）：`nvda-20260125.htm`（`sec_filing_html`）抽取文本由改造前 `407,708` 字符降至 **`375,946`** 字符（减少约 `31.8k` 字符）；（同批 `msft-20250630.htm` 返回上游 `503`、`aapl-20260926.htm` 触发 SEC `429` 限流）；
+    3. **Run 2**（`operation:d0e4b1c19ba4c8ed29027013`，针对 `375,946` 字符 10-K，上限 `8 calls / 0 search / 240s / 150k tokens`）：模型先调用 `outline_source` + 5 次 `search_source` 再精准 `read_sources`（单切片 `800–2,365` 字符，零 5 万字符盲读），完成 6 条 `record_facts` 与 4 项 `calculate_financials`；SSE `/events` 回放正常；
+    4. **Postgres 诊断与前缀缓存实测**（`research_run_inputs.private_validation_diagnostics`）：确认 `max_tokens=16384` 生效（Run 1 Call 4 临近 200k 预算上限时安全钳位为 `6640`），`stop_reason`、`finish`、`wire_bytes`、`stream: true`、`budget_estimate`（含 `utf8_wire_estimate` 与 `ceil_chars_div_3`）及 `usage` 完整落库；观测到 `cache_read_input_tokens` 命中（`6,016` / `9,536` / `16,448` / `11,904`；`api.z.ai` 不返回 `cache_creation_input_tokens`）；
+    5. **Run 4 `/continue` 真实续跑**：`operation:ab6fd6a9f194754368fea44b` 遭遇单次 `120.0s` 上游流式超时后，触发 `POST /continue`（`operation:05b2b80c337c7f1c0f357351`）返回 HTTP `202`、标记旧 checkpoint `already_used` 并递增 `continuation_count=1` 继续执行 `search_source` + `read_sources`。
+  - **如实记录的实测边界与未覆盖项**：
+    1. 因线上 `discover_sources`（`glm_coding_mcp`）返回 `search_response_invalid`、`api.z.ai` 上游流式延迟较高（单次可达 `>120s`）以及测试严格控制预算与总时长（`150k–200k` tokens / `180–300s`），全部 **5 次受控真跑均在最终成功 `submit_research` 前以 `partial`（`provider_timeout` 或 `provider_budget_exhausted`）结束**，本轮尚未在公网受控窗口内录得一次 `completed` 全量交付；
+    2. `read_sources` 超 `25,000` 字符报错、`stop_reason='max_tokens'` 真实截断以及前端 `repeated_truncation` 熔断路径在本次受控真跑中**未实际触发**（前述三项已在 Stage 1/2 单元测试与离线 E2E 中通过验证；本次 Run 2 Call 5 的 `3,294` tokens 输出在 `16384` 上限下未再截断）；
+    3. 一次性测试账号经 `DELETE /v1/auth/local/account` 清理（仅余账务审计表 `billing_states` 1 行与 `usage_ledger` 20 行），`git status -sb` 仅含 Stage 2 的 11 个已跟踪文件，无临时脚本或密钥泄露。
